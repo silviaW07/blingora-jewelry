@@ -668,7 +668,7 @@ export const resolveImportCategoryOwnership = async (
       select: { id: true, status: true }
     })
     if (parent?.status === 'ACTIVE') {
-      return {
+  return {
         primaryCategoryId: category.id,
         linkedCategoryIds: [parent.id, category.id],
         isSecondary: true,
@@ -4499,8 +4499,8 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
       const color = pick('color')
       const spec = pick('spec')
       const productPriceText = preserveProductPriceRaw(pick('productPrice'))
-      return {
-        rowId: `row-${index + 1}`,
+        return {
+          rowId: `row-${index + 1}`,
         productCode: pick('productCode'),
         skuCode: pick('skuCode'),
         productPrice: null,
@@ -5215,7 +5215,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           })
           }
         }
-        } catch (error: any) {
+      } catch (error: any) {
         failureCount += 1
         await prisma.importtaskitem.update({
           where: { id: item.id },
