@@ -1,16 +1,29 @@
 'use client'
 
 import React, { useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Loader2, Package } from 'lucide-react'
 import { useHome } from '@/frontend/hooks/useHome'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection'
 
 type RecommendZonePageViewProps = {
-  zoneId: string
+  /** 可选；未传时从 URL ?zoneId= 读取（静态导出兼容） */
+  zoneId?: string
 }
 
-export const RecommendZonePageView = ({ zoneId }: RecommendZonePageViewProps) => {
+export const RecommendZonePageView = ({ zoneId: zoneIdProp }: RecommendZonePageViewProps) => {
+  const searchParams = useSearchParams()
+  const zoneId = useMemo(() => {
+    if (zoneIdProp) return zoneIdProp
+    const raw = searchParams.get('zoneId') || ''
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      return raw
+    }
+  }, [zoneIdProp, searchParams])
+
   const { state, handlers } = useHome()
 
   const zone = useMemo(

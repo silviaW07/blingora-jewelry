@@ -1,12 +1,12 @@
 import RecommendZonePageView from '@/frontend/components/RecommendZonePageView'
 
-type PageProps = {
-  searchParams: Promise<{
-    zoneId?: string
-  }>
-}
+/**
+ * 静态导出（output: 'export'）下禁止使用 searchParams 等动态 API。
+ * zoneId 改由客户端 useSearchParams 读取，避免 build 时报
+ * Route /zone with dynamic = "error" couldn't be rendered statically。
+ */
+export const dynamic = 'force-static'
 
-export default async function RecommendZonePage({ searchParams }: PageProps) {
-  const { zoneId = '' } = await searchParams
-  return <RecommendZonePageView zoneId={decodeURIComponent(zoneId)} />
+export default function RecommendZonePage() {
+  return <RecommendZonePageView />
 }
