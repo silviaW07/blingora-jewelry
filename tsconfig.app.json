@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "noUncheckedSideEffectImports": true
+  },
+  "include": [
+    "src", // 生成流程仍依赖 src 目录
+    "app",
+    "src/types/global.d.ts",
+    "src/types.d.ts",
+    "src/vite-env.d.ts",
+    "src/pages/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist",
+    "checkpoint",
+    "pnpm_node_modules",
+    "**/pnpm_node_modules/sub*",
+    "**/pnpm_node_modules/.pnpm",
+    "src/assets/**",
+    "src/tools/**",
+    "src/font/**",
+    "src/ui/**",
+    "src/default/**",
+    "src/@base/**",
+    "src/main.tsx",
+    "src/index.css"
+  ]
+}

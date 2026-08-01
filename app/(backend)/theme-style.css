@@ -1,0 +1,114 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap");
+@import "tailwindcss";
+
+@theme inline {
+  --font-display: "Inter", sans-serif; /* [demo] */
+  --font-header: "Inter", sans-serif; /* [demo] */
+  --font-body: "Roboto", sans-serif; /* [demo] */
+
+  --color-background: var(--background); /* [demo] */
+  --color-foreground: var(--foreground); /* [demo] */
+  --color-primary: var(--primary); /* [demo] */
+  --color-primary-foreground: var(--primary-foreground); /* [demo] */
+  --color-secondary: var(--secondary); /* [demo] */
+  --color-secondary-foreground: var(--secondary-foreground); /* [demo] */
+  --color-accent: var(--accent); /* [demo] */
+  --color-accent-foreground: var(--accent-foreground); /* [demo] */
+  --color-muted: var(--muted); /* [demo] */
+  --color-muted-foreground: var(--muted-foreground); /* [demo] */
+  --color-destructive: var(--destructive); /* [demo] */
+  --color-destructive-foreground: var(--destructive-foreground); /* [demo] */
+  --color-card: var(--card); /* [demo] */
+  --color-card-foreground: var(--card-foreground); /* [demo] */
+  --color-popover: var(--popover); /* [demo] */
+  --color-popover-foreground: var(--popover-foreground); /* [demo] */
+  --color-border: var(--border); /* [demo] */
+  --color-input: var(--input); /* [demo] */
+  --color-ring: var(--ring); /* [demo] */
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* [demo] */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* popover / menu */
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05); /* [demo] */
+  --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); /* [demo] */
+
+  --radius-sm: 4px; /* [demo] */
+  --radius-md: 8px; /* [demo] */
+  --radius-lg: 12px; /* [demo] */
+}
+
+@layer base {
+  :root {
+    --background: #F8FAFC; /* [demo] */
+    --foreground: #1E293B; /* [demo] */
+    --primary: #0052D9; /* [demo] */
+    --primary-foreground: #FFFFFF; /* [demo] */
+    --secondary: #F1F5F9; /* [demo] */
+    --secondary-foreground: #475569; /* [demo] */
+    --accent: #2BA471; /* [demo] */
+    --accent-foreground: #FFFFFF; /* [demo] */
+    --muted: #E2E8F0; /* [demo] */
+    --muted-foreground: #64748B; /* [demo] */
+    --destructive: #D9001B; /* [demo] */
+    --destructive-foreground: #FFFFFF; /* [demo] */
+    --card: #FFFFFF; /* [demo] */
+    --card-foreground: #1E293B; /* [demo] */
+    --popover: #FFFFFF; /* [demo] */
+    --popover-foreground: #1E293B; /* [demo] */
+    --border: #CBD5E1; /* [demo] */
+    --input: #FFFFFF; /* [demo] */
+    --ring: #0052D9; /* [demo] */
+
+    --chart-1: #0052D9;
+    --chart-2: #2BA471;
+    --chart-3: #F59E0B;
+    --chart-4: #8B5CF6;
+    --chart-5: #0EA5E9;
+  }
+}
+
+/*
+ * Next 根布局先加载 @/index.css，再加载本文件；本文件内的 Tailwind Preflight 含 `* { border: 0 solid }`，
+ * 会作为更晚的 @layer base 覆盖 index.css 里对 border-color 的修复。必须在「本 Tailwind 入口」内、Preflight 之后
+ * 再设一次默认 border-color（前台 theme-style 已在 @layer base 中对 * 做过同类处理）。
+ */
+@layer base {
+  *,
+  ::before,
+  ::after,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, var(--border, #d6dde8));
+  }
+}
+
+/* 后台勾选框：浅粉色底+边框，避免白底上看不清 */
+[data-slot="checkbox"] {
+  border-color: #f9a8d4 !important;
+  background-color: #fdf2f8 !important;
+  border-width: 1.5px !important;
+}
+
+[data-slot="checkbox"][data-state="checked"],
+[data-slot="checkbox"][data-state="indeterminate"] {
+  border-color: #ec4899 !important;
+  background-color: #fbcfe8 !important;
+  color: #9d174d !important;
+}
+
+[data-slot="checkbox"]:focus-visible {
+  border-color: #ec4899 !important;
+  box-shadow: 0 0 0 3px rgb(244 114 182 / 0.35) !important;
+}
+
+input[type="checkbox"]:not(.sr-only) {
+  accent-color: #ec4899;
+  outline: 1.5px solid #f9a8d4;
+  outline-offset: 1px;
+  border-radius: 3px;
+}

@@ -1,0 +1,82 @@
+  const {
+    recommendZones,
+    isLoadingRecommendZones,
+    selectedRecommendCategoryId
+  } = state;
+  const isDefaultHomeState = isDefaultHomeQueryState(state);
+  const sideNavZones = recommendZones.filter(zone => zone.zoneType === 'SIDE_NAV');
+  const contentZones = recommendZones.filter(zone => zone.zoneType !== 'SIDE_NAV');
+  const primarySideNavZone = sideNavZones.find(zone => zone.items.some(item => item.entityType === 'SIDE_NAV'));
+  const sideNavItems = primarySideNavZone?.items.filter((item): item is RecommendSideNavItem => item.entityType === 'SIDE_NAV') ?? [];
+  const linkedProductZoneId = contentZones.find(zone => zone.items.some(item => item.entityType === 'PRODUCT'))?.zoneId;
+  const linkedProductZones = linkedProductZoneId ? contentZones.filter(zone => zone.zoneId === linkedProductZoneId && zone.items.length > 0) : [];
+  const staticContentZones = linkedProductZoneId ? contentZones.filter(zone => zone.zoneId !== linkedProductZoneId) : contentZones;
+  return <>
+      <ProductCategoryView state={state} handlers={handlers} data-api-unique-id='homeview-rcf81425b173c8376-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+
+      {isDefaultHomeState ? <section className="mx-auto w-full max-w-[1680px] px-4 pt-6 sm:px-6 xl:px-10" data-controller-name="首页服务权益条模块" data-api-unique-id='homeview-r12b51d77be7038c3-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-api-unique-id='homeview-r989ff82ab392c508-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+            {serviceBenefitItems.map((item, index) => <article key={item.title} className="flex h-full gap-4 rounded-[28px] border border-[#e8e2d8] bg-white/95 px-5 py-5 shadow-[0_18px_42px_-36px_rgba(0,0,0,0.32)]" data-controller-name="首页服务权益卡片" data-api-unique-id='homeview-r2a70f7e5f7241036-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#f4efe8] text-[#3d342c]" data-api-unique-id='homeview-r3e987314d219e895-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
+                  <item.icon className="size-5" data-api-bind-info={`serviceBenefitItems-${index}-icon`} data-api-map-var-name='item' data-api-unique-id='homeview-r867cb82a1ff0359d-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' />
+                </div>
+                <div className="min-w-0 space-y-1.5" data-api-unique-id='homeview-r37851487c9274698-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
+                  <h2 className="text-base font-semibold text-[#40372f]" data-api-unique-id='homeview-re007a33024939a5a-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' data-api-bind-info={`serviceBenefitItems-${index}-title`} data-api-map-var-name='item'>{item.title}</h2>
+                  <p className="text-sm leading-6 text-[#7d7366]" data-api-unique-id='homeview-r889be422c7221340-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' data-api-bind-info={`serviceBenefitItems-${index}-description`} data-api-map-var-name='item'>{item.description}</p>
+                </div>
+              </article>)}
+          </div>
+        </section> : null}
+
+      {isDefaultHomeState && primarySideNavZone ? <section className="mx-auto -mt-[calc(100vh-100vh)] w-full max-w-[1680px] px-4 pb-6 sm:px-6 xl:px-10" data-controller-name="首页左导航与横幅联动模块" data-api-unique-id='homeview-rd53c3a435ad12521-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+          <div className="flex flex-col items-stretch gap-5 rounded-[36px] bg-[#f5f4ef] p-4 shadow-[0_24px_60px_-48px_rgba(0,0,0,0.34)] lg:flex-row lg:items-stretch lg:p-6 xl:gap-6" data-api-unique-id='homeview-raec01d5774b241fe-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+            <aside className="flex min-h-0 shrink-0 lg:w-[320px] lg:self-stretch" data-controller-name="首页左侧分类导航专区列表" data-api-unique-id='homeview-r13536acb8489454c-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+              <div className="flex h-full min-h-0 flex-1 flex-col rounded-[32px] bg-[#f8f7f3] px-5 py-6 shadow-[0_20px_46px_-38px_rgba(0,0,0,0.32)]" data-api-unique-id='homeview-rb18573492ab77a20-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                <div className="mb-5 flex items-start justify-between gap-3 px-1" data-api-unique-id='homeview-r2dd7378b45dfd1f9-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                  <div data-api-unique-id='homeview-r3b405190d6219846-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                    <h3 className="text-[26px] font-semibold text-[#181818]" data-api-unique-id='homeview-r3d81b980f38baba2-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>分类浏览</h3>
+                    <p className="mt-1 text-sm text-[#8c867d]" data-api-unique-id='homeview-r414ca0299eea5324-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>Hot</p>
+                  </div>
+                  <span className="pt-1 text-sm text-[#8c867d]" data-api-unique-id='homeview-r1bd7409c073cbb27-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>{sideNavItems.length} 项</span>
+                </div>
+                <nav className="min-h-0 max-h-full flex-1 space-y-3 overflow-y-auto pr-1" data-controller-name="首页左侧分类导航按钮列表" data-api-unique-id='homeview-r4e7986ac67647f3b-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                  {sideNavItems.map((item, index) => <button key={item.itemId} type="button" className={cn('flex w-full items-center justify-between rounded-[20px] border px-5 py-4 text-left text-base transition-all', selectedRecommendCategoryId === item.categoryId ? 'border-[#191919] bg-[#fdfcf8] text-[#191919] shadow-[0_12px_24px_-22px_rgba(0,0,0,0.6)]' : 'border-transparent bg-[#f1efea] text-[#2a2926] hover:border-[#d2ccc2] hover:bg-white')} onClick={() => handlers.handleNavigateRecommendCategory(item.categoryId)} data-api-unique-id='homeview-r4a3dc702d037ce2c-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
+                      <span className="truncate pr-4 font-medium" data-api-unique-id='homeview-r5a9d64fc644ba8ec-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' data-api-bind-info={`sideNavItems-${index}-categoryName`} data-api-map-var-name='item'>{item.categoryName}</span>
+                      <ChevronRight className="size-4 shrink-0 opacity-65" data-api-unique-id='homeview-rbad0db535124f25b-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' />
+                    </button>)}
+                </nav>
+              </div>
+            </aside>
+
+            <div className="flex min-h-0 flex-1 self-stretch lg:min-h-full" data-controller-name="首页横幅与联动商品展示区" data-api-unique-id='homeview-r5aa561a0c0b55571-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+              <article className="relative flex h-full min-h-[320px] flex-1 overflow-hidden rounded-[32px] bg-[#111111] px-6 py-8 text-white shadow-[0_28px_60px_-40px_rgba(0,0,0,0.55)] sm:px-10 sm:py-10 lg:min-h-full lg:px-12 lg:py-12" data-controller-name="首页联动横幅卡片" data-api-unique-id='homeview-raedff2a5ab19f928-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03)_0px,rgba(255,255,255,0.03)_1px,transparent_1px,transparent_72px)] opacity-30" data-api-unique-id='homeview-r807eac642e1405f0-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                <div className="relative flex h-full min-h-[320px] flex-1 flex-col justify-center gap-6 rounded-[28px] border border-white/8 px-4 sm:px-0" data-api-unique-id='homeview-rf35c3b451ef8108a-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                  <div className="inline-flex w-fit rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.3em] text-white/88" data-api-unique-id='homeview-r28b9fbac096eb851-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                    Latest Drop
+                  </div>
+                  <div className="max-w-[560px] space-y-4" data-api-unique-id='homeview-r601b94064319b998-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                    <h2 className="text-4xl font-semibold uppercase leading-[0.92] tracking-[0.12em] text-white sm:text-5xl xl:text-[72px]" data-api-unique-id='homeview-r7620b2338a762344-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>Summer Jewelry Picks</h2>
+                    <Button type="button" className="rounded-full bg-white px-7 text-base font-semibold text-[#181818] hover:bg-[#f0ece4]" onClick={() => handlers.handleNavigateRecommendCategory(selectedRecommendCategoryId || sideNavItems[0]?.categoryId || '')} data-api-unique-id='homeview-rd55f64c0af2c14dd-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                      Discover More
+                    </Button>
+                  </div>
+                </div>
+                <button type="button" aria-label="上一张横幅" className="absolute left-4 top-1/2 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#181818] shadow-[0_18px_36px_-28px_rgba(0,0,0,0.55)] sm:left-6" data-api-unique-id='homeview-rf1e4f82c82e0e3f0-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                  <ChevronRight className="size-4 rotate-180" data-api-unique-id='homeview-r616d92f6037efa93-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                </button>
+                <button type="button" aria-label="下一张横幅" className="absolute right-4 top-1/2 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#181818] shadow-[0_18px_36px_-28px_rgba(0,0,0,0.55)] sm:right-6" data-api-unique-id='homeview-rc7c44b74027c64a9-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                  <ChevronRight className="size-4" data-api-unique-id='homeview-r62c791ce6b546e13-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                </button>
+                <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2" data-api-unique-id='homeview-r4b43c5ef0cb36c75-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
+                  <span className="h-2 w-10 rounded-full bg-[#191919] ring-2 ring-white/80" data-api-unique-id='homeview-rf762879debe823d9-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                  <span className="size-2 rounded-full bg-[#d5d0c6]" data-api-unique-id='homeview-re610f0f305ec4d50-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                  <span className="size-2 rounded-full bg-[#d5d0c6]" data-api-unique-id='homeview-r7268419147bff216-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                  <span className="size-2 rounded-full bg-[#d5d0c6]" data-api-unique-id='homeview-redd23e148d61d498-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
+                </div>
+              </article>
+            </div>
+          </div>
+        </section> : null}
+
+      {isDefaultHomeState ? <section className="mx-auto w-full max-w-[1680px] px-4 pb-12 sm:px-6 xl:px-10" data-controller-name="首页推荐专区模块" data-api-unique-id='homeview-rc4afff86ef1b1c41-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>

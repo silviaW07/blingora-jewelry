@@ -1,0 +1,299 @@
+'use client'
+import React from 'react'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationPrevious,
+  PaginationNext,
+} from "@/components/ui/pagination";
+
+import { 
+  useCategoryManagement, 
+  type CategoryManagementState, 
+  type CategoryManagementHandlers,
+  STATUS_LABELS 
+} from '@/backend/hooks/useCategoryManagement'
+
+interface Props {
+  state: CategoryManagementState
+  handlers: CategoryManagementHandlers
+}
+
+export const CategoryManagementView = ({ state, handlers }: Props) => {
+  return (
+    <div>
+      <header>
+        <div>
+          <h2>分类管理</h2>
+          <p>
+            前台仅展示状态为 <strong>{STATUS_LABELS.ACTIVE}</strong> 的分类及其商品。禁用分类将导致其下关联商品在前台不可见。
+          </p>
+        </div>
+        <div>
+          <Button onClick={handlers.openCreateDrawer}>新增分类</Button>
+        </div>
+      </header>
+
+      <section>
+        <div>
+          <Tabs value={state.status || 'ALL'} onValueChange={handlers.handleTabChange}>
+            <TabsList>
+              <TabsTrigger value="ALL">全部</TabsTrigger>
+              <TabsTrigger value="ACTIVE">{STATUS_LABELS.ACTIVE}</TabsTrigger>
+              <TabsTrigger value="INACTIVE">{STATUS_LABELS.INACTIVE}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        <div>
+          <Input 
+            placeholder="输入分类名称检索..." 
+            value={state.searchInput}
+            onChange={(e) => handlers.setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handlers.handleSearch()}
+          />
+          <Button onClick={handlers.handleSearch}>检索</Button>
+        </div>
+      </section>
+
+      <section>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>分类主图</TableHead>
+              <TableHead>分类名称与标识</TableHead>
+              <TableHead>关联商品数</TableHead>
+              <TableHead>排序权重</TableHead>
+              <TableHead>当前状态</TableHead>
+              <TableHead>平台操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {state.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6}>数据加载中...</TableCell>
+              </TableRow>
+            ) : state.list.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6}>暂无分类数据</TableCell>
+              </TableRow>
+            ) : (
+              state.list.map((item) => (
+                <TableRow key={item.category_id}>
+                  <TableCell>
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.category_name} />
+                    ) : (
+                      <span>[无图片]</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <strong>{item.category_name}</strong>
+                    </div>
+                    <div>
+                      <small>{item.category_slug}</small>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span>{item.product_count}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Input 
+                      type="number" 
+                      value={state.weightInputs[item.category_id] ?? item.sort_weight} 
+                      onChange={(e) => handlers.handleInlineWeightChange(item.category_id, e.target.value)}
+                      onBlur={() => handlers.handleInlineWeightBlur(item)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Switch 
+                      checked={item.status === 'ACTIVE'}
+                      onCheckedChange={(checked) => handlers.handleInlineStatusChange(item, checked)}
+                    />
+                    <span>{STATUS_LABELS[item.status]}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Button onClick={() => handlers.navigateToDetail(item.category_id)}>
+                      编辑
+                    </Button>
+                    <Button onClick={() => handlers.setDeleteItem(item)}>
+                      删除
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => handlers.setPage(p => Math.max(1, p - 1))}
+                aria-disabled={state.page === 1}
+              />
+            </PaginationItem>
+            <PaginationItem>
+              <span>第 {state.page} 页 / 共 {state.totalPages} 页 (共 {state.total} 条记录)</span>
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => handlers.setPage(p => Math.min(state.totalPages, p + 1))}
+                aria-disabled={state.page === state.totalPages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </section>
+
+      <Sheet open={state.isDrawerOpen} onOpenChange={(open) => !open && handlers.closeDrawer()}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>{state.editingId ? '编辑分类' : '新增分类'}</SheetTitle>
+          </SheetHeader>
+          
+          <form onSubmit={(e) => { e.preventDefault(); handlers.submitForm(); }}>
+            <fieldset disabled={state.isSubmitting}>
+              <div>
+                <h3>基础配置</h3>
+                <label>
+                  <span>分类名称</span>
+                  <Input 
+                    value={state.formData.category_name} 
+                    onChange={(e) => handlers.handleFormChange('category_name', e.target.value)} 
+                    required 
+                  />
+                </label>
+                <label>
+                  <span>唯一标识 (Slug)</span>
+                  <Input 
+                    value={state.formData.category_slug} 
+                    onChange={(e) => handlers.handleFormChange('category_slug', e.target.value)} 
+                    required 
+                  />
+                </label>
+              </div>
+
+              <div>
+                <h3>视觉媒体</h3>
+                <label>
+                  <span>图片 URL</span>
+                  <Input 
+                    value={state.formData.image_url} 
+                    onChange={(e) => handlers.handleFormChange('image_url', e.target.value)} 
+                  />
+                </label>
+                <div>
+                  {state.formData.image_url ? (
+                    <img src={state.formData.image_url} alt="分类图片预览" />
+                  ) : (
+                    <div>[无图片预览]</div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3>业务属性</h3>
+                <label>
+                  <span>分类说明</span>
+                  <Textarea 
+                    value={state.formData.description} 
+                    onChange={(e) => handlers.handleFormChange('description', e.target.value)} 
+                  />
+                </label>
+                <label>
+                  <span>排序权重</span>
+                  <Input 
+                    type="number" 
+                    value={state.formData.sort_weight} 
+                    onChange={(e) => handlers.handleFormChange('sort_weight', parseInt(e.target.value, 10) || 0)} 
+                    required
+                  />
+                </label>
+                <label>
+                  <span>分类状态</span>
+                  <Switch 
+                    checked={state.formData.status === 'ACTIVE'}
+                    onCheckedChange={(checked) => handlers.handleFormChange('status', checked ? 'ACTIVE' : 'INACTIVE')}
+                  />
+                  <span>{STATUS_LABELS[state.formData.status]}</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <SheetFooter>
+              <Button type="button" onClick={handlers.closeDrawer} disabled={state.isSubmitting}>取消</Button>
+              <Button type="submit" disabled={state.isSubmitting}>保存并同步</Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog open={!!state.deleteItem} onOpenChange={(open) => !open && handlers.setDeleteItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除操作确认</AlertDialogTitle>
+            <AlertDialogDescription>
+              {state.deleteItem?.product_count && state.deleteItem.product_count > 0 ? (
+                <>
+                  严重警告：分类 <strong>{state.deleteItem.category_name}</strong> 下目前存在 <strong>{state.deleteItem.product_count}</strong> 个商品！<br />
+                  强制要求先将相关商品转移改绑到其他分类后，才能执行删除操作。当前确认动作已被锁定。
+                </>
+              ) : (
+                <>确定要删除分类 <strong>{state.deleteItem?.category_name}</strong> 吗？此操作无法撤销。</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={state.isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => { e.preventDefault(); handlers.confirmDelete(); }} 
+              disabled={state.isDeleting || (state.deleteItem?.product_count ?? 0) > 0}
+            >
+              确认
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+export default function CategoryManagementPage() {
+  const { state, handlers } = useCategoryManagement();
+  return <CategoryManagementView state={state} handlers={handlers} />;
+}

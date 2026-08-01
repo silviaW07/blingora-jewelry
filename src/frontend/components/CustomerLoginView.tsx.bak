@@ -1,0 +1,143 @@
+'use client'
+import React from 'react'
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import type { CustomerLoginState, CustomerLoginHandlers } from '@/frontend/hooks/useCustomerLogin';
+
+interface Props {
+  state: CustomerLoginState;
+  handlers: CustomerLoginHandlers;
+}
+
+export const CustomerLoginView = ({ state, handlers }: Props) => {
+  return (
+    <main>
+      {/* ==================== 左侧：品牌与注册引导区 ==================== */}
+      <section>
+        <header>
+          <div>Brand Logo</div>
+        </header>
+
+        <article>
+          <h1>Access Global Supply. Seamlessly.</h1>
+          <ul>
+            <li>✓ 专属阶梯式批发报价 (Tiered Wholesale Pricing)</li>
+            <li>✓ 确定性跨境物流追踪 (Deterministic Global Tracking)</li>
+            <li>✓ 1688数据一键直连 (1688 Data Integration)</li>
+          </ul>
+        </article>
+
+        <div>
+          <p>New to our platform?</p>
+          <Button 
+            variant="outline" 
+            onClick={handlers.handleGoToRegister} 
+            disabled={state.isSubmitting}
+          >
+            前往注册
+          </Button>
+        </div>
+      </section>
+
+      {/* ==================== 右侧：登录操作控制台 ==================== */}
+      <section>
+        <header>
+          <h2>安全登录 (Sign In to Your Account)</h2>
+          {state.returnTo ? (
+            <p>登录后将返回原访问页面继续操作</p>
+          ) : (
+            <p>欢迎回来，请登录您的账户</p>
+          )}
+        </header>
+
+        {state.errorMessage && (
+          <Alert variant="destructive">
+            <AlertTitle>账户异常</AlertTitle>
+            <AlertDescription>{state.errorMessage}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={handlers.handleLoginSubmit}>
+          <div>
+            <Label htmlFor="sysuser_account">账号 (Account)</Label>
+            <Input
+              id="sysuser_account"
+              type="text"
+              placeholder="请输入账号"
+              autoComplete="username"
+              disabled={state.isSubmitting}
+              value={state.formData.sysuser_account}
+              onChange={(e) => handlers.handleFormFieldChange('sysuser_account', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="sysuser_password">密码 (Password)</Label>
+            <div>
+              <Input
+                id="sysuser_password"
+                type={state.showPassword ? "text" : "password"}
+                placeholder="请输入密码"
+                autoComplete="current-password"
+                disabled={state.isSubmitting}
+                value={state.formData.sysuser_password}
+                onChange={(e) => handlers.handleFormFieldChange('sysuser_password', e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={state.isSubmitting}
+                onClick={handlers.togglePasswordVisibility}
+                title={state.showPassword ? "隐藏密码" : "显示密码"}
+              >
+                {state.showPassword ? "隐藏" : "显示"}
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <div>
+              <Checkbox
+                id="remember_me"
+                disabled={state.isSubmitting}
+                checked={state.rememberMe}
+                onCheckedChange={handlers.handleRememberMeChange}
+              />
+              <Label htmlFor="remember_me">记住账号 (Remember me)</Label>
+            </div>
+            
+            <div>
+              <Button 
+                type="button" 
+                variant="link" 
+                disabled={state.isSubmitting}
+              >
+                忘记密码？ (Forgot Password?)
+              </Button>
+            </div>
+          </div>
+
+          <Button 
+            type="submit" 
+            size="lg" 
+            disabled={state.isSubmitting}
+          >
+            {state.isSubmitting ? "正在验证..." : "登录"}
+          </Button>
+        </form>
+
+        <footer>
+          <ul>
+            <li>SSL加密认证</li>
+            <li>安全支付保障</li>
+            <li>全球物流合作伙伴</li>
+          </ul>
+        </footer>
+      </section>
+    </main>
+  );
+};

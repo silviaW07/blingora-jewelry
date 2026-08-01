@@ -1,0 +1,48 @@
+            </section> : null}
+
+          {!showProductResults ? <section className="rounded-[36px] bg-white px-4 py-4 shadow-[0_18px_55px_-42px_rgba(0,0,0,0.4)] sm:px-6 sm:py-6 lg:px-8" data-controller-name="首页横幅轮播区" data-api-unique-id='productcategoryview-r53ef404c3392f4ff-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+            {activeBanner ? <div className="space-y-5" data-api-unique-id='productcategoryview-rc2738a2bb48f760c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' style={{
+            marginBottom: `1px`,
+            paddingBottom: `0px`,
+            paddingTop: `0px`,
+            paddingRight: `0px`,
+            paddingLeft: `0px`
+          } as React.CSSProperties}>
+                <div className="relative overflow-hidden rounded-[32px] bg-[#d9d2c3]" data-api-unique-id='productcategoryview-r7451325828cca4aa-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  <button type="button" className="group relative block h-[360px] w-full overflow-hidden bg-[#ddd7ca] sm:h-[460px] lg:h-[520px]" onClick={() => handlers.handleBannerClick(activeBanner)} data-api-unique-id='productcategoryview-re6b0d609650b4efa-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    <EditableImg propKey={`category-poster-${activeBanner.poster_id}`} keywords={activeBanner.image_url || activeBanner.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" data-api-unique-id='productcategoryview-r1ba76f4aa78e3c09-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
+                    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,17,17,0.62),rgba(17,17,17,0.14))]" data-api-unique-id='productcategoryview-rbe6fb0b11d49a793-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' style={{
+                  borderRadius: `8px`,
+                  backgroundColor: `#1c1c1c`
+                } as React.CSSProperties} />
+                    <div className="absolute inset-y-0 left-0 flex max-w-[76%] flex-col items-start justify-center gap-4 px-6 text-left text-white sm:px-10 lg:max-w-[58%] lg:px-12" data-api-unique-id='productcategoryview-r1b6c214c2ea2def3-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                      <span className="rounded-full border border-white/25 bg-white/12 px-4 py-1 text-xs font-semibold uppercase tracking-[0.22em] backdrop-blur-sm" data-api-unique-id='productcategoryview-r8682873e13f0c4f5-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                        Latest Drop
+                      </span>
+                      <div className="space-y-3" data-api-unique-id='productcategoryview-rd3957ec65d74f9da-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                        <h3 className="text-[clamp(28px,4vw,48px)] font-black uppercase tracking-[0.14em] leading-tight" data-api-unique-id='productcategoryview-r7b94cb5c7c504400-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{activeBanner.title}</h3>
+                        {activeBanner.subtitle ? <p className="max-w-[520px] text-sm leading-6 text-white/85 sm:text-base" data-api-unique-id='productcategoryview-r38fc5603036e60ad-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{activeBanner.subtitle}</p> : null}
+                      </div>
+                      <div className="inline-flex items-center rounded-full bg-white px-5 py-2 text-sm font-semibold tracking-[0.08em] text-[#111111] shadow-[0_10px_30px_-20px_rgba(0,0,0,0.55)]" data-api-unique-id='productcategoryview-re2528365f60b9c7b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                        {renderBannerHrefLabel(activeBanner)}
+                      </div>
+                    </div>
+                  </button>
+
+                  <button type="button" className="absolute left-4 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-[#111111] shadow-[0_12px_30px_-20px_rgba(0,0,0,0.45)] transition hover:bg-white" onClick={() => handlers.handleBannerChange(activeBannerIndex - 1)} aria-label="上一张横幅" data-api-unique-id='productcategoryview-r54014f18580d9e9e-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    <ChevronLeft className="size-5" data-api-unique-id='productcategoryview-r671215b03c0e2786-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
+                  </button>
+                  <button type="button" className="absolute right-4 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-[#111111] shadow-[0_12px_30px_-20px_rgba(0,0,0,0.45)] transition hover:bg-white" onClick={() => handlers.handleBannerChange(activeBannerIndex + 1)} aria-label="下一张横幅" data-api-unique-id='productcategoryview-r91b5d7ac78d33ec2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    <ChevronRightIcon className="size-5" data-api-unique-id='productcategoryview-ra16ed3630867bbde-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-center gap-2" data-api-unique-id='productcategoryview-rf853f0b93917954f-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  {posters.map((banner, index) => <button key={banner.poster_id} type="button" className={`h-2.5 rounded-full transition-all ${index === activeBannerIndex ? 'w-8 bg-[#111111]' : 'w-2.5 bg-[#d2cbbd] hover:bg-[#b9b19f]'}`} onClick={() => handlers.handleBannerChange(index)} aria-label={`切换到第 ${index + 1} 张横幅`} data-api-unique-id='productcategoryview-ra28ec7f140a8a8b7-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />)}
+                </div>
+              </div> : <div className="flex min-h-[360px] items-center justify-center rounded-[32px] bg-[#f1eee8] text-sm text-[#7a756c] sm:min-h-[420px] lg:min-h-[480px]" data-api-unique-id='productcategoryview-r84623d15968d0d42-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                暂无可展示横幅
+              </div>}
+          </section> : null}
+
+          {!showProductResults ? <section className="space-y-5" data-controller-name="推荐关键词楼层区" data-api-unique-id='productcategoryview-rbbc35a071596ce95-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>

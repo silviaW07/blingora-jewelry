@@ -1,0 +1,359 @@
+'use client'
+import React from 'react'
+import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail'
+import type { ProductStatus, StockStatus } from '@/frontend/actions/ProductDetail'
+
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+
+// ===== 枚举映射 =====
+const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
+  DRAFT: '草稿',
+  ACTIVE: '上架',
+  INACTIVE: '下架',
+}
+
+const STOCK_STATUS_LABELS: Record<StockStatus, string> = {
+  IN_STOCK: '有货',
+  LOW_STOCK: '库存不足',
+  OUT_OF_STOCK: '缺货',
+}
+
+interface Props {
+  state: ProductDetailState
+  handlers: ProductDetailHandlers
+}
+
+export const ProductDetailView = ({ state, handlers }: Props) => {
+  const {
+    loading,
+    error,
+    product,
+    relatedProducts,
+    selectedAttributes,
+    selectedSku,
+    quantity,
+    activeImage,
+    submitting,
+    availableAttributes,
+    sortedGallery,
+    isPurchasable,
+    isSkuValid,
+    isStockAvailable,
+    session
+  } = state
+
+  const {
+    handleAttributeSelect,
+    handleQuantityChange,
+    handleAddToCart,
+    handleRelatedClick,
+    setActiveImage
+  } = handlers
+
+  if (loading) {
+    return <div>正在加载商品详情...</div>
+  }
+
+  if (error) {
+    return <div>加载失败: {error}</div>
+  }
+
+  if (!product) {
+    return <div>未找到指定商品</div>
+  }
+
+  return (
+    <article>
+      {/* 警告横幅 */}
+      {!isPurchasable && (
+        <Alert variant="destructive">
+          <AlertTitle>不可购买</AlertTitle>
+          <AlertDescription>
+            该商品目前处于 {PRODUCT_STATUS_LABELS[product.status]} 状态，暂不支持浏览详情及加入购物车。
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* 模块一：核心交易视窗 */}
+      <section>
+        {/* 左栏：标准化媒体阵列 */}
+        <div>
+          <div>
+            <img src={activeImage} alt={product.name} />
+          </div>
+          <div>
+            {sortedGallery.map((item, idx) => (
+              <button 
+                key={idx} 
+                onClick={() => { if(item.url) setActiveImage(item.url) }}
+              >
+                {item.url && <img src={item.url} alt={`缩略图 ${idx + 1}`} />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 右栏：转化漏斗 */}
+        <div>
+          <div>
+            <h1>{product.name}</h1>
+            <p>SKU Code: {product.productCode}</p>
+            <div>
+              <span>评分: {product.ratingAverage} / 5</span>
+              <span>评价数: {product.ratingCount}</span>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div>
+            {selectedSku ? (
+              <div>
+                <h2>售价: {selectedSku.price.toFixed(2)}</h2>
+                {selectedSku.originalPrice && selectedSku.originalPrice > selectedSku.price && (
+                  <p>
+                    <s>原价: {selectedSku.originalPrice.toFixed(2)}</s>
+                    <Badge>折扣特惠</Badge>
+                  </p>
+                )}
+                <div>
+                  <p>发货地: {product.tradeInfoJson?.shipFrom || '以实际为准'}</p>
+                  <p>预计交期: {selectedSku.deliveryDays || product.tradeInfoJson?.deliveryDays || '--'} 天</p>
+                  <p>最小起订量: {product.tradeInfoJson?.minOrderQty || 1}</p>
+                </div>
+              </div>
+            ) : (
+              <p>请选择具体的规格组合查看详细信息</p>
+            )}
+          </div>
+
+          <Separator />
+
+          <div>
+            {availableAttributes.map(attrGroup => (
+              <div key={attrGroup.name}>
+                <h3>{attrGroup.name}</h3>
+                <div>
+                  {attrGroup.values.map(val => {
+                    const isSelected = selectedAttributes[attrGroup.name] === val
+                    return (
+                      <Button
+                        key={val}
+                        variant={isSelected ? "default" : "outline"}
+                        disabled={!isPurchasable}
+                        onClick={() => handleAttributeSelect(attrGroup.name, val)}
+                      >
+                        {val}
+                      </Button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Separator />
+
+          <div>
+            <div>
+              <span>当前库存状态: {selectedSku ? STOCK_STATUS_LABELS[selectedSku.stockStatus] : '--'}</span>
+              {selectedSku && <span> (剩余 {selectedSku.stock})</span>}
+            </div>
+            <div>
+              <Button 
+                variant="outline" 
+                disabled={!isPurchasable || !isSkuValid || quantity <= 1} 
+                onClick={() => handleQuantityChange('dec')}
+              >
+                -
+              </Button>
+              <Input 
+                value={quantity} 
+                readOnly 
+                disabled={!isPurchasable || !isSkuValid} 
+              />
+              <Button 
+                variant="outline" 
+                disabled={!isPurchasable || !isSkuValid || (selectedSku && quantity >= selectedSku.stock) || false} 
+                onClick={() => handleQuantityChange('inc')}
+              >
+                +
+              </Button>
+            </div>
+            
+            <Button 
+              disabled={!isPurchasable || !isSkuValid || !isStockAvailable || submitting}
+              onClick={handleAddToCart}
+            >
+              {submitting ? '处理中...' : '加入购物车'}
+            </Button>
+            
+            {!session.token && (
+              <p>GUEST 用户点击将引导登录 / 登录后获取专属服务</p>
+            )}
+            
+            <div>
+              <p>安全支付保障 | 支持全球主流物流渠道</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 模块二：深度信息矩阵 */}
+      <section>
+        <nav>
+          <ul>
+            <li><a href="#section-content">图文详情</a></li>
+            <li><a href="#section-specs">规格参数</a></li>
+            <li><a href="#section-trade">物流与贸易</a></li>
+            <li><a href="#section-faq">评价与问答</a></li>
+          </ul>
+        </nav>
+
+        <div>
+          {/* 图文详情 */}
+          <div id="section-content">
+            <h2>图文详情</h2>
+            {product.sellingPointsJson && product.sellingPointsJson.length > 0 && (
+              <ul>
+                {product.sellingPointsJson.map((sp, idx) => (
+                  <li key={idx}>
+                    <strong>{sp.title}</strong>: {sp.content}
+                  </li>
+                ))}
+              </ul>
+            )}
+            
+            {product.detailContentJson && product.detailContentJson.length > 0 ? (
+              <div>
+                {product.detailContentJson.map((block, idx) => (
+                  <div key={idx}>
+                    {block.title && <h3>{block.title}</h3>}
+                    {block.type === 'image' && block.content ? (
+                      <img src={block.content} alt={block.title || ''} />
+                    ) : (
+                      <p>{block.content}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>暂无详细图文介绍</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* 规格参数 */}
+          <div id="section-specs">
+            <h2>规格参数</h2>
+            {product.parameterJson && product.parameterJson.length > 0 ? (
+              <div>
+                {product.parameterJson.map((group, idx) => (
+                  <div key={idx}>
+                    <h3>{group.group || '通用参数'}</h3>
+                    <table border={1}>
+                      <tbody>
+                        {group.items?.map((item, itemIdx) => (
+                          <tr key={itemIdx}>
+                            <td>{item.key}</td>
+                            <td>{item.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>暂无规格参数数据</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* 物流与贸易 */}
+          <div id="section-trade">
+            <h2>物流与贸易说明</h2>
+            {product.tradeInfoJson ? (
+              <div>
+                <Card>
+                  <CardHeader><CardTitle>支持地区</CardTitle></CardHeader>
+                  <CardContent>
+                    {product.tradeInfoJson.supportedRegions?.join(', ') || '全球'}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>运输说明</CardTitle></CardHeader>
+                  <CardContent>{product.tradeInfoJson.shippingNote || '暂无说明'}</CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>注意事项</CardTitle></CardHeader>
+                  <CardContent>{product.tradeInfoJson.tradeNotice || '暂无注意事项'}</CardContent>
+                </Card>
+              </div>
+            ) : (
+              <p>暂无物流与贸易数据</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* 评价与问答 */}
+          <div id="section-faq">
+            <h2>常见问题与解答</h2>
+            {product.faqJson && product.faqJson.length > 0 ? (
+              <Accordion type="single" collapsible>
+                {product.faqJson.map((faq, idx) => (
+                  <AccordionItem value={`item-${idx}`} key={idx}>
+                    <AccordionTrigger>{faq.question}</AccordionTrigger>
+                    <AccordionContent>{faq.answer}</AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            ) : (
+              <p>暂无常见问题</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 模块三：确定性关联推荐 */}
+      <section>
+        <h2>相关推荐</h2>
+        {relatedProducts.length > 0 ? (
+          <div>
+            {relatedProducts.map(item => (
+              <Card key={item.id} onClick={() => handleRelatedClick(item.id)}>
+                <img src={item.mainImageUrl} alt={item.name} />
+                <CardHeader>
+                  <CardTitle>{item.name}</CardTitle>
+                  <CardDescription>最低约: {item.minPrice.toFixed(2)}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <p>暂无相关推荐商品</p>
+        )}
+      </section>
+    </article>
+  )
+}

@@ -1,0 +1,132 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "paths": {
+      "@/frontend/actions/*": [
+        "./lib/rpc-generated/src/frontend/actions/*",
+        "./src/frontend/actions/*"
+      ],
+      "@/backend/actions/*": [
+        "./lib/rpc-generated/src/backend/actions/*",
+        "./src/backend/actions/*"
+      ],
+      "@/app/actions/*": [
+        "./lib/rpc-generated/src/app/actions/*",
+        "./src/app/actions/*"
+      ],
+      "@/frontend/action_utils": [
+        "./lib/rpc-generated/src/frontend/action_utils",
+        "./src/frontend/action_utils"
+      ],
+      "@/backend/action_utils": [
+        "./lib/rpc-generated/src/backend/action_utils",
+        "./src/backend/action_utils"
+      ],
+      "@/app/action_utils": [
+        "./lib/rpc-generated/src/app/action_utils",
+        "./src/app/action_utils"
+      ],
+      "@/*": [
+        "./src/*"
+      ],
+      "@ui/*": [
+        "./src/ui/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@repo/shadcn-ui/lib/utils": [
+        "./src/lib/utils"
+      ],
+      "@repo/shadcn-ui/components/ui/*": [
+        "./src/components/ui/*"
+      ],
+      "@repo/*": [
+        "./src/components/ui/shadcn-io/*"
+      ],
+      "@/server/*": [
+        "./server/*"
+      ],
+      "@/thirdparty": [
+        "./server/thirdparty/index.ts"
+      ],
+      "@/thirdparty/*": [
+        "./server/thirdparty/*"
+      ],
+      "@/frontend/components/EditableImg": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/backend/components/EditableImg": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/app/components/EditableImg": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/tools/EditableImg": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/components/ui/use-toast": [
+        "./node_modules/sonner"
+      ],
+      "@/components/ui/editable-img": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/frontend/components/editable-img": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/components/ui/EditableImg": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/backend/components/editable-img": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "@/components/base/EditableImg": [
+        "./src/@base/EditableImg.tsx"
+      ],
+      "gsap": [
+        "./src/lib/safe-gsap.ts"
+      ],
+      "@prisma/client": [
+        "./prisma-generated/client"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "resolveJsonModule": true,
+    "strict": false,
+    "types": [
+      "node"
+    ],
+    "strictNullChecks": true
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist",
+    "checkpoint",
+    "pnpm_node_modules",
+    "prisma-generated",
+    "server"
+  ]
+}

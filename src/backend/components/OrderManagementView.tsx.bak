@@ -1,0 +1,494 @@
+'use client'
+
+import React from 'react'
+import { useRouter } from 'next/navigation'
+import { OrderManagement } from '@/backend/route-params'
+import type { OrderStatus, OrderShipMethod, PaymentMethodType } from '@/backend/actions/OrderManagement'
+import type { OrderManagementState, OrderManagementHandlers } from '@/backend/hooks/useOrderManagement'
+
+// UI Components
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+
+// ===== 枚举映射 =====
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  PENDING_PAYMENT: '待付款',
+  PAID: '已支付',
+  PROCESSING: '处理中/待发货',
+  SHIPPED: '运输中',
+  DELIVERED: '已送达',
+  CANCELLED: '已取消',
+  REFUNDED: '已退款',
+}
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethodType, string> = {
+  PAYPAL: 'PayPal',
+  BANK_TRANSFER: '银行转账',
+  STRIPE: 'Stripe',
+  CREDIT_CARD: '信用卡',
+}
+
+interface Props {
+  state: OrderManagementState
+  handlers: OrderManagementHandlers
+}
+
+export const OrderManagementView = ({ state, handlers }: Props) => {
+  const router = useRouter()
+
+  return (
+    <div>
+      {/* 1. 顶部看板 */}
+      <div>
+        <Card>
+          <CardHeader>
+            <CardTitle>订单概览</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {state.statsLoading ? (
+              <div>加载指标中...</div>
+            ) : state.stats ? (
+              <div>
+                <div>
+                  <Label>待发货订单：</Label>
+                  <span>{state.stats.pendingShipmentCount}</span>
+                </div>
+                <div>
+                  <Label>今日新增订单：</Label>
+                  <span>{state.stats.todayNewOrderCount}</span>
+                </div>
+                <div>
+                  <Label>退款处理中：</Label>
+                  <span>{state.stats.refundingCount}</span>
+                </div>
+                <div>
+                  <Label>全部订单：</Label>
+                  <span>{state.stats.totalOrderCount}</span>
+                </div>
+              </div>
+            ) : (
+              <div>暂无数据</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 2. 筛选区 */}
+      <div>
+        <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange}>
+          <TabsList>
+            <TabsTrigger value="ALL">全部订单</TabsTrigger>
+            {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => (
+              <TabsTrigger key={k} value={k}>
+                {v}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <Card>
+          <CardContent>
+            <div>
+              <Label>全局搜索 (单号/客户/邮箱)</Label>
+              <Input
+                value={state.filterForm.keyword || ''}
+                onChange={(e) => handlers.handleFilterChange('keyword', e.target.value)}
+                placeholder="请输入关键词"
+              />
+            </div>
+            <div>
+              <Label>国家/地区</Label>
+              <Input
+                value={state.filterForm.countryName || ''}
+                onChange={(e) => handlers.handleFilterChange('countryName', e.target.value)}
+                placeholder="例如: US"
+              />
+            </div>
+            <div>
+              <Label>下单时间 (起)</Label>
+              <Input
+                type="date"
+                value={state.filterForm.startDate || ''}
+                onChange={(e) => handlers.handleFilterChange('startDate', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>下单时间 (止)</Label>
+              <Input
+                type="date"
+                value={state.filterForm.endDate || ''}
+                onChange={(e) => handlers.handleFilterChange('endDate', e.target.value)}
+              />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handlers.handleSearchClick}>搜索</Button>
+            <Button variant="secondary" onClick={handlers.handleClearFilter}>
+              重置
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+
+      {/* 3. 数据表格区 */}
+      <Card>
+        <CardContent>
+          {state.listLoading ? (
+            <div>加载列表中...</div>
+          ) : state.list.length === 0 ? (
+            <div>暂无符合条件的订单</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>订单号</TableHead>
+                  <TableHead>客户信息</TableHead>
+                  <TableHead>商品摘要</TableHead>
+                  <TableHead>财务</TableHead>
+                  <TableHead>状态/物流</TableHead>
+                  <TableHead>下单时间</TableHead>
+                  <TableHead>操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {state.list.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.orderNo}</TableCell>
+                    <TableCell>
+                      <div>
+                        <Button variant="link" onClick={() => handlers.jumpToCustomer(row.customerEmail)}>
+                          {row.customerName}
+                        </Button>
+                        <div>{row.countryName}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {row.itemImageUrl ? <img src={row.itemImageUrl} alt="商品" /> : null}
+                      <span>{row.itemSummary}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div>{row.currencyCode} {row.totalAmount}</div>
+                      <div>{PAYMENT_METHOD_LABELS[row.paymentMethod]}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div>{ORDER_STATUS_LABELS[row.status]}</div>
+                      {row.trackingCarrier && <div>{row.trackingCarrier}</div>}
+                    </TableCell>
+                    <TableCell>{new Date(row.createdAt).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Button onClick={() => OrderManagement.navigateToWithParams(router, { status: '', orderId: row.id })}>
+                        详情处理
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {/* 分页器 */}
+          <div>
+            <span>共 {state.total} 条</span>
+            <Button
+              disabled={state.filterForm.page === 1}
+              onClick={() => handlers.handlePageChange((state.filterForm.page || 1) - 1)}
+            >
+              上一页
+            </Button>
+            <span>当前页: {state.filterForm.page}</span>
+            <Button
+              disabled={(state.filterForm.page || 1) * (state.filterForm.pageSize || 20) >= state.total}
+              onClick={() => handlers.handlePageChange((state.filterForm.page || 1) + 1)}
+            >
+              下一页
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 4. 详情抽屉 (Sheet) */}
+      <Sheet open={!!state.queryOrderId} onOpenChange={(open) => !open && handlers.handleCloseDetail()}>
+        <SheetContent>
+          {state.detailLoading ? (
+            <div>加载订单详情中...</div>
+          ) : state.detailData ? (
+            <div>
+              <SheetHeader>
+                <SheetTitle>订单号：{state.detailData.orderNo}</SheetTitle>
+                <SheetDescription>
+                  状态：{ORDER_STATUS_LABELS[state.detailData.status]}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>业务与财务数据</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div>
+                      <Label>商品明细</Label>
+                      <Table>
+                        <TableBody>
+                          {state.detailData.items.map((sku) => (
+                            <TableRow key={sku.id}>
+                              <TableCell>{sku.mainImageUrl && <img src={sku.mainImageUrl} alt="" />}</TableCell>
+                              <TableCell>{sku.productName} ({sku.skuCode})</TableCell>
+                              <TableCell>数量: {sku.quantity}</TableCell>
+                              <TableCell>小计: {sku.lineAmount}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div>
+                      <Label>支付清单</Label>
+                      <div>商品总计：{state.detailData.subtotalAmount}</div>
+                      <div>运费：{state.detailData.shippingAmount}</div>
+                      <div>折扣抵扣：{state.detailData.discountAmount}</div>
+                      <div>实付金额：{state.detailData.currencyCode} {state.detailData.totalAmount}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>客户与发货处理</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div>
+                      <Label>收货地址</Label>
+                      {state.detailData.address ? (
+                        <div>
+                          <div>收件人：{state.detailData.address.recipientName} {state.detailData.address.phone}</div>
+                          <div>地址：{state.detailData.address.addressLine1} {state.detailData.address.addressLine2}</div>
+                          <div>{state.detailData.address.cityName}, {state.detailData.address.stateName}, {state.detailData.address.countryName}</div>
+                        </div>
+                      ) : (
+                        <div>无地址信息</div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <Label>履约处理区 (可多次更新发货信息)</Label>
+                      <div>
+                        <Label>物流渠道</Label>
+                        <Input
+                          value={state.shipForm.trackingCarrier}
+                          onChange={(e) => handlers.handleShipFormChange('trackingCarrier', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>物流单号</Label>
+                        <Input
+                          value={state.shipForm.trackingNumber}
+                          onChange={(e) => handlers.handleShipFormChange('trackingNumber', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>发货时间</Label>
+                        <Input
+                          type="datetime-local"
+                          value={state.shipForm.shippedAt}
+                          onChange={(e) => handlers.handleShipFormChange('shippedAt', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>内部备注</Label>
+                        <Textarea
+                          value={state.shipForm.internalNote || ''}
+                          onChange={(e) => handlers.handleShipFormChange('internalNote', e.target.value)}
+                        />
+                      </div>
+                      <Button onClick={handlers.submitShipOrder} disabled={state.detailData.status === 'CANCELLED' || state.detailData.status === 'REFUNDED'}>
+                        提交发货/更新信息
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>扩展追踪</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div>
+                      <Label>多段物流记录</Label>
+                      <Button onClick={() => handlers.openLogisticsDialog(state.detailData!.id)}>新增物流段</Button>
+                      <ul>
+                        {state.detailData.logistics.map((log) => (
+                          <li key={log.id}>
+                            [{log.segmentType}] {log.carrierName} - {log.trackingNumber} ({log.statusLabel})
+                            <div>添加时间：{new Date(log.createdAt).toLocaleString()}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <Label>操作日志</Label>
+                      <ul>
+                        {state.detailData.logs.map((op) => (
+                          <li key={op.id}>
+                            [{new Date(op.createdAt).toLocaleString()}] {op.operatorName}: {op.actionType}
+                            <div>备注：{op.actionNote}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="secondary" onClick={() => handlers.openStatusDialog(state.detailData!.id, state.detailData!.status)}>
+                      干预订单状态 (退款/取消等)
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </div>
+            </div>
+          ) : (
+            <div>订单不存在或加载失败</div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* 5. 状态变更弹窗 */}
+      <Dialog open={state.isStatusDialogOpen} onOpenChange={handlers.setIsStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>干预订单状态</DialogTitle>
+            <DialogDescription>强行修改订单状态需要记录备注说明。</DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label>新状态</Label>
+            <Select
+              value={state.statusForm.newStatus}
+              onValueChange={(val: OrderStatus) => handlers.setStatusForm((p) => ({ ...p, newStatus: val }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>操作备注 (必填)</Label>
+            <Textarea
+              value={state.statusForm.actionNote}
+              onChange={(e) => handlers.setStatusForm((p) => ({ ...p, actionNote: e.target.value }))}
+            />
+          </div>
+          <DialogFooter>
+            <Button onClick={handlers.submitStatusChange}>确认修改</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 6. 添加多段物流弹窗 */}
+      <Dialog open={state.isLogisticsDialogOpen} onOpenChange={handlers.setIsLogisticsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>添加物流段记录</DialogTitle>
+          </DialogHeader>
+          <div>
+            <Label>物流段名称 (如: 国内段、清关段)</Label>
+            <Input
+              value={state.logisticsForm.segmentType}
+              onChange={(e) => handlers.setLogisticsForm((p) => ({ ...p, segmentType: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>承运商名称</Label>
+            <Input
+              value={state.logisticsForm.carrierName || ''}
+              onChange={(e) => handlers.setLogisticsForm((p) => ({ ...p, carrierName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>物流单号</Label>
+            <Input
+              value={state.logisticsForm.trackingNumber || ''}
+              onChange={(e) => handlers.setLogisticsForm((p) => ({ ...p, trackingNumber: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>状态标签</Label>
+            <Input
+              value={state.logisticsForm.statusLabel || ''}
+              onChange={(e) => handlers.setLogisticsForm((p) => ({ ...p, statusLabel: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>预计送达时间 (选填)</Label>
+            <Input
+              type="datetime-local"
+              value={state.logisticsForm.estimatedArrivalAt || ''}
+              onChange={(e) => handlers.setLogisticsForm((p) => ({ ...p, estimatedArrivalAt: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>备注</Label>
+            <Input
+              value={state.logisticsForm.remark || ''}
+              onChange={(e) => handlers.setLogisticsForm((p) => ({ ...p, remark: e.target.value }))}
+            />
+          </div>
+          <DialogFooter>
+            <Button onClick={handlers.submitLogisticsSegment}>提交记录</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

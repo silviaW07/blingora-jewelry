@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "outDir": "dist",
+    "target": "ES2019",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/tools/prisma-proxy": ["./server/prisma.ts"],
+      "@/server/*": ["./server/*"],
+      "@prisma/client": ["./prisma-generated/client"]
+    }
+  },
+  "include": [
+    "server/**/*",
+    "src/actions/**/*",          // Legacy: src/actions/**/*
+    "src/**/actions/*",        // New: src/xxx/actions/*
+    "src/types/**/*",
+    "app/**/actions.ts"
+  ],
+  "exclude": [
+    "pnpm_node_modules",
+    "dist"
+  ]
+}

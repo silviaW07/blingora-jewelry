@@ -1,0 +1,7 @@
+SET FOREIGN_KEY_CHECKS=0;
+-- AlterTable
+ALTER TABLE `homeRecommendZone` MODIFY `zoneType` ENUM('PRODUCT', 'CATEGORY', 'SIDE_NAV') NOT NULL;
+
+-- AlterTable
+ALTER TABLE `homeRecommendZoneItem` MODIFY `entityType` ENUM('PRODUCT', 'CATEGORY', 'SIDE_NAV') NOT NULL;
+SET FOREIGN_KEY_CHECKS=1;

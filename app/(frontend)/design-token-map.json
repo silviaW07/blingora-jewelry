@@ -1,0 +1,11 @@
+{
+  "#f8fafc": "background",
+  "#0f172a": "foreground",
+  "#0055ff": "primary",
+  "#e2e8f0": "secondary",
+  "#ff5a1f": "accent",
+  "#cbd5e1": "muted",
+  "#64748b": "muted-foreground",
+  "#ef4444": "destructive",
+  "#f1f5f9": "card"
+}

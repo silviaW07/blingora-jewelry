@@ -1,0 +1,101 @@
+        </div>
+      </section>
+
+      <section className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row xl:px-10" data-controller-name="左侧导航与内容区" data-api-unique-id='productcategoryview-r220efc53b28f746c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+        <aside className="w-full shrink-0 lg:w-[320px]" data-controller-name="左侧一体化导航栏" data-api-unique-id='productcategoryview-rf59447163630589e-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+          <div className="rounded-[32px] bg-white p-5 shadow-[0_18px_50px_-40px_rgba(0,0,0,0.45)] lg:sticky lg:top-6" data-api-unique-id='productcategoryview-r20809e4690a05a41-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+
+            <section className="mt-5 space-y-5" data-controller-name="左侧关键词导航模块" data-api-unique-id='productcategoryview-r4d1fcc1beb5d82b1-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+              <nav className="flex flex-wrap gap-2" data-api-unique-id='productcategoryview-r9692dc14d92fba4c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                {leftNavKeywordGroups.map((group, index) => <button key={group.group_id} type="button" className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${activeLeftNavGroupId === group.group_id ? 'border-[#111111] bg-[#111111] text-white' : 'border-[#ddd6c8] bg-[#faf8f3] text-[#5f5a52] hover:border-[#111111] hover:bg-white'}`} onClick={() => handlers.handleSelectLeftNavGroup(group.group_id)} data-api-unique-id='productcategoryview-r1ed338a6f1bf3e37-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`leftNavKeywordGroups-${index}-group_name`} data-api-map-var-name='group'>
+                    {group.group_name}
+                  </button>)}
+              </nav>
+
+              <div className="space-y-2" data-api-unique-id='productcategoryview-r8bda9c0b1e98fc59-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                {leftNavKeywords.length > 0 ? leftNavKeywords.map((item, index) => <button key={item.keyword_id} type="button" className="flex w-full items-center justify-between rounded-[22px] border border-transparent bg-[#faf8f3] px-4 py-3 text-left text-sm font-medium text-[#1f1f1f] transition hover:border-[#111111] hover:bg-white" onClick={() => handlers.handleSelectKeyword(item)} data-api-unique-id='productcategoryview-rd27785a51006d777-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                    <span data-api-unique-id='productcategoryview-r3f9334a38cf21531-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>{renderKeywordLabel(item)}</span>
+                    <ChevronRight className="size-4 opacity-60" data-api-unique-id='productcategoryview-rf73003c2f5cf3f11-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />
+                  </button>) : <></>}
+              </div>
+
+              {!showProductResults ? <section data-controller-name="左侧分类浏览模块" data-api-unique-id='productcategoryview-rba31c6c28c87ab61-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  <div className="mb-3 flex items-center justify-between" data-api-unique-id='productcategoryview-rb92328d6412a4ec6-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    <div data-api-unique-id='productcategoryview-rc5f186c06dfc18eb-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                      <h3 className="text-sm font-semibold tracking-[0.12em] text-[#111111]" data-api-unique-id='productcategoryview-r4e0d753aeab96e5c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>分类浏览</h3>
+                      <p className="mt-1 text-xs text-[#7a756c]" data-api-unique-id='productcategoryview-rd5b335a95faaa71c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{sideNavZone?.title || '来自首页推荐专区管理的左侧导航'}</p>
+                    </div>
+                    <span className="text-xs text-[#7a756c]" data-api-unique-id='productcategoryview-ra0f71e360245eee4-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{sideNavItems.length > 0 ? `${sideNavItems.length} 项` : `${categories.length} 个目录`}</span>
+                  </div>
+                  <nav className="columns-1 space-y-2" data-api-unique-id='productcategoryview-raffcb2fe4e9d618a-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    {sideNavItems.length > 0 ? sideNavItems.map((item, index) => {
+                  const isActive = queryState.categoryId === item.category_id;
+                  return <button key={item.item_id} type="button" className={`mb-2 flex w-full break-inside-avoid items-center justify-between rounded-[22px] border px-4 py-3 text-left text-sm font-medium transition-colors ${isActive ? 'border-[#111111] bg-[#111111] text-white' : 'border-transparent bg-[#faf8f3] text-[#1f1f1f] hover:border-[#111111] hover:bg-white'}`} onClick={() => handlers.handleSelectCategory(item.category_id)} data-api-unique-id='productcategoryview-rdf25ffb13dc2d1bc-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                          <span className="pr-3 leading-6" data-api-unique-id='productcategoryview-r3328bc26f7aca71c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`sideNavItems-${index}-category_name`} data-api-map-var-name='item'>{item.category_name}</span>
+                          <ChevronRight className={`size-4 shrink-0 ${isActive ? 'text-white/80' : 'opacity-60'}`} data-api-unique-id='productcategoryview-rd2a2e67b9f2c83da-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />
+                        </button>;
+                }) : categories.map((category, index) => {
+                  const isExpanded = expandedCategoryIds.includes(category.category_id);
+                  const isActive = queryState.categoryId === category.category_id || category.children.some(child => child.category_id === queryState.categoryId);
+                  const canToggleChildren = category.display_config.allowChildrenCollapse && category.children.length > 0;
+                  return <div key={category.category_id} className="rounded-[24px] border border-transparent bg-[#faf8f3] p-2" data-api-unique-id='productcategoryview-r95ee5ca5f42524b8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                          <div className="flex items-center gap-2" data-api-unique-id='productcategoryview-rec6c6bc1919e100b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                            <button type="button" className={`flex flex-1 items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium transition-colors ${isActive ? 'bg-[#111111] text-white' : 'text-[#1f1f1f] hover:bg-[#f1eee7]'}`} onClick={() => handlers.handleSelectCategory(category.category_id)} data-api-unique-id='productcategoryview-r66cc388b37c79e9e-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                              <span data-api-unique-id='productcategoryview-rc032f8e3e5849211-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`categories-${index}-category_name`} data-api-map-var-name='category'>{category.category_name}</span>
+                              <span className={`text-xs ${isActive ? 'text-white/80' : 'text-[#7a756c]'}`} data-api-unique-id='productcategoryview-rc80335585cdc7947-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`categories-${index}-children.length`} data-api-map-var-name='category'>{category.children.length}</span>
+                            </button>
+                            {canToggleChildren ? <button type="button" className="flex size-10 items-center justify-center rounded-2xl text-[#5f5a52] transition-colors hover:bg-[#f1eee7]" onClick={() => handlers.handleToggleCategoryChildren(category.category_id)} aria-label={isExpanded ? '收起二级类目' : '展开二级类目'} data-api-unique-id='productcategoryview-r155043d5465eef57-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                                {isExpanded ? <ChevronDown className="size-4" data-api-unique-id='productcategoryview-r26eece658f0c50da-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' /> : <ChevronRight className="size-4" data-api-unique-id='productcategoryview-r135e485290992cdc-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />}
+                              </button> : null}
+                          </div>
+                          {isExpanded && category.children.length > 0 ? <div className="mt-2 space-y-1 px-2 pb-1" data-api-unique-id='productcategoryview-r971c511b69d0a05c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                              {category.children.map((child, index1) => {
+                        const isChildActive = queryState.categoryId === child.category_id;
+                        return <button key={child.category_id} type="button" className={`flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${isChildActive ? 'bg-[#ece7dc] text-[#111111]' : 'text-[#5f5a52] hover:bg-[#f4f1ea]'}`} onClick={() => handlers.handleSelectCategory(child.category_id)} data-api-unique-id='productcategoryview-r254f19483a63b5af-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                                    <span data-api-unique-id='productcategoryview-rd67b2eccb3b717c0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`categories-${index}-category.children-${index1}-category_name`} data-api-map-var-name='child'>{child.category_name}</span>
+                                    <ChevronRight className="size-4 opacity-60" data-api-unique-id='productcategoryview-rbe33929e7617441c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />
+                                  </button>;
+                      })}
+                            </div> : null}
+                        </div>;
+                })}
+                  </nav>
+                </section> : <section data-controller-name="左侧分类浏览模块" data-api-unique-id='productcategoryview-reb7d5dd17ce76d71-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  <div className="mb-3 flex items-center justify-between" data-api-unique-id='productcategoryview-rf2f679d002e6c7b0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    <h3 className="text-sm font-semibold tracking-[0.12em] text-[#111111]" data-api-unique-id='productcategoryview-r21a23533be9e0160-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>分类浏览</h3>
+                    <span className="text-xs text-[#7a756c]" data-api-unique-id='productcategoryview-rf29c37ba72bee1f5-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{categories.length} 个目录</span>
+                  </div>
+                  <nav className="space-y-2" data-api-unique-id='productcategoryview-rf40a744fc6432f94-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    {categories.map((category, index) => {
+                  const isExpanded = expandedCategoryIds.includes(category.category_id);
+                  const isActive = queryState.categoryId === category.category_id || category.children.some(child => child.category_id === queryState.categoryId);
+                  const canToggleChildren = category.display_config.allowChildrenCollapse && category.children.length > 0;
+                  return <div key={category.category_id} className="rounded-[24px] border border-transparent bg-[#faf8f3] p-2" data-api-unique-id='productcategoryview-rd9c361a78241e606-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                          <div className="flex items-center gap-2" data-api-unique-id='productcategoryview-rda0b2229b4c847ee-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                            <button type="button" className={`flex flex-1 items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium transition-colors ${isActive ? 'bg-[#111111] text-white' : 'text-[#1f1f1f] hover:bg-[#f1eee7]'}`} onClick={() => handlers.handleSelectCategory(category.category_id)} data-api-unique-id='productcategoryview-r9cff85a11ffebaa9-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                              <span data-api-unique-id='productcategoryview-ra2e9e29454823d64-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`categories-${index}-category_name`} data-api-map-var-name='category'>{category.category_name}</span>
+                              <span className={`text-xs ${isActive ? 'text-white/80' : 'text-[#7a756c]'}`} data-api-unique-id='productcategoryview-r2deb969c70376130-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`categories-${index}-children.length`} data-api-map-var-name='category'>{category.children.length}</span>
+                            </button>
+                            {canToggleChildren ? <button type="button" className="flex size-10 items-center justify-center rounded-2xl text-[#5f5a52] transition-colors hover:bg-[#f1eee7]" onClick={() => handlers.handleToggleCategoryChildren(category.category_id)} aria-label={isExpanded ? '收起二级类目' : '展开二级类目'} data-api-unique-id='productcategoryview-r9bd0f96c3c62c1b9-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                                {isExpanded ? <ChevronDown className="size-4" data-api-unique-id='productcategoryview-r8b1569ddabd6357b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' /> : <ChevronRight className="size-4" data-api-unique-id='productcategoryview-rfb28be2b1cb1de88-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />}
+                              </button> : null}
+                          </div>
+                          {isExpanded && category.children.length > 0 ? <div className="mt-2 space-y-1 px-2 pb-1" data-api-unique-id='productcategoryview-r5cad4b7500aa10cb-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                              {category.children.map((child, index1) => {
+                        const isChildActive = queryState.categoryId === child.category_id;
+                        return <button key={child.category_id} type="button" className={`flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${isChildActive ? 'bg-[#ece7dc] text-[#111111]' : 'text-[#5f5a52] hover:bg-[#f4f1ea]'}`} onClick={() => handlers.handleSelectCategory(child.category_id)} data-api-unique-id='productcategoryview-r33261a07f77419ef-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
+                                    <span data-api-unique-id='productcategoryview-rbec0e43b27650ef0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`categories-${index}-category.children-${index1}-category_name`} data-api-map-var-name='child'>{child.category_name}</span>
+                                    <ChevronRight className="size-4 opacity-60" data-api-unique-id='productcategoryview-r16c2e7ceca58b50e-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />
+                                  </button>;
+                      })}
+                            </div> : null}
+                        </div>;
+                })}
+                  </nav>
+                </section>}
+            </section>
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1 space-y-6" data-controller-name="右侧横幅与热门搜索区" data-api-unique-id='productcategoryview-r549ced684abd2c7f-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+          {showProductResults ? <section className="space-y-6" data-controller-name="商品结果展示区" data-api-unique-id='productcategoryview-r81884d5ddb85b4ab-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>

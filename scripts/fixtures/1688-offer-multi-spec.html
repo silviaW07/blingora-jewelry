@@ -1,0 +1,87 @@
+<!doctype html><html><body>
+<!-- gallery with leading video: must skip mp4/aliVideo and keep subsequent color images -->
+<script>
+var media = {
+  "offerImgList": [
+    "https://cloud.video.taobao.com/play/u/xxx/p/1/e/6/t/1/aliVideo_demo.mp4",
+    "https://cbu01.alicdn.com/img/ibank/gallery_main_1.jpg",
+    "https://cbu01.alicdn.com/img/ibank/gallery_main_2.jpg",
+    "https://cbu01.alicdn.com/img/ibank/gallery_main_3.jpg"
+  ]
+};
+</script>
+<div class="detail-gallery">
+  <video class="aliVideo" src="https://cloud.video.taobao.com/x.mp4"></video>
+  <img class="video-cover" src="https://img.alicdn.com/video/cover_poster.jpg" alt="视频封面" />
+  <img title="米白" src="https://cbu01.alicdn.com/img/1_50x50.jpg" />
+  <img title="卡其" src="https://cbu01.alicdn.com/img/2_50x50.jpg" />
+</div>
+<!-- visible 3 colors + hidden/collapsed extras (display:none) must still be scraped -->
+<div class="sku-prop-module">
+  <div class="prop-item" title="米白"><img src="https://cbu01.alicdn.com/img/1_50x50.jpg" /><span>米白</span></div>
+  <div class="prop-item" title="卡其"><img src="https://cbu01.alicdn.com/img/2_50x50.jpg" /><span>卡其</span></div>
+  <div class="prop-item" title="咖啡"><img src="https://cbu01.alicdn.com/img/3_50x50.jpg" /><span>咖啡</span></div>
+  <div class="expand-view" style="display:none">
+    <div class="prop-item" title="黑色"><img src="https://cbu01.alicdn.com/img/4_50x50.jpg" /><span>黑色</span></div>
+    <div class="prop-item" title="粉色"><img src="https://cbu01.alicdn.com/img/5_50x50.jpg" /><span>粉色</span></div>
+    <div class="prop-item" title="银灰"><img src="https://cbu01.alicdn.com/img/6_50x50.jpg" /><span>银灰</span></div>
+    <div class="prop-item" title="深蓝"><img src="https://cbu01.alicdn.com/img/7_50x50.jpg" /><span>深蓝</span></div>
+    <div class="prop-item" title="无图色"><span>无图色</span></div>
+  </div>
+</div>
+<script>
+// decoy: few colors + inflated size stubs — must NOT beat full color table under color-weighted score
+var decoy = {
+  "skuProps": [
+    {"prop":"颜色","value":[{"name":"红色","imageUrl":"https://cbu01.alicdn.com/img/red_50x50.jpg"},{"name":"蓝色","imageUrl":"https://cbu01.alicdn.com/img/blue_50x50.jpg"},{"name":"黑色","imageUrl":"https://cbu01.alicdn.com/img/black_50x50.jpg"}]},
+    {"prop":"尺码","value":[
+      {"name":"S"},{"name":"M"},{"name":"L"},{"name":"XL"},{"name":"XXL"},
+      {"name":"3XL"},{"name":"4XL"},{"name":"5XL"},{"name":"6XL"},{"name":"7XL"},
+      {"name":"8XL"},{"name":"9XL"},{"name":"10XL"},{"name":"11XL"},{"name":"12XL"},
+      {"name":"13XL"},{"name":"14XL"},{"name":"15XL"},{"name":"16XL"},{"name":"17XL"}
+    ]}
+  ],
+  "skuMap": {
+    "红色>L": {"price":"10","canBookCount":1},
+    "蓝色>L": {"price":"10","canBookCount":1},
+    "黑色>L": {"price":"10","canBookCount":1}
+  }
+};
+// full offer blob: 花色 + 鞋码; one color without imageUrl must still be kept
+window.__INIT_DATA__ = {
+  "offerDetail": {
+    "skuModel": {
+      "skuProps": [
+        {"prop":"花色","value":[
+          {"name":"米白","imageUrl":"https://cbu01.alicdn.com/img/1_50x50.jpg"},
+          {"name":"卡其","imageUrl":"https://cbu01.alicdn.com/img/2_50x50.jpg"},
+          {"name":"咖啡","imageUrl":"https://cbu01.alicdn.com/img/3_50x50.jpg"},
+          {"name":"黑色","imageUrl":"https://cbu01.alicdn.com/img/4_50x50.jpg"},
+          {"name":"粉色","imageUrl":"https://cbu01.alicdn.com/img/5_50x50.jpg"},
+          {"name":"银灰","imageUrl":"https://cbu01.alicdn.com/img/6_50x50.jpg"},
+          {"name":"深蓝","imageUrl":"https://cbu01.alicdn.com/img/7_50x50.jpg"},
+          {"name":"裸粉"}
+        ]},
+        {"prop":"规格","value":[{"name":"L"}]},
+        {"prop":"鞋码","value":[
+          {"name":"35"},{"name":"36"},{"name":"37"},{"name":"38"},{"name":"39"},{"name":"40"},{"name":"41"}
+        ]}
+      ],
+      "skuList": [
+        {"specAttrs":"花色&gt;米白;鞋码&gt;35","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;米白;鞋码&gt;36","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;米白;鞋码&gt;37","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;卡其;鞋码&gt;35","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;卡其;鞋码&gt;36","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;咖啡;鞋码&gt;37","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;黑色;鞋码&gt;38","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;粉色;鞋码&gt;39","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;银灰;鞋码&gt;40","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;深蓝;鞋码&gt;41","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;深蓝;鞋码&gt;35","price":"29","canBookCount":9},
+        {"specAttrs":"花色&gt;裸粉;鞋码&gt;36","price":"29","canBookCount":9}
+      ]
+    }
+  }
+};
+</script></body></html>

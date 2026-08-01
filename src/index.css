@@ -1,0 +1,1172 @@
+@config "../tailwind.config.ts";
+@import "tailwindcss";
+
+@layer base {
+  html {
+    scroll-behavior: auto !important;
+    scrollbar-gutter: stable;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body { height: 100%; }
+  body { 
+    background-color: var(--color-background, var(--background));
+    color:var(--color-foreground, var(--foreground));
+    overflow-y: scroll;
+    font-family: "Outfit", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    @apply antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * 全局可交互指针：覆盖 Tailwind Preflight 将 button 设为 cursor:default 的问题。
+   * React onClick 不会留在 DOM 属性上，因此按语义标签 / ARIA / 常见交互选择器统一处理。
+   */
+  a[href],
+  area[href],
+  button:not(:disabled):not([disabled]):not([aria-disabled='true']),
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type='button']:not(:disabled),
+  input[type='submit']:not(:disabled),
+  input[type='reset']:not(:disabled),
+  input[type='image']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  [role='button']:not([aria-disabled='true']):not([disabled]),
+  [role='link'],
+  [role='tab']:not([aria-disabled='true']),
+  [role='menuitem']:not([aria-disabled='true']),
+  [role='option']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']),
+  [role='checkbox']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']),
+  [role='treeitem'],
+  [data-clickable='true'],
+  .cursor-pointer {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:disabled,
+  button[disabled],
+  button[aria-disabled='true'],
+  [role='button'][aria-disabled='true'],
+  [aria-disabled='true'],
+  input:disabled,
+  select:disabled,
+  .cursor-not-allowed,
+  .is-disabled {
+    cursor: not-allowed;
+  }
+
+  a,
+  button,
+  [role='button'],
+  [role='link'],
+  [role='tab'],
+  label,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * Radix RadioGroupItem：可见的是 role="radio" 的 button，后面还跟一个用于表单的原生 input[type=radio]。
+   * 不显式去掉 appearance 时，部分浏览器仍会画出原生圆环，且绝对定位无 inset 时会落在按钮下方，看起来像「两个圆点」。
+   */
+   button[role="radio"] + input[type="radio"][aria-hidden="true"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+
+  :root {
+    --calendar-invert: 0; /* 默认浅色模式，不反转 */
+    --storefront-page-bg: #FFF5F5;
+    --storefront-outer-border: #F0DEDE;
+    /* 全站内容区统一宽度：Header / Banner / 卡片 / Footer 共线 */
+    --storefront-max-w: 1440px;
+    --storefront-gutter: 1.25rem; /* 20px */
+    --storefront-gutter-sm: 0.75rem; /* 12px，<768px */
+    /* 兼容旧变量名 */
+    --site-max-w: var(--storefront-max-w);
+    --site-gutter: var(--storefront-gutter);
+    --site-gutter-sm: var(--storefront-gutter-sm);
+  }
+  
+  [data-theme='dark'] {
+    --calendar-invert: 1; /* 深色模式，完全反转 */
+  }
+  
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(var(--calendar-invert));
+  }
+   /* 全局隐藏滚动条 - 适用于所有元素 */
+   * {
+    /* Firefox */
+    scrollbar-width: none;
+    /* IE 和 Edge */
+    -ms-overflow-style: none;
+  }
+
+  /* WebKit 浏览器 (Chrome, Safari, Edge) */
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  *::-webkit-scrollbar-track {
+    display: none;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    display: none;
+  }
+}
+
+
+.whatsapp-float-btn {
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.home-product-card,
+.home-side-nav-item,
+.product-color-swatch,
+.storefront-category-nav button,
+.product-detail-buy-actions button,
+[data-controller-name='一级分类标签导航'] button,
+[data-controller-name='首页左侧分类导航按钮列表'] button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 前台统一内容壳：Header / Banner / 卡片 / Footer 同宽共线 */
+.storefront-container,
+.site-shell,
+.storefront-shell {
+  width: 100%;
+  max-width: var(--storefront-max-w, 1440px);
+  padding-left: var(--storefront-gutter, 1.25rem);
+  padding-right: var(--storefront-gutter, 1.25rem);
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+/* 商品详情：<1024 上下堆叠；≥1024 左图右购 */
+.product-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+.product-detail-gallery {
+  order: 1;
+}
+
+.product-detail-buy {
+  order: 2;
+}
+
+.product-detail-desc {
+  order: 3;
+}
+
+.product-detail-related {
+  order: 4;
+}
+
+@media (min-width: 1024px) {
+  .product-detail-layout {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .product-detail-gallery {
+    grid-column: 1;
+    grid-row: 1;
+    order: unset;
+  }
+
+  .product-detail-desc {
+    grid-column: 1;
+    grid-row: 2;
+    order: unset;
+  }
+
+  .product-detail-buy {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    order: unset;
+  }
+
+  .product-detail-related {
+    grid-column: 1 / -1;
+    order: unset;
+  }
+}
+
+/* 顶部分类标签：小屏 2~3 列，大屏横向均分 */
+.storefront-category-nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.storefront-category-nav > * {
+  min-width: 0;
+}
+
+@media (min-width: 480px) {
+  .storefront-category-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .storefront-category-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: visible;
+  }
+
+  .storefront-category-nav > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .storefront-category-nav button {
+    width: 100%;
+    justify-content: center;
+    padding-inline: 0 !important;
+  }
+
+  /* 一级分类标签行：与左侧 CATEGORIES 下边缘同高 */
+  [data-controller-name="一级分类标签导航"] {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 767px) {
+  .storefront-container,
+  .site-shell,
+  .storefront-shell {
+    max-width: none;
+    padding-left: var(--storefront-gutter-sm, 0.75rem);
+    padding-right: var(--storefront-gutter-sm, 0.75rem);
+  }
+}
+
+@media (max-width: 479px) {
+  .product-detail-page {
+    font-size: 0.9375rem;
+  }
+
+  .product-detail-page h1 {
+    font-size: 1.125rem !important;
+    line-height: 1.35;
+  }
+
+  .product-detail-page .product-detail-buy-actions {
+    gap: 0.5rem;
+  }
+
+  .product-detail-page .product-detail-buy-actions button {
+    min-height: 2.75rem;
+  }
+
+  .storefront-category-nav button {
+    font-size: 0.8125rem;
+    padding-inline: 0.35rem;
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
+
+/* 商品详情 SKU 规格列表：极简行卡片 */
+.product-sku-list {
+  width: 100%;
+  border-top: 1px solid #eeeeee;
+}
+
+.product-sku-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1.05rem 0.15rem;
+  border-bottom: 1px solid #eeeeee;
+  box-sizing: border-box;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.product-sku-thumb {
+  display: none;
+}
+
+.product-sku-thumb-img {
+  display: none;
+}
+
+.product-sku-thumb-code {
+  display: none;
+}
+
+.product-sku-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  padding-left: 0.15rem;
+}
+
+.product-sku-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  color: #333333;
+}
+
+.product-sku-price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  color: #111111;
+  white-space: nowrap;
+}
+
+.product-sku-price-prefix {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #333333;
+}
+
+.product-sku-price-num {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #111111;
+}
+
+/* 商品详情：颜色缩略图（上方标签 + 框内仅图片） */
+.product-color-swatch-list {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 1rem;
+  row-gap: 10px;
+  overflow-x: visible;
+  padding-top: 2rem;
+  padding-bottom: 0.35rem;
+}
+
+.product-color-swatch {
+  --color-swatch-size: 88px;
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: var(--color-swatch-size);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.product-color-swatch-label {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 50%;
+  z-index: 2;
+  max-width: calc(var(--color-swatch-size) + 1.5rem);
+  transform: translateX(-50%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 2px;
+  background: #4b5563;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #fff;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.product-color-swatch.is-selected .product-color-swatch-label,
+.product-color-swatch:hover .product-color-swatch-label,
+.product-color-swatch:focus-visible .product-color-swatch-label {
+  opacity: 1;
+}
+
+.product-color-swatch-frame {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--color-swatch-size);
+  height: var(--color-swatch-size);
+  overflow: hidden;
+  border: 2px solid #e5e5e5;
+  border-radius: 4px;
+  background: #f3f3f3;
+  transition: border-color 0.12s ease;
+}
+
+.product-color-swatch-frame > *,
+.product-color-swatch-frame img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.product-color-swatch:hover:not(.is-selected) .product-color-swatch-frame {
+  border-color: #c4c4c4;
+}
+
+/* 选中：外圈粉色流光（旋转锥形渐变，图片在上层不被遮挡） */
+@keyframes product-color-swatch-flow-rotate {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.product-color-swatch.is-selected .product-color-swatch-frame {
+  border: none;
+  box-shadow: none;
+  padding: 3px;
+  overflow: hidden;
+  background: #fff;
+  isolation: isolate;
+}
+
+.product-color-swatch.is-selected .product-color-swatch-frame::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: 180%;
+  height: 180%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #f254a6 0deg,
+    #ffb6d5 70deg,
+    #fff0f6 120deg,
+    #f254a6 180deg,
+    #ff8fc4 250deg,
+    #ffe0ef 300deg,
+    #f254a6 360deg
+  );
+  transform: translate(-50%, -50%);
+  animation: product-color-swatch-flow-rotate 2.5s linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.product-color-swatch.is-selected .product-color-swatch-frame > * {
+  position: relative;
+  z-index: 1;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #f3f3f3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-color-swatch.is-selected .product-color-swatch-frame::before {
+    animation: none;
+    background: linear-gradient(135deg, #f254a6, #ffb6d5, #f254a6);
+  }
+}
+
+.product-color-swatch.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.product-color-swatch.is-disabled:hover .product-color-swatch-label {
+  opacity: 0;
+}
+
+.product-color-swatch.is-disabled.is-selected .product-color-swatch-label {
+  opacity: 1;
+}
+
+@media (min-width: 640px) {
+  .product-color-swatch {
+    --color-swatch-size: 96px;
+  }
+
+  .product-color-swatch-list {
+    column-gap: 1.125rem;
+  }
+}
+
+.product-sku-stepper {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 2rem;
+  padding: 0 0.15rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 9999px;
+  background: #ffffff;
+}
+
+.product-sku-stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  background: transparent;
+  color: #333333;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.product-sku-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.product-sku-stepper-qty {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #222222;
+  line-height: 1;
+}
+
+@media (max-width: 479px) {
+  .product-sku-row {
+    gap: 0.75rem;
+    padding: 0.9rem 0;
+  }
+
+  .product-sku-name {
+    font-size: 1rem;
+  }
+
+  .product-sku-price-prefix {
+    font-size: 0.875rem;
+  }
+
+  .product-sku-price-num {
+    font-size: 1.125rem;
+  }
+
+  .product-sku-stepper {
+    height: 1.85rem;
+  }
+
+  .product-sku-stepper-btn {
+    width: 1.55rem;
+    height: 1.55rem;
+  }
+
+  .product-sku-stepper-qty {
+    min-width: 1.25rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* ===== 首页：克制 Banner + 透明 Brand 悬浮侧栏（等高对齐） ===== */
+:root {
+  --home-brand-w: 280px;
+}
+
+[data-controller-name="首页独立站陈列布局"] {
+  --home-brand-w: 280px;
+  --home-hero-h: 500px;
+}
+
+/* 宽度/水平 gutter 由 .storefront-container 提供，此处只保留英雄区垂直节奏 */
+.home-hero-fullbleed {
+  --home-hero-h: 500px;
+  --home-brand-w: 280px;
+  padding-top: 1.25rem;
+  padding-bottom: 1rem;
+}
+
+/* 非首页：CATEGORIES 按钮正下方 Brand 飞出层（≤0.2s） */
+.floating-side-nav {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 40;
+  width: var(--home-brand-w, 280px);
+  max-height: min(70vh, calc(100vh - 180px));
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.floating-side-nav.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.floating-side-nav-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(70vh, calc(100vh - 180px));
+  padding: 0.875rem 0.75rem;
+  border-radius: 12px;
+  border: 0;
+  background: #f8f8f8;
+  box-shadow: 0 18px 48px -34px rgba(17, 17, 17, 0.32);
+  box-sizing: border-box;
+}
+
+.floating-side-nav-list {
+  --brand-btn-h: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  max-height: 100%;
+  margin: 0;
+  padding: 0 0.125rem 0 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+@media (max-width: 1023px) {
+  .floating-side-nav {
+    display: none;
+  }
+}
+
+/* 首页顶部目录导航：与下方品牌框 / Banner 严格共线 */
+[data-controller-name="顶部目录导航"] {
+  margin-top: 0.75rem !important;
+}
+
+/* 粉色 CATEGORIES：全站固定宽度，禁止收缩 */
+[data-controller-name="分类导航CATEGORIES标识"] {
+  width: var(--home-brand-w, 280px) !important;
+  min-width: var(--home-brand-w, 280px) !important;
+  max-width: var(--home-brand-w, 280px) !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box;
+  height: 44px !important;
+  min-height: 44px !important;
+  background: #f254a6 !important;
+  color: #ffffff !important;
+  border: 0;
+  box-shadow: none !important;
+}
+
+.storefront-categories-col {
+  width: var(--home-brand-w, 280px);
+  min-width: var(--home-brand-w, 280px);
+  max-width: var(--home-brand-w, 280px);
+  flex-shrink: 0;
+}
+
+.storefront-home-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding: 0.15rem 0.1rem;
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.storefront-home-back-link:hover {
+  color: #6b7280;
+}
+
+@media (min-width: 1024px) {
+  [data-controller-name="顶部目录导航"] {
+    display: flex;
+    align-items: stretch;
+    gap: 0.75rem !important;
+  }
+
+  [data-controller-name="一级分类标签导航"] {
+    height: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    display: flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 767px) {
+  .home-hero-fullbleed {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+}
+
+.home-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .home-hero-grid {
+    grid-template-columns: var(--home-brand-w) minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: stretch;
+    height: var(--home-hero-h);
+    overflow: hidden;
+  }
+}
+
+.home-side-nav-col {
+  width: 100%;
+  max-width: var(--home-brand-w);
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .home-side-nav-col {
+    width: var(--home-brand-w);
+    min-width: var(--home-brand-w);
+    max-width: var(--home-brand-w);
+    height: var(--home-hero-h);
+    min-height: var(--home-hero-h);
+    max-height: var(--home-hero-h);
+    align-self: stretch;
+    overflow: hidden;
+  }
+}
+
+.home-side-nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--home-brand-w);
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.875rem 0.75rem;
+  background: #f8f8f8;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.home-side-nav-list {
+  --brand-btn-h: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  /* 外框高度不变；胶囊之间小间距，超出则由 overflow-y: auto 继续滚动 */
+  gap: 10px;
+  min-height: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0 0.125rem 0 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* 桌面端继续使用外框 100% 填满策略 */
+
+/* Brand 列表项：首页左侧栏与 CATEGORIES 飞出层共用 — 白底圆角胶囊
+ * 字体与顶部一级分类标签（En stock / New 等）对齐：
+ * text-sm → lg:text-base，font-bold，同色 #333333，继承 body 字体族 */
+.brand-nav-item,
+.home-side-nav-item {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  height: var(--brand-btn-h, 44px);
+  min-height: var(--brand-btn-h, 44px);
+  max-height: var(--brand-btn-h, 44px);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0 1rem 0 1.125rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #333333;
+  font-family: inherit;
+  font-size: 0.875rem; /* text-sm，与顶部导航小屏一致 */
+  font-weight: 700; /* font-bold */
+  line-height: 1.25;
+  letter-spacing: normal;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04);
+  box-sizing: border-box;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+
+@media (min-width: 1024px) {
+  .brand-nav-item,
+  .home-side-nav-item {
+    font-size: 1rem; /* lg:text-base，与顶部导航桌面端一致 */
+  }
+}
+
+.brand-nav-item:hover,
+.home-side-nav-item:hover {
+  background: #f3f3f3;
+  border-color: #d4d4d4;
+  color: #333333;
+  box-shadow: 0 1px 3px rgba(17, 17, 17, 0.06);
+}
+
+.brand-nav-item[data-active='true'],
+.home-side-nav-item[data-active='true'] {
+  background: #efefef;
+  border-color: #cfcfcf;
+  color: #333333;
+  font-weight: 700;
+}
+
+.brand-nav-item .brand-nav-chevron,
+.home-side-nav-item .brand-nav-chevron {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: #a3a3a3;
+}
+
+.brand-nav-item:hover .brand-nav-chevron,
+.brand-nav-item[data-active='true'] .brand-nav-chevron,
+.home-side-nav-item:hover .brand-nav-chevron,
+.home-side-nav-item[data-active='true'] .brand-nav-chevron {
+  color: #737373;
+}
+
+/* Banner 列：由海报比例决定行高，供左侧 stretch 对齐 */
+.home-banner-wrap {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+}
+
+@media (min-width: 1024px) {
+  .home-banner-wrap {
+    height: var(--home-hero-h);
+    min-height: var(--home-hero-h);
+    max-height: var(--home-hero-h);
+  }
+}
+
+.home-right-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0;
+}
+
+/* 海报：标准舒适比例，不铺满视口 */
+.home-banner-shell {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  overflow: hidden;
+  aspect-ratio: 21 / 9;
+  max-height: 420px;
+  min-height: 200px;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+  background: #111111;
+}
+
+@media (min-width: 1024px) {
+  .home-banner-shell {
+    height: 100%;
+    min-height: var(--home-hero-h);
+    max-height: var(--home-hero-h);
+    aspect-ratio: auto;
+    border-radius: 12px;
+  }
+}
+
+/* 海报图：任意尺寸上传均裁剪铺满，不变形 */
+.home-banner-shell .home-banner-media,
+.home-banner-shell img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center center;
+  display: block;
+}
+
+/* Banner 文案安全区：距左缘约 12% */
+.home-banner-copy {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  display: flex;
+  width: min(72%, 640px);
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.75rem;
+  padding-left: 12%;
+  padding-right: 5%;
+  text-align: left;
+  color: #ffffff;
+  box-sizing: border-box;
+}
+
+@media (max-width: 639px) {
+  .home-banner-copy {
+    width: 88%;
+    padding-left: 10%;
+    gap: 0.5rem;
+  }
+}
+
+
+/* 首页专区区块：保持透明无框 */
+.home-zone-section {
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* 商品列表卡片：白底圆角框，与浅色页面背景分离 */
+.home-product-card {
+  border: 1px solid #ebe7de !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(17, 17, 17, 0.06) !important;
+  background: #ffffff !important;
+  height: 100%;
+}
+
+/* 主图固定 1:1：裁剪铺满，覆盖 EditableImg 默认 inline aspect-ratio:16/9 */
+.home-product-card .home-product-card-media {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  flex-shrink: 0;
+  border-radius: 11px 11px 0 0;
+  overflow: hidden;
+  background: #f7f4ee;
+}
+
+.home-product-card .home-product-card-media > *,
+.home-product-card .home-product-card-media img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  aspect-ratio: auto !important;
+  object-fit: cover !important;
+  object-position: center center;
+}
+
+/* 顶部搜索框：大圆角胶囊 */
+[data-controller-name="搜索栏与用户功能区"] > div:first-child {
+  border-radius: 24px !important;
+}
+
+/* 适当放宽搜索容器最大宽度，让搜索框外层向左扩展 */
+@media (min-width: 1024px) {
+  [data-controller-name="搜索栏与用户功能区"] {
+    max-width: 100% !important;
+  }
+}
+
+/* 首页服务保障区：彻底去掉外层大背景框，只保留独立卡片 */
+[data-controller-name="首页服务权益条模块"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  max-width: 100% !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* 底部服务权益卡片：独立白卡，紧凑横排 */
+[data-controller-name="首页服务权益卡片"] {
+  border-radius: 12px;
+  background: #ffffff !important;
+  border: 1px solid var(--storefront-outer-border, #F0DEDE) !important;
+  box-shadow: 0 18px 42px -36px rgba(0, 0, 0, 0.22) !important;
+}
+
+/* 全站主界面外框：统一浅粉描边，白底卡片在粉色画布上更清晰 */
+[data-controller-name="购物车核心区域"] > .storefront-container > div > [class*="border"],
+[data-controller-name="购物车核心区域"] > .storefront-shell > div > [class*="border"],
+[data-controller-name="客户个人中心"] aside,
+[data-controller-name="客户个人中心"] > .storefront-container section,
+[data-controller-name="客户个人中心"] > .storefront-shell section,
+[data-controller-name="B2B商品详情布局"] .rounded-\[28px\],
+[data-controller-name="商品详情页布局"] .rounded-\[24px\] {
+  border-color: var(--storefront-outer-border, #F0DEDE);
+}
+
+/* 覆盖默认的颜色类名，映射到语义化配色 */
+@layer utilities {
+  /* 前台主内容优先使用 .storefront-container；保留 container 兼容旧页 */
+  .container {
+    width: 100%;
+    max-width: var(--storefront-max-w, 1440px);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--storefront-gutter, 1.25rem);
+    padding-right: var(--storefront-gutter, 1.25rem);
+  }
+
+  @media (max-width: 767px) {
+    .container {
+      max-width: none;
+      padding-left: var(--storefront-gutter-sm, 0.75rem);
+      padding-right: var(--storefront-gutter-sm, 0.75rem);
+    }
+  }
+
+  /* 注意：所有颜色、排版、间距、阴影的映射现已完全迁移至 tailwind.config.ts */
+
+  /* 增强 ToggleGroupItem 的选中状态对比度 - 完全使用主题色变量 */
+  .data-\[state\=on\]\:bg-primary[data-state="on"] { 
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border: 2px solid var(--color-primary);
+    box-shadow: 0 4px 6px -1px color-mix(in srgb, var(--color-foreground, var(--foreground)) 10%, transparent);
+  }
+  
+  /* 未选中状态的样式 - 使用muted色 */
+  [data-radix-collection-item][data-state="off"] {
+    background-color: var(--color-muted);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+  }
+  
+  [data-radix-collection-item][data-state="off"]:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
+  
+  /* 禁用状态的样式 */
+  [data-radix-collection-item][data-disabled] {
+    background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+    color: color-mix(in srgb, var(--color-muted-foreground) 50%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+    cursor: not-allowed;
+  }
+
+  /* Recharts 适配 */
+  [data-slot="chart"] .recharts-cartesian-axis-tick text {
+    fill: var(--color-muted-foreground) !important;
+  }
+}
+
+/* 覆盖浏览器 autofill 背景色 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: inherit !important;
+  transition: background-color 5000s ease-in-out 0s;
+  background-color: transparent !important;
+}
+
+
+/*
+ * Preflight（@layer base）对 * 使用 `border: 0 solid`，省略的 border-color 为 currentColor。
+ * 原先在更早的 @layer base 里 `* { @apply border-border }` 会排在 Preflight 之前合并，无法覆盖简写里的颜色；
+ * 只加 `border-b` 时分割线会跟正文同色。放在**本文件末尾**的 @layer base，合并后会排在 Preflight 之后。
+ * 勿改为未分层 `*`，否则会压过 utilities 里的 border-primary / border-input 等。
+ */
+ @layer base {
+  *,
+  ::before,
+  ::after,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, var(--border, #d8e1ee));
+  }
+}
+
+
+/* 覆盖 .list-item 类名与 CSS display: list-item 的冲突 */
+.list-item {
+  display: flex !important;
+  list-style: none !important;
+}
+.list-item::marker,
+.list-item::before {
+  display: none !important;
+  content: none !important;
+}

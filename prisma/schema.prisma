@@ -1,0 +1,1227 @@
+generator client {
+  provider = "prisma-client-js"
+  output = "../prisma-generated/client"
+}
+
+
+datasource db {
+  provider = "mysql"
+  url      = "mysql://root:LocalDev123!@localhost:3306/PROJ_fcb9e6ee_snap_20260726_092922_893?charset=utf8mb4&connection_limit=10"
+}
+
+enum userrole {
+  CUSTOMER
+  ADMIN
+}
+
+enum userstatus {
+  ACTIVE
+  DISABLED
+}
+
+enum categorystatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum productstatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+  PREORDER
+}
+
+enum productsource {
+  MANUAL
+  IMPORT_1688
+  TABLE_IMPORT
+}
+
+enum stockstatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum cartitemstatus {
+  VALID
+  INVALID
+}
+
+enum importtaskstatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  QUEUED
+  RATE_LIMITED
+  PARTIAL_SUCCESS
+  RETRY_PENDING
+}
+
+enum materialtype {
+  GOLD_14K
+  GOLD_18K
+  SILVER_925
+  GOLD_PLATED
+  ROSE_GOLD
+  WHITE_GOLD
+  PEARL
+  GEMSTONE
+}
+
+enum gemstoneType {
+  DIAMOND
+  ZIRCON
+  PEARL
+  COLOR_GEM
+  NONE
+}
+
+enum jewelryproducttype {
+  RING
+  NECKLACE
+  EARRING
+  BRACELET
+  ANKLET
+  SET
+  MENS_JEWELRY
+  GIFT_BOX
+  CUSTOM_ENGRAVING
+}
+
+enum sitesettingtype {
+  PROMO_BAR
+  HERO_BANNER
+  CATEGORY_BANNER
+  HOT_MATERIAL
+  LOOKBOOK
+  TRUST_BADGE
+  HOT_SEARCH
+  FOOTER_LINK
+  FLOAT_CONTACT
+  HOMEPAGE_POSTER
+  HOME_SECTION
+  STATIC_COPY
+  EMAIL_TEMPLATE
+  PAYMENT_METHOD
+  CURRENCY_SETTING
+  EXCHANGE_RATE
+  SHIPPING_TEMPLATE
+  TAX_RULE
+  ROLE_PERMISSION
+  HOME_BRAND_SECTION
+  HOME_REVIEW_SECTION
+  HOME_FEATURED_KEYWORDS
+  FRONTEND_SCENE_SLOT
+}
+
+enum keywordgrouptype {
+  BRAND
+  NEW_ARRIVAL
+  PROMOTION
+  GENERAL
+}
+
+enum keywordscenearea {
+  LEFT_NAV
+  RECOMMENDATION
+  BOTH
+}
+
+enum homerecommendzonetype {
+  PRODUCT
+  CATEGORY
+  SIDE_NAV
+}
+
+enum wishlistitemstatus {
+  ACTIVE
+  MOVED_TO_CART
+}
+
+enum orderstatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum ordershipmethod {
+  STANDARD
+  EXPRESS
+}
+
+enum paymentmethodtype {
+  PAYPAL
+  BANK_TRANSFER
+  STRIPE
+  CREDIT_CARD
+}
+
+enum reviewstatus {
+  PUBLISHED
+  HIDDEN
+  PENDING
+}
+
+enum promotiontype {
+  FLASH_SALE
+  COUPON
+  NEW_CUSTOMER
+  HOLIDAY
+  FULL_REDUCTION
+  PERCENTAGE_DISCOUNT
+  BUY_X_GET_Y
+}
+
+enum ticketstatus {
+  OPEN
+  REPLIED
+  RESOLVED
+  CLOSED
+}
+
+enum customorderstatus {
+  PENDING_CONFIRMATION
+  IN_PRODUCTION
+  READY_TO_SHIP
+  SHIPPED
+  COMPLETED
+}
+
+model sysuser {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  account           String             @unique @db.VarChar(50)
+  password          String             @db.VarChar(255)
+  email             String             @unique @db.VarChar(100)
+  role              userrole
+  status            userstatus         @default(ACTIVE)
+  username          String             @db.VarChar(100)
+  avatarUrl         String?            @db.VarChar(700)
+  phone             String?            @db.VarChar(30) // WhatsApp 号（前台注册同步写入）
+  preferredCurrency String?            @db.VarChar(10)
+  preferredLocale   String?            @db.VarChar(20)
+  countryCode       String?            @db.VarChar(10)
+  countryName       String?            @db.VarChar(100)
+  purchaseCount     Int                @default(0)
+  adminNote         String?            @db.Text
+  ringSizeUs        String?            @db.VarChar(20)
+  ringSizeEu        String?            @db.VarChar(20)
+  braceletSize      String?            @db.VarChar(20)
+  savedPreferencesJson Json?           // 用户偏好，格式：{ "recentMaterials": ["GOLD_14K"], "recentSearches": ["pearl ring"] }
+  savedSizesJson    Json?              // 保存尺寸，格式：[{ "type": "ring", "label": "US 6" }]
+  lastLoginAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  carts             cart[]
+  importTasks       importtask[]
+  importTaskItems   importtaskitem[]
+  addresses         useraddress[]
+  wishlists         wishlistitem[]
+  orders            orderrecord[]
+  reviews           productreview[]
+  tickets           customerticket[]
+  customOrders      customorder[]
+  customerTags      customertaglink[]
+  communicationLogs customercommunication[]
+}
+
+model category {
+  id                String               @id @default(uuid()) @db.VarChar(36)
+  parentId          String?              @db.VarChar(36)
+  level             Int                  @default(1) // 目录层级：1=一级分类，2=二级分类
+  name              String               @db.VarChar(120)
+  slug              String?              @db.VarChar(120)
+  imageUrl          String?              @db.VarChar(700)
+  iconUrl           String?              @db.VarChar(700)
+  bannerImageUrl    String?              @db.VarChar(700)
+  description       String?              @db.Text
+  seoTitle          String?              @db.VarChar(200)
+  seoDescription    String?              @db.Text
+  seoKeywords       String?              @db.VarChar(300)
+  sortWeight        Int                  @default(0) // 排序权重，数值越大越靠前
+  status            categorystatus       @default(ACTIVE)
+  path              String?              @db.VarChar(500)
+  isBrandCategory   Boolean              @default(false)
+  brandCode         String?              @db.VarChar(80)
+  brandKeywordsJson Json?                // 品牌关键词，格式：[{ "keyword": "chanel", "weight": 100 }, { "keyword": "香奈儿", "weight": 90 }]
+  homepageConfigJson Json?               // 首页联动配置，格式：{ "showOnHome": true, "showInHotSection": true, "showInBrandSection": false, "heroTitle": "", "heroSubtitle": "", "heroButtonText": "", "heroButtonLink": "" }
+  categoryDisplayConfigJson Json?        // 类目展示配置，格式：{ "showChildrenByDefault": true, "allowChildrenCollapse": true, "showBrandFilter": false, "brandFilterCollapsedRows": 3 }
+  keywordMappingJson Json?               // 关键词映射配置，格式：{ "groupIds": ["uuid"], "keywordIds": ["uuid"], "syncToHomepage": true }
+  priceCoefficient  Decimal?             @db.Decimal(6, 2) // 售价系数（子级优先：二级有值用二级，否则用一级，都未设则前台按 1；成本价×系数换算展示）
+  translationsJson  Json?                // 多语言字段，格式：{ "zh": {"name": "戒指"}, "en": {"name": "Rings"}, "ar": {"name": "خواتم"} }
+  seoTranslationsJson Json?              // 多语言SEO，格式：{ "zh": {"title": "", "description": "", "keywords": ""} }
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt @default(now())
+
+  parent            category?            @relation("CategoryTree", fields: [parentId], references: [id])
+  children          category[]           @relation("CategoryTree")
+  products          product[]
+  brandProducts     product[]            @relation("BrandCategoryProducts")
+  recommendZoneItems homeRecommendZoneItem[]
+  categoryFilters   categoryfilterbinding[]
+  categorySpecs     categoryspectemplatebinding[]
+  productLinks      productcategory[]
+  keywordLinks      categorykeywordlink[]
+  relationProducts  product_category_relations[]
+  navConfig         categorynavconfig?
+
+  @@index([parentId])
+  @@index([level])
+  @@index([status])
+  @@index([isBrandCategory])
+  @@index([brandCode])
+}
+
+model categorynavconfig {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  categoryId        String             @db.VarChar(36)
+  navTitle          String?            @db.VarChar(120)
+  sortWeight        Int                @default(0)
+  isVisible         Boolean            @default(true)
+  badgeText         String?            @db.VarChar(60)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  category          category           @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId])
+  @@index([isVisible])
+  @@index([sortWeight])
+}
+
+model product {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  categoryId        String             @db.VarChar(36) // FK → category.id
+  name              String             @db.VarChar(200)
+  slug              String             @unique @db.VarChar(200)
+  productCode       String             @unique @db.VarChar(100)
+  source            productsource
+  supplierName      String?            @db.VarChar(160)
+  status            productstatus      @default(DRAFT)
+  productType       jewelryproducttype @default(RING)
+  goodsStatus       String?            @db.VarChar(60)
+  costPrice         Decimal?           @db.Decimal(10, 2)
+  priceCoefficient  Decimal?           @db.Decimal(6, 2)
+  detailText        String?            @db.Text
+  brandName         String?            @db.VarChar(120)
+  brandCategoryId   String?            @db.VarChar(36)
+  brandMatchKeyword String?            @db.VarChar(120)
+  autoBrandMatched  Boolean            @default(false)
+  materialType      materialtype?
+  gemstoneType      gemstoneType?      @default(NONE)
+  metalPurity       String?            @db.VarChar(50)
+  platingProcess    String?            @db.VarChar(120)
+  totalCarat        Decimal?           @db.Decimal(8, 2)
+  weightGram        Decimal?           @db.Decimal(8, 2)
+  mainImageUrl      String             @db.VarChar(700)
+  hoverImageUrl     String?            @db.VarChar(700)
+  wearImageUrl      String?            @db.VarChar(700)
+  videoUrl          String?            @db.VarChar(700)
+  rotate360Json     Json?              // 360 视图，格式：[{ "url": "图片URL", "sort": 1 }]
+  galleryJson       Json               // 商品相册，格式：[{ "url": "图片URL", "sort": 1, "type": "image|detail|wear" }]
+  shortDescription  String?            @db.Text
+  designStory       String?            @db.Text
+  translationsJson  Json?              // 多语言商品信息，格式：{ "zh": {"name": "", "shortDescription": "", "detail": ""}, "en": {...}, "ar": {...} }
+  detailTranslationsJson Json?         // 多语言图文详情，格式：{ "zh": [{"type": "text", "content": ""}], "en": [...] }
+  sellingPointsJson Json?              // 商品卖点，格式：[{ "title": "卖点标题", "content": "卖点内容" }]
+  detailContentJson Json?              // 图文详情，格式：[{ "type": "text|image", "content": "文本内容或图片URL", "title": "可选标题" }]
+  parameterJson     Json?              // 参数表，格式：[{ "group": "参数分组", "items": [{ "key": "参数名", "value": "参数值" }] }]
+  careGuideJson     Json?              // 护理指南，格式：[{ "title": "步骤", "content": "说明" }]
+  sizeGuideJson     Json?              // 尺码指南，格式：{ "ring": [...], "necklace": [...], "printableUrl": "PDF链接" }
+  engravingPreviewBaseUrl String?      @db.VarChar(700)
+  packagingImageUrl String?            @db.VarChar(700)
+  certificateInfo   String?            @db.Text
+  tradeInfoJson     Json?              // 物流与贸易说明，格式：{ "shipFrom": "发货地", "deliveryDays": 7, "minOrderQty": 1, "supportedRegions": ["US","EU"], "shippingNote": "运输说明", "tradeNotice": "注意事项" }
+  faqJson           Json?              // 常见购买问题，格式：[{ "question": "问题", "answer": "回答" }]
+  ratingAverage     Float              @default(0) // 平均评分（X分，0-5）
+  ratingCount       Int                @default(0) // 评价数量（X个）
+  soldCount         Int                @default(0)
+  isNewArrival      Boolean            @default(false)
+  isBestSeller      Boolean            @default(false)
+  isLimitedDiscount Boolean            @default(false)
+  sortWeight        Int                @default(0) // 排序权重，数值越大越靠前
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  category          category           @relation(fields: [categoryId], references: [id])
+  brandCategory     category?          @relation("BrandCategoryProducts", fields: [brandCategoryId], references: [id])
+  skus              productsku[]
+  cartItems         cartitem[]
+  importTaskItems   importtaskitem[]
+  reviews           productreview[]
+  wishlistItems     wishlistitem[]
+  lookbookLinks     lookbookproduct[]
+  orderItems        orderitem[]
+  customOrders      customorder[]
+  categoryLinks     productcategory[]
+  relationCategories product_category_relations[]
+  relationKeywords  product_keyword_relations[]
+  keywordGroupLinks  keywordgroupproduct[]
+  recommendZoneItems homeRecommendZoneItem[]
+  recommendCollections homeRecommendCollectionItem[]
+
+  @@index([categoryId])
+  @@index([brandCategoryId])
+  @@index([status])
+  @@index([productType])
+  @@index([materialType])
+  @@index([gemstoneType])
+  @@index([goodsStatus])
+  @@index([brandName])
+}
+
+model productsku {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  productId         String             @db.VarChar(36) // FK → product.id
+  skuCode           String             @unique @db.VarChar(100)
+  imageUrl          String?            @db.VarChar(700)
+  minOrderQty       Int?               // SKU独立起订量；为空时继承商品级，若商品级也未设则前台按1
+  materialType      materialtype?
+  gemstoneType      gemstoneType?      @default(NONE)
+  ringSizeUs        String?            @db.VarChar(20)
+  ringSizeEu        String?            @db.VarChar(20)
+  materialLabel     String?            @db.VarChar(60)
+  sizeLabel         String?            @db.VarChar(60)
+  necklaceLengthInch String?           @db.VarChar(20)
+  braceletLengthCm  String?            @db.VarChar(20)
+  engravingSupported Boolean           @default(false)
+  engravingMaxChars Int?               @default(0)
+  fontOptionsJson   Json?              // 字体选项，格式：[{ "name": "Serif", "extraFee": 5 }]
+  extraFee          Decimal?           @db.Decimal(10, 2)
+  price             Decimal            @db.Decimal(10, 2) // 售价（X元）
+  originalPrice     Decimal?           @db.Decimal(10, 2) // 原价（X元）
+  stock             Int                @default(0) // 库存（X个）
+  stockStatus       stockstatus        @default(IN_STOCK)
+  attributeJson     Json               // SKU规格属性，格式：[{ "name": "颜色", "value": "黑色" }, { "name": "尺寸", "value": "L" }]
+  deliveryDays      Int?               // 预计交期（X天）
+  weightKg          Decimal?           @db.Decimal(10, 3) // 重量（X千克）
+  volumeM3          Decimal?           @db.Decimal(10, 4) // 体积（X立方米）
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  product           product            @relation(fields: [productId], references: [id])
+  cartItems         cartitem[]
+  orderItems        orderitem[]
+  customOrders      customorder[]
+
+  @@index([productId])
+  @@index([materialType])
+}
+
+model cart {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  accountId         String             @unique @db.VarChar(36) // FK → sysuser.id
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  account           sysuser            @relation(fields: [accountId], references: [id])
+  items             cartitem[]
+}
+
+model cartitem {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  cartId            String             @db.VarChar(36) // FK → cart.id
+  productId         String             @db.VarChar(36) // FK → product.id
+  productSkuId      String             @db.VarChar(36) // FK → productsku.id
+  quantity          Int                @default(1) // 商品数量（X个）
+  engravingText     String?            @db.VarChar(120)
+  engravingFont     String?            @db.VarChar(50)
+  engravingPreviewUrl String?          @db.VarChar(700)
+  giftWrapSelected  Boolean            @default(false)
+  giftWrapFee       Decimal?           @db.Decimal(10, 2)
+  status            cartitemstatus     @default(VALID)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  cart              cart               @relation(fields: [cartId], references: [id])
+  product           product            @relation(fields: [productId], references: [id])
+  productSku        productsku         @relation(fields: [productSkuId], references: [id])
+
+  @@unique([cartId, productSkuId, engravingText, engravingFont])
+  @@index([cartId])
+  @@index([productId])
+  @@index([productSkuId])
+}
+
+model importtask {
+  id                    String             @id @default(uuid()) @db.VarChar(36)
+  creatorId             String             @db.VarChar(36) // FK → sysuser.id
+  taskName              String             @db.VarChar(150)
+  status                importtaskstatus   @default(PENDING)
+  sourceLinkCount       Int                @default(0) // 来源链接数量（X条）
+  successCount          Int                @default(0) // 成功数量（X条）
+  failureCount          Int                @default(0) // 失败数量（X条）
+  progressPercent       Int                @default(0) // 进度百分比（X%）
+  markupRate            Decimal?           @db.Decimal(5, 2) // 加价比例（X%）
+  defaultStatus         productstatus      @default(DRAFT)
+  defaultCategoryId     String?            @db.VarChar(36)
+  queueConcurrency      Int                @default(1) // 采集并发上限，默认串行或小并发
+  rateLimitMinDelaySec  Int                @default(2) // 每次采集最小延迟秒数
+  rateLimitMaxDelaySec  Int                @default(5) // 每次采集最大延迟秒数
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  lastScheduledAt       DateTime?
+  lastRateLimitedAt     DateTime?
+  stockStrategyJson     Json?              // 默认库存策略，格式：{ "type": "fixed", "stock": 100 }
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt @default(now())
+
+  creator               sysuser            @relation(fields: [creatorId], references: [id])
+  items                 importtaskitem[]
+
+  @@index([creatorId])
+  @@index([status])
+}
+
+model importtaskitem {
+  id                    String            @id @default(uuid()) @db.VarChar(36)
+  importTaskId          String            @db.VarChar(36) // FK → importtask.id
+  operatorId            String            @db.VarChar(36) // FK → sysuser.id
+  sourceUrl             String            @db.VarChar(700)
+  parsedName            String?           @db.VarChar(200)
+  parsedMainImageUrl    String?           @db.VarChar(700)
+  parsedPriceMin        Decimal?          @db.Decimal(10, 2) // 解析最低价（X元）
+  parsedPriceMax        Decimal?          @db.Decimal(10, 2) // 解析最高价（X元）
+  supplierName          String?           @db.VarChar(150)
+  mainImageUrl          String?           @db.VarChar(700)
+  costPrice             Decimal?          @db.Decimal(10, 2) // 成本价（人民币）
+  weightGrams           Int?              // 重量（克）
+  sourceCategoryName    String?           @db.VarChar(150) // 1688来源主类目名称
+  targetCategoryId      String?           @db.VarChar(36) // 发布到正式商品时使用的目标分类ID
+  coefficient           Decimal?          @db.Decimal(8, 2) // 当前成本系数
+  goodsStatus           productstatus?    // 待上传项目标商品状态（上架/下架/缺货/预售等）
+  minimumOrderQuantity  Int?              // 起订量
+  availableStock        Int?              // 可用库存
+  cnyPriceMin           Decimal?          @db.Decimal(10, 2) // 人民币售价区间最低价
+  cnyPriceMax           Decimal?          @db.Decimal(10, 2) // 人民币售价区间最高价
+  usdPriceMin           Decimal?          @db.Decimal(10, 2) // 美元预估区间最低价
+  usdPriceMax           Decimal?          @db.Decimal(10, 2) // 美元预估区间最高价
+  productDetail         String?           @db.LongText // 商品详情描述/图文摘要
+  skuSummaryText        String?           @db.LongText // SKU摘要文本，便于待上传列表直接编辑
+  fetchStatus           importtaskstatus  @default(PENDING) // 单条采集状态：排队/抓取中/成功/失败/可重试
+  publishStatus         importtaskstatus  @default(PENDING) // 单条发布状态：待发布/发布中/完成/失败/可重试
+  retryCount            Int               @default(0)
+  fetchStartedAt        DateTime?
+  fetchFinishedAt       DateTime?
+  publishStartedAt      DateTime?
+  publishedAt           DateTime?
+  specSummaryJson       Json?             // 规格摘要，格式：[{ "name": "颜色", "values": ["黑色","白色"] }]
+  previewDataJson       Json?             // 导入/采集预览数据，格式：{ "name": "商品名", "categoryId": "分类ID", "price": 99.99, "mainImageUrl": "图片URL", "shortDescription": "简述", "detailImages": ["图片URL1"], "skuTable": [{ "spec": "金色/7号", "costPrice": 88.5, "stock": 20 }] }
+  isSelected            Boolean           @default(false)
+  isPublished           Boolean           @default(false)
+  importedProductId     String?           @db.VarChar(36) // FK → product.id
+  failureReason         String?           @db.Text
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt @default(now())
+
+  importTask            importtask        @relation(fields: [importTaskId], references: [id])
+  operator              sysuser           @relation(fields: [operatorId], references: [id])
+  importedProduct       product?          @relation(fields: [importedProductId], references: [id])
+
+  @@index([importTaskId])
+  @@index([operatorId])
+  @@index([importedProductId])
+  @@index([fetchStatus])
+  @@index([publishStatus])
+  @@index([isPublished])
+  @@index([targetCategoryId])
+}
+model useraddress {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  userId            String             @db.VarChar(36)
+  recipientName     String             @db.VarChar(100)
+  phone             String?            @db.VarChar(30)
+  countryCode       String             @db.VarChar(10)
+  countryName       String             @db.VarChar(100)
+  stateName         String?            @db.VarChar(100)
+  cityName          String?            @db.VarChar(100)
+  addressLine1      String             @db.VarChar(255)
+  addressLine2      String?            @db.VarChar(255)
+  postalCode        String?            @db.VarChar(30)
+  isDefault         Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  user              sysuser            @relation(fields: [userId], references: [id])
+  orders            orderrecord[]
+
+  @@index([userId])
+}
+
+model wishlistitem {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  userId            String             @db.VarChar(36)
+  productId         String             @db.VarChar(36)
+  status            wishlistitemstatus @default(ACTIVE)
+  shareToken        String?            @unique @db.VarChar(100)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  user              sysuser            @relation(fields: [userId], references: [id])
+  product           product            @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+}
+
+model sitesetting {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  settingType       sitesettingtype
+  title             String             @db.VarChar(150)
+  subtitle          String?            @db.VarChar(200)
+  contentJson       Json               // 配置内容，格式：{ "items": [...], "link": "", "categoryId": "一级分类ID" }
+  imageUrl          String?            @db.VarChar(700)
+  localeCode        String?            @db.VarChar(20)
+  currencyCode      String?            @db.VarChar(10)
+  sortWeight        Int                @default(0)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  @@index([settingType])
+  @@index([isActive])
+}
+
+model lookbook {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  title             String             @db.VarChar(150)
+  subtitle          String?            @db.VarChar(200)
+  imageUrl          String             @db.VarChar(700)
+  videoUrl          String?            @db.VarChar(700)
+  description       String?            @db.Text
+  isActive          Boolean            @default(true)
+  sortWeight        Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  products          lookbookproduct[]
+}
+
+model lookbookproduct {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  lookbookId        String             @db.VarChar(36)
+  productId         String             @db.VarChar(36)
+  hotspotJson       Json?              // 热点信息，格式：{ "x": 50, "y": 40, "label": "戒指" }
+
+  lookbook          lookbook           @relation(fields: [lookbookId], references: [id])
+  product           product            @relation(fields: [productId], references: [id])
+
+  @@unique([lookbookId, productId])
+  @@index([lookbookId])
+  @@index([productId])
+}
+
+model homeRecommendCollection {
+  id                String                     @id @default(uuid()) @db.VarChar(36)
+  name              String                     @db.VarChar(150)
+  description       String?                    @db.Text
+  sourceZoneId      String?                    @unique @db.VarChar(36)
+  isActive          Boolean                    @default(true)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt @default(now())
+
+  sourceZone        homeRecommendZone?         @relation("CollectionSourceZone", fields: [sourceZoneId], references: [id])
+  collectionItems   homeRecommendCollectionItem[]
+  zonesUsingAsBound homeRecommendZone[]        @relation("ZoneBoundCollection")
+
+  @@index([isActive])
+}
+
+model homeRecommendCollectionItem {
+  id                String                  @id @default(uuid()) @db.VarChar(36)
+  collectionId      String                  @db.VarChar(36)
+  productId         String                  @db.VarChar(36)
+  sortWeight        Int                     @default(0)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt @default(now())
+
+  collection        homeRecommendCollection @relation(fields: [collectionId], references: [id])
+  product           product                 @relation(fields: [productId], references: [id])
+
+  @@unique([collectionId, productId])
+  @@index([collectionId])
+  @@index([productId])
+  @@index([sortWeight])
+}
+
+model homeRecommendZone {
+  id                String                   @id @default(uuid()) @db.VarChar(36)
+  title             String                   @db.VarChar(150)
+  zoneType          homerecommendzonetype
+  pcCols            Int                      @default(4)
+  mobileCols        Int                      @default(2)
+  pcRows            Int                      @default(2)
+  sortWeight        Int                      @default(0)
+  isActive          Boolean                  @default(true)
+  boundCollectionId String?                  @unique @db.VarChar(36)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt @default(now())
+
+  sourceCollection  homeRecommendCollection? @relation("CollectionSourceZone")
+  boundCollection   homeRecommendCollection? @relation("ZoneBoundCollection", fields: [boundCollectionId], references: [id])
+  items             homeRecommendZoneItem[]
+
+  @@index([zoneType])
+  @@index([isActive])
+  @@index([sortWeight])
+}
+
+model homeRecommendZoneItem {
+  id                String                @id @default(uuid()) @db.VarChar(36)
+  zoneId            String                @db.VarChar(36)
+  entityType        homerecommendzonetype
+  productId         String?               @db.VarChar(36)
+  categoryId        String?               @db.VarChar(36)
+  sortWeight        Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt @default(now())
+
+  zone              homeRecommendZone     @relation(fields: [zoneId], references: [id])
+  product           product?              @relation(fields: [productId], references: [id])
+  category          category?             @relation(fields: [categoryId], references: [id])
+
+  @@index([zoneId])
+  @@index([productId])
+  @@index([categoryId])
+  @@index([sortWeight])
+}
+
+model promotioncampaign {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  name              String             @db.VarChar(150)
+  promotionType     promotiontype
+  code              String?            @unique @db.VarChar(60)
+  discountPercent   Decimal?           @db.Decimal(5, 2)
+  discountAmount    Decimal?           @db.Decimal(10, 2)
+  minOrderAmount    Decimal?           @db.Decimal(10, 2)
+  startAt           DateTime?
+  endAt             DateTime?
+  usageLimit        Int?
+  usedCount         Int                @default(0)
+  contentJson       Json?              // 活动说明，格式：{ "bannerText": "", "eligibleMaterials": [] }
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  orders            orderrecord[]
+  customOrders      customorder[]
+
+  @@index([promotionType])
+  @@index([isActive])
+}
+
+model orderrecord {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  orderNo           String             @unique @db.VarChar(60)
+  userId            String             @db.VarChar(36)
+  addressId         String?            @db.VarChar(36)
+  status            orderstatus        @default(PENDING_PAYMENT)
+  currencyCode      String             @db.VarChar(10)
+  localeCode        String?            @db.VarChar(20)
+  subtotalAmount    Decimal            @db.Decimal(10, 2)
+  discountAmount    Decimal            @db.Decimal(10, 2) @default(0)
+  shippingAmount    Decimal            @db.Decimal(10, 2) @default(0)
+  giftWrapAmount    Decimal            @db.Decimal(10, 2) @default(0)
+  totalAmount       Decimal            @db.Decimal(10, 2)
+  paymentMethod     paymentmethodtype
+  paymentStatus     String?            @db.VarChar(50)
+  installmentInfo   String?            @db.VarChar(100)
+  couponId          String?            @db.VarChar(36)
+  shipMethod        ordershipmethod    @default(STANDARD)
+  trackingCarrier   String?            @db.VarChar(60)
+  trackingNumber    String?            @db.VarChar(100)
+  estimatedArrivalAt DateTime?
+  shippedAt         DateTime?
+  internalNote      String?            @db.Text
+  giftMessage       String?            @db.VarChar(255)
+  note              String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  user              sysuser            @relation(fields: [userId], references: [id])
+  address           useraddress?       @relation(fields: [addressId], references: [id])
+  coupon            promotioncampaign? @relation(fields: [couponId], references: [id])
+  items             orderitem[]
+  reviews           productreview[]
+  logistics         orderlogisticssegment[]
+  logs              orderoperationlog[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model orderitem {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  orderId           String             @db.VarChar(36)
+  productId         String             @db.VarChar(36)
+  productSkuId      String             @db.VarChar(36)
+  productName       String             @db.VarChar(200)
+  skuCode           String             @db.VarChar(100)
+  materialLabel     String?            @db.VarChar(60)
+  sizeLabel         String?            @db.VarChar(60)
+  engravingText     String?            @db.VarChar(120)
+  engravingFont     String?            @db.VarChar(50)
+  quantity          Int                @default(1)
+  unitPrice         Decimal            @db.Decimal(10, 2)
+  lineAmount        Decimal            @db.Decimal(10, 2)
+  giftWrapSelected  Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  order             orderrecord        @relation(fields: [orderId], references: [id])
+  product           product            @relation(fields: [productId], references: [id])
+  productSku        productsku         @relation(fields: [productSkuId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([productSkuId])
+}
+
+model productreview {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  productId         String             @db.VarChar(36)
+  userId            String             @db.VarChar(36)
+  orderId           String?            @db.VarChar(36)
+  rating            Int
+  title             String?            @db.VarChar(150)
+  content           String?            @db.Text
+  imageUrlsJson     Json?              // 晒图，格式：["url1", "url2"]
+  hasImages         Boolean            @default(false)
+  status            reviewstatus       @default(PUBLISHED)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  product           product            @relation(fields: [productId], references: [id])
+  user              sysuser            @relation(fields: [userId], references: [id])
+  order             orderrecord?       @relation(fields: [orderId], references: [id])
+
+  @@index([productId])
+  @@index([userId])
+  @@index([status])
+}
+
+model customorder {
+  id                String               @id @default(uuid()) @db.VarChar(36)
+  orderId           String?              @unique @db.VarChar(36)
+  userId            String               @db.VarChar(36)
+  productId         String               @db.VarChar(36)
+  productSkuId      String               @db.VarChar(36)
+  promotionId       String?              @db.VarChar(36)
+  engravingText     String?              @db.VarChar(120)
+  engravingFont     String?              @db.VarChar(50)
+  engravingPreviewUrl String?            @db.VarChar(700)
+  status            customorderstatus    @default(PENDING_CONFIRMATION)
+  productionNote    String?              @db.Text
+  shippingLabelUrl  String?              @db.VarChar(700)
+  completedAt       DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt @default(now())
+
+  user              sysuser              @relation(fields: [userId], references: [id])
+  product           product              @relation(fields: [productId], references: [id])
+  productSku        productsku           @relation(fields: [productSkuId], references: [id])
+  promotion         promotioncampaign?   @relation(fields: [promotionId], references: [id])
+
+  @@index([userId])
+  @@index([productId])
+  @@index([productSkuId])
+  @@index([status])
+}
+
+model sizemapping {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  regionCode        String             @db.VarChar(20)
+  jewelryType       jewelryproducttype
+  sourceSize        String             @db.VarChar(20)
+  targetRegionCode  String             @db.VarChar(20)
+  targetSize        String             @db.VarChar(20)
+  note              String?            @db.VarChar(200)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  @@index([regionCode, jewelryType])
+}
+
+model customerticket {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  userId            String?            @db.VarChar(36)
+  contactName       String             @db.VarChar(100)
+  email             String?            @db.VarChar(120)
+  channel           String?            @db.VarChar(50)
+  subject           String             @db.VarChar(150)
+  content           String             @db.Text
+  status            ticketstatus       @default(OPEN)
+  replyContent      String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  user              sysuser?           @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+model productcategory {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  productId         String             @db.VarChar(36)
+  categoryId        String             @db.VarChar(36)
+  isPrimary         Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+
+  product           product            @relation(fields: [productId], references: [id])
+  category          category           @relation(fields: [categoryId], references: [id])
+
+  @@unique([productId, categoryId])
+  @@index([categoryId])
+}
+
+model filterspec {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  name              String             @db.VarChar(120)
+  code              String             @unique @db.VarChar(100)
+  inputType         String             @db.VarChar(50)
+  optionJson        Json?              // 筛选项选项，格式：[{ "label": "Gold", "value": "gold" }]
+  translationsJson  Json?              // 多语言名称，格式：{ "zh": {"name": "材质"}, "en": {"name": "Material"} }
+  sortWeight        Int                @default(0)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  categoryBindings  categoryfilterbinding[]
+}
+
+model categoryfilterbinding {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  categoryId        String             @db.VarChar(36)
+  filterSpecId      String             @db.VarChar(36)
+  sortWeight        Int                @default(0)
+  createdAt         DateTime           @default(now())
+
+  category          category           @relation(fields: [categoryId], references: [id])
+  filterSpec        filterspec         @relation(fields: [filterSpecId], references: [id])
+
+  @@unique([categoryId, filterSpecId])
+  @@index([filterSpecId])
+}
+
+model spectemplate {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  name              String             @db.VarChar(120)
+  code              String             @unique @db.VarChar(100)
+  fieldsJson        Json               // 规格模板字段，格式：[{ "name": "ringSize", "label": "戒指尺寸", "type": "select" }]
+  translationsJson  Json?              // 多语言模板信息，格式：{ "zh": {"name": "戒指尺寸"}, "en": {"name": "Ring Size"} }
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  categoryBindings  categoryspectemplatebinding[]
+}
+
+model categoryspectemplatebinding {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  categoryId        String             @db.VarChar(36)
+  specTemplateId    String             @db.VarChar(36)
+  createdAt         DateTime           @default(now())
+
+  category          category           @relation(fields: [categoryId], references: [id])
+  specTemplate      spectemplate       @relation(fields: [specTemplateId], references: [id])
+
+  @@unique([categoryId, specTemplateId])
+  @@index([specTemplateId])
+}
+
+model customertag {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  name              String             @db.VarChar(120)
+  code              String             @unique @db.VarChar(100)
+  color             String?            @db.VarChar(30)
+  description       String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  userLinks         customertaglink[]
+}
+
+model customertaglink {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  userId            String             @db.VarChar(36)
+  tagId             String             @db.VarChar(36)
+  createdAt         DateTime           @default(now())
+
+  user              sysuser            @relation(fields: [userId], references: [id])
+  tag               customertag        @relation(fields: [tagId], references: [id])
+
+  @@unique([userId, tagId])
+  @@index([tagId])
+}
+
+model customercommunication {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  userId            String             @db.VarChar(36)
+  channel           String             @db.VarChar(50)
+  content           String             @db.Text
+  operatorName      String?            @db.VarChar(100)
+  createdAt         DateTime           @default(now())
+
+  user              sysuser            @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model orderlogisticssegment {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  orderId           String             @db.VarChar(36)
+  segmentType       String             @db.VarChar(50)
+  carrierName       String?            @db.VarChar(100)
+  trackingNumber    String?            @db.VarChar(120)
+  statusLabel       String?            @db.VarChar(100)
+  estimatedArrivalAt DateTime?
+  shippedAt         DateTime?
+  remark            String?            @db.Text
+  timelineJson      Json?              // 物流轨迹，格式：[{ "time": "2026-07-11T10:00:00Z", "label": "已出库" }]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  order             orderrecord        @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+}
+
+model orderoperationlog {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  orderId           String             @db.VarChar(36)
+  actionType        String             @db.VarChar(60)
+  actionNote        String?            @db.Text
+  operatorName      String?            @db.VarChar(100)
+  createdAt         DateTime           @default(now())
+
+  order             orderrecord        @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+}
+
+model shippingtemplate {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  name              String             @db.VarChar(120)
+  countryCode       String?            @db.VarChar(10)
+  minWeightKg       Decimal?           @db.Decimal(10, 3)
+  maxWeightKg       Decimal?           @db.Decimal(10, 3)
+  minOrderAmount    Decimal?           @db.Decimal(10, 2)
+  maxOrderAmount    Decimal?           @db.Decimal(10, 2)
+  shippingFee       Decimal            @db.Decimal(10, 2)
+  freeShippingOver  Decimal?           @db.Decimal(10, 2)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+}
+
+/// 物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态
+model shippingchannel {
+  id                  String   @id @default(uuid()) @db.VarChar(36)
+  name                String   @db.VarChar(120)
+  estimatedTime       String   @db.VarChar(120)
+  /// 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）
+  billingMode         String   @default("EXPRESS_TIER") @db.VarChar(30)
+  /// 渠道系数，最终运费 = 基础运费 × 系数，默认 1.00
+  channelCoefficient  Decimal  @default(1.0000) @db.Decimal(10, 4)
+  /// 按国家运费规则（人民币 ¥）。
+  /// EXPRESS_TIER: { "United States": { "tiers": [{ "maxKg": 0.5, "fee": 10 }] } }
+  /// SEA_PER_KG:   { "United States": { "baseKg": 12, "baseFee": 180, "perKgFee": 12 } }
+  /// 兼容旧版固定价数字：{ "United States": 15.53 }
+  countryFeesJson     Json
+  isEnabled           Boolean  @default(true)
+  sortWeight          Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt @default(now())
+
+  @@index([isEnabled])
+  @@index([sortWeight])
+  @@index([billingMode])
+}
+
+model currencysetting {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  currencyCode      String             @unique @db.VarChar(10)
+  currencyName      String             @db.VarChar(60)
+  exchangeRate      Decimal            @db.Decimal(12, 6)
+  isDefault         Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+}
+
+model taxrule {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  countryCode       String             @db.VarChar(10)
+  countryName       String?            @db.VarChar(100)
+  taxType           String             @db.VarChar(50)
+  taxRate           Decimal            @db.Decimal(6, 2)
+  taxNumber         String?            @db.VarChar(100)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  @@index([countryCode])
+}
+
+model rolepermission {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  roleCode          String             @db.VarChar(50)
+  permissionKey     String             @db.VarChar(100)
+  isAllowed         Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  @@unique([roleCode, permissionKey])
+}
+
+model keywordgroup {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  name              String             @db.VarChar(120)
+  slug              String?            @db.VarChar(120)
+  groupType         keywordgrouptype   @default(GENERAL)
+  parentGroupId     String?            @db.VarChar(36)
+  sceneKey          String?            @db.VarChar(160)
+  sceneType         String?            @db.VarChar(80)
+  sceneArea         keywordscenearea   @default(RECOMMENDATION)
+  sceneSlotKey      String?            @db.VarChar(160)
+  sceneSlotName     String?            @db.VarChar(120)
+  floorTitle        String?            @db.VarChar(160)
+  floorIcon         String?            @db.VarChar(160)
+  floorLink         String?            @db.VarChar(255)
+  homepageSortWeight Int               @default(0)
+  showOnHomepage    Boolean            @default(false)
+  sortWeight        Int                @default(0)
+  isActive          Boolean            @default(true)
+  description       String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  parentGroup       keywordgroup?      @relation("KeywordGroupTree", fields: [parentGroupId], references: [id])
+  childrenGroups    keywordgroup[]     @relation("KeywordGroupTree")
+  keywords          keyworditem[]
+  categoryLinks     categorykeywordlink[]
+  productLinks      keywordgroupproduct[]
+
+  @@index([groupType])
+  @@index([parentGroupId])
+  @@index([sceneKey])
+  @@index([sceneType])
+  @@index([sceneArea])
+  @@index([sceneSlotKey])
+  @@index([showOnHomepage])
+  @@index([homepageSortWeight])
+  @@index([isActive])
+}
+
+model keyworditem {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  groupId           String             @db.VarChar(36)
+  parentKeywordId   String?            @db.VarChar(36)
+  keyword           String             @db.VarChar(160)
+  normalizedKeyword String?            @db.VarChar(160)
+  sortWeight        Int                @default(0)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  group             keywordgroup       @relation(fields: [groupId], references: [id])
+  parentKeyword     keyworditem?       @relation("KeywordItemTree", fields: [parentKeywordId], references: [id])
+  childrenKeywords  keyworditem[]      @relation("KeywordItemTree")
+  categoryLinks     categorykeywordlink[]
+  productLinks      product_keyword_relations[]
+
+  @@index([groupId])
+  @@index([parentKeywordId])
+  @@index([normalizedKeyword])
+  @@index([isActive])
+}
+
+model categorykeywordlink {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  categoryId        String             @db.VarChar(36)
+  keywordGroupId    String             @db.VarChar(36)
+  keywordItemId     String?            @db.VarChar(36)
+  applyToHomepage   Boolean            @default(false)
+  sortWeight        Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt @default(now())
+
+  category          category           @relation(fields: [categoryId], references: [id])
+  keywordGroup      keywordgroup       @relation(fields: [keywordGroupId], references: [id])
+  keywordItem       keyworditem?       @relation(fields: [keywordItemId], references: [id])
+
+  @@index([categoryId])
+  @@index([keywordGroupId])
+  @@index([keywordItemId])
+  @@unique([categoryId, keywordGroupId, keywordItemId])
+}
+
+model categorybanner {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  title       String?  @db.VarChar(150)
+  imageUrl    String   @db.VarChar(700)
+  linkUrl     String   @db.VarChar(1000)
+  sortWeight  Int      @default(0)
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt @default(now())
+
+  @@index([isEnabled])
+  @@index([sortWeight])
+}
+
+model product_category_relations {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  productId  String   @db.VarChar(36)
+  categoryId String   @db.VarChar(36)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt @default(now())
+
+  product    product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category   category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, categoryId])
+  @@index([productId])
+  @@index([categoryId])
+}
+
+model product_keyword_relations {
+  id         String      @id @default(uuid()) @db.VarChar(36)
+  productId  String      @db.VarChar(36)
+  keywordId  String      @db.VarChar(36)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt @default(now())
+
+  product    product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  keyword    keyworditem @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, keywordId])
+  @@index([productId])
+  @@index([keywordId])
+}
+
+model keywordgroupproduct {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  keywordGroupId String       @db.VarChar(36)
+  productId      String       @db.VarChar(36)
+  sortWeight     Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt @default(now())
+
+  keywordGroup   keywordgroup @relation(fields: [keywordGroupId], references: [id])
+  product        product      @relation(fields: [productId], references: [id])
+
+  @@unique([keywordGroupId, productId])
+  @@index([keywordGroupId])
+  @@index([productId])
+  @@index([sortWeight])
+}

@@ -1,0 +1,120 @@
+[
+  {
+    "ui_section_name": "Featured Products Section",
+    "target_model": "product",
+    "target_fields": [
+      "name",
+      "productCode",
+      "mainImageUrl",
+      "ratingAverage",
+      "ratingCount",
+      "tradeInfoJson",
+      "sellingPointsJson"
+    ],
+    "mapping_logic": "展示核心推荐商品列表，数据提取自 FeaturedProductsSection 组件中的 products 数组。其中 tag 映射至 sellingPointsJson，moq 与 leadTime 映射至 tradeInfoJson。",
+    "page_name": "frontend_home",
+    "page_key": "frontend_home",
+    "page_slug": "home",
+    "platform": "frontend"
+  },
+  {
+    "ui_section_name": "Featured Products Price Info",
+    "target_model": "productsku",
+    "target_fields": [
+      "price",
+      "originalPrice",
+      "deliveryDays"
+    ],
+    "mapping_logic": "展示商品的实时售价与划线原价，以及配送交期，数据源自 products 数组中的 priceCNY, originalPriceUSD(换算) 等价格字段。",
+    "page_name": "frontend_home",
+    "page_key": "frontend_home",
+    "page_slug": "home",
+    "platform": "frontend"
+  },
+  {
+    "ui_section_name": "Category Guide Section",
+    "target_model": "category",
+    "target_fields": [
+      "name",
+      "slug",
+      "imageUrl",
+      "description"
+    ],
+    "mapping_logic": "展示热门品类导航，数据提取自 CategoryGuideSection 组件中的 categories 数组。englishName 映射至 description 字段。",
+    "page_name": "frontend_home",
+    "page_key": "frontend_home",
+    "page_slug": "home",
+    "platform": "frontend"
+  },
+  {
+    "ui_section_name": "Sidebar & Header Admin Profile",
+    "target_model": "sysuser",
+    "target_fields": [
+      "username",
+      "email",
+      "avatarUrl"
+    ],
+    "mapping_logic": "展示当前登录管理员的基础信息，数据提取自代码中 sidebar 底部和 header 右侧的管理员展示逻辑",
+    "page_name": "backend_home",
+    "page_key": "backend_home",
+    "page_slug": "home",
+    "platform": "backend"
+  },
+  {
+    "ui_section_name": "Import Task Monitoring",
+    "target_model": "importtask",
+    "target_fields": [
+      "taskName",
+      "status",
+      "progressPercent"
+    ],
+    "mapping_logic": "展示 1688 采集任务监控面板，数据提取自 importTasks 数组",
+    "page_name": "backend_home",
+    "page_key": "backend_home",
+    "page_slug": "home",
+    "platform": "backend"
+  },
+  {
+    "ui_section_name": "Recent Products Table",
+    "target_model": "product",
+    "target_fields": [
+      "name",
+      "productCode",
+      "status",
+      "mainImageUrl"
+    ],
+    "mapping_logic": "展示最近上架商品明细表格，数据提取自 recentProducts 数组",
+    "page_name": "backend_home",
+    "page_key": "backend_home",
+    "page_slug": "home",
+    "platform": "backend"
+  },
+  {
+    "ui_section_name": "Supply Chain Stock Alerts",
+    "target_model": "productsku",
+    "target_fields": [
+      "skuCode",
+      "stock",
+      "price"
+    ],
+    "mapping_logic": "展示供应链库存预警列表，数据提取自 stockAlerts 数组，映射 SKU 编码及实时库存",
+    "page_name": "backend_home",
+    "page_key": "backend_home",
+    "page_slug": "home",
+    "platform": "backend"
+  },
+  {
+    "ui_section_name": "New Registered Users",
+    "target_model": "sysuser",
+    "target_fields": [
+      "username",
+      "email",
+      "avatarUrl"
+    ],
+    "mapping_logic": "展示最新注册买家流，数据提取自 newUsers 数组",
+    "page_name": "backend_home",
+    "page_key": "backend_home",
+    "page_slug": "home",
+    "platform": "backend"
+  }
+]

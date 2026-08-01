@@ -1,0 +1,244 @@
+'use client'
+
+import React from 'react'
+import type { BannerManagementState, BannerManagementHandlers } from '@/backend/hooks/useBannerManagement'
+
+interface Props {
+  state: BannerManagementState
+  handlers: BannerManagementHandlers
+}
+
+export const BannerManagementView = ({ state, handlers }: Props) => {
+  return (
+    <div>
+      {/* 快捷跳转区 */}
+      <div>
+        <button onClick={handlers.navigateToCategoryManagement}>
+          前往相关页面：分类管理
+        </button>
+      </div>
+
+      {/* 筛选与操作工具栏 */}
+      <section>
+        <div>
+          <input
+            type="text"
+            placeholder="搜索 Banner 标题"
+            value={state.inputKeyword}
+            onChange={e => handlers.setInputKeyword(e.target.value)}
+          />
+          <select
+            value={state.filterStatus}
+            onChange={e => handlers.setFilterStatus(e.target.value as any)}
+          >
+            {Object.entries(state.STATUS_LABELS).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+          <button onClick={handlers.handleSearch}>查询</button>
+          <button onClick={handlers.handleReset}>重置</button>
+        </div>
+
+        <div>
+          <button onClick={handlers.handleBatchDelete} disabled={state.selectedIds.length === 0}>
+            批量删除
+          </button>
+          <button onClick={() => handlers.handleBatchUpdateStatus(true)} disabled={state.selectedIds.length === 0}>
+            批量启用
+          </button>
+          <button onClick={() => handlers.handleBatchUpdateStatus(false)} disabled={state.selectedIds.length === 0}>
+            批量禁用
+          </button>
+          <button onClick={handlers.openCreateModal}>新增 Banner</button>
+        </div>
+      </section>
+
+      {/* 数据列表区 */}
+      <section>
+        {state.loading ? (
+          <div>加载中...</div>
+        ) : state.list.length === 0 ? (
+          <div>暂无数据</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={state.isAllSelected}
+                    onChange={e => handlers.handleSelectAll(e.target.checked)}
+                  />
+                </th>
+                <th>封面图</th>
+                <th>标题</th>
+                <th>跳转链接</th>
+                <th>排序权重</th>
+                <th>状态</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.list.map(item => (
+                <tr key={item.banner_id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={state.selectedIds.includes(item.banner_id)}
+                      onChange={e => handlers.handleSelectRow(item.banner_id, e.target.checked)}
+                    />
+                  </td>
+                  <td>
+                    {item.banner_imageUrl ? (
+                      <img src={item.banner_imageUrl} alt={item.banner_title || 'Banner图'} style={{ width: 100 }} />
+                    ) : (
+                      <span>暂无图片</span>
+                    )}
+                  </td>
+                  <td>{item.banner_title || '-'}</td>
+                  <td>
+                    {item.banner_linkUrl ? (
+                      <div>
+                        <span>{item.banner_linkUrl}</span>
+                        <button onClick={() => handlers.handleCopyLink(item.banner_linkUrl)}>复制</button>
+                        <a href={item.banner_linkUrl} target="_blank" rel="noreferrer">跳转</a>
+                      </div>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={state.editingWeights[item.banner_id] ?? item.banner_sortWeight}
+                      onChange={e => handlers.setEditingWeights(prev => ({
+                        ...prev,
+                        [item.banner_id]: Number(e.target.value)
+                      }))}
+                      onBlur={() => handlers.handleQuickUpdateSortWeight(item.banner_id, item.banner_sortWeight)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={item.banner_isEnabled}
+                      onChange={e => handlers.handleQuickUpdateStatus(item.banner_id, e.target.checked)}
+                    />
+                    <span>{item.banner_isEnabled ? '已启用' : '已禁用'}</span>
+                  </td>
+                  <td>
+                    {new Date(item.banner_updatedAt).toLocaleString()}
+                  </td>
+                  <td>
+                    <button onClick={() => handlers.openEditModal(item)}>编辑</button>
+                    <button onClick={() => handlers.handleDelete(item.banner_id)}>删除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* 分页器 */}
+        <div>
+          <span>共 {state.total} 条</span>
+          <select value={state.pageSize} onChange={e => handlers.handlePageSizeChange(Number(e.target.value))}>
+            <option value={10}>10 条/页</option>
+            <option value={20}>20 条/页</option>
+            <option value={50}>50 条/页</option>
+          </select>
+          <button onClick={() => handlers.setPage(p => Math.max(1, p - 1))} disabled={state.page <= 1}>
+            上一页
+          </button>
+          <span>
+            {state.page} / {state.totalPages}
+          </span>
+          <button onClick={() => handlers.setPage(p => Math.min(state.totalPages, p + 1))} disabled={state.page >= state.totalPages}>
+            下一页
+          </button>
+        </div>
+      </section>
+
+      {/* 弹窗：新增/编辑 */}
+      {state.formMode && state.formData && (
+        <dialog open>
+          <div>
+            <h3>{state.formMode === 'CREATE' ? '新增 Banner' : '编辑 Banner'}</h3>
+            <button onClick={handlers.closeFormModal}>关闭</button>
+            
+            <div>
+              <label>标题</label>
+              <input
+                type="text"
+                placeholder="选填"
+                value={state.formData.banner_title || ''}
+                onChange={e => handlers.handleFormFieldChange('banner_title', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label>图片上传 (必填)</label>
+              <div>
+                {state.formData.banner_imageUrl ? (
+                  <div>
+                    <img src={state.formData.banner_imageUrl} alt="预览图" style={{ width: 200 }} />
+                    <button onClick={() => handlers.handleFormFieldChange('banner_imageUrl', '')}>
+                      删除图片
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlers.handleImageUpload}
+                      disabled={state.uploading}
+                    />
+                    {state.uploading && <span>上传中...</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label>跳转链接</label>
+              <input
+                type="url"
+                placeholder="输入以 http/https 开头的链接"
+                value={state.formData.banner_linkUrl}
+                onChange={e => handlers.handleFormFieldChange('banner_linkUrl', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label>排序权重</label>
+              <input
+                type="number"
+                value={state.formData.banner_sortWeight}
+                onChange={e => handlers.handleFormFieldChange('banner_sortWeight', Number(e.target.value))}
+              />
+            </div>
+
+            <div>
+              <label>启用状态</label>
+              <input
+                type="checkbox"
+                checked={state.formData.banner_isEnabled}
+                onChange={e => handlers.handleFormFieldChange('banner_isEnabled', e.target.checked)}
+              />
+              <span>{state.formData.banner_isEnabled ? '启用' : '禁用'}</span>
+            </div>
+
+            <div>
+              <button onClick={handlers.closeFormModal} disabled={state.submitting}>取消</button>
+              <button onClick={handlers.handleFormSubmit} disabled={state.submitting}>
+                {state.submitting ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+    </div>
+  )
+}
