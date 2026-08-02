@@ -4,6 +4,8 @@ type Actions = typeof import('../../../../../src/frontend/actions/ProductCategor
 
 export const getCategoryList = (...args: Parameters<Actions["getCategoryList"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getCategoryList"]>>>("src.frontend.actions.ProductCategory.getCategoryList", ...args);
+export const resolveCategoryRouteKey = (...args: Parameters<Actions["resolveCategoryRouteKey"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["resolveCategoryRouteKey"]>>>("src.frontend.actions.ProductCategory.resolveCategoryRouteKey", ...args);
 export const getCategoryDetail = (...args: Parameters<Actions["getCategoryDetail"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getCategoryDetail"]>>>("src.frontend.actions.ProductCategory.getCategoryDetail", ...args);
 export const getCategoryPosterList = (...args: Parameters<Actions["getCategoryPosterList"]>) => 

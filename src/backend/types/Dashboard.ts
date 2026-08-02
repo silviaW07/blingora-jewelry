@@ -17,6 +17,11 @@ export interface AdminProfile_Output {
   avatarUrl: string | null;
 }
 
+export interface UpdateAdminProfile_Input {
+  username: string;
+  avatarUrl?: string;
+}
+
 export interface KpiStats_Output {
   // data-from: product-id | 聚合计算总数
   totalProductCount: number;
@@ -105,6 +110,13 @@ export interface RetryTask_Input {
  *   3. [返回结果]: 组装并返回 AdminProfile_Output 格式数据
  */
 declare function getAdminProfile(): Promise<AdminProfile_Output>;
+
+/**
+ * @requires: ADMIN
+ * @Prisma_Model: sysuser
+ * @Description: 更新当前登录管理员的个人资料（姓名、头像）
+ */
+declare function updateAdminProfile(input: UpdateAdminProfile_Input): Promise<AdminProfile_Output>;
 
 /**
  * @requires: ADMIN

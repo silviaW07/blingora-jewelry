@@ -67,6 +67,7 @@ export const useAdminLogin = (): { state: AdminLoginState, handlers: AdminLoginH
         token: data.token,
         user_id: data.sysuser_id,
         username: data.sysuser_username,
+        avatarUrl: data.sysuser_avatarUrl || '',
       });
 
       toast.success('登录成功');

@@ -58,8 +58,9 @@ export interface PreviewDataJson {
   importSortIndex?: number
   /** 入库身份：1688 每条链接独立；表格按产品编号合并后写入 */
   inboundIdentity?: {
-    mode: 'LINK_1688_INDEPENDENT' | 'TABLE_PRODUCT_CODE_MERGED'
+    mode: 'LINK_1688_INDEPENDENT' | 'LINK_PDD_INDEPENDENT' | 'TABLE_PRODUCT_CODE_MERGED'
     offerId?: string | null
+    goodsId?: string | null
     sourceUrl?: string | null
     excelProductCode?: string | null
   }
@@ -307,6 +308,15 @@ export interface CreateImportTaskInput {
 
 export interface CreateImportTaskOutput {
   taskId: string
+}
+
+export interface CreatePinduoduoImportTaskInput {
+  urls: string
+  defaultCategoryId?: string
+  /** 售价相对拼多多采集价的加价百分比，例如 20 表示 +20% */
+  markupRate?: number
+  defaultStatus: ProductStatusType
+  stockStrategyStock?: number
 }
 
 export interface StartParseTaskInput {
@@ -611,6 +621,12 @@ import {
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
+import {
+  extractPinduoduoGoodsId,
+  fetchPinduoduoProductPreview,
+  isPinduoduoProductUrl,
+  type PinduoduoProductPreview,
+} from '@/backend/parsers/PinduoduoParser'
 
 const buildImportSkuSegments = (sku: PendingImportSkuItem, index: number) => {
   const attrs = Array.isArray(sku.attributes) ? sku.attributes : []
@@ -3946,11 +3962,258 @@ const is1688ImportSourceUrl = (sourceUrl?: string | null) => {
   return /1688\.com/i.test(url) && /offer\/\d+/i.test(url)
 }
 
+const isPinduoduoImportSourceUrl = (sourceUrl?: string | null) =>
+  Boolean(sourceUrl && isPinduoduoProductUrl(String(sourceUrl)))
+
 const resolvePendingCreationSource = (sourceUrl?: string | null): ProductCreationSourceType => {
   if (isTableImportSourceUrl(sourceUrl)) return 'TABLE_IMPORT'
   if (is1688ImportSourceUrl(sourceUrl)) return 'IMPORT_1688'
-  // 兜底：非 table-import 前缀一律按 1688/链接导入独立建品，避免误走产品编号合并
+  if (isPinduoduoImportSourceUrl(sourceUrl)) return 'IMPORT_1688'
+  // 兜底：非 table-import 前缀一律按链接导入独立建品，避免误走产品编号合并
   return 'IMPORT_1688'
+}
+
+const resolvePinduoduoMarkupMultiplier = (task: { markupRate?: unknown; stockStrategyJson?: unknown }) => {
+  const strategy = (task.stockStrategyJson || {}) as { markupPercent?: unknown }
+  const fromStrategy = toNumberOrNull(strategy.markupPercent)
+  const fromTask = toNumberOrNull(task.markupRate)
+  const percent = Math.max(0, fromStrategy ?? fromTask ?? 0)
+  return 1 + percent / 100
+}
+
+/**
+ * 将拼多多抓取结果写入待上传明细（与 1688 任务互不共用解析器）。
+ * 售价 = 采集价 × (1 + 加价百分比)；成本保留采集价。
+ */
+const persistPinduoduoParsedItem = async (params: {
+  item: { id: string; sourceUrl: string | null }
+  task: {
+    id: string
+    defaultCategoryId?: string | null
+    defaultStatus?: string | null
+    markupRate?: unknown
+    stockStrategyJson?: unknown
+  }
+  fetched: PinduoduoProductPreview
+  secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>
+  categoryMap: Awaited<ReturnType<typeof loadImportPricingCategories>>
+  exchangeRate: number
+  importSortIndex?: number
+}) => {
+  const { item, task, fetched, secondaryCategories, categoryMap, exchangeRate } = params
+  const sourceUrl = item.sourceUrl || ''
+  const goodsId = fetched.goodsId || extractPinduoduoGoodsId(sourceUrl) || item.id.slice(0, 6)
+  const markupMultiplier = resolvePinduoduoMarkupMultiplier(task)
+  const strategyStock =
+    toNumberOrNull((task.stockStrategyJson as StockStrategyJson | null)?.stock) ?? 100
+  const productName = fetched.name || `[拼多多抓取] 商品 ${goodsId}`
+  const productDetail =
+    fetched.productDetail || '自动采集的拼多多商品详情，请运营补充图文与说明。'
+  const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(
+    productName,
+    secondaryCategories,
+    productDetail,
+  )
+  const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
+  const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
+  const targetCategoryId = matchedSecondaryCategoryIds[0] || task.defaultCategoryId || null
+  // 系数仅作分类归属参考展示；拼多多售价按加价百分比计算
+  const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
+
+  const rawPriceMin = fetched.priceMin ?? 0
+  const rawPriceMax = fetched.priceMax ?? rawPriceMin
+  const costMin = Math.max(0, roundCurrency(rawPriceMin))
+  const costMax = Math.max(costMin, roundCurrency(rawPriceMax))
+  const finalPriceMin = roundCurrency(costMin * markupMultiplier)
+  const finalPriceMax = roundCurrency(costMax * markupMultiplier)
+
+  const mainImageUrl = fetched.mainImageUrl || null
+  const detailImages =
+    Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0
+      ? fetched.detailImages
+      : mainImageUrl
+        ? [mainImageUrl]
+        : []
+
+  const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : []
+  const colorsEarly =
+    Array.isArray(fetched.colors) && fetched.colors.length > 0
+      ? fetched.colors
+          .map(color => ({
+            label: normalizeText(color.label),
+            imageUrl: normalizeText(color.imageUrl) || null,
+          }))
+          .filter(color => color.label)
+      : []
+  const sizesByColorEarly =
+    fetched.sizesByColor && typeof fetched.sizesByColor === 'object'
+      ? Object.fromEntries(
+          Object.entries(fetched.sizesByColor).map(([color, sizes]) => [
+            color,
+            Array.from(new Set((sizes || []).map(size => normalizeText(size)).filter(Boolean))),
+          ]),
+        )
+      : {}
+
+  const baseSkuRows = resolveSkuTableOrExpandFromColors({
+    skuTable: parsedSkuRows.map(row => ({
+      skuKey: row.skuKey,
+      spec: row.spec,
+      costPrice: row.price,
+      price: row.price,
+      stock: row.stock,
+      imageUrl: row.imageUrl,
+      attributes: row.attributes,
+    })),
+    colors: colorsEarly,
+    sizesByColor: sizesByColorEarly,
+    costPrice: costMin,
+    price: finalPriceMin,
+    stock: strategyStock,
+  })
+
+  const skuTable: PreviewSkuTableRow[] = baseSkuRows.map((row, index) => {
+    const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawPriceMin
+    const nextCost = Math.max(0, roundCurrency(sourceCost))
+    const nextPrice = roundCurrency(nextCost * markupMultiplier)
+    return {
+      skuKey: normalizeText(row.skuKey) || `sku-${index + 1}`,
+      spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
+      costPrice: nextCost,
+      price: nextPrice,
+      stock: toNumberOrNull(row.stock) ?? strategyStock,
+      weightGrams: toNumberOrNull(row.weightGrams) ?? 500,
+      imageUrl: normalizeText(row.imageUrl) || null,
+      attributes:
+        Array.isArray(row.attributes) && row.attributes.length > 0
+          ? row.attributes.map(attr => ({
+              name: normalizeText(attr.name) || '规格',
+              value: normalizeText(attr.value) || '默认',
+            }))
+          : parseSpecAttributes(row.spec || '默认规格'),
+    }
+  })
+
+  const colors =
+    colorsEarly.length > 0
+      ? colorsEarly
+      : parsedSkuRows.length > 0
+        ? Array.from(
+            new Set(
+              skuTable
+                .map(sku => sku.attributes?.find(attr => attr.name === '颜色')?.value)
+                .filter(Boolean) as string[],
+            ),
+          ).map(label => ({
+            label,
+            imageUrl:
+              skuTable.find(sku => sku.attributes?.some(attr => attr.name === '颜色' && attr.value === label))
+                ?.imageUrl || null,
+          }))
+        : []
+
+  const sizesByColor: Record<string, string[]> = { ...sizesByColorEarly }
+  if (Object.keys(sizesByColor).length === 0) {
+    for (const sku of skuTable) {
+      const color = sku.attributes?.find(attr => attr.name === '颜色')?.value
+      const size = sku.attributes?.find(attr => attr.name === '尺码')?.value
+      if (!color || !size) continue
+      const list = sizesByColor[color] || []
+      if (!list.includes(size)) list.push(size)
+      sizesByColor[color] = list
+    }
+  }
+
+  const specSummary: SpecSummaryJson[] =
+    Array.isArray(fetched.specSummary) && fetched.specSummary.length > 0
+      ? fetched.specSummary
+      : [
+          ...(colors.length ? [{ name: '颜色', values: colors.map(item => item.label) }] : []),
+          ...(() => {
+            const sizeValues = Array.from(
+              new Set(
+                [
+                  ...Object.values(sizesByColor).flat(),
+                  ...skuTable
+                    .map(sku => sku.attributes?.find(attr => attr.name === '尺码')?.value)
+                    .filter(Boolean),
+                ].filter(Boolean) as string[],
+              ),
+            )
+            return sizeValues.length ? [{ name: '尺码', values: sizeValues }] : []
+          })(),
+        ]
+  if (specSummary.length === 0) {
+    specSummary.push({ name: '规格', values: ['默认规格'] })
+  }
+
+  const skuPrices = skuTable
+    .map(sku => toNumberOrNull(sku.price))
+    .filter((value): value is number => value !== null)
+  const resolvedFinalPriceMin = skuPrices.length ? Math.min(...skuPrices) : finalPriceMin
+  const resolvedFinalPriceMax = skuPrices.length ? Math.max(...skuPrices) : finalPriceMax
+  const resolvedUsdMin = roundCurrency(resolvedFinalPriceMin / exchangeRate)
+  const resolvedUsdMax = roundCurrency(resolvedFinalPriceMax / exchangeRate)
+  const totalStock = skuTable.reduce((sum, sku) => sum + (toNumberOrNull(sku.stock) ?? 0), 0)
+
+  const previewData: PreviewDataJson = {
+    name: productName,
+    ...(await (async () => {
+      const nameEn = await resolveEnglishProductTitle(productName)
+      const nameEs = await resolveSpanishProductTitle(productName, null, nameEn)
+      return { nameEn, nameEs }
+    })()),
+    categoryId: targetCategoryId || undefined,
+    matchedCategoryIds: matchedSecondaryCategoryIds,
+    matchedCategoryNames: matchedSecondaryCategoryNames,
+    price: resolvedFinalPriceMin,
+    mainImageUrl: mainImageUrl || undefined,
+    detailImages,
+    shortDescription: productDetail,
+    featureAttributes: fetched.featureAttributes || [],
+    colors,
+    sizesByColor,
+    ...(typeof params.importSortIndex === 'number' ? { importSortIndex: params.importSortIndex } : {}),
+    inboundIdentity: {
+      mode: 'LINK_PDD_INDEPENDENT',
+      goodsId,
+      sourceUrl,
+    },
+    skuTable,
+  }
+
+  await prisma.importtaskitem.update({
+    where: { id: item.id },
+    data: {
+      parsedName: productName,
+      supplierName: fetched.supplierName || null,
+      mainImageUrl,
+      parsedMainImageUrl: mainImageUrl,
+      costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? costMin,
+      weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? 500,
+      sourceCategoryName: null,
+      coefficient: resolvedCoefficient,
+      goodsStatus: (task.defaultStatus || 'DRAFT') as any,
+      productDetail,
+      skuSummaryText: skuTable.map(sku => sku.spec).filter(Boolean).join(' | ') || '默认规格',
+      cnyPriceMin: resolvedFinalPriceMin,
+      cnyPriceMax: resolvedFinalPriceMax,
+      usdPriceMin: resolvedUsdMin,
+      usdPriceMax: resolvedUsdMax,
+      minimumOrderQuantity: 1,
+      availableStock: totalStock > 0 ? totalStock : strategyStock,
+      targetCategoryId,
+      parsedPriceMin: rawPriceMin,
+      parsedPriceMax: rawPriceMax,
+      specSummaryJson: specSummary as any,
+      previewDataJson: previewData as any,
+      fetchStatus: 'COMPLETED' as any,
+      failureReason: null,
+      fetchFinishedAt: new Date(),
+    },
+  })
+
+  return { productName }
 }
 
 /**
@@ -4880,6 +5143,88 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
   })
 )
 
+export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
+  withResult(async (input: CreatePinduoduoImportTaskInput): Promise<CreateImportTaskOutput> => {
+    const { userId } = getAuthContext()
+    const rawUrls = input.urls.split('\n').map(u => u.trim()).filter(Boolean)
+    const uniqueUrls = Array.from(new Set(rawUrls))
+
+    if (uniqueUrls.length === 0) {
+      throw new Error('请输入有效的拼多多商品链接')
+    }
+
+    const httpUrls = uniqueUrls.filter(u => u.startsWith('http://') || u.startsWith('https://'))
+    if (httpUrls.length === 0) {
+      throw new Error('链接格式不正确，需以 http 或 https 开头')
+    }
+
+    const validUrls = httpUrls.filter(u => isPinduoduoProductUrl(u))
+    if (validUrls.length === 0) {
+      throw new Error('请粘贴有效的拼多多商品详情页链接（需包含 goods_id，如 https://mobile.yangkeduo.com/goods.html?goods_id=xxxx）')
+    }
+
+    const markupRate =
+      typeof input.markupRate === 'number' && Number.isFinite(input.markupRate)
+        ? Math.max(0, input.markupRate)
+        : 0
+
+    let stockStrategyJson: any = {
+      type: 'fixed',
+      platform: 'PDD',
+      markupPercent: markupRate,
+    }
+    if (typeof input.stockStrategyStock === 'number') {
+      stockStrategyJson.stock = input.stockStrategyStock
+    }
+
+    const taskName = `拼多多导入 ${new Date().toLocaleString('zh-CN')}`
+
+    const task = await prisma.$transaction(async tx => {
+      const newTask = await tx.importtask.create({
+        data: {
+          creatorId: userId,
+          taskName,
+          status: 'PENDING',
+          sourceLinkCount: validUrls.length,
+          successCount: 0,
+          failureCount: 0,
+          progressPercent: 0,
+          // 拼多多任务：markupRate 存加价百分比（与 1688 的成本减法语义隔离）
+          markupRate,
+          defaultStatus: input.defaultStatus as any,
+          defaultCategoryId: input.defaultCategoryId || null,
+          stockStrategyJson,
+          queueConcurrency: 1,
+          rateLimitMinDelaySec: 2,
+          rateLimitMaxDelaySec: 5,
+          lastScheduledAt: null,
+          lastRateLimitedAt: null,
+          startedAt: null,
+          finishedAt: null,
+        },
+      })
+
+      await tx.importtaskitem.createMany({
+        data: validUrls.map(url => ({
+          importTaskId: newTask.id,
+          operatorId: userId,
+          sourceUrl: url,
+          isSelected: true,
+          fetchStatus: 'PENDING' as any,
+          publishStatus: 'PENDING' as any,
+          isPublished: false,
+          targetCategoryId: input.defaultCategoryId || null,
+          goodsStatus: (input.defaultStatus || 'DRAFT') as any,
+        })),
+      })
+
+      return newTask
+    })
+
+    return { taskId: task.id }
+  })
+)
+
 export const startParseTask = requireRole([UserRole.ADMIN])(
   withResult(async (input: StartParseTaskInput): Promise<void> => {
     try {
@@ -4927,6 +5272,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
       try {
         const sourceUrl = item.sourceUrl || ''
+        const isPddUrl = isPinduoduoProductUrl(sourceUrl)
         const is1688OfferUrl = /1688\.com\/.*offer\/\d+/i.test(sourceUrl) || /detail\.1688\.com\/offer\/\d+/i.test(sourceUrl)
         const looksOffline = /offline|下架|sold.?out|removed/i.test(sourceUrl)
         const looksTimeout = /timeout|error|超时/i.test(sourceUrl)
@@ -4939,7 +5285,9 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             where: { id: item.id },
             data: {
               fetchStatus: 'RATE_LIMITED' as any,
-              failureReason: '解析失败：触发1688限流，请稍后重试',
+              failureReason: isPddUrl
+                ? '解析失败：触发拼多多限流，请稍后重试'
+                : '解析失败：触发1688限流，请稍后重试',
               fetchFinishedAt: now
             }
           })
@@ -4947,13 +5295,50 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             where: { id: task.id },
             data: { lastRateLimitedAt: now }
           })
+        } else if (isPddUrl) {
+          const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
+          const fetched = fetchResult.preview
+          const hasRealParse = Boolean(
+            fetched.name ||
+            fetched.mainImageUrl ||
+            (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
+          )
+
+          if (!hasRealParse) {
+            failureCount += 1
+            const failReason =
+              fetchResult.outcome === 'expired'
+                ? '解析失败：该拼多多商品已下架或不存在'
+                : fetchResult.failureReason || '解析失败：拼多多风控/抓取失败，请稍后重试'
+            const goodsId = extractPinduoduoGoodsId(sourceUrl) || item.id.slice(0, 6)
+            await prisma.importtaskitem.update({
+              where: { id: item.id },
+              data: {
+                parsedName: fetched.name || `[拼多多抓取] 商品 ${goodsId}`,
+                fetchStatus: 'FAILED' as any,
+                failureReason: failReason,
+                fetchFinishedAt: new Date(),
+              },
+            })
+          } else {
+            successCount += 1
+            await persistPinduoduoParsedItem({
+              item,
+              task,
+              fetched,
+              secondaryCategories,
+              categoryMap,
+              exchangeRate,
+              importSortIndex: index,
+            })
+          }
         } else if (!is1688OfferUrl) {
           failureCount += 1
           await prisma.importtaskitem.update({
             where: { id: item.id },
             data: {
               fetchStatus: 'FAILED' as any,
-              failureReason: '解析失败：链接错误，请粘贴有效的1688商品详情页链接（如 https://detail.1688.com/offer/xxxx.html）',
+              failureReason: '解析失败：链接错误，请粘贴有效的1688或拼多多商品详情页链接',
               fetchFinishedAt: new Date()
             }
           })
@@ -6152,13 +6537,14 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
 
         const sourceUrl = normalizeText(item.sourceUrl)
         const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
-        if (!sourceUrl || !is1688OfferUrl) {
+        const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
+        if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {
           fail += 1
           results.push({
             itemId,
             success: false,
             name: displayName,
-            reason: '无效的 1688 商品链接，仅支持 detail.1688.com/offer/… 类链接重新解析',
+            reason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
           })
           continue
         }
@@ -6172,6 +6558,45 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
             failureReason: null,
           },
         })
+
+        if (isPddUrl) {
+          const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
+          const fetched = fetchResult.preview
+          const hasRealParse = Boolean(
+            fetched.name ||
+            fetched.mainImageUrl ||
+            (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
+          )
+          if (!hasRealParse) {
+            const reason =
+              fetchResult.outcome === 'expired'
+                ? '该拼多多商品已下架或不存在'
+                : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试'
+            await prisma.importtaskitem.update({
+              where: { id: item.id },
+              data: {
+                fetchStatus: 'FAILED' as any,
+                failureReason: reason,
+                fetchFinishedAt: new Date(),
+              },
+            })
+            fail += 1
+            results.push({ itemId, success: false, name: displayName, reason })
+          } else {
+            const applied = await persistPinduoduoParsedItem({
+              item,
+              task: item.importTask as any,
+              fetched,
+              secondaryCategories,
+              categoryMap,
+              exchangeRate,
+            })
+            success += 1
+            results.push({ itemId, success: true, name: applied.productName })
+            displayName = applied.productName
+          }
+          continue
+        }
 
         const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
         const fetched = fetchResult.preview

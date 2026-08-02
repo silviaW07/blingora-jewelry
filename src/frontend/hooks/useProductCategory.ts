@@ -25,8 +25,10 @@ import {
   getKeywordList,
   getProductList,
   addToCart,
-  getCategoryTopPromotion
+  getCategoryTopPromotion,
+  resolveCategoryRouteKey,
 } from '@/frontend/actions/ProductCategory'
+import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 
 type CategoryChildItem = {
@@ -233,9 +235,9 @@ export interface ProductCategoryState {
 
 export interface ProductCategoryHandlers {
   handleFilterChange: <K extends keyof ProductCategoryState['queryState']>(field: K, value: ProductCategoryState['queryState'][K]) => void
-  handleSelectCategory: (categoryId: string, options?: { parentCategoryId?: string }) => void
+  handleSelectCategory: (categoryId: string, options?: { parentCategoryId?: string; categorySlug?: string | null }) => void
   handleTopCategoryHoverChange: (categoryId: string | null) => void
-  handleToggleDesktopTopNavCategory: (categoryId: string) => void
+  handleToggleDesktopTopNavCategory: (categoryId: string, options?: { categorySlug?: string | null }) => void
   handleToggleTopNavCategory: (categoryId: string) => void
   handleNavigateToWishlist: () => void
   handleNavigateToCart: () => void
@@ -284,8 +286,13 @@ export const useProductCategory = (): {
   const routeCategorySlug = useMemo(() => {
     if (!isCategorySlugRoute || !pathname) return ''
     const rest = pathname.slice('/category/'.length)
-    const slug = rest.split('/')[0] || ''
-    return decodeURIComponent(slug).trim()
+    // trailingSlash: true → /category/foo/ ；只取第一段并去掉空段
+    const slug = rest.split('/').filter(Boolean)[0] || ''
+    try {
+      return decodeURIComponent(slug).trim()
+    } catch {
+      return slug.trim()
+    }
   }, [isCategorySlugRoute, pathname])
 
   const [queryState, setQueryState] = useState({
@@ -352,10 +359,11 @@ export const useProductCategory = (): {
     }
   }, [clearTopNavHoverCloseTimer])
 
-  // Soft nav (e.g. Brand SIDE_NAV → navigateToCategory) only changes ?categoryId=
-  // without remounting; keep queryState in sync so product fetch re-runs.
+  // Soft nav：同步 URL query → queryState。
+  // /category/[slug] 路由的 categoryId 由 slug 解析 effect 写入，这里绝不能强制清空，
+  // 否则会把已解析的分类冲掉，导致 getProductList 不带 category_id、返回全站商品。
   useEffect(() => {
-    const nextCategoryId = isCategorySlugRoute ? '' : (routeParams.categoryId || '')
+    const nextCategoryIdFromQuery = routeParams.categoryId || ''
     const nextSearchKeyword = routeParams.search || ''
     const nextPage = routeParams.page ? parseInt(routeParams.page, 10) : 1
     const nextSortBy = (routeParams.sortBy as SortByEnum) || 'NEWEST'
@@ -366,6 +374,8 @@ export const useProductCategory = (): {
     ) as StockStatusEnum[]
 
     setQueryState((prev) => {
+      const nextCategoryId = isCategorySlugRoute ? prev.categoryId : nextCategoryIdFromQuery
+
       if (
         prev.categoryId === nextCategoryId &&
         prev.searchKeyword === nextSearchKeyword &&
@@ -401,6 +411,7 @@ export const useProductCategory = (): {
       max: routeParams.maxPrice || '',
     })
   }, [
+    isCategorySlugRoute,
     routeParams.categoryId,
     routeParams.search,
     routeParams.page,
@@ -422,15 +433,32 @@ export const useProductCategory = (): {
       .finally(() => setIsLoadingCategories(false))
   }, [localeTick])
 
+  // 在 /category/[slug] 之间切换时，先清空旧 categoryId，等待新 slug 解析，避免串类目
+  useEffect(() => {
+    if (!isCategorySlugRoute) return
+    setQueryState((prev) => ({
+      ...prev,
+      categoryId: '',
+      page: 1,
+      brandCategoryId: '',
+      keywordId: '',
+      keywordGroupId: '',
+    }))
+  }, [isCategorySlugRoute, routeCategorySlug])
+
   const resolveCategoryIdBySlug = useCallback((slug: string): string => {
     const normalized = String(slug || '').trim()
     if (!normalized) return ''
     for (const cat of categories) {
+      // 兼容历史链接：路径段可能是 id
+      if (cat.category_id === normalized) return cat.category_id
       if (String(cat.category_slug || '').trim() === normalized) return cat.category_id
       for (const child of cat.children || []) {
+        if (child.category_id === normalized) return child.category_id
         if (String(child.category_slug || '').trim() === normalized) return child.category_id
       }
       for (const brand of cat.brand_options || []) {
+        if (brand.category_id === normalized) return brand.category_id
         if (String(brand.category_slug || '').trim() === normalized) return brand.category_id
       }
     }
@@ -456,19 +484,55 @@ export const useProductCategory = (): {
     if (!isCategorySlugRoute) return
     if (!routeCategorySlug) return
     if (isLoadingCategories) return
-    const resolvedId = resolveCategoryIdBySlug(routeCategorySlug)
-    if (!resolvedId) {
-      toast.error('未找到对应分类')
-      return
+
+    let cancelled = false
+
+    const applyResolved = (resolvedId: string) => {
+      if (cancelled || !resolvedId) return
+      setQueryState((prev) => (prev.categoryId === resolvedId ? prev : { ...prev, categoryId: resolvedId }))
+      const params = new URLSearchParams(searchParams.toString())
+      if (params.has('categoryId')) {
+        params.delete('categoryId')
+        params.delete('page')
+        const qs = params.toString()
+        router.replace(qs ? `${pathname}?${qs}` : (pathname || '/'), { scroll: false })
+      }
     }
-    setQueryState((prev) => (prev.categoryId === resolvedId ? prev : { ...prev, categoryId: resolvedId }))
-    // keep url clean: slug identifies category; drop categoryId from query if present
-    const params = new URLSearchParams(searchParams.toString())
-    if (params.has('categoryId')) {
-      params.delete('categoryId')
-      params.delete('page')
-      const qs = params.toString()
-      router.replace(qs ? `${pathname}?${qs}` : (pathname || '/'), { scroll: false })
+
+    const fromTree = resolveCategoryIdBySlug(routeCategorySlug)
+    if (fromTree) {
+      applyResolved(fromTree)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    // 导航树未收录（如品牌类/不可见类）时，回源数据库按 slug/id 解析
+    resolveCategoryRouteKey({ routeKey: routeCategorySlug })
+      .then((res) => {
+        if (cancelled) return
+        if (!res.categoryId) {
+          toast.error('未找到对应分类')
+          return
+        }
+        applyResolved(res.categoryId)
+        // 若库中有正式 slug 且当前 URL 段是 id，纠正为 /category/[slug]
+        const canonicalSlug = String(res.categorySlug || '').trim()
+        if (canonicalSlug && canonicalSlug !== routeCategorySlug) {
+          const params = new URLSearchParams(searchParams.toString())
+          params.delete('categoryId')
+          params.delete('page')
+          const qs = params.toString()
+          const target = `/category/${encodeURIComponent(canonicalSlug)}`
+          router.replace(qs ? `${target}?${qs}` : target, { scroll: false })
+        }
+      })
+      .catch((err: any) => {
+        if (!cancelled) toast.error(err?.message || '未找到对应分类')
+      })
+
+    return () => {
+      cancelled = true
     }
   }, [
     isCategorySlugRoute,
@@ -681,9 +745,44 @@ export const useProductCategory = (): {
 
   useEffect(() => {
     if (isDailyNewArrivalMode) {
+      // New / 每日上新：独立时间窗查询，不走分类 ID 过滤
+      setIsLoadingProducts(true)
       setProducts([])
       setTotalCount(0)
-      setIsLoadingProducts(false)
+      const lang = getCurrentLang()
+      const dailyMonth = searchParams.get('dailyMonth') || ''
+      const [yearText, monthText] = dailyMonth.split('-')
+      const year = Number(yearText)
+      const month = Number(monthText)
+      const hasMonth =
+        Boolean(dailyMonth) &&
+        Number.isInteger(year) &&
+        Number.isInteger(month) &&
+        month >= 1 &&
+        month <= 12
+
+      getDailyNewArrivalProducts({
+        ...(hasMonth ? { year, month } : {}),
+        lang,
+      })
+        .then((res) => {
+          setProducts(Array.isArray(res.list) ? res.list : [])
+          setTotalCount(res.total || 0)
+        })
+        .catch((err: any) => {
+          setProducts([])
+          setTotalCount(0)
+          toast.error(err.message || '上新商品加载失败')
+        })
+        .finally(() => setIsLoadingProducts(false))
+      return
+    }
+
+    // /category/[slug] 尚未解析出 categoryId 时，禁止无过滤拉取，避免短暂/长期展示全站商品
+    if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId) {
+      setIsLoadingProducts(true)
+      setProducts([])
+      setTotalCount(0)
       return
     }
 
@@ -717,7 +816,7 @@ export const useProductCategory = (): {
         toast.error(err.message)
       })
       .finally(() => setIsLoadingProducts(false))
-  }, [isDailyNewArrivalMode, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick])
+  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
 
   const syncListingQueryToUrl = useCallback((patch: {
     sortBy?: SortByEnum
@@ -780,7 +879,7 @@ export const useProductCategory = (): {
     return `${base}${query ? `?${query}` : ''}`
   }, [pathname, searchParams])
 
-  const handleSelectCategory = useCallback((categoryId: string, options?: { parentCategoryId?: string }) => {
+  const handleSelectCategory = useCallback((categoryId: string, options?: { parentCategoryId?: string; categorySlug?: string | null }) => {
     // 点击后立即收起悬浮菜单，避免与商品区刷新抢焦点
     closeTopNavHoverPanel()
     if (isMobile && options?.parentCategoryId) {
@@ -793,14 +892,10 @@ export const useProductCategory = (): {
       return
     }
 
-    const slug = resolveCategorySlugById(categoryId)
-    const target = slug ? `/category/${encodeURIComponent(slug)}` : `/category/${categoryId}`
-    const params = new URLSearchParams(searchParams.toString())
-    params.delete('categoryId')
-    params.delete('page')
-    const qs = params.toString()
-    router.push(qs ? `${target}?${qs}` : target)
-  }, [closeTopNavHoverPanel, handleFilterChange, isMobile, resolveCategorySlugById, router, searchParams])
+    const slugFromOption = String(options?.categorySlug || '').trim()
+    const slug = slugFromOption || resolveCategorySlugById(categoryId)
+    ProductCategory.navigateToCategory(router, { categoryId, categorySlug: slug || null })
+  }, [closeTopNavHoverPanel, handleFilterChange, isMobile, resolveCategorySlugById, router])
 
   const handleSearchProducts = useCallback((keyword: string) => {
     closeTopNavHoverPanel()
@@ -849,9 +944,9 @@ export const useProductCategory = (): {
     setHoveredTopCategoryId(categoryId)
   }, [clearTopNavHoverCloseTimer, isMobile])
 
-  const handleToggleDesktopTopNavCategory = useCallback((categoryId: string) => {
+  const handleToggleDesktopTopNavCategory = useCallback((categoryId: string, options?: { categorySlug?: string | null }) => {
     // 桌面端点击一级：加载该一级旗下全部商品；悬浮下拉仅用于选二级，两者互不冲突
-    handleSelectCategory(categoryId)
+    handleSelectCategory(categoryId, options)
   }, [handleSelectCategory])
 
   const handleToggleTopNavCategory = useCallback((categoryId: string) => {

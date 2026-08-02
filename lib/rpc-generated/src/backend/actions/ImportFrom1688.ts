@@ -32,6 +32,8 @@ export const createProductsFromTable = (...args: Parameters<Actions["createProdu
   rpcCall<Awaited<ReturnType<Actions["createProductsFromTable"]>>>("src.backend.actions.ImportFrom1688.createProductsFromTable", ...args);
 export const createImportTask = (...args: Parameters<Actions["createImportTask"]>) => 
   rpcCall<Awaited<ReturnType<Actions["createImportTask"]>>>("src.backend.actions.ImportFrom1688.createImportTask", ...args);
+export const createPinduoduoImportTask = (...args: Parameters<Actions["createPinduoduoImportTask"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["createPinduoduoImportTask"]>>>("src.backend.actions.ImportFrom1688.createPinduoduoImportTask", ...args);
 export const startParseTask = (...args: Parameters<Actions["startParseTask"]>) => 
   rpcCall<Awaited<ReturnType<Actions["startParseTask"]>>>("src.backend.actions.ImportFrom1688.startParseTask", ...args);
 export const updateTaskItemPreview = (...args: Parameters<Actions["updateTaskItemPreview"]>) => 

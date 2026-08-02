@@ -4,6 +4,8 @@ type Actions = typeof import('../../../../../src/backend/actions/Dashboard');
 
 export const getAdminProfile = (...args: Parameters<Actions["getAdminProfile"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getAdminProfile"]>>>("src.backend.actions.Dashboard.getAdminProfile", ...args);
+export const updateAdminProfile = (...args: Parameters<Actions["updateAdminProfile"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateAdminProfile"]>>>("src.backend.actions.Dashboard.updateAdminProfile", ...args);
 export const getKpiStats = (...args: Parameters<Actions["getKpiStats"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getKpiStats"]>>>("src.backend.actions.Dashboard.getKpiStats", ...args);
 export const getImportTasksOverview = (...args: Parameters<Actions["getImportTasksOverview"]>) => 

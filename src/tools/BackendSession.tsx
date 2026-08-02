@@ -7,11 +7,18 @@ export class AdminSession{
     token: string;
     user_id: string;
     username: string;
+    avatarUrl: string;
     constructor() { 
         this.token='';
         this.user_id='';
         this.username='';
+        this.avatarUrl='';
     }
 }
 
-export const useAdminSession = createPersistStore<AdminSession>('AdminSession', { token: '', user_id: '', username: '' });
+export const useAdminSession = createPersistStore<AdminSession>('AdminSession', {
+  token: '',
+  user_id: '',
+  username: '',
+  avatarUrl: '',
+});

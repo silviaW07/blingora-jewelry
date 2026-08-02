@@ -105,12 +105,19 @@ export const ProductCategory = {
     params: { categoryId: string; categorySlug?: string | null },
   ) => {
     const slug = String(params.categorySlug || '').trim()
+    // 去掉首尾斜杠，避免 /category//foo 或 slug 自带路径前缀
     const normalizedSlug = slug.replace(/^\/+|\/+$/g, '')
     if (normalizedSlug) {
       router.push(`/category/${encodeURIComponent(normalizedSlug)}`)
       return
     }
-    router.push(`/category/${params.categoryId}`)
+    // 无 slug 时不要把 id 塞进 /category/[slug]（会导致「未找到对应分类」）
+    const categoryId = String(params.categoryId || '').trim()
+    if (!categoryId) {
+      router.push(ProductCategory.path)
+      return
+    }
+    router.push(buildUrl(ProductCategory.path, { categoryId }))
   },
   navigateToFiltered: (router: AppRouterInstance, params: { categoryId: string; stockStatus: string; sortBy: string; page: string }) =>
     router.push(buildUrl(ProductCategory.path, params)),

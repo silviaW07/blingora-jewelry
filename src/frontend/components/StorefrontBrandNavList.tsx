@@ -15,7 +15,7 @@ import type { BrandNavListItem } from '@/frontend/utils/brandSideNav'
 interface Props {
   items: BrandNavListItem[]
   activeId?: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string, slug?: string | null) => void
   /** rail = home left column; flyout = dropdown under CATEGORIES */
   variant?: 'rail' | 'flyout'
   className?: string
@@ -66,7 +66,7 @@ export const StorefrontBrandNavList = ({
             type="button"
             data-active={isActive ? 'true' : 'false'}
             className={itemClass}
-            onClick={() => onSelect(item.id)}
+            onClick={() => onSelect(item.id, item.slug)}
             {...(bindInfo ? { 'data-api-bind-info': bindInfo } : {})}
             {...(mapVar ? { 'data-api-map-var-name': mapVar } : {})}
           >

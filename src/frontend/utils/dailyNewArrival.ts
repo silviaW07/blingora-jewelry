@@ -2,11 +2,16 @@ export const DAILY_NEW_ARRIVAL_CATEGORY_KEYWORD = '每日上新'
 
 const DAILY_NEW_ARRIVAL_NAME_PATTERNS = [
   '每日上新',
+  '每月上新',
   'daily new arrival',
   'daily new arrivals',
   'daily new',
   'new arrival',
+  'new arrivals',
 ]
+
+/** 短名精确匹配（导航常显示为 New） */
+const DAILY_NEW_ARRIVAL_EXACT_NAMES = ['new', '上新', '新品']
 
 export type DailyNewArrivalCategoryRef = {
   category_id: string
@@ -20,6 +25,7 @@ export type DailyNewArrivalCategoryRef = {
 export const isDailyNewArrivalCategoryName = (name?: string | null) => {
   const value = String(name || '').trim().toLowerCase()
   if (!value) return false
+  if (DAILY_NEW_ARRIVAL_EXACT_NAMES.includes(value)) return true
   return DAILY_NEW_ARRIVAL_NAME_PATTERNS.some((pattern) => value.includes(pattern.toLowerCase()))
 }
 
@@ -85,4 +91,11 @@ export const getMonthDateRange = (year: number, month: number) => {
   const end = new Date(year, month, 1, 0, 0, 0, 0)
 
   return { start, end }
+}
+
+/** 最近 6 个月（含当月）窗口起点：最旧那个月的 1 号 00:00 */
+export const getLast6MonthsRangeStart = (referenceDate = new Date()) => {
+  const months = buildLast6Months(referenceDate)
+  const oldest = months[months.length - 1]
+  return getMonthDateRange(oldest.year, oldest.month).start
 }

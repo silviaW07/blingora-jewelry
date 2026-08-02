@@ -21,4 +21,5 @@ export type BrandNavListItem = {
   id: string
   label: string
   key?: string
+  slug?: string | null
 }

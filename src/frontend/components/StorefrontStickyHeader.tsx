@@ -13,7 +13,6 @@ import {
   Camera,
   ChevronDown,
   ChevronRight,
-  Gem,
   Globe,
   Loader2,
   Menu,
@@ -22,6 +21,7 @@ import {
   ShoppingCart,
 } from 'lucide-react'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
+import { StorefrontBrandMark } from '@/frontend/components/StorefrontBrandMark'
 import { CustomerAccountMenu } from '@/frontend/components/CustomerAccountMenu'
 import { StorefrontFloatingSideNav } from '@/frontend/components/StorefrontFloatingSideNav'
 import { useUserSession } from '@/tools/FrontendSession'
@@ -113,6 +113,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
         id: category.category_id,
         key: category.item_id,
         label: category.category_name,
+        slug: category.category_slug,
       })),
     [floatingBrandItems],
   )
@@ -260,13 +261,15 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   }, [router])
 
   const goHomeWithCategory = useCallback(
-    (categoryId: string) => {
+    (categoryId: string, categorySlug?: string | null) => {
       if (!categoryId) {
         goHome()
         return
       }
       const id = String(categoryId || '').trim()
+      const slugFromArg = String(categorySlug || '').trim()
       const slug =
+        slugFromArg ||
         categories.find((c) => c.category_id === id)?.category_slug ||
         categories.flatMap((c) => c.children || []).find((c) => c.category_id === id)?.category_slug ||
         categories.flatMap((c) => c.brand_options || []).find((c) => c.category_id === id)?.category_slug ||
@@ -327,33 +330,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
           <div className="flex flex-col gap-2.5 overflow-visible">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="storefront-categories-col flex flex-wrap items-center gap-3">
-                <a
-                  href="/"
-                  className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
-                  aria-label={t('common.backToHome')}
-                >
-                  <div className="relative flex size-11 items-center justify-center rounded-[16px] bg-[linear-gradient(145deg,#111111,#3c2f7d)] text-white shadow-[0_12px_28px_-18px_rgba(17,17,17,0.55)] sm:size-12">
-                    <span className="absolute left-1.5 top-1.5 size-3 rounded-full bg-[#f4a261] opacity-95" />
-                    <span className="absolute bottom-1.5 right-1.5 size-2.5 rounded-full bg-[#2ec4b6] opacity-90" />
-                    <Gem className="size-5" />
-                  </div>
-                  <div>
-                    <DecorateText
-                      propKey="home_brand_eyebrow"
-                      as="p"
-                      className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#6f6a62]"
-                    >
-                      BLINGORA
-                    </DecorateText>
-                    <DecorateText
-                      propKey="home_brand_title"
-                      as="h1"
-                      className="mt-0.5 text-[20px] font-black tracking-[0.14em] text-[#111111]"
-                    >
-                      JEWELRY
-                    </DecorateText>
-                  </div>
-                </a>
+                <StorefrontBrandMark ariaLabel={t('common.backToHome')} />
               </div>
 
               <div
@@ -492,9 +469,9 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                       open={isFloatingSideNavOpen}
                       items={floatingSideNavItems}
                       activeId={null}
-                      onSelect={(categoryId) => {
+                      onSelect={(categoryId, categorySlug) => {
                         setIsFloatingSideNavOpen(false)
-                        goHomeWithCategory(categoryId)
+                        goHomeWithCategory(categoryId, categorySlug)
                       }}
                     />
                   ) : null}
@@ -531,8 +508,8 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                             className="relative flex min-w-0 flex-1 items-center justify-center bg-transparent px-2 py-2 text-center text-sm font-bold text-[#333333] transition-colors duration-200 hover:text-[#f254a6] lg:text-base lg:whitespace-nowrap"
                             onClick={(event) => {
                               event.preventDefault()
-                              if (isDailyNewArrival) return
-                              goHomeWithCategory(category.category_id)
+                              // New / 每日上新：进入上新列表页（按 6 个月时间窗，不按分类 ID）
+                              goHomeWithCategory(category.category_id, category.category_slug)
                             }}
                             aria-expanded={hasHoverPanel ? isDesktopPanelVisible : undefined}
                             aria-haspopup={hasHoverPanel ? 'menu' : undefined}
@@ -571,7 +548,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   event.preventDefault()
-                                  goHomeWithCategory(child.category_id)
+                                  goHomeWithCategory(child.category_id, child.category_slug)
                                 }}
                               >
                                 <span>{translateCatalogLabel(t, child.category_name)}</span>
@@ -627,7 +604,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                                   onClick={(event) => {
                                     event.preventDefault()
                                     event.stopPropagation()
-                                    goHomeWithCategory(child.category_id)
+                                    goHomeWithCategory(child.category_id, child.category_slug)
                                   }}
                                 >
                                   <span>{translateCatalogLabel(t, child.category_name)}</span>

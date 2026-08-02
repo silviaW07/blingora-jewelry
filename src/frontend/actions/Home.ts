@@ -14,6 +14,7 @@ import { withResult } from '@/frontend/action_utils'
 import {
   buildLast6Months,
   formatMonthLabel,
+  getLast6MonthsRangeStart,
   getMonthDateRange,
   toMonthKey,
 } from '@/frontend/utils/dailyNewArrival'
@@ -688,8 +689,9 @@ export interface GetDailyNewArrivalCalendarOutput {
 }
 
 export interface GetDailyNewArrivalProductsInput {
-  year: number
-  month: number
+  /** 可选：指定年月则只返回该月；不传则返回最近 6 个月（含当月）全部上新 */
+  year?: number
+  month?: number
   lang?: string
 }
 
@@ -850,7 +852,8 @@ const activeListedProductWhere = {
  */
 export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyNewArrivalCalendarOutput> => {
   const months = buildLast6Months()
-  const rangeStart = getMonthDateRange(months[0].year, months[0].month).start
+  // 窗口从「最旧一个月」月初开始（含当月共 6 个月）
+  const rangeStart = getLast6MonthsRangeStart()
   const monthKeys = new Set(months.map((item) => item.monthKey))
   const countMap = new Map(months.map((item) => [item.monthKey, 0]))
 
@@ -861,18 +864,23 @@ export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyN
     prisma.product.findMany({
       where: {
         ...activeListedProductWhere,
-        createdAt: {
-          gte: rangeStart,
-        },
+        OR: [
+          { publishedAt: { gte: rangeStart } },
+          {
+            AND: [{ publishedAt: null }, { createdAt: { gte: rangeStart } }],
+          },
+        ],
       },
       select: {
         createdAt: true,
+        publishedAt: true,
       },
     }),
   ])
 
   productsInRange.forEach((product) => {
-    const monthKey = toMonthKey(product.createdAt.getFullYear(), product.createdAt.getMonth() + 1)
+    const anchor = product.publishedAt || product.createdAt
+    const monthKey = toMonthKey(anchor.getFullYear(), anchor.getMonth() + 1)
     if (!monthKeys.has(monthKey)) {
       return
     }
@@ -893,30 +901,58 @@ export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyN
 })
 
 /**
- * 按月份筛选已上架商品（基于创建/上架时间）
+ * 上新商品列表：独立于分类 ID，仅按 publishedAt/createdAt 时间窗筛选，倒序。
+ * - 传 year+month：该月
+ * - 不传：最近 6 个月（含当月）
  */
 export const getDailyNewArrivalProducts = withResult(async (
-  input: GetDailyNewArrivalProductsInput,
+  input: GetDailyNewArrivalProductsInput = {},
 ): Promise<GetDailyNewArrivalProductsOutput> => {
-  const year = Number(input.year)
-  const month = Number(input.month)
+  const hasMonth =
+    Number.isInteger(Number(input.year)) &&
+    Number.isInteger(Number(input.month)) &&
+    Number(input.month) >= 1 &&
+    Number(input.month) <= 12
 
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-    return {
-      list: [],
-      total: 0,
-    }
+  let rangeStart: Date
+  let rangeEnd: Date | undefined
+
+  if (hasMonth) {
+    const year = Number(input.year)
+    const month = Number(input.month)
+    const range = getMonthDateRange(year, month)
+    rangeStart = range.start
+    rangeEnd = range.end
+  } else {
+    rangeStart = getLast6MonthsRangeStart()
+    rangeEnd = undefined
   }
 
-  const { start, end } = getMonthDateRange(year, month)
+  const timeFilter = rangeEnd
+    ? {
+        OR: [
+          { publishedAt: { gte: rangeStart, lt: rangeEnd } },
+          {
+            AND: [
+              { publishedAt: null },
+              { createdAt: { gte: rangeStart, lt: rangeEnd } },
+            ],
+          },
+        ],
+      }
+    : {
+        OR: [
+          { publishedAt: { gte: rangeStart } },
+          {
+            AND: [{ publishedAt: null }, { createdAt: { gte: rangeStart } }],
+          },
+        ],
+      }
 
   const dbProducts = await prisma.product.findMany({
     where: {
       ...activeListedProductWhere,
-      createdAt: {
-        gte: start,
-        lt: end,
-      },
+      ...timeFilter,
     },
     include: {
       skus: true,
@@ -963,7 +999,14 @@ export const getDailyNewArrivalProducts = withResult(async (
   })
 
   const exchangeRate = await getUsdExchangeRate(prisma)
-  const list = dbProducts.map((product) => mapActiveProductToItem(product, exchangeRate, input.lang))
+  const list = dbProducts
+    .slice()
+    .sort((a, b) => {
+      const ta = (a.publishedAt || a.createdAt).getTime()
+      const tb = (b.publishedAt || b.createdAt).getTime()
+      return tb - ta
+    })
+    .map((product) => mapActiveProductToItem(product, exchangeRate, input.lang))
 
   return {
     list,

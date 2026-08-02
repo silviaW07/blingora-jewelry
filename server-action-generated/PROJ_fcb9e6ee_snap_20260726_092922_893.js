@@ -85802,7 +85802,8 @@ const adminLogin = (0, _action_utils.withResult)(async (input)=>{
         sysuser_account: user.account,
         sysuser_username: user.username,
         sysuser_role: user.role,
-        sysuser_status: user.status
+        sysuser_status: user.status,
+        sysuser_avatarUrl: user.avatarUrl || ''
     };
 });
 
@@ -88723,6 +88724,9 @@ _export(exports, {
     },
     get retryImportTask () {
         return retryImportTask;
+    },
+    get updateAdminProfile () {
+        return updateAdminProfile;
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
@@ -88748,6 +88752,27 @@ const getAdminProfile = (0, _action_utils.requireRole)(_action_utils.UserRole.AD
     if (!user) {
         throw new Error('当前用户信息不存在');
     }
+    return user;
+}));
+const updateAdminProfile = (0, _action_utils.requireRole)(_action_utils.UserRole.ADMIN)((0, _action_utils.withResult)(async (input)=>{
+    const { userId } = (0, _action_utils.getAuthContext)();
+    const username = (input.username || '').trim();
+    if (!username) throw new Error('请填写姓名');
+    const user = await _prisma.default.sysuser.update({
+        where: {
+            id: userId
+        },
+        data: {
+            username,
+            avatarUrl: (input.avatarUrl || '').trim() || null
+        },
+        select: {
+            account: true,
+            username: true,
+            email: true,
+            avatarUrl: true
+        }
+    });
     return user;
 }));
 const getKpiStats = (0, _action_utils.requireRole)(_action_utils.UserRole.ADMIN)((0, _action_utils.withResult)(async ()=>{
@@ -89927,6 +89952,9 @@ _export(exports, {
     get createImportTask () {
         return createImportTask;
     },
+    get createPinduoduoImportTask () {
+        return createPinduoduoImportTask;
+    },
     get createProductsFromTable () {
         return createProductsFromTable;
     },
@@ -89997,6 +90025,7 @@ const _productIdentifiers = __webpack_require__(92969);
 const _pendingImportReadiness = __webpack_require__(64481);
 const _resolveProductTitleEn = __webpack_require__(64205);
 const _sortSizeLabels = __webpack_require__(15784);
+const _PinduoduoParser = __webpack_require__(52966);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -93086,11 +93115,227 @@ const is1688ImportSourceUrl = (sourceUrl)=>{
     const url = String(sourceUrl || '');
     return /1688\.com/i.test(url) && /offer\/\d+/i.test(url);
 };
+const isPinduoduoImportSourceUrl = (sourceUrl)=>Boolean(sourceUrl && (0, _PinduoduoParser.isPinduoduoProductUrl)(String(sourceUrl)));
 const resolvePendingCreationSource = (sourceUrl)=>{
     if (isTableImportSourceUrl(sourceUrl)) return 'TABLE_IMPORT';
     if (is1688ImportSourceUrl(sourceUrl)) return 'IMPORT_1688';
-    // 兜底：非 table-import 前缀一律按 1688/链接导入独立建品，避免误走产品编号合并
+    if (isPinduoduoImportSourceUrl(sourceUrl)) return 'IMPORT_1688';
+    // 兜底：非 table-import 前缀一律按链接导入独立建品，避免误走产品编号合并
     return 'IMPORT_1688';
+};
+const resolvePinduoduoMarkupMultiplier = (task)=>{
+    var _ref;
+    const strategy = task.stockStrategyJson || {};
+    const fromStrategy = toNumberOrNull(strategy.markupPercent);
+    const fromTask = toNumberOrNull(task.markupRate);
+    const percent = Math.max(0, (_ref = fromStrategy !== null && fromStrategy !== void 0 ? fromStrategy : fromTask) !== null && _ref !== void 0 ? _ref : 0);
+    return 1 + percent / 100;
+};
+/**
+ * 将拼多多抓取结果写入待上传明细（与 1688 任务互不共用解析器）。
+ * 售价 = 采集价 × (1 + 加价百分比)；成本保留采集价。
+ */ const persistPinduoduoParsedItem = async (params)=>{
+    var _toNumberOrNull, _fetched_priceMin, _fetched_priceMax, _toNumberOrNull1, _toNumberOrNull2;
+    var _task_stockStrategyJson, _skuTable_, _skuTable_1;
+    const { item, task, fetched, secondaryCategories, categoryMap, exchangeRate } = params;
+    const sourceUrl = item.sourceUrl || '';
+    const goodsId = fetched.goodsId || (0, _PinduoduoParser.extractPinduoduoGoodsId)(sourceUrl) || item.id.slice(0, 6);
+    const markupMultiplier = resolvePinduoduoMarkupMultiplier(task);
+    const strategyStock = (_toNumberOrNull = toNumberOrNull((_task_stockStrategyJson = task.stockStrategyJson) === null || _task_stockStrategyJson === void 0 ? void 0 : _task_stockStrategyJson.stock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 100;
+    const productName = fetched.name || `[拼多多抓取] 商品 ${goodsId}`;
+    const productDetail = fetched.productDetail || '自动采集的拼多多商品详情，请运营补充图文与说明。';
+    const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
+    const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
+    const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
+    const targetCategoryId = matchedSecondaryCategoryIds[0] || task.defaultCategoryId || null;
+    // 系数仅作分类归属参考展示；拼多多售价按加价百分比计算
+    const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
+    const rawPriceMin = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : 0;
+    const rawPriceMax = (_fetched_priceMax = fetched.priceMax) !== null && _fetched_priceMax !== void 0 ? _fetched_priceMax : rawPriceMin;
+    const costMin = Math.max(0, roundCurrency(rawPriceMin));
+    const costMax = Math.max(costMin, roundCurrency(rawPriceMax));
+    const finalPriceMin = roundCurrency(costMin * markupMultiplier);
+    const finalPriceMax = roundCurrency(costMax * markupMultiplier);
+    const mainImageUrl = fetched.mainImageUrl || null;
+    const detailImages = Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0 ? fetched.detailImages : mainImageUrl ? [
+        mainImageUrl
+    ] : [];
+    const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : [];
+    const colorsEarly = Array.isArray(fetched.colors) && fetched.colors.length > 0 ? fetched.colors.map((color)=>({
+            label: normalizeText(color.label),
+            imageUrl: normalizeText(color.imageUrl) || null
+        })).filter((color)=>color.label) : [];
+    const sizesByColorEarly = fetched.sizesByColor && typeof fetched.sizesByColor === 'object' ? Object.fromEntries(Object.entries(fetched.sizesByColor).map(([color, sizes])=>[
+            color,
+            Array.from(new Set((sizes || []).map((size)=>normalizeText(size)).filter(Boolean)))
+        ])) : {};
+    const baseSkuRows = resolveSkuTableOrExpandFromColors({
+        skuTable: parsedSkuRows.map((row)=>({
+                skuKey: row.skuKey,
+                spec: row.spec,
+                costPrice: row.price,
+                price: row.price,
+                stock: row.stock,
+                imageUrl: row.imageUrl,
+                attributes: row.attributes
+            })),
+        colors: colorsEarly,
+        sizesByColor: sizesByColorEarly,
+        costPrice: costMin,
+        price: finalPriceMin,
+        stock: strategyStock
+    });
+    const skuTable = baseSkuRows.map((row, index)=>{
+        var _ref, _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
+        const sourceCost = (_ref = (_toNumberOrNull = toNumberOrNull(row.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : toNumberOrNull(row.price)) !== null && _ref !== void 0 ? _ref : rawPriceMin;
+        const nextCost = Math.max(0, roundCurrency(sourceCost));
+        const nextPrice = roundCurrency(nextCost * markupMultiplier);
+        return {
+            skuKey: normalizeText(row.skuKey) || `sku-${index + 1}`,
+            spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
+            costPrice: nextCost,
+            price: nextPrice,
+            stock: (_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock,
+            weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
+            imageUrl: normalizeText(row.imageUrl) || null,
+            attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
+                    name: normalizeText(attr.name) || '规格',
+                    value: normalizeText(attr.value) || '默认'
+                })) : parseSpecAttributes(row.spec || '默认规格')
+        };
+    });
+    const colors = colorsEarly.length > 0 ? colorsEarly : parsedSkuRows.length > 0 ? Array.from(new Set(skuTable.map((sku)=>{
+        var _sku_attributes_find, _sku_attributes;
+        return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '颜色')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
+    }).filter(Boolean))).map((label)=>{
+        var _skuTable_find;
+        return {
+            label,
+            imageUrl: ((_skuTable_find = skuTable.find((sku)=>{
+                var _sku_attributes;
+                return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : _sku_attributes.some((attr)=>attr.name === '颜色' && attr.value === label);
+            })) === null || _skuTable_find === void 0 ? void 0 : _skuTable_find.imageUrl) || null
+        };
+    }) : [];
+    const sizesByColor = {
+        ...sizesByColorEarly
+    };
+    if (Object.keys(sizesByColor).length === 0) {
+        for (const sku of skuTable){
+            var _sku_attributes_find, _sku_attributes, _sku_attributes_find1, _sku_attributes1;
+            const color = (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '颜色')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
+            const size = (_sku_attributes1 = sku.attributes) === null || _sku_attributes1 === void 0 ? void 0 : (_sku_attributes_find1 = _sku_attributes1.find((attr)=>attr.name === '尺码')) === null || _sku_attributes_find1 === void 0 ? void 0 : _sku_attributes_find1.value;
+            if (!color || !size) continue;
+            const list = sizesByColor[color] || [];
+            if (!list.includes(size)) list.push(size);
+            sizesByColor[color] = list;
+        }
+    }
+    const specSummary = Array.isArray(fetched.specSummary) && fetched.specSummary.length > 0 ? fetched.specSummary : [
+        ...colors.length ? [
+            {
+                name: '颜色',
+                values: colors.map((item)=>item.label)
+            }
+        ] : [],
+        ...(()=>{
+            const sizeValues = Array.from(new Set([
+                ...Object.values(sizesByColor).flat(),
+                ...skuTable.map((sku)=>{
+                    var _sku_attributes_find, _sku_attributes;
+                    return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '尺码')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
+                }).filter(Boolean)
+            ].filter(Boolean)));
+            return sizeValues.length ? [
+                {
+                    name: '尺码',
+                    values: sizeValues
+                }
+            ] : [];
+        })()
+    ];
+    if (specSummary.length === 0) {
+        specSummary.push({
+            name: '规格',
+            values: [
+                '默认规格'
+            ]
+        });
+    }
+    const skuPrices = skuTable.map((sku)=>toNumberOrNull(sku.price)).filter((value)=>value !== null);
+    const resolvedFinalPriceMin = skuPrices.length ? Math.min(...skuPrices) : finalPriceMin;
+    const resolvedFinalPriceMax = skuPrices.length ? Math.max(...skuPrices) : finalPriceMax;
+    const resolvedUsdMin = roundCurrency(resolvedFinalPriceMin / exchangeRate);
+    const resolvedUsdMax = roundCurrency(resolvedFinalPriceMax / exchangeRate);
+    const totalStock = skuTable.reduce((sum, sku)=>{
+        var _toNumberOrNull;
+        return sum + ((_toNumberOrNull = toNumberOrNull(sku.stock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0);
+    }, 0);
+    const previewData = {
+        name: productName,
+        ...await (async ()=>{
+            const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(productName);
+            const nameEs = await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(productName, null, nameEn);
+            return {
+                nameEn,
+                nameEs
+            };
+        })(),
+        categoryId: targetCategoryId || undefined,
+        matchedCategoryIds: matchedSecondaryCategoryIds,
+        matchedCategoryNames: matchedSecondaryCategoryNames,
+        price: resolvedFinalPriceMin,
+        mainImageUrl: mainImageUrl || undefined,
+        detailImages,
+        shortDescription: productDetail,
+        featureAttributes: fetched.featureAttributes || [],
+        colors,
+        sizesByColor,
+        ...typeof params.importSortIndex === 'number' ? {
+            importSortIndex: params.importSortIndex
+        } : {},
+        inboundIdentity: {
+            mode: 'LINK_PDD_INDEPENDENT',
+            goodsId,
+            sourceUrl
+        },
+        skuTable
+    };
+    await _prisma.default.importtaskitem.update({
+        where: {
+            id: item.id
+        },
+        data: {
+            parsedName: productName,
+            supplierName: fetched.supplierName || null,
+            mainImageUrl,
+            parsedMainImageUrl: mainImageUrl,
+            costPrice: (_toNumberOrNull1 = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : costMin,
+            weightGrams: (_toNumberOrNull2 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
+            sourceCategoryName: null,
+            coefficient: resolvedCoefficient,
+            goodsStatus: task.defaultStatus || 'DRAFT',
+            productDetail,
+            skuSummaryText: skuTable.map((sku)=>sku.spec).filter(Boolean).join(' | ') || '默认规格',
+            cnyPriceMin: resolvedFinalPriceMin,
+            cnyPriceMax: resolvedFinalPriceMax,
+            usdPriceMin: resolvedUsdMin,
+            usdPriceMax: resolvedUsdMax,
+            minimumOrderQuantity: 1,
+            availableStock: totalStock > 0 ? totalStock : strategyStock,
+            targetCategoryId,
+            parsedPriceMin: rawPriceMin,
+            parsedPriceMax: rawPriceMax,
+            specSummaryJson: specSummary,
+            previewDataJson: previewData,
+            fetchStatus: 'COMPLETED',
+            failureReason: null,
+            fetchFinishedAt: new Date()
+        }
+    });
+    return {
+        productName
+    };
 };
 /**
  * 表格导入专用：严格按「产品编号」合并为 SPU。
@@ -94001,6 +94246,76 @@ const createImportTask = (0, _action_utils.requireRole)([
         taskId: task.id
     };
 }));
+const createPinduoduoImportTask = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const { userId } = (0, _action_utils.getAuthContext)();
+    const rawUrls = input.urls.split('\n').map((u)=>u.trim()).filter(Boolean);
+    const uniqueUrls = Array.from(new Set(rawUrls));
+    if (uniqueUrls.length === 0) {
+        throw new Error('请输入有效的拼多多商品链接');
+    }
+    const httpUrls = uniqueUrls.filter((u)=>u.startsWith('http://') || u.startsWith('https://'));
+    if (httpUrls.length === 0) {
+        throw new Error('链接格式不正确，需以 http 或 https 开头');
+    }
+    const validUrls = httpUrls.filter((u)=>(0, _PinduoduoParser.isPinduoduoProductUrl)(u));
+    if (validUrls.length === 0) {
+        throw new Error('请粘贴有效的拼多多商品详情页链接（需包含 goods_id，如 https://mobile.yangkeduo.com/goods.html?goods_id=xxxx）');
+    }
+    const markupRate = typeof input.markupRate === 'number' && Number.isFinite(input.markupRate) ? Math.max(0, input.markupRate) : 0;
+    let stockStrategyJson = {
+        type: 'fixed',
+        platform: 'PDD',
+        markupPercent: markupRate
+    };
+    if (typeof input.stockStrategyStock === 'number') {
+        stockStrategyJson.stock = input.stockStrategyStock;
+    }
+    const taskName = `拼多多导入 ${new Date().toLocaleString('zh-CN')}`;
+    const task = await _prisma.default.$transaction(async (tx)=>{
+        const newTask = await tx.importtask.create({
+            data: {
+                creatorId: userId,
+                taskName,
+                status: 'PENDING',
+                sourceLinkCount: validUrls.length,
+                successCount: 0,
+                failureCount: 0,
+                progressPercent: 0,
+                // 拼多多任务：markupRate 存加价百分比（与 1688 的成本减法语义隔离）
+                markupRate,
+                defaultStatus: input.defaultStatus,
+                defaultCategoryId: input.defaultCategoryId || null,
+                stockStrategyJson,
+                queueConcurrency: 1,
+                rateLimitMinDelaySec: 2,
+                rateLimitMaxDelaySec: 5,
+                lastScheduledAt: null,
+                lastRateLimitedAt: null,
+                startedAt: null,
+                finishedAt: null
+            }
+        });
+        await tx.importtaskitem.createMany({
+            data: validUrls.map((url)=>({
+                    importTaskId: newTask.id,
+                    operatorId: userId,
+                    sourceUrl: url,
+                    isSelected: true,
+                    fetchStatus: 'PENDING',
+                    publishStatus: 'PENDING',
+                    isPublished: false,
+                    targetCategoryId: input.defaultCategoryId || null,
+                    goodsStatus: input.defaultStatus || 'DRAFT'
+                }))
+        });
+        return newTask;
+    });
+    return {
+        taskId: task.id
+    };
+}));
 const startParseTask = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
@@ -94062,6 +94377,7 @@ const startParseTask = (0, _action_utils.requireRole)([
         });
         try {
             const sourceUrl = item.sourceUrl || '';
+            const isPddUrl = (0, _PinduoduoParser.isPinduoduoProductUrl)(sourceUrl);
             const is1688OfferUrl = /1688\.com\/.*offer\/\d+/i.test(sourceUrl) || /detail\.1688\.com\/offer\/\d+/i.test(sourceUrl);
             const looksOffline = /offline|下架|sold.?out|removed/i.test(sourceUrl);
             const looksTimeout = /timeout|error|超时/i.test(sourceUrl);
@@ -94075,7 +94391,7 @@ const startParseTask = (0, _action_utils.requireRole)([
                     },
                     data: {
                         fetchStatus: 'RATE_LIMITED',
-                        failureReason: '解析失败：触发1688限流，请稍后重试',
+                        failureReason: isPddUrl ? '解析失败：触发拼多多限流，请稍后重试' : '解析失败：触发1688限流，请稍后重试',
                         fetchFinishedAt: now
                     }
                 });
@@ -94087,6 +94403,37 @@ const startParseTask = (0, _action_utils.requireRole)([
                         lastRateLimitedAt: now
                     }
                 });
+            } else if (isPddUrl) {
+                const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
+                const fetched = fetchResult.preview;
+                const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
+                if (!hasRealParse) {
+                    failureCount += 1;
+                    const failReason = fetchResult.outcome === 'expired' ? '解析失败：该拼多多商品已下架或不存在' : fetchResult.failureReason || '解析失败：拼多多风控/抓取失败，请稍后重试';
+                    const goodsId = (0, _PinduoduoParser.extractPinduoduoGoodsId)(sourceUrl) || item.id.slice(0, 6);
+                    await _prisma.default.importtaskitem.update({
+                        where: {
+                            id: item.id
+                        },
+                        data: {
+                            parsedName: fetched.name || `[拼多多抓取] 商品 ${goodsId}`,
+                            fetchStatus: 'FAILED',
+                            failureReason: failReason,
+                            fetchFinishedAt: new Date()
+                        }
+                    });
+                } else {
+                    successCount += 1;
+                    await persistPinduoduoParsedItem({
+                        item,
+                        task,
+                        fetched,
+                        secondaryCategories,
+                        categoryMap,
+                        exchangeRate,
+                        importSortIndex: index
+                    });
+                }
             } else if (!is1688OfferUrl) {
                 failureCount += 1;
                 await _prisma.default.importtaskitem.update({
@@ -94095,7 +94442,7 @@ const startParseTask = (0, _action_utils.requireRole)([
                     },
                     data: {
                         fetchStatus: 'FAILED',
-                        failureReason: '解析失败：链接错误，请粘贴有效的1688商品详情页链接（如 https://detail.1688.com/offer/xxxx.html）',
+                        failureReason: '解析失败：链接错误，请粘贴有效的1688或拼多多商品详情页链接',
                         fetchFinishedAt: new Date()
                     }
                 });
@@ -95180,13 +95527,14 @@ const reparsePendingImportItems = (0, _action_utils.requireRole)([
             }
             const sourceUrl = normalizeText(item.sourceUrl);
             const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl);
-            if (!sourceUrl || !is1688OfferUrl) {
+            const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl);
+            if (!sourceUrl || !is1688OfferUrl && !isPddUrl) {
                 fail += 1;
                 results.push({
                     itemId,
                     success: false,
                     name: displayName,
-                    reason: '无效的 1688 商品链接，仅支持 detail.1688.com/offer/… 类链接重新解析'
+                    reason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析'
                 });
                 continue;
             }
@@ -95201,6 +95549,48 @@ const reparsePendingImportItems = (0, _action_utils.requireRole)([
                     failureReason: null
                 }
             });
+            if (isPddUrl) {
+                const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
+                const fetched = fetchResult.preview;
+                const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
+                if (!hasRealParse) {
+                    const reason = fetchResult.outcome === 'expired' ? '该拼多多商品已下架或不存在' : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试';
+                    await _prisma.default.importtaskitem.update({
+                        where: {
+                            id: item.id
+                        },
+                        data: {
+                            fetchStatus: 'FAILED',
+                            failureReason: reason,
+                            fetchFinishedAt: new Date()
+                        }
+                    });
+                    fail += 1;
+                    results.push({
+                        itemId,
+                        success: false,
+                        name: displayName,
+                        reason
+                    });
+                } else {
+                    const applied = await persistPinduoduoParsedItem({
+                        item,
+                        task: item.importTask,
+                        fetched,
+                        secondaryCategories,
+                        categoryMap,
+                        exchangeRate
+                    });
+                    success += 1;
+                    results.push({
+                        itemId,
+                        success: true,
+                        name: applied.productName
+                    });
+                    displayName = applied.productName;
+                }
+                continue;
+            }
             const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl);
             const fetched = fetchResult.preview;
             const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
@@ -100671,6 +101061,394 @@ async function translateTextZhTo(text, targetLang = 'en') {
 
 /***/ },
 
+/***/ 52966
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * 拼多多商品页解析器。
+ *
+ * 拼多多页面可能返回服务端 JSON、内嵌状态或风控页；解析器只消费页面中真实存在的数据，
+ * 不生成虚假标题/价格/SKU。遇到登录或风控页时返回明确错误，供任务单独重试。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get extractPinduoduoGoodsId () {
+        return extractPinduoduoGoodsId;
+    },
+    get fetchPinduoduoProductPreview () {
+        return fetchPinduoduoProductPreview;
+    },
+    get isPinduoduoProductUrl () {
+        return isPinduoduoProductUrl;
+    },
+    get parsePinduoduoHtml () {
+        return parsePinduoduoHtml;
+    }
+});
+const PDD_HOST_RE = /(^|\.)((mobile|m)\.)?(yangkeduo|pinduoduo)\.com$/i;
+const IMAGE_RE = /^https?:\/\/.+\.(?:jpe?g|png|webp|avif)(?:[?#].*)?$/i;
+const emptyPreview = (goodsId)=>({
+        goodsId,
+        name: '',
+        priceMin: null,
+        priceMax: null,
+        mainImageUrl: null,
+        detailImages: [],
+        supplierName: null,
+        productDetail: '',
+        featureAttributes: [],
+        colors: [],
+        sizesByColor: {},
+        specSummary: [],
+        skuTable: []
+    });
+const decodeHtml = (value)=>value.replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, code)=>String.fromCharCode(Number(code))).trim();
+const cleanText = (value)=>typeof value === 'string' ? decodeHtml(value).replace(/\s+/g, ' ').trim() : '';
+const absoluteImage = (value)=>{
+    let url = cleanText(value).replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+    if (url.startsWith('//')) url = `https:${url}`;
+    return IMAGE_RE.test(url) ? url : '';
+};
+const numberOrNull = (value)=>{
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value !== 'string') return null;
+    const parsed = Number(value.replace(/[^\d.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+};
+/**
+ * 拼多多 JSON 常用“分”为单位；带 decimal 的字符串通常已是元。
+ */ const normalizePrice = (key, value)=>{
+    const parsed = numberOrNull(value);
+    if (parsed === null || parsed < 0) return null;
+    const lowerKey = key.toLowerCase();
+    const raw = String(value);
+    const looksCentField = /(?:price|minprice|maxprice|groupprice|normalprice|marketprice|skuprice)/i.test(lowerKey) && !raw.includes('.');
+    return looksCentField && parsed >= 100 ? Number((parsed / 100).toFixed(2)) : Number(parsed.toFixed(2));
+};
+const extractPinduoduoGoodsId = (sourceUrl)=>{
+    try {
+        const url = new URL(sourceUrl);
+        const queryId = url.searchParams.get('goods_id') || url.searchParams.get('goodsId') || url.searchParams.get('id');
+        if (queryId && /^\d+$/.test(queryId)) return queryId;
+        const pathMatch = url.pathname.match(/(?:goods|goods2|product)[/-](\d+)/i);
+        return (pathMatch === null || pathMatch === void 0 ? void 0 : pathMatch[1]) || null;
+    } catch  {
+        return null;
+    }
+};
+const isPinduoduoProductUrl = (sourceUrl)=>{
+    try {
+        const url = new URL(sourceUrl);
+        return PDD_HOST_RE.test(url.hostname) && Boolean(extractPinduoduoGoodsId(sourceUrl));
+    } catch  {
+        return false;
+    }
+};
+const isRecord = (value)=>Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const collectJsonRoots = (html)=>{
+    const roots = [];
+    const scriptRe = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while(match = scriptRe.exec(html)){
+        const content = decodeHtml(match[1]).trim();
+        const candidates = [
+            content
+        ];
+        const assignmentIndex = content.indexOf('=');
+        if (assignmentIndex > 0) candidates.push(content.slice(assignmentIndex + 1).replace(/;\s*$/, '').trim());
+        for (const candidate of candidates){
+            if (!candidate.startsWith('{') && !candidate.startsWith('[')) continue;
+            try {
+                roots.push(JSON.parse(candidate));
+                break;
+            } catch  {
+            // Other scripts can contain regular JavaScript; ignore them.
+            }
+        }
+    }
+    return roots;
+};
+const walkJson = (value, visit, seen = new Set(), depth = 0)=>{
+    if (depth > 18 || !value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+        value.forEach((item)=>walkJson(item, visit, seen, depth + 1));
+        return;
+    }
+    const record = value;
+    visit(record);
+    Object.values(record).forEach((item)=>walkJson(item, visit, seen, depth + 1));
+};
+const firstString = (record, keys)=>{
+    for (const key of keys){
+        const value = cleanText(record[key]);
+        if (value) return value;
+    }
+    return '';
+};
+const firstImage = (record, keys)=>{
+    for (const key of keys){
+        const value = absoluteImage(record[key]);
+        if (value) return value;
+    }
+    return '';
+};
+const collectImagesFromValue = (value, output)=>{
+    if (typeof value === 'string') {
+        const url = absoluteImage(value);
+        if (url) output.add(url);
+        return;
+    }
+    if (Array.isArray(value)) value.forEach((item)=>collectImagesFromValue(item, output));
+};
+const parseMeta = (html, key)=>{
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patterns = [
+        new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, 'i'),
+        new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, 'i')
+    ];
+    for (const pattern of patterns){
+        var _pattern_exec;
+        const value = (_pattern_exec = pattern.exec(html)) === null || _pattern_exec === void 0 ? void 0 : _pattern_exec[1];
+        if (value) return decodeHtml(value);
+    }
+    return '';
+};
+const parseAttributes = (record)=>{
+    const raw = record.specs || record.specList || record.spec_list || record.spec;
+    const attributes = [];
+    if (Array.isArray(raw)) {
+        for (const entry of raw){
+            if (!isRecord(entry)) continue;
+            const name = firstString(entry, [
+                'spec_key',
+                'specKey',
+                'name',
+                'key',
+                'spec_name',
+                'specName'
+            ]);
+            const value = firstString(entry, [
+                'spec_value',
+                'specValue',
+                'value',
+                'value_name',
+                'valueName'
+            ]);
+            if (name && value) attributes.push({
+                name,
+                value
+            });
+        }
+    } else if (isRecord(raw)) {
+        for (const [name, value] of Object.entries(raw)){
+            const text = cleanText(value);
+            if (name && text) attributes.push({
+                name,
+                value: text
+            });
+        }
+    }
+    return attributes;
+};
+const parsePinduoduoHtml = (html, sourceUrl)=>{
+    var _exec;
+    const goodsId = extractPinduoduoGoodsId(sourceUrl);
+    const preview = emptyPreview(goodsId);
+    const imageSet = new Set();
+    const priceValues = [];
+    const skuRows = new Map();
+    const specValues = new Map();
+    preview.name = parseMeta(html, 'og:title') || parseMeta(html, 'twitter:title') || cleanText(((_exec = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)) === null || _exec === void 0 ? void 0 : _exec[1]) || '').replace(/[-_|].*拼多多.*$/i, '');
+    const metaImage = absoluteImage(parseMeta(html, 'og:image'));
+    if (metaImage) imageSet.add(metaImage);
+    const metaPrice = normalizePrice('meta', parseMeta(html, 'product:price:amount'));
+    if (metaPrice !== null) priceValues.push(metaPrice);
+    const roots = collectJsonRoots(html);
+    for (const root of roots){
+        walkJson(root, (record)=>{
+            if (!preview.name) {
+                preview.name = firstString(record, [
+                    'goods_name',
+                    'goodsName',
+                    'goods_title',
+                    'goodsTitle',
+                    'productName'
+                ]);
+            }
+            if (!preview.supplierName) {
+                preview.supplierName = firstString(record, [
+                    'mall_name',
+                    'mallName',
+                    'shop_name',
+                    'shopName',
+                    'storeName'
+                ]) || null;
+            }
+            if (!preview.productDetail) {
+                preview.productDetail = firstString(record, [
+                    'goods_desc',
+                    'goodsDesc',
+                    'description',
+                    'goods_description'
+                ]);
+            }
+            const image = firstImage(record, [
+                'goods_image_url',
+                'goodsImageUrl',
+                'hd_thumb_url',
+                'hdThumbUrl',
+                'thumb_url',
+                'thumbUrl',
+                'image_url',
+                'imageUrl'
+            ]);
+            if (image) imageSet.add(image);
+            for (const key of [
+                'gallery',
+                'gallery_urls',
+                'galleryUrls',
+                'detail_gallery',
+                'detailGallery'
+            ]){
+                collectImagesFromValue(record[key], imageSet);
+            }
+            for (const [key, value] of Object.entries(record)){
+                if (!/(?:^|_)(?:min_?|max_?|group_?|normal_?|market_?|sku_?)?price$/i.test(key) && !/(?:minPrice|maxPrice|groupPrice|normalPrice|marketPrice|skuPrice)/.test(key)) continue;
+                const price = normalizePrice(key, value);
+                if (price !== null && price > 0 && price < 10000000) priceValues.push(price);
+            }
+            const attributes = parseAttributes(record);
+            if (attributes.length > 0) {
+                var _ref, _record_quantity;
+                for (const attr of attributes){
+                    if (!specValues.has(attr.name)) specValues.set(attr.name, new Set());
+                    specValues.get(attr.name).add(attr.value);
+                }
+                const skuKey = firstString(record, [
+                    'sku_id',
+                    'skuId',
+                    'id'
+                ]) || attributes.map((item)=>`${item.name}:${item.value}`).join('|');
+                const priceEntry = Object.entries(record).find(([key])=>/^(?:sku_?price|group_?price|normal_?price|price)$/i.test(key));
+                const stock = numberOrNull((_ref = (_record_quantity = record.quantity) !== null && _record_quantity !== void 0 ? _record_quantity : record.stock) !== null && _ref !== void 0 ? _ref : record.inventory);
+                skuRows.set(skuKey, {
+                    skuKey,
+                    spec: attributes.map((item)=>item.value).join(' / '),
+                    price: priceEntry ? normalizePrice(priceEntry[0], priceEntry[1]) : null,
+                    stock,
+                    imageUrl: image || null,
+                    attributes
+                });
+            }
+        });
+    }
+    preview.detailImages = Array.from(imageSet);
+    preview.mainImageUrl = preview.detailImages[0] || null;
+    preview.priceMin = priceValues.length ? Math.min(...priceValues) : null;
+    preview.priceMax = priceValues.length ? Math.max(...priceValues) : preview.priceMin;
+    preview.skuTable = Array.from(skuRows.values());
+    preview.specSummary = Array.from(specValues.entries()).map(([name, values])=>({
+            name,
+            values: Array.from(values)
+        }));
+    const colorEntry = preview.specSummary.find((item)=>/颜色|色|color/i.test(item.name));
+    const sizeEntry = preview.specSummary.find((item)=>/尺码|尺寸|规格|size/i.test(item.name));
+    preview.colors = ((colorEntry === null || colorEntry === void 0 ? void 0 : colorEntry.values) || []).map((label)=>{
+        const sku = preview.skuTable.find((row)=>row.attributes.some((attr)=>attr.name === (colorEntry === null || colorEntry === void 0 ? void 0 : colorEntry.name) && attr.value === label));
+        return {
+            label,
+            imageUrl: (sku === null || sku === void 0 ? void 0 : sku.imageUrl) || null
+        };
+    });
+    for (const color of preview.colors){
+        preview.sizesByColor[color.label] = preview.skuTable.filter((row)=>row.attributes.some((attr)=>attr.value === color.label)).map((row)=>{
+            var _row_attributes_find;
+            return ((_row_attributes_find = row.attributes.find((attr)=>attr.name === (sizeEntry === null || sizeEntry === void 0 ? void 0 : sizeEntry.name))) === null || _row_attributes_find === void 0 ? void 0 : _row_attributes_find.value) || '';
+        }).filter(Boolean).filter((value, index, list)=>list.indexOf(value) === index);
+    }
+    return preview;
+};
+const isRiskControlHtml = (html)=>/验证|安全校验|访问过于频繁|系统繁忙|risk|captcha|login|请在拼多多APP中打开/i.test(html);
+const isExpiredHtml = (html)=>/商品已下架|商品不存在|已失效|页面不存在|goods.*(?:removed|offline)/i.test(html);
+const fetchPinduoduoProductPreview = async (sourceUrl)=>{
+    const goodsId = extractPinduoduoGoodsId(sourceUrl);
+    if (!isPinduoduoProductUrl(sourceUrl)) {
+        return {
+            preview: emptyPreview(goodsId),
+            outcome: 'failed',
+            failureReason: '链接错误，请粘贴有效的拼多多商品详情页链接（需包含 goods_id）'
+        };
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 20000);
+    try {
+        const response = await fetch(sourceUrl, {
+            redirect: 'follow',
+            signal: controller.signal,
+            headers: {
+                'user-agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+                accept: 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.6',
+                referer: 'https://mobile.yangkeduo.com/'
+            }
+        });
+        const html = await response.text();
+        const preview = parsePinduoduoHtml(html, response.url || sourceUrl);
+        if (response.status === 404 || response.status === 410 || isExpiredHtml(html)) {
+            return {
+                preview,
+                outcome: 'expired',
+                failureReason: '该拼多多商品已下架或不存在'
+            };
+        }
+        if (response.status === 403 || response.status === 429 || isRiskControlHtml(html)) {
+            return {
+                preview,
+                outcome: 'risk_control',
+                failureReason: '拼多多返回了登录/风控校验页，请稍后重试或更换可公开访问的商品链接'
+            };
+        }
+        if (!response.ok) {
+            return {
+                preview,
+                outcome: 'failed',
+                failureReason: `拼多多页面请求失败（HTTP ${response.status}）`
+            };
+        }
+        const hasProductData = Boolean(preview.name && (preview.mainImageUrl || preview.priceMin !== null));
+        return hasProductData ? {
+            preview,
+            outcome: 'success'
+        } : {
+            preview,
+            outcome: 'failed',
+            failureReason: '页面未包含可识别的标题、价格或主图，可能需要登录后访问'
+        };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '未知网络错误';
+        return {
+            preview: emptyPreview(goodsId),
+            outcome: 'failed',
+            failureReason: `拼多多页面抓取失败：${message}`
+        };
+    } finally{
+        clearTimeout(timer);
+    }
+};
+
+
+/***/ },
+
 /***/ 64481
 (__unused_webpack_module, exports) {
 
@@ -100968,31 +101746,26 @@ _export(exports, {
         return UserRole;
     }
 });
-function _define_property(obj, key, value) {
-    if (key in obj) {
-        Object.defineProperty(obj, key, {
-            value: value,
-            enumerable: true,
-            configurable: true,
-            writable: true
-        });
-    } else obj[key] = value;
-    return obj;
-}
 var UserRole = /*#__PURE__*/ function(UserRole) {
     UserRole["CUSTOMER"] = "CUSTOMER";
     return UserRole;
 }({});
 class UnauthorizedError extends Error {
+    get statusCode() {
+        return 401;
+    }
     constructor(message = '请先登录'){
-        super(message), _define_property(this, "statusCode", 401);
+        super(message);
         this.name = 'UnauthorizedError';
         Object.setPrototypeOf(this, UnauthorizedError.prototype);
     }
 }
 class ForbiddenError extends Error {
+    get statusCode() {
+        return 403;
+    }
     constructor(message = '权限不足，无法执行此操作'){
-        super(message), _define_property(this, "statusCode", 403);
+        super(message);
         this.name = 'ForbiddenError';
         Object.setPrototypeOf(this, ForbiddenError.prototype);
     }
@@ -103842,7 +104615,8 @@ const activeListedProductWhere = {
 };
 const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
     const months = (0, _dailyNewArrival.buildLast6Months)();
-    const rangeStart = (0, _dailyNewArrival.getMonthDateRange)(months[0].year, months[0].month).start;
+    // 窗口从「最旧一个月」月初开始（含当月共 6 个月）
+    const rangeStart = (0, _dailyNewArrival.getLast6MonthsRangeStart)();
     const monthKeys = new Set(months.map((item)=>item.monthKey));
     const countMap = new Map(months.map((item)=>[
             item.monthKey,
@@ -103855,17 +104629,35 @@ const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
         _prisma.default.product.findMany({
             where: {
                 ...activeListedProductWhere,
-                createdAt: {
-                    gte: rangeStart
-                }
+                OR: [
+                    {
+                        publishedAt: {
+                            gte: rangeStart
+                        }
+                    },
+                    {
+                        AND: [
+                            {
+                                publishedAt: null
+                            },
+                            {
+                                createdAt: {
+                                    gte: rangeStart
+                                }
+                            }
+                        ]
+                    }
+                ]
             },
             select: {
-                createdAt: true
+                createdAt: true,
+                publishedAt: true
             }
         })
     ]);
     productsInRange.forEach((product)=>{
-        const monthKey = (0, _dailyNewArrival.toMonthKey)(product.createdAt.getFullYear(), product.createdAt.getMonth() + 1);
+        const anchor = product.publishedAt || product.createdAt;
+        const monthKey = (0, _dailyNewArrival.toMonthKey)(anchor.getFullYear(), anchor.getMonth() + 1);
         if (!monthKeys.has(monthKey)) {
             return;
         }
@@ -103882,23 +104674,67 @@ const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
         totalActiveProducts
     };
 });
-const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input)=>{
-    const year = Number(input.year);
-    const month = Number(input.month);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-        return {
-            list: [],
-            total: 0
-        };
+const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = {})=>{
+    const hasMonth = Number.isInteger(Number(input.year)) && Number.isInteger(Number(input.month)) && Number(input.month) >= 1 && Number(input.month) <= 12;
+    let rangeStart;
+    let rangeEnd;
+    if (hasMonth) {
+        const year = Number(input.year);
+        const month = Number(input.month);
+        const range = (0, _dailyNewArrival.getMonthDateRange)(year, month);
+        rangeStart = range.start;
+        rangeEnd = range.end;
+    } else {
+        rangeStart = (0, _dailyNewArrival.getLast6MonthsRangeStart)();
+        rangeEnd = undefined;
     }
-    const { start, end } = (0, _dailyNewArrival.getMonthDateRange)(year, month);
+    const timeFilter = rangeEnd ? {
+        OR: [
+            {
+                publishedAt: {
+                    gte: rangeStart,
+                    lt: rangeEnd
+                }
+            },
+            {
+                AND: [
+                    {
+                        publishedAt: null
+                    },
+                    {
+                        createdAt: {
+                            gte: rangeStart,
+                            lt: rangeEnd
+                        }
+                    }
+                ]
+            }
+        ]
+    } : {
+        OR: [
+            {
+                publishedAt: {
+                    gte: rangeStart
+                }
+            },
+            {
+                AND: [
+                    {
+                        publishedAt: null
+                    },
+                    {
+                        createdAt: {
+                            gte: rangeStart
+                        }
+                    }
+                ]
+            }
+        ]
+    };
     const dbProducts = await _prisma.default.product.findMany({
         where: {
             ...activeListedProductWhere,
-            createdAt: {
-                gte: start,
-                lt: end
-            }
+            ...timeFilter
         },
         include: {
             skus: true,
@@ -103944,7 +104780,11 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input)=>
         }
     });
     const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
-    const list = dbProducts.map((product)=>mapActiveProductToItem(product, exchangeRate, input.lang));
+    const list = dbProducts.slice().sort((a, b)=>{
+        const ta = (a.publishedAt || a.createdAt).getTime();
+        const tb = (b.publishedAt || b.createdAt).getTime();
+        return tb - ta;
+    }).map((product)=>mapActiveProductToItem(product, exchangeRate, input.lang));
     return {
         list,
         total: list.length
@@ -104086,6 +104926,9 @@ _export(exports, {
     },
     get getProductList () {
         return getProductList;
+    },
+    get resolveCategoryRouteKey () {
+        return resolveCategoryRouteKey;
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
@@ -104460,6 +105303,51 @@ const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
                     })).sort((a, b)=>b.product_count - a.product_count || a.category_name.localeCompare(b.category_name, 'zh-CN'))
             };
         })
+    };
+});
+const resolveCategoryRouteKey = (0, _action_utils.withResult)(async (input)=>{
+    const routeKey = String(input.routeKey || '').trim();
+    if (!routeKey) {
+        return {
+            categoryId: '',
+            categorySlug: null
+        };
+    }
+    const bySlug = await _prisma.default.category.findFirst({
+        where: {
+            status: 'ACTIVE',
+            slug: routeKey
+        },
+        select: {
+            id: true,
+            slug: true
+        }
+    });
+    if (bySlug) {
+        return {
+            categoryId: bySlug.id,
+            categorySlug: bySlug.slug || null
+        };
+    }
+    const byId = await _prisma.default.category.findFirst({
+        where: {
+            status: 'ACTIVE',
+            id: routeKey
+        },
+        select: {
+            id: true,
+            slug: true
+        }
+    });
+    if (byId) {
+        return {
+            categoryId: byId.id,
+            categorySlug: byId.slug || null
+        };
+    }
+    return {
+        categoryId: '',
+        categorySlug: null
     };
 });
 const getCategoryDetail = (0, _action_utils.withResult)(async (input)=>{
@@ -106082,6 +106970,9 @@ _export(exports, {
     get formatMonthLabel () {
         return formatMonthLabel;
     },
+    get getLast6MonthsRangeStart () {
+        return getLast6MonthsRangeStart;
+    },
     get getMonthDateRange () {
         return getMonthDateRange;
     },
@@ -106098,14 +106989,22 @@ _export(exports, {
 const DAILY_NEW_ARRIVAL_CATEGORY_KEYWORD = '每日上新';
 const DAILY_NEW_ARRIVAL_NAME_PATTERNS = [
     '每日上新',
+    '每月上新',
     'daily new arrival',
     'daily new arrivals',
     'daily new',
-    'new arrival'
+    'new arrival',
+    'new arrivals'
+];
+/** 短名精确匹配（导航常显示为 New） */ const DAILY_NEW_ARRIVAL_EXACT_NAMES = [
+    'new',
+    '上新',
+    '新品'
 ];
 const isDailyNewArrivalCategoryName = (name)=>{
     const value = String(name || '').trim().toLowerCase();
     if (!value) return false;
+    if (DAILY_NEW_ARRIVAL_EXACT_NAMES.includes(value)) return true;
     return DAILY_NEW_ARRIVAL_NAME_PATTERNS.some((pattern)=>value.includes(pattern.toLowerCase()));
 };
 const findDailyNewArrivalCategoryId = (categories)=>{
@@ -106154,6 +107053,11 @@ const getMonthDateRange = (year, month)=>{
         start,
         end
     };
+};
+const getLast6MonthsRangeStart = (referenceDate = new Date())=>{
+    const months = buildLast6Months(referenceDate);
+    const oldest = months[months.length - 1];
+    return getMonthDateRange(oldest.year, oldest.month).start;
 };
 
 

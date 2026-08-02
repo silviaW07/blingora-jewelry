@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
+import { AdminProfile } from '@/backend/route-params';
 
 // 扁平化的导航配置
 const MENU_ITEMS = [{
@@ -24,6 +25,12 @@ const MENU_ITEMS = [{
   label: '管理概览',
   href: '/dashboard',
   icon: LayoutDashboard,
+  role: 'ADMIN'
+}, {
+  id: 'B18',
+  label: '个人设置',
+  href: '/adminprofile',
+  icon: UserRound,
   role: 'ADMIN'
 }, {
   id: 'B04',
@@ -123,10 +130,12 @@ export default function Sidebar() {
   const {
     user_id,
     username,
+    avatarUrl,
     reset
   } = useAdminSession();
   const isLogin = !!user_id;
   const currentRole = isLogin ? 'ADMIN' : 'GUEST';
+  const avatarLetter = (username || 'A').slice(0, 1).toUpperCase();
 
   // 过滤当前角色可见的菜单
   const displayMenus = MENU_ITEMS.filter(item => item.role === currentRole);
@@ -193,7 +202,7 @@ export default function Sidebar() {
               })}
               {sidebarOpen ? (
                 <p className="mt-1 px-2 text-[10px] leading-4 text-[#1D4ED8]/80">
-                  进入任意装修页后，左下角可配置【客服配置】（WhatsApp 号码 / 悬浮按钮）
+                  进入首页装修后，点击顶部 Logo 可上传站点 Logo；左下角可配置【客服配置】（WhatsApp）
                 </p>
               ) : null}
             </div>
@@ -214,15 +223,25 @@ export default function Sidebar() {
       {/* 底部用户面板区 */}
       <div className="p-4 border-t border-border bg-background flex flex-col gap-3">
         {isLogin ? <>
-            <div className={`flex items-center ${sidebarOpen ? 'gap-3' : 'justify-center'}`}>
-              <div className="w-9 h-9 rounded-full border border-border bg-card flex items-center justify-center shrink-0 text-muted-foreground shadow-xs">
-                <Users className="w-5 h-5" />
+            <button
+              type="button"
+              onClick={() => AdminProfile.navigateTo(router)}
+              className={`flex items-center rounded-md transition-colors hover:bg-secondary ${sidebarOpen ? 'gap-3 px-1 py-1' : 'justify-center p-1'}`}
+              title="个人设置"
+            >
+              <div className="w-9 h-9 rounded-full border border-border bg-card flex items-center justify-center shrink-0 text-muted-foreground shadow-xs overflow-hidden">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="" className="size-full object-cover" />
+                ) : (
+                  <span className="text-xs font-bold text-foreground">{avatarLetter}</span>
+                )}
               </div>
-              {sidebarOpen && <div className="min-w-0 flex-1">
+              {sidebarOpen && <div className="min-w-0 flex-1 text-left">
                   <p className="text-xs font-semibold text-foreground truncate">{username || '超级管理员'}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{user_id || 'admin'}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">个人设置 · 更换头像</p>
                 </div>}
-            </div>
+            </button>
             {/* 退出登录按钮 */}
             <button onClick={handleLogout} className={`flex items-center ${sidebarOpen ? 'gap-3 justify-start px-3 py-2.5' : 'justify-center p-2.5'} rounded-md text-sm font-medium text-secondary-foreground hover:bg-secondary hover:text-foreground transition-colors`}>
               <LogOut className="shrink-0 w-5 h-5" />

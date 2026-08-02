@@ -55,6 +55,17 @@ export const Dashboard = {
 };
 
 // ================================================================
+// B18 管理员个人设置 — 无入参
+// ================================================================
+export const AdminProfile = {
+  id: 'B18',
+  path: '/adminprofile',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(AdminProfile.path),
+};
+
+// ================================================================
 // B04 商品管理 — 入参: name, categoryId, status, tab
 // ================================================================
 export const ProductManagement = {

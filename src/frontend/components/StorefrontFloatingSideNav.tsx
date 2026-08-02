@@ -11,7 +11,7 @@ interface Props {
   open: boolean
   items: StorefrontFloatingSideNavItem[]
   activeId?: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string, slug?: string | null) => void
   className?: string
 }
 

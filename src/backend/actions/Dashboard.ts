@@ -9,6 +9,7 @@ import {
 } from '@/backend/action_utils'
 import type {
   AdminProfile_Output,
+  UpdateAdminProfile_Input,
   KpiStats_Output,
   ImportTaskOverview_Output,
   RetryTask_Input,
@@ -38,6 +39,33 @@ export const getAdminProfile = requireRole(UserRole.ADMIN)(
 
     return user
   })
+)
+
+/**
+ * 更新管理员个人资料（姓名、头像）
+ */
+export const updateAdminProfile = requireRole(UserRole.ADMIN)(
+  withResult(async (input: UpdateAdminProfile_Input): Promise<AdminProfile_Output> => {
+    const { userId } = getAuthContext()
+    const username = (input.username || '').trim()
+    if (!username) throw new Error('请填写姓名')
+
+    const user = await prisma.sysuser.update({
+      where: { id: userId },
+      data: {
+        username,
+        avatarUrl: (input.avatarUrl || '').trim() || null,
+      },
+      select: {
+        account: true,
+        username: true,
+        email: true,
+        avatarUrl: true,
+      },
+    })
+
+    return user
+  }),
 )
 
 export const getKpiStats = requireRole(UserRole.ADMIN)(

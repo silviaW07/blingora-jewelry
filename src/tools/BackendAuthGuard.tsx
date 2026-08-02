@@ -8,7 +8,19 @@ export default function BackendAuthGuard({ children }: { children: React.ReactNo
   const router = useRouter();
   const pathname = usePathname();
   const session = useAdminSession();
-  const need_auth = ['/dashboard','/productmanagement','/importfrom1688','/categorymanagement','/usermanagement'];
+  const need_auth = [
+    '/dashboard',
+    '/adminprofile',
+    '/productmanagement',
+    '/importfrom1688',
+    '/categorymanagement',
+    '/usermanagement',
+    '/ordermanagement',
+    '/bannermanagement',
+    '/homerecommendzonemanagement',
+    '/shippingchannelconfig',
+    '/pricingpromotionmanagement',
+  ];
 
   useEffect(() => {
     if (!session._hasHydrated) return;

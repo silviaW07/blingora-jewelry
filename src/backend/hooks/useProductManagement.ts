@@ -542,6 +542,7 @@ export interface ProductManagementState {
   featuredKeywordInput: string
   featuredKeywordsSaving: boolean
   pendingImportDialogOpen: boolean
+  pinduoduoImportDialogOpen: boolean
   pendingImportTaskForm: PendingImportTaskForm
   pendingImportCreating: boolean
   pendingImportRefreshing: boolean
@@ -677,6 +678,7 @@ export interface ProductManagementHandlers {
   removeFeaturedKeyword: (keyword: string) => void
   saveFeaturedKeywords: () => Promise<void>
   setPendingImportDialogOpen: (open: boolean) => void
+  setPinduoduoImportDialogOpen: (open: boolean) => void
   updatePendingImportTaskForm: <K extends keyof PendingImportTaskForm>(field: K, value: PendingImportTaskForm[K]) => void
   submitPendingImportTask: () => Promise<void>
   refreshPendingImportQueue: (options?: { silent?: boolean }) => Promise<void>
@@ -846,6 +848,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [featuredKeywordInput, setFeaturedKeywordInput] = useState('')
   const [featuredKeywordsSaving, setFeaturedKeywordsSaving] = useState(false)
   const [pendingImportDialogOpen, setPendingImportDialogOpen] = useState(false)
+  const [pinduoduoImportDialogOpen, setPinduoduoImportDialogOpen] = useState(false)
   const [pendingImportTaskForm, setPendingImportTaskForm] = useState<PendingImportTaskForm>(defaultPendingImportTaskForm)
   const [pendingImportCreating, setPendingImportCreating] = useState(false)
   const [pendingImportRefreshing, setPendingImportRefreshing] = useState(false)
@@ -2882,6 +2885,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       featuredKeywordInput,
       featuredKeywordsSaving,
       pendingImportDialogOpen,
+      pinduoduoImportDialogOpen,
       pendingImportTaskForm,
       pendingImportCreating,
       pendingImportRefreshing,
@@ -3016,6 +3020,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       removeFeaturedKeyword,
       saveFeaturedKeywords,
       setPendingImportDialogOpen,
+      setPinduoduoImportDialogOpen,
       updatePendingImportTaskForm,
       submitPendingImportTask,
       refreshPendingImportQueue,

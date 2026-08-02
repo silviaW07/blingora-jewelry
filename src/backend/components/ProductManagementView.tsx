@@ -9,6 +9,7 @@ import { ProductTreeRows } from '@/backend/components/ProductSkuTreeRows';
 import { PendingCategoryTreeDialog } from '@/backend/components/PendingCategoryTreeDialog';
 import { PendingImportTableRows } from '@/backend/components/PendingImportTableRows'
 import { ImportFrom1688CollectModal } from '@/backend/components/ImportFrom1688CollectModal'
+import { ImportFromPinduoduoCollectModal } from '@/backend/components/ImportFromPinduoduoCollectModal'
 import { Sync1688StatusResultPanel } from '@/backend/components/Sync1688StatusResultPanel'
 import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus, PendingImportItemFetchStatus, PendingImportItemPublishStatus, PendingImportTaskStatus } from '@/backend/types/ProductManagement';
 const STATUS_CONFIG: Record<ProductStatus, {
@@ -315,6 +316,9 @@ export const ProductManagementView = ({
               </Button>
               <Button variant="outline" className="h-10 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-radd4b3c8cafd97dc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rba173deb9cf80df0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />1688 多链接采集
+              </Button>
+              <Button variant="outline" className="h-10 border-dashed border-rose-300 bg-rose-50/70 text-rose-700 hover:bg-rose-600 hover:text-white" onClick={() => handlers.setPinduoduoImportDialogOpen(true)} data-api-unique-id='productmanagementview-pinduoduo-collect-btn-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-pinduoduo-collect-icon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />拼多多多链接采集
               </Button>
               <Button className="h-10 bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all" onClick={handlers.handleOpenCreate} data-api-unique-id='productmanagementview-re974db461807473f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <Plus className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-re0a54b0747e57709-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />新增跨境商品
@@ -763,6 +767,15 @@ export const ProductManagementView = ({
       <ImportFrom1688CollectModal
         open={state.pendingImportDialogOpen}
         onOpenChange={handlers.setPendingImportDialogOpen}
+        onTaskCreated={() => {
+          handlers.setActiveTab('pending_imports')
+          void handlers.refreshPendingImportQueue()
+        }}
+      />
+
+      <ImportFromPinduoduoCollectModal
+        open={state.pinduoduoImportDialogOpen}
+        onOpenChange={handlers.setPinduoduoImportDialogOpen}
         onTaskCreated={() => {
           handlers.setActiveTab('pending_imports')
           void handlers.refreshPendingImportQueue()

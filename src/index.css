@@ -704,6 +704,46 @@
   flex-shrink: 0;
 }
 
+/* 顶栏品牌字较长：允许品牌列随内容变宽，CATEGORIES 粉块仍保持 --home-brand-w */
+.storefront-categories-col:has(.storefront-brand-mark) {
+  width: auto;
+  max-width: min(100%, 420px);
+}
+
+/* 品牌标识：图标左 + 字右，垂直居中；字体固定衬线，字号/颜色可装修覆盖 */
+.storefront-brand-mark {
+  min-width: 0;
+}
+
+.storefront-brand-wordmark {
+  font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif !important;
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #f6e7b2 0%, #d4af37 42%, #9a7218 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.storefront-brand-wordmark--compact {
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  letter-spacing: 0.08em;
+}
+
+/* 可视化装修指定颜色时用纯色，保留固定衬线字体 */
+.storefront-brand-wordmark.is-solid-color {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: currentColor;
+}
+
 .storefront-home-back-link {
   display: inline-flex;
   align-items: center;

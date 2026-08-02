@@ -155,6 +155,16 @@ export interface GetCategoryDetailOutput {
   detail: CategoryDetail | null
 }
 
+export interface ResolveCategoryRouteKeyInput {
+  /** URL 中的 /category/[slug] 段：优先按 slug 匹配，其次按 id */
+  routeKey: string
+}
+
+export interface ResolveCategoryRouteKeyOutput {
+  categoryId: string
+  categorySlug: string | null
+}
+
 export interface GetCategoryPosterListInput {
   category_id?: string
 }
@@ -649,6 +659,48 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
     })
   }
 })
+
+/**
+ * 根据 URL 路由键解析分类：先按 slug，再按 id（兼容旧链接把 id 写进 /category/[…]）
+ */
+export const resolveCategoryRouteKey = withResult(
+  async (input: ResolveCategoryRouteKeyInput): Promise<ResolveCategoryRouteKeyOutput> => {
+    const routeKey = String(input.routeKey || '').trim()
+    if (!routeKey) {
+      return { categoryId: '', categorySlug: null }
+    }
+
+    const bySlug = await prisma.category.findFirst({
+      where: {
+        status: 'ACTIVE',
+        slug: routeKey,
+      },
+      select: { id: true, slug: true },
+    })
+    if (bySlug) {
+      return {
+        categoryId: bySlug.id,
+        categorySlug: bySlug.slug || null,
+      }
+    }
+
+    const byId = await prisma.category.findFirst({
+      where: {
+        status: 'ACTIVE',
+        id: routeKey,
+      },
+      select: { id: true, slug: true },
+    })
+    if (byId) {
+      return {
+        categoryId: byId.id,
+        categorySlug: byId.slug || null,
+      }
+    }
+
+    return { categoryId: '', categorySlug: null }
+  },
+)
 
 /**
  * 获取特定分类详情与该分类下的有效商品数（用于分类标题区展示）

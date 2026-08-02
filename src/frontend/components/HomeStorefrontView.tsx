@@ -17,7 +17,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Gem,
   Globe,
   Menu,
   Loader2,
@@ -38,6 +37,7 @@ import type {
 } from '@/frontend/actions/Home';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame';
+import { StorefrontBrandMark } from '@/frontend/components/StorefrontBrandMark';
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext';
 import { CustomerAccountMenu } from '@/frontend/components/CustomerAccountMenu';
 import { StorefrontBrandNavList } from '@/frontend/components/StorefrontBrandNavList';
@@ -90,17 +90,13 @@ const serviceBenefitItems = [
 ] as const;
 
 const isDefaultHomeQueryState = (state: HomeState) => {
-  // 已选中某个月份：进入「每日上新」商品结果态
-  if (state.selectedDailyNewArrivalMonthKey) {
+  // 每日上新 / New：进入时间窗商品结果态（整段 6 个月或已选月份）
+  if (state.isDailyNewArrivalMode || state.selectedDailyNewArrivalMonthKey) {
     return false;
   }
 
   const queryState = state.queryState;
-  // 仅悬停「每日上新」未点月份时，仍保持首页推荐陈列
-  const categoryId =
-    state.isDailyNewArrivalMode && !state.selectedDailyNewArrivalMonthKey
-      ? ''
-      : queryState.categoryId;
+  const categoryId = queryState.categoryId;
 
   return !(
     categoryId ||
@@ -480,6 +476,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
           id: item.category_id,
           key: item.item_id,
           label: item.category_name,
+          slug: item.category_slug,
         }))
       : (hotSideNavZoneFromRecommend?.items || [])
           .filter((item): item is HomeRecommendSideNavItem => item.entityType === 'SIDE_NAV')
@@ -487,6 +484,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
             id: item.categoryId,
             key: item.itemId,
             label: item.categoryName,
+            slug: item.categorySlug,
           }));
 
   // 激活的商品/类目专区全量展示；顺序沿用接口返回的列表顺序，不按权重重排
@@ -494,8 +492,8 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
     (zone) => zone.zoneType === 'PRODUCT' || zone.zoneType === 'CATEGORY',
   );
 
-  const handleSideNavClick = (categoryId: string) => {
-    handlers.handleNavigateRecommendCategory(categoryId);
+  const handleSideNavClick = (categoryId: string, categorySlug?: string | null) => {
+    handlers.handleNavigateRecommendCategory(categoryId, categorySlug);
   };
 
   const clearFloatingSideNavCloseTimer = useCallback(() => {
@@ -592,9 +590,9 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   open={isFloatingSideNavOpen}
                   items={sideNavItems}
                   activeId={queryState.categoryId || selectedRecommendCategoryId || null}
-                  onSelect={(categoryId) => {
+                  onSelect={(categoryId, categorySlug) => {
                     setIsFloatingSideNavOpen(false);
-                    handleSideNavClick(categoryId);
+                    handleSideNavClick(categoryId, categorySlug);
                   }}
                 />
               ) : null}
@@ -647,7 +645,9 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                     onClick={(event) => {
                       event.preventDefault();
                       if (isDailyNewArrival) return;
-                      handlers.handleToggleDesktopTopNavCategory(category.category_id);
+                      handlers.handleToggleDesktopTopNavCategory(category.category_id, {
+                        categorySlug: category.category_slug,
+                      });
                     }}
                     aria-expanded={hasHoverPanel ? isDesktopPanelVisible : undefined}
                     aria-haspopup={hasHoverPanel ? 'menu' : undefined}
@@ -686,6 +686,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                           event.preventDefault();
                           handlers.handleSelectCategory(child.category_id, {
                             parentCategoryId: category.category_id,
+                            categorySlug: child.category_slug,
                           });
                         }}
                         data-api-bind-info={`categories-${index}-category.children-${index1}-category_name`}
@@ -749,6 +750,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                               event.stopPropagation();
                               handlers.handleSelectCategory(child.category_id, {
                                 parentCategoryId: category.category_id,
+                                categorySlug: child.category_slug,
                               });
                             }}
                           >
@@ -824,25 +826,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
             <div className="flex flex-col gap-2.5 overflow-visible">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="storefront-categories-col flex flex-wrap items-center gap-3">
-                  <Link
-                    href="/"
-                    className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
-                    aria-label={t('common.backToHome')}
-                  >
-                    <div className="relative flex size-11 items-center justify-center rounded-[16px] bg-[linear-gradient(145deg,#111111,#3c2f7d)] text-white shadow-[0_12px_28px_-18px_rgba(17,17,17,0.55)] sm:size-12">
-                      <span className="absolute left-1.5 top-1.5 size-3 rounded-full bg-[#f4a261] opacity-95" />
-                      <span className="absolute bottom-1.5 right-1.5 size-2.5 rounded-full bg-[#2ec4b6] opacity-90" />
-                      <Gem className="size-5" />
-                    </div>
-                    <div>
-                      <DecorateText propKey="home_brand_eyebrow" as="p" className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#6f6a62]">
-                        BLINGORA
-                      </DecorateText>
-                      <DecorateText propKey="home_brand_title" as="h1" className="mt-0.5 text-[20px] font-black tracking-[0.14em] text-[#111111]">
-                        JEWELRY
-                      </DecorateText>
-                    </div>
-                  </Link>
+                  <StorefrontBrandMark useNextLink ariaLabel={t('common.backToHome')} />
                 </div>
 
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-2.5 xl:max-w-[980px]" data-controller-name="搜索栏与用户功能区">

@@ -19,6 +19,7 @@ export interface AdminLoginOutput {
   sysuser_username: string    // data-from: sysuser-username
   sysuser_role: string        // data-from: sysuser-role
   sysuser_status: UserStatus  // data-from: sysuser-status
+  sysuser_avatarUrl: string   // data-from: sysuser-avatarUrl
 }
 
 // ===== Imports =====
@@ -82,6 +83,7 @@ export const adminLogin = withResult(
       sysuser_username: user.username,
       sysuser_role: user.role,
       sysuser_status: user.status as UserStatus,
+      sysuser_avatarUrl: user.avatarUrl || '',
     }
   }
 )

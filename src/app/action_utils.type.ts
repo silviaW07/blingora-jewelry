@@ -21,6 +21,7 @@ export interface AuthContext {
 
 /**
  * 401 未授权错误
+ * 用 getter，禁止 class field，避免编译期 _define_property(this) 触发 Must call super
  */
 export class UnauthorizedError extends Error {
   get statusCode(): number {

@@ -242,34 +242,29 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
   }, [fallbackDailyNewArrivalMonths])
 
   useEffect(() => {
-    if (!selectedDailyNewArrivalMonthKey) {
-      setDailyNewArrivalProducts([])
-      setIsLoadingDailyNewArrivalProducts(false)
-      return
-    }
-
-    const [yearText, monthText] = selectedDailyNewArrivalMonthKey.split('-')
-    const year = Number(yearText)
-    const month = Number(monthText)
-
-    if (!Number.isInteger(year) || !Number.isInteger(month)) {
-      setDailyNewArrivalProducts([])
-      return
-    }
-
     let cancelled = false
     setIsLoadingDailyNewArrivalProducts(true)
 
-    getDailyNewArrivalProducts({
-      year,
-      month,
-      lang:
-        typeof window !== 'undefined'
-          ? window.localStorage.getItem('app_preferred_locale') ||
-            document.documentElement.getAttribute('lang') ||
-            'en'
-          : 'en',
-    })
+    const lang =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('app_preferred_locale') ||
+          document.documentElement.getAttribute('lang') ||
+          'en'
+        : 'en'
+
+    const request = selectedDailyNewArrivalMonthKey
+      ? (() => {
+          const [yearText, monthText] = selectedDailyNewArrivalMonthKey.split('-')
+          const year = Number(yearText)
+          const month = Number(monthText)
+          if (!Number.isInteger(year) || !Number.isInteger(month)) {
+            return Promise.resolve({ list: [], total: 0 })
+          }
+          return getDailyNewArrivalProducts({ year, month, lang })
+        })()
+      : getDailyNewArrivalProducts({ lang }) // 最近 6 个月全部上新
+
+    request
       .then((res) => {
         if (cancelled) return
         setDailyNewArrivalProducts(Array.isArray(res.list) ? res.list : [])
@@ -277,7 +272,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       .catch((err: any) => {
         if (cancelled) return
         setDailyNewArrivalProducts([])
-        toast.error(err.message || '月度商品加载失败')
+        toast.error(err.message || '上新商品加载失败')
       })
       .finally(() => {
         if (!cancelled) setIsLoadingDailyNewArrivalProducts(false)
@@ -303,13 +298,16 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
 
   const handleToggleDesktopTopNavCategory: typeof handlers.handleToggleDesktopTopNavCategory = (
     categoryId,
+    options,
   ) => {
-    // 「每日上新」仅通过悬浮月历选月，点击标签本身不进入分类结果页
+    // 「每日上新 / New」：进入专属时间窗列表页（不按分类 ID 筛商品）
     if (categoryId && categoryId === state.dailyNewArrivalCategoryId) {
+      clearDailyNewArrivalMonthSelection()
+      handlers.handleSelectCategory(categoryId, options)
       return
     }
     clearDailyNewArrivalMonthSelection()
-    handlers.handleToggleDesktopTopNavCategory(categoryId)
+    handlers.handleToggleDesktopTopNavCategory(categoryId, options)
   }
 
   const handleSelectDailyNewArrivalMonth = (monthKey: string) => {
@@ -318,6 +316,18 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
 
     const categoryId = state.dailyNewArrivalCategoryId
     if (categoryId) {
+      // 带上 dailyMonth，分类页/首页共用同一套按月筛选
+      const slug =
+        state.categories.find((c) => c.category_id === categoryId)?.category_slug ||
+        null
+      const params = new URLSearchParams()
+      params.set('dailyMonth', monthKey)
+      if (slug) {
+        router.push(`/category/${encodeURIComponent(String(slug).trim())}?${params.toString()}`)
+      } else {
+        params.set('categoryId', categoryId)
+        router.push(`${ProductCategory.path}?${params.toString()}`)
+      }
       handlers.handleSelectCategory(categoryId)
     }
   }
