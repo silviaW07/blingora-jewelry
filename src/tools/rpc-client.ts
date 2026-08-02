@@ -36,6 +36,16 @@ const ERROR_MESSAGES = {
   OPERATION_FAILED: 'Operation failed',
 };
 
+/** Hide misleading engine messages that are not actionable for operators */
+const sanitizeRpcErrorMessage = (raw: unknown): string => {
+  const message = String(raw || '').trim();
+  if (!message) return ERROR_MESSAGES.SERVER_ERROR;
+  if (/Must call super constructor/i.test(message)) {
+    return ERROR_MESSAGES.SERVER_ERROR;
+  }
+  return message;
+};
+
 // 根据 actionName 判断使用哪个 rpc-auth（和 bundled-entry.ts 逻辑一致）
 function getRpcAuthModule(actionName: string) {
   // actionName 格式: "src.frontend.actions.xxx" 或 "src.backend.actions.xxx" 或 "src.app.actions.xxx"
@@ -138,7 +148,7 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
       // 403 权限不足
       if (resp.status === 403) {
         const data = await resp.json();
-        const errorMsg = data.error ?? ERROR_MESSAGES.FORBIDDEN;
+        const errorMsg = sanitizeRpcErrorMessage(data.error ?? ERROR_MESSAGES.FORBIDDEN);
         toast.error(errorMsg);
         throw new Error(errorMsg);
       }
@@ -152,7 +162,7 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
 
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => ({}));
-        const errorMsg = errorData.error || ERROR_MESSAGES.SERVER_ERROR;
+        const errorMsg = sanitizeRpcErrorMessage(errorData.error || ERROR_MESSAGES.SERVER_ERROR);
         toast.error(errorMsg);
         throw new Error(errorMsg);
       }

@@ -6,12 +6,18 @@ export class UnauthorizedError extends Error {
     super(message);
     this.name = 'UnauthorizedError';
   }
+  get statusCode(): number {
+    return 401;
+  }
 }
 
 export class ForbiddenError extends Error {
   constructor(message = '权限不足') {
     super(message);
     this.name = 'ForbiddenError';
+  }
+  get statusCode(): number {
+    return 403;
   }
 }
 

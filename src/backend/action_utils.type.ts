@@ -20,16 +20,16 @@ export interface AuthContext {
 
 /**
  * 401 未授权错误
- * 用 getter，禁止 class field，避免编译期 _define_property(this) 触发 Must call super
+ * constructor 必须先 super()；禁止 class field，避免 Must call super constructor
  */
 export class UnauthorizedError extends Error {
-  get statusCode(): number {
-    return 401
-  }
   constructor(message = '请先登录') {
     super(message)
     this.name = 'UnauthorizedError'
     Object.setPrototypeOf(this, UnauthorizedError.prototype)
+  }
+  get statusCode(): number {
+    return 401
   }
 }
 
@@ -37,13 +37,13 @@ export class UnauthorizedError extends Error {
  * 403 禁止访问错误
  */
 export class ForbiddenError extends Error {
-  get statusCode(): number {
-    return 403
-  }
   constructor(message = '权限不足，无法执行此操作') {
     super(message)
     this.name = 'ForbiddenError'
     Object.setPrototypeOf(this, ForbiddenError.prototype)
+  }
+  get statusCode(): number {
+    return 403
   }
 }
 

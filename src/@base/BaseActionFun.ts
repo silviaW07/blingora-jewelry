@@ -9,24 +9,24 @@ import { createHash } from 'crypto'
 // ===== 基础错误类 =====
 
 export class UnauthorizedError extends Error {
-  get statusCode(): number {
-    return 401
-  }
   constructor(message = 'Please login first') {
     super(message)
     this.name = 'UnauthorizedError'
     Object.setPrototypeOf(this, UnauthorizedError.prototype)
   }
+  get statusCode(): number {
+    return 401
+  }
 }
 
 export class ForbiddenError extends Error {
-  get statusCode(): number {
-    return 403
-  }
   constructor(message = 'Access denied') {
     super(message)
     this.name = 'ForbiddenError'
     Object.setPrototypeOf(this, ForbiddenError.prototype)
+  }
+  get statusCode(): number {
+    return 403
   }
 }
 

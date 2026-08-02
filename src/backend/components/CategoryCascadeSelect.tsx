@@ -63,7 +63,8 @@ export function buildCategoryCascadeTree(
 ): CategoryCascadeNode[] {
   const forImportL1 = config?.forImportL1 ?? true
   const map = new Map<string, CategoryCascadeNode>()
-  options.forEach(option => {
+  const safeOptions = Array.isArray(options) ? options : []
+  safeOptions.forEach(option => {
     map.set(option.category_id, { ...option, children: [] })
   })
 
@@ -114,7 +115,8 @@ export function getCategoryCascadeLabel(
   value?: string | null,
 ): string {
   if (!value) return ''
-  const selected = options.find(item => item.category_id === value)
+  const safeOptions = Array.isArray(options) ? options : []
+  const selected = safeOptions.find(item => item.category_id === value)
   if (!selected) return ''
   return selected.category_name
 }
@@ -124,7 +126,8 @@ export function resolveToL1CategoryId(
   options: CategoryCascadeOption[],
   categoryId: string,
 ): string {
-  const selected = options.find(item => item.category_id === categoryId)
+  const safeOptions = Array.isArray(options) ? options : []
+  const selected = safeOptions.find(item => item.category_id === categoryId)
   if (!selected) return categoryId
   const isL2 = selected.level === 2 || (!!selected.parent_id && selected.level !== 1)
   if (isL2 && selected.parent_id) return selected.parent_id
@@ -162,27 +165,28 @@ export function CategoryCascadeSelect({
 }: CategoryCascadeSelectProps) {
   const [open, setOpen] = useState(false)
   const [hoveredL1Id, setHoveredL1Id] = useState<string | null>(null)
+  const safeOptions = Array.isArray(options) ? options : []
 
   const tree = useMemo(
-    () => buildCategoryCascadeTree(options, { forImportL1: true }),
-    [options],
+    () => buildCategoryCascadeTree(safeOptions, { forImportL1: true }),
+    [safeOptions],
   )
-  const selectedLabel = useMemo(() => getCategoryCascadeLabel(options, value), [options, value])
+  const selectedLabel = useMemo(() => getCategoryCascadeLabel(safeOptions, value), [safeOptions, value])
 
   const activeL1 = useMemo(() => {
     if (hoveredL1Id) return tree.find(node => node.category_id === hoveredL1Id) || null
     if (value) {
-      const selected = options.find(item => item.category_id === value)
+      const selected = safeOptions.find(item => item.category_id === value)
       if (selected?.parent_id) {
         return tree.find(node => node.category_id === selected.parent_id) || null
       }
       return tree.find(node => node.category_id === value) || null
     }
     return tree[0] || null
-  }, [hoveredL1Id, tree, value, options])
+  }, [hoveredL1Id, tree, value, safeOptions])
 
   const handleSelect = (categoryId: string) => {
-    const nextId = selectL1Only ? resolveToL1CategoryId(options, categoryId) : categoryId
+    const nextId = selectL1Only ? resolveToL1CategoryId(safeOptions, categoryId) : categoryId
     onValueChange(nextId)
     setOpen(false)
     setHoveredL1Id(null)

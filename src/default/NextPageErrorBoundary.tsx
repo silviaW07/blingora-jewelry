@@ -120,6 +120,7 @@ export class PageErrorBoundary extends Component<
   PageErrorBoundaryState
 > {
   constructor(props: PageErrorBoundaryProps) {
+    // React class components must call super(props) before accessing this
     super(props)
     this.state = { hasError: false, error: null, errorInfo: null }
   }

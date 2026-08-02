@@ -92,9 +92,12 @@ export function PendingImportTableRows({
   const effectivelyReady = isPendingImportEffectivelyReady(readinessSnapshot, nowMs)
   const effectiveFetchStatus = getEffectivePendingImportFetchStatus(readinessSnapshot, nowMs)
   const canPublish = canPublishPendingImportItem(readinessSnapshot, nowMs) && !isReparsing
-  const source = item.item_sourceUrl?.startsWith('table-import://')
+  const isTableImport = item.item_sourceUrl?.startsWith('table-import://')
+  const isPinduoduoImport = /(?:yangkeduo|pinduoduo)\.com/i.test(String(item.item_sourceUrl || ''))
+  const source = isTableImport
     ? sourceConfig.TABLE_IMPORT
     : sourceConfig.IMPORT_1688
+  const sourceLabel = isTableImport ? '表格导入' : isPinduoduoImport ? '拼多多' : '1688'
   const skuCount = pendingSkus.length || 1
   const colorValues = Array.from(new Set(
     pendingSkus.map(sku => sku.attributes?.find(attr => attr.name === '颜色')?.value?.trim() || '默认颜色'),
@@ -256,7 +259,7 @@ export function PendingImportTableRows({
               />
               <span className="text-xs text-muted-foreground font-mono">
                 {brand ? `${brand} · ` : ''}
-                {item.item_sourceUrl?.startsWith('table-import://') ? '表格导入' : '1688'}
+                {sourceLabel}
                 {isSingleColor
                   ? ` · ${skuCount} 规格`
                   : ` · ${colorCount} 色 · ${skuCount} SKU`}

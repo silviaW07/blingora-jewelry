@@ -85518,12 +85518,18 @@ _export(exports, {
     }
 });
 class UnauthorizedError extends Error {
+    get statusCode() {
+        return 401;
+    }
     constructor(message = '请登录'){
         super(message);
         this.name = 'UnauthorizedError';
     }
 }
 class ForbiddenError extends Error {
+    get statusCode() {
+        return 403;
+    }
     constructor(message = '权限不足'){
         super(message);
         this.name = 'ForbiddenError';
@@ -92201,6 +92207,8 @@ const readSkuMapStock = (row)=>{
                 }
             }
             const name = extract1688OfferTitleFromHtml(html);
+            // multiSpec 必须先解析：后面色图候选会读 colors/skuTable，避免 TDZ ReferenceError
+            const multiSpec = parse1688MultiSpecFromHtml(html);
             const { hdCandidates, watermarkedFallback } = extract1688ImageCandidates(html);
             const resolvedImages = await resolve1688ImageUrls({
                 hdCandidates,
@@ -92229,7 +92237,6 @@ const readSkuMapStock = (row)=>{
             const priceText = pickJsonStringField(html, 'price') || pickJsonStringField(html, 'priceDisplay') || pickJsonStringField(html, 'offerPrice');
             const { min: priceMinFromText, max: priceMaxFromText } = parsePriceRangeText(priceText);
             const featureAttributes = parse1688FeatureAttributes(html);
-            const multiSpec = parse1688MultiSpecFromHtml(html);
             const priceMin = (_multiSpec_priceMin = multiSpec.priceMin) !== null && _multiSpec_priceMin !== void 0 ? _multiSpec_priceMin : priceMinFromText;
             const priceMax = (_ref = (_multiSpec_priceMax = multiSpec.priceMax) !== null && _multiSpec_priceMax !== void 0 ? _multiSpec_priceMax : priceMaxFromText) !== null && _ref !== void 0 ? _ref : priceMin;
             if (name || mainImageUrl || multiSpec.skuTable.length > 0) {
@@ -93594,15 +93601,13 @@ const getCategoryOptions = (0, _action_utils.requireRole)([
             c.id,
             c.name
         ]));
-    return {
-        list: categories.map((c)=>({
-                category_id: c.id,
-                category_name: c.name,
-                parent_id: c.parentId,
-                level: c.level,
-                parent_name: c.parentId ? nameById.get(c.parentId) || null : null
-            }))
-    };
+    return categories.map((c)=>({
+            category_id: c.id,
+            category_name: c.name,
+            parent_id: c.parentId,
+            level: c.level,
+            parent_name: c.parentId ? nameById.get(c.parentId) || null : null
+        }));
 }));
 const getImportTaskList = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN

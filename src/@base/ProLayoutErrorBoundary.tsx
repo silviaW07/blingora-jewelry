@@ -76,6 +76,7 @@ class CustomProLayoutErrorBoundary extends Component<{
 }, CustomErrorBoundaryState> {
 
   constructor(props: any) {
+    // React class components must call super(props) before accessing this
     super(props);
     this.state = {
       hasError: false,

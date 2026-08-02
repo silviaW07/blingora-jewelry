@@ -51,7 +51,14 @@ export function useImportFromPinduoduo(options: Options = {}) {
 
   useEffect(() => {
     void getCategoryOptions()
-      .then(setCategoryOptions)
+      .then((res) => {
+        const list = Array.isArray(res)
+          ? res
+          : Array.isArray((res as { list?: CategoryOption[] })?.list)
+            ? (res as { list: CategoryOption[] }).list
+            : []
+        setCategoryOptions(list)
+      })
       .catch(() => setCategoryOptions([]))
   }, [])
 

@@ -35,7 +35,8 @@ interface TreeNode extends PendingCategoryOption {
 
 function buildCategoryTree(options: PendingCategoryOption[]): TreeNode[] {
   const map = new Map<string, TreeNode>()
-  options.forEach(option => {
+  const safeOptions = Array.isArray(options) ? options : []
+  safeOptions.forEach(option => {
     map.set(option.category_id, { ...option, children: [] })
   })
 

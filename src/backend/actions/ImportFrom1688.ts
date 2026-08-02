@@ -3126,6 +3126,8 @@ const fetch1688OfferPreviewOnce = async (
       }
 
       const name = extract1688OfferTitleFromHtml(html)
+      // multiSpec 必须先解析：后面色图候选会读 colors/skuTable，避免 TDZ ReferenceError
+      const multiSpec = parse1688MultiSpecFromHtml(html)
 
       const { hdCandidates, watermarkedFallback } = extract1688ImageCandidates(html)
       const resolvedImages = await resolve1688ImageUrls({
@@ -3174,7 +3176,6 @@ const fetch1688OfferPreviewOnce = async (
         pickJsonStringField(html, 'offerPrice')
       const { min: priceMinFromText, max: priceMaxFromText } = parsePriceRangeText(priceText)
       const featureAttributes = parse1688FeatureAttributes(html)
-      const multiSpec = parse1688MultiSpecFromHtml(html)
       const priceMin = multiSpec.priceMin ?? priceMinFromText
       const priceMax = multiSpec.priceMax ?? priceMaxFromText ?? priceMin
 
@@ -4516,7 +4517,7 @@ export function matchSecondaryCategoriesByTitle(
 // ===== Actions =====
 
 export const getCategoryOptions = requireRole([UserRole.ADMIN])(
-  withResult(async (): Promise<GetCategoryOptionsOutput> => {
+  withResult(async (): Promise<CategoryOption[]> => {
     const categories = await prisma.category.findMany({
       where: { status: 'ACTIVE' },
       select: { id: true, name: true, parentId: true, level: true },
@@ -4525,15 +4526,13 @@ export const getCategoryOptions = requireRole([UserRole.ADMIN])(
 
     const nameById = new Map(categories.map(c => [c.id, c.name]))
 
-    return {
-      list: categories.map(c => ({
-        category_id: c.id,
-        category_name: c.name,
-        parent_id: c.parentId,
-        level: c.level,
-        parent_name: c.parentId ? (nameById.get(c.parentId) || null) : null
-      }))
-    }
+    return categories.map(c => ({
+      category_id: c.id,
+      category_name: c.name,
+      parent_id: c.parentId,
+      level: c.level,
+      parent_name: c.parentId ? (nameById.get(c.parentId) || null) : null
+    }))
   })
 )
 

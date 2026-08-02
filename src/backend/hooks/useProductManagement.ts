@@ -967,8 +967,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const fetchCategoryOptions = async () => {
     try {
       const data = await getCategoryOptions()
-      setCategoryOptions(data)
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray((data as { list?: CategoryOption[] })?.list)
+          ? (data as { list: CategoryOption[] }).list
+          : []
+      setCategoryOptions(list)
     } catch (err: any) {
+      setCategoryOptions([])
       toast.error(err.message || '获取分类选项失败')
     }
   }

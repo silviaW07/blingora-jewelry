@@ -682,8 +682,14 @@ export const useImportFrom1688 = (
   const loadCategories = useCallback(async () => {
     try {
       const res = await getCategoryOptions()
-      setCategoryOptions(res.list)
+      const list = Array.isArray(res)
+        ? res
+        : Array.isArray((res as { list?: CategoryOption[] })?.list)
+          ? (res as { list: CategoryOption[] }).list
+          : []
+      setCategoryOptions(list)
     } catch (error) {
+      setCategoryOptions([])
       toast.error((error as Error).message)
     }
   }, [])
