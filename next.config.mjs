@@ -11,7 +11,7 @@ const monoRoot = path.resolve(__dirname, '../../../../')
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // 1. 静态导出
-  output: 'export',
+  output: 'standalone',
 
   // 2. 文件追踪相关
   outputFileTracingRoot: monoRoot,
