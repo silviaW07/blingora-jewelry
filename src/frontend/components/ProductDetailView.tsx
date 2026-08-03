@@ -744,7 +744,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </div>
                     <div className="space-y-1 p-3">
                       <p className="line-clamp-2 min-h-[2.5rem] text-sm text-[#222]">{item.name}</p>
-                      <p className="text-sm font-bold text-[#111]">{formatUsd(item.minPrice)}</p>
+                      <StorePrice compact className="text-sm font-bold">
+                        <p className="text-sm font-bold text-[#111]">{formatUsd(item.minPrice)}</p>
+                      </StorePrice>
                     </div>
                   </button>
                 ))}

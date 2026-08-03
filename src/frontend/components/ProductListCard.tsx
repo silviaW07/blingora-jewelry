@@ -6,7 +6,10 @@ import { cn } from '@/lib/utils'
 import type { ProductItem } from '@/frontend/actions/ProductCategory'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
-import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
+import {
+  GuestPlaceholder,
+  useCanViewStorePrice,
+} from '@/frontend/components/GuestPricePlaceholder'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -69,6 +72,7 @@ export const ProductListCard = ({
   controllerName = '商品列表卡片',
 }: ProductListCardProps) => {
   const { t } = useTranslation()
+  const canViewPrice = useCanViewStorePrice()
   const thumbnails = resolveThumbnails(item)
   /** Multi-color row: show all when available; hide when only a single main fallback. */
   const showColorThumbs = thumbnails.length >= 2
@@ -150,13 +154,15 @@ export const ProductListCard = ({
 
         {isDraft ? (
           <div className="h-5" aria-hidden="true" />
+        ) : canViewPrice ? (
+          <div className="min-h-5">
+            <p className="truncate text-base font-bold leading-5 text-[#111111]">
+              {formatListPrice(item.price, item.price_max)}
+            </p>
+          </div>
         ) : (
           <div className="min-h-5">
-            <StorePrice className="truncate text-base font-bold leading-5">
-              <p className="truncate text-base font-bold leading-5 text-[#111111]">
-                {formatListPrice(item.price, item.price_max)}
-              </p>
-            </StorePrice>
+            <GuestPlaceholder compact className="truncate" />
           </div>
         )}
 

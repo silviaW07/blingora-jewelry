@@ -2,14 +2,24 @@
 
 import type { ReactNode } from 'react'
 import { useUserSession } from '@/tools/FrontendSession'
-import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
+import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
-/** True when the storefront customer session has a non-empty token. */
+/**
+ * Guest cannot see storefront prices until they have a real customer session.
+ * Default to hidden before persist rehydration to avoid flashing USD prices.
+ */
 export function useCanViewStorePrice(): boolean {
-  const { token } = useUserSession()
-  return Boolean(token?.trim())
+  const session = useUserSession()
+  const token = String(session?.token || '').trim()
+  const userId = String(session?.user_id || '').trim()
+  const hydrated = Boolean((session as { _hasHydrated?: boolean })?._hasHydrated)
+
+  // Until localStorage session is ready, never reveal prices.
+  if (!hydrated) return false
+  if (!token || !userId) return false
+  return true
 }
 
 type GuestPricePlaceholderProps = {
@@ -19,30 +29,39 @@ type GuestPricePlaceholderProps = {
 }
 
 /**
- * Clickable “Login to view price” — opens the customer auth modal.
+ * Clickable “Login to view price” — opens the customer auth modal when available.
  */
 export function GuestPricePlaceholder({ className, compact = false }: GuestPricePlaceholderProps) {
   const { t } = useTranslation()
-  const { openAuthModal } = useCustomerAuthModal()
+  const authModal = useOptionalCustomerAuthModal()
 
   return (
     <button
       type="button"
       className={cn(
-        'text-left font-semibold text-[#f254a6] transition hover:text-[#e44798] hover:underline',
-        compact ? 'text-xs leading-4' : 'text-base leading-5',
+        'guest-price-placeholder text-left font-semibold text-[#f254a6] transition hover:text-[#e44798] hover:underline',
+        compact ? 'text-xs leading-4 sm:text-sm' : 'text-sm leading-5 sm:text-base',
         className,
       )}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        openAuthModal('login')
+        if (authModal?.openAuthModal) {
+          authModal.openAuthModal('login')
+          return
+        }
+        if (typeof window !== 'undefined') {
+          window.location.assign('/customerlogin/')
+        }
       }}
     >
-      {t('product.loginToViewPrice')}
+      {t('product.loginToViewPrice', { defaultValue: 'Login to view price' })}
     </button>
   )
 }
+
+/** Alias for list wiring / product docs */
+export const GuestPlaceholder = GuestPricePlaceholder
 
 type StorePriceProps = {
   children: ReactNode

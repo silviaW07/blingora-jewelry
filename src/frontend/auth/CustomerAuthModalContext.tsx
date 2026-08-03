@@ -48,3 +48,8 @@ export function useCustomerAuthModal() {
   }
   return context;
 }
+
+/** Safe for product cards that may render outside the modal provider during tests. */
+export function useOptionalCustomerAuthModal() {
+  return useContext(CustomerAuthModalContext);
+}
