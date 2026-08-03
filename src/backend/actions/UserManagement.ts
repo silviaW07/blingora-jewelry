@@ -11,6 +11,11 @@ export type RawOrderStatus = 'PENDING_PAYMENT' | 'PAID' | 'PROCESSING' | 'SHIPPE
 export type UserListSortField = 'createdAt' | 'lastLoginAt' | 'cartUsdTotal'
 export type SortDirection = 'asc' | 'desc'
 
+export type { CustomerTagCode } from '@/backend/lib/customerTags'
+export { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
+import type { CustomerTagCode } from '@/backend/lib/customerTags'
+import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
+
 export interface UserOrderSummary {
   total: number
   pendingPayment: number
@@ -53,12 +58,15 @@ export interface UserListItem {
   username: string
   whatsapp: string | null
   email: string
-  passwordMasked: string
+  /** 明文密码（后台展示）；历史账号可能为空 */
+  passwordPlain: string | null
   role: SysUserRole
   status: SysUserStatus
   createdAt: string
   lastLoginAt: string | null
   adminNote: string | null
+  customerTagCode: CustomerTagCode
+  customerTagName: string | null
   cartItemCount: number
   cartUsdTotal: number
   orderCount: number
@@ -71,12 +79,14 @@ export interface UserDetail {
   username: string
   whatsapp: string | null
   email: string
-  passwordMasked: string
+  passwordPlain: string | null
   role: SysUserRole
   status: SysUserStatus
   createdAt: string
   lastLoginAt: string | null
   adminNote: string | null
+  customerTagCode: CustomerTagCode
+  customerTagName: string | null
   cartId: string | null
   cartItemCount: number
   cartUsdTotal: number
@@ -123,6 +133,12 @@ export interface UpdateUserAdminNoteInput {
   adminNote: string
 }
 
+export interface UpdateUserCustomerTagInput {
+  id: string
+  /** 空字符串表示清除标签 */
+  tagCode: CustomerTagCode
+}
+
 export interface ImpersonateCustomerInput {
   userId: string
 }
@@ -146,7 +162,6 @@ import {
 } from '@/backend/action_utils'
 
 const USD_EXCHANGE_RATE = 6.5
-const PASSWORD_MASK = '已加密存储'
 
 const ORDER_STATUS_PRIORITY: Record<RawOrderStatus, number> = {
   PENDING_PAYMENT: 1,
@@ -257,11 +272,42 @@ function mapOrderLines(items: Array<{
   })
 }
 
+async function ensureCustomerTags() {
+  for (const option of CUSTOMER_TAG_OPTIONS) {
+    await prisma.customertag.upsert({
+      where: { code: option.code },
+      create: {
+        name: option.name,
+        code: option.code,
+        description: option.name,
+      },
+      update: { name: option.name },
+    })
+  }
+}
+
+function pickPrimaryTag(links?: Array<{ tag?: { code?: string | null; name?: string | null } | null }> | null): {
+  customerTagCode: CustomerTagCode
+  customerTagName: string | null
+} {
+  const tag = links?.[0]?.tag
+  const code = String(tag?.code || '') as CustomerTagCode
+  if (!code || !CUSTOMER_TAG_OPTIONS.some(item => item.code === code)) {
+    return { customerTagCode: '', customerTagName: null }
+  }
+  return {
+    customerTagCode: code,
+    customerTagName: tag?.name || CUSTOMER_TAG_OPTIONS.find(item => item.code === code)?.name || null,
+  }
+}
+
 /**
  * 获取客户/用户列表（支持分页、搜索、筛选、排序、购物车美金合计）
  */
 export const getUserList = requireRole([UserRole.ADMIN])(
   withResult(async (input: GetUserListInput): Promise<GetUserListOutput> => {
+    await ensureCustomerTags()
+
     const page = input.page && input.page > 0 ? input.page : 1
     const rawPageSize = input.pageSize && input.pageSize > 0 ? input.pageSize : 50
     const pageSize = Math.max(1, Math.min(200, Math.floor(rawPageSize)))
@@ -309,6 +355,13 @@ export const getUserList = requireRole([UserRole.ADMIN])(
       },
       orders: {
         select: { status: true }
+      },
+      customerTags: {
+        take: 1,
+        orderBy: { createdAt: 'desc' as const },
+        include: {
+          tag: { select: { code: true, name: true } }
+        }
       }
     } as const
 
@@ -359,18 +412,21 @@ export const getUserList = requireRole([UserRole.ADMIN])(
       const directStatuses = user.orders.map(order => order.status as RawOrderStatus)
       const emailStatuses = user.email ? emailStatusMap.get(user.email.trim().toLowerCase()) ?? [] : []
       const mergedStatuses = [...directStatuses, ...emailStatuses]
+      const tag = pickPrimaryTag(user.customerTags)
       return {
         id: user.id,
         account: user.account,
         username: user.username,
         whatsapp: user.phone || null,
         email: user.email,
-        passwordMasked: PASSWORD_MASK,
+        passwordPlain: (user as any).passwordPlain || null,
         role: user.role as SysUserRole,
         status: user.status as SysUserStatus,
         createdAt: user.createdAt.toISOString(),
         lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
         adminNote: user.adminNote || null,
+        customerTagCode: tag.customerTagCode,
+        customerTagName: tag.customerTagName,
         cartItemCount: cart?._count?.items ?? 0,
         cartUsdTotal: calcCartUsdTotal(cart),
         orderCount: mergedStatuses.length,
@@ -395,6 +451,8 @@ export const getUserList = requireRole([UserRole.ADMIN])(
  */
 export const getUserDetail = requireRole([UserRole.ADMIN])(
   withResult(async (input: GetUserDetailInput): Promise<GetUserDetailOutput> => {
+    await ensureCustomerTags()
+
     const user = await prisma.sysuser.findUnique({
       where: { id: input.id },
       include: {
@@ -406,6 +464,13 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
               }
             },
             _count: { select: { items: true } }
+          }
+        },
+        customerTags: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            tag: { select: { code: true, name: true } }
           }
         },
         orders: {
@@ -522,6 +587,7 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
 
     const unpaidOrders = orderRecords.filter(order => order.rawStatus === 'PENDING_PAYMENT')
     const cart = user.carts[0]
+    const tag = pickPrimaryTag(user.customerTags)
 
     return {
       id: user.id,
@@ -529,12 +595,14 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
       username: user.username,
       whatsapp: user.phone || null,
       email: user.email,
-      passwordMasked: PASSWORD_MASK,
+      passwordPlain: (user as any).passwordPlain || null,
       role: user.role as SysUserRole,
       status: user.status as SysUserStatus,
       createdAt: user.createdAt.toISOString(),
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
       adminNote: user.adminNote || null,
+      customerTagCode: tag.customerTagCode,
+      customerTagName: tag.customerTagName,
       cartId: cart?.id ?? null,
       cartItemCount: cart?._count?.items ?? 0,
       cartUsdTotal: calcCartUsdTotal(cart),
@@ -555,6 +623,42 @@ export const updateUserAdminNote = requireRole([UserRole.ADMIN])(
       data: { adminNote: input.adminNote.trim() || null }
     })
     return { success: true }
+  })
+)
+
+export const updateUserCustomerTag = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateUserCustomerTagInput): Promise<{ success: boolean; tagCode: CustomerTagCode; tagName: string | null }> => {
+    await ensureCustomerTags()
+
+    const user = await prisma.sysuser.findUnique({ where: { id: input.id }, select: { id: true } })
+    if (!user) throw new Error('客户不存在')
+
+    const tagCode = (input.tagCode || '') as CustomerTagCode
+    if (tagCode && !CUSTOMER_TAG_OPTIONS.some(item => item.code === tagCode)) {
+      throw new Error('无效的客户标签')
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.customertaglink.deleteMany({ where: { userId: input.id } })
+      if (!tagCode) return
+
+      const tag = await tx.customertag.findUnique({ where: { code: tagCode } })
+      if (!tag) throw new Error('客户标签不存在')
+      await tx.customertaglink.create({
+        data: {
+          userId: input.id,
+          tagId: tag.id,
+        }
+      })
+    })
+
+    return {
+      success: true,
+      tagCode,
+      tagName: tagCode
+        ? CUSTOMER_TAG_OPTIONS.find(item => item.code === tagCode)?.name || null
+        : null,
+    }
   })
 )
 
@@ -614,6 +718,7 @@ export const deleteUser = requireRole([UserRole.ADMIN])(
       where: { id: targetId },
       include: {
         carts: true,
+        orders: { select: { id: true } },
         _count: { select: { importTasks: true } }
       }
     })
@@ -635,11 +740,30 @@ export const deleteUser = requireRole([UserRole.ADMIN])(
     }
 
     await prisma.$transaction(async (tx) => {
-      if (targetUser.role === 'CUSTOMER' && targetUser.carts.length > 0) {
+      const orderIds = targetUser.orders.map(order => order.id)
+
+      if (orderIds.length > 0) {
+        await tx.orderoperationlog.deleteMany({ where: { orderId: { in: orderIds } } })
+        await tx.orderlogisticssegment.deleteMany({ where: { orderId: { in: orderIds } } })
+        await tx.productreview.deleteMany({ where: { orderId: { in: orderIds } } })
+        await tx.orderitem.deleteMany({ where: { orderId: { in: orderIds } } })
+        await tx.orderrecord.deleteMany({ where: { id: { in: orderIds } } })
+      }
+
+      await tx.productreview.deleteMany({ where: { userId: targetId } })
+      await tx.customorder.deleteMany({ where: { userId: targetId } })
+      await tx.customertaglink.deleteMany({ where: { userId: targetId } })
+      await tx.customercommunication.deleteMany({ where: { userId: targetId } })
+      await tx.wishlistitem.deleteMany({ where: { userId: targetId } })
+      await tx.customerticket.updateMany({ where: { userId: targetId }, data: { userId: null } })
+      await tx.useraddress.deleteMany({ where: { userId: targetId } })
+
+      if (targetUser.carts.length > 0) {
         const cartIds = targetUser.carts.map(c => c.id)
         await tx.cartitem.deleteMany({ where: { cartId: { in: cartIds } } })
         await tx.cart.deleteMany({ where: { id: { in: cartIds } } })
       }
+
       await tx.sysuser.delete({ where: { id: targetId } })
     })
   })

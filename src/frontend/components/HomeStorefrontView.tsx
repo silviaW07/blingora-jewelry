@@ -7,6 +7,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -48,6 +49,7 @@ import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection';
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
+import { StorePrice } from '@/frontend/components/GuestPricePlaceholder';
 import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages';
 import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefitKeys';
 import { useTranslation } from 'react-i18next';
@@ -218,10 +220,12 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
                   <div className="min-h-[40px] flex-1" aria-hidden="true" />
                 ) : (
                   <div>
-                    <p className="text-2xl font-bold text-[#111111]">{formatPrice(item.price)}</p>
-                    {item.originalPrice ? (
-                      <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(item.originalPrice)}</p>
-                    ) : null}
+                    <StorePrice className="text-2xl font-bold">
+                      <p className="text-2xl font-bold text-[#111111]">{formatPrice(item.price)}</p>
+                      {item.originalPrice ? (
+                        <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(item.originalPrice)}</p>
+                      ) : null}
+                    </StorePrice>
                   </div>
                 )}
                 {isDraft ? (
@@ -305,6 +309,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
 
 export const HomeStorefrontView = ({ state, handlers }: Props) => {
   const { getPatch, isDecorateMode } = useDecorateMode();
+  const router = useRouter();
   const {
     posters,
     activeBannerIndex,
@@ -518,12 +523,9 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   );
 
   const goHomeFromListing = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.location.assign('/');
-      return;
-    }
     handlers.handleSelectCategory('');
-  }, [handlers]);
+    router.push('/');
+  }, [handlers, router]);
 
   const hasFloatingBrandItems = sideNavItems.length > 0;
 
@@ -829,41 +831,44 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   <StorefrontBrandMark useNextLink ariaLabel={t('common.backToHome')} />
                 </div>
 
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-2.5 xl:max-w-[980px]" data-controller-name="搜索栏与用户功能区">
-                  <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)]">
-                    <div className="flex min-w-0 flex-1 items-center gap-2.5 px-4 text-[#6b6b6b]">
-                      <Camera className="size-4 shrink-0" />
-                      <Input
-                        placeholder={t('common.pleaseInput')}
-                        className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11"
-                        value={searchKeyword}
-                        onChange={(event) => setSearchKeyword(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            handleHeaderSearchSubmit();
-                          }
-                        }}
-                      />
+                <div className="flex min-w-0 flex-1 items-center gap-5 sm:gap-6 xl:max-w-[980px]" data-controller-name="搜索栏与用户功能区">
+                  <div className="flex min-w-0 flex-1 justify-center">
+                    <div className="flex w-full max-w-[220px] items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)] sm:max-w-[240px]">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 text-[#6b6b6b] sm:px-4">
+                        <Camera className="size-4 shrink-0" />
+                        <Input
+                          placeholder={t('common.pleaseInput')}
+                          className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11"
+                          value={searchKeyword}
+                          onChange={(event) => setSearchKeyword(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              handleHeaderSearchSubmit();
+                            }
+                          }}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleHeaderSearchSubmit}
+                        disabled={isSearchLoading}
+                        aria-busy={isSearchLoading}
+                        className="h-10 min-w-[78px] rounded-none rounded-r-full bg-[#ffc0cb] px-4 text-sm font-semibold tracking-[0.08em] text-[#111111] hover:bg-[#ffb1c1] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:px-5"
+                      >
+                        {isSearchLoading ? (
+                          <Loader2 className="mr-2 size-5 animate-spin" />
+                        ) : (
+                          <Search className="mr-2 size-5" />
+                        )}
+                        <DecorateText propKey="home_search_btn" as="span">
+                          {t('common.search')}
+                        </DecorateText>
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      onClick={handleHeaderSearchSubmit}
-                      disabled={isSearchLoading}
-                      aria-busy={isSearchLoading}
-                      className="h-10 min-w-[78px] rounded-none rounded-r-full bg-[#ffc0cb] px-5 text-sm font-semibold tracking-[0.08em] text-[#111111] hover:bg-[#ffb1c1] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:px-6"
-                    >
-                      {isSearchLoading ? (
-                        <Loader2 className="mr-2 size-5 animate-spin" />
-                      ) : (
-                        <Search className="mr-2 size-5" />
-                      )}
-                      <DecorateText propKey="home_search_btn" as="span">
-                        {t('common.search')}
-                      </DecorateText>
-                    </Button>
                   </div>
 
+                  <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
                   <div className="relative shrink-0" ref={localeMenuRef}>
                     <button
                       type="button"
@@ -920,6 +925,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       {t('common.cart')}
                     </DecorateText>
                   </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1045,7 +1051,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   {t('product.loading')}
                 </div>
               ) : dailyNewArrivalProducts.length > 0 ? (
-                <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {dailyNewArrivalProducts.map((item) => renderDailyNewArrivalProductCard(item))}
                 </div>
               ) : (
@@ -1114,7 +1120,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   {t('product.loading')}
                 </div>
               ) : products.length > 0 ? (
-                <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {products.map((item) => (
                     <ProductListCard
                       key={item.product_id}

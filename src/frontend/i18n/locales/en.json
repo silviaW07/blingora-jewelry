@@ -35,6 +35,8 @@
   },
   "nav": {
     "home": "Home",
+    "categories": "Categories",
+    "brand": "Brand",
     "myOrders": "My Orders",
     "addresses": "Addresses",
     "profile": "Profile",
@@ -54,6 +56,15 @@
     "bags": "Bags",
     "cosmetics": "Cosmetics",
     "shoes": "Shoes"
+  },
+  "mobile": {
+    "promoEyebrow": "New arrivals",
+    "categoriesPromo": "Shop by category — wholesale ready stock",
+    "viewAllInCategory": "View all products",
+    "viewMore": "View More",
+    "brandShowing": "{{name}}",
+    "noBrands": "No brands yet",
+    "noBrandProducts": "No products for this brand"
   },
   "home": {
     "zone_popular_jewelry": "Popular Jewelry",
@@ -293,6 +304,8 @@
     "sizeOptions": "Size options",
     "specOptions": "Options",
     "preview": "Preview",
+    "loginToViewPrice": "Login to view price",
+    "signInForPrice": "Sign in for price",
     "noDescriptionParams": "No Description attributes available (or none match the display whitelist).",
     "noManualDescriptionParams": "No Description attributes for manually created products. Fill the specs table in admin.",
     "colorPreview": "Color preview",

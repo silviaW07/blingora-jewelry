@@ -61,6 +61,7 @@ export const registerAdmin = withResult(
         account: input.account,
         email: input.email,
         password: hashPassword(input.password),
+        passwordPlain: String(input.password || '').slice(0, 255) || null,
         role: 'ADMIN',
         status: 'ACTIVE',
         username: input.account, // 注册时未提供 username，默认使用 account 填充必填项

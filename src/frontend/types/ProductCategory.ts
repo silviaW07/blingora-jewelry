@@ -25,6 +25,7 @@ export interface CategoryChildItem {
   category_id: string
   category_name: string
   category_slug: string | null
+  image_url?: string | null
 }
 
 export interface BrandCategoryItem {
@@ -32,6 +33,7 @@ export interface BrandCategoryItem {
   category_name: string
   category_slug: string | null
   product_count: number
+  image_url?: string | null
 }
 
 export interface CategoryItem {
@@ -40,6 +42,7 @@ export interface CategoryItem {
   category_slug: string | null
   parent_category_id: string | null
   level: number
+  image_url?: string | null
   display_config: CategoryDisplayConfig
   children: CategoryChildItem[]
   brand_options: BrandCategoryItem[]
@@ -624,6 +627,7 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
       category_slug: cat.slug,
       parent_category_id: cat.parentId,
       level: cat.level,
+      image_url: cat.imageUrl || cat.iconUrl || null,
       display_config: parseCategoryDisplayConfig(cat.categoryDisplayConfigJson),
       children: childCategories
         .filter(child => child.parentId === cat.id)
@@ -632,7 +636,8 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
         .map(child => ({
           category_id: child.id,
           category_name: resolveCategoryDisplayName(child.translationsJson, child.name, lang),
-          category_slug: child.slug
+          category_slug: child.slug,
+          image_url: child.imageUrl || child.iconUrl || null,
         })),
       brand_options: brandCategories
         .filter(brand => brand.parentId === cat.id)
@@ -640,7 +645,8 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
           category_id: brand.id,
           category_name: resolveCategoryDisplayName(brand.translationsJson, brand.name, lang),
           category_slug: brand.slug,
-          product_count: brand.products.length
+          product_count: brand.products.length,
+          image_url: brand.imageUrl || brand.iconUrl || null,
         }))
         .sort((a, b) => b.product_count - a.product_count || a.category_name.localeCompare(b.category_name, 'zh-CN'))
     }))

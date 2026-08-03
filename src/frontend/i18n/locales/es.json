@@ -35,6 +35,8 @@
   },
   "nav": {
     "home": "Inicio",
+    "categories": "Categorías",
+    "brand": "Marca",
     "myOrders": "Mis pedidos",
     "addresses": "Direcciones",
     "profile": "Perfil",
@@ -54,6 +56,15 @@
     "bags": "Bolsos",
     "cosmetics": "Cosméticos",
     "shoes": "Zapatos"
+  },
+  "mobile": {
+    "promoEyebrow": "Novedades",
+    "categoriesPromo": "Compra por categoría — stock listo para mayoreo",
+    "viewAllInCategory": "Ver todos los productos",
+    "viewMore": "Ver más",
+    "brandShowing": "{{name}}",
+    "noBrands": "Aún no hay marcas",
+    "noBrandProducts": "No hay productos para esta marca"
   },
   "home": {
     "zone_popular_jewelry": "Joyería popular",
@@ -288,6 +299,8 @@
     "sizeOptions": "Tallas",
     "specOptions": "Opciones",
     "preview": "Vista previa",
+    "loginToViewPrice": "Login to view price",
+    "signInForPrice": "Inicia sesión para ver el precio",
     "noDescriptionParams": "No hay atributos de Descripción disponibles (o ninguno está en la lista blanca).",
     "noManualDescriptionParams": "Productos creados manualmente sin atributos de Descripción. Complétalos en admin.",
     "colorPreview": "Vista previa del color",

@@ -1,13 +1,13 @@
 // {"router": "/", "id": "f01", "en_name": "Home"}
-'use client';
+import HomeClient from './HomeClient'
 
-import { useHome } from '@/frontend/hooks/useHome';
-import HomeStorefrontView from '@/frontend/components/HomeStorefrontView';
-/** Legacy HomeView kept at `@/frontend/components/HomeView` for reference; storefront is the active homepage. */
+/** ISR: regenerate homepage shell at most every 5 minutes */
+export const revalidate = 300
+
+/**
+ * Static shell for `/` — client data still loads via RPC after hydrate.
+ * Category routes use generateStaticParams in category/[slug]/page.tsx.
+ */
 export default function HomePage() {
-  const {
-    state,
-    handlers
-  } = useHome();
-  return <HomeStorefrontView state={state} handlers={handlers} />;
+  return <HomeClient />
 }

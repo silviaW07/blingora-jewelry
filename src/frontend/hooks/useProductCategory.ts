@@ -121,6 +121,44 @@ const getCurrentLang = () => (typeof window !== 'undefined' ? getClientPreferred
 
 const KEYWORD_GROUP_LIMIT = 16
 
+/** Resolve category id from nav tree by slug or id (sync — for cache warm start). */
+function findCategoryIdInTree(
+  list: Array<{
+    category_id: string
+    category_slug: string | null
+    children?: Array<{ category_id: string; category_slug: string | null }>
+    brand_options?: Array<{ category_id: string; category_slug: string | null }>
+  }>,
+  slugOrId: string,
+): string {
+  const normalized = String(slugOrId || '').trim()
+  if (!normalized) return ''
+  for (const cat of list) {
+    if (cat.category_id === normalized) return cat.category_id
+    if (String(cat.category_slug || '').trim() === normalized) return cat.category_id
+    for (const child of cat.children || []) {
+      if (child.category_id === normalized) return child.category_id
+      if (String(child.category_slug || '').trim() === normalized) return child.category_id
+    }
+    for (const brand of cat.brand_options || []) {
+      if (brand.category_id === normalized) return brand.category_id
+      if (String(brand.category_slug || '').trim() === normalized) return brand.category_id
+    }
+  }
+  return ''
+}
+
+function parseCategorySlugFromPathname(pathname: string | null): string {
+  if (!pathname || !pathname.startsWith('/category/')) return ''
+  const rest = pathname.slice('/category/'.length)
+  const slug = rest.split('/').filter(Boolean)[0] || ''
+  try {
+    return decodeURIComponent(slug).trim()
+  } catch {
+    return slug.trim()
+  }
+}
+
 export interface ProductCategoryBannerItem {
   poster_id: string
   title: string
@@ -226,6 +264,9 @@ export interface ProductCategoryState {
   totalCount: number
   isLoadingCategories: boolean
   isLoadingProducts: boolean
+  /** True while /category/[slug] has a slug but categoryId is not resolved yet */
+  isResolvingCategoryRoute: boolean
+  routeCategorySlug: string
   totalPages: number
   stockStatusLabels: Record<StockStatusEnum, string>
   sortByLabels: Record<SortByEnum, string>
@@ -283,32 +324,37 @@ export const useProductCategory = (): {
   const { openAuthModal } = useCustomerAuthModal()
 
   const isCategorySlugRoute = Boolean(pathname && pathname.startsWith('/category/'))
-  const routeCategorySlug = useMemo(() => {
-    if (!isCategorySlugRoute || !pathname) return ''
-    const rest = pathname.slice('/category/'.length)
-    // trailingSlash: true → /category/foo/ ；只取第一段并去掉空段
-    const slug = rest.split('/').filter(Boolean)[0] || ''
-    try {
-      return decodeURIComponent(slug).trim()
-    } catch {
-      return slug.trim()
-    }
-  }, [isCategorySlugRoute, pathname])
+  const routeCategorySlug = useMemo(
+    () => parseCategorySlugFromPathname(pathname),
+    [pathname],
+  )
 
-  const [queryState, setQueryState] = useState({
-    categoryId: isCategorySlugRoute ? '' : (routeParams.categoryId || ''),
-    brandCategoryId: '',
-    keywordId: '',
-    keywordGroupId: '',
-    searchKeyword: routeParams.search || '',
-    stockStatus: (routeParams.stockStatus ? routeParams.stockStatus.split(',').filter(Boolean) : []).filter((status): status is StockStatusEnum => status === 'IN_STOCK' || status === 'LOW_STOCK') as StockStatusEnum[],
-    sortBy: (routeParams.sortBy as SortByEnum) || 'NEWEST',
-    page: routeParams.page ? parseInt(routeParams.page) : 1,
-    pageSize: 24,
-    minPrice: routeParams.minPrice ? parseFloat(routeParams.minPrice) : undefined,
-    maxPrice: routeParams.maxPrice ? parseFloat(routeParams.maxPrice) : undefined,
-    hasDiscount: false,
-    minRating: undefined as number | undefined
+  const [queryState, setQueryState] = useState(() => {
+    // Warm-start categoryId from nav cache so product listing mode starts immediately
+    // (avoids flashing the empty-banner home shell while slug resolves).
+    const slugOnMount = parseCategorySlugFromPathname(pathname)
+    const cachedId = slugOnMount
+      ? findCategoryIdInTree(peekCachedCategoryList() || [], slugOnMount)
+      : ''
+    const categoryId = slugOnMount
+      ? cachedId
+      : (routeParams.categoryId || '')
+
+    return {
+      categoryId,
+      brandCategoryId: '',
+      keywordId: '',
+      keywordGroupId: '',
+      searchKeyword: routeParams.search || '',
+      stockStatus: (routeParams.stockStatus ? routeParams.stockStatus.split(',').filter(Boolean) : []).filter((status): status is StockStatusEnum => status === 'IN_STOCK' || status === 'LOW_STOCK') as StockStatusEnum[],
+      sortBy: (routeParams.sortBy as SortByEnum) || 'NEWEST',
+      page: routeParams.page ? parseInt(routeParams.page) : 1,
+      pageSize: 24,
+      minPrice: routeParams.minPrice ? parseFloat(routeParams.minPrice) : undefined,
+      maxPrice: routeParams.maxPrice ? parseFloat(routeParams.maxPrice) : undefined,
+      hasDiscount: false,
+      minRating: undefined as number | undefined,
+    }
   })
   const [priceInput, setPriceInput] = useState({
     min: routeParams.minPrice || '',
@@ -444,8 +490,7 @@ export const useProductCategory = (): {
       .finally(() => setIsLoadingCategories(false))
   }, [localeTick])
 
-  // Switch /category/[slug]: reset filters only. Keep categoryId until the new slug resolves
-  // so the top nav / product shell does not blank out mid-navigation.
+  // Switch /category/[slug]: reset listing filters when the slug segment changes.
   useEffect(() => {
     if (!isCategorySlugRoute) return
     setQueryState((prev) => ({
@@ -457,23 +502,17 @@ export const useProductCategory = (): {
     }))
   }, [isCategorySlugRoute, routeCategorySlug])
 
+  // Apply categoryId from nav tree as soon as slug (or cached tree) is known —
+  // do not wait for the async resolveCategoryRouteKey round-trip.
+  useEffect(() => {
+    if (!isCategorySlugRoute || !routeCategorySlug) return
+    const fromTree = findCategoryIdInTree(categories, routeCategorySlug)
+    if (!fromTree) return
+    setQueryState((prev) => (prev.categoryId === fromTree ? prev : { ...prev, categoryId: fromTree }))
+  }, [isCategorySlugRoute, routeCategorySlug, categories])
+
   const resolveCategoryIdBySlug = useCallback((slug: string): string => {
-    const normalized = String(slug || '').trim()
-    if (!normalized) return ''
-    for (const cat of categories) {
-      // 兼容历史链接：路径段可能是 id
-      if (cat.category_id === normalized) return cat.category_id
-      if (String(cat.category_slug || '').trim() === normalized) return cat.category_id
-      for (const child of cat.children || []) {
-        if (child.category_id === normalized) return child.category_id
-        if (String(child.category_slug || '').trim() === normalized) return child.category_id
-      }
-      for (const brand of cat.brand_options || []) {
-        if (brand.category_id === normalized) return brand.category_id
-        if (String(brand.category_slug || '').trim() === normalized) return brand.category_id
-      }
-    }
-    return ''
+    return findCategoryIdInTree(categories, slug)
   }, [categories])
 
   const resolveCategorySlugById = useCallback((categoryId: string): string => {
@@ -612,11 +651,13 @@ export const useProductCategory = (): {
   useEffect(() => {
     getCategoryPosterList({ category_id: selectedTopLevelCategoryId || undefined })
       .then((res) => {
-        setPosters(res.list)
+        setPosters(Array.isArray(res.list) ? res.list : [])
         setActiveBannerIndex(0)
       })
       .catch(() => {
-        // empty posters is fine — UI shows bannerEmpty
+        // Optional chrome — never block listing; hide banner area when empty
+        setPosters([])
+        setActiveBannerIndex(0)
       })
   }, [selectedTopLevelCategoryId])
 
@@ -756,8 +797,6 @@ export const useProductCategory = (): {
     if (isDailyNewArrivalMode) {
       // New / 每日上新：独立时间窗查询，不走分类 ID 过滤
       setIsLoadingProducts(true)
-      setProducts([])
-      setTotalCount(0)
       const lang = getCurrentLang()
       const dailyMonth = searchParams.get('dailyMonth') || ''
       const [yearText, monthText] = dailyMonth.split('-')
@@ -790,14 +829,12 @@ export const useProductCategory = (): {
     // /category/[slug] 尚未解析出 categoryId 时，禁止无过滤拉取，避免短暂/长期展示全站商品
     if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId) {
       setIsLoadingProducts(true)
-      setProducts([])
-      setTotalCount(0)
+      // Keep previous products during soft nav; do not blank the grid while slug resolves
       return
     }
 
     setIsLoadingProducts(true)
-    setProducts([])
-    setTotalCount(0)
+    // Keep prior product cards visible while fetching — avoids empty flash on category change
     const lang = getCurrentLang()
     getProductList({
       category_id: queryState.categoryId || undefined,
@@ -1378,6 +1415,8 @@ export const useProductCategory = (): {
       totalCount,
       isLoadingCategories,
       isLoadingProducts,
+      isResolvingCategoryRoute: Boolean(isCategorySlugRoute && routeCategorySlug && !queryState.categoryId),
+      routeCategorySlug,
       totalPages,
       stockStatusLabels: STOCK_STATUS_LABELS,
       sortByLabels: SORT_BY_LABELS,

@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import EditableImg from '@/@base/EditableImg';
-import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Package, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Package } from 'lucide-react';
 import type { ProductCategoryState, ProductCategoryHandlers, ProductCategoryBannerItem, ProductCategoryKeywordItem } from '@/frontend/hooks/useProductCategory';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
@@ -19,6 +20,7 @@ export const ProductCategoryView = ({
   handlers
 }: Props) => {
   const { t } = useTranslation();
+  const router = useRouter();
   const renderBannerHrefLabel = (banner: ProductCategoryBannerItem) =>
     banner.link_text || t('product.discoverMore');
   const renderKeywordLabel = (item: ProductCategoryKeywordItem) =>
@@ -34,6 +36,8 @@ export const ProductCategoryView = ({
     isSecondaryCategoryResults,
     totalCount,
     isLoadingProducts,
+    isResolvingCategoryRoute,
+    routeCategorySlug,
     stockStatusLabels,
     categoryDetail
   } = state;
@@ -45,11 +49,15 @@ export const ProductCategoryView = ({
         categoryDetail?.category_name ||
           categories.find((category) => category.category_id === queryState.categoryId)?.category_name ||
           categories.flatMap((category) => category.children).find((child) => child.category_id === queryState.categoryId)?.category_name ||
+          (routeCategorySlug ? routeCategorySlug.replace(/-/g, ' ') : '') ||
           t('product.allProducts'),
       );
   const selectedStockStatuses = queryState.stockStatus || [];
+  // Prefer product listing shell as soon as we have any listing intent (incl. pending slug resolve)
   const showProductResults = Boolean(
     queryState.categoryId ||
+      isResolvingCategoryRoute ||
+      routeCategorySlug ||
       queryState.searchKeyword ||
       queryState.keywordId ||
       queryState.keywordGroupId ||
@@ -60,13 +68,14 @@ export const ProductCategoryView = ({
       queryState.minRating !== undefined ||
       queryState.stockStatus.length > 0,
   );
+  const hasBrowseChrome = Boolean(activeBanner) || recommendationFloors.length > 0;
   return <main className="min-h-screen bg-[#FFF5F5] text-[#111111]" data-controller-name="分类页整体布局" data-api-unique-id='productcategoryview-r3cbcd43ae04fc8af-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
       <StorefrontStickyHeader isHome={false} />
 
-      {!showProductResults ? <section className="storefront-container py-6" data-controller-name="首页分类浏览与横幅联动区" data-api-unique-id='productcategoryview-r220efc53b28f746c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-        <div className="flex w-full flex-col items-stretch rounded-[36px] bg-[#f5f4ef] p-3 shadow-[0_24px_60px_-48px_rgba(0,0,0,0.34)] sm:p-4 lg:p-5" data-api-unique-id='productcategoryview-home-hero-row-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+      {!showProductResults ? hasBrowseChrome ? <section className="storefront-container py-6" data-controller-name="首页分类浏览与横幅联动区" data-api-unique-id='productcategoryview-r220efc53b28f746c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+        {activeBanner ? <div className="flex w-full flex-col items-stretch rounded-[36px] bg-[#f5f4ef] p-3 shadow-[0_24px_60px_-48px_rgba(0,0,0,0.34)] sm:p-4 lg:p-5" data-api-unique-id='productcategoryview-home-hero-row-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
           <div className="flex min-h-0 min-w-0 flex-1 self-stretch" data-controller-name="首页横幅轮播区" data-api-unique-id='productcategoryview-r549ced684abd2c7f-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-            {activeBanner ? <div className="relative flex h-full min-h-[360px] w-full flex-1 overflow-hidden rounded-[32px] bg-[#111111] sm:min-h-[460px] lg:min-h-[520px]" data-api-unique-id='productcategoryview-rc2738a2bb48f760c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+            <div className="relative flex h-full min-h-[360px] w-full flex-1 overflow-hidden rounded-[32px] bg-[#111111] sm:min-h-[460px] lg:min-h-[520px]" data-api-unique-id='productcategoryview-rc2738a2bb48f760c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                 <button type="button" className="group relative block h-full min-h-[360px] w-full overflow-hidden bg-[#111111] sm:min-h-[460px] lg:min-h-[520px]" onClick={() => handlers.handleBannerClick(activeBanner)} data-api-unique-id='productcategoryview-re6b0d609650b4efa-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                   <EditableImg propKey={`category-poster-${activeBanner.poster_id}`} keywords={activeBanner.image_url || activeBanner.title} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" data-api-unique-id='productcategoryview-r1ba76f4aa78e3c09-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
                   <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,17,17,0.72),rgba(17,17,17,0.18))]" data-api-unique-id='productcategoryview-rbe6fb0b11d49a793-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
@@ -94,13 +103,11 @@ export const ProductCategoryView = ({
                 <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2" data-api-unique-id='productcategoryview-rf853f0b93917954f-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                   {posters.map((banner, index) => <button key={banner.poster_id} type="button" className={`h-2.5 rounded-full transition-all ${index === activeBannerIndex ? 'w-8 bg-white' : 'w-2.5 bg-white/35 hover:bg-white/60'}`} onClick={() => handlers.handleBannerChange(index)} aria-label={`切换到第 ${index + 1} 张横幅`} data-api-unique-id='productcategoryview-ra28ec7f140a8a8b7-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />)}
                 </div>
-              </div> : <div className="flex min-h-[360px] w-full flex-1 items-center justify-center rounded-[32px] bg-[#111111] text-sm text-white/70 sm:min-h-[460px] lg:min-h-[520px]" data-api-unique-id='productcategoryview-r84623d15968d0d42-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                {t('product.bannerEmpty')}
-              </div>}
+              </div>
           </div>
-        </div>
+        </div> : null}
 
-        <section className="mt-6 w-full space-y-5" data-controller-name="推荐关键词楼层区" data-api-unique-id='productcategoryview-rbbc35a071596ce95-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+        <section className={`w-full space-y-5 ${activeBanner ? 'mt-6' : ''}`} data-controller-name="推荐关键词楼层区" data-api-unique-id='productcategoryview-rbbc35a071596ce95-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
           {recommendationFloors.length > 0 ? recommendationFloors.map((floor, index) => {
             const isFloorActive = activeRecommendationGroupId === floor.group_id;
             return <div key={floor.group_id} className={`rounded-[40px] bg-white p-4 shadow-[0_18px_55px_-42px_rgba(0,0,0,0.4)] sm:p-6 ${isFloorActive ? 'ring-2 ring-[#111111]/15' : ''}`} data-controller-name="推荐关键词楼层卡片" data-api-unique-id='productcategoryview-rd0eef43ba619624f-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
@@ -135,9 +142,9 @@ export const ProductCategoryView = ({
                     </button>)}
                 </div>
               </div>;
-          }) : <></>}
+          }) : null}
         </section>
-      </section> : <section className="storefront-container py-6" data-controller-name="商品结果内容区" data-api-unique-id='productcategoryview-r220efc53b28f746c-results-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+      </section> : null : <section className="storefront-container py-6" data-controller-name="商品结果内容区" data-api-unique-id='productcategoryview-r220efc53b28f746c-results-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
         <div className="min-w-0 w-full space-y-6" data-controller-name="商品结果区" data-api-unique-id='productcategoryview-r549ced684abd2c7f-results-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
 
           <section className="space-y-6" data-controller-name="商品结果展示区" data-api-unique-id='productcategoryview-r81884d5ddb85b4ab-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
@@ -151,11 +158,8 @@ export const ProductCategoryView = ({
                         data-controller-name="返回首页入口"
                         onClick={(event) => {
                           event.preventDefault()
-                          if (typeof window !== 'undefined') {
-                            window.location.assign('/')
-                            return
-                          }
                           handlers.handleClearAllFilters()
+                          router.push('/')
                         }}
                       >
                         <ChevronLeft className="size-3.5 shrink-0" />
@@ -165,7 +169,9 @@ export const ProductCategoryView = ({
                     </div>
                     <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-[0.08em] text-[#111111]" data-api-unique-id='productcategoryview-reacb97979b8103a0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{currentCategoryName}</h2>
                     <p className="mt-1 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r84fca975fe17aa7b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                      {isSecondaryCategoryResults
+                      {isLoadingProducts && products.length === 0
+                        ? t('product.loading')
+                        : isSecondaryCategoryResults
                         ? t('product.totalCountSecondary', { count: totalCount })
                         : t('product.totalCount', { count: totalCount })}
                     </p>
@@ -184,10 +190,15 @@ export const ProductCategoryView = ({
                   />
                 </div>
 
-                {isLoadingProducts ? <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-sm text-[#7a756c]" data-api-unique-id='productcategoryview-r9d3a358e517b77c8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                    <Loader2 className="size-6 animate-spin" data-api-unique-id='productcategoryview-r2df635ff0c11b943-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
-                    {t('product.loading')}
-                  </div> : products.length > 0 ? <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                {isLoadingProducts && products.length === 0 ? <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-api-unique-id='productcategoryview-skeleton-grid' data-api-unique-page-name='src/frontend/components/ProductCategoryView' aria-busy="true" aria-label={t('product.loading')}>
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <div key={`product-skeleton-${index}`} className="animate-pulse space-y-3">
+                        <div className="aspect-[3/4] rounded-[24px] bg-[#ebe7de]" />
+                        <div className="h-3 w-3/4 rounded-full bg-[#ebe7de]" />
+                        <div className="h-3 w-1/2 rounded-full bg-[#ebe7de]" />
+                      </div>
+                    ))}
+                  </div> : products.length > 0 ? <div className={`storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${isLoadingProducts ? 'opacity-60 transition-opacity' : ''}`} data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     {products.map((item) => <ProductListCard key={item.product_id} item={item} imagePropKey={`category-product-${item.product_id}`} onNavigate={handlers.handleNavigateToDetail} onAddToCart={handlers.handleAddToCart} onAddToWishlist={handlers.handleAddToWishlist} controllerName={isSecondaryCategoryResults ? '二级类目商品图片名称卡片' : '分类商品信息卡片'} />)}
                   </div> : <div className="mt-6 rounded-[28px] border border-dashed border-[#ddd6c8] bg-[#faf8f3] px-6 py-14 text-center" data-api-unique-id='productcategoryview-rf8e519298f81db85-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#ebe7de] text-[#111111]" data-api-unique-id='productcategoryview-re1ac063fbce010dd-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>

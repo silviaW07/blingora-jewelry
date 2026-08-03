@@ -8,6 +8,7 @@ import FrontendAuthGuard from '@/tools/FrontendAuthGuard'
 import { PageErrorBoundary } from '@/default/NextPageErrorBoundary'
 import { DecorateModeProvider } from '@/frontend/decorate/DecorateContext'
 import { WhatsAppFloatButton } from '@/frontend/components/WhatsAppFloatButton'
+import { MobileBottomNav } from '@/frontend/components/MobileBottomNav'
 import { CustomerAuthModalProvider } from '@/frontend/auth/CustomerAuthModalContext'
 import { CustomerAuthModal } from '@/frontend/components/CustomerAuthModal'
 import { CustomerAuthModalDecorateBridge } from '@/frontend/auth/CustomerAuthModalDecorateBridge'
@@ -44,10 +45,11 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
             <CustomerAuthModalProvider>
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
-                <main className="flex-1 w-full min-h-0">
+                <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
                   <PageErrorBoundary key={pathname} onGoBack={handleGoBack}>{children}</PageErrorBoundary>
                 </main>
                 {isFullscreen ? null : <Footer />}
+                {isFullscreen ? null : <MobileBottomNav />}
                 <WhatsAppFloatButton />
               </DecorateModeProvider>
               <CustomerAuthModal />

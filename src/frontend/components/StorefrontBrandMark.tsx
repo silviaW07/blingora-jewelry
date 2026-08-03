@@ -59,18 +59,11 @@ export function StorefrontBrandMark({
     className,
   )
 
-  if (useNextLink) {
-    return (
-      <Link href="/" className={markClass} aria-label={ariaLabel} data-controller-name="站点品牌标识">
-        {content}
-      </Link>
-    )
-  }
-
+  // Soft-nav home — prefer Link over full reload
   return (
-    <a href="/" className={markClass} aria-label={ariaLabel} data-controller-name="站点品牌标识">
+    <Link href="/" className={markClass} aria-label={ariaLabel} data-controller-name="站点品牌标识" prefetch>
       {content}
-    </a>
+    </Link>
   )
 }
 

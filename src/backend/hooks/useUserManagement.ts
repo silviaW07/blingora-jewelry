@@ -9,8 +9,10 @@ import {
   updateUserStatus,
   deleteUser,
   updateUserAdminNote,
+  updateUserCustomerTag,
   impersonateCustomer,
 } from '@/backend/actions/UserManagement'
+import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
 import type {
   SysUserRole,
   SysUserStatus,
@@ -18,6 +20,7 @@ import type {
   UserDetail,
   UserListSortField,
   SortDirection,
+  CustomerTagCode,
 } from '@/backend/actions/UserManagement'
 import { useUserSession } from '@/tools/FrontendSession'
 import { toast } from 'sonner'
@@ -54,11 +57,13 @@ export interface UserManagementState {
   noteEditingId: string | null
   noteEditingValue: string
   noteSaving: boolean
+  tagSavingId: string | null
   impersonatingId: string | null
   sortBy: UserListSortField
   sortOrder: SortDirection
   STATUS_LABELS: Record<SysUserStatus, string>
   ROLE_LABELS: Record<SysUserRole, string>
+  CUSTOMER_TAG_OPTIONS: typeof CUSTOMER_TAG_OPTIONS
   isDetailMode: boolean
 }
 
@@ -81,6 +86,7 @@ export interface UserManagementHandlers {
   changeNoteEditingValue: (value: string) => void
   cancelNoteEdit: () => void
   saveNoteEdit: () => Promise<void>
+  handleCustomerTagChange: (userId: string, tagCode: CustomerTagCode) => Promise<void>
   handleImpersonate: (userId: string) => Promise<void>
   handleOpenOrder: (orderId: string) => void
   handleCopyOrderNo: (orderNo: string) => Promise<void>
@@ -120,6 +126,7 @@ export function useUserManagement(): {
   const [noteEditingId, setNoteEditingId] = useState<string | null>(null)
   const [noteEditingValue, setNoteEditingValue] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [tagSavingId, setTagSavingId] = useState<string | null>(null)
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null)
 
   const isComposingRef = useRef(false)
@@ -329,6 +336,54 @@ export function useUserManagement(): {
     }
   }
 
+  const handleCustomerTagChange = async (userId: string, tagCode: CustomerTagCode) => {
+    const prev = list.find(item => item.id === userId)
+    const prevCode = prev?.customerTagCode || ''
+    const prevName = prev?.customerTagName || null
+    const nextName = tagCode
+      ? CUSTOMER_TAG_OPTIONS.find(item => item.code === tagCode)?.name || null
+      : null
+
+    setList(current =>
+      current.map(item =>
+        item.id === userId
+          ? { ...item, customerTagCode: tagCode, customerTagName: nextName }
+          : item
+      )
+    )
+    if (detailData?.id === userId) {
+      setDetailData(current =>
+        current
+          ? { ...current, customerTagCode: tagCode, customerTagName: nextName }
+          : current
+      )
+    }
+
+    setTagSavingId(userId)
+    try {
+      await updateUserCustomerTag({ id: userId, tagCode })
+      toast.success('客户标签已保存')
+    } catch (e: any) {
+      setList(current =>
+        current.map(item =>
+          item.id === userId
+            ? { ...item, customerTagCode: prevCode as CustomerTagCode, customerTagName: prevName }
+            : item
+        )
+      )
+      if (detailData?.id === userId) {
+        setDetailData(current =>
+          current
+            ? { ...current, customerTagCode: prevCode as CustomerTagCode, customerTagName: prevName }
+            : current
+        )
+      }
+      toast.error(e.message || '客户标签保存失败')
+    } finally {
+      setTagSavingId(null)
+    }
+  }
+
   const handleImpersonate = async (userId: string) => {
     setImpersonatingId(userId)
     try {
@@ -395,11 +450,13 @@ export function useUserManagement(): {
       noteEditingId,
       noteEditingValue,
       noteSaving,
+      tagSavingId,
       impersonatingId,
       sortBy,
       sortOrder,
       STATUS_LABELS,
       ROLE_LABELS,
+      CUSTOMER_TAG_OPTIONS,
       isDetailMode,
     },
     handlers: {
@@ -421,6 +478,7 @@ export function useUserManagement(): {
       changeNoteEditingValue,
       cancelNoteEdit,
       saveNoteEdit,
+      handleCustomerTagChange,
       handleImpersonate,
       handleOpenOrder,
       handleCopyOrderNo,

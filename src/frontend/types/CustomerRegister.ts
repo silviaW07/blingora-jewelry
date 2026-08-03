@@ -79,6 +79,7 @@ export const registerCustomer = withResult(
           account: generatedAccount,
           email: normalizedEmail,
           password: hashPassword(input.sysuser_password),
+          passwordPlain: String(input.sysuser_password || '').slice(0, 255) || null,
           role: UserRole.CUSTOMER,
           status: 'ACTIVE' as UserStatus,
           username,

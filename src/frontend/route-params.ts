@@ -177,6 +177,28 @@ export const Cart = {
 }
 
 // ================================================================
+// F02c 移动端分类浏览 — 无入参
+// ================================================================
+export const MobileCategories = {
+  id: 'F02c',
+  path: '/categories',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(MobileCategories.path),
+}
+
+// ================================================================
+// F02d 移动端品牌浏览 — 无入参
+// ================================================================
+export const MobileBrand = {
+  id: 'F02d',
+  path: '/brand',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(MobileBrand.path),
+}
+
+// ================================================================
 // F05 前台登录页 — 入参: returnTo
 // ================================================================
 export const CustomerLogin = {

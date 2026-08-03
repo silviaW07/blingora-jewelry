@@ -3,6 +3,7 @@
 import {
   collapseRepeatedTitleWords,
   containsChinese,
+  stripChineseFromTitle,
   translateTitleKeywords,
 } from '@/shared/productKeywordDictionary'
 
@@ -47,13 +48,45 @@ export function pickProductTranslation(
   return map[code] || map[lang || ''] || map.en || map.zh || null
 }
 
+function asCleanLatinTitle(raw: string | null | undefined): string {
+  const text = collapseRepeatedTitleWords(String(raw || '').trim())
+  if (!text || containsChinese(text)) return ''
+  return text
+}
+
+function healLatinTitle(raw: string, code: 'en' | 'es'): string {
+  const direct = asCleanLatinTitle(raw)
+  if (direct) return direct
+  if (!raw) return ''
+  const healed = collapseRepeatedTitleWords(translateTitleKeywords(raw, code) || '')
+  const clean = asCleanLatinTitle(healed) || asCleanLatinTitle(stripChineseFromTitle(healed))
+  return clean
+}
+
+function pickEnglishTitle(translationsJson: unknown, fallback: string): string {
+  const enExact = pickExactProductTranslation(translationsJson, 'en')
+  const fromEn = healLatinTitle(String(enExact?.name || '').trim(), 'en')
+  if (fromEn) return fromEn
+
+  if (translationsJson && typeof translationsJson === 'object') {
+    const root = translationsJson as Record<string, unknown>
+    const sideEn = String(root.title_en ?? root.titleEn ?? root.nameEn ?? '').trim()
+    const cleanSide = healLatinTitle(sideEn, 'en')
+    if (cleanSide) return cleanSide
+  }
+
+  if (fallback && !containsChinese(fallback)) {
+    return collapseRepeatedTitleWords(fallback)
+  }
+  return healLatinTitle(fallback, 'en')
+}
+
 /**
  * Storefront product title by locale:
  * - zh → Chinese `name` (DB)
- * - en/es → translationsJson[lang].name → keyword-map partial translate of CN name
+ * - en/es → clean Latin title only (never 中英 / 中西 mixed)
  *
- * Always collapse repeated tokens so stored bad titles like
- * "… Flat Flat Flat …" render as a single "Flat" without re-scrape.
+ * Prefer exact locale → keyword heal → (ES) English → strip leftover CJK.
  */
 export function resolveProductDisplayName(
   name: string,
@@ -62,35 +95,38 @@ export function resolveProductDisplayName(
 ): string {
   const fallback = String(name || '').trim()
   const code = normalizeProductLang(lang)
-  const exact = pickExactProductTranslation(translationsJson, code)
-  const fromLang = String(exact?.name || '').trim()
-  if (fromLang) {
-    // Heal already-persisted Flat Flat Flat… titles; if still Chinese, dict once.
-    if (code !== 'zh' && containsChinese(fromLang)) {
-      return collapseRepeatedTitleWords(translateTitleKeywords(fromLang, code) || fromLang)
-    }
-    return collapseRepeatedTitleWords(fromLang)
-  }
-
   if (code === 'zh') return fallback
 
-  // Also accept preview-style side fields
+  const exact = pickExactProductTranslation(translationsJson, code)
+  const fromLang = String(exact?.name || '').trim()
+  const fromExact = healLatinTitle(fromLang, code)
+  if (fromExact) return fromExact
+
   if (translationsJson && typeof translationsJson === 'object') {
     const root = translationsJson as Record<string, unknown>
     if (code === 'es') {
       const sideEs = String(root.title_es ?? root.titleEs ?? root.nameEs ?? '').trim()
-      if (sideEs && !containsChinese(sideEs)) return collapseRepeatedTitleWords(sideEs)
+      const cleanEs = healLatinTitle(sideEs, 'es')
+      if (cleanEs) return cleanEs
     }
     if (code === 'en') {
       const sideEn = String(root.title_en ?? root.titleEn ?? root.nameEn ?? '').trim()
-      if (sideEn && !containsChinese(sideEn)) return collapseRepeatedTitleWords(sideEn)
+      const cleanEn = healLatinTitle(sideEn, 'en')
+      if (cleanEn) return cleanEn
     }
   }
 
-  if (fallback && containsChinese(fallback)) {
-    return collapseRepeatedTitleWords(translateTitleKeywords(fallback, code) || fallback)
+  const fromFallback = healLatinTitle(fallback, code)
+  if (fromFallback) return fromFallback
+
+  // ES without a clean Spanish title → show English rather than Chinese mix
+  if (code === 'es') {
+    const en = pickEnglishTitle(translationsJson, fallback)
+    if (en) return en
   }
-  return collapseRepeatedTitleWords(fallback)
+
+  const stripped = stripChineseFromTitle(fromLang || fallback)
+  return stripped || 'Product'
 }
 
 function pickCategoryLocaleName(block: unknown): string {

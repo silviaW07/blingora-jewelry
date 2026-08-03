@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
 import EditableImg from '@/@base/EditableImg';
@@ -19,6 +20,11 @@ import {
   Truck,
 } from 'lucide-react';
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader';
+import {
+  GuestPricePlaceholder,
+  StorePrice,
+  useCanViewStorePrice,
+} from '@/frontend/components/GuestPricePlaceholder';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { translateColorName } from '@/frontend/i18n/catalogLabels';
@@ -149,6 +155,8 @@ const getSpecDisplayLabel = (
 
 export const ProductDetailView = ({ state, handlers }: Props) => {
   const { t } = useTranslation()
+  const router = useRouter()
+  const canViewPrice = useCanViewStorePrice()
   const {
     loading,
     error,
@@ -288,8 +296,14 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             {modelLabel}
           </span>
           <span className="product-sku-price">
-            <span className="product-sku-price-prefix">{priceParts.prefix}</span>
-            <span className="product-sku-price-num">{priceParts.amount}</span>
+            {canViewPrice ? (
+              <>
+                <span className="product-sku-price-prefix">{priceParts.prefix}</span>
+                <span className="product-sku-price-num">{priceParts.amount}</span>
+              </>
+            ) : (
+              <GuestPricePlaceholder compact className="product-sku-price-num" />
+            )}
           </span>
         </div>
 
@@ -342,7 +356,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
               variant="outline"
               className="mt-1 border-[#FECACA] bg-white text-[#991B1B] hover:bg-[#FEF2F2]"
               onClick={() => {
-                if (typeof window !== 'undefined') window.location.href = '/'
+                router.push('/')
               }}
             >
               返回首页
@@ -495,11 +509,13 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
               <div className="mt-4 space-y-4">
                   <div>
-                    <p className="text-[28px] font-bold leading-none text-[#111]">
-                      {selectedSku
-                        ? formatUsd(selectedSku.price)
-                        : formatUsdRange(product.priceMin, product.priceMax)}
-                    </p>
+                    <StorePrice className="text-[22px] font-bold leading-none sm:text-[28px]">
+                      <p className="text-[28px] font-bold leading-none text-[#111]">
+                        {selectedSku
+                          ? formatUsd(selectedSku.price)
+                          : formatUsdRange(product.priceMin, product.priceMax)}
+                      </p>
+                    </StorePrice>
                     <p className="mt-2 text-sm text-[#666]">
                       {t('common.minOrder')}: {displayedMinOrderQty}{' '}
                       {displayedMinOrderQty > 1 ? t('common.pieces') : t('common.piece')}
@@ -605,11 +621,17 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         className="grid text-center text-sm font-semibold text-[#111]"
                         style={{ gridTemplateColumns: `repeat(${product.priceTiers.length}, minmax(0, 1fr))` }}
                       >
-                        {product.priceTiers.map((tier) => (
-                          <div key={`p-${tier.label}`} className="border-r border-[#ececec] px-2 py-2.5 last:border-r-0">
-                            {formatUsd(tier.price)}
+                        {canViewPrice ? (
+                          product.priceTiers.map((tier) => (
+                            <div key={`p-${tier.label}`} className="border-r border-[#ececec] px-2 py-2.5 last:border-r-0">
+                              {formatUsd(tier.price)}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-full px-2 py-2.5">
+                            <GuestPricePlaceholder compact className="mx-auto block text-center" />
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
                   ) : null}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { CSSProperties, useState, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
 import get_image_url from '../../src/tools/tools';
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame';
@@ -252,22 +253,33 @@ const EditableImg = ({
 
     return (
         <DecorateFrame propKey={propKey} kind="image" className={className} style={mergedStyle}>
-            <img
-                {...imgProps}
-                // 1688/alicdn blocks hotlink when Referer is our domain → 403 blank images
-                referrerPolicy={imgProps.referrerPolicy ?? 'no-referrer'}
-                loading={loading}
-                decoding={decoding}
-                style={mergedStyle}
-                src={(() => {
-                    const raw = imageSrc ?? fallbackSrc ?? undefined
-                    if (!raw) return undefined
-                    return toProxiedImageUrl(raw, { width: 800 }) || raw
-                })()}
-                alt={imageAlt ?? undefined}
-                className={className}
-                data-api-exclude-tracking={isFromKeywordSearch ? "true" : undefined}
-            />
+            {(() => {
+                const raw = imageSrc ?? fallbackSrc ?? undefined
+                if (!raw) return null
+                const proxied = toProxiedImageUrl(raw, { width: 800 }) || raw
+                const isLocalProxy = proxied.startsWith('/img-proxy/')
+                return (
+                    <Image
+                        {...(imgProps as any)}
+                        referrerPolicy={imgProps.referrerPolicy ?? 'no-referrer'}
+                        width={1200}
+                        height={800}
+                        sizes="(max-width: 768px) 100vw, 80vw"
+                        priority={loading === 'eager'}
+                        unoptimized={isLocalProxy || proxied.startsWith('data:')}
+                        style={{
+                            ...mergedStyle,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: (mergedStyle.objectFit as any) || 'cover',
+                        }}
+                        src={proxied}
+                        alt={imageAlt ?? ''}
+                        className={className}
+                        data-api-exclude-tracking={isFromKeywordSearch ? "true" : undefined}
+                    />
+                )
+            })()}
         </DecorateFrame>
     );
 };

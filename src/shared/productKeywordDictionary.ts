@@ -168,6 +168,20 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '厂家',
   '直销',
   '跨境',
+  '外贸',
+  '早春',
+  '厚底凉',
+  '厚底增',
+  '厚底',
+  '一字拖外穿',
+  '一字拖',
+  '绊带扣',
+  '魔术贴',
+  '牛仔布',
+  '印花',
+  '刺绣',
+  '外穿',
+  '增高',
 ]
 
 export const PRODUCT_KEYWORD_EN: Record<string, string> = {
@@ -324,6 +338,20 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   厂家: 'Factory',
   直销: 'Direct',
   跨境: 'Cross-border',
+  外贸: 'Foreign Trade',
+  早春: 'Early Spring',
+  厚底凉: 'Platform Slide',
+  厚底增: 'Platform Boost',
+  厚底: 'Platform',
+  一字拖外穿: 'Outdoor Slide',
+  一字拖: 'Slide Sandal',
+  绊带扣: 'Buckle Strap',
+  魔术贴: 'Hook-and-Loop',
+  牛仔布: 'Denim',
+  印花: 'Print',
+  刺绣: 'Embroidery',
+  外穿: 'Outdoor',
+  增高: 'Height Boost',
 }
 
 export const PRODUCT_KEYWORD_ES: Record<string, string> = {
@@ -480,6 +508,20 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   厂家: 'Fábrica',
   直销: 'Directo',
   跨境: 'Transfronterizo',
+  外贸: 'Comercio exterior',
+  早春: 'Inicio de primavera',
+  厚底凉: 'Sandalia plataforma',
+  厚底增: 'Plataforma',
+  厚底: 'Plataforma',
+  一字拖外穿: 'Sandalia slide exterior',
+  一字拖: 'Sandalia slide',
+  绊带扣: 'Correa con hebilla',
+  魔术贴: 'Velcro',
+  牛仔布: 'Denim',
+  印花: 'Estampado',
+  刺绣: 'Bordado',
+  外穿: 'Exterior',
+  增高: 'Aumenta altura',
 }
 
 const LATIN_EDGE = /[A-Za-z0-9]/
@@ -487,6 +529,16 @@ const CJK_EDGE = /[\u4e00-\u9fff]/
 
 export function containsChinese(text: string | null | undefined): boolean {
   return /[\u4e00-\u9fff]/.test(String(text || ''))
+}
+
+/** Drop CJK runs so storefront EN/ES titles never show Chinese leftovers. */
+export function stripChineseFromTitle(text: string | null | undefined): string {
+  return collapseRepeatedTitleWords(
+    String(text || '')
+      .replace(/[\u4e00-\u9fff]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
 }
 
 /**
@@ -554,7 +606,7 @@ function startsKeywordAt(raw: string, index: number): boolean {
  * Replace known Chinese keywords in a title / compound string.
  * Single left-to-right pass, longest-match only — never re-scans replaced text,
  * never advances by 0 (empty keyword rows cannot loop into Flat Flat Flat…).
- * Unmatched CJK segments are left as-is (partial dictionary translate).
+ * Unmatched pure-CJK segments are dropped for en/es (no mixed titles).
  */
 export function translateTitleKeywords(
   text: string | null | undefined,
@@ -586,7 +638,13 @@ export function translateTitleKeywords(
     }
     let j = i + 1
     while (j < raw.length && !startsKeywordAt(raw, j)) j += 1
-    pieces.push(raw.slice(i, j))
+    const segment = raw.slice(i, j)
+    // Latin locales: drop unmatched pure-CJK chunks to avoid "中文 + Español" titles
+    if (/^[\u4e00-\u9fff\s]+$/.test(segment)) {
+      i = j
+      continue
+    }
+    pieces.push(segment)
     i = j
   }
 

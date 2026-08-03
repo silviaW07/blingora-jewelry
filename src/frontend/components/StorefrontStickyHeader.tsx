@@ -256,11 +256,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   )
 
   const goHome = useCallback(() => {
-    // 始终回到干净首页（含刷新），避免残留搜索/分类 query
-    if (typeof window !== 'undefined') {
-      window.location.assign('/')
-      return
-    }
+    // Client-side nav — avoid full reload (was the main “back is slow” cause)
     router.push('/')
   }, [router])
 
@@ -351,43 +347,46 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
               </div>
 
               <div
-                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-2.5 xl:max-w-[980px]"
+                className="flex min-w-0 flex-1 items-center gap-5 sm:gap-6 xl:max-w-[980px]"
                 data-controller-name="搜索栏与用户功能区"
               >
-                <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)]">
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5 px-4 text-[#6b6b6b]">
-                    <Camera className="size-4 shrink-0" />
-                    <Input
-                      placeholder={t('common.pleaseInput')}
-                      className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11"
-                      value={searchKeyword}
-                      onChange={(event) => setSearchKeyword(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          handleHeaderSearchSubmit()
-                        }
-                      }}
-                    />
+                <div className="flex min-w-0 flex-1 justify-center">
+                  <div className="flex w-full max-w-[220px] items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)] sm:max-w-[240px]">
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 text-[#6b6b6b] sm:px-4">
+                      <Camera className="size-4 shrink-0" />
+                      <Input
+                        placeholder={t('common.pleaseInput')}
+                        className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11"
+                        value={searchKeyword}
+                        onChange={(event) => setSearchKeyword(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            handleHeaderSearchSubmit()
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleHeaderSearchSubmit}
+                      disabled={isSearchLoading}
+                      aria-busy={isSearchLoading}
+                      className="h-10 min-w-[78px] rounded-none rounded-r-full bg-[#ffc0cb] px-4 text-sm font-semibold tracking-[0.08em] text-[#111111] hover:bg-[#ffb1c1] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:px-5"
+                    >
+                      {isSearchLoading ? (
+                        <Loader2 className="mr-2 size-5 animate-spin" />
+                      ) : (
+                        <Search className="mr-2 size-5" />
+                      )}
+                      <DecorateText propKey="home_search_btn" as="span">
+                        {t('common.search')}
+                      </DecorateText>
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={handleHeaderSearchSubmit}
-                    disabled={isSearchLoading}
-                    aria-busy={isSearchLoading}
-                    className="h-10 min-w-[78px] rounded-none rounded-r-full bg-[#ffc0cb] px-5 text-sm font-semibold tracking-[0.08em] text-[#111111] hover:bg-[#ffb1c1] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:px-6"
-                  >
-                    {isSearchLoading ? (
-                      <Loader2 className="mr-2 size-5 animate-spin" />
-                    ) : (
-                      <Search className="mr-2 size-5" />
-                    )}
-                    <DecorateText propKey="home_search_btn" as="span">
-                      {t('common.search')}
-                    </DecorateText>
-                  </Button>
                 </div>
 
+                <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
                 <div className="relative shrink-0" ref={localeMenuRef}>
                   <button
                     type="button"
@@ -446,6 +445,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                     {t('common.cart')}
                   </DecorateText>
                 </Button>
+                </div>
               </div>
             </div>
 

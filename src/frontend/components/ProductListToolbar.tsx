@@ -14,7 +14,7 @@ import type { SortByEnum } from '@/frontend/actions/ProductCategory'
 import { cn } from '@/lib/utils'
 
 const PRICE_SLIDER_MIN = 0
-const PRICE_SLIDER_MAX = 500
+const PRICE_SLIDER_MAX = 120
 const DEBOUNCE_MS = 250
 
 const SORT_OPTIONS: Array<{ value: SortByEnum; labelKey: string }> = [
@@ -29,7 +29,7 @@ export type ProductListToolbarProps = {
   sortBy: SortByEnum
   onPriceRangeChange: (min: number | undefined, max: number | undefined) => void
   onSortChange: (sortBy: SortByEnum) => void
-  /** Upper bound for the dual range slider (USD). Defaults to 500. */
+  /** Upper bound for the dual range slider (USD). Defaults to 120. */
   priceBoundMax?: number
   className?: string
 }
@@ -58,8 +58,9 @@ const toCommittedRange = (
   max: number,
   boundMax: number,
 ): [number | undefined, number | undefined] => {
+  // Full-left min → no lower bound; max always capped at boundMax (strict 0–boundMax USD)
   const nextMin = min <= PRICE_SLIDER_MIN ? undefined : min
-  const nextMax = max >= boundMax ? undefined : max
+  const nextMax = max >= boundMax ? boundMax : max
   return [nextMin, nextMax]
 }
 
@@ -126,10 +127,7 @@ export function ProductListToolbar({
         />
         <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[#6f6a62] tabular-nums">
           <span>{formatUsd(range[0])}</span>
-          <span>
-            {formatUsd(range[1])}
-            {range[1] >= boundMax ? '+' : ''}
-          </span>
+          <span>{formatUsd(range[1])}</span>
         </div>
       </div>
 

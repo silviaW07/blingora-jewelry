@@ -15,6 +15,7 @@ import type {
   HomeRecommendZoneSection as HomeRecommendZoneSectionType,
 } from '@/frontend/actions/Home'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
+import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -146,10 +147,12 @@ const renderRecommendZoneContent = (
                     <div className="min-h-[40px] flex-1" aria-hidden="true" />
                   ) : (
                     <div>
-                      <p className="text-2xl font-bold text-[#111111]">{formatPrice(item.price)}</p>
-                      {item.originalPrice ? (
-                        <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(item.originalPrice)}</p>
-                      ) : null}
+                      <StorePrice className="text-2xl font-bold">
+                        <p className="text-2xl font-bold text-[#111111]">{formatPrice(item.price)}</p>
+                        {item.originalPrice ? (
+                          <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(item.originalPrice)}</p>
+                        ) : null}
+                      </StorePrice>
                     </div>
                   )}
                   {isDraft ? (

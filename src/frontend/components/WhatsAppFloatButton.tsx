@@ -196,7 +196,7 @@ export function WhatsAppFloatButton() {
       rel="noopener noreferrer"
       aria-label="Contact us on WhatsApp"
       title={isFloatDragMode ? '拖拽以调整位置' : 'WhatsApp'}
-      className={`whatsapp-float-btn fixed flex items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_28px_-10px_rgba(37,211,102,0.75)] transition select-none touch-none ${
+      className={`whatsapp-float-btn whatsapp-float-root fixed flex items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_28px_-10px_rgba(37,211,102,0.75)] transition select-none touch-none ${
         isFloatDragMode
           ? 'z-[120] cursor-grab ring-4 ring-[#2563EB]/70 ring-offset-2 active:cursor-grabbing hover:scale-100'
           : 'hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'

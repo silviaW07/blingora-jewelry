@@ -107263,34 +107263,62 @@ function pickProductTranslation(raw, lang) {
 function resolveProductDisplayName(name, translationsJson, lang) {
     const fallback = String(name || '').trim();
     const code = normalizeProductLang(lang);
+    if (code === 'zh') return fallback;
     const exact = pickExactProductTranslation(translationsJson, code);
     const fromLang = String((exact === null || exact === void 0 ? void 0 : exact.name) || '').trim();
-    if (fromLang) {
-        // Heal already-persisted Flat Flat Flat… titles; if still Chinese, dict once.
-        if (code !== 'zh' && (0, _productKeywordDictionary.containsChinese)(fromLang)) {
-            return (0, _productKeywordDictionary.collapseRepeatedTitleWords)((0, _productKeywordDictionary.translateTitleKeywords)(fromLang, code) || fromLang);
-        }
-        return (0, _productKeywordDictionary.collapseRepeatedTitleWords)(fromLang);
-    }
-    if (code === 'zh') return fallback;
-    // Also accept preview-style side fields
+    const fromExact = healLatinTitle(fromLang, code);
+    if (fromExact) return fromExact;
     if (translationsJson && typeof translationsJson === 'object') {
         const root = translationsJson;
         if (code === 'es') {
             var _ref, _ref1, _root_title_es;
             const sideEs = String((_ref = (_ref1 = (_root_title_es = root.title_es) !== null && _root_title_es !== void 0 ? _root_title_es : root.titleEs) !== null && _ref1 !== void 0 ? _ref1 : root.nameEs) !== null && _ref !== void 0 ? _ref : '').trim();
-            if (sideEs && !(0, _productKeywordDictionary.containsChinese)(sideEs)) return (0, _productKeywordDictionary.collapseRepeatedTitleWords)(sideEs);
+            const cleanEs = healLatinTitle(sideEs, 'es');
+            if (cleanEs) return cleanEs;
         }
         if (code === 'en') {
             var _ref2, _ref3, _root_title_en;
             const sideEn = String((_ref2 = (_ref3 = (_root_title_en = root.title_en) !== null && _root_title_en !== void 0 ? _root_title_en : root.titleEn) !== null && _ref3 !== void 0 ? _ref3 : root.nameEn) !== null && _ref2 !== void 0 ? _ref2 : '').trim();
-            if (sideEn && !(0, _productKeywordDictionary.containsChinese)(sideEn)) return (0, _productKeywordDictionary.collapseRepeatedTitleWords)(sideEn);
+            const cleanEn = healLatinTitle(sideEn, 'en');
+            if (cleanEn) return cleanEn;
         }
     }
-    if (fallback && (0, _productKeywordDictionary.containsChinese)(fallback)) {
-        return (0, _productKeywordDictionary.collapseRepeatedTitleWords)((0, _productKeywordDictionary.translateTitleKeywords)(fallback, code) || fallback);
+    const fromFallback = healLatinTitle(fallback, code);
+    if (fromFallback) return fromFallback;
+    if (code === 'es') {
+        const en = pickEnglishTitle(translationsJson, fallback);
+        if (en) return en;
     }
-    return (0, _productKeywordDictionary.collapseRepeatedTitleWords)(fallback);
+    const stripped = (0, _productKeywordDictionary.stripChineseFromTitle)(fromLang || fallback);
+    return stripped || 'Product';
+}
+function asCleanLatinTitle(raw) {
+    const text = (0, _productKeywordDictionary.collapseRepeatedTitleWords)(String(raw || '').trim());
+    if (!text || (0, _productKeywordDictionary.containsChinese)(text)) return '';
+    return text;
+}
+function healLatinTitle(raw, code) {
+    const direct = asCleanLatinTitle(raw);
+    if (direct) return direct;
+    if (!raw) return '';
+    const healed = (0, _productKeywordDictionary.collapseRepeatedTitleWords)((0, _productKeywordDictionary.translateTitleKeywords)(raw, code) || '');
+    return asCleanLatinTitle(healed) || asCleanLatinTitle((0, _productKeywordDictionary.stripChineseFromTitle)(healed));
+}
+function pickEnglishTitle(translationsJson, fallback) {
+    const enExact = pickExactProductTranslation(translationsJson, 'en');
+    const fromEn = healLatinTitle(String((enExact === null || enExact === void 0 ? void 0 : enExact.name) || '').trim(), 'en');
+    if (fromEn) return fromEn;
+    if (translationsJson && typeof translationsJson === 'object') {
+        const root = translationsJson;
+        var _ref4, _ref5, _root_title_en1;
+        const sideEn = String((_ref4 = (_ref5 = (_root_title_en1 = root.title_en) !== null && _root_title_en1 !== void 0 ? _root_title_en1 : root.titleEn) !== null && _ref5 !== void 0 ? _ref5 : root.nameEn) !== null && _ref4 !== void 0 ? _ref4 : '').trim();
+        const cleanSide = healLatinTitle(sideEn, 'en');
+        if (cleanSide) return cleanSide;
+    }
+    if (fallback && !(0, _productKeywordDictionary.containsChinese)(fallback)) {
+        return (0, _productKeywordDictionary.collapseRepeatedTitleWords)(fallback);
+    }
+    return healLatinTitle(fallback, 'en');
 }
 function pickCategoryLocaleName(block) {
     var _ref, _obj_name;
@@ -108573,6 +108601,9 @@ _export(exports, {
     get containsChinese () {
         return containsChinese;
     },
+    get stripChineseFromTitle () {
+        return stripChineseFromTitle;
+    },
     get translateTitleKeywords () {
         return translateTitleKeywords;
     }
@@ -108685,6 +108716,20 @@ const PRODUCT_KEYWORD_ORDER = [
     '马丁靴',
     '洞洞鞋',
     '人字拖',
+    '外贸',
+    '早春',
+    '厚底凉',
+    '厚底增',
+    '厚底',
+    '一字拖外穿',
+    '一字拖',
+    '绊带扣',
+    '魔术贴',
+    '牛仔布',
+    '印花',
+    '刺绣',
+    '外穿',
+    '增高',
     '半拖',
     '凉鞋',
     '拖鞋',
@@ -108889,7 +108934,22 @@ const PRODUCT_KEYWORD_EN = {
     批发: 'Wholesale',
     厂家: 'Factory',
     直销: 'Direct',
-    跨境: 'Cross-border'
+    跨境: 'Cross-border',
+
+    外贸: 'Foreign Trade',
+    早春: 'Early Spring',
+    厚底凉: 'Platform Slide',
+    厚底增: 'Platform Boost',
+    厚底: 'Platform',
+    一字拖外穿: 'Outdoor Slide',
+    一字拖: 'Slide Sandal',
+    绊带扣: 'Buckle Strap',
+    魔术贴: 'Hook-and-Loop',
+    牛仔布: 'Denim',
+    印花: 'Print',
+    刺绣: 'Embroidery',
+    外穿: 'Outdoor',
+    增高: 'Height Boost',
 };
 const PRODUCT_KEYWORD_ES = {
     不锈钢: 'Acero inoxidable',
@@ -109044,7 +109104,22 @@ const PRODUCT_KEYWORD_ES = {
     批发: 'Mayorista',
     厂家: 'Fábrica',
     直销: 'Directo',
-    跨境: 'Transfronterizo'
+    跨境: 'Transfronterizo',
+
+    外贸: 'Comercio exterior',
+    早春: 'Inicio de primavera',
+    厚底凉: 'Sandalia plataforma',
+    厚底增: 'Plataforma',
+    厚底: 'Plataforma',
+    一字拖外穿: 'Sandalia slide exterior',
+    一字拖: 'Sandalia slide',
+    绊带扣: 'Correa con hebilla',
+    魔术贴: 'Velcro',
+    牛仔布: 'Denim',
+    印花: 'Estampado',
+    刺绣: 'Bordado',
+    外穿: 'Exterior',
+    增高: 'Aumenta altura',
 };
 const LATIN_EDGE = /[A-Za-z0-9]/;
 const CJK_EDGE = /[\u4e00-\u9fff]/;
@@ -109101,6 +109176,9 @@ function joinTranslatedPieces(pieces) {
 function startsKeywordAt(raw, index) {
     return longestKeywordAt(raw, index) != null;
 }
+function stripChineseFromTitle(text) {
+    return collapseRepeatedTitleWords(String(text || '').replace(/[\u4e00-\u9fff]+/g, ' ').replace(/\s+/g, ' ').trim());
+}
 function translateTitleKeywords(text, locale = 'en') {
     const raw = String(text || '').trim();
     if (!raw) return '';
@@ -109126,7 +109204,13 @@ function translateTitleKeywords(text, locale = 'en') {
         }
         let j = i + 1;
         while(j < raw.length && !startsKeywordAt(raw, j))j += 1;
-        pieces.push(raw.slice(i, j));
+        const segment = raw.slice(i, j);
+        // Latin locales: drop unmatched pure-CJK chunks to avoid mixed titles
+        if (/^[\u4e00-\u9fff\s]+$/.test(segment)) {
+            i = j;
+            continue;
+        }
+        pieces.push(segment);
         i = j;
     }
     return joinTranslatedPieces(pieces);
