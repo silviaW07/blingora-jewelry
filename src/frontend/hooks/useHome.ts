@@ -144,8 +144,8 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
         setRecommendZones(Array.isArray(res.zones) ? res.zones : [])
       })
       .catch((err: any) => {
-        setRecommendZones([])
-        toast.error(err.message || '推荐专区加载失败')
+        // Keep previous zones on transient 502 — avoid empty homepage flash
+        console.warn('[getHomeRecommendZones]', err?.message || err)
       })
       .finally(() => setIsLoadingRecommendZones(false))
   }, [homeLocaleTick])
@@ -185,8 +185,8 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       })
       .catch((err: any) => {
         if (cancelled) return
-        setLinkedCategoryProducts([])
-        toast.error(err.message || '分类商品加载失败')
+        // keep previous linked products; no toast storm on 502
+        console.warn('[getHomeFeaturedProducts]', err?.message || err)
       })
       .finally(() => {
         if (!cancelled) setIsLoadingLinkedCategoryProducts(false)
