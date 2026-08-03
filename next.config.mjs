@@ -82,7 +82,8 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [64, 96, 128, 256, 384],
-    minimumCacheTTL: 86400,
+    // Optimized images cached 7 days (return visitors hit browser/CDN cache)
+    minimumCacheTTL: 604800,
     remotePatterns: [
       { protocol: 'https', hostname: 'cbu01.alicdn.com', pathname: '/**' },
       { protocol: 'https', hostname: 'cbu02.alicdn.com', pathname: '/**' },
@@ -94,6 +95,42 @@ const nextConfig = {
       { protocol: 'http', hostname: '127.0.0.1', pathname: '/img-proxy/**' },
       { protocol: 'http', hostname: 'localhost', pathname: '/img-proxy/**' },
     ],
+  },
+
+  /**
+   * Browser cache for hashed build assets — big win for return visitors.
+   * Nginx should also set these (see deploy/nginx); Next headers cover direct :3000 / future CDN.
+   */
+  async headers() {
+    const immutable = 'public, max-age=31536000, immutable'
+    const oneDay = 'public, max-age=86400'
+    const week = 'public, max-age=604800'
+    return [
+      {
+        source: '/_next/static/:path*',
+        headers: [{ key: 'Cache-Control', value: immutable }],
+      },
+      {
+        source: '/_next/image',
+        headers: [{ key: 'Cache-Control', value: week }],
+      },
+      {
+        source: '/favicon.ico',
+        headers: [{ key: 'Cache-Control', value: oneDay }],
+      },
+      {
+        source: '/favicon.svg',
+        headers: [{ key: 'Cache-Control', value: oneDay }],
+      },
+      {
+        source: '/category-covers/:path*',
+        headers: [{ key: 'Cache-Control', value: week }],
+      },
+      {
+        source: '/:path*.(js|css|woff2|woff|ttf|otf|png|jpg|jpeg|gif|webp|avif|svg|ico)',
+        headers: [{ key: 'Cache-Control', value: week }],
+      },
+    ]
   },
 
   productionBrowserSourceMaps: false,
