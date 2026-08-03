@@ -624,6 +624,7 @@ import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
   extractPinduoduoGoodsId,
   fetchPinduoduoProductPreview,
+  hasMeaningfulPinduoduoPreview,
   isPinduoduoProductUrl,
   type PinduoduoProductPreview,
 } from '@/backend/parsers/PinduoduoParser'
@@ -5297,11 +5298,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
         } else if (isPddUrl) {
           const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
           const fetched = fetchResult.preview
-          const hasRealParse = Boolean(
-            fetched.name ||
-            fetched.mainImageUrl ||
-            (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
-          )
+          const hasRealParse =
+            fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
 
           if (!hasRealParse) {
             failureCount += 1
@@ -6561,11 +6559,8 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
         if (isPddUrl) {
           const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
           const fetched = fetchResult.preview
-          const hasRealParse = Boolean(
-            fetched.name ||
-            fetched.mainImageUrl ||
-            (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
-          )
+          const hasRealParse =
+            fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
           if (!hasRealParse) {
             const reason =
               fetchResult.outcome === 'expired'

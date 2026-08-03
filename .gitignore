@@ -39,3 +39,7 @@ tools/bin/
 *.sw?
 .history
 .yarn
+
+secrets/
+.pdd-cookie
+

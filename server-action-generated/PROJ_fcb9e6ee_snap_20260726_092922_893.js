@@ -94411,7 +94411,7 @@ const startParseTask = (0, _action_utils.requireRole)([
             } else if (isPddUrl) {
                 const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
                 const fetched = fetchResult.preview;
-                const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
+                const hasRealParse = fetchResult.outcome === 'success' && (0, _PinduoduoParser.hasMeaningfulPinduoduoPreview)(fetched);
                 if (!hasRealParse) {
                     failureCount += 1;
                     const failReason = fetchResult.outcome === 'expired' ? '解析失败：该拼多多商品已下架或不存在' : fetchResult.failureReason || '解析失败：拼多多风控/抓取失败，请稍后重试';
@@ -95557,7 +95557,7 @@ const reparsePendingImportItems = (0, _action_utils.requireRole)([
             if (isPddUrl) {
                 const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
                 const fetched = fetchResult.preview;
-                const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
+                const hasRealParse = fetchResult.outcome === 'success' && (0, _PinduoduoParser.hasMeaningfulPinduoduoPreview)(fetched);
                 if (!hasRealParse) {
                     const reason = fetchResult.outcome === 'expired' ? '该拼多多商品已下架或不存在' : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试';
                     await _prisma.default.importtaskitem.update({
@@ -101067,14 +101067,14 @@ async function translateTextZhTo(text, targetLang = 'en') {
 /***/ },
 
 /***/ 52966
-(__unused_webpack_module, exports) {
+(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
 /**
- * 拼多多商品页解析器。
+ * 拼多多商品页解析器（升级版）。
  *
- * 拼多多页面可能返回服务端 JSON、内嵌状态或风控页；解析器只消费页面中真实存在的数据，
- * 不生成虚假标题/价格/SKU。遇到登录或风控页时返回明确错误，供任务单独重试。
+ * 优先从 window.rawData / skuProps / skus 等内嵌 JSON 提取真实主图、颜色、尺码与 SKU；
+ * 并补充扫描 <img> 的 src / data-src / srcset。不臆造规格。
  */ 
 Object.defineProperty(exports, "__esModule", ({
     value: true
@@ -101092,6 +101092,12 @@ _export(exports, {
     get fetchPinduoduoProductPreview () {
         return fetchPinduoduoProductPreview;
     },
+    get hasMeaningfulPinduoduoPreview () {
+        return hasMeaningfulPinduoduoPreview;
+    },
+    get isGenericPinduoduoTitle () {
+        return isGenericPinduoduoTitle;
+    },
     get isPinduoduoProductUrl () {
         return isPinduoduoProductUrl;
     },
@@ -101100,7 +101106,8 @@ _export(exports, {
     }
 });
 const PDD_HOST_RE = /(^|\.)((mobile|m)\.)?(yangkeduo|pinduoduo)\.com$/i;
-const IMAGE_RE = /^https?:\/\/.+\.(?:jpe?g|png|webp|avif)(?:[?#].*)?$/i;
+const PDD_CDN_HOST_RE = /(^|\.)(pddpic|yangkeduo|pinduoduo|pddugc|pddcdn|commimg)\./i;
+const LOGO_OR_PLACEHOLDER_RE = /(?:logo|favicon|avatar|placeholder|default[_-]?img|blank|sprite|icon[_-]?(?:pdd|goods)?|watermark|qrcode|captcha|loading)/i;
 const emptyPreview = (goodsId)=>({
         goodsId,
         name: '',
@@ -101116,12 +101123,34 @@ const emptyPreview = (goodsId)=>({
         specSummary: [],
         skuTable: []
     });
-const decodeHtml = (value)=>value.replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, code)=>String.fromCharCode(Number(code))).trim();
+const decodeHtml = (value)=>value.replace(/\\u002F/gi, '/').replace(/\\\//g, '/').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, code)=>String.fromCharCode(Number(code))).trim();
 const cleanText = (value)=>typeof value === 'string' ? decodeHtml(value).replace(/\s+/g, ' ').trim() : '';
-const absoluteImage = (value)=>{
-    let url = cleanText(value).replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+const isLikelyProductImageUrl = (url)=>{
+    if (!url || !/^https?:\/\//i.test(url)) return false;
+    if (LOGO_OR_PLACEHOLDER_RE.test(url)) return false;
+    try {
+        const host = new URL(url).hostname;
+        if (PDD_CDN_HOST_RE.test(host)) return true;
+        if (/\.(?:jpe?g|png|webp|avif)(?:$|\?)/i.test(url)) return true;
+        // 部分拼多多图无扩展名，但路径含 mms / goods / image
+        if (/\/(?:mms|goods|image|img|gallery|sku)\b/i.test(url)) return true;
+    } catch  {
+        return false;
+    }
+    return false;
+};
+/** 统一绝对地址，并尽量升到较清晰图（去掉极小缩略后缀） */ const absoluteImage = (value)=>{
+    let url = cleanText(value);
+    if (!url) return '';
     if (url.startsWith('//')) url = `https:${url}`;
-    return IMAGE_RE.test(url) ? url : '';
+    if (url.startsWith('/')) url = `https://img.pddpic.com${url}`;
+    // srcset 可能是 "url 1x, url2 2x"
+    if (/\s+\d+[wx]\b/i.test(url) || url.includes(',')) {
+        const first = url.split(',').map((part)=>part.trim().split(/\s+/)[0]).find((part)=>/^https?:\/\//i.test(part));
+        if (first) url = first;
+    }
+    url = url.replace(/([?&])(?:w|h|width|height)=\d+/gi, '$1').replace(/\?&/, '?').replace(/[?&]$/, '');
+    return isLikelyProductImageUrl(url) ? url : '';
 };
 const numberOrNull = (value)=>{
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -101159,39 +101188,114 @@ const isPinduoduoProductUrl = (sourceUrl)=>{
     }
 };
 const isRecord = (value)=>Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const tryParseJsonSlice = (slice)=>{
+    try {
+        return JSON.parse(slice);
+    } catch  {
+        try {
+            return JSON.parse(slice.replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&'));
+        } catch  {
+            return null;
+        }
+    }
+};
+/** 按括号匹配提取某 key 的全部 JSON 值（对象或数组） */ const extractAllBalancedJsonValues = (html, key)=>{
+    const results = [];
+    const keyRe = new RegExp(`(?:window\\.)?${key}\\s*=\\s*([\\[\\{])|"${key}"\\s*:\\s*([\\[\\{])`, 'gi');
+    let matched;
+    while(matched = keyRe.exec(html)){
+        const startIdx = matched.index + matched[0].length - 1;
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for(let i = startIdx; i < html.length; i += 1){
+            const ch = html[i];
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                    continue;
+                }
+                if (ch === '\\') {
+                    escaped = true;
+                    continue;
+                }
+                if (ch === '"') inString = false;
+                continue;
+            }
+            if (ch === '"') {
+                inString = true;
+                continue;
+            }
+            if (ch === '{' || ch === '[') depth += 1;
+            else if (ch === '}' || ch === ']') {
+                depth -= 1;
+                if (depth === 0) {
+                    const parsed = tryParseJsonSlice(html.slice(startIdx, i + 1));
+                    if (parsed != null) results.push(parsed);
+                    keyRe.lastIndex = i + 1;
+                    break;
+                }
+            }
+            if (i - startIdx > 2500000) break;
+        }
+    }
+    return results;
+};
 const collectJsonRoots = (html)=>{
     const roots = [];
+    const seen = new Set();
+    const pushRoot = (value)=>{
+        if (value == null) return;
+        const key = typeof value === 'object' ? JSON.stringify(value).slice(0, 240) : String(value);
+        if (seen.has(key)) return;
+        seen.add(key);
+        roots.push(value);
+    };
+    for (const key of [
+        'rawData',
+        'initDataObj',
+        'store',
+        'goods',
+        'sku',
+        'skus',
+        'skuProps',
+        'sku_props',
+        'initData'
+    ]){
+        extractAllBalancedJsonValues(html, key).forEach(pushRoot);
+    }
     const scriptRe = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
     let match;
     while(match = scriptRe.exec(html)){
         const content = decodeHtml(match[1]).trim();
+        const assignmentIndex = content.search(/=\s*[\[\{]/);
         const candidates = [
             content
         ];
-        const assignmentIndex = content.indexOf('=');
-        if (assignmentIndex > 0) candidates.push(content.slice(assignmentIndex + 1).replace(/;\s*$/, '').trim());
+        if (assignmentIndex > 0) {
+            candidates.push(content.slice(assignmentIndex + 1).replace(/;\s*$/, '').trim());
+        }
         for (const candidate of candidates){
             if (!candidate.startsWith('{') && !candidate.startsWith('[')) continue;
-            try {
-                roots.push(JSON.parse(candidate));
+            const parsed = tryParseJsonSlice(candidate);
+            if (parsed != null) {
+                pushRoot(parsed);
                 break;
-            } catch  {
-            // Other scripts can contain regular JavaScript; ignore them.
             }
         }
     }
     return roots;
 };
-const walkJson = (value, visit, seen = new Set(), depth = 0)=>{
-    if (depth > 18 || !value || typeof value !== 'object' || seen.has(value)) return;
+const walkJson = (value, visit, seen = new Set(), depth = 0, path = '')=>{
+    if (depth > 22 || !value || typeof value !== 'object' || seen.has(value)) return;
     seen.add(value);
     if (Array.isArray(value)) {
-        value.forEach((item)=>walkJson(item, visit, seen, depth + 1));
+        value.forEach((item, index)=>walkJson(item, visit, seen, depth + 1, `${path}[${index}]`));
         return;
     }
     const record = value;
-    visit(record);
-    Object.values(record).forEach((item)=>walkJson(item, visit, seen, depth + 1));
+    visit(record, path);
+    Object.entries(record).forEach(([key, item])=>walkJson(item, visit, seen, depth + 1, path ? `${path}.${key}` : key));
 };
 const firstString = (record, keys)=>{
     for (const key of keys){
@@ -101213,7 +101317,44 @@ const collectImagesFromValue = (value, output)=>{
         if (url) output.add(url);
         return;
     }
-    if (Array.isArray(value)) value.forEach((item)=>collectImagesFromValue(item, output));
+    if (Array.isArray(value)) {
+        value.forEach((item)=>collectImagesFromValue(item, output));
+        return;
+    }
+    if (isRecord(value)) {
+        for (const key of Object.keys(value)){
+            if (!/(?:url|img|image|thumb|src|pic)/i.test(key)) continue;
+            collectImagesFromValue(value[key], output);
+        }
+    }
+};
+/** 从 HTML img 标签提取多属性图片链接 */ const extractImagesFromImgTags = (html, output)=>{
+    const imgRe = /<img\b([^>]*)>/gi;
+    let match;
+    while(match = imgRe.exec(html)){
+        const attrs = match[1] || '';
+        const attrRe = /(?:src|data-src|data-original|data-lazy|data-img|data-url|data-srcset|srcset|data-background|data-bg)\s*=\s*(["'])(.*?)\1/gi;
+        let attrMatch;
+        while(attrMatch = attrRe.exec(attrs)){
+            const raw = attrMatch[2] || '';
+            if (attrMatch[0].toLowerCase().includes('srcset') || raw.includes(',')) {
+                raw.split(',').forEach((part)=>{
+                    const url = absoluteImage(part.trim().split(/\s+/)[0]);
+                    if (url) output.add(url);
+                });
+            } else {
+                const url = absoluteImage(raw);
+                if (url) output.add(url);
+            }
+        }
+    }
+    // style background-image
+    const bgRe = /background(?:-image)?\s*:\s*url\((['"]?)(https?:\/\/[^'")]+)\1\)/gi;
+    let bgMatch;
+    while(bgMatch = bgRe.exec(html)){
+        const url = absoluteImage(bgMatch[2]);
+        if (url) output.add(url);
+    }
 };
 const parseMeta = (html, key)=>{
     const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -101228,26 +101369,36 @@ const parseMeta = (html, key)=>{
     }
     return '';
 };
+const isColorDimensionName = (name)=>/颜色|色系|色彩|花色|款式|color/i.test(name);
+const isSizeDimensionName = (name)=>/尺码|尺寸|规格|型号|size|容量|净含量|suit/i.test(name);
+const normalizeAttrName = (name)=>{
+    if (isColorDimensionName(name)) return '颜色';
+    if (isSizeDimensionName(name)) return '尺码';
+    return name || '规格';
+};
 const parseAttributes = (record)=>{
-    const raw = record.specs || record.specList || record.spec_list || record.spec;
+    const raw = record.specs || record.specList || record.spec_list || record.spec || record.sku_spec || record.skuSpec || record.specs_list;
     const attributes = [];
     if (Array.isArray(raw)) {
         for (const entry of raw){
             if (!isRecord(entry)) continue;
-            const name = firstString(entry, [
+            const name = normalizeAttrName(firstString(entry, [
                 'spec_key',
                 'specKey',
                 'name',
                 'key',
                 'spec_name',
-                'specName'
-            ]);
+                'specName',
+                'pname'
+            ]));
             const value = firstString(entry, [
                 'spec_value',
                 'specValue',
                 'value',
                 'value_name',
-                'valueName'
+                'valueName',
+                'note',
+                'v'
             ]);
             if (name && value) attributes.push({
                 name,
@@ -101258,12 +101409,81 @@ const parseAttributes = (record)=>{
         for (const [name, value] of Object.entries(raw)){
             const text = cleanText(value);
             if (name && text) attributes.push({
-                name,
+                name: normalizeAttrName(name),
                 value: text
             });
         }
     }
     return attributes;
+};
+/** 解析拼多多 skuProps / goods_property 结构 */ const parseSkuPropsList = (raw)=>{
+    if (!Array.isArray(raw)) return [];
+    const props = [];
+    for (const item of raw){
+        if (!isRecord(item)) continue;
+        const name = normalizeAttrName(firstString(item, [
+            'name',
+            'spec_key',
+            'specKey',
+            'key',
+            'pname',
+            'prop',
+            'title',
+            'fname'
+        ]));
+        const valueList = Array.isArray(item.values) && item.values || Array.isArray(item.value) && item.value || Array.isArray(item.list) && item.list || [];
+        const values = [];
+        for (const entry of valueList){
+            if (typeof entry === 'string' || typeof entry === 'number') {
+                const label = cleanText(entry);
+                if (label) values.push({
+                    label,
+                    imageUrl: null
+                });
+                continue;
+            }
+            if (!isRecord(entry)) continue;
+            const label = firstString(entry, [
+                'spec_value',
+                'specValue',
+                'value',
+                'name',
+                'note',
+                'vid',
+                'v'
+            ]);
+            const imageUrl = firstImage(entry, [
+                'thumb_url',
+                'thumbUrl',
+                'tiny_url',
+                'tinyUrl',
+                'image_url',
+                'imageUrl',
+                'url',
+                'pic',
+                'img',
+                'sku_img',
+                'skuImg'
+            ]) || null;
+            if (label) values.push({
+                label,
+                imageUrl
+            });
+        }
+        if (name && values.length > 0) props.push({
+            name,
+            values
+        });
+    }
+    return props;
+};
+const scoreSkuProps = (props)=>{
+    let score = 0;
+    for (const prop of props){
+        score += prop.values.length * (isColorDimensionName(prop.name) ? 5 : 2);
+        score += prop.values.filter((item)=>item.imageUrl).length * 3;
+    }
+    return score;
 };
 const parsePinduoduoHtml = (html, sourceUrl)=>{
     var _exec;
@@ -101273,11 +101493,44 @@ const parsePinduoduoHtml = (html, sourceUrl)=>{
     const priceValues = [];
     const skuRows = new Map();
     const specValues = new Map();
+    const colorImageMap = new Map();
+    let bestSkuProps = [];
+    let bestSkuPropsScore = 0;
     preview.name = parseMeta(html, 'og:title') || parseMeta(html, 'twitter:title') || cleanText(((_exec = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)) === null || _exec === void 0 ? void 0 : _exec[1]) || '').replace(/[-_|].*拼多多.*$/i, '');
     const metaImage = absoluteImage(parseMeta(html, 'og:image'));
     if (metaImage) imageSet.add(metaImage);
     const metaPrice = normalizePrice('meta', parseMeta(html, 'product:price:amount'));
     if (metaPrice !== null) priceValues.push(metaPrice);
+    extractImagesFromImgTags(html, imageSet);
+    // 显式抽取常见关键键
+    for (const key of [
+        'skuProps',
+        'sku_props',
+        'skus',
+        'sku',
+        'goodsProperty',
+        'goods_property'
+    ]){
+        for (const raw of extractAllBalancedJsonValues(html, key)){
+            const props = parseSkuPropsList(raw);
+            const score = scoreSkuProps(props);
+            if (score > bestSkuPropsScore) {
+                bestSkuProps = props;
+                bestSkuPropsScore = score;
+            }
+            if (Array.isArray(raw)) {
+                for (const entry of raw){
+                    if (!isRecord(entry)) continue;
+                    const nestedProps = parseSkuPropsList(entry.skuProps || entry.sku_props || entry.values);
+                    const nestedScore = scoreSkuProps(nestedProps);
+                    if (nestedScore > bestSkuPropsScore) {
+                        bestSkuProps = nestedProps;
+                        bestSkuPropsScore = nestedScore;
+                    }
+                }
+            }
+        }
+    }
     const roots = collectJsonRoots(html);
     for (const root of roots){
         walkJson(root, (record)=>{
@@ -101287,7 +101540,9 @@ const parsePinduoduoHtml = (html, sourceUrl)=>{
                     'goodsName',
                     'goods_title',
                     'goodsTitle',
-                    'productName'
+                    'productName',
+                    'share_title',
+                    'shareTitle'
                 ]);
             }
             if (!preview.supplierName) {
@@ -101304,18 +101559,24 @@ const parsePinduoduoHtml = (html, sourceUrl)=>{
                     'goods_desc',
                     'goodsDesc',
                     'description',
-                    'goods_description'
+                    'goods_description',
+                    'share_desc',
+                    'shareDesc'
                 ]);
             }
             const image = firstImage(record, [
-                'goods_image_url',
-                'goodsImageUrl',
+                'hd_url',
+                'hdUrl',
                 'hd_thumb_url',
                 'hdThumbUrl',
+                'goods_image_url',
+                'goodsImageUrl',
                 'thumb_url',
                 'thumbUrl',
                 'image_url',
-                'imageUrl'
+                'imageUrl',
+                'pic_url',
+                'picUrl'
             ]);
             if (image) imageSet.add(image);
             for (const key of [
@@ -101323,68 +101584,231 @@ const parsePinduoduoHtml = (html, sourceUrl)=>{
                 'gallery_urls',
                 'galleryUrls',
                 'detail_gallery',
-                'detailGallery'
+                'detailGallery',
+                'top_gallery',
+                'topGallery',
+                'view_image_url_list',
+                'viewImageUrlList',
+                'carousel_section_list',
+                'carouselSectionList',
+                'sku_img_list',
+                'skuImgList'
             ]){
                 collectImagesFromValue(record[key], imageSet);
             }
+            const localProps = parseSkuPropsList(record.skuProps || record.sku_props || record.goods_property || record.goodsProperty);
+            const localScore = scoreSkuProps(localProps);
+            if (localScore > bestSkuPropsScore) {
+                bestSkuProps = localProps;
+                bestSkuPropsScore = localScore;
+            }
             for (const [key, value] of Object.entries(record)){
-                if (!/(?:^|_)(?:min_?|max_?|group_?|normal_?|market_?|sku_?)?price$/i.test(key) && !/(?:minPrice|maxPrice|groupPrice|normalPrice|marketPrice|skuPrice)/.test(key)) continue;
+                if (!/(?:^|_)(?:min_?|max_?|group_?|normal_?|market_?|sku_?)?price$/i.test(key) && !/(?:minPrice|maxPrice|groupPrice|normalPrice|marketPrice|skuPrice)/.test(key)) {
+                    continue;
+                }
                 const price = normalizePrice(key, value);
                 if (price !== null && price > 0 && price < 10000000) priceValues.push(price);
             }
             const attributes = parseAttributes(record);
-            if (attributes.length > 0) {
-                var _ref, _record_quantity;
+            const looksLikeSku = attributes.length > 0 || Boolean(firstString(record, [
+                'sku_id',
+                'skuId'
+            ])) || /sku/i.test(String(record.sku_id || record.skuId || ''));
+            if (looksLikeSku && attributes.length > 0) {
+                var _ref, _ref1, _record_quantity;
                 for (const attr of attributes){
                     if (!specValues.has(attr.name)) specValues.set(attr.name, new Set());
                     specValues.get(attr.name).add(attr.value);
+                    if (attr.name === '颜色' && image) colorImageMap.set(attr.value, image);
                 }
                 const skuKey = firstString(record, [
                     'sku_id',
                     'skuId',
                     'id'
                 ]) || attributes.map((item)=>`${item.name}:${item.value}`).join('|');
-                const priceEntry = Object.entries(record).find(([key])=>/^(?:sku_?price|group_?price|normal_?price|price)$/i.test(key));
-                const stock = numberOrNull((_ref = (_record_quantity = record.quantity) !== null && _record_quantity !== void 0 ? _record_quantity : record.stock) !== null && _ref !== void 0 ? _ref : record.inventory);
-                skuRows.set(skuKey, {
-                    skuKey,
-                    spec: attributes.map((item)=>item.value).join(' / '),
-                    price: priceEntry ? normalizePrice(priceEntry[0], priceEntry[1]) : null,
-                    stock,
-                    imageUrl: image || null,
-                    attributes
-                });
+                const priceEntry = Object.entries(record).find(([key])=>/^(?:sku_?price|group_?price|normal_?price|price|group_price)$/i.test(key));
+                const stock = numberOrNull((_ref = (_ref1 = (_record_quantity = record.quantity) !== null && _record_quantity !== void 0 ? _record_quantity : record.stock) !== null && _ref1 !== void 0 ? _ref1 : record.inventory) !== null && _ref !== void 0 ? _ref : record.sku_quantity);
+                const skuImage = firstImage(record, [
+                    'thumb_url',
+                    'thumbUrl',
+                    'sku_thumb_url',
+                    'skuThumbUrl',
+                    'image_url',
+                    'imageUrl',
+                    'pic'
+                ]) || image || null;
+                const existing = skuRows.get(skuKey);
+                if (!existing || skuImage && !existing.imageUrl) {
+                    var _ref2, _ref3;
+                    skuRows.set(skuKey, {
+                        skuKey,
+                        spec: attributes.map((item)=>item.value).join(' / '),
+                        price: priceEntry ? normalizePrice(priceEntry[0], priceEntry[1]) : (_ref2 = existing === null || existing === void 0 ? void 0 : existing.price) !== null && _ref2 !== void 0 ? _ref2 : null,
+                        stock: (_ref3 = stock !== null && stock !== void 0 ? stock : existing === null || existing === void 0 ? void 0 : existing.stock) !== null && _ref3 !== void 0 ? _ref3 : null,
+                        imageUrl: skuImage || (existing === null || existing === void 0 ? void 0 : existing.imageUrl) || null,
+                        attributes
+                    });
+                }
             }
         });
     }
-    preview.detailImages = Array.from(imageSet);
-    preview.mainImageUrl = preview.detailImages[0] || null;
+    // 用最优 skuProps 回填颜色/尺码与色图
+    for (const prop of bestSkuProps){
+        if (!specValues.has(prop.name)) specValues.set(prop.name, new Set());
+        for (const value of prop.values){
+            specValues.get(prop.name).add(value.label);
+            if (prop.name === '颜色' && value.imageUrl) {
+                colorImageMap.set(value.label, value.imageUrl);
+                imageSet.add(value.imageUrl);
+            }
+        }
+    }
+    // 若 JSON SKU 为空，但 skuProps 有颜色+尺码，则笛卡尔展开
+    if (skuRows.size === 0 && bestSkuProps.length > 0) {
+        const colorProp = bestSkuProps.find((item)=>item.name === '颜色') || bestSkuProps[0];
+        const sizeProp = bestSkuProps.find((item)=>item.name === '尺码') || bestSkuProps.find((item)=>item.name !== colorProp.name) || null;
+        const colors = (colorProp === null || colorProp === void 0 ? void 0 : colorProp.values) || [];
+        const sizes = (sizeProp === null || sizeProp === void 0 ? void 0 : sizeProp.values) || [
+            {
+                label: '默认规格',
+                imageUrl: null
+            }
+        ];
+        let index = 0;
+        for (const color of colors){
+            for (const size of sizes){
+                index += 1;
+                const attributes = [
+                    {
+                        name: colorProp.name,
+                        value: color.label
+                    },
+                    ...sizeProp ? [
+                        {
+                            name: sizeProp.name,
+                            value: size.label
+                        }
+                    ] : []
+                ];
+                const skuKey = attributes.map((item)=>`${item.name}:${item.value}`).join('|') || `sku-${index}`;
+                skuRows.set(skuKey, {
+                    skuKey,
+                    spec: attributes.map((item)=>item.value).join(' / '),
+                    price: priceValues.length ? Math.min(...priceValues) : null,
+                    stock: null,
+                    imageUrl: color.imageUrl || size.imageUrl || null,
+                    attributes
+                });
+            }
+        }
+    }
+    const orderedImages = Array.from(imageSet);
+    preview.detailImages = orderedImages.slice(0, 120);
+    // 主图优先：非 logo 的第一张；若色图更清晰也可作主图
+    preview.mainImageUrl = orderedImages[0] || Array.from(colorImageMap.values())[0] || null;
     preview.priceMin = priceValues.length ? Math.min(...priceValues) : null;
     preview.priceMax = priceValues.length ? Math.max(...priceValues) : preview.priceMin;
     preview.skuTable = Array.from(skuRows.values());
-    preview.specSummary = Array.from(specValues.entries()).map(([name, values])=>({
+    preview.specSummary = bestSkuProps.length > 0 ? bestSkuProps.map((prop)=>({
+            name: prop.name,
+            values: prop.values.map((item)=>item.label)
+        })) : Array.from(specValues.entries()).map(([name, values])=>({
             name,
             values: Array.from(values)
         }));
-    const colorEntry = preview.specSummary.find((item)=>/颜色|色|color/i.test(item.name));
-    const sizeEntry = preview.specSummary.find((item)=>/尺码|尺寸|规格|size/i.test(item.name));
+    const colorEntry = preview.specSummary.find((item)=>item.name === '颜色') || preview.specSummary.find((item)=>isColorDimensionName(item.name));
+    const sizeEntry = preview.specSummary.find((item)=>item.name === '尺码') || preview.specSummary.find((item)=>isSizeDimensionName(item.name));
     preview.colors = ((colorEntry === null || colorEntry === void 0 ? void 0 : colorEntry.values) || []).map((label)=>{
-        const sku = preview.skuTable.find((row)=>row.attributes.some((attr)=>attr.name === (colorEntry === null || colorEntry === void 0 ? void 0 : colorEntry.name) && attr.value === label));
+        const fromMap = colorImageMap.get(label) || null;
+        const sku = preview.skuTable.find((row)=>row.attributes.some((attr)=>attr.name === ((colorEntry === null || colorEntry === void 0 ? void 0 : colorEntry.name) || '颜色') && attr.value === label));
         return {
             label,
-            imageUrl: (sku === null || sku === void 0 ? void 0 : sku.imageUrl) || null
+            imageUrl: fromMap || (sku === null || sku === void 0 ? void 0 : sku.imageUrl) || null
         };
     });
     for (const color of preview.colors){
-        preview.sizesByColor[color.label] = preview.skuTable.filter((row)=>row.attributes.some((attr)=>attr.value === color.label)).map((row)=>{
+        const sizes = preview.skuTable.filter((row)=>row.attributes.some((attr)=>attr.name === ((colorEntry === null || colorEntry === void 0 ? void 0 : colorEntry.name) || '颜色') && attr.value === color.label)).map((row)=>{
             var _row_attributes_find;
-            return ((_row_attributes_find = row.attributes.find((attr)=>attr.name === (sizeEntry === null || sizeEntry === void 0 ? void 0 : sizeEntry.name))) === null || _row_attributes_find === void 0 ? void 0 : _row_attributes_find.value) || '';
-        }).filter(Boolean).filter((value, index, list)=>list.indexOf(value) === index);
+            return ((_row_attributes_find = row.attributes.find((attr)=>attr.name === ((sizeEntry === null || sizeEntry === void 0 ? void 0 : sizeEntry.name) || '尺码'))) === null || _row_attributes_find === void 0 ? void 0 : _row_attributes_find.value) || '';
+        }).filter(Boolean);
+        preview.sizesByColor[color.label] = Array.from(new Set(sizes));
+    }
+    // 仅有颜色无尺码时，给每个颜色挂一个「默认规格」，便于待上传区展开色图
+    if (preview.colors.length > 0) {
+        for (const color of preview.colors){
+            if (!preview.sizesByColor[color.label] || preview.sizesByColor[color.label].length === 0) {
+                preview.sizesByColor[color.label] = [
+                    '默认规格'
+                ];
+            }
+        }
     }
     return preview;
 };
-const isRiskControlHtml = (html)=>/验证|安全校验|访问过于频繁|系统繁忙|risk|captcha|login|请在拼多多APP中打开/i.test(html);
+const isRiskControlHtml = (html)=>/安全校验|访问过于频繁|系统繁忙|滑动验证|请在拼多多APP中打开|_____tmd_____|x5secdata/i.test(html) || /"needLogin"\s*:\s*true|"need_login"\s*:\s*true/i.test(html);
 const isExpiredHtml = (html)=>/商品已下架|商品不存在|已失效|页面不存在|goods.*(?:removed|offline)/i.test(html);
+const isGenericPinduoduoTitle = (name)=>{
+    const text = String(name || '').trim().toLowerCase().replace(/\s+/g, '');
+    if (!text) return true;
+    return text === '拼多多' || text === 'pinduoduo' || text === '拼多多商城' || text === '拼多多 - 多实惠，多乐趣' || text === '商品详情' || /^拼多多/.test(text) && text.length <= 8;
+};
+const hasMeaningfulPinduoduoPreview = (preview)=>{
+    if (isGenericPinduoduoTitle(preview.name) && !preview.mainImageUrl && preview.skuTable.length === 0) {
+        return false;
+    }
+    const hasImage = Boolean(preview.mainImageUrl) || preview.detailImages.length > 0;
+    const hasPrice = preview.priceMin != null && preview.priceMin > 0;
+    const hasSpecs = preview.skuTable.length > 0 || preview.colors.length > 0 || preview.specSummary.some((item)=>item.values.length > 0);
+    const hasRealName = Boolean(preview.name) && !isGenericPinduoduoTitle(preview.name);
+    return (hasImage || hasPrice || hasSpecs) && (hasRealName || hasImage || hasSpecs);
+};
+const readPddCookieFromDisk = ()=>{
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = __webpack_require__(79896);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const path = __webpack_require__(16928);
+        const candidates = [
+            process.env.PDD_COOKIE_FILE,
+            path.join(process.cwd(), 'secrets', 'pdd-cookie.txt'),
+            path.join(process.cwd(), '.pdd-cookie')
+        ].filter(Boolean);
+        for (const file of candidates){
+            if (fs.existsSync(file)) {
+                const text = fs.readFileSync(file, 'utf8').trim();
+                if (text) return text;
+            }
+        }
+    } catch  {
+    // ignore missing optional cookie file
+    }
+    return '';
+};
+const buildPddFetchCandidates = (sourceUrl, goodsId)=>{
+    const urls = [];
+    const push = (url)=>{
+        if (url && !urls.includes(url)) urls.push(url);
+    };
+    if (goodsId) {
+        push(`https://mobile.yangkeduo.com/goods.html?goods_id=${goodsId}`);
+        push(`https://mobile.yangkeduo.com/goods2.html?goods_id=${goodsId}`);
+        push(`https://yangkeduo.com/goods.html?goods_id=${goodsId}`);
+    }
+    push(sourceUrl);
+    return urls;
+};
+const buildPddRequestHeaders = (refererUrl)=>{
+    const cookie = process.env.COOKIE_PDD || process.env.PDD_COOKIE || process.env.YANGKEDUO_COOKIE || readPddCookieFromDisk() || '';
+    return {
+        'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+        accept: 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.6',
+        referer: refererUrl || 'https://mobile.yangkeduo.com/',
+        ...cookie ? {
+            cookie
+        } : {}
+    };
+};
 const fetchPinduoduoProductPreview = async (sourceUrl)=>{
     const goodsId = extractPinduoduoGoodsId(sourceUrl);
     if (!isPinduoduoProductUrl(sourceUrl)) {
@@ -101394,61 +101818,75 @@ const fetchPinduoduoProductPreview = async (sourceUrl)=>{
             failureReason: '链接错误，请粘贴有效的拼多多商品详情页链接（需包含 goods_id）'
         };
     }
-    const controller = new AbortController();
-    const timer = setTimeout(()=>controller.abort(), 20000);
-    try {
-        const response = await fetch(sourceUrl, {
-            redirect: 'follow',
-            signal: controller.signal,
-            headers: {
-                'user-agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
-                accept: 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
-                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.6',
-                referer: 'https://mobile.yangkeduo.com/'
+    const hasCookie = Boolean(process.env.COOKIE_PDD || process.env.PDD_COOKIE || process.env.YANGKEDUO_COOKIE || readPddCookieFromDisk());
+    const loginHint = hasCookie ? '当前 Cookie 可能已失效，请更新环境变量 COOKIE_PDD 或 secrets/pdd-cookie.txt 后重试' : '拼多多商品页需登录态才能返回主图与规格：请配置环境变量 COOKIE_PDD（或写入 secrets/pdd-cookie.txt）后重新解析';
+    const candidates = buildPddFetchCandidates(sourceUrl, goodsId);
+    let lastFailure = {
+        preview: emptyPreview(goodsId),
+        outcome: 'failed',
+        failureReason: loginHint
+    };
+    for (const candidate of candidates){
+        const controller = new AbortController();
+        const timer = setTimeout(()=>controller.abort(), 20000);
+        try {
+            const response = await fetch(candidate, {
+                redirect: 'follow',
+                signal: controller.signal,
+                headers: buildPddRequestHeaders(candidate)
+            });
+            const html = await response.text();
+            const preview = parsePinduoduoHtml(html, response.url || candidate);
+            const needLogin = /"needLogin"\s*:\s*true|"need_login"\s*:\s*true/i.test(html);
+            if (response.status === 404 || response.status === 410 || isExpiredHtml(html)) {
+                lastFailure = {
+                    preview,
+                    outcome: 'expired',
+                    failureReason: '该拼多多商品已下架或不存在'
+                };
+                continue;
             }
-        });
-        const html = await response.text();
-        const preview = parsePinduoduoHtml(html, response.url || sourceUrl);
-        if (response.status === 404 || response.status === 410 || isExpiredHtml(html)) {
-            return {
-                preview,
-                outcome: 'expired',
-                failureReason: '该拼多多商品已下架或不存在'
-            };
-        }
-        if (response.status === 403 || response.status === 429 || isRiskControlHtml(html)) {
-            return {
-                preview,
-                outcome: 'risk_control',
-                failureReason: '拼多多返回了登录/风控校验页，请稍后重试或更换可公开访问的商品链接'
-            };
-        }
-        if (!response.ok) {
-            return {
+            if (response.status === 403 || response.status === 429 || isRiskControlHtml(html) || needLogin) {
+                lastFailure = {
+                    preview,
+                    outcome: 'risk_control',
+                    failureReason: loginHint
+                };
+                // 有 Cookie 时继续试下一个候选；无 Cookie 直接结束
+                if (!hasCookie) return lastFailure;
+                continue;
+            }
+            if (!response.ok) {
+                lastFailure = {
+                    preview,
+                    outcome: 'failed',
+                    failureReason: `拼多多页面请求失败（HTTP ${response.status}）`
+                };
+                continue;
+            }
+            if (hasMeaningfulPinduoduoPreview(preview)) {
+                return {
+                    preview,
+                    outcome: 'success'
+                };
+            }
+            lastFailure = {
                 preview,
                 outcome: 'failed',
-                failureReason: `拼多多页面请求失败（HTTP ${response.status}）`
+                failureReason: loginHint
             };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '未知网络错误';
+            lastFailure = {
+                preview: emptyPreview(goodsId),
+                outcome: 'failed',
+                failureReason: `拼多多页面抓取失败：${message}`
+            };
+        } finally{
+            clearTimeout(timer);
         }
-        const hasProductData = Boolean(preview.name && (preview.mainImageUrl || preview.priceMin !== null));
-        return hasProductData ? {
-            preview,
-            outcome: 'success'
-        } : {
-            preview,
-            outcome: 'failed',
-            failureReason: '页面未包含可识别的标题、价格或主图，可能需要登录后访问'
-        };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : '未知网络错误';
-        return {
-            preview: emptyPreview(goodsId),
-            outcome: 'failed',
-            failureReason: `拼多多页面抓取失败：${message}`
-        };
-    } finally{
-        clearTimeout(timer);
     }
+    return lastFailure;
 };
 
 

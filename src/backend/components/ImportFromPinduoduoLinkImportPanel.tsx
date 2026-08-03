@@ -130,10 +130,10 @@ export function ImportFromPinduoduoLinkImportPanel({ state, handlers }: Props) {
         ) : (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>链接格式说明</AlertTitle>
+            <AlertTitle>链接与登录说明</AlertTitle>
             <AlertDescription>
-              支持 mobile.yangkeduo.com / pinduoduo.com 商品详情页，链接中需包含 goods_id。与 1688
-              采集任务相互独立，可并行使用。
+              支持 mobile.yangkeduo.com / pinduoduo.com 商品详情页（需含 goods_id）。拼多多详情接口默认要求登录态：请在服务端配置环境变量
+              COOKIE_PDD，或把 Cookie 写入 secrets/pdd-cookie.txt，否则只能拿到空壳页（无主图/规格）。配置后请对失败条目点「重新解析」。
             </AlertDescription>
           </Alert>
         )}

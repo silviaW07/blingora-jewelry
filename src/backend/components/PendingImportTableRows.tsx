@@ -97,6 +97,7 @@ export function PendingImportTableRows({
   const source = isTableImport
     ? sourceConfig.TABLE_IMPORT
     : sourceConfig.IMPORT_1688
+  const sourceBadgeLabel = isTableImport ? source.label : isPinduoduoImport ? '拼多多导入' : source.label
   const sourceLabel = isTableImport ? '表格导入' : isPinduoduoImport ? '拼多多' : '1688'
   const skuCount = pendingSkus.length || 1
   const colorValues = Array.from(new Set(
@@ -282,9 +283,9 @@ export function PendingImportTableRows({
         </TableCell>
 
         <TableCell>
-          <div className="flex items-center text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-sm w-fit">
+          <div className={`flex items-center text-xs px-2 py-1 rounded-sm w-fit ${isPinduoduoImport ? 'text-rose-700 bg-rose-50' : 'text-slate-600 bg-slate-50'}`}>
             {source.icon}
-            {source.label}
+            {sourceBadgeLabel}
           </div>
         </TableCell>
 
