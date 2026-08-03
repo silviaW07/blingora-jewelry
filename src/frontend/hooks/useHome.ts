@@ -230,7 +230,8 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
         if (cancelled) return
         setDailyNewArrivalMonths(fallbackDailyNewArrivalMonths)
         setDailyNewArrivalTotalActiveProducts(0)
-        toast.error(err.message || '发布月历加载失败')
+        // Soft-fail: month dropdown still works with empty counts; avoid red toast on home
+        console.warn('[dailyNewArrivalCalendar]', err?.message || err)
       })
       .finally(() => {
         if (!cancelled) setIsLoadingDailyNewArrivalCalendar(false)

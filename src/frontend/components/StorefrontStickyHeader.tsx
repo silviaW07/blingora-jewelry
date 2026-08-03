@@ -27,11 +27,11 @@ import { StorefrontFloatingSideNav } from '@/frontend/components/StorefrontFloat
 import { useUserSession } from '@/tools/FrontendSession'
 import { ProductCategory, Cart } from '@/frontend/route-params'
 import {
-  getCategoryList,
   getCategorySideNavZones,
   type CategoryItem,
   type SideNavZoneItem,
 } from '@/frontend/actions/ProductCategory'
+import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import {
   getDailyNewArrivalCalendar,
@@ -82,7 +82,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   const switchLocale = useSwitchAppLocale()
   const { preferredLocale } = useUserSession()
 
-  const [categories, setCategories] = useState<CategoryItem[]>([])
+  const [categories, setCategories] = useState<CategoryItem[]>(() => peekCachedCategoryList() || [])
   const [dailyNewArrivalMonths, setDailyNewArrivalMonths] = useState<DailyNewArrivalMonthCard[]>([])
   const [isLoadingDailyNewArrivalCalendar, setIsLoadingDailyNewArrivalCalendar] = useState(false)
   const [hoveredTopCategoryId, setHoveredTopCategoryId] = useState<string | null>(null)
@@ -152,9 +152,11 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
           currentLocale ||
           'en'
         : currentLocale || 'en'
-    getCategoryList({ lang })
-      .then((res) => setCategories(Array.isArray(res.list) ? res.list : []))
-      .catch(() => setCategories([]))
+    loadCategoryListCached(lang)
+      .then((list) => setCategories(list))
+      .catch(() => {
+        // keep cached / previous categories — never wipe nav to []
+      })
 
     getCategorySideNavZones({ lang })
       .then((res) => {
@@ -163,7 +165,9 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
         const brandZone = pickBrandSideNavZone(zones)
         setFloatingBrandItems(Array.isArray(brandZone?.items) ? brandZone.items : [])
       })
-      .catch(() => setFloatingBrandItems([]))
+      .catch(() => {
+        // keep previous brand items
+      })
   }, [currentLocale, localeTick])
 
   useEffect(() => {

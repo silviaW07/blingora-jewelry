@@ -17,7 +17,6 @@ import type {
   SideNavZoneSection
 } from '@/frontend/actions/ProductCategory'
 import {
-  getCategoryList,
   getCategoryDetail,
   getCategoryPosterList,
   getCategorySideNavZones,
@@ -28,6 +27,7 @@ import {
   getCategoryTopPromotion,
   resolveCategoryRouteKey,
 } from '@/frontend/actions/ProductCategory'
+import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 
@@ -314,7 +314,7 @@ export const useProductCategory = (): {
     min: routeParams.minPrice || '',
     max: routeParams.maxPrice || ''
   })
-  const [categories, setCategories] = useState<CategoryItem[]>([])
+  const [categories, setCategories] = useState<CategoryItem[]>(() => peekCachedCategoryList() || [])
   const [categoryDetail, setCategoryDetail] = useState<CategoryDetail | null>(null)
   const [currentCategoryLevel, setCurrentCategoryLevel] = useState<number | null>(routeParams.categoryId ? null : 1)
   const [posters, setPosters] = useState<CategoryPosterItem[]>([])
@@ -327,7 +327,7 @@ export const useProductCategory = (): {
   const [recommendationKeywords, setRecommendationKeywords] = useState<ProductCategoryKeywordItem[]>([])
   const [products, setProducts] = useState<ProductCardItem[]>([])
   const [totalCount, setTotalCount] = useState(0)
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+  const [isLoadingCategories, setIsLoadingCategories] = useState(() => !(peekCachedCategoryList()?.length))
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [localeTick, setLocaleTick] = useState(0)
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([])
@@ -422,23 +422,34 @@ export const useProductCategory = (): {
   ])
 
   useEffect(() => {
-    setIsLoadingCategories(true)
     const lang = getCurrentLang()
-    getCategoryList({ lang })
-      .then((res) => {
-        setCategories(res.list)
-        setExpandedCategoryIds(res.list.filter(category => category.display_config.showChildrenByDefault).map(category => category.category_id))
+    const cached = peekCachedCategoryList(lang)
+    // Keep showing cached nav while refreshing — never flash empty on route change
+    if (!cached?.length) setIsLoadingCategories(true)
+    loadCategoryListCached(lang)
+      .then((list) => {
+        setCategories(list)
+        setExpandedCategoryIds(
+          list
+            .filter((category) => category.display_config.showChildrenByDefault)
+            .map((category) => category.category_id),
+        )
       })
-      .catch((err: any) => toast.error(err.message))
+      .catch((err: any) => {
+        // Only toast when we have nothing to show
+        if (!(peekCachedCategoryList()?.length)) {
+          toast.error(err?.message || 'Failed to load categories', { id: 'category-list' })
+        }
+      })
       .finally(() => setIsLoadingCategories(false))
   }, [localeTick])
 
-  // 在 /category/[slug] 之间切换时，先清空旧 categoryId，等待新 slug 解析，避免串类目
+  // Switch /category/[slug]: reset filters only. Keep categoryId until the new slug resolves
+  // so the top nav / product shell does not blank out mid-navigation.
   useEffect(() => {
     if (!isCategorySlugRoute) return
     setQueryState((prev) => ({
       ...prev,
-      categoryId: '',
       page: 1,
       brandCategoryId: '',
       keywordId: '',
@@ -593,7 +604,9 @@ export const useProductCategory = (): {
         setCurrentCategoryLevel(res.detail?.current_category_level ?? null)
         setIsBrandExpanded(false)
       })
-      .catch((err: any) => toast.error(err.message))
+      .catch(() => {
+        // Keep previous detail; avoid red toast storm on transient RPC errors
+      })
   }, [queryState.categoryId, localeTick])
 
   useEffect(() => {
@@ -602,7 +615,9 @@ export const useProductCategory = (): {
         setPosters(res.list)
         setActiveBannerIndex(0)
       })
-      .catch((err: any) => toast.error(err.message))
+      .catch(() => {
+        // empty posters is fine — UI shows bannerEmpty
+      })
   }, [selectedTopLevelCategoryId])
 
   useEffect(() => {
@@ -611,9 +626,8 @@ export const useProductCategory = (): {
       .then((res) => {
         setSideNavZones(Array.isArray(res.zones) ? res.zones : [])
       })
-      .catch((err: any) => {
-        setSideNavZones([])
-        toast.error(err.message)
+      .catch(() => {
+        // keep previous zones
       })
   }, [localeTick])
 
@@ -624,10 +638,8 @@ export const useProductCategory = (): {
         setLeftNavKeywordGroups(groups)
         setActiveLeftNavGroupId((prev) => prev && groups.some((group) => group.group_id === prev) ? prev : groups[0]?.group_id || '')
       })
-      .catch((err: any) => {
-        setLeftNavKeywordGroups([])
-        setActiveLeftNavGroupId('')
-        toast.error(err.message)
+      .catch(() => {
+        // optional chrome — silent
       })
   }, [])
 
@@ -638,9 +650,8 @@ export const useProductCategory = (): {
         setRecommendationKeywordGroups(groups)
         setActiveRecommendationGroupId((prev) => prev && groups.some((group) => group.group_id === prev) ? prev : '')
       })
-      .catch((err: any) => {
-        setRecommendationKeywordGroups([])
-        toast.error(err.message)
+      .catch(() => {
+        // optional chrome — silent
       })
   }, [])
 
@@ -652,9 +663,8 @@ export const useProductCategory = (): {
       .then((res) => {
         setLeftNavKeywords(Array.isArray(res.list) ? res.list : [])
       })
-      .catch((err: any) => {
-        setLeftNavKeywords([])
-        toast.error(err.message)
+      .catch(() => {
+        // optional
       })
   }, [activeLeftNavGroupId])
 
@@ -666,9 +676,8 @@ export const useProductCategory = (): {
       .then((res) => {
         setRecommendationKeywords(Array.isArray(res.list) ? res.list : [])
       })
-      .catch((err: any) => {
-        setRecommendationKeywords([])
-        toast.error(err.message)
+      .catch(() => {
+        // optional
       })
   }, [])
 

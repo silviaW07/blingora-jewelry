@@ -36,6 +36,27 @@ const ERROR_MESSAGES = {
   OPERATION_FAILED: 'Operation failed',
 };
 
+/** Optional chrome reads — soft-fail in UI; do not spam red toasts on transient 5xx */
+const SILENT_SERVER_ERROR_ACTIONS = new Set([
+  'getKeywordGroupList',
+  'getKeywordList',
+  'getCategoryPosterList',
+  'getCategorySideNavZones',
+  'getCategoryTopPromotion',
+  'getDailyNewArrivalCalendar',
+  'getHomeReviewSection',
+  'getHomeSceneKeywordGroups',
+  'getHomeCategoryGuide',
+]);
+
+const actionLeafName = (actionName: string) => {
+  const parts = String(actionName || '').split('.');
+  return parts[parts.length - 1] || '';
+};
+
+const shouldSilentServerError = (actionName: string) =>
+  SILENT_SERVER_ERROR_ACTIONS.has(actionLeafName(actionName));
+
 /** Hide misleading engine messages that are not actionable for operators */
 const sanitizeRpcErrorMessage = (raw: unknown): string => {
   const message = String(raw || '').trim();
@@ -131,9 +152,17 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
         await new Promise(r => setTimeout(r, 500));
         resp = await fetch(apiUrl, fetchOptions);
         if (resp.status === 503) {
-          toast.error(ERROR_MESSAGES.SERVER_ERROR);
+          if (!shouldSilentServerError(actionName)) {
+            toast.error(ERROR_MESSAGES.SERVER_ERROR, { id: 'rpc-server-error' });
+          }
           throw new Error(ERROR_MESSAGES.SERVER_ERROR);
         }
+      }
+
+      // 502/500：瞬时过载再试一次（点击目录并发请求高峰）
+      if (resp.status === 502 || resp.status === 500) {
+        await new Promise(r => setTimeout(r, 400));
+        resp = await fetch(apiUrl, fetchOptions);
       }
 
       // 401 统一拦截
@@ -163,7 +192,9 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => ({}));
         const errorMsg = sanitizeRpcErrorMessage(errorData.error || ERROR_MESSAGES.SERVER_ERROR);
-        toast.error(errorMsg);
+        if (!shouldSilentServerError(actionName)) {
+          toast.error(errorMsg, { id: 'rpc-server-error' });
+        }
         throw new Error(errorMsg);
       }
 
