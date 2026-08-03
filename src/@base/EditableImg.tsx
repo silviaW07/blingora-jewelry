@@ -6,6 +6,7 @@ import get_image_url from '../../src/tools/tools';
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame';
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext';
 import { isDirectImageSrc } from '@/shared/imageUrl';
+import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
 
 
 // 并发控制：最多同时 3 个图片请求
@@ -261,16 +262,7 @@ const EditableImg = ({
                 src={(() => {
                     const raw = imageSrc ?? fallbackSrc ?? undefined
                     if (!raw) return undefined
-                    // Prefer same-origin /img-proxy for alicdn (nginx cache + no Referer 403)
-                    try {
-                        if (raw.startsWith('/img-proxy/')) return raw
-                        const u = new URL(raw, typeof window !== 'undefined' ? window.location.origin : 'https://sourcingjewelry.com')
-                        const host = u.hostname.toLowerCase()
-                        if (host === 'cbu01.alicdn.com') return `/img-proxy/cbu01${u.pathname}${u.search}`
-                        if (host === 'cbu02.alicdn.com') return `/img-proxy/cbu02${u.pathname}${u.search}`
-                        if (host === 'gw.alicdn.com' || host === 'img.alicdn.com') return `/img-proxy/cbu01${u.pathname}${u.search}`
-                    } catch { /* keep raw */ }
-                    return raw
+                    return toProxiedImageUrl(raw, { width: 800 }) || raw
                 })()}
                 alt={imageAlt ?? undefined}
                 className={className}

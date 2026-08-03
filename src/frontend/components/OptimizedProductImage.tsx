@@ -31,15 +31,17 @@ export function OptimizedProductImage({
   height,
   sizes = '(max-width: 640px) 50vw, 25vw',
   priority = false,
-}: Props) {
-  const proxied = toProxiedImageUrl(src)
+  /** Longest edge requested from alicdn (default 400 for cards) */
+  imageWidth = 400,
+}: Props & { imageWidth?: number }) {
+  const proxied = toProxiedImageUrl(src, { width: imageWidth })
   const [failed, setFailed] = useState(false)
 
   if (!proxied || failed) {
     return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
   }
 
-  // Local /img-proxy and absolute same-origin — use unoptimized only if needed
+  // Local /img-proxy — nginx already caches; skip Next optimizer round-trip
   const isLocalProxy = proxied.startsWith('/img-proxy/')
 
   if (fill) {
@@ -62,8 +64,8 @@ export function OptimizedProductImage({
     <Image
       src={proxied}
       alt={alt}
-      width={width || 400}
-      height={height || 400}
+      width={width || imageWidth}
+      height={height || imageWidth}
       sizes={sizes}
       priority={priority}
       className={cn('object-cover', className)}

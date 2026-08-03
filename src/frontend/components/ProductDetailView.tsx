@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
 import EditableImg from '@/@base/EditableImg';
+import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -392,15 +393,17 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       key={`${item.url}-${index}`}
                       type="button"
                       className={cn(
-                        'aspect-square overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
+                        'relative aspect-square overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
                         activeImage === item.url ? 'border-[#111111]' : 'border-transparent hover:border-[#ccc]',
                       )}
                       onClick={() => item.url && setActiveImage(item.url)}
                     >
-                      <EditableImg
-                        propKey={`detail-thumb-${index}`}
-                        keywords={item.url || product.name}
-                        className="size-full object-cover"
+                      <OptimizedProductImage
+                        src={item.url}
+                        alt={product.name}
+                        className="size-full"
+                        sizes="72px"
+                        imageWidth={160}
                       />
                     </button>
                   ))}
@@ -408,10 +411,13 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
                 <div className="relative min-w-0 flex-1">
                   <div className="relative aspect-square w-full overflow-hidden rounded-[2px] bg-[#f3f3f3]">
-                    <EditableImg
-                      propKey={`detail-main-${product.id}`}
-                      keywords={activeImage || product.mainImageUrl || product.name}
-                      className="size-full object-cover"
+                    <OptimizedProductImage
+                      src={activeImage || product.mainImageUrl}
+                      alt={product.name}
+                      className="size-full"
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      imageWidth={960}
+                      priority
                     />
                     <button
                       type="button"
@@ -437,15 +443,17 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         key={`m-${item.url}-${index}`}
                         type="button"
                         className={cn(
-                          'size-14 shrink-0 overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
+                          'relative size-14 shrink-0 overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
                           activeImage === item.url ? 'border-[#111111]' : 'border-transparent',
                         )}
                         onClick={() => item.url && setActiveImage(item.url)}
                       >
-                        <EditableImg
-                          propKey={`detail-mthumb-${index}`}
-                          keywords={item.url || product.name}
-                          className="size-full object-cover"
+                        <OptimizedProductImage
+                          src={item.url}
+                          alt=""
+                          className="size-full"
+                          sizes="56px"
+                          imageWidth={160}
                         />
                       </button>
                     ))}

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import type { ProductItem } from '@/frontend/actions/ProductCategory'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
+import { GuestPricePlaceholder, useCanViewStorePrice } from '@/frontend/components/GuestPricePlaceholder'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -130,6 +131,7 @@ export const ProductListCard = ({
           alt={item.product_name}
           className="transition duration-500 group-hover:scale-[1.03]"
           sizes="(max-width: 640px) 50vw, 25vw"
+          imageWidth={400}
         />
       </div>
 
@@ -184,6 +186,7 @@ export const ProductListCard = ({
                     alt=""
                     className="pointer-events-none"
                     sizes="24px"
+                    imageWidth={120}
                   />
                 </button>
               )

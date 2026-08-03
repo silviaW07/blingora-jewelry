@@ -24,7 +24,15 @@ export const optimizeCatalogImageUrl = (
 ): string | null => {
   const text = String(value || '').trim()
   if (!text) return null
-  if (text.startsWith('/') || text.startsWith('data:') || text.startsWith('blob:')) return text
+  if (text.startsWith('/') || text.startsWith('data:') || text.startsWith('blob:')) {
+    // Already same-origin (incl. /img-proxy) — append alicdn size when possible
+    if (text.startsWith('/img-proxy/') && !/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
+      if (/\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
+        return `${text.split('?')[0]}_${width}x${width}q80.jpg${text.includes('?') ? `?${text.split('?')[1]}` : ''}`
+      }
+    }
+    return text
+  }
 
   try {
     const url = new URL(text)
@@ -43,6 +51,15 @@ export const optimizeCatalogImageUrl = (
       url.searchParams.set('auto', 'compress')
       url.searchParams.set('cs', 'tinysrgb')
       url.searchParams.set('w', String(width))
+      return url.toString()
+    }
+
+    // 1688 / alicdn：官方尺寸后缀，体积从数百 KB 降到几十 KB
+    if (host.includes('alicdn.com')) {
+      const path = url.pathname
+      if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(path) && /\.(jpe?g|png|webp)$/i.test(path)) {
+        url.pathname = `${path}_${width}x${width}q80.jpg`
+      }
       return url.toString()
     }
 
