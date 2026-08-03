@@ -848,12 +848,11 @@ const activeListedProductWhere = {
 }
 
 /**
- * 读取所有已上架商品，按 publishedAt（回退 createdAt）统计最近 6 个月新品数量。
- * 要求 product.publishedAt 列存在（见 deploy/sql/add-product-publishedAt.sql）。
+ * 读取已上架商品，按 createdAt 归入最近 6 个月（New 月历）。
+ * 故意不查 publishedAt：线上 Prisma client / 列不同步时会整页 500。
  */
 export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyNewArrivalCalendarOutput> => {
   const months = buildLast6Months()
-  // 窗口从「最旧一个月」月初开始（含当月共 6 个月）
   const rangeStart = getLast6MonthsRangeStart()
   const monthKeys = new Set(months.map((item) => item.monthKey))
   const countMap = new Map(months.map((item) => [item.monthKey, 0]))
@@ -865,22 +864,16 @@ export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyN
     prisma.product.findMany({
       where: {
         ...activeListedProductWhere,
-        OR: [
-          { publishedAt: { gte: rangeStart } },
-          {
-            AND: [{ publishedAt: null }, { createdAt: { gte: rangeStart } }],
-          },
-        ],
+        createdAt: { gte: rangeStart },
       },
       select: {
         createdAt: true,
-        publishedAt: true,
       },
     }),
   ])
 
   productsInRange.forEach((product) => {
-    const anchor = product.publishedAt || product.createdAt
+    const anchor = product.createdAt
     const monthKey = toMonthKey(anchor.getFullYear(), anchor.getMonth() + 1)
     if (!monthKeys.has(monthKey)) {
       return
@@ -902,7 +895,7 @@ export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyN
 })
 
 /**
- * 上新商品列表：独立于分类 ID，仅按 publishedAt/createdAt 时间窗筛选，倒序。
+ * 上新商品列表：按 createdAt 时间窗筛选，倒序。
  * - 传 year+month：该月
  * - 不传：最近 6 个月（含当月）
  */
@@ -929,31 +922,12 @@ export const getDailyNewArrivalProducts = withResult(async (
     rangeEnd = undefined
   }
 
-  const timeFilter = rangeEnd
-    ? {
-        OR: [
-          { publishedAt: { gte: rangeStart, lt: rangeEnd } },
-          {
-            AND: [
-              { publishedAt: null },
-              { createdAt: { gte: rangeStart, lt: rangeEnd } },
-            ],
-          },
-        ],
-      }
-    : {
-        OR: [
-          { publishedAt: { gte: rangeStart } },
-          {
-            AND: [{ publishedAt: null }, { createdAt: { gte: rangeStart } }],
-          },
-        ],
-      }
-
   const dbProducts = await prisma.product.findMany({
     where: {
       ...activeListedProductWhere,
-      ...timeFilter,
+      createdAt: rangeEnd
+        ? { gte: rangeStart, lt: rangeEnd }
+        : { gte: rangeStart },
     },
     include: {
       skus: true,
@@ -1002,11 +976,7 @@ export const getDailyNewArrivalProducts = withResult(async (
   const exchangeRate = await getUsdExchangeRate(prisma)
   const list = dbProducts
     .slice()
-    .sort((a, b) => {
-      const ta = (a.publishedAt || a.createdAt).getTime()
-      const tb = (b.publishedAt || b.createdAt).getTime()
-      return tb - ta
-    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((product) => mapActiveProductToItem(product, exchangeRate, input.lang))
 
   return {
