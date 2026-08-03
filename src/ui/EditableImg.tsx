@@ -110,6 +110,7 @@ const EditableImg = ({
             src={imageSrc}
             alt={imageAlt}
             className={className}
+            referrerPolicy="no-referrer"
         />
     );
 };

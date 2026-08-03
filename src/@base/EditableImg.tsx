@@ -253,10 +253,25 @@ const EditableImg = ({
         <DecorateFrame propKey={propKey} kind="image" className={className} style={mergedStyle}>
             <img
                 {...imgProps}
+                // 1688/alicdn blocks hotlink when Referer is our domain → 403 blank images
+                referrerPolicy={imgProps.referrerPolicy ?? 'no-referrer'}
                 loading={loading}
                 decoding={decoding}
                 style={mergedStyle}
-                src={imageSrc ?? fallbackSrc ?? undefined}
+                src={(() => {
+                    const raw = imageSrc ?? fallbackSrc ?? undefined
+                    if (!raw) return undefined
+                    // Prefer same-origin /img-proxy for alicdn (nginx cache + no Referer 403)
+                    try {
+                        if (raw.startsWith('/img-proxy/')) return raw
+                        const u = new URL(raw, typeof window !== 'undefined' ? window.location.origin : 'https://sourcingjewelry.com')
+                        const host = u.hostname.toLowerCase()
+                        if (host === 'cbu01.alicdn.com') return `/img-proxy/cbu01${u.pathname}${u.search}`
+                        if (host === 'cbu02.alicdn.com') return `/img-proxy/cbu02${u.pathname}${u.search}`
+                        if (host === 'gw.alicdn.com' || host === 'img.alicdn.com') return `/img-proxy/cbu01${u.pathname}${u.search}`
+                    } catch { /* keep raw */ }
+                    return raw
+                })()}
                 alt={imageAlt ?? undefined}
                 className={className}
                 data-api-exclude-tracking={isFromKeywordSearch ? "true" : undefined}

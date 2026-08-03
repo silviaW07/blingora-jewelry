@@ -51,6 +51,8 @@ export default function RootLayout({
       color: 'rgba(0, 0, 0, 0.85)'
     }}>
       <head>
+        {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}
+        <meta name="referrer" content="no-referrer" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />

@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import EditableImg from '@/@base/EditableImg'
 import type { ProductItem } from '@/frontend/actions/ProductCategory'
+import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { useTranslation } from 'react-i18next'
 
@@ -125,12 +125,11 @@ export const ProductListCard = ({
       onKeyDown={handleCardKeyDown}
     >
       <div className="home-product-card-media relative aspect-square w-full shrink-0 overflow-hidden">
-        <EditableImg
-          propKey={imagePropKey}
-          keywords={previewImage || item.product_name}
-          orientation="square"
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-          style={{ aspectRatio: '1 / 1' }}
+        <OptimizedProductImage
+          src={previewImage || item.main_image_url}
+          alt={item.product_name}
+          className="transition duration-500 group-hover:scale-[1.03]"
+          sizes="(max-width: 640px) 50vw, 25vw"
         />
       </div>
 
@@ -172,7 +171,7 @@ export const ProductListCard = ({
                   aria-label={t('product.colorIndex', { index: index + 1 })}
                   aria-pressed={isActive}
                   className={cn(
-                    'size-6 shrink-0 overflow-hidden rounded-[4px] border bg-[#f7f4ee] transition',
+                    'relative size-6 shrink-0 overflow-hidden rounded-[4px] border bg-[#f7f4ee] transition',
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20',
                     isActive
                       ? 'border-[#111111] ring-1 ring-[#111111]/30'
@@ -180,12 +179,11 @@ export const ProductListCard = ({
                   )}
                   onClick={(event) => handleColorThumbClick(event, url)}
                 >
-                  <EditableImg
-                    propKey={`${imagePropKey}-swatch-${index}`}
-                    keywords={url}
-                    orientation="square"
-                    className="pointer-events-none size-full object-cover"
-                    style={{ aspectRatio: '1 / 1' }}
+                  <OptimizedProductImage
+                    src={url}
+                    alt=""
+                    className="pointer-events-none"
+                    sizes="24px"
                   />
                 </button>
               )

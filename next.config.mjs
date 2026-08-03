@@ -78,8 +78,22 @@ const nextConfig = {
   assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH || '',
 
   images: {
-    unoptimized: true,
-    formats: ['image/avif', 'image/webp']
+    // Enable Next.js optimizer → WebP/AVIF for remote product images
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [64, 96, 128, 256, 384],
+    minimumCacheTTL: 86400,
+    remotePatterns: [
+      { protocol: 'https', hostname: 'cbu01.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'cbu02.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'gw.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'img.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'productp.s3.us-west-2.amazonaws.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'sourcingjewelry.com', pathname: '/img-proxy/**' },
+      { protocol: 'http', hostname: '127.0.0.1', pathname: '/img-proxy/**' },
+      { protocol: 'http', hostname: 'localhost', pathname: '/img-proxy/**' },
+    ],
   },
 
   productionBrowserSourceMaps: false,
