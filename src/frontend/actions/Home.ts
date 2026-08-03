@@ -848,7 +848,8 @@ const activeListedProductWhere = {
 }
 
 /**
- * 读取所有已上架商品，按创建/上架月份统计最近 6 个月新品数量
+ * 读取所有已上架商品，按 publishedAt（回退 createdAt）统计最近 6 个月新品数量。
+ * 要求 product.publishedAt 列存在（见 deploy/sql/add-product-publishedAt.sql）。
  */
 export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyNewArrivalCalendarOutput> => {
   const months = buildLast6Months()

@@ -284,13 +284,26 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   )
 
   const goHomeWithDailyMonth = useCallback(
-    (monthKey: string, dailyCategoryId?: string) => {
+    (monthKey: string, dailyCategoryId?: string, dailyCategorySlug?: string | null) => {
       const params = new URLSearchParams()
-      if (dailyCategoryId) params.set('categoryId', dailyCategoryId)
       params.set('dailyMonth', monthKey)
-      router.push(`${ProductCategory.path}?${params.toString()}`)
+      const id = String(dailyCategoryId || '').trim()
+      const slugFromArg = String(dailyCategorySlug || '').trim()
+      const slug =
+        slugFromArg ||
+        (id
+          ? categories.find((c) => c.category_id === id)?.category_slug ||
+            categories.flatMap((c) => c.children || []).find((c) => c.category_id === id)?.category_slug ||
+            null
+          : null)
+      if (slug) {
+        router.push(`/category/${encodeURIComponent(String(slug).trim())}?${params.toString()}`)
+        return
+      }
+      if (id) params.set('categoryId', id)
+      router.push(`/productcategory/?${params.toString()}`)
     },
-    [router],
+    [categories, router],
   )
 
   const handleHeaderSearchSubmit = useCallback(() => {
@@ -578,7 +591,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                                   onClick={(event) => {
                                     event.stopPropagation()
                                     event.preventDefault()
-                                    goHomeWithDailyMonth(month.monthKey, category.category_id)
+                                    goHomeWithDailyMonth(month.monthKey, category.category_id, category.category_slug)
                                   }}
                                 >
                                   <span>{month.label}</span>
@@ -644,7 +657,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                                     onClick={(event) => {
                                       event.preventDefault()
                                       event.stopPropagation()
-                                      goHomeWithDailyMonth(month.monthKey, category.category_id)
+                                      goHomeWithDailyMonth(month.monthKey, category.category_id, category.category_slug)
                                     }}
                                   >
                                     <span>{month.label}</span>

@@ -4304,6 +4304,9 @@ const createProductRecord = async (tx: any, params: {
       productCode,
       source: params.source as any,
       status: (params.status || 'DRAFT') as any,
+      // New / 每月上新：上架即写入 publishedAt，供前台按月归类
+      publishedAt: (params.status || 'DRAFT') === 'ACTIVE' ? new Date() : null,
+      isNewArrival: (params.status || 'DRAFT') === 'ACTIVE',
       supplierName: params.supplierName || null,
       goodsStatus: (params.goodsStatus && params.goodsStatus !== 'DRAFT' ? params.goodsStatus : undefined) as any,
       brandCategoryId: params.brandCategoryId || null,
@@ -4528,12 +4531,12 @@ export const getCategoryOptions = requireRole([UserRole.ADMIN])(
     const nameById = new Map(categories.map(c => [c.id, c.name]))
 
     return categories.map(c => ({
-      category_id: c.id,
+        category_id: c.id,
       category_name: c.name,
       parent_id: c.parentId,
       level: c.level,
       parent_name: c.parentId ? (nameById.get(c.parentId) || null) : null
-    }))
+      }))
   })
 )
 
@@ -5302,17 +5305,17 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
 
           if (!hasRealParse) {
-            failureCount += 1
+          failureCount += 1
             const failReason =
               fetchResult.outcome === 'expired'
                 ? '解析失败：该拼多多商品已下架或不存在'
                 : fetchResult.failureReason || '解析失败：拼多多风控/抓取失败，请稍后重试'
             const goodsId = extractPinduoduoGoodsId(sourceUrl) || item.id.slice(0, 6)
-            await prisma.importtaskitem.update({
-              where: { id: item.id },
-              data: {
+          await prisma.importtaskitem.update({
+            where: { id: item.id },
+            data: {
                 parsedName: fetched.name || `[拼多多抓取] 商品 ${goodsId}`,
-                fetchStatus: 'FAILED' as any,
+              fetchStatus: 'FAILED' as any,
                 failureReason: failReason,
                 fetchFinishedAt: new Date(),
               },

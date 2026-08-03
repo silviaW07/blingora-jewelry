@@ -2048,7 +2048,14 @@ export const updateProductStatus = requireRole([UserRole.ADMIN])(
         where: { id: product_id },
         data: {
           status: target_status,
-          goodsStatus: target_status === 'DRAFT' ? 'DRAFT' : mapProductStatusToGoodsStatus(target_status)
+          goodsStatus: target_status === 'DRAFT' ? 'DRAFT' : mapProductStatusToGoodsStatus(target_status),
+          // 首次上架写入 publishedAt；再次上架若为空也补上（供 New 按月归类）
+          ...(target_status === 'ACTIVE'
+            ? {
+                publishedAt: product.publishedAt || new Date(),
+                isNewArrival: true,
+              }
+            : {}),
         }
       })
       await syncCartItemsValidState(tx, product_id)

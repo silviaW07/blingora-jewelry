@@ -1,12 +1,11 @@
 generator client {
   provider = "prisma-client-js"
-  output = "../prisma-generated/client"
 }
 
 
 datasource db {
   provider = "mysql"
-  url      = "mysql://root:LocalDev123!@localhost:3306/PROJ_fcb9e6ee_snap_20260726_092922_893?charset=utf8mb4&connection_limit=10"
+  url      = env("DATABASE_URL")
 }
 
 enum userrole {
@@ -347,6 +346,8 @@ model product {
   isBestSeller      Boolean            @default(false)
   isLimitedDiscount Boolean            @default(false)
   sortWeight        Int                @default(0) // 排序权重，数值越大越靠前
+  /** 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt */
+  publishedAt       DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt @default(now())
 
@@ -375,6 +376,7 @@ model product {
   @@index([gemstoneType])
   @@index([goodsStatus])
   @@index([brandName])
+  @@index([publishedAt])
 }
 
 model productsku {
