@@ -1,13 +1,14 @@
 // {"router": "/category/[slug]", "id": "f02b", "en_name": "CategoryBySlug"}
 import CategoryBySlugClient from './CategoryBySlugClient'
 
-/** ISR: regenerate category shell at most every 5 minutes */
+/**
+ * Pre-render every active category slug at build time (SSG + ISR).
+ * `dynamicParams = true` still allows new slugs after deploy without rebuild.
+ */
+export const dynamic = 'force-static'
+export const dynamicParams = true
 export const revalidate = 300
 
-/**
- * Static export (`output: 'export'`) requires generateStaticParams for dynamic segments.
- * Pre-render all active category slugs (fallback to id when slug is empty).
- */
 export async function generateStaticParams() {
   try {
     const prisma = (await import('@/tools/prisma')).default
