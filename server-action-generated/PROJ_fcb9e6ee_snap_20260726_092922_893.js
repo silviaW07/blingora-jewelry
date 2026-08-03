@@ -105058,7 +105058,6 @@ const activeListedProductWhere = {
 };
 const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
     const months = (0, _dailyNewArrival.buildLast6Months)();
-    // 窗口从「最旧一个月」月初开始（含当月共 6 个月）
     const rangeStart = (0, _dailyNewArrival.getLast6MonthsRangeStart)();
     const monthKeys = new Set(months.map((item)=>item.monthKey));
     const countMap = new Map(months.map((item)=>[
@@ -105072,34 +105071,17 @@ const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
         _prisma.default.product.findMany({
             where: {
                 ...activeListedProductWhere,
-                OR: [
-                    {
-                        publishedAt: {
-                            gte: rangeStart
-                        }
-                    },
-                    {
-                        AND: [
-                            {
-                                publishedAt: null
-                            },
-                            {
-                                createdAt: {
-                                    gte: rangeStart
-                                }
-                            }
-                        ]
-                    }
-                ]
+                createdAt: {
+                    gte: rangeStart
+                }
             },
             select: {
-                createdAt: true,
-                publishedAt: true
+                createdAt: true
             }
         })
     ]);
     productsInRange.forEach((product)=>{
-        const anchor = product.publishedAt || product.createdAt;
+        const anchor = product.createdAt;
         const monthKey = (0, _dailyNewArrival.toMonthKey)(anchor.getFullYear(), anchor.getMonth() + 1);
         if (!monthKeys.has(monthKey)) {
             return;
@@ -105131,53 +105113,15 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
         rangeStart = (0, _dailyNewArrival.getLast6MonthsRangeStart)();
         rangeEnd = undefined;
     }
-    const timeFilter = rangeEnd ? {
-        OR: [
-            {
-                publishedAt: {
-                    gte: rangeStart,
-                    lt: rangeEnd
-                }
-            },
-            {
-                AND: [
-                    {
-                        publishedAt: null
-                    },
-                    {
-                        createdAt: {
-                            gte: rangeStart,
-                            lt: rangeEnd
-                        }
-                    }
-                ]
-            }
-        ]
-    } : {
-        OR: [
-            {
-                publishedAt: {
-                    gte: rangeStart
-                }
-            },
-            {
-                AND: [
-                    {
-                        publishedAt: null
-                    },
-                    {
-                        createdAt: {
-                            gte: rangeStart
-                        }
-                    }
-                ]
-            }
-        ]
-    };
     const dbProducts = await _prisma.default.product.findMany({
         where: {
             ...activeListedProductWhere,
-            ...timeFilter
+            createdAt: rangeEnd ? {
+                gte: rangeStart,
+                lt: rangeEnd
+            } : {
+                gte: rangeStart
+            }
         },
         include: {
             skus: true,
@@ -105224,8 +105168,8 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
     });
     const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
     const list = dbProducts.slice().sort((a, b)=>{
-        const ta = (a.publishedAt || a.createdAt).getTime();
-        const tb = (b.publishedAt || b.createdAt).getTime();
+        const ta = a.createdAt.getTime();
+        const tb = b.createdAt.getTime();
         return tb - ta;
     }).map((product)=>mapActiveProductToItem(product, exchangeRate, input.lang));
     return {
