@@ -1048,10 +1048,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setPendingImportActiveTask(result.activeTask || null)
     const visibleItems = (result.list || []).filter(item => !item.item_isPublished)
     setPendingImportQueue(visibleItems)
-    setPendingImportQueueTotal(visibleItems.length)
+    // Prefer server total when paginated; fall back to page length
+    setPendingImportQueueTotal(
+      typeof result.total === 'number' && result.total >= visibleItems.length
+        ? result.total
+        : visibleItems.length,
+    )
     setPendingImportSelectedIds(prev => prev.filter(id => visibleItems.some(item => item.item_id === id)))
     setPendingImportPage(prev => {
-      const totalPages = Math.max(1, Math.ceil(visibleItems.length / 50))
+      const total = typeof result.total === 'number' ? result.total : visibleItems.length
+      const totalPages = Math.max(1, Math.ceil(total / 50))
       return Math.min(prev, totalPages)
     })
   }, [])
@@ -1081,11 +1087,18 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       setPendingImportQueueLoading(true)
     }
     try {
-      const result = await getPendingImportQueue()
+      const result = await getPendingImportQueue({
+        page: 1,
+        page_size: 80,
+        skip_maintenance: silent,
+      } as any)
       applyPendingImportQueueResult(result)
       setPendingImportQueueError(null)
     } catch (err: any) {
-      const message = err.message || '获取待上传区数据失败'
+      const raw = String(err?.message || '')
+      const message = /Failed to fetch|无法连接|NetworkError|fetch failed/i.test(raw)
+        ? '无法连接后台 RPC。请执行：pnpm run build:server && pm2 restart rpc'
+        : raw || '获取待上传区数据失败'
       if (!silent) {
         setPendingImportActiveTask(null)
         setPendingImportQueue([])

@@ -318,6 +318,8 @@ export interface ProductManagementPendingImportQueueOutput {
   activeTask: PendingImportQueueTaskSummary | null
   list: PendingImportQueueItem[]
   total: number
+  page?: number
+  page_size?: number
 }
 
 type PublishedImportMatchDbRecord = {
@@ -2666,8 +2668,12 @@ export const retryPendingImportTaskForProductManagement = requireRole([UserRole.
 )
 
 export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
-  withResult(async (): Promise<ProductManagementPendingImportQueueOutput> => {
-    const queue = await getImportFrom1688PendingImportQueue()
+  withResult(async (input?: {
+    page?: number
+    page_size?: number
+    skip_maintenance?: boolean
+  }): Promise<ProductManagementPendingImportQueueOutput> => {
+    const queue = await getImportFrom1688PendingImportQueue(input)
     return queue as ProductManagementPendingImportQueueOutput
   })
 )

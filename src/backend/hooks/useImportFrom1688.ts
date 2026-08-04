@@ -714,7 +714,12 @@ export const useImportFrom1688 = (
       setIsLoadingDetail(true)
     }
     try {
-      const res = await getPendingImportQueue()
+      // Light queue pull for status panels — never full unbounded dump or heavy maintenance on every open
+      const res = await getPendingImportQueue({
+        page: 1,
+        page_size: 80,
+        skip_maintenance: true,
+      } as any)
       const queueItems = id ? res.list.filter(item => item.item_importTaskId === id) : res.list
       const fallbackTask = id && queueItems.length > 0
         ? (res.activeTask?.task_id === id ? res.activeTask : buildFallbackTaskSummary(id, queueItems))
@@ -732,7 +737,10 @@ export const useImportFrom1688 = (
       lastQueueLoadErrorRef.current = null
       return { task: fallbackTask, items: queueItems }
     } catch (error) {
-      const message = (error as Error).message || '获取待上传区数据失败'
+      const raw = String((error as Error).message || '')
+      const message = /Failed to fetch|无法连接|NetworkError|fetch failed/i.test(raw)
+        ? '无法连接后台 RPC（Failed to fetch）。请确认 rpc 在线：pnpm run build:server && pm2 restart rpc'
+        : raw || '获取待上传区数据失败'
       setCurrentTask(prev => prev)
       setCurrentItems(prev => {
         if (prev.length === 0) {
@@ -742,7 +750,8 @@ export const useImportFrom1688 = (
         }
         return prev
       })
-      if (lastQueueLoadErrorRef.current !== message) {
+      // 表格导入页依赖本地解析，队列失败不刷屏盖掉「解析成功」
+      if (!options?.silent && lastQueueLoadErrorRef.current !== message) {
         toast.error(message)
         lastQueueLoadErrorRef.current = message
       }
@@ -831,10 +840,14 @@ export const useImportFrom1688 = (
     loadCategories()
   }, [loadCategories])
 
+  // 表格导入 / 手动建品：预览纯本地，不强制拉待上传队列（避免 Failed to fetch 掩盖解析成功）
   useEffect(() => {
     setActiveTab('current')
-    loadDetail(taskId || null)
-  }, [taskId, loadDetail])
+    if (creationMode === 'table' || creationMode === 'manual') {
+      return
+    }
+    void loadDetail(taskId || null)
+  }, [taskId, loadDetail, creationMode])
 
   useEffect(() => {
     const watchId = parseWatchTaskId || taskId || null
@@ -1145,6 +1158,11 @@ export const useImportFrom1688 = (
       toast.error('存在名称为空的行，请补全后再提交')
       return
     }
+    const missingCode = tableImportRows.find(row => !row.productCode.trim())
+    if (missingCode) {
+      toast.error('存在产品编号为空的行，请补全后再提交')
+      return
+    }
 
     setIsSubmittingTableImport(true)
     try {
@@ -1165,7 +1183,11 @@ export const useImportFrom1688 = (
       setTableImportForm(prev => ({ ...prev, content: '', selectedFileName: '', importSource: 'paste' }))
       ProductManagement.navigateToPendingImports(router)
     } catch (error) {
-      toast.error((error as Error).message || '提交失败')
+      const raw = String((error as Error).message || '')
+      const message = /Failed to fetch|无法连接|NetworkError|fetch failed/i.test(raw)
+        ? '创建失败：无法连接 RPC。请执行 pnpm run build:server && pm2 restart rpc 后重试'
+        : raw || '提交失败'
+      toast.error(message)
     } finally {
       setIsSubmittingTableImport(false)
     }

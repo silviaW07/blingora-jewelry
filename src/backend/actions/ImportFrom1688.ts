@@ -347,10 +347,21 @@ export interface DeleteImportTaskInput {
   taskId: string
 }
 
+export interface GetPendingImportQueueInput {
+  /** 1-based page; default 1 */
+  page?: number
+  /** default 80, max 200 — prevents opening table-import from downloading entire queue */
+  page_size?: number
+  /** skip charset/mock repair side-effects on hot path */
+  skip_maintenance?: boolean
+}
+
 export interface GetPendingImportQueueOutput {
   activeTask: PendingImportQueueTaskSummary | null
   list: PendingImportItemRecord[]
   total: number
+  page?: number
+  page_size?: number
 }
 
 interface PendingImportQueueSnapshot {
@@ -3901,38 +3912,57 @@ const buildPendingTaskSummary = (task: any): PendingImportQueueTaskSummary => ({
   task_finishedAt: task.finishedAt || null
 })
 
-const loadPendingImportQueueSnapshot = async (): Promise<PendingImportQueueSnapshot> => {
-  const activeTask = await prisma.importtask.findFirst({
-    where: {
-      status: {
-        in: ['PENDING', 'RUNNING', 'RATE_LIMITED', 'RETRY_PENDING', 'PARTIAL_SUCCESS'] as any
-      }
-    },
-    orderBy: [{ createdAt: 'desc' }]
-  })
+const PENDING_IMPORT_QUEUE_WHERE = {
+  isPublished: false,
+  importedProductId: null,
+  OR: [
+    { fetchStatus: 'COMPLETED' as any },
+    { publishStatus: { in: ['FAILED', 'PENDING', 'RUNNING'] as any } },
+    { fetchStatus: { in: ['PENDING', 'RUNNING', 'FAILED', 'RATE_LIMITED', 'RETRY_PENDING'] as any } },
+  ],
+} as const
 
-  const fallbackTask = activeTask
-    ? activeTask
-    : await prisma.importtask.findFirst({
-        orderBy: [{ createdAt: 'desc' }]
-      })
+/** Soft cap so admin open never pulls unbounded preview JSON (table import / 1688 drafts). */
+const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 80
+const MAX_PENDING_QUEUE_PAGE_SIZE = 200
 
-  const items = await prisma.importtaskitem.findMany({
-    where: {
-      isPublished: false,
-      importedProductId: null,
-      OR: [
-        { fetchStatus: 'COMPLETED' as any },
-        { publishStatus: { in: ['FAILED', 'PENDING', 'RUNNING'] as any } },
-        { fetchStatus: { in: ['PENDING', 'RUNNING', 'FAILED', 'RATE_LIMITED', 'RETRY_PENDING'] as any } }
-      ]
-    },
-    // 按导入时间正序，保留 Excel 原始行顺序（不再倒序）
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    include: {
-      importTask: true
-    }
-  })
+const loadPendingImportQueueSnapshot = async (opts?: {
+  page?: number
+  page_size?: number
+}): Promise<PendingImportQueueSnapshot & { total: number }> => {
+  const page = Math.max(1, Number(opts?.page) || 1)
+  const pageSize = Math.min(
+    MAX_PENDING_QUEUE_PAGE_SIZE,
+    Math.max(1, Number(opts?.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE),
+  )
+  const skip = (page - 1) * pageSize
+
+  const [activeTask, fallbackTask, total, items] = await Promise.all([
+    prisma.importtask.findFirst({
+      where: {
+        status: {
+          in: ['PENDING', 'RUNNING', 'RATE_LIMITED', 'RETRY_PENDING', 'PARTIAL_SUCCESS'] as any,
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+    prisma.importtask.findFirst({
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+    prisma.importtaskitem.count({ where: PENDING_IMPORT_QUEUE_WHERE as any }),
+    prisma.importtaskitem.findMany({
+      where: PENDING_IMPORT_QUEUE_WHERE as any,
+      // 按导入时间正序，保留 Excel 原始行顺序
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      skip,
+      take: pageSize,
+      include: {
+        importTask: true,
+      },
+    }),
+  ])
+
+  const task = activeTask || fallbackTask
 
   const sortedItems = [...items].sort((a, b) => {
     const timeA = new Date(a.createdAt).getTime()
@@ -3948,10 +3978,10 @@ const loadPendingImportQueueSnapshot = async (): Promise<PendingImportQueueSnaps
   })
 
   // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
-  // （表格合并仅发生在 createProductsFromTable；1688 每条链接在解析时已是独立条目）
   return {
-    activeTask: fallbackTask ? buildPendingTaskSummary(fallbackTask) : null,
-    items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask))
+    activeTask: task ? buildPendingTaskSummary(task) : null,
+    items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask)),
+    total,
   }
 }
 
@@ -4589,86 +4619,107 @@ export const getImportTaskDetail = requireRole([UserRole.ADMIN])(
   })
 )
 
+/** Queue list is a hot path — full charset/mock sweeps at most once per 10 minutes. */
+let lastPendingQueueMaintenanceAt = 0
+const PENDING_QUEUE_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000
+
 export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
-  withResult(async (): Promise<GetPendingImportQueueOutput> => {
+  withResult(async (input?: GetPendingImportQueueInput): Promise<GetPendingImportQueueOutput> => {
+    const page = Math.max(1, Number(input?.page) || 1)
+    const pageSize = Math.min(
+      MAX_PENDING_QUEUE_PAGE_SIZE,
+      Math.max(1, Number(input?.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE),
+    )
+    const skipMaintenance = Boolean(input?.skip_maintenance)
+
     try {
       await prisma.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
     } catch (error) {
       console.error('[getPendingImportQueue] failed to set utf8mb4 session charset', error)
     }
 
-    try {
-      const repairedCount = await repairCharsetCorruptedPendingImportItems()
-      if (repairedCount > 0) {
-        console.info(`[getPendingImportQueue] repaired ${repairedCount} charset-corrupted pending import items`)
-      }
-    } catch (error) {
-      console.error('[getPendingImportQueue] failed to repair charset-corrupted pending import items', error)
-    }
+    const dueMaintenance =
+      !skipMaintenance &&
+      Date.now() - lastPendingQueueMaintenanceAt >= PENDING_QUEUE_MAINTENANCE_INTERVAL_MS
 
-    try {
-      const sanitizedMockCount = await sanitizeClassicMockPendingImportItems(40)
-      if (sanitizedMockCount > 0) {
-        console.info(`[getPendingImportQueue] cleared ${sanitizedMockCount} classic mock 红/蓝/黑 SKU rows`)
-      }
-    } catch (error) {
-      console.error('[getPendingImportQueue] failed to sanitize classic mock SKUs', error)
-    }
-
-    try {
-      const backfilledCount = await backfillPendingImportOriginalMeta(6)
-      if (backfilledCount > 0) {
-        console.info(`[getPendingImportQueue] backfilled ${backfilledCount} original 1688 titles/images`)
-      }
-    } catch (error) {
-      console.error('[getPendingImportQueue] failed to backfill original 1688 meta', error)
-    }
-
-    try {
-      const inconsistentPublishedItems = await prisma.importtaskitem.findMany({
-        where: {
-          importedProductId: { not: null },
-          OR: [
-            { isPublished: false },
-            { publishStatus: { not: 'COMPLETED' as any } },
-            { fetchStatus: { not: 'COMPLETED' as any } },
-            { publishedAt: null }
-          ]
-        },
-        select: {
-          id: true,
-          importedProductId: true,
-          fetchStatus: true,
-          publishStatus: true,
-          publishedAt: true
+    if (dueMaintenance) {
+      lastPendingQueueMaintenanceAt = Date.now()
+      try {
+        const repairedCount = await repairCharsetCorruptedPendingImportItems()
+        if (repairedCount > 0) {
+          console.info(`[getPendingImportQueue] repaired ${repairedCount} charset-corrupted pending import items`)
         }
-      })
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to repair charset-corrupted pending import items', error)
+      }
 
-      const recoveryOperations = inconsistentPublishedItems.flatMap(item => {
-        const recoveryData = buildPublishedImportItemRecoveryData(item)
-        if (!recoveryData) {
-          return []
+      try {
+        const sanitizedMockCount = await sanitizeClassicMockPendingImportItems(40)
+        if (sanitizedMockCount > 0) {
+          console.info(`[getPendingImportQueue] cleared ${sanitizedMockCount} classic mock 红/蓝/黑 SKU rows`)
         }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to sanitize classic mock SKUs', error)
+      }
 
-        return prisma.importtaskitem.update({
-          where: { id: item.id },
-          data: recoveryData
+      try {
+        const backfilledCount = await backfillPendingImportOriginalMeta(6)
+        if (backfilledCount > 0) {
+          console.info(`[getPendingImportQueue] backfilled ${backfilledCount} original 1688 titles/images`)
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to backfill original 1688 meta', error)
+      }
+
+      try {
+        const inconsistentPublishedItems = await prisma.importtaskitem.findMany({
+          where: {
+            importedProductId: { not: null },
+            OR: [
+              { isPublished: false },
+              { publishStatus: { not: 'COMPLETED' as any } },
+              { fetchStatus: { not: 'COMPLETED' as any } },
+              { publishedAt: null },
+            ],
+          },
+          select: {
+            id: true,
+            importedProductId: true,
+            fetchStatus: true,
+            publishStatus: true,
+            publishedAt: true,
+          },
+          take: 100,
         })
-      })
 
-      if (recoveryOperations.length > 0) {
-        await prisma.$transaction(recoveryOperations)
+        const recoveryOperations = inconsistentPublishedItems.flatMap(item => {
+          const recoveryData = buildPublishedImportItemRecoveryData(item)
+          if (!recoveryData) {
+            return []
+          }
+
+          return prisma.importtaskitem.update({
+            where: { id: item.id },
+            data: recoveryData,
+          })
+        })
+
+        if (recoveryOperations.length > 0) {
+          await prisma.$transaction(recoveryOperations)
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to repair published import items, fallback to queue snapshot', error)
       }
-    } catch (error) {
-      console.error('[getPendingImportQueue] failed to repair published import items, fallback to queue snapshot', error)
     }
 
-    const snapshot = await loadPendingImportQueueSnapshot()
+    const snapshot = await loadPendingImportQueueSnapshot({ page, page_size: pageSize })
 
     return {
       activeTask: snapshot.activeTask,
       list: snapshot.items,
-      total: snapshot.items.length
+      total: snapshot.total,
+      page,
+      page_size: pageSize,
     }
   })
 )
@@ -4924,141 +4975,148 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
       }
     }
 
-    const task = await prisma.$transaction(async tx => {
-      const newTask = await tx.importtask.create({
-        data: {
-          creatorId: userId,
-          taskName: `表格导入 ${new Date().toLocaleString('zh-CN')}`,
-          status: 'COMPLETED' as any,
-          sourceLinkCount: groupedRows.size,
-          successCount: groupedRows.size,
-          failureCount: 0,
-          progressPercent: 100,
-          defaultStatus: 'DRAFT' as any,
-          defaultCategoryId: input.defaultCategoryId || null,
-          queueConcurrency: 1,
-          rateLimitMinDelaySec: 0,
-          rateLimitMaxDelaySec: 0,
-          startedAt: new Date(),
-          finishedAt: new Date()
-        }
-      })
+    // Pre-build drafts OUTSIDE the transaction — never call translation APIs inside a DB txn
+    // (55 rows of title EN/ES previously held the transaction open until client Failed to fetch).
+    const mergedDrafts = Array.from(groupedRows.entries()).map(([productCode, spuRows]) =>
+      buildTableMergedDraft(productCode, spuRows),
+    )
+    const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
 
-      const mergedDrafts = Array.from(groupedRows.entries()).map(([productCode, spuRows]) =>
-        buildTableMergedDraft(productCode, spuRows),
+    const itemCreates = mergedDrafts.map((row, index) => {
+      const categoryName = normalizeText(row.categoryName)
+      const matchedByCell = categoryName ? categoryByName.get(categoryName.toLowerCase()) : null
+      const productDetailText = [
+        normalizeText(row.detail),
+        normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
+        normalizeText(row.productCode) ? `产品编号：${normalizeText(row.productCode)}` : '',
+      ].filter(Boolean).join('\n') || null
+      const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(
+        normalizeText(row.productName),
+        secondaryCategories,
+        productDetailText,
       )
-
-      const secondaryCategories = await loadAutoMatchSecondaryCategories(tx)
-
-      for (const [index, row] of mergedDrafts.entries()) {
-        const categoryName = normalizeText(row.categoryName)
-        const matchedByCell = categoryName ? categoryByName.get(categoryName.toLowerCase()) : null
-        const productDetailText = [
-          normalizeText(row.detail),
-          normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
-          normalizeText(row.productCode) ? `产品编号：${normalizeText(row.productCode)}` : '',
-        ].filter(Boolean).join('\n') || null
-        const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(
-          normalizeText(row.productName),
-          secondaryCategories,
-          productDetailText,
-        )
-        const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map(category => category.id)
-        const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map(category => category.name)
-        // 类目单元格优先；否则用标题/详情命中的 L2；再回退默认类目
-        const categoryId =
-          row.categoryId ||
-          matchedByCell?.id ||
-          matchedSecondaryCategoryIds[0] ||
-          input.defaultCategoryId ||
-          null
-        const resolvedCategory = categoryId
-          ? categories.find(item => item.id === categoryId)
+      const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map(category => category.id)
+      const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map(category => category.name)
+      const categoryId =
+        row.categoryId ||
+        matchedByCell?.id ||
+        matchedSecondaryCategoryIds[0] ||
+        input.defaultCategoryId ||
+        null
+      const resolvedCategory = categoryId
+        ? categories.find(item => item.id === categoryId)
+        : null
+      const resolvedParent = resolvedCategory?.parentId
+        ? categories.find(item => item.id === resolvedCategory.parentId)
+        : matchedByCell?.parentId
+          ? categories.find(item => item.id === matchedByCell.parentId)
           : null
-        const resolvedParent = resolvedCategory?.parentId
-          ? categories.find(item => item.id === resolvedCategory.parentId)
-          : matchedByCell?.parentId
-            ? categories.find(item => item.id === matchedByCell.parentId)
-            : null
-        const matchedCoefficient = resolveCategoryPriceCoefficient(
-          resolvedCategory && !isAggregatePricingCategoryName(resolvedCategory.name)
-            ? toNumberOrNull(resolvedCategory.priceCoefficient)
-            : matchedByCell && !isAggregatePricingCategoryName(matchedByCell.name)
-              ? toNumberOrNull(matchedByCell.priceCoefficient)
-              : null,
-          resolvedParent && !isAggregatePricingCategoryName(resolvedParent.name)
-            ? toNumberOrNull(resolvedParent.priceCoefficient)
+      const matchedCoefficient = resolveCategoryPriceCoefficient(
+        resolvedCategory && !isAggregatePricingCategoryName(resolvedCategory.name)
+          ? toNumberOrNull(resolvedCategory.priceCoefficient)
+          : matchedByCell && !isAggregatePricingCategoryName(matchedByCell.name)
+            ? toNumberOrNull(matchedByCell.priceCoefficient)
             : null,
-        )
-        const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`
-        const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null
-        const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null
+        resolvedParent && !isAggregatePricingCategoryName(resolvedParent.name)
+          ? toNumberOrNull(resolvedParent.priceCoefficient)
+          : null,
+      )
+      const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`
+      const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null
+      const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null
+      const zhName = normalizeText(row.productName)
 
-        await tx.importtaskitem.create({
-          data: {
-            importTaskId: newTask.id,
-            operatorId: userId,
+      return {
+        operatorId: userId,
+        sourceUrl: `table-import://${productCode}`,
+        parsedName: zhName,
+        parsedMainImageUrl: null,
+        parsedPriceMin: row.priceMin,
+        parsedPriceMax: row.priceMax,
+        supplierName: normalizeText(row.supplierName) || null,
+        mainImageUrl: null,
+        costPrice: row.priceMin,
+        weightGrams: row.weightGrams,
+        sourceCategoryName: categoryName || matchedSecondaryCategoryNames[0] || null,
+        targetCategoryId: categoryId,
+        coefficient: matchedCoefficient,
+        goodsStatus: 'DRAFT' as any,
+        minimumOrderQuantity: 1,
+        availableStock: row.skuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0),
+        cnyPriceMin: row.priceMin,
+        cnyPriceMax: row.priceMax,
+        usdPriceMin: usdMin,
+        usdPriceMax: usdMax,
+        productDetail: productDetailText,
+        skuSummaryText: row.skuTable.map(sku => sku.spec).join(' | '),
+        fetchStatus: 'COMPLETED' as any,
+        publishStatus: 'PENDING' as any,
+        isSelected: true,
+        isPublished: false,
+        fetchStartedAt: new Date(),
+        fetchFinishedAt: new Date(),
+        specSummaryJson: row.specSummary as any,
+        // 发布时再补 EN/ES；导入热路径禁止 await 翻译以防超时
+        previewDataJson: {
+          name: zhName,
+          nameEn: '',
+          nameEs: '',
+          categoryId: categoryId || undefined,
+          matchedCategoryIds: matchedSecondaryCategoryIds,
+          matchedCategoryNames: matchedSecondaryCategoryNames,
+          price: row.priceMin ?? undefined,
+          mainImageUrl: undefined,
+          detailImages: [],
+          shortDescription: normalizeText(row.brand) || undefined,
+          importSortIndex: index,
+          inboundIdentity: {
+            mode: 'TABLE_PRODUCT_CODE_MERGED',
+            excelProductCode: productCode,
             sourceUrl: `table-import://${productCode}`,
-            parsedName: normalizeText(row.productName),
-            parsedMainImageUrl: null,
-            parsedPriceMin: row.priceMin,
-            parsedPriceMax: row.priceMax,
-            supplierName: normalizeText(row.supplierName) || null,
-            mainImageUrl: null,
-            costPrice: row.priceMin,
-            weightGrams: row.weightGrams,
-            sourceCategoryName: categoryName || matchedSecondaryCategoryNames[0] || null,
-            targetCategoryId: categoryId,
-            coefficient: matchedCoefficient,
-            goodsStatus: 'DRAFT' as any,
-            minimumOrderQuantity: 1,
-            availableStock: row.skuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0),
-            cnyPriceMin: row.priceMin,
-            cnyPriceMax: row.priceMax,
-            usdPriceMin: usdMin,
-            usdPriceMax: usdMax,
-            productDetail: productDetailText,
-            skuSummaryText: row.skuTable.map(sku => sku.spec).join(' | '),
-            fetchStatus: 'COMPLETED' as any,
-            publishStatus: 'PENDING' as any,
-            isSelected: true,
-            isPublished: false,
-            fetchStartedAt: new Date(),
-            fetchFinishedAt: new Date(),
-            specSummaryJson: row.specSummary as any,
-            previewDataJson: {
-              name: normalizeText(row.productName),
-              ...(await (async () => {
-                const zhName = normalizeText(row.productName)
-                const nameEn = await resolveEnglishProductTitle(zhName)
-                const nameEs = await resolveSpanishProductTitle(zhName, null, nameEn)
-                return { nameEn, nameEs }
-              })()),
-              categoryId: categoryId || undefined,
-              matchedCategoryIds: matchedSecondaryCategoryIds,
-              matchedCategoryNames: matchedSecondaryCategoryNames,
-              price: row.priceMin ?? undefined,
-              mainImageUrl: undefined,
-              detailImages: [],
-              shortDescription: normalizeText(row.brand) || undefined,
-              importSortIndex: index,
-              inboundIdentity: {
-                mode: 'TABLE_PRODUCT_CODE_MERGED',
-                excelProductCode: productCode,
-                sourceUrl: `table-import://${productCode}`,
-              },
-              featureAttributes: [
-                ...(normalizeText(row.brand) ? [{ key: '品牌', value: normalizeText(row.brand) }] : []),
-                ...(normalizeText(row.productCode) ? [{ key: '产品编号', value: normalizeText(row.productCode) }] : []),
-              ],
-              skuTable: row.skuTable,
-            } as any
-          }
-        })
+          },
+          featureAttributes: [
+            ...(normalizeText(row.brand) ? [{ key: '品牌', value: normalizeText(row.brand) }] : []),
+            ...(normalizeText(row.productCode) ? [{ key: '产品编号', value: normalizeText(row.productCode) }] : []),
+          ],
+          skuTable: row.skuTable,
+        } as any,
       }
-
-      return newTask
     })
+
+    const task = await prisma.$transaction(
+      async tx => {
+        const newTask = await tx.importtask.create({
+          data: {
+            creatorId: userId,
+            taskName: `表格导入 ${new Date().toLocaleString('zh-CN')}`,
+            status: 'COMPLETED' as any,
+            sourceLinkCount: groupedRows.size,
+            successCount: groupedRows.size,
+            failureCount: 0,
+            progressPercent: 100,
+            defaultStatus: 'DRAFT' as any,
+            defaultCategoryId: input.defaultCategoryId || null,
+            queueConcurrency: 1,
+            rateLimitMinDelaySec: 0,
+            rateLimitMaxDelaySec: 0,
+            startedAt: new Date(),
+            finishedAt: new Date(),
+          },
+        })
+
+        for (const item of itemCreates) {
+          await tx.importtaskitem.create({
+            data: {
+              importTaskId: newTask.id,
+              ...item,
+            },
+          })
+        }
+
+        return newTask
+      },
+      { timeout: 120_000, maxWait: 15_000 },
+    )
 
     return {
       taskId: task.id,
@@ -5066,8 +5124,8 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
       created: Array.from(groupedRows.values()).map(spuRows => ({
         productId: '',
         productName: spuRows[0]?.productName || '',
-        source: 'TABLE_IMPORT'
-      }))
+        source: 'TABLE_IMPORT',
+      })),
     }
   })
 )

@@ -156,7 +156,17 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
         }),
       };
 
-      let resp = await fetch(apiUrl, fetchOptions);
+      let resp: Response;
+      try {
+        resp = await fetch(apiUrl, fetchOptions);
+      } catch (networkError: any) {
+        const connectMsg =
+          '无法连接后台 RPC（Failed to fetch）。请确认进程在线：pnpm run build:server && pm2 restart rpc（本地默认 :3100）';
+        if (!shouldSilentServerError(actionName)) {
+          toast.error(connectMsg, { id: 'rpc-connect-error' });
+        }
+        throw new Error(connectMsg);
+      }
 
       // 503 服务过载：延迟 0.5 秒重试 1 次，失败就放弃
       if (resp.status === 503) {
