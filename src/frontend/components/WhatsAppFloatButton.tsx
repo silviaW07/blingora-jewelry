@@ -203,6 +203,8 @@ export function WhatsAppFloatButton() {
   )
 
   if (!active.floatEnabled || !href) return null
+  // 移动端（≤767px）彻底隐藏右下角悬浮钮；桌面端保留。顶栏 WhatsApp 入口另有组件，不受影响。
+  if (isMobileViewport && !isFloatDragMode) return null
 
   return (
     <a
@@ -215,14 +217,13 @@ export function WhatsAppFloatButton() {
       className={`whatsapp-float-btn whatsapp-float-root fixed flex items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_28px_-10px_rgba(37,211,102,0.75)] transition select-none touch-none ${
         isFloatDragMode
           ? 'z-[120] cursor-grab ring-4 ring-[#2563EB]/70 ring-offset-2 active:cursor-grabbing hover:scale-100'
-          : forceMobileSafe
-            ? 'z-[90] hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'
-            : 'z-[60] hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'
+          : 'z-[60] hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'
       }`}
       style={style}
       data-controller-name="全站WhatsApp悬浮客服"
       data-float-drag-mode={isFloatDragMode ? '1' : '0'}
       data-mobile-safe={forceMobileSafe ? '1' : '0'}
+      data-hidden-on-mobile="1"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

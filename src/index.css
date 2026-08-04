@@ -1305,26 +1305,21 @@ input:-webkit-autofill:active {
   }
 
   /*
-   * WhatsApp FAB: always bottom-right above bottom nav on mobile.
-   * Clear top/left/transform so saved mid-screen coords cannot stick the button over filters/CATEGORÍAS.
-   * z-index 90 sits under .mobile-bottom-nav (100). Decorate drag mode keeps free placement.
+   * Mobile: hide the green floating WhatsApp button entirely (desktop only).
+   * Header / cart WhatsApp entry points are separate and stay available.
+   * Decorate float-drag mode may still show the node for positioning — rare on phone.
    */
   .whatsapp-float-root:not([data-float-drag-mode='1']),
   a.whatsapp-float-btn[data-controller-name='全站WhatsApp悬浮客服']:not([data-float-drag-mode='1']) {
-    position: fixed !important;
-    top: auto !important;
-    left: auto !important;
-    right: 16px !important;
-    bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 16px) !important;
-    transform: none !important;
-    z-index: 90 !important;
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
   }
 
-  /* Hide FAB when CATEGORIES flyout is open so it cannot cover nav links */
   body:has(.floating-side-nav.is-open) .whatsapp-float-root,
   body:has([data-controller-name='顶部目录导航'] [role='menu']) .whatsapp-float-root {
-    opacity: 0 !important;
-    pointer-events: none !important;
+    display: none !important;
   }
 
   /* Category listing shell: denser, closer to mobile home — less desktop card chrome */
