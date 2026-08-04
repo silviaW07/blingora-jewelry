@@ -14,8 +14,11 @@ import { withResult } from '@/frontend/action_utils'
 import {
   buildLast6Months,
   formatMonthLabel,
+  getDateKeyRange,
   getLast6MonthsRangeStart,
   getMonthDateRange,
+  toDateKey,
+  toDateLabel,
   toMonthKey,
 } from '@/frontend/utils/dailyNewArrival'
 import { normalizeProductLang, pickProductTranslation, resolveCategoryDisplayName, resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
@@ -1004,15 +1007,120 @@ export interface GetComingSoonDateCardsOutput {
   cards: ComingSoonDateCard[]
 }
 
-const pad2 = (n: number) => String(n).padStart(2, '0')
+export interface ComingSoonProductItem {
+  product_id: string
+  product_slug: string | null
+  product_name: string
+  main_image_url: string
+  status?: string | null
+}
 
-const toDateKey = (d: Date) =>
-  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+export interface GetComingSoonProductsByDateInput {
+  /** YYYY-MM-DD local calendar day */
+  date_key: string
+  lang?: string
+}
 
-const toDateLabel = (d: Date) => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+export interface GetComingSoonProductsByDateOutput {
+  date_key: string
+  date_label: string
+  list: ComingSoonProductItem[]
+}
+
+type ComingSoonProductRow = {
+  id: string
+  slug: string
+  name: string
+  mainImageUrl: string
+  status?: string
+  publishedAt: Date | null
+  createdAt: Date
+  sortWeight: number
+  translationsJson?: unknown
+}
+
+const comingTeaserSelect = {
+  id: true,
+  slug: true,
+  name: true,
+  mainImageUrl: true,
+  status: true,
+  publishedAt: true,
+  createdAt: true,
+  sortWeight: true,
+  translationsJson: true,
+} as const
+
+const buildComingTeaserWhere = (teaserCategoryIds: string[]) =>
+  teaserCategoryIds.length > 0
+    ? {
+        OR: [
+          { status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const } },
+          { categoryId: { in: teaserCategoryIds } },
+        ],
+      }
+    : {
+        status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const },
+      }
+
+const loadComingTeaserCategoryIds = async () => {
+  const teaserCategories = await prisma.category.findMany({
+    where: {
+      status: 'ACTIVE',
+      OR: [
+        { name: { contains: '预告' } },
+        { name: { contains: '未上架' } },
+        { name: { contains: 'Coming' } },
+        { name: { contains: 'coming' } },
+      ],
+    },
+    select: { id: true },
+    take: 50,
+  })
+  return teaserCategories.map((c) => c.id)
+}
 
 /**
- * Coming 页日期卡片：
+ * Shared product source for Coming:
+ * DRAFT / PREORDER / INACTIVE, or teaser categories; soft ACTIVE fallback for demos.
+ */
+const loadComingSoonProductRows = async (take = 500): Promise<ComingSoonProductRow[]> => {
+  const teaserCategoryIds = await loadComingTeaserCategoryIds()
+  let products = await prisma.product.findMany({
+    where: buildComingTeaserWhere(teaserCategoryIds),
+    select: comingTeaserSelect,
+    orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }],
+    take,
+  })
+
+  if (products.length === 0) {
+    products = await prisma.product.findMany({
+      where: {
+        status: 'ACTIVE',
+        category: { status: 'ACTIVE' },
+      },
+      select: comingTeaserSelect,
+      orderBy: [{ createdAt: 'desc' }],
+      take: Math.min(80, take),
+    })
+  }
+
+  return products
+}
+
+const mapComingSoonProductItem = (
+  product: ComingSoonProductRow,
+  lang?: string,
+): ComingSoonProductItem => ({
+  product_id: product.id,
+  product_slug: product.slug || null,
+  product_name: resolveProductDisplayName(product.name, product.translationsJson, lang),
+  main_image_url: product.mainImageUrl || '',
+  status: product.status || null,
+})
+
+/**
+ * Coming 页日期卡片（legacy 摘要）：
  * - 来源：未上架/预告类商品（DRAFT / PREORDER / INACTIVE），或类目名含 预告|Coming|未上架
  * - 归日：优先 publishedAt（管理员配置的预告/计划日期），否则 createdAt
  * - 排序：日期降序（新的在前）
@@ -1020,74 +1128,13 @@ const toDateLabel = (d: Date) => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}
  */
 export const getComingSoonDateCards = withResult(
   async (): Promise<GetComingSoonDateCardsOutput> => {
-    const teaserCategories = await prisma.category.findMany({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { name: { contains: '预告' } },
-          { name: { contains: '未上架' } },
-          { name: { contains: 'Coming' } },
-          { name: { contains: 'coming' } },
-        ],
-      },
-      select: { id: true },
-      take: 50,
-    })
-    const teaserCategoryIds = teaserCategories.map((c) => c.id)
-
-    const where =
-      teaserCategoryIds.length > 0
-        ? {
-            OR: [
-              { status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const } },
-              { categoryId: { in: teaserCategoryIds } },
-            ],
-          }
-        : {
-            status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const },
-          }
-
-    let products = await prisma.product.findMany({
-      where,
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        mainImageUrl: true,
-        publishedAt: true,
-        createdAt: true,
-        sortWeight: true,
-      },
-      orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }],
-      take: 500,
-    })
-
-    // Soft fallback so local demos still show date structure
-    if (products.length === 0) {
-      products = await prisma.product.findMany({
-        where: {
-          status: 'ACTIVE',
-          category: { status: 'ACTIVE' },
-        },
-        select: {
-          id: true,
-          slug: true,
-          name: true,
-          mainImageUrl: true,
-          publishedAt: true,
-          createdAt: true,
-          sortWeight: true,
-        },
-        orderBy: [{ createdAt: 'desc' }],
-        take: 80,
-      })
-    }
+    const products = await loadComingSoonProductRows(500)
 
     const byDay = new Map<
       string,
       {
         label: string
-        product: (typeof products)[number]
+        product: ComingSoonProductRow
         anchorMs: number
       }
     >()
@@ -1095,8 +1142,7 @@ export const getComingSoonDateCards = withResult(
     for (const product of products) {
       const anchor = product.publishedAt || product.createdAt
       const key = toDateKey(anchor)
-      const existing = byDay.get(key)
-      if (!existing) {
+      if (!byDay.has(key)) {
         byDay.set(key, {
           label: toDateLabel(anchor),
           product,
@@ -1117,5 +1163,37 @@ export const getComingSoonDateCards = withResult(
       }))
 
     return { cards }
+  },
+)
+
+/**
+ * Coming 页按日商品列表：
+ * - 与 getComingSoonDateCards 同源
+ * - 归日：publishedAt ?? createdAt 落在 date_key 当天
+ * - 排序：sortWeight desc → createdAt desc
+ */
+export const getComingSoonProductsByDate = withResult(
+  async (input: GetComingSoonProductsByDateInput): Promise<GetComingSoonProductsByDateOutput> => {
+    const range = getDateKeyRange(input.date_key)
+    if (!range) {
+      return {
+        date_key: String(input.date_key || ''),
+        date_label: '',
+        list: [],
+      }
+    }
+
+    const date_key = toDateKey(range.start)
+    const date_label = toDateLabel(range.start)
+
+    const products = await loadComingSoonProductRows(500)
+    const list = products
+      .filter((product) => {
+        const anchor = product.publishedAt || product.createdAt
+        return toDateKey(anchor) === date_key
+      })
+      .map((product) => mapComingSoonProductItem(product, input.lang))
+
+    return { date_key, date_label, list }
   },
 )

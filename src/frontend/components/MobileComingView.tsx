@@ -1,43 +1,64 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import {
-  getComingSoonDateCards,
-  type ComingSoonDateCard,
+  getComingSoonProductsByDate,
+  type ComingSoonProductItem,
 } from '@/frontend/actions/Home'
 import { ProductDetail } from '@/frontend/route-params'
+import { buildLastNDays } from '@/frontend/utils/dailyNewArrival'
+import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
+import { cn } from '@/lib/utils'
 
 /**
- * Coming: pure MM/DD date cards + preview thumb + heart.
- * No counts, banners, product lists, or labels like "Yesterday".
+ * Coming: horizontal last-10-days date switcher + two-column product grid
+ * (image, title, wishlist). Client-side date switch, no full page reload.
  */
 export default function MobileComingView() {
   const router = useRouter()
-  const { t } = useTranslation()
-  const [cards, setCards] = useState<ComingSoonDateCard[]>([])
+  const { t, i18n } = useTranslation()
+  const dateChips = useMemo(() => buildLastNDays(10), [])
+  const [selectedDateKey, setSelectedDateKey] = useState(
+    () => dateChips[0]?.date_key ?? '',
+  )
+  const [products, setProducts] = useState<ComingSoonProductItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  const lang = useMemo(
+    () =>
+      normalizeLocale(
+        i18n.language || (typeof window !== 'undefined' ? readStoredLocale() : 'en'),
+      ),
+    [i18n.language],
+  )
+
   useEffect(() => {
+    if (!selectedDateKey) {
+      setProducts([])
+      setLoading(false)
+      return
+    }
+
     let cancelled = false
     setLoading(true)
 
     const load = async () => {
       try {
-        const api = getComingSoonDateCards
+        const api = getComingSoonProductsByDate
         if (typeof api !== 'function') {
-          if (!cancelled) setCards([])
+          if (!cancelled) setProducts([])
           return
         }
-        const res = await api()
+        const res = await api({ date_key: selectedDateKey, lang })
         if (cancelled) return
-        setCards(Array.isArray(res?.cards) ? res.cards : [])
+        setProducts(Array.isArray(res?.list) ? res.list : [])
       } catch {
-        if (!cancelled) setCards([])
+        if (!cancelled) setProducts([])
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -47,82 +68,99 @@ export default function MobileComingView() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [selectedDateKey, lang])
 
-  const openPreview = (card: ComingSoonDateCard) => {
-    if (!card.preview_product_id) return
-    if (card.preview_product_slug) {
-      ProductDetail.navigateToBySlug(router, { slug: card.preview_product_slug })
+  const openProduct = (item: ComingSoonProductItem) => {
+    if (!item.product_id) return
+    if (item.product_slug) {
+      ProductDetail.navigateToBySlug(router, { slug: item.product_slug })
       return
     }
-    ProductDetail.navigateToById(router, { productId: card.preview_product_id })
+    ProductDetail.navigateToById(router, { productId: item.product_id })
   }
 
   return (
     <div
-      className="mobile-coming-page min-h-screen bg-[#f7f4ee] text-[#111111]"
+      className="mobile-coming-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
       data-controller-name="移动端Coming新品预告"
     >
       <div className="mobile-coming-page__body">
+        <div
+          className="mobile-coming-dates"
+          role="tablist"
+          aria-label={t('mobile.comingDateBar', { defaultValue: 'Select date' })}
+        >
+          {dateChips.map((chip) => {
+            const active = chip.date_key === selectedDateKey
+            return (
+              <button
+                key={chip.date_key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={cn('mobile-coming-dates__item', active && 'is-active')}
+                onClick={() => setSelectedDateKey(chip.date_key)}
+              >
+                {chip.date_label}
+              </button>
+            )
+          })}
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-16 text-[#8b8477]">
             <Loader2 className="size-6 animate-spin" aria-label={t('common.loading')} />
           </div>
-        ) : cards.length === 0 ? (
+        ) : products.length === 0 ? (
           <p className="mt-12 text-center text-sm text-[#8a8073]">
-            {t('mobile.noComingDates', {
-              defaultValue: 'No upcoming previews yet',
+            {t('mobile.noComingProducts', {
+              defaultValue: 'No previews for this day',
             })}
           </p>
         ) : (
           <div
-            className="mobile-coming-grid"
-            data-controller-name="Coming日期卡片网格"
+            className="mobile-coming-product-grid"
+            data-controller-name="Coming日期商品网格"
           >
-            {cards.map((card) => (
-              <article key={card.date_key} className="mobile-coming-card">
-                {/* Date bar — date only */}
+            {products.map((item) => (
+              <article key={item.product_id} className="mobile-coming-product-card">
                 <button
                   type="button"
-                  className="mobile-coming-card__surface"
-                  onClick={() => openPreview(card)}
-                  aria-label={card.date_label}
+                  className="mobile-coming-product-card__media"
+                  onClick={() => openProduct(item)}
+                  aria-label={item.product_name}
                 >
-                  <span className="mobile-coming-card__date">{card.date_label}</span>
-                </button>
-
-                {/* Preview under date */}
-                <button
-                  type="button"
-                  className="mobile-coming-card__media"
-                  onClick={() => openPreview(card)}
-                  aria-label={`${card.date_label} preview`}
-                >
-                  {card.preview_image_url ? (
+                  {item.main_image_url ? (
                     <OptimizedProductImage
-                      src={card.preview_image_url}
-                      alt=""
+                      src={item.main_image_url}
+                      alt={item.product_name}
                       sizes="(max-width: 480px) 50vw, 33vw"
                       imageWidth={480}
                       className="object-cover"
                     />
                   ) : (
-                    <span className="mobile-coming-card__media-empty" aria-hidden />
+                    <span className="mobile-coming-product-card__media-empty" aria-hidden />
                   )}
                 </button>
 
-                {/* Heart: bottom-right of card */}
-                {card.preview_product_id ? (
-                  <div className="mobile-coming-card__heart">
-                    <WishlistHeartButton
-                      productId={card.preview_product_id}
-                      productName={card.preview_product_name || card.date_label}
-                      size={18}
-                      className="!rounded-full bg-white/95 p-1.5 shadow-sm"
-                      requireAuth
-                    />
-                  </div>
-                ) : null}
+                <div className="mobile-coming-product-card__heart">
+                  <WishlistHeartButton
+                    productId={item.product_id}
+                    productName={item.product_name}
+                    size={18}
+                    className="!rounded-full bg-white/95 p-1.5 shadow-sm"
+                    requireAuth
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="mobile-coming-product-card__title"
+                  onClick={() => openProduct(item)}
+                  title={item.product_name}
+                >
+                  {item.product_name}
+                </button>
               </article>
             ))}
           </div>

@@ -156,12 +156,19 @@ export function ProductTreeRows({
                   </button>
                   {(cat.is_pricing || (cat.is_pricing == null && cat.is_primary && !cat.is_brand)) &&
                     !cat.is_brand &&
-                    item.effective_price_coefficient != null &&
-                    Number(item.effective_price_coefficient) > 0 && (
-                      <span className="shrink-0 rounded bg-slate-200/80 px-1 text-[10px] font-medium text-slate-600">
-                        ×{Number(item.effective_price_coefficient).toFixed(2)}
-                      </span>
-                    )}
+                    (() => {
+                      const badgeCoeff =
+                        item.price_coefficient != null && Number(item.price_coefficient) > 0
+                          ? Number(item.price_coefficient)
+                          : item.effective_price_coefficient != null && Number(item.effective_price_coefficient) > 0
+                            ? Number(item.effective_price_coefficient)
+                            : null
+                      return badgeCoeff != null ? (
+                        <span className="shrink-0 rounded bg-slate-200/80 px-1 text-[10px] font-medium text-slate-600">
+                          ×{badgeCoeff.toFixed(2)}
+                        </span>
+                      ) : null
+                    })()}
                   <button
                     type="button"
                     className="ml-0.5 shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-600"
@@ -217,9 +224,15 @@ export function ProductTreeRows({
           />
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
-          {item.effective_price_coefficient != null && Number(item.effective_price_coefficient) > 0
-            ? Number(item.effective_price_coefficient).toFixed(2)
-            : '--'}
+          {(() => {
+            const display =
+              item.price_coefficient != null && Number(item.price_coefficient) > 0
+                ? Number(item.price_coefficient)
+                : item.effective_price_coefficient != null && Number(item.effective_price_coefficient) > 0
+                  ? Number(item.effective_price_coefficient)
+                  : null
+            return display != null ? display.toFixed(2) : '--'
+          })()}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
           ￥{item.price_min.toLocaleString()} ~ {item.price_max.toLocaleString()}

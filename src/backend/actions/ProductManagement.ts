@@ -686,6 +686,22 @@ function resolveEffectiveCoefficient(
   )
 }
 
+/**
+ * 列表/详情「当前系数」：商品级 priceCoefficient 优先（批量改价系数写在这儿），
+ * 未设置或无效时再回退主类目继承系数。否则批量改完商品系数列表仍只显示类目系数看起来像「没更新」。
+ */
+function resolveListDisplayCoefficient(
+  productPriceCoefficient: number | null | undefined,
+  ownCategoryCoefficient: number | null,
+  parentCategoryCoefficient: number | null = null,
+): number {
+  const productCoeff = toNumber(productPriceCoefficient)
+  if (productCoeff != null && Number.isFinite(productCoeff) && productCoeff > 0) {
+    return productCoeff
+  }
+  return resolveEffectiveCoefficient(ownCategoryCoefficient, parentCategoryCoefficient)
+}
+
 function getCategoryHierarchyCoefficients(
   categoryMap: Map<string, CategoryMeta>,
   categoryId: string | null | undefined,
@@ -799,7 +815,11 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
       ? resolveCategoryPriceCoefficient(own, parent)
       : null
   const mainCategoryCoefficient = categoryEffectiveCoefficient ?? toNumber(main?.priceCoefficient)
-  const effectiveCoefficient = resolveEffectiveCoefficient(own, parent)
+  const effectiveCoefficient = resolveListDisplayCoefficient(
+    toNumber(product.priceCoefficient),
+    own,
+    parent,
+  )
   const mappedGoodsStatus = product.status === 'DRAFT'
     ? 'DELETED'
     : normalizeGoodsStatus(product.goodsStatus) || mapProductStatusToGoodsStatus(product.status as ProductStatus)
@@ -1660,7 +1680,11 @@ export const getProductList = requireRole([UserRole.ADMIN])(
           ? resolveCategoryPriceCoefficient(own, parent)
           : null
       const mainCategoryCoefficient = categoryEffectiveCoefficient ?? toNumber(main?.priceCoefficient)
-      const effectiveCoefficient = resolveEffectiveCoefficient(own, parent)
+      const effectiveCoefficient = resolveListDisplayCoefficient(
+        toNumber(p.priceCoefficient),
+        own,
+        parent,
+      )
       const mappedGoodsStatus = normalizeGoodsStatus(p.goodsStatus) || mapProductStatusToGoodsStatus(p.status as ProductStatus)
 
       return {
@@ -1746,7 +1770,11 @@ export const getProductDetail = requireRole([UserRole.ADMIN])(
       main_category_id: main?.id || p.categoryId,
       main_category_name: main?.name || current?.name || p.category?.name || '--',
       main_category_price_coefficient: mainCategoryCoefficient,
-      effective_price_coefficient: resolveEffectiveCoefficient(own, parent),
+      effective_price_coefficient: resolveListDisplayCoefficient(
+        toNumber(p.priceCoefficient),
+        own,
+        parent,
+      ),
       linked_category_ids: Array.from(p.relationCategories ?? [], (item: { categoryId: string }) => item.categoryId),
       linked_keyword_ids: Array.from(p.relationKeywords ?? [], (item: { keywordId: string }) => item.keywordId),
       name: p.name,
@@ -2566,30 +2594,46 @@ export const batchUpdateManagementStatus = requireRole([UserRole.ADMIN])(
 
 export const batchUpdateProductWeightPrice = requireRole([UserRole.ADMIN])(
   withResult(async (input: BatchUpdateProductWeightPriceInput): Promise<BatchOperateOutput> => {
-    if (!input.product_ids.length) throw new Error('请先选择商品')
+    if (!input.product_ids?.length) throw new Error('请先选择商品')
     const nextValue = Number(input.value)
+    // Accept aliases so前端/历史 payload (coefficient) 也能命中商品系数字段
+    const rawField = String(input.field || '').trim()
+    const field: BatchAdjustTargetField =
+      rawField === 'weight_gram' || rawField === 'weight'
+        ? 'weight_gram'
+        : 'price_coefficient'
     if (!Number.isFinite(nextValue) || nextValue <= 0) {
-      throw new Error(input.field === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0')
+      throw new Error(field === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0')
     }
 
     let success = 0
     let fail = 0
+    const errors: string[] = []
 
     for (const productId of input.product_ids) {
       try {
         await prisma.$transaction(async tx => {
-          if (input.field === 'weight_gram') {
+          if (field === 'weight_gram') {
             await tx.product.update({ where: { id: productId }, data: { weightGram: nextValue } })
-            await tx.productsku.updateMany({ where: { productId }, data: { weightKg: Number((nextValue / 1000).toFixed(3)) } })
+            await tx.productsku.updateMany({
+              where: { productId },
+              data: { weightKg: Number((nextValue / 1000).toFixed(3)) },
+            })
           } else {
+            // 写入 product.priceCoefficient 并按新系数重算 SKU 售价
             await applyProductCoefficient(tx, productId, nextValue)
           }
           await syncCartItemsValidState(tx, productId)
         })
         success++
-      } catch (error) {
+      } catch (error: any) {
         fail++
+        errors.push(`${productId}: ${error?.message || '更新失败'}`)
       }
+    }
+
+    if (success === 0 && fail > 0) {
+      throw new Error(errors[0] || '批量更新价格系数/重量失败')
     }
 
     return { success_count: success, fail_count: fail }

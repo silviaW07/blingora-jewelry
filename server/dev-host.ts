@@ -1,5 +1,5 @@
 /* 开发环境宿主服务 - 加载增量构建产物 PROJ_xxx.js */
-/* touch: reload Coming getComingSoonDateCards */
+/* touch: reload Coming getComingSoonProductsByDate */
 import path from 'path'
 import fs from 'fs'
 import express from 'express'

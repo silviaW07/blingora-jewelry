@@ -2,6 +2,18 @@
 import { rpcCall } from '@/tools/rpc-client';
 type Actions = typeof import('../../../../../src/frontend/actions/Home');
 
+export type {
+  ComingSoonDateCard,
+  ComingSoonProductItem,
+  DailyNewArrivalMonthCard,
+  GetComingSoonDateCardsOutput,
+  GetComingSoonProductsByDateInput,
+  GetComingSoonProductsByDateOutput,
+  GetDailyNewArrivalCalendarOutput,
+  GetDailyNewArrivalProductsInput,
+  GetDailyNewArrivalProductsOutput,
+} from '../../../../../src/frontend/actions/Home';
+
 export const getHomeRecommendZones = (...args: Parameters<Actions["getHomeRecommendZones"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getHomeRecommendZones"]>>>("src.frontend.actions.Home.getHomeRecommendZones", ...args);
 export const getHomeFeaturedProducts = (...args: Parameters<Actions["getHomeFeaturedProducts"]>) => 
@@ -20,3 +32,5 @@ export const getDailyNewArrivalProducts = (...args: Parameters<Actions["getDaily
   rpcCall<Awaited<ReturnType<Actions["getDailyNewArrivalProducts"]>>>("src.frontend.actions.Home.getDailyNewArrivalProducts", ...args);
 export const getComingSoonDateCards = (...args: Parameters<Actions["getComingSoonDateCards"]>) =>
   rpcCall<Awaited<ReturnType<Actions["getComingSoonDateCards"]>>>("src.frontend.actions.Home.getComingSoonDateCards", ...args);
+export const getComingSoonProductsByDate = (...args: Parameters<Actions["getComingSoonProductsByDate"]>) =>
+  rpcCall<Awaited<ReturnType<Actions["getComingSoonProductsByDate"]>>>("src.frontend.actions.Home.getComingSoonProductsByDate", ...args);

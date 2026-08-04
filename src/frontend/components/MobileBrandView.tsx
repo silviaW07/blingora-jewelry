@@ -131,7 +131,7 @@ export default function MobileBrandView() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f4ee] text-[#111111]">
+    <div className="min-h-screen bg-[#f7f4ee] text-[#4a4a4a]">
       <MobileStorefrontHeader />
 
       <div className="mobile-brand-page">

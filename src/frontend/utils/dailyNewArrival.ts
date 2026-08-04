@@ -99,3 +99,69 @@ export const getLast6MonthsRangeStart = (referenceDate = new Date()) => {
   const oldest = months[months.length - 1]
   return getMonthDateRange(oldest.year, oldest.month).start
 }
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** YYYY-MM-DD (local calendar day) */
+export const toDateKey = (d: Date) =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+
+/** MM/DD display label */
+export const toDateLabel = (d: Date) => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+
+export type ComingDateChip = {
+  date_key: string
+  date_label: string
+}
+
+/**
+ * Last N calendar days including today, newest first (today → older).
+ * Used by mobile Coming date switcher.
+ */
+export const buildLastNDays = (count = 10, referenceDate = new Date()): ComingDateChip[] => {
+  const days: ComingDateChip[] = []
+  const safeCount = Math.max(1, Math.min(31, Math.floor(count) || 10))
+  const base = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+    12,
+    0,
+    0,
+    0,
+  )
+
+  for (let offset = 0; offset < safeCount; offset += 1) {
+    const d = new Date(base)
+    d.setDate(base.getDate() - offset)
+    days.push({
+      date_key: toDateKey(d),
+      date_label: toDateLabel(d),
+    })
+  }
+
+  return days
+}
+
+/** Local midnight range for YYYY-MM-DD */
+export const getDateKeyRange = (dateKey: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || '').trim())
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null
+  }
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0)
+  const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0)
+  return { start, end, year, month, day }
+}

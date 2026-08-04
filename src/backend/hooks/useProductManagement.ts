@@ -2405,10 +2405,26 @@ export const useProductManagement = (): { state: ProductManagementState, handler
               product_ids: targetProductIds,
               adjust_mode: batchPriceAdjustMode
             }
+        if (batchPriceAdjustMode === 'PRODUCT_COEFFICIENT') {
+          const coeff = Number(batchPriceCoefficientValue)
+          if (!Number.isFinite(coeff) || coeff <= 0) throw new Error('价格系数必须大于0')
+        }
         const res = await batchUpdatePriceCoefficient(payload as any)
         toast.success(batchPriceAdjustMode === 'PRODUCT_COEFFICIENT'
           ? `商品系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
           : `已按主类目系数重算售价，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        if (batchPriceAdjustMode === 'PRODUCT_COEFFICIENT') {
+          const coeff = Number(batchPriceCoefficientValue)
+          setList(prev => prev.map(item =>
+            targetProductIds.includes(item.product_id)
+              ? {
+                  ...item,
+                  price_coefficient: coeff,
+                  effective_price_coefficient: coeff,
+                }
+              : item,
+          ))
+        }
       } else if (confirmAction === 'CATEGORY') {
         if (!batchCategoryId || batchCategoryId === 'ALL') throw new Error('请选择目标分类')
         const res = await batchUpdateProductCategory({ product_ids: targetProductIds, category_id: batchCategoryId })
@@ -2417,14 +2433,40 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         const res = await batchUpdateManagementStatus({ product_ids: targetProductIds, target_status: batchManagementStatus })
         toast.success(`状态已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
       } else if (confirmAction === 'WEIGHT_PRICE') {
+        if (!targetProductIds.length) throw new Error('请先选择商品')
+        const mode = batchWeightPriceMode === 'weight_gram' ? 'weight_gram' : 'price_coefficient'
+        const raw = String(batchWeightPriceValue ?? '').trim()
+        if (!raw) throw new Error(mode === 'weight_gram' ? '请输入重量' : '请输入价格系数')
+        const nextValue = Number(raw)
+        if (!Number.isFinite(nextValue) || nextValue <= 0) {
+          throw new Error(mode === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0')
+        }
         const res = await batchUpdateProductWeightPrice({
           product_ids: targetProductIds,
-          field: batchWeightPriceMode,
-          value: Number(batchWeightPriceValue)
+          field: mode,
+          value: nextValue,
         })
-        toast.success(batchWeightPriceMode === 'weight_gram'
+        toast.success(mode === 'weight_gram'
           ? `重量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
           : `价格系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        // 即时反映到列表「当前系数」，不依赖慢刷新/旧类目系数口径
+        if (mode === 'price_coefficient' && res.success_count > 0) {
+          setList(prev => prev.map(item =>
+            targetProductIds.includes(item.product_id)
+              ? {
+                  ...item,
+                  price_coefficient: nextValue,
+                  effective_price_coefficient: nextValue,
+                }
+              : item,
+          ))
+        } else if (mode === 'weight_gram' && res.success_count > 0) {
+          setList(prev => prev.map(item =>
+            targetProductIds.includes(item.product_id)
+              ? { ...item, weight_gram: nextValue }
+              : item,
+          ))
+        }
       } else if (confirmAction === 'MIN_ORDER_QTY') {
         const res = await (ProductManagementActionModule as any).batchUpdateMinOrderQty({
           product_ids: targetProductIds,
@@ -2447,7 +2489,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       }
       setConfirmDialogOpen(false)
       setSelectedIds([])
-      fetchList()
+      // await 刷新保证系数/重量与 SKU 售价一致；乐观更新先给用户即时反馈
+      await fetchList()
     } catch (err: any) {
       toast.error(err.message || '操作失败')
     } finally {

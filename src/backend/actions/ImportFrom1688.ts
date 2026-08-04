@@ -4548,6 +4548,113 @@ export function matchSecondaryCategoriesByTitle(
   return scored.map(item => item.category)
 }
 
+/**
+ * 表格「类目」列路径解析：首段=一级、次段=二级（如 Bag, Handbag / Bags, Handbags）。
+ * 不参与品牌列；匹配系统分类时跳过 isBrandCategory。
+ */
+export const splitTableCategoryPathTokens = (raw?: string | null): string[] =>
+  normalizeText(raw)
+    .split(/[,，/|；;]+/)
+    .map(token => token.trim())
+    .filter(Boolean)
+
+const categoryNameFuzzyMatch = (dbName: string, token: string) => {
+  const a = normalizeCategoryMatchText(dbName)
+  const b = normalizeCategoryMatchText(token)
+  if (!a || !b) return false
+  if (a === b) return true
+  // Bag ↔ Bags, Handbag ↔ Handbags
+  if (a.endsWith('S') && a.slice(0, -1) === b) return true
+  if (b.endsWith('S') && b.slice(0, -1) === a) return true
+  // 长类目名包含短词（handbag ⊂ handbags 已在上面；也可 Bags 含子类时宽松包含）
+  if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) return true
+  return false
+}
+
+type TableImportCategoryRow = {
+  id: string
+  name: string
+  parentId: string | null
+  level: number | null
+  priceCoefficient: unknown
+  isBrandCategory?: boolean | null
+}
+
+export function resolveTableImportCategoryPath(
+  categoryCell: string | null | undefined,
+  categories: TableImportCategoryRow[],
+): {
+  l1Token: string | null
+  l2Token: string | null
+  primaryId: string | null
+  secondaryId: string | null
+  targetCategoryId: string | null
+  sourceCategoryLabel: string | null
+  matchedCategory: TableImportCategoryRow | null
+  parentCategory: TableImportCategoryRow | null
+} {
+  const tokens = splitTableCategoryPathTokens(categoryCell)
+  const empty = {
+    l1Token: null as string | null,
+    l2Token: null as string | null,
+    primaryId: null as string | null,
+    secondaryId: null as string | null,
+    targetCategoryId: null as string | null,
+    sourceCategoryLabel: null as string | null,
+    matchedCategory: null as TableImportCategoryRow | null,
+    parentCategory: null as TableImportCategoryRow | null,
+  }
+  if (!tokens.length) return empty
+
+  const l1Token = tokens[0] || null
+  const l2Token = tokens[1] || null
+  const usable = categories.filter(c => !c.isBrandCategory)
+
+  const levelOf = (c: TableImportCategoryRow) => {
+    if (c.level != null && Number.isFinite(Number(c.level))) return Number(c.level)
+    return c.parentId ? 2 : 1
+  }
+
+  const level1 = usable.filter(c => levelOf(c) === 1)
+  const level2 = usable.filter(c => levelOf(c) === 2)
+
+  const matchPrimary =
+    (l1Token
+      ? level1.find(c => categoryNameFuzzyMatch(c.name, l1Token)) ||
+        usable.find(c => categoryNameFuzzyMatch(c.name, l1Token) && levelOf(c) === 1)
+      : null) || null
+
+  let matchSecondary: TableImportCategoryRow | null = null
+  if (l2Token) {
+    const underPrimary = matchPrimary
+      ? level2.filter(c => c.parentId === matchPrimary.id)
+      : level2
+    matchSecondary =
+      underPrimary.find(c => categoryNameFuzzyMatch(c.name, l2Token)) ||
+      level2.find(c => categoryNameFuzzyMatch(c.name, l2Token)) ||
+      null
+  }
+
+  // 仅写了一级时，也可把 L2 写成与一级同名的误填，回退一级
+  const target = matchSecondary || matchPrimary || null
+  const parent =
+    target?.parentId
+      ? usable.find(c => c.id === target.parentId) || null
+      : null
+
+  const labelParts = [l1Token, l2Token].filter(Boolean) as string[]
+  return {
+    l1Token,
+    l2Token,
+    primaryId: matchPrimary?.id || parent?.id || null,
+    secondaryId: matchSecondary?.id || null,
+    targetCategoryId: target?.id || null,
+    sourceCategoryLabel: labelParts.length ? labelParts.join(', ') : null,
+    matchedCategory: target,
+    parentCategory: parent || matchPrimary,
+  }
+}
+
 // ===== Actions =====
 
 export const getCategoryOptions = requireRole([UserRole.ADMIN])(
@@ -4863,11 +4970,15 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
     }
 
     const categories = await prisma.category.findMany({
-      select: { id: true, name: true, parentId: true, priceCoefficient: true }
+      select: {
+        id: true,
+        name: true,
+        parentId: true,
+        level: true,
+        priceCoefficient: true,
+        isBrandCategory: true,
+      },
     })
-    const categoryByName = new Map(
-      categories.map(item => [item.name.trim().toLowerCase(), item])
-    )
 
     const groupedRows = groupTableImportRowsByProductCode(rows)
 
@@ -4980,47 +5091,81 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
     const mergedDrafts = Array.from(groupedRows.entries()).map(([productCode, spuRows]) =>
       buildTableMergedDraft(productCode, spuRows),
     )
+    // 品牌关键词匹配仅可作参考标签；有「类目」单元格时主类目严禁被标题里的 LV/COACH 覆盖
     const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
 
     const itemCreates = mergedDrafts.map((row, index) => {
-      const categoryName = normalizeText(row.categoryName)
-      const matchedByCell = categoryName ? categoryByName.get(categoryName.toLowerCase()) : null
+      const categoryCell = normalizeText(row.categoryName)
+      const pathResolved = resolveTableImportCategoryPath(categoryCell, categories)
+      // 精确整格名兜底（不走品牌类目）
+      const exactCell =
+        categoryCell && !pathResolved.targetCategoryId
+          ? categories.find(
+              item =>
+                !item.isBrandCategory &&
+                item.name.trim().toLowerCase() === categoryCell.toLowerCase(),
+            ) || null
+          : null
+      // 仅当类目列为空时，才用标题/详情做二级类目自动命中（排除 Brand 下 LV/COACH 的优先级仍在匹配器里，
+      // 这里空格时才走；有类目词时彻底关掉）
+      const autoMatchedSecondaryCategories = categoryCell
+        ? []
+        : matchSecondaryCategoriesByTitle(
+            normalizeText(row.productName),
+            secondaryCategories,
+            [
+              normalizeText(row.detail),
+              // 品牌不得参与类目自动命中语料
+            ].filter(Boolean).join('\n') || null,
+          )
+      const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map(category => category.id)
+      const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map(category => category.name)
+
+      const categoryId =
+        normalizeText(row.categoryId) ||
+        pathResolved.targetCategoryId ||
+        exactCell?.id ||
+        (!categoryCell ? matchedSecondaryCategoryIds[0] : null) ||
+        input.defaultCategoryId ||
+        null
+
       const productDetailText = [
         normalizeText(row.detail),
         normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
         normalizeText(row.productCode) ? `产品编号：${normalizeText(row.productCode)}` : '',
+        // 仅记录表格类目原文，供运营对照；不写入品牌到「类目」语义
+        pathResolved.sourceCategoryLabel
+          ? `类目：${pathResolved.sourceCategoryLabel}`
+          : categoryCell
+            ? `类目：${categoryCell}`
+            : '',
       ].filter(Boolean).join('\n') || null
-      const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(
-        normalizeText(row.productName),
-        secondaryCategories,
-        productDetailText,
-      )
-      const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map(category => category.id)
-      const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map(category => category.name)
-      const categoryId =
-        row.categoryId ||
-        matchedByCell?.id ||
-        matchedSecondaryCategoryIds[0] ||
-        input.defaultCategoryId ||
-        null
+
       const resolvedCategory = categoryId
-        ? categories.find(item => item.id === categoryId)
+        ? categories.find(item => item.id === categoryId) || null
         : null
       const resolvedParent = resolvedCategory?.parentId
-        ? categories.find(item => item.id === resolvedCategory.parentId)
-        : matchedByCell?.parentId
-          ? categories.find(item => item.id === matchedByCell.parentId)
-          : null
+        ? categories.find(item => item.id === resolvedCategory.parentId) || null
+        : pathResolved.parentCategory || null
+
+      // 系数：二级优先，否则一级；不使用品牌类目系数
       const matchedCoefficient = resolveCategoryPriceCoefficient(
         resolvedCategory && !isAggregatePricingCategoryName(resolvedCategory.name)
           ? toNumberOrNull(resolvedCategory.priceCoefficient)
-          : matchedByCell && !isAggregatePricingCategoryName(matchedByCell.name)
-            ? toNumberOrNull(matchedByCell.priceCoefficient)
-            : null,
+          : null,
         resolvedParent && !isAggregatePricingCategoryName(resolvedParent.name)
           ? toNumberOrNull(resolvedParent.priceCoefficient)
           : null,
       )
+
+      // sourceCategoryName：表格类目路径原文（Bag, Handbag），不是 LV/COACH
+      const sourceCategoryName =
+        pathResolved.sourceCategoryLabel ||
+        categoryCell ||
+        matchedSecondaryCategoryNames[0] ||
+        resolvedCategory?.name ||
+        null
+
       const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`
       const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null
       const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null
@@ -5037,7 +5182,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         mainImageUrl: null,
         costPrice: row.priceMin,
         weightGrams: row.weightGrams,
-        sourceCategoryName: categoryName || matchedSecondaryCategoryNames[0] || null,
+        sourceCategoryName,
         targetCategoryId: categoryId,
         coefficient: matchedCoefficient,
         goodsStatus: 'DRAFT' as any,
@@ -5062,6 +5207,15 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           nameEn: '',
           nameEs: '',
           categoryId: categoryId || undefined,
+          /** 表格类目路径解析结果（主类目用；品牌永不进入此列表作为主类目） */
+          tableCategoryPath: {
+            raw: categoryCell || null,
+            l1: pathResolved.l1Token,
+            l2: pathResolved.l2Token,
+            primaryId: pathResolved.primaryId,
+            secondaryId: pathResolved.secondaryId,
+          },
+          brand: normalizeText(row.brand) || undefined,
           matchedCategoryIds: matchedSecondaryCategoryIds,
           matchedCategoryNames: matchedSecondaryCategoryNames,
           price: row.priceMin ?? undefined,
@@ -5077,6 +5231,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           featureAttributes: [
             ...(normalizeText(row.brand) ? [{ key: '品牌', value: normalizeText(row.brand) }] : []),
             ...(normalizeText(row.productCode) ? [{ key: '产品编号', value: normalizeText(row.productCode) }] : []),
+            ...(sourceCategoryName ? [{ key: '类目', value: sourceCategoryName }] : []),
           ],
           skuTable: row.skuTable,
         } as any,

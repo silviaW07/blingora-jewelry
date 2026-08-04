@@ -100,6 +100,11 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     setIsSearchLoading(false)
   }, [pathname])
 
+  /* Keep search box in sync with URL/query (same as desktop sticky header) */
+  useEffect(() => {
+    setSearchKeyword(initialKeyword || '')
+  }, [initialKeyword])
+
   useEffect(() => {
     if (!isSearchLoading) return
     const timer = window.setTimeout(() => setIsSearchLoading(false), 8000)
@@ -112,6 +117,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     const keyword = searchKeyword.trim()
     const params = new URLSearchParams()
     if (keyword) params.set('search', keyword)
+    /* ProductCategory.path === '/' — identical routing to desktop */
     router.push(
       params.toString()
         ? `${ProductCategory.path}?${params.toString()}`

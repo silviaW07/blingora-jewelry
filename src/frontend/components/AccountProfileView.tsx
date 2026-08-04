@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -30,7 +31,25 @@ function ScrollField({
   )
 }
 
+function FieldRow({
+  label,
+  children,
+  className,
+}: {
+  label: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('mobile-account-field min-w-0', className)}>
+      <label className="mobile-account-field__label">{label}</label>
+      {children}
+    </div>
+  )
+}
+
 export default function AccountProfileView() {
+  const { t } = useTranslation()
   const session = useUserSession()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -51,11 +70,11 @@ export default function AccountProfileView() {
       setAvatarUrl(res.avatarUrl)
       setPreferredLocale(res.preferredLocale || 'en')
     } catch (error) {
-      toast.error((error as Error).message || '加载资料失败')
+      toast.error((error as Error).message || t('accountProfile.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -67,11 +86,11 @@ export default function AccountProfileView() {
     try {
       const url = await upload_project_file(file)
       const nextUrl = typeof url === 'string' ? url : (url as { file_url?: string })?.file_url || ''
-      if (!nextUrl) throw new Error('上传失败，未返回图片地址')
+      if (!nextUrl) throw new Error(t('accountProfile.uploadNoUrl'))
       setAvatarUrl(nextUrl)
-      toast.success('头像已上传，请点击保存资料')
+      toast.success(t('accountProfile.uploadSuccess'))
     } catch (error) {
-      toast.error((error as Error).message || '头像上传失败')
+      toast.error((error as Error).message || t('accountProfile.uploadFailed'))
     } finally {
       setUploading(false)
     }
@@ -91,39 +110,41 @@ export default function AccountProfileView() {
         username: res.username,
         preferredLocale: res.preferredLocale,
       })
-      toast.success('个人资料已更新')
+      toast.success(t('accountProfile.saveSuccess'))
     } catch (error) {
-      toast.error((error as Error).message || '保存失败')
+      toast.error((error as Error).message || t('accountProfile.saveFailed'))
     } finally {
       setSaving(false)
     }
   }
 
   const fieldInputClass =
-    'h-10 min-w-0 w-full max-w-none text-[0.875rem] whitespace-nowrap'
+    'mobile-account-field__input h-9 min-w-0 w-full max-w-none border-[#e8e2d8] bg-white text-[0.8125rem] whitespace-nowrap shadow-none focus-visible:ring-[#d8d0c4] md:h-10 md:text-[0.875rem]'
 
   return (
-    <AccountShell title="个人信息修改" description="修改头像、姓名与绑定手机号。">
+    <AccountShell title={t('accountProfile.title')} description={t('accountProfile.description')}>
       {loading || !profile ? (
-        <div className="flex min-h-[160px] items-center justify-center gap-2 text-sm text-[#7a756c] md:min-h-[240px]">
+        <div className="flex min-h-[120px] items-center justify-center gap-2 text-sm text-[#7a756c] md:min-h-[240px]">
           <Loader2 className="size-4 animate-spin" />
-          正在读取个人资料...
+          {t('accountProfile.loading')}
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-2xl space-y-4 md:space-y-6">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e8e2d8] bg-[#f6f2ea] text-xl font-semibold text-[#1f1a14] md:size-20 md:text-2xl">
+        <div className="mobile-account-profile mx-auto w-full max-w-2xl">
+          <div className="mobile-account-avatar-row flex items-center gap-3">
+            <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e8e2d8] bg-[#f6f2ea] text-lg font-semibold text-[#1f1a14] md:size-20 md:text-2xl">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="avatar" className="size-full object-cover" />
+                <img src={avatarUrl} alt="" className="size-full object-cover" />
               ) : (
                 username.slice(0, 1).toUpperCase() || 'U'
               )}
             </div>
-            <div className="min-w-0 space-y-1.5">
-              <p className="text-sm font-medium text-[#1f1a14]">头像</p>
-              <label className="inline-flex cursor-pointer items-center rounded-full border border-[#d8d4ca] bg-white px-3 py-1.5 text-xs font-semibold text-[#1f1a14] hover:bg-[#f7f4ee] md:px-4 md:py-2">
-                {uploading ? '上传中...' : '上传头像'}
+            <div className="min-w-0 space-y-1">
+              <p className="text-[0.8125rem] font-medium text-[#1f1a14] md:text-sm">
+                {t('accountProfile.avatar')}
+              </p>
+              <label className="inline-flex cursor-pointer items-center rounded-full border border-[#d8d4ca] bg-white px-2.5 py-1 text-[0.6875rem] font-semibold text-[#1f1a14] hover:bg-[#f7f4ee] md:px-4 md:py-2 md:text-xs">
+                {uploading ? t('accountProfile.uploading') : t('accountProfile.uploadAvatar')}
                 <input
                   type="file"
                   accept="image/*"
@@ -135,21 +156,18 @@ export default function AccountProfileView() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-            <div className="min-w-0 space-y-1 sm:col-span-2">
-              <label className="text-xs font-medium text-[#8a8073]">登录账号</label>
+          <div className="mobile-account-form-list">
+            <FieldRow label={t('accountProfile.loginAccount')}>
               <ScrollField>
                 <Input value={profile.account} disabled className={fieldInputClass} />
               </ScrollField>
-            </div>
-            <div className="min-w-0 space-y-1 sm:col-span-2">
-              <label className="text-xs font-medium text-[#8a8073]">邮箱</label>
+            </FieldRow>
+            <FieldRow label={t('accountProfile.email')}>
               <ScrollField>
                 <Input value={profile.email} disabled className={fieldInputClass} />
               </ScrollField>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <label className="text-xs font-medium text-[#8a8073]">姓名</label>
+            </FieldRow>
+            <FieldRow label={t('accountProfile.name')} className="sm:col-span-1">
               <ScrollField>
                 <Input
                   value={username}
@@ -157,31 +175,28 @@ export default function AccountProfileView() {
                   className={fieldInputClass}
                 />
               </ScrollField>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <label className="text-xs font-medium text-[#8a8073]">绑定手机号</label>
+            </FieldRow>
+            <FieldRow label={t('accountProfile.phone')} className="sm:col-span-1">
               <ScrollField>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="可选"
+                  placeholder={t('accountProfile.phoneOptional')}
                   className={fieldInputClass}
                 />
               </ScrollField>
-            </div>
-            <div className="min-w-0 space-y-1 sm:col-span-2">
-              <label className="text-xs font-medium text-[#8a8073]">头像 URL</label>
+            </FieldRow>
+            <FieldRow label={t('accountProfile.avatarUrl')}>
               <ScrollField>
                 <Input
                   value={avatarUrl}
                   onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="可粘贴图片地址"
+                  placeholder={t('accountProfile.avatarUrlPlaceholder')}
                   className={fieldInputClass}
                 />
               </ScrollField>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <label className="text-xs font-medium text-[#8a8073]">偏好语言</label>
+            </FieldRow>
+            <FieldRow label={t('accountProfile.preferredLocale')}>
               <ScrollField>
                 <Input
                   value={preferredLocale}
@@ -189,16 +204,16 @@ export default function AccountProfileView() {
                   className={fieldInputClass}
                 />
               </ScrollField>
-            </div>
+            </FieldRow>
           </div>
 
           <Button
             type="button"
-            className="h-10 w-full rounded-full bg-[#111111] px-6 text-sm text-white hover:bg-[#222] sm:w-auto"
+            className="mobile-account-save-btn mt-3 h-9 w-full rounded-full bg-[#111111] px-6 text-[0.8125rem] text-white hover:bg-[#222] md:mt-5 md:h-10 md:w-auto md:text-sm"
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? '保存中...' : '保存资料'}
+            {saving ? t('accountProfile.saving') : t('accountProfile.save')}
           </Button>
         </div>
       )}

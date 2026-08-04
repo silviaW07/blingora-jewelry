@@ -45,6 +45,8 @@ const SILENT_SERVER_ERROR_ACTIONS = new Set([
   'getCategoryTopPromotion',
   'getDailyNewArrivalCalendar',
   'getDailyNewArrivalProducts',
+  'getComingSoonDateCards',
+  'getComingSoonProductsByDate',
   'getHomeRecommendZones',
   'getHomeFeaturedProducts',
   'getHomeReviewSection',

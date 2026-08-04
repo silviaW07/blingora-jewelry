@@ -314,8 +314,19 @@ export function PendingImportTableRows({
               handlers={handlers}
               useCategoryTree
               className="flex items-center gap-1 text-sm font-medium text-slate-800 text-left"
-              renderDisplay={() => <span>{targetCategoryName || '--'}</span>}
+              renderDisplay={() => (
+                <span>
+                  {targetCategoryName || item.item_sourceCategoryName || '--'}
+                </span>
+              )}
             />
+            {item.item_sourceCategoryName &&
+            targetCategoryName &&
+            item.item_sourceCategoryName !== targetCategoryName ? (
+              <div className="text-[10px] text-slate-400 truncate max-w-[160px]" title={item.item_sourceCategoryName}>
+                表：{item.item_sourceCategoryName}
+              </div>
+            ) : null}
             <div className="text-[11px] text-slate-500">
               <PendingImportEditableCell
                 itemId={item.item_id}

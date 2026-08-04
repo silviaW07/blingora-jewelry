@@ -4,14 +4,12 @@
  * Mobile-only home stream (md:hidden). Desktop keeps HomeStorefrontView layout.
  * Order: chrome → search → L1 chips → banner → services → recommend zones
  */
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   Package,
 } from 'lucide-react'
@@ -55,7 +53,6 @@ const isDefaultHomeQueryState = (state: HomeState) => {
 
 const serviceBenefitItems = SERVICE_PAGE_CONFIGS.map((cfg) => ({
   title: cfg.title,
-  description: cfg.description,
   iconSrc: cfg.iconSrc,
   defaultHref: `/${cfg.slug}`,
 }))
@@ -84,7 +81,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
     isLoadingDailyNewArrivalProducts,
   } = state
 
-  const [chipsExpanded, setChipsExpanded] = useState(false)
   const categoryProductsRef = useRef<HTMLElement | null>(null)
 
   const isDefaultHomeState = isDefaultHomeQueryState(state)
@@ -109,7 +105,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       )
 
   const goHomeClear = () => {
-    setChipsExpanded(false)
     handlers.handleSelectCategory('')
     router.push('/')
   }
@@ -123,7 +118,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   }
 
   const isHomeChipActive = isDefaultHomeState
-  const showExpandAll = categories.length > 4
 
   const renderChipButton = (
     key: string,
@@ -136,7 +130,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       type="button"
       data-active={isActive}
       className={cn(
-        'mobile-home__chip relative shrink-0 py-2 text-[0.875rem] font-semibold tracking-[0.02em] transition-colors',
+        'mobile-home__chip relative shrink-0 py-2 text-[0.8125rem] font-semibold tracking-[0.02em] transition-colors',
         isActive ? 'text-[#f254a6]' : 'text-[#3a3a3a]',
       )}
       onClick={onClick}
@@ -149,73 +143,32 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   )
 
   return (
-    <div className="mobile-home bg-[#f7f4f0] text-[#111111]" data-controller-name="移动端首页流式布局">
+    <div className="mobile-home bg-[#f7f4f0]" data-controller-name="移动端首页流式布局">
       <MobileStorefrontHeader initialKeyword={queryState.searchKeyword || ''} />
 
-      {/* Horizontal L1 directory + expand all */}
-      <div className="mobile-home__chips mb-4 border-b border-[#ebe4d8] bg-[#f7f4f0]">
-        {!chipsExpanded ? (
-          <div className="mobile-home__chips-row no-scrollbar flex max-h-10 items-center gap-5 overflow-x-auto overflow-y-hidden px-3">
-            {renderChipButton('home', t('nav.home'), isHomeChipActive, goHomeClear)}
-            {categories.map((category) => {
-              const isActive =
-                queryState.categoryId === category.category_id ||
-                category.children.some((c) => c.category_id === queryState.categoryId) ||
-                (isDailyNewArrivalCategoryName(category.category_name) &&
-                  Boolean(selectedDailyNewArrivalMonthKey))
-              return renderChipButton(
-                category.category_id,
-                translateCatalogLabel(t, category.category_name),
-                isActive,
-                () =>
-                  selectTopCategory(
-                    category.category_id,
-                    category.category_slug,
-                    category.category_name,
-                  ),
-              )
-            })}
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-x-5 gap-y-1 px-3 py-1.5">
-            {renderChipButton('home', t('nav.home'), isHomeChipActive, goHomeClear)}
-            {categories.map((category) => {
-              const isActive =
-                queryState.categoryId === category.category_id ||
-                category.children.some((c) => c.category_id === queryState.categoryId) ||
-                (isDailyNewArrivalCategoryName(category.category_name) &&
-                  Boolean(selectedDailyNewArrivalMonthKey))
-              return renderChipButton(
-                category.category_id,
-                translateCatalogLabel(t, category.category_name),
-                isActive,
-                () =>
-                  selectTopCategory(
-                    category.category_id,
-                    category.category_slug,
-                    category.category_name,
-                  ),
-              )
-            })}
-          </div>
-        )}
-        {showExpandAll ? (
-          <button
-            type="button"
-            className="mobile-home__chips-expand flex w-full items-center justify-center gap-1 border-t border-[#ebe4d8]/80 py-1.5 text-[0.8125rem] font-semibold text-[#6b6560]"
-            onClick={() => setChipsExpanded((v) => !v)}
-            aria-expanded={chipsExpanded}
-          >
-            {chipsExpanded
-              ? t('mobile.collapseCategories', { defaultValue: 'Collapse' })
-              : t('mobile.expandAllCategories', { defaultValue: 'Expand all' })}
-            {chipsExpanded ? (
-              <ChevronUp className="size-3.5" />
-            ) : (
-              <ChevronDown className="size-3.5" />
-            )}
-          </button>
-        ) : null}
+      {/* Horizontal L1 directory only — no Expand all */}
+      <div className="mobile-home__chips mb-3 border-b border-[#ebe4d8] bg-[#f7f4f0]">
+        <div className="mobile-home__chips-row no-scrollbar flex max-h-10 items-center gap-4 overflow-x-auto overflow-y-hidden px-3">
+          {renderChipButton('home', t('nav.home'), isHomeChipActive, goHomeClear)}
+          {categories.map((category) => {
+            const isActive =
+              queryState.categoryId === category.category_id ||
+              category.children.some((c) => c.category_id === queryState.categoryId) ||
+              (isDailyNewArrivalCategoryName(category.category_name) &&
+                Boolean(selectedDailyNewArrivalMonthKey))
+            return renderChipButton(
+              category.category_id,
+              translateCatalogLabel(t, category.category_name),
+              isActive,
+              () =>
+                selectTopCategory(
+                  category.category_id,
+                  category.category_slug,
+                  category.category_name,
+                ),
+            )
+          })}
+        </div>
       </div>
 
       {isDefaultHomeState ? (
@@ -293,12 +246,12 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
             </div>
           </section>
 
-          {/* 3. Compact service grid — 2-up short rows */}
+          {/* 3. Compact service chips — icon + title only, content-sized */}
           <section
-            className="mobile-home__services mb-4 px-3"
+            className="mobile-home__services mb-3 px-3"
             data-controller-name="移动端服务权益网格"
           >
-            <div className="grid grid-cols-2 gap-2">
+            <div className="mobile-home__services-row flex flex-wrap items-start gap-1.5">
               {serviceBenefitItems.map((item, index) => {
                 const keys = getServiceBenefitDecorateKeys(index)
                 const cardPatch = getPatch(keys.card)
@@ -309,21 +262,21 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                   item.defaultHref
 
                 const tile = (
-                  <div className="flex h-11 items-center gap-2 rounded-lg border border-[#efe8dc] bg-white px-2.5 shadow-[0_4px_12px_-10px_rgba(0,0,0,0.28)]">
-                    <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[#f5f1ea]">
+                  <div className="mobile-home__service-tile inline-flex w-auto max-w-full items-center gap-1.5 rounded-lg border border-[#efe8dc] bg-white px-2 py-1.5 shadow-[0_3px_10px_-9px_rgba(0,0,0,0.28)]">
+                    <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[#f5f1ea]">
                       <EditableImg
                         propKey={keys.icon}
                         src={item.iconSrc}
                         alt={item.title}
-                        className="size-4 object-contain"
-                        style={{ objectFit: 'contain', width: '1rem', height: '1rem' }}
+                        className="size-3.5 object-contain"
+                        style={{ objectFit: 'contain', width: '0.875rem', height: '0.875rem' }}
                         disableKeywordSearch
                       />
                     </div>
                     <DecorateText
                       propKey={keys.title}
                       as="span"
-                      className="min-w-0 flex-1 truncate text-[0.875rem] font-semibold leading-none text-[#3a322a]"
+                      className="mobile-home__service-title whitespace-nowrap text-[0.6875rem] font-semibold leading-tight text-[#3a322a]"
                     >
                       {item.title}
                     </DecorateText>
@@ -332,7 +285,11 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
 
                 if (isDecorateMode) {
                   return (
-                    <div key={keys.card} data-controller-name="移动端服务权益卡片">
+                    <div
+                      key={keys.card}
+                      className="mobile-home__service-link inline-flex w-auto max-w-full shrink-0"
+                      data-controller-name="移动端服务权益卡片"
+                    >
                       {tile}
                     </div>
                   )
@@ -341,7 +298,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                   <a
                     key={keys.card}
                     href={href}
-                    className="block"
+                    className="mobile-home__service-link inline-flex w-auto max-w-full shrink-0"
                     data-controller-name="移动端服务权益卡片"
                   >
                     {tile}
@@ -389,7 +346,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               <p className="text-[0.8125rem] font-semibold uppercase tracking-[0.14em] text-[#8b8477]">
                 {t('product.dailyNewTitle')}
               </p>
-              <h2 className="mt-1 text-[0.9375rem] font-semibold text-[#111]">
+              <h2 className="mt-1 text-[0.9375rem] font-semibold text-[#333]">
                 {dailyNewArrivalMonths.find((m) => m.monthKey === selectedDailyNewArrivalMonthKey)
                   ?.label || t('product.dailyNewFallback')}
               </h2>
@@ -430,7 +387,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 <ArrowLeft className="size-3.5" />
                 {t('common.backToHome')}
               </button>
-              <h2 className="text-[0.9375rem] font-semibold leading-tight text-[#111]">
+              <h2 className="text-[0.9375rem] font-semibold leading-tight text-[#333]">
                 {currentCategoryName}
               </h2>
               <p className="mt-1 text-[0.875rem] text-[#6f6a62]">
