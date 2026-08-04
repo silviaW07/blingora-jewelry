@@ -82,13 +82,21 @@ export const registerCustomer = withResult(
           account: generatedAccount,
           email: normalizedEmail,
           password: hashPassword(input.sysuser_password),
-          passwordPlain: String(input.sysuser_password || '').slice(0, 255) || null,
+          // passwordPlain requires DB column; omit so register works when schema lag
           role: UserRole.CUSTOMER,
           status: 'ACTIVE' as UserStatus,
           username,
           phone: normalizedPhone || null,
           lastLoginAt: new Date(),
-        }
+        },
+        select: {
+          id: true,
+          account: true,
+          email: true,
+          username: true,
+          preferredLocale: true,
+          role: true,
+        },
       })
 
       // 初始化空购物车

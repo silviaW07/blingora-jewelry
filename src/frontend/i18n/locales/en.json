@@ -37,6 +37,7 @@
     "home": "Home",
     "categories": "Categories",
     "brand": "Brand",
+    "coming": "Coming",
     "myOrders": "My Orders",
     "addresses": "Addresses",
     "profile": "Profile",
@@ -64,7 +65,18 @@
     "viewMore": "View More",
     "brandShowing": "{{name}}",
     "noBrands": "No brands yet",
-    "noBrandProducts": "No products for this brand"
+    "noBrandProducts": "No products for this brand",
+    "recommendedCategories": "Recommended categories",
+    "noRecommendedCategories": "No categories yet",
+    "cameraSearch": "Photo search",
+    "cameraSearchHint": "image",
+    "bannerPlaceholderTitle": "Wholesale deals for you",
+    "shopNow": "Shop now",
+    "expandAllCategories": "Expand all",
+    "collapseCategories": "Collapse",
+    "dailyNewPromo": "Pick a month to browse new arrivals",
+    "all6Months": "Last 6 months",
+    "noComingDates": "No upcoming previews yet"
   },
   "home": {
     "zone_popular_jewelry": "Popular Jewelry",

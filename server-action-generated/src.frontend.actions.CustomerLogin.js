@@ -52,13 +52,33 @@ __export(CustomerLogin_exports, {
 module.exports = __toCommonJS(CustomerLogin_exports);
 var import_prisma = __toESM(require_prisma());
 var import_action_utils = __toESM(require_action_utils());
+var loginUserSelect = {
+  id: true,
+  account: true,
+  password: true,
+  email: true,
+  role: true,
+  status: true,
+  username: true,
+  preferredLocale: true
+};
 var loginCustomer = (0, import_action_utils.withResult)(
   async (input) => {
-    const user = await import_prisma.default.sysuser.findUnique({
+    const accountOrEmail = String(input.sysuser_account || "").trim();
+    let user = await import_prisma.default.sysuser.findUnique({
       where: {
-        account: input.sysuser_account
-      }
+        account: accountOrEmail
+      },
+      select: loginUserSelect
     });
+    if (!user && accountOrEmail.includes("@")) {
+      user = await import_prisma.default.sysuser.findUnique({
+        where: {
+          email: accountOrEmail.toLowerCase()
+        },
+        select: loginUserSelect
+      });
+    }
     if (!user) {
       throw new Error("\u8D26\u53F7\u6216\u5BC6\u7801\u9519\u8BEF");
     }
@@ -72,10 +92,15 @@ var loginCustomer = (0, import_action_utils.withResult)(
     if (user.status === "DISABLED") {
       throw new Error("\u8D26\u6237\u72B6\u6001\u53D7\u9650 (DISABLED)\uFF0C\u8BF7\u8054\u7CFB\u7AD9\u70B9\u7BA1\u7406\u5458");
     }
-    await import_prisma.default.sysuser.update({
-      where: { id: user.id },
-      data: { lastLoginAt: /* @__PURE__ */ new Date() }
-    });
+    try {
+      await import_prisma.default.sysuser.update({
+        where: { id: user.id },
+        data: { lastLoginAt: /* @__PURE__ */ new Date() },
+        select: { id: true }
+      });
+    } catch {
+      // Best-effort: do not block a valid login on lastLoginAt / schema lag
+    }
     const token = await (0, import_action_utils.signToken)(user.id, user.role);
     return {
       token,
@@ -83,7 +108,7 @@ var loginCustomer = (0, import_action_utils.withResult)(
       sysuser_account: user.account,
       sysuser_name: user.username,
       sysuser_email: user.email,
-      preferred_locale: user.preferredLocale || "zh-CN",
+      preferred_locale: user.preferredLocale || "en",
       sysuser_role: user.role
     };
   }

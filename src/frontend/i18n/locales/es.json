@@ -37,6 +37,7 @@
     "home": "Inicio",
     "categories": "Categorías",
     "brand": "Marca",
+    "coming": "Coming",
     "myOrders": "Mis pedidos",
     "addresses": "Direcciones",
     "profile": "Perfil",
@@ -64,7 +65,18 @@
     "viewMore": "Ver más",
     "brandShowing": "{{name}}",
     "noBrands": "Aún no hay marcas",
-    "noBrandProducts": "No hay productos para esta marca"
+    "noBrandProducts": "No hay productos para esta marca",
+    "recommendedCategories": "Categorías recomendadas",
+    "noRecommendedCategories": "Aún no hay categorías",
+    "cameraSearch": "Buscar por foto",
+    "cameraSearchHint": "imagen",
+    "bannerPlaceholderTitle": "Ofertas mayoristas para ti",
+    "shopNow": "Comprar ahora",
+    "expandAllCategories": "Ver todas",
+    "collapseCategories": "Contraer",
+    "dailyNewPromo": "Elige un mes para ver las novedades",
+    "all6Months": "Últimos 6 meses",
+    "noComingDates": "Aún no hay novedades próximas"
   },
   "home": {
     "zone_popular_jewelry": "Joyería popular",

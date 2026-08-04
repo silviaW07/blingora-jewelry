@@ -31,24 +31,32 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const handleGoBack = () => router.back()
-  const normalizedPath = pathname.toLowerCase()
+  const normalizedPath = (pathname || '/').toLowerCase().replace(/\/+$/, '') || '/'
   const isFullscreen = FULLSCREEN_PATHS.some((p) => normalizedPath.startsWith(p.toLowerCase()))
   const isCheckoutPage = CHECKOUT_PATHS.some((p) => normalizedPath === p || normalizedPath.startsWith(`${p}/`))
   const showPromotionBanner = !isFullscreen && !isCheckoutPage
+  // 完整页脚：移动端仅首页；桌面端全站（非全屏）
+  const isStorefrontHome = normalizedPath === '/' || normalizedPath === '/home'
+  const showFooter = !isFullscreen
 
   return (
     <FrontendAuthGuard>
       <I18nProvider>
         <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col">
-          <AuthExpiredDialog />
           <Suspense fallback={null}>
             <CustomerAuthModalProvider>
+              {/* 401 → open CustomerAuthModal (no bottom 初始化登录账号 sheet) */}
+              <AuthExpiredDialog />
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
                   <PageErrorBoundary key={pathname} onGoBack={handleGoBack}>{children}</PageErrorBoundary>
                 </main>
-                {isFullscreen ? null : <Footer />}
+                {showFooter ? (
+                  <div className={isStorefrontHome ? undefined : 'hidden md:block'}>
+                    <Footer />
+                  </div>
+                ) : null}
                 {isFullscreen ? null : <MobileBottomNav />}
                 <WhatsAppFloatButton />
               </DecorateModeProvider>

@@ -16,28 +16,3 @@ export const updateUserStatus = (...args: Parameters<Actions["updateUserStatus"]
   rpcCall<Awaited<ReturnType<Actions["updateUserStatus"]>>>("src.backend.actions.UserManagement.updateUserStatus", ...args);
 export const deleteUser = (...args: Parameters<Actions["deleteUser"]>) => 
   rpcCall<Awaited<ReturnType<Actions["deleteUser"]>>>("src.backend.actions.UserManagement.deleteUser", ...args);
-
-export type {
-  SysUserRole,
-  SysUserStatus,
-  UserOrderStatus,
-  RawOrderStatus,
-  UserListSortField,
-  SortDirection,
-  CustomerTagCode,
-  UserOrderSummary,
-  UserOrderItem,
-  UnpaidOrderLineItem,
-  UserListItem,
-  UserDetail,
-  GetUserListInput,
-  GetUserListOutput,
-  GetUserDetailInput,
-  GetUserDetailOutput,
-  UpdateUserStatusInput,
-  DeleteUserInput,
-  UpdateUserAdminNoteInput,
-  UpdateUserCustomerTagInput,
-  ImpersonateCustomerInput,
-  ImpersonateCustomerOutput,
-} from '../../../../../src/backend/actions/UserManagement';

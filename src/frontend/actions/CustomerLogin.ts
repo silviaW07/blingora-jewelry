@@ -31,15 +31,34 @@ import {
   UserRole
 } from '@/frontend/action_utils'
 
+/** Fields required for login only — skip schema-lag columns like passwordPlain */
+const loginUserSelect = {
+  id: true,
+  account: true,
+  password: true,
+  email: true,
+  role: true,
+  status: true,
+  username: true,
+  preferredLocale: true,
+} as const
+
 // ===== Actions =====
 export const loginCustomer = withResult(
   async (input: LoginCustomerInput): Promise<LoginCustomerOutput> => {
-    // 1. 根据账号查找用户
-    const user = await prisma.sysuser.findUnique({
-      where: {
-        account: input.sysuser_account
-      }
+    const accountOrEmail = String(input.sysuser_account || '').trim()
+
+    // 1. 账号查找；注册时 account 一般为邮箱，并兼容纯邮箱字段登录
+    let user = await prisma.sysuser.findUnique({
+      where: { account: accountOrEmail },
+      select: loginUserSelect,
     })
+    if (!user && accountOrEmail.includes('@')) {
+      user = await prisma.sysuser.findUnique({
+        where: { email: accountOrEmail.toLowerCase() },
+        select: loginUserSelect,
+      })
+    }
 
     if (!user) {
       throw new Error('账号或密码错误')
@@ -62,10 +81,17 @@ export const loginCustomer = withResult(
     }
 
     // 5. 业务闭环：登录成功瞬间更新最后登录时间
-    await prisma.sysuser.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() }
-    })
+    // Must use select — Prisma re-SELECTs the full model after update by default,
+    // which fails when schema has columns (e.g. passwordPlain) not yet in DB.
+    try {
+      await prisma.sysuser.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+        select: { id: true },
+      })
+    } catch {
+      // Best-effort: do not block a valid login on lastLoginAt / schema lag
+    }
 
     // 6. 签发 Token
     const token = await signToken(user.id, user.role)
@@ -77,7 +103,7 @@ export const loginCustomer = withResult(
       sysuser_name: user.username,
       sysuser_email: user.email,
       preferred_locale: user.preferredLocale || 'en',
-      sysuser_role: user.role
+      sysuser_role: user.role,
     }
-  }
+  },
 )

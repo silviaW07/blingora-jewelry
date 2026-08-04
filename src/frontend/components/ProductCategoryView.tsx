@@ -8,7 +8,7 @@ import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Pac
 import type { ProductCategoryState, ProductCategoryHandlers, ProductCategoryBannerItem, ProductCategoryKeywordItem } from '@/frontend/hooks/useProductCategory';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
-import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader';
+import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
 import { useTranslation } from 'react-i18next';
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels';
 interface Props {
@@ -70,7 +70,7 @@ export const ProductCategoryView = ({
   );
   const hasBrowseChrome = Boolean(activeBanner) || recommendationFloors.length > 0;
   return <main className="min-h-screen bg-[#FFF5F5] text-[#111111]" data-controller-name="分类页整体布局" data-api-unique-id='productcategoryview-r3cbcd43ae04fc8af-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-      <StorefrontStickyHeader isHome={false} />
+      <StorefrontResponsiveHeader isHome={false} />
 
       {!showProductResults ? hasBrowseChrome ? <section className="storefront-container py-6" data-controller-name="首页分类浏览与横幅联动区" data-api-unique-id='productcategoryview-r220efc53b28f746c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
         {activeBanner ? <div className="flex w-full flex-col items-stretch rounded-[36px] bg-[#f5f4ef] p-3 shadow-[0_24px_60px_-48px_rgba(0,0,0,0.34)] sm:p-4 lg:p-5" data-api-unique-id='productcategoryview-home-hero-row-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>

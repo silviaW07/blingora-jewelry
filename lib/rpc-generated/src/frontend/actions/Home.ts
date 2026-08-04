@@ -18,3 +18,5 @@ export const getDailyNewArrivalCalendar = (...args: Parameters<Actions["getDaily
   rpcCall<Awaited<ReturnType<Actions["getDailyNewArrivalCalendar"]>>>("src.frontend.actions.Home.getDailyNewArrivalCalendar", ...args);
 export const getDailyNewArrivalProducts = (...args: Parameters<Actions["getDailyNewArrivalProducts"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getDailyNewArrivalProducts"]>>>("src.frontend.actions.Home.getDailyNewArrivalProducts", ...args);
+export const getComingSoonDateCards = (...args: Parameters<Actions["getComingSoonDateCards"]>) =>
+  rpcCall<Awaited<ReturnType<Actions["getComingSoonDateCards"]>>>("src.frontend.actions.Home.getComingSoonDateCards", ...args);

@@ -35,6 +35,8 @@ type HomeRecommendZoneSectionProps = {
   showViewAll?: boolean
   onViewAll?: (zoneId: string) => void
   className?: string
+  /** Mobile home: horizontal squircle icons + labels (PC layout unchanged). */
+  variant?: 'default' | 'mobile-squircle'
 }
 
 const formatPrice = (price?: number | null) => {
@@ -72,6 +74,146 @@ const CATEGORY_CARD_PLACEHOLDER = '/category-covers/placeholder.svg'
 const resolveCategoryCardSrc = (imageUrl?: string | null) => {
   const text = String(imageUrl || '').trim()
   return text || CATEGORY_CARD_PLACEHOLDER
+}
+
+/** Horizontal squircle strip: ≤5 fill row; >5 scrolls (5 visible). */
+const MobileSquircleStrip = ({
+  count,
+  children,
+}: {
+  count: number
+  children: React.ReactNode
+}) => {
+  const n = Math.max(count, 0)
+  const fillsRow = n > 0 && n <= 5
+  return (
+    <div
+      className={cn(
+        'mobile-zone-squircle-row',
+        fillsRow ? 'mobile-zone-squircle-row--fill' : 'mobile-zone-squircle-row--scroll',
+      )}
+      data-count={n}
+      style={
+        {
+          '--zone-item-count': String(Math.max(n, 1)),
+          '--zone-visible': '5',
+        } as React.CSSProperties
+      }
+      data-controller-name="移动端推荐专区横向图标行"
+    >
+      {children}
+    </div>
+  )
+}
+
+const renderMobileSquircleContent = (
+  zone: HomeRecommendZoneSectionType,
+  handlers: ZoneHandlers,
+  t: ReturnType<typeof useTranslation>['t'],
+) => {
+  if (zone.zoneType === 'PRODUCT') {
+    const productItems = zone.items.filter(
+      (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
+    )
+    if (productItems.length === 0) {
+      return (
+        <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
+          {t('home.emptyProductZone', { defaultValue: '当前商品专区暂无可展示内容' })}
+        </div>
+      )
+    }
+    return (
+      <MobileSquircleStrip count={productItems.length}>
+        {productItems.map((item) => (
+          <button
+            key={item.itemId}
+            type="button"
+            className="mobile-zone-squircle"
+            onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+            data-controller-name="移动端推荐商品图标"
+          >
+            <span className="mobile-zone-squircle__media">
+              <EditableImg
+                propKey={`home-recommend-product-m-${item.productId}`}
+                src={item.imageUrl || undefined}
+                alt={item.productName}
+                keywords={item.imageUrl || undefined}
+                disableKeywordSearch
+                fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                loading="lazy"
+                orientation="square"
+                className="h-full w-full object-cover"
+                style={{ aspectRatio: '1 / 1' }}
+              />
+            </span>
+            <span className="mobile-zone-squircle__label">
+              <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
+                {item.productName}
+              </DecorateText>
+            </span>
+          </button>
+        ))}
+      </MobileSquircleStrip>
+    )
+  }
+
+  if (zone.zoneType === 'CATEGORY') {
+    const categoryItems = zone.items.filter(
+      (item): item is RecommendCategoryCard => item.entityType === 'CATEGORY',
+    )
+    if (categoryItems.length === 0) {
+      return (
+        <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
+          {t('home.emptyCategoryZone', { defaultValue: '当前类目专区暂无可展示内容' })}
+        </div>
+      )
+    }
+    return (
+      <MobileSquircleStrip count={categoryItems.length}>
+        {categoryItems.map((item) => {
+          const displayName = translateCatalogLabel(t, item.categoryName)
+          const imageSrc = resolveCategoryCardSrc(item.imageUrl)
+          return (
+            <button
+              key={item.itemId}
+              type="button"
+              className="mobile-zone-squircle"
+              onClick={() =>
+                handlers.handleNavigateRecommendCategory(item.categoryId, item.categorySlug)
+              }
+              data-controller-name="移动端推荐类目图标"
+            >
+              <span className="mobile-zone-squircle__media">
+                <EditableImg
+                  propKey={`home-recommend-category-m-${item.categoryId}`}
+                  src={imageSrc}
+                  alt={displayName}
+                  keywords={undefined}
+                  disableKeywordSearch
+                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  loading="lazy"
+                  orientation="square"
+                  className="h-full w-full object-cover"
+                  style={{ aspectRatio: '1 / 1' }}
+                />
+              </span>
+              <span className="mobile-zone-squircle__label">
+                <DecorateText propKey={`home_category_card_name_${item.categoryId}`} as="span">
+                  {displayName}
+                </DecorateText>
+              </span>
+            </button>
+          )
+        })}
+      </MobileSquircleStrip>
+    )
+  }
+
+  return (
+    <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
+      {t('home.emptyZone', { defaultValue: '当前专区暂无可展示内容' })}
+    </div>
+  )
 }
 
 const renderRecommendZoneContent = (
@@ -253,41 +395,62 @@ export const HomeRecommendZoneSection = ({
   showViewAll = false,
   onViewAll,
   className,
+  variant = 'default',
 }: HomeRecommendZoneSectionProps) => {
   const { t } = useTranslation()
   const HeadingTag = headingAs
+  const isMobileSquircle = variant === 'mobile-squircle'
 
   return (
     <section
-      className={cn('home-zone-section p-0 sm:p-0', className)}
+      className={cn(
+        'home-zone-section p-0 sm:p-0',
+        isMobileSquircle && 'home-zone-section--mobile-squircle',
+        className,
+      )}
       data-controller-name="首页推荐专区分组"
     >
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
+      <div
+        className={cn(
+          'flex items-center justify-between',
+          isMobileSquircle ? 'mb-2.5 gap-3' : 'mb-5 gap-4',
+        )}
+      >
+        <div className={cn('flex min-w-0 flex-1 items-center', isMobileSquircle ? 'gap-3' : 'gap-4')}>
           <DecorateText
             propKey={`home_zone_title_${zone.zoneId}`}
             as={HeadingTag}
             className={cn(
-              headingAs === 'h1' ? 'text-[34px]' : 'text-[28px]',
-              'truncate font-semibold tracking-[0.02em] text-[#4a4137]',
+              isMobileSquircle
+                ? 'text-[0.875rem] font-semibold tracking-[0.02em] text-[#3a322a]'
+                : cn(
+                    headingAs === 'h1' ? 'text-[34px]' : 'text-[28px]',
+                    'font-semibold tracking-[0.02em] text-[#4a4137]',
+                  ),
+              'truncate',
             )}
           >
             {translateCatalogLabel(t, zone.title)}
           </DecorateText>
-          <div className="h-px flex-1 bg-[#d8d1c7]" />
+          {!isMobileSquircle ? <div className="h-px flex-1 bg-[#d8d1c7]" /> : null}
         </div>
-        {showViewAll && zone.zoneType === 'PRODUCT' ? (
+        {showViewAll && (zone.zoneType === 'PRODUCT' || zone.zoneType === 'CATEGORY') ? (
           <button
             type="button"
-            className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#4a4137] transition hover:text-[#111111]"
+            className={cn(
+              'inline-flex shrink-0 items-center font-semibold text-[#4a4137] transition hover:text-[#111111]',
+              isMobileSquircle ? 'gap-0.5 text-[0.8125rem]' : 'gap-1 text-sm',
+            )}
             onClick={() => onViewAll?.(zone.zoneId)}
           >
-            <span>View All</span>
-            <ChevronRight className="size-4" />
+            <span>{t('common.viewAll', { defaultValue: 'View All' })}</span>
+            <ChevronRight className={isMobileSquircle ? 'size-3.5' : 'size-4'} />
           </button>
         ) : null}
       </div>
-      {renderRecommendZoneContent(zone, handlers, t)}
+      {isMobileSquircle
+        ? renderMobileSquircleContent(zone, handlers, t)
+        : renderRecommendZoneContent(zone, handlers, t)}
     </section>
   )
 }

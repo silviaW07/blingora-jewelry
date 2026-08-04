@@ -5959,6 +5959,7 @@ export namespace Prisma {
     id: string | null
     account: string | null
     password: string | null
+    passwordPlain: string | null
     email: string | null
     role: $Enums.userrole | null
     status: $Enums.userstatus | null
@@ -5983,6 +5984,7 @@ export namespace Prisma {
     id: string | null
     account: string | null
     password: string | null
+    passwordPlain: string | null
     email: string | null
     role: $Enums.userrole | null
     status: $Enums.userstatus | null
@@ -6007,6 +6009,7 @@ export namespace Prisma {
     id: number
     account: number
     password: number
+    passwordPlain: number
     email: number
     role: number
     status: number
@@ -6043,6 +6046,7 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
+    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6067,6 +6071,7 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
+    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6091,6 +6096,7 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
+    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6204,6 +6210,7 @@ export namespace Prisma {
     id: string
     account: string
     password: string
+    passwordPlain: string | null
     email: string
     role: $Enums.userrole
     status: $Enums.userstatus
@@ -6249,6 +6256,7 @@ export namespace Prisma {
     id?: boolean
     account?: boolean
     password?: boolean
+    passwordPlain?: boolean
     email?: boolean
     role?: boolean
     status?: boolean
@@ -6289,6 +6297,7 @@ export namespace Prisma {
     id?: boolean
     account?: boolean
     password?: boolean
+    passwordPlain?: boolean
     email?: boolean
     role?: boolean
     status?: boolean
@@ -6311,7 +6320,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
+  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
   export type sysuserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     carts?: boolean | sysuser$cartsArgs<ExtArgs>
     importTasks?: boolean | sysuser$importTasksArgs<ExtArgs>
@@ -6346,6 +6355,10 @@ export namespace Prisma {
       id: string
       account: string
       password: string
+      /**
+       * * 明文密码（仅供后台客服协助；登录仍校验 password 哈希）
+       */
+      passwordPlain: string | null
       email: string
       role: $Enums.userrole
       status: $Enums.userstatus
@@ -6749,6 +6762,7 @@ export namespace Prisma {
     readonly id: FieldRef<"sysuser", 'String'>
     readonly account: FieldRef<"sysuser", 'String'>
     readonly password: FieldRef<"sysuser", 'String'>
+    readonly passwordPlain: FieldRef<"sysuser", 'String'>
     readonly email: FieldRef<"sysuser", 'String'>
     readonly role: FieldRef<"sysuser", 'userrole'>
     readonly status: FieldRef<"sysuser", 'userstatus'>
@@ -9938,6 +9952,7 @@ export namespace Prisma {
     isBestSeller: boolean | null
     isLimitedDiscount: boolean | null
     sortWeight: number | null
+    publishedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -9982,6 +9997,7 @@ export namespace Prisma {
     isBestSeller: boolean | null
     isLimitedDiscount: boolean | null
     sortWeight: number | null
+    publishedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -10037,6 +10053,7 @@ export namespace Prisma {
     isBestSeller: number
     isLimitedDiscount: number
     sortWeight: number
+    publishedAt: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -10105,6 +10122,7 @@ export namespace Prisma {
     isBestSeller?: true
     isLimitedDiscount?: true
     sortWeight?: true
+    publishedAt?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -10149,6 +10167,7 @@ export namespace Prisma {
     isBestSeller?: true
     isLimitedDiscount?: true
     sortWeight?: true
+    publishedAt?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -10204,6 +10223,7 @@ export namespace Prisma {
     isBestSeller?: true
     isLimitedDiscount?: true
     sortWeight?: true
+    publishedAt?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -10346,6 +10366,7 @@ export namespace Prisma {
     isBestSeller: boolean
     isLimitedDiscount: boolean
     sortWeight: number
+    publishedAt: Date | null
     createdAt: Date
     updatedAt: Date
     _count: ProductCountAggregateOutputType | null
@@ -10420,6 +10441,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: boolean
+    publishedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     category?: boolean | categoryDefaultArgs<ExtArgs>
@@ -10494,11 +10516,12 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: boolean
+    publishedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type productOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "categoryId" | "name" | "slug" | "productCode" | "source" | "supplierName" | "status" | "productType" | "goodsStatus" | "costPrice" | "priceCoefficient" | "detailText" | "brandName" | "brandCategoryId" | "brandMatchKeyword" | "autoBrandMatched" | "materialType" | "gemstoneType" | "metalPurity" | "platingProcess" | "totalCarat" | "weightGram" | "mainImageUrl" | "hoverImageUrl" | "wearImageUrl" | "videoUrl" | "rotate360Json" | "galleryJson" | "shortDescription" | "designStory" | "translationsJson" | "detailTranslationsJson" | "sellingPointsJson" | "detailContentJson" | "parameterJson" | "careGuideJson" | "sizeGuideJson" | "engravingPreviewBaseUrl" | "packagingImageUrl" | "certificateInfo" | "tradeInfoJson" | "faqJson" | "ratingAverage" | "ratingCount" | "soldCount" | "isNewArrival" | "isBestSeller" | "isLimitedDiscount" | "sortWeight" | "createdAt" | "updatedAt", ExtArgs["result"]["product"]>
+  export type productOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "categoryId" | "name" | "slug" | "productCode" | "source" | "supplierName" | "status" | "productType" | "goodsStatus" | "costPrice" | "priceCoefficient" | "detailText" | "brandName" | "brandCategoryId" | "brandMatchKeyword" | "autoBrandMatched" | "materialType" | "gemstoneType" | "metalPurity" | "platingProcess" | "totalCarat" | "weightGram" | "mainImageUrl" | "hoverImageUrl" | "wearImageUrl" | "videoUrl" | "rotate360Json" | "galleryJson" | "shortDescription" | "designStory" | "translationsJson" | "detailTranslationsJson" | "sellingPointsJson" | "detailContentJson" | "parameterJson" | "careGuideJson" | "sizeGuideJson" | "engravingPreviewBaseUrl" | "packagingImageUrl" | "certificateInfo" | "tradeInfoJson" | "faqJson" | "ratingAverage" | "ratingCount" | "soldCount" | "isNewArrival" | "isBestSeller" | "isLimitedDiscount" | "sortWeight" | "publishedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["product"]>
   export type productInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | categoryDefaultArgs<ExtArgs>
     brandCategory?: boolean | product$brandCategoryArgs<ExtArgs>
@@ -10590,6 +10613,10 @@ export namespace Prisma {
       isBestSeller: boolean
       isLimitedDiscount: boolean
       sortWeight: number
+      /**
+       * * 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt
+       */
+      publishedAt: Date | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["product"]>
@@ -11027,6 +11054,7 @@ export namespace Prisma {
     readonly isBestSeller: FieldRef<"product", 'Boolean'>
     readonly isLimitedDiscount: FieldRef<"product", 'Boolean'>
     readonly sortWeight: FieldRef<"product", 'Int'>
+    readonly publishedAt: FieldRef<"product", 'DateTime'>
     readonly createdAt: FieldRef<"product", 'DateTime'>
     readonly updatedAt: FieldRef<"product", 'DateTime'>
   }
@@ -56103,6 +56131,7 @@ export namespace Prisma {
     id: 'id',
     account: 'account',
     password: 'password',
+    passwordPlain: 'passwordPlain',
     email: 'email',
     role: 'role',
     status: 'status',
@@ -56225,6 +56254,7 @@ export namespace Prisma {
     isBestSeller: 'isBestSeller',
     isLimitedDiscount: 'isLimitedDiscount',
     sortWeight: 'sortWeight',
+    publishedAt: 'publishedAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -57002,6 +57032,7 @@ export namespace Prisma {
     id: 'id',
     account: 'account',
     password: 'password',
+    passwordPlain: 'passwordPlain',
     email: 'email',
     username: 'username',
     avatarUrl: 'avatarUrl',
@@ -57798,6 +57829,7 @@ export namespace Prisma {
     id?: StringFilter<"sysuser"> | string
     account?: StringFilter<"sysuser"> | string
     password?: StringFilter<"sysuser"> | string
+    passwordPlain?: StringNullableFilter<"sysuser"> | string | null
     email?: StringFilter<"sysuser"> | string
     role?: EnumuserroleFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusFilter<"sysuser"> | $Enums.userstatus
@@ -57835,6 +57867,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrderInput | SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -57877,6 +57910,7 @@ export namespace Prisma {
     OR?: sysuserWhereInput[]
     NOT?: sysuserWhereInput | sysuserWhereInput[]
     password?: StringFilter<"sysuser"> | string
+    passwordPlain?: StringNullableFilter<"sysuser"> | string | null
     role?: EnumuserroleFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusFilter<"sysuser"> | $Enums.userstatus
     username?: StringFilter<"sysuser"> | string
@@ -57913,6 +57947,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrderInput | SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -57947,6 +57982,7 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"sysuser"> | string
     account?: StringWithAggregatesFilter<"sysuser"> | string
     password?: StringWithAggregatesFilter<"sysuser"> | string
+    passwordPlain?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     email?: StringWithAggregatesFilter<"sysuser"> | string
     role?: EnumuserroleWithAggregatesFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusWithAggregatesFilter<"sysuser"> | $Enums.userstatus
@@ -58289,6 +58325,7 @@ export namespace Prisma {
     isBestSeller?: BoolFilter<"product"> | boolean
     isLimitedDiscount?: BoolFilter<"product"> | boolean
     sortWeight?: IntFilter<"product"> | number
+    publishedAt?: DateTimeNullableFilter<"product"> | Date | string | null
     createdAt?: DateTimeFilter<"product"> | Date | string
     updatedAt?: DateTimeFilter<"product"> | Date | string
     category?: XOR<CategoryScalarRelationFilter, categoryWhereInput>
@@ -58360,6 +58397,7 @@ export namespace Prisma {
     isBestSeller?: SortOrder
     isLimitedDiscount?: SortOrder
     sortWeight?: SortOrder
+    publishedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     category?: categoryOrderByWithRelationInput
@@ -58435,6 +58473,7 @@ export namespace Prisma {
     isBestSeller?: BoolFilter<"product"> | boolean
     isLimitedDiscount?: BoolFilter<"product"> | boolean
     sortWeight?: IntFilter<"product"> | number
+    publishedAt?: DateTimeNullableFilter<"product"> | Date | string | null
     createdAt?: DateTimeFilter<"product"> | Date | string
     updatedAt?: DateTimeFilter<"product"> | Date | string
     category?: XOR<CategoryScalarRelationFilter, categoryWhereInput>
@@ -58506,6 +58545,7 @@ export namespace Prisma {
     isBestSeller?: SortOrder
     isLimitedDiscount?: SortOrder
     sortWeight?: SortOrder
+    publishedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: productCountOrderByAggregateInput
@@ -58569,6 +58609,7 @@ export namespace Prisma {
     isBestSeller?: BoolWithAggregatesFilter<"product"> | boolean
     isLimitedDiscount?: BoolWithAggregatesFilter<"product"> | boolean
     sortWeight?: IntWithAggregatesFilter<"product"> | number
+    publishedAt?: DateTimeNullableWithAggregatesFilter<"product"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"product"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"product"> | Date | string
   }
@@ -62397,6 +62438,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -62434,6 +62476,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -62471,6 +62514,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62508,6 +62552,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62545,6 +62590,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -62571,6 +62617,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62597,6 +62644,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62986,6 +63034,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -63057,6 +63106,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -63124,6 +63174,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -63195,6 +63246,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -63264,6 +63316,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -63317,6 +63370,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -63372,6 +63426,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -67564,20 +67619,6 @@ export namespace Prisma {
     not?: NestedStringFilter<$PrismaModel> | string
   }
 
-  export type EnumuserroleFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
-  }
-
-  export type EnumuserstatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
-  }
-
   export type StringNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -67591,6 +67632,20 @@ export namespace Prisma {
     endsWith?: string | StringFieldRefInput<$PrismaModel>
     search?: string
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
+  }
+
+  export type EnumuserroleFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
+  }
+
+  export type EnumuserstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
   }
 
   export type IntFilter<$PrismaModel = never> = {
@@ -67774,6 +67829,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -67804,6 +67860,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -67828,6 +67885,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -67870,6 +67928,24 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
+  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    search?: string
+    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedStringNullableFilter<$PrismaModel>
+    _max?: NestedStringNullableFilter<$PrismaModel>
+  }
+
   export type EnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
     equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
     in?: $Enums.userrole[]
@@ -67888,24 +67964,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumuserstatusFilter<$PrismaModel>
     _max?: NestedEnumuserstatusFilter<$PrismaModel>
-  }
-
-  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: string | StringFieldRefInput<$PrismaModel> | null
-    in?: string[] | null
-    notIn?: string[] | null
-    lt?: string | StringFieldRefInput<$PrismaModel>
-    lte?: string | StringFieldRefInput<$PrismaModel>
-    gt?: string | StringFieldRefInput<$PrismaModel>
-    gte?: string | StringFieldRefInput<$PrismaModel>
-    contains?: string | StringFieldRefInput<$PrismaModel>
-    startsWith?: string | StringFieldRefInput<$PrismaModel>
-    endsWith?: string | StringFieldRefInput<$PrismaModel>
-    search?: string
-    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedStringNullableFilter<$PrismaModel>
-    _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
   export type IntWithAggregatesFilter<$PrismaModel = never> = {
@@ -68466,6 +68524,7 @@ export namespace Prisma {
     isBestSeller?: SortOrder
     isLimitedDiscount?: SortOrder
     sortWeight?: SortOrder
+    publishedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -68521,6 +68580,7 @@ export namespace Prisma {
     isBestSeller?: SortOrder
     isLimitedDiscount?: SortOrder
     sortWeight?: SortOrder
+    publishedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -68565,6 +68625,7 @@ export namespace Prisma {
     isBestSeller?: SortOrder
     isLimitedDiscount?: SortOrder
     sortWeight?: SortOrder
+    publishedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -71670,16 +71731,16 @@ export namespace Prisma {
     set?: string
   }
 
+  export type NullableStringFieldUpdateOperationsInput = {
+    set?: string | null
+  }
+
   export type EnumuserroleFieldUpdateOperationsInput = {
     set?: $Enums.userrole
   }
 
   export type EnumuserstatusFieldUpdateOperationsInput = {
     set?: $Enums.userstatus
-  }
-
-  export type NullableStringFieldUpdateOperationsInput = {
-    set?: string | null
   }
 
   export type IntFieldUpdateOperationsInput = {
@@ -75165,20 +75226,6 @@ export namespace Prisma {
     not?: NestedStringFilter<$PrismaModel> | string
   }
 
-  export type NestedEnumuserroleFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
-  }
-
-  export type NestedEnumuserstatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
-  }
-
   export type NestedStringNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -75192,6 +75239,20 @@ export namespace Prisma {
     endsWith?: string | StringFieldRefInput<$PrismaModel>
     search?: string
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
+  }
+
+  export type NestedEnumuserroleFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
+  }
+
+  export type NestedEnumuserstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
   }
 
   export type NestedIntFilter<$PrismaModel = never> = {
@@ -75245,26 +75306,6 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type NestedEnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleWithAggregatesFilter<$PrismaModel> | $Enums.userrole
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumuserroleFilter<$PrismaModel>
-    _max?: NestedEnumuserroleFilter<$PrismaModel>
-  }
-
-  export type NestedEnumuserstatusWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusWithAggregatesFilter<$PrismaModel> | $Enums.userstatus
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumuserstatusFilter<$PrismaModel>
-    _max?: NestedEnumuserstatusFilter<$PrismaModel>
-  }
-
   export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -75292,6 +75333,26 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
+  }
+
+  export type NestedEnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleWithAggregatesFilter<$PrismaModel> | $Enums.userrole
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumuserroleFilter<$PrismaModel>
+    _max?: NestedEnumuserroleFilter<$PrismaModel>
+  }
+
+  export type NestedEnumuserstatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusWithAggregatesFilter<$PrismaModel> | $Enums.userstatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumuserstatusFilter<$PrismaModel>
+    _max?: NestedEnumuserstatusFilter<$PrismaModel>
   }
 
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
@@ -76982,6 +77043,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     brandCategory?: categoryCreateNestedOneWithoutBrandProductsInput
@@ -77051,6 +77113,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -77128,6 +77191,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -77197,6 +77261,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -77609,6 +77674,7 @@ export namespace Prisma {
     isBestSeller?: BoolFilter<"product"> | boolean
     isLimitedDiscount?: BoolFilter<"product"> | boolean
     sortWeight?: IntFilter<"product"> | number
+    publishedAt?: DateTimeNullableFilter<"product"> | Date | string | null
     createdAt?: DateTimeFilter<"product"> | Date | string
     updatedAt?: DateTimeFilter<"product"> | Date | string
   }
@@ -79261,6 +79327,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -79331,6 +79398,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     cartItems?: cartitemUncheckedCreateNestedManyWithoutProductInput
@@ -79543,6 +79611,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -79613,6 +79682,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     cartItems?: cartitemUncheckedUpdateManyWithoutProductNestedInput
@@ -79682,6 +79752,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -79718,6 +79789,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -79810,6 +79882,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -79846,6 +79919,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -79962,6 +80036,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -80032,6 +80107,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -80208,6 +80284,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -80278,6 +80355,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -80374,6 +80452,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80410,6 +80489,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80554,6 +80634,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -80590,6 +80671,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -80695,6 +80777,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80731,6 +80814,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80817,6 +80901,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -80887,6 +80972,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -80983,6 +81069,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81019,6 +81106,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81111,6 +81199,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -81181,6 +81270,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -81202,6 +81292,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81238,6 +81329,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81364,6 +81456,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81400,6 +81493,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81452,6 +81546,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81488,6 +81583,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81574,6 +81670,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -81644,6 +81741,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -81681,6 +81779,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81717,6 +81816,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81809,6 +81909,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -81879,6 +81980,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -82014,6 +82116,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -82084,6 +82187,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -82203,6 +82307,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -82273,6 +82378,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -82557,6 +82663,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -82627,6 +82734,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -82742,6 +82850,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -82812,6 +82921,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -83079,6 +83189,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -83149,6 +83260,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -83353,6 +83465,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -83423,6 +83536,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -83681,6 +83795,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83717,6 +83832,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83999,6 +84115,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -84035,6 +84152,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -84373,6 +84491,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -84443,6 +84562,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -84669,6 +84789,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -84739,6 +84860,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -84880,6 +85002,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -84950,6 +85073,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -84976,6 +85100,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85012,6 +85137,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85178,6 +85304,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -85248,6 +85375,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -85280,6 +85408,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85316,6 +85445,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85427,6 +85557,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85463,6 +85594,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85549,6 +85681,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -85619,6 +85752,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -85768,6 +85902,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85804,6 +85939,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85896,6 +86032,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -85966,6 +86103,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -86111,6 +86249,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -86147,6 +86286,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -86199,6 +86339,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -86235,6 +86376,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -86316,6 +86458,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -86386,6 +86529,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -86549,6 +86693,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -86619,6 +86764,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -87307,6 +87453,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87343,6 +87490,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87420,6 +87568,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87456,6 +87605,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87523,6 +87673,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87559,6 +87710,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87611,6 +87763,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87647,6 +87800,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -89089,6 +89243,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -89159,6 +89314,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -89322,6 +89478,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -89392,6 +89549,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -89545,6 +89703,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -89615,6 +89774,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -89730,6 +89890,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -89800,6 +89961,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -89962,6 +90124,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutProductsInput
@@ -90032,6 +90195,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     skus?: productskuUncheckedCreateNestedManyWithoutProductInput
@@ -90177,6 +90341,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -90247,6 +90412,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -91080,6 +91246,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -91134,6 +91301,7 @@ export namespace Prisma {
     isBestSeller?: boolean
     isLimitedDiscount?: boolean
     sortWeight?: number
+    publishedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -91338,6 +91506,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     brandCategory?: categoryUpdateOneWithoutBrandProductsNestedInput
@@ -91407,6 +91576,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -91475,6 +91645,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -91528,6 +91699,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutProductsNestedInput
@@ -91597,6 +91769,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     skus?: productskuUncheckedUpdateManyWithoutProductNestedInput
@@ -91665,6 +91838,7 @@ export namespace Prisma {
     isBestSeller?: BoolFieldUpdateOperationsInput | boolean
     isLimitedDiscount?: BoolFieldUpdateOperationsInput | boolean
     sortWeight?: IntFieldUpdateOperationsInput | number
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

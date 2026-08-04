@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Custom path used by server/webpack (not node_modules default)
+  output        = "../prisma-generated/client"
+  // Dev may be Windows; prod ECS is Debian OpenSSL 3 — always include both
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 

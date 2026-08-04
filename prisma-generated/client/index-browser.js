@@ -125,6 +125,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
+  passwordPlain: 'passwordPlain',
   email: 'email',
   role: 'role',
   status: 'status',
@@ -238,6 +239,7 @@ exports.Prisma.ProductScalarFieldEnum = {
   isBestSeller: 'isBestSeller',
   isLimitedDiscount: 'isLimitedDiscount',
   sortWeight: 'sortWeight',
+  publishedAt: 'publishedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -865,6 +867,7 @@ exports.Prisma.sysuserOrderByRelevanceFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
+  passwordPlain: 'passwordPlain',
   email: 'email',
   username: 'username',
   avatarUrl: 'avatarUrl',

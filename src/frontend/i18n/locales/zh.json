@@ -37,6 +37,7 @@
     "home": "首页",
     "categories": "分类",
     "brand": "品牌",
+    "coming": "Coming",
     "myOrders": "我的订单",
     "addresses": "地址管理",
     "profile": "个人资料",
@@ -64,7 +65,18 @@
     "viewMore": "查看更多",
     "brandShowing": "{{name}}",
     "noBrands": "暂无品牌",
-    "noBrandProducts": "该品牌暂无商品"
+    "noBrandProducts": "该品牌暂无商品",
+    "recommendedCategories": "推荐类目",
+    "noRecommendedCategories": "暂无类目",
+    "cameraSearch": "拍照搜同款",
+    "cameraSearchHint": "图片搜索",
+    "bannerPlaceholderTitle": "批发好货精选",
+    "shopNow": "立即选购",
+    "expandAllCategories": "展开全部",
+    "collapseCategories": "收起",
+    "dailyNewPromo": "点选月份查看上新商品",
+    "all6Months": "近 6 个月",
+    "noComingDates": "暂无新品预告"
   },
   "home": {
     "zone_popular_jewelry": "流行饰品",

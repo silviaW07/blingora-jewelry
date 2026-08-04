@@ -31,6 +31,22 @@ interface RegisterForm {
   sysuser_password: string;
 }
 
+/** Hide Prisma schema/engine dumps from end-user login UI */
+const sanitizeAuthErrorMessage = (raw: unknown, fallback: string): string => {
+  const message = String(raw || '').trim()
+  if (!message) return fallback
+  if (
+    /Invalid `.*` invocation/i.test(message) ||
+    /does not exist in the current database/i.test(message) ||
+    /passwordPlain/i.test(message) ||
+    /prisma/i.test(message) ||
+    /ECONNREFUSED|ENOTFOUND|P20\d{2}/i.test(message)
+  ) {
+    return fallback
+  }
+  return message
+}
+
 export function CustomerAuthModal() {
   const { t } = useTranslation();
   const { isOpen, activeTab, closeAuthModal, setActiveTab } = useCustomerAuthModal();
@@ -116,8 +132,11 @@ export function CustomerAuthModal() {
       toast.success(t('auth.loginSuccess'));
       closeAuthModal();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('auth.loginFailed');
-      setLoginError(message);
+      const message = sanitizeAuthErrorMessage(
+        error instanceof Error ? error.message : null,
+        t('auth.loginFailed'),
+      )
+      setLoginError(message)
     } finally {
       setIsLoginSubmitting(false);
     }
@@ -164,8 +183,11 @@ export function CustomerAuthModal() {
       // 注册即登录：直接关弹窗，不切回登录页、不额外弹成功提示
       closeAuthModal();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : t('auth.registerFailed');
-      setRegisterError(message);
+      const message = sanitizeAuthErrorMessage(
+        error instanceof Error ? error.message : null,
+        t('auth.registerFailed'),
+      )
+      setRegisterError(message)
     } finally {
       setIsRegisterSubmitting(false);
     }
@@ -174,7 +196,7 @@ export function CustomerAuthModal() {
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent
-        className="max-h-[min(92vh,820px)] w-full max-w-[560px] gap-0 overflow-hidden rounded-[24px] border-[#E2E8F0] p-0"
+        className="max-h-[min(92vh,820px)] w-[calc(100%-2rem)] max-w-[560px] gap-0 overflow-hidden rounded-[24px] border-[#E2E8F0] bg-white p-0 sm:w-full"
         data-controller-name="登录注册弹窗"
         onInteractOutside={(event) => {
           if (isDecorateAuthOpen) event.preventDefault();
@@ -187,19 +209,19 @@ export function CustomerAuthModal() {
           <button
             type="button"
             onClick={closeAuthModal}
-            className="absolute right-4 top-4 z-10 flex size-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#64748B] transition hover:border-[#CBD5E1] hover:text-[#0F172A]"
+            className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#64748B] transition hover:border-[#CBD5E1] hover:text-[#0F172A] sm:right-4 sm:top-4"
             aria-label={t('auth.close')}
           >
             <X className="size-4" />
           </button>
         ) : null}
 
-        <DialogHeader className="space-y-3 border-b border-[#E2E8F0] px-6 pb-5 pt-6 text-left">
+        <DialogHeader className="space-y-3 border-b border-[#E2E8F0] px-5 pb-5 pt-6 text-left sm:px-6">
           <DialogTitle asChild>
             <DecorateText
               propKey={activeTab === 'login' ? 'auth_modal_title' : 'auth_modal_register_title'}
               as="h2"
-              className="text-2xl font-bold tracking-tight text-[#0F172A]"
+              className="pr-10 text-2xl font-bold tracking-tight text-[#0F172A]"
             >
               {activeTab === 'login' ? t('auth.welcomeBack') : t('auth.createAccount')}
             </DecorateText>
@@ -235,7 +257,7 @@ export function CustomerAuthModal() {
           </div>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-6 py-5">
+        <div className="overflow-y-auto px-5 py-5 sm:px-6">
           {activeTab === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div className="space-y-2">

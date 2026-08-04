@@ -1,10 +1,9 @@
-// {"router": "/brand", "id": "f02d", "en_name": "MobileComing"}
+// {"router": "/coming", "id": "c0m1", "en_name": "MobileComing"}
 import MobileComingView from '@/frontend/components/MobileComingView'
 
-/** Coming (ex-Brand tab): static shell + ISR */
 export const dynamic = 'force-static'
 export const revalidate = 300
 
-export default function BrandPage() {
+export default function ComingPage() {
   return <MobileComingView />
 }

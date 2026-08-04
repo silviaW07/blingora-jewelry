@@ -19,7 +19,7 @@ import {
   Star,
   Truck,
 } from 'lucide-react';
-import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader';
+import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
 import {
   GuestPricePlaceholder,
   StorePrice,
@@ -48,7 +48,7 @@ interface Props {
 
 const withStorefrontHeader = (content: React.ReactNode) => (
   <div className="min-h-screen bg-[#FFF5F5]" data-controller-name="商品详情页布局">
-    <StorefrontStickyHeader />
+    <StorefrontResponsiveHeader />
     {content}
   </div>
 );

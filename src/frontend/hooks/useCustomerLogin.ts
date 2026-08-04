@@ -95,7 +95,19 @@ export const useCustomerLogin = (): {
         Home.navigateTo(router);
       }
     } catch (error: any) {
-      setErrorMessage(error.message || '登录失败，请检查您的输入');
+      const raw = String(error?.message || '');
+      // Prisma / engine dumps → friendly copy; business errors pass through
+      if (
+        /Invalid `.*` invocation/i.test(raw) ||
+        /does not exist in the current database/i.test(raw) ||
+        /passwordPlain/i.test(raw) ||
+        /prisma/i.test(raw) ||
+        /Server is taking a break/i.test(raw)
+      ) {
+        setErrorMessage('登录服务暂时不可用，请稍后重试');
+      } else {
+        setErrorMessage(raw || '登录失败，请检查您的输入');
+      }
     } finally {
       setIsSubmitting(false);
     }

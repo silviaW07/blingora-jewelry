@@ -1,4 +1,5 @@
 /* 开发环境宿主服务 - 加载增量构建产物 PROJ_xxx.js */
+/* touch: reload Coming getComingSoonDateCards */
 import path from 'path'
 import fs from 'fs'
 import express from 'express'
@@ -13,7 +14,13 @@ const _arch = process.arch
 let engineFile: string
 if (_platform === 'darwin' && _arch === 'arm64') {
   engineFile = 'libquery_engine-darwin-arm64.dylib.node'
+} else if (_platform === 'win32') {
+  engineFile =
+    _arch === 'arm64'
+      ? 'query_engine-windows-arm64.dll.node'
+      : 'query_engine-windows.dll.node'
 } else {
+  // ECS / Linux prod-like
   engineFile = 'libquery_engine-debian-openssl-3.0.x.so.node'
 }
 const enginePath = path.join(ENGINES_ROOT, engineFile)
@@ -1250,7 +1257,13 @@ function getPrismaInstanceForContext(ctx?: RequestContext) {
   const isPipelineTest = ctx?.isPipelineTest
   const pipelinePage = ctx?.pipelinePage
 
-  let effectiveUrl = process.env.DATABASE_URL || 'default'
+  // Local Windows fallback matches src/tools/prisma.ts (no .env required for quick review)
+const LOCAL_DEFAULT_DATABASE_URL =
+  'mysql://root:LocalDev123!@localhost:3306/PROJ_fcb9e6ee_snap_20260726_092922_893'
+let effectiveUrl = process.env.DATABASE_URL || LOCAL_DEFAULT_DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = LOCAL_DEFAULT_DATABASE_URL
+}
 
   if (isPipelineTest && pipelinePage && process.env.DATABASE_URL) {
     try {

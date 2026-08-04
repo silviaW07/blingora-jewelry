@@ -48,6 +48,7 @@ import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection';
+import { MobileHomeStorefrontView } from '@/frontend/components/MobileHomeStorefrontView';
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder';
 import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages';
@@ -546,7 +547,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   );
 
   const renderTopCategoryRow = (includeCategoriesBlock: boolean) => (
-    <div className="relative z-20 mt-2 flex flex-col gap-2 overflow-visible xl:flex-row xl:items-stretch" data-controller-name="顶部目录导航">
+    <div className="relative z-20 mt-2 hidden flex-col gap-2 overflow-visible md:flex xl:flex-row xl:items-stretch" data-controller-name="顶部目录导航">
       {includeCategoriesBlock ? (
         isDefaultHomeState ? (
           /* Home only: static label — brand rail below is already open; no flyout */
@@ -817,7 +818,12 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   };
 
   return (
-    <div className="bg-[#FFF5F5] text-[#111111]" data-controller-name="首页独立站陈列布局">
+    <>
+    {/* Mobile: stream home (see MobileHomeStorefrontView). Desktop unchanged below. */}
+    <div className="md:hidden">
+      <MobileHomeStorefrontView state={state} handlers={handlers} />
+    </div>
+    <div className="hidden bg-[#FFF5F5] text-[#111111] md:block" data-controller-name="首页独立站陈列布局">
       {/* 第 1 层：Logo / 搜索 + 目录导航 */}
       <section
         className="border-b border-[#f0dede] bg-[#FFF5F5]"
@@ -833,12 +839,13 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
 
                 <div className="flex min-w-0 flex-1 items-center gap-5 sm:gap-6 xl:max-w-[980px]" data-controller-name="搜索栏与用户功能区">
                   <div className="flex min-w-0 flex-1 justify-center">
-                    <div className="flex w-full max-w-[220px] items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)] sm:max-w-[240px]">
-                      <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 text-[#6b6b6b] sm:px-4">
-                        <Camera className="size-4 shrink-0" />
+                    {/* Desktop search: full-width capsule + black search button (not mobile 220px) */}
+                    <div className="storefront-desktop-search flex w-full max-w-[560px] items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)] xl:max-w-[640px]">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 text-[#6b6b6b] sm:gap-3 sm:px-5">
+                        <Camera className="size-4 shrink-0 sm:size-5" />
                         <Input
                           placeholder={t('common.pleaseInput')}
-                          className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11"
+                          className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-base"
                           value={searchKeyword}
                           onChange={(event) => setSearchKeyword(event.target.value)}
                           onKeyDown={(event) => {
@@ -854,7 +861,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                         onClick={handleHeaderSearchSubmit}
                         disabled={isSearchLoading}
                         aria-busy={isSearchLoading}
-                        className="h-10 min-w-[78px] rounded-none rounded-r-full bg-[#ffc0cb] px-4 text-sm font-semibold tracking-[0.08em] text-[#111111] hover:bg-[#ffb1c1] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:px-5"
+                        className="h-10 min-w-[88px] rounded-none rounded-r-full bg-[#111111] px-4 text-sm font-semibold tracking-[0.08em] text-white hover:bg-[#262626] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:min-w-[100px] sm:px-6"
                       >
                         {isSearchLoading ? (
                           <Loader2 className="mr-2 size-5 animate-spin" />
@@ -1272,6 +1279,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
       </div>
       {/* 第 5 层页脚由 app/(frontend)/layout.tsx 的 Footer 提供，此处不重复渲染 */}
     </div>
+    </>
   );
 };
 

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
+import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { ProductListCard } from '@/frontend/components/ProductListCard'
 import {
   getCategorySideNavZones,
@@ -132,7 +132,7 @@ export default function MobileBrandView() {
 
   return (
     <div className="min-h-screen bg-[#f7f4ee] text-[#111111]">
-      <StorefrontStickyHeader isHome={false} />
+      <MobileStorefrontHeader />
 
       <div className="mobile-brand-page">
         <h1 className="mobile-brand-page__heading">

@@ -63,7 +63,8 @@ export default function RootLayout({
       <body className={`${body.className} antialiased`}>
         <Providers>
           <Toaster position="top-center" richColors offset="100px" />
-          <Suspense fallback={<div>Loading...</div>}>
+          {/* Null fallback avoids a blank stuck "Loading..." paint if streaming stalls */}
+          <Suspense fallback={null}>
             {children}
           </Suspense>
         </Providers>

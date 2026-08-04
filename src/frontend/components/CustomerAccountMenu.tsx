@@ -26,6 +26,8 @@ type Props = {
   guestLabel?: string
   /** 触发方式：点击或悬停打开 */
   trigger?: 'click' | 'hover'
+  /** icon：仅用户图标，适合移动端顶栏 */
+  variant?: 'default' | 'icon'
 }
 
 /** 从全名中取 First Name（按空格拆分取第一段） */
@@ -42,6 +44,7 @@ export function CustomerAccountMenu({
   className,
   guestLabel,
   trigger = 'click',
+  variant = 'default',
 }: Props) {
   const { t } = useTranslation()
   const router = useRouter()
@@ -58,6 +61,7 @@ export function CustomerAccountMenu({
   const firstName = getFirstName(fullName) || fullName
   const label = isLoggedIn ? t('nav.hiUser', { name: firstName }) : resolvedGuestLabel
   const avatarText = firstName.slice(0, 1).toUpperCase() || 'U'
+  const isIcon = variant === 'icon'
 
   const clearCloseTimer = () => {
     if (closeTimerRef.current) {
@@ -109,14 +113,16 @@ export function CustomerAccountMenu({
       <button
         type="button"
         className={cn(
-          'inline-flex h-14 shrink-0 items-center gap-2 rounded-full border border-[#d8d4ca] bg-white px-4 text-sm font-semibold text-[#111111] shadow-sm transition hover:border-[#111111] hover:bg-[#f7f4ee]',
+          isIcon
+            ? 'inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-[#d8d4ca] bg-white text-[#111111] shadow-sm transition active:bg-[#f7f4ee]'
+            : 'inline-flex h-14 shrink-0 items-center gap-2 rounded-full border border-[#d8d4ca] bg-white px-4 text-sm font-semibold text-[#111111] shadow-sm transition hover:border-[#111111] hover:bg-[#f7f4ee]',
           className,
         )}
         onClick={() => openAuthModal('login')}
         aria-label={resolvedGuestLabel}
       >
-        <UserCircle2 className="size-4" />
-        <span className="max-w-[140px] truncate">{resolvedGuestLabel}</span>
+        <UserCircle2 className={isIcon ? 'size-5' : 'size-4'} />
+        {isIcon ? null : <span className="max-w-[140px] truncate">{resolvedGuestLabel}</span>}
       </button>
     )
   }
@@ -138,17 +144,29 @@ export function CustomerAccountMenu({
     >
       <button
         type="button"
-        className="inline-flex h-14 items-center gap-2 rounded-full border border-[#d8d4ca] bg-white px-3 text-sm font-semibold text-[#111111] shadow-sm transition hover:border-[#111111] hover:bg-[#f7f4ee] sm:px-4"
+        className={cn(
+          isIcon
+            ? 'inline-flex size-10 items-center justify-center rounded-full border border-[#d8d4ca] bg-white text-[#111111] shadow-sm transition active:bg-[#f7f4ee]'
+            : 'inline-flex h-14 items-center gap-2 rounded-full border border-[#d8d4ca] bg-white px-3 text-sm font-semibold text-[#111111] shadow-sm transition hover:border-[#111111] hover:bg-[#f7f4ee] sm:px-4',
+        )}
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={label}
       >
-        <span className="flex size-8 items-center justify-center rounded-full bg-[#111111] text-xs font-bold text-white">
-          {avatarText}
-        </span>
-        <span className="max-w-[140px] truncate">{label}</span>
-        <ChevronDown className={cn('size-4 transition-transform', open ? 'rotate-180' : '')} />
+        {isIcon ? (
+          <span className="flex size-7 items-center justify-center rounded-full bg-[#111111] text-[11px] font-bold text-white">
+            {avatarText}
+          </span>
+        ) : (
+          <>
+            <span className="flex size-8 items-center justify-center rounded-full bg-[#111111] text-xs font-bold text-white">
+              {avatarText}
+            </span>
+            <span className="max-w-[140px] truncate">{label}</span>
+            <ChevronDown className={cn('size-4 transition-transform', open ? 'rotate-180' : '')} />
+          </>
+        )}
       </button>
 
       {open ? (

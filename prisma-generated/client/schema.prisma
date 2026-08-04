@@ -1,11 +1,14 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../prisma-generated/client"
+  provider      = "prisma-client-js"
+  // Custom path used by server/webpack (not node_modules default)
+  output        = "../prisma-generated/client"
+  // Dev may be Windows; prod ECS is Debian OpenSSL 3 — always include both
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "mysql"
-  url      = "mysql://root:LocalDev123!@localhost:3306/PROJ_fcb9e6ee_snap_20260726_092922_893?charset=utf8mb4&connection_limit=10"
+  url      = env("DATABASE_URL")
 }
 
 enum userrole {
@@ -197,6 +200,10 @@ model sysuser {
   id                   String     @id @default(uuid()) @db.VarChar(36)
   account              String     @unique @db.VarChar(50)
   password             String     @db.VarChar(255)
+  /**
+   * 明文密码（仅供后台客服协助；登录仍校验 password 哈希）
+   */
+  passwordPlain        String?    @db.VarChar(255)
   email                String     @unique @db.VarChar(100)
   role                 userrole
   status               userstatus @default(ACTIVE)
@@ -346,6 +353,10 @@ model product {
   isBestSeller            Boolean            @default(false)
   isLimitedDiscount       Boolean            @default(false)
   sortWeight              Int                @default(0) // 排序权重，数值越大越靠前
+  /**
+   * 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt
+   */
+  publishedAt             DateTime?
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @default(now()) @updatedAt
 
@@ -374,6 +385,7 @@ model product {
   @@index([gemstoneType])
   @@index([goodsStatus])
   @@index([brandName])
+  @@index([publishedAt])
 }
 
 model productsku {

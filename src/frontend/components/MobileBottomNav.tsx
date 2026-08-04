@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, LayoutGrid, Tag, ShoppingCart, User } from 'lucide-react'
+import { Home, LayoutGrid, Sparkles, ShoppingCart, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
@@ -15,10 +15,10 @@ const TABS = [
     match: (p: string) => p.startsWith('/categories'),
   },
   {
-    href: '/brand/',
-    key: 'brand',
-    icon: Tag,
-    match: (p: string) => p.startsWith('/brand'),
+    href: '/coming/',
+    key: 'coming',
+    icon: Sparkles,
+    match: (p: string) => p.startsWith('/coming') || p.startsWith('/brand'),
   },
   {
     href: '/cart/',
@@ -45,7 +45,7 @@ export function MobileBottomNav() {
   const labels: Record<(typeof TABS)[number]['key'], string> = {
     home: t('nav.home', { defaultValue: 'Home' }),
     categories: t('nav.categories', { defaultValue: 'Categories' }),
-    brand: t('nav.brand', { defaultValue: 'Brand' }),
+    coming: t('nav.coming', { defaultValue: 'Coming' }),
     cart: t('common.cart', { defaultValue: 'Cart' }),
     account: t('nav.account', { defaultValue: 'Account' }),
   }

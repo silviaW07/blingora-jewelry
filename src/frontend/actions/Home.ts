@@ -984,3 +984,138 @@ export const getDailyNewArrivalProducts = withResult(async (
     total: list.length,
   }
 })
+
+// ===== Coming 新品预告（未上架 / 预告按日） =====
+
+export interface ComingSoonDateCard {
+  /** YYYY-MM-DD — used for sort + stable key */
+  date_key: string
+  /** MM/DD display only */
+  date_label: string
+  /** Preview image for that day (admin product main image) */
+  preview_image_url: string | null
+  /** Product used for wishlist / detail */
+  preview_product_id: string
+  preview_product_slug: string | null
+  preview_product_name: string
+}
+
+export interface GetComingSoonDateCardsOutput {
+  cards: ComingSoonDateCard[]
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+const toDateKey = (d: Date) =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+
+const toDateLabel = (d: Date) => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+
+/**
+ * Coming 页日期卡片：
+ * - 来源：未上架/预告类商品（DRAFT / PREORDER / INACTIVE），或类目名含 预告|Coming|未上架
+ * - 归日：优先 publishedAt（管理员配置的预告/计划日期），否则 createdAt
+ * - 排序：日期降序（新的在前）
+ * - 卡片：每日一张，预览图取该日第一条商品主图；不返回数量文案
+ */
+export const getComingSoonDateCards = withResult(
+  async (): Promise<GetComingSoonDateCardsOutput> => {
+    const teaserCategories = await prisma.category.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { name: { contains: '预告' } },
+          { name: { contains: '未上架' } },
+          { name: { contains: 'Coming' } },
+          { name: { contains: 'coming' } },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    })
+    const teaserCategoryIds = teaserCategories.map((c) => c.id)
+
+    const where =
+      teaserCategoryIds.length > 0
+        ? {
+            OR: [
+              { status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const } },
+              { categoryId: { in: teaserCategoryIds } },
+            ],
+          }
+        : {
+            status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const },
+          }
+
+    let products = await prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        mainImageUrl: true,
+        publishedAt: true,
+        createdAt: true,
+        sortWeight: true,
+      },
+      orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
+    })
+
+    // Soft fallback so local demos still show date structure
+    if (products.length === 0) {
+      products = await prisma.product.findMany({
+        where: {
+          status: 'ACTIVE',
+          category: { status: 'ACTIVE' },
+        },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          mainImageUrl: true,
+          publishedAt: true,
+          createdAt: true,
+          sortWeight: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 80,
+      })
+    }
+
+    const byDay = new Map<
+      string,
+      {
+        label: string
+        product: (typeof products)[number]
+        anchorMs: number
+      }
+    >()
+
+    for (const product of products) {
+      const anchor = product.publishedAt || product.createdAt
+      const key = toDateKey(anchor)
+      const existing = byDay.get(key)
+      if (!existing) {
+        byDay.set(key, {
+          label: toDateLabel(anchor),
+          product,
+          anchorMs: anchor.getTime(),
+        })
+      }
+    }
+
+    const cards: ComingSoonDateCard[] = Array.from(byDay.entries())
+      .sort((a, b) => b[1].anchorMs - a[1].anchorMs)
+      .map(([date_key, row]) => ({
+        date_key,
+        date_label: row.label,
+        preview_image_url: row.product.mainImageUrl || null,
+        preview_product_id: row.product.id,
+        preview_product_slug: row.product.slug || null,
+        preview_product_name: row.product.name || '',
+      }))
+
+    return { cards }
+  },
+)

@@ -67,6 +67,14 @@ const sanitizeRpcErrorMessage = (raw: unknown): string => {
   if (/Must call super constructor/i.test(message)) {
     return ERROR_MESSAGES.SERVER_ERROR;
   }
+  // Prisma column/table schema drift → friendly message for storefront
+  if (
+    /Invalid `.*` invocation/i.test(message) ||
+    /does not exist in the current database/i.test(message) ||
+    /passwordPlain/i.test(message)
+  ) {
+    return ERROR_MESSAGES.SERVER_ERROR;
+  }
   return message;
 };
 
@@ -163,7 +171,11 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
       }
 
       // 502/500：瞬时过载再试一次（点击目录并发请求高峰）
-      if (resp.status === 502 || resp.status === 500) {
+      // Skip retry for auth actions — business "密码错误" also used to return as 500.
+      if (
+        (resp.status === 502 || resp.status === 500) &&
+        !/(loginCustomer|registerCustomer|checkEmailUnique)/i.test(actionLeafName(actionName))
+      ) {
         await new Promise(r => setTimeout(r, 400));
         resp = await fetch(apiUrl, fetchOptions);
       }
@@ -195,7 +207,11 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => ({}));
         const errorMsg = sanitizeRpcErrorMessage(errorData.error || ERROR_MESSAGES.SERVER_ERROR);
-        if (!shouldSilentServerError(actionName)) {
+        // Auth forms surface their own field error; skip global toast spam for 4xx
+        const isAuthLeaf = /^(loginCustomer|registerCustomer|checkEmailUnique)$/.test(
+          actionLeafName(actionName),
+        );
+        if (!shouldSilentServerError(actionName) && !(isAuthLeaf && resp.status < 500)) {
           toast.error(errorMsg, { id: 'rpc-server-error' });
         }
         throw new Error(errorMsg);

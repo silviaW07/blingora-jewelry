@@ -192,11 +192,14 @@ export const MobileCategories = {
 // ================================================================
 export const MobileBrand = {
   id: 'F02d',
-  path: '/brand',
+  path: '/coming',
   paramsMeta: {} as Record<string, ParamMeta>,
   getParams: (_sp: URLSearchParams) => ({}),
   navigateTo: (router: AppRouterInstance) => router.push(MobileBrand.path),
 }
+
+export const MobileComing = MobileBrand
+
 
 // ================================================================
 // F05 前台登录页 — 入参: returnTo

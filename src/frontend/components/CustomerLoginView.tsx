@@ -14,9 +14,6 @@ import {
   CreditCard,
   Globe,
   AlertTriangle,
-  PackageCheck,
-  Truck,
-  Headphones,
 } from 'lucide-react';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import type { CustomerLoginState, CustomerLoginHandlers } from '@/frontend/hooks/useCustomerLogin';
@@ -25,30 +22,6 @@ interface Props {
   state: CustomerLoginState;
   handlers: CustomerLoginHandlers;
 }
-
-const AUTH_SERVICE_POINTS = [
-  {
-    icon: PackageCheck,
-    titleKey: 'auth_service_0_title',
-    descKey: 'auth_service_0_desc',
-    defaultTitle: '采购账户权益',
-    defaultDesc: '登录后可查看专属报价、起订量规则与历史采购记录。',
-  },
-  {
-    icon: Truck,
-    titleKey: 'auth_service_1_title',
-    descKey: 'auth_service_1_desc',
-    defaultTitle: '继续购物流程',
-    defaultDesc: '登录后可继续浏览现货、补货与跨境采购专区。',
-  },
-  {
-    icon: Headphones,
-    titleKey: 'auth_service_2_title',
-    descKey: 'auth_service_2_desc',
-    defaultTitle: '采购支持服务',
-    defaultDesc: '支持样品沟通、订单跟进与国际物流协同。',
-  },
-] as const;
 
 export const CustomerLoginView = ({ state, handlers }: Props) => {
   const trustItems = [
@@ -93,28 +66,6 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     </DecorateText>
                   ) : null}
                 </div>
-              </div>
-
-              <div className="grid gap-3 rounded-[18px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 sm:grid-cols-3">
-                {AUTH_SERVICE_POINTS.map((item) => (
-                  <div key={item.titleKey} className="rounded-[14px] border border-[#E2E8F0] bg-white p-4">
-                    <item.icon className="size-5 text-[#0055FF]" />
-                    <DecorateText
-                      propKey={item.titleKey}
-                      as="p"
-                      className="mt-3 font-body text-sm font-semibold text-[#0F172A]"
-                    >
-                      {item.defaultTitle}
-                    </DecorateText>
-                    <DecorateText
-                      propKey={item.descKey}
-                      as="p"
-                      className="mt-2 font-body text-xs leading-5 text-[#64748B]"
-                    >
-                      {item.defaultDesc}
-                    </DecorateText>
-                  </div>
-                ))}
               </div>
 
               {state.errorMessage ? (
