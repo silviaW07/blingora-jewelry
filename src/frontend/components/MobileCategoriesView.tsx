@@ -272,7 +272,7 @@ export default function MobileCategoriesView() {
 
   return (
     <div
-      className="mobile-categories-page min-h-screen bg-[#f7f4ee] text-[#111111]"
+      className="mobile-categories-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
       data-controller-name="移动端分类页-自然滚动+底部品牌区"
     >
       <MobileStorefrontHeader />
