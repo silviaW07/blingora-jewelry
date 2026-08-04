@@ -396,6 +396,8 @@
     "calculatedAtCheckout": "Calculado al pagar",
     "total": "Total",
     "weight": "Peso",
+    "subtotal": "Subtotal",
+    "goCheckout": "Ir a pagar",
     "recipient": "Destinatario: {{name}}",
     "editAddress": "Editar dirección de envío",
     "fillAddress": "Dirección y confirmación",

@@ -15,7 +15,7 @@ import { OrderAmountOverview } from '@/frontend/components/OrderAmountOverview';
 import type { CartState, CartHandlers } from '@/frontend/hooks/useCart';
 import { useQuantityControl } from '@/frontend/hooks/useCart';
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder';
-import { AccountOrders, ProductDetail } from '@/frontend/route-params';
+import { AccountOrders, Checkout, ProductDetail } from '@/frontend/route-params';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -62,13 +62,13 @@ const QuantityControl = ({
     handleCompositionStart,
     handleCompositionEnd
   } = useQuantityControl(initialValue, max, onUpdate);
-  return <fieldset disabled={disabled} className="inline-flex items-center h-9 bg-[#F1F5F9] overflow-hidden focus-within:ring-2 focus-within:ring-[#0055FF] transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-      <button type="button" onClick={handleMinus} disabled={disabled || Number(val) <= 1} className="w-9 h-full flex items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-        <Minus className="size-4" data-api-unique-id='cartview-r2cdb4196d925e59d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
+  return <fieldset disabled={disabled} className="mobile-cart-qty inline-flex h-8 items-center overflow-hidden bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+      <button type="button" onClick={handleMinus} disabled={disabled || Number(val) <= 1} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+        <Minus className="size-3.5" data-api-unique-id='cartview-r2cdb4196d925e59d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
-      <Input type="text" value={val} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} className="w-11 h-full border-0 bg-transparent text-center font-body text-sm text-[#0F172A] p-0 focus-visible:ring-0 focus-visible:outline-none rounded-none" aria-label="Quantity" data-api-unique-id='cartview-r3985fe31fc48ad8b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
-      <button type="button" onClick={handlePlus} disabled={disabled || Number(val) >= max} className="w-9 h-full flex items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Increase quantity" data-api-unique-id='cartview-r97ac9a4c6c9b44cc-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-        <Plus className="size-4" data-api-unique-id='cartview-rf62224822c3caf62-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
+      <Input type="text" value={val} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} className="h-full w-9 border-0 bg-transparent p-0 text-center font-body text-sm text-[#0F172A] focus-visible:outline-none focus-visible:ring-0 rounded-none" aria-label="Quantity" data-api-unique-id='cartview-r3985fe31fc48ad8b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
+      <button type="button" onClick={handlePlus} disabled={disabled || Number(val) >= max} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Increase quantity" data-api-unique-id='cartview-r97ac9a4c6c9b44cc-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+        <Plus className="size-3.5" data-api-unique-id='cartview-rf62224822c3caf62-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
     </fieldset>;
 };
@@ -189,7 +189,7 @@ export const CartView = ({
 
   return <>
     <CheckoutTopBar />
-    <main className="relative w-full min-h-screen bg-[#FFF5F5] selection:bg-[#0055FF] selection:text-white" data-api-unique-id='cartview-re268a5b801353ed5-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+    <main className="mobile-cart-page relative w-full min-h-screen bg-[#FFF5F5] selection:bg-[#0055FF] selection:text-white" data-api-unique-id='cartview-re268a5b801353ed5-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
       <section className="w-full bg-[#FFF5F5]" data-controller-name="购物车核心区域" data-api-unique-id='cartview-raff0b9bb077008c4-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
         <div className="storefront-container py-4 md:py-5" data-api-unique-id='cartview-rff8b61084508686f-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
           {state.loading ? <div className="flex flex-col items-center justify-center py-16 space-y-4" data-api-unique-id='cartview-rd3cf8db919d29906-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
@@ -211,7 +211,7 @@ export const CartView = ({
                 <DecorateText propKey="cart_empty_continue_btn" as="span">{t('common.continueShopping')}</DecorateText>
               </Button>
             </div> : <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12 xl:gap-5" data-api-unique-id='cartview-r58a70c7c14e014c6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-              <div className="flex max-h-[80vh] flex-col overflow-hidden rounded-[12px] border border-[#f0dede] bg-white p-3 sm:p-4 xl:col-span-8 xl:h-[80vh]" data-api-unique-id='cartview-r3f22438c72796820-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+              <div className="mobile-cart-list-shell flex max-h-none flex-col overflow-hidden rounded-[12px] border border-[#f0dede] bg-white p-3 sm:p-4 md:max-h-[80vh] xl:col-span-8 xl:h-[80vh]" data-api-unique-id='cartview-r3f22438c72796820-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                 <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-1" data-api-unique-id='cartview-r5e264d24a5bba2be-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                   <div className="flex items-center gap-2 min-w-0" data-api-unique-id='cartview-r80afdd634904788b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                     <h2 className="font-header text-lg font-bold text-[#0F172A] tracking-tight" data-api-unique-id='cartview-r480ac6e497713a5c-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
@@ -269,8 +269,8 @@ export const CartView = ({
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-api-unique-id='cartview-r1bdc0189f1b818e2-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-                  {state.items.map((item) => <div key={item.cartItemId} className="border-b border-[#f0f0f0] bg-transparent py-5 shadow-none" data-api-unique-id='cartview-r935a74be75be37e7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[28px_96px_minmax(0,1fr)]" data-api-unique-id='cartview-re17e46bc7c2fa346-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                  {state.items.map((item) => <div key={item.cartItemId} className="mobile-cart-line border-b border-[#f0f0f0] bg-transparent py-3 shadow-none md:py-5" data-api-unique-id='cartview-r935a74be75be37e7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                      <div className="mobile-cart-line__row grid grid-cols-[auto_5.25rem_minmax(0,1fr)] items-start gap-2.5 md:grid-cols-[28px_96px_minmax(0,1fr)] md:gap-3" data-api-unique-id='cartview-re17e46bc7c2fa346-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                           <div className="flex items-start justify-center pt-1">
                             <Checkbox
                               checked={selectedIds.includes(item.cartItemId)}
@@ -283,7 +283,7 @@ export const CartView = ({
                             <button
                               type="button"
                               onClick={() => ProductDetail.navigateToById(router, { productId: item.productId })}
-                              className="relative w-full max-w-[96px] shrink-0 overflow-hidden bg-[#F1F5F9] aspect-square cursor-pointer transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
+                              className="mobile-cart-line__thumb relative aspect-square w-full max-w-[5.25rem] shrink-0 overflow-hidden bg-[#F1F5F9] cursor-pointer transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40 md:max-w-[96px]"
                               aria-label={item.productName}
                               data-api-unique-id='cartview-r5f1186b734437a3a-s3843595280'
                               data-api-unique-page-name='src/frontend/components/CartView'
@@ -295,88 +295,91 @@ export const CartView = ({
                                 keywords={item.imageUrl || item.mainImageUrl || item.productName}
                                 fallbackSrc={item.mainImageUrl || undefined}
                                 disableKeywordSearch
-                                className="w-full h-full object-contain pointer-events-none"
+                                className="pointer-events-none h-full w-full object-cover md:object-contain"
                                 data-api-unique-id='cartview-rf0f39ebfda21d17d-s3843595280'
                                 data-api-unique-page-name='src/frontend/components/CartView'
                                 data-api-in-loop='1'
                               />
-                              {item.status === 'INVALID' && <div className="absolute left-1.5 top-1.5" data-api-unique-id='cartview-r30c4e56a56d03072-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                  <Badge variant="destructive" className="rounded-none bg-[#EF4444] text-white text-[10px] font-semibold" data-api-unique-id='cartview-rb20ffdfd1b905bdf-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                              {item.status === 'INVALID' && <div className="absolute left-1 top-1" data-api-unique-id='cartview-r30c4e56a56d03072-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                                  <Badge variant="destructive" className="rounded-none bg-[#EF4444] text-[9px] font-semibold text-white" data-api-unique-id='cartview-rb20ffdfd1b905bdf-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                     Unavailable
                                   </Badge>
                                 </div>}
                             </button>
                           </div>
 
-                          <div className="flex min-w-0 flex-1 flex-col gap-2.5" data-api-unique-id='cartview-r7131081c3fa818d1-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                            <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between" data-api-unique-id='cartview-r3dfb61749f2017d6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                              <div className="min-w-0 space-y-1.5" data-api-unique-id='cartview-r406cb74892b2643a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                <div className="flex flex-wrap items-center gap-1.5" data-api-unique-id='cartview-rcdc74d1e3abdac57-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                  <span className="inline-flex items-center bg-[#E2E8F0] px-2 py-0.5 font-body text-[10px] font-semibold uppercase tracking-[0.06em] text-[#64748B]" data-api-unique-id='cartview-re04b8e696b8a6719-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                    Procurement item
-                                  </span>
-                                </div>
-                                <h3 className="font-header text-base font-semibold leading-snug text-[#0F172A]" data-api-unique-id='cartview-r64316e0eade6ddaa-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                          <div className="mobile-cart-line__body flex min-w-0 flex-1 flex-col gap-1.5 md:gap-2.5" data-api-unique-id='cartview-r7131081c3fa818d1-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                            <div className="min-w-0 space-y-1" data-api-unique-id='cartview-r406cb74892b2643a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                                <h3 className="mobile-cart-line__title font-header text-sm font-semibold leading-snug text-[#0F172A] md:text-base" data-api-unique-id='cartview-r64316e0eade6ddaa-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                   <button
                                     type="button"
                                     onClick={() => ProductDetail.navigateToById(router, { productId: item.productId })}
-                                    className="text-left hover:text-[#f254a6] hover:underline underline-offset-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
+                                    className="line-clamp-2 text-left transition-colors hover:text-[#f254a6] hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
                                   >
                                     {item.productName}
                                   </button>
                                 </h3>
-                                {item.skuAttributes && item.skuAttributes.length > 0 && <div className="flex flex-wrap gap-1.5" data-api-unique-id='cartview-r4f75d13364ec3762-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                    {item.skuAttributes.map((attr, index1) => <div key={index1} className="inline-flex items-center bg-[#F1F5F9] px-2 py-0.5 font-body text-[10px] font-semibold uppercase tracking-[0.04em] text-[#64748B] max-w-full" data-api-unique-id='cartview-r443a41401fde3abe-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                                {item.skuAttributes && item.skuAttributes.length > 0 && <div className="flex flex-wrap gap-1" data-api-unique-id='cartview-r4f75d13364ec3762-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                                    {item.skuAttributes.map((attr, index1) => <div key={index1} className="inline-flex max-w-full items-center bg-[#F1F5F9] px-1.5 py-0.5 font-body text-[11px] font-medium text-[#64748B] md:text-[10px] md:font-semibold md:uppercase md:tracking-[0.04em]" data-api-unique-id='cartview-r443a41401fde3abe-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                         <span className="mr-1 opacity-70" data-api-unique-id='cartview-r3ba08fd515f27b2a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' data-api-bind-info={`item.skuAttributes-${index1}-name`} data-api-map-var-name='attr'>{translateProductSpecLabel(attr.name, t)}:</span>
-                                        <span className="truncate text-[#0F172A] max-w-[140px] normal-case" data-api-unique-id='cartview-r34b8564756da5cab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' data-api-bind-info={`item.skuAttributes-${index1}-value`} data-api-map-var-name='attr'>{translateProductSpecValue(attr.name, attr.value, t)}</span>
+                                        <span className="max-w-[120px] truncate text-[#0F172A] normal-case" data-api-unique-id='cartview-r34b8564756da5cab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' data-api-bind-info={`item.skuAttributes-${index1}-value`} data-api-map-var-name='attr'>{translateProductSpecValue(attr.name, attr.value, t)}</span>
                                       </div>)}
                                   </div>}
-                                <p className="font-header text-sm font-bold text-[#0F172A]">
+                                <p className="mobile-cart-line__price font-header text-sm font-bold text-[#0F172A]">
                                   {formatUsd(Number(item.price) || 0)}
                                   {Number(item.originalPrice) > Number(item.price) + 0.009 ? (
-                                    <del className="ml-2 font-body text-xs font-semibold text-[#64748B]">{formatUsd(Number(item.originalPrice) || 0)}</del>
+                                    <del className="ml-1.5 font-body text-xs font-semibold text-[#64748B]">{formatUsd(Number(item.originalPrice) || 0)}</del>
                                   ) : null}
                                 </p>
-                              </div>
                             </div>
 
-                            {item.status === 'INVALID' && <div className="inline-flex max-w-full items-center gap-2 bg-[#FEF2F2] px-2.5 py-1.5 font-body text-xs text-[#B91C1C]" data-api-unique-id='cartview-r4525f2a09c7b91a0-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                            {item.status === 'INVALID' && <div className="inline-flex max-w-full items-center gap-1.5 bg-[#FEF2F2] px-2 py-1 font-body text-[11px] text-[#B91C1C]" data-api-unique-id='cartview-r4525f2a09c7b91a0-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                 <AlertCircle className="size-3.5 shrink-0" data-api-unique-id='cartview-r6a6466944366cb17-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
                                 <span className="truncate" data-api-unique-id='cartview-rb071d92aebcdcf4a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>{state.CART_ITEM_STATUS_LABELS[item.status]} · {item.invalidReason}</span>
                               </div>}
 
-                            <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between" data-api-unique-id='cartview-r9e65d6e4ae1298b7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                              <div className="flex flex-wrap items-center gap-3" data-api-unique-id='cartview-rbbf5a5f6b29da63f-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                <QuantityControl initialValue={item.quantity} max={item.stock} disabled={state.actionLoading || item.status === 'INVALID'} onUpdate={val => handlers.handleUpdateQuantity(item.cartItemId, val)} data-api-unique-id='cartview-r12e15f99691ee10a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
-                              </div>
-
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end" data-api-unique-id='cartview-ra81392229e792aa7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                {item.status === 'INVALID' ? (
-                                  <p className="font-body text-xs text-[#64748B]" data-api-unique-id='cartview-r85f7e7eb64d1220e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                    This line is excluded until availability is restored.
-                                  </p>
-                                ) : null}
-                                <Button variant="ghost" onClick={() => handlers.handleRemoveItem(item.cartItemId)} disabled={state.actionLoading} className="h-8 rounded-none px-2 text-[#64748B] hover:text-[#EF4444] hover:bg-[#EF4444]/10 shrink-0" aria-label={t('common.cancel')} data-api-unique-id='cartview-r8e026a7a0a7e016e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                  <Trash2 className="size-3.5 mr-1.5" data-api-unique-id='cartview-r54c7ac71d33e46d6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
-                                  {t('common.cancel')}
+                            <div className="mobile-cart-line__actions flex items-center justify-between gap-2 pt-0.5" data-api-unique-id='cartview-r9e65d6e4ae1298b7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                              <QuantityControl initialValue={item.quantity} max={item.stock} disabled={state.actionLoading || item.status === 'INVALID'} onUpdate={val => handlers.handleUpdateQuantity(item.cartItemId, val)} data-api-unique-id='cartview-r12e15f99691ee10a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
+                              <Button variant="ghost" size="icon" onClick={() => handlers.handleRemoveItem(item.cartItemId)} disabled={state.actionLoading} className="size-8 shrink-0 rounded-none text-[#64748B] hover:bg-[#EF4444]/10 hover:text-[#EF4444]" aria-label={t('common.cancel')} data-api-unique-id='cartview-r8e026a7a0a7e016e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                                  <Trash2 className="size-4" data-api-unique-id='cartview-r54c7ac71d33e46d6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
                                 </Button>
-                              </div>
                             </div>
                           </div>
                         </div>
                     </div>)}
                   <div className="flex items-center justify-between gap-3 border-t border-[#f0f0f0] px-1 py-4" data-controller-name="商品列表总额">
                     <span className="font-body text-sm font-semibold text-[#0F172A]">
-                      <DecorateText propKey="cart_list_subtotal_label" as="span">商品总额</DecorateText>
+                      <DecorateText propKey="cart_list_subtotal_label" as="span">
+                        {t('checkout.subtotal', { defaultValue: 'Subtotal' })}
+                      </DecorateText>
                     </span>
-                    <span className="font-header text-base font-bold text-[#0F172A] text-right break-all">
+                    <span className="break-all text-right font-header text-base font-bold text-[#0F172A]">
                       {formatUsd(checkoutTotals.originalPriceUsd)}
                     </span>
+                  </div>
+
+                  {/* Mobile: go to address + shipping page (not inline expand) */}
+                  <div className="mobile-cart-checkout-cta px-1 pb-3 xl:hidden" data-controller-name="移动端去结算">
+                    <Button
+                      type="button"
+                      disabled={
+                        state.actionLoading ||
+                        state.isEmpty ||
+                        state.items.every((item) => item.status === 'INVALID')
+                      }
+                      onClick={() => Checkout.navigateTo(router)}
+                      className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#f254a6] py-5 text-base font-bold text-white hover:bg-[#e44798] disabled:opacity-50"
+                    >
+                      <DecorateText propKey="cart_go_checkout_btn" as="span">
+                        {t('checkout.goCheckout', { defaultValue: 'Checkout' })}
+                      </DecorateText>
+                      <ArrowRight className="size-4 shrink-0" />
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              <div className="xl:col-span-4 xl:sticky xl:top-[76px]" data-api-unique-id='cartview-r39276e9511f27071-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+              <div className="hidden xl:col-span-4 xl:sticky xl:top-[76px] xl:block" data-api-unique-id='cartview-r39276e9511f27071-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                 {state.summary && <div className="flex max-h-[80vh] flex-col overflow-y-auto overscroll-contain rounded-[12px] border border-[#f0dede] bg-white xl:h-[80vh]" data-api-unique-id='cartview-rfe0b33b0e27d27a4-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                     <div className="space-y-3 px-4 py-3" data-api-unique-id='cartview-r51067957ab55614c-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                       <div className="flex items-start justify-between gap-2" data-api-unique-id='cartview-r93ff93501e254643-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>

@@ -396,6 +396,8 @@
     "calculatedAtCheckout": "结算时计算",
     "total": "合计",
     "weight": "重量",
+    "subtotal": "小计",
+    "goCheckout": "去结算",
     "recipient": "收货人：{{name}}",
     "editAddress": "修改收货地址",
     "fillAddress": "地址填写与确认",

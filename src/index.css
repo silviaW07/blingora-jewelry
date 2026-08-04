@@ -1944,4 +1944,23 @@ input:-webkit-autofill:active {
     font-size: 0.875rem !important;
     line-height: 1.35 !important;
   }
+
+  /* Mobile cart: compact left-thumb + right meta */
+  .mobile-cart-page {
+    --mobile-fs: 0.875rem;
+    font-size: var(--mobile-fs);
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-cart-line__title {
+    font-size: 0.875rem !important;
+  }
+
+  .mobile-cart-line__price {
+    font-size: 0.875rem !important;
+  }
+
+  .mobile-cart-checkout-cta button {
+    font-size: 0.9375rem;
+  }
 }

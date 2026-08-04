@@ -401,6 +401,8 @@
     "calculatedAtCheckout": "Calculated at checkout",
     "total": "Total",
     "weight": "Weight",
+    "subtotal": "Subtotal",
+    "goCheckout": "Checkout",
     "recipient": "Recipient: {{name}}",
     "editAddress": "Edit shipping address",
     "fillAddress": "Address & confirmation",

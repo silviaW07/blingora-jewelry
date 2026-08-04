@@ -177,6 +177,17 @@ export const Cart = {
 }
 
 // ================================================================
+// F04b 结算页（地址 + 物流）— 无入参
+// ================================================================
+export const Checkout = {
+  id: 'F04b',
+  path: '/checkout',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(Checkout.path),
+}
+
+// ================================================================
 // F02c 移动端分类浏览 — 无入参
 // ================================================================
 export const MobileCategories = {

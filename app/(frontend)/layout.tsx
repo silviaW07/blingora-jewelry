@@ -21,7 +21,7 @@ import { AuthExpiredDialog } from '@/frontend/auth/rpc-auth'
 // 不需要导航栏和页脚的路径白名单（模板，后续可修改）
 const FULLSCREEN_PATHS = ['/customerlogin', '/customerregister']
 /** 结账/购物车页：隐藏全站粉色促销倒计时条，改用页面内专用导航头 */
-const CHECKOUT_PATHS = ['/cart']
+const CHECKOUT_PATHS = ['/cart', '/checkout']
 
 interface RootLayoutProps {
   children: React.ReactNode
