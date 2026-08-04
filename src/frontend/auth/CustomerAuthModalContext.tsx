@@ -1,10 +1,11 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
+import { create } from 'zustand';
 
 export type CustomerAuthModalTab = 'login' | 'register';
 
-interface CustomerAuthModalContextValue {
+interface CustomerAuthModalState {
   isOpen: boolean;
   activeTab: CustomerAuthModalTab;
   openAuthModal: (tab?: CustomerAuthModalTab) => void;
@@ -12,20 +13,28 @@ interface CustomerAuthModalContextValue {
   setActiveTab: (tab: CustomerAuthModalTab) => void;
 }
 
+/**
+ * Zustand store — usable from route guards / nav without React context nesting.
+ * Keeps open/close available even when FrontendAuthGuard sits outside the Provider.
+ */
+export const useCustomerAuthModalStore = create<CustomerAuthModalState>((set) => ({
+  isOpen: false,
+  activeTab: 'login',
+  openAuthModal: (tab: CustomerAuthModalTab = 'login') => set({ isOpen: true, activeTab: tab }),
+  closeAuthModal: () => set({ isOpen: false }),
+  setActiveTab: (tab: CustomerAuthModalTab) => set({ activeTab: tab }),
+}));
+
+type CustomerAuthModalContextValue = CustomerAuthModalState;
+
 const CustomerAuthModalContext = createContext<CustomerAuthModalContextValue | null>(null);
 
 export function CustomerAuthModalProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<CustomerAuthModalTab>('login');
-
-  const openAuthModal = useCallback((tab: CustomerAuthModalTab = 'login') => {
-    setActiveTab(tab);
-    setIsOpen(true);
-  }, []);
-
-  const closeAuthModal = useCallback(() => {
-    setIsOpen(false);
-  }, []);
+  const isOpen = useCustomerAuthModalStore((s) => s.isOpen);
+  const activeTab = useCustomerAuthModalStore((s) => s.activeTab);
+  const openAuthModal = useCustomerAuthModalStore((s) => s.openAuthModal);
+  const closeAuthModal = useCustomerAuthModalStore((s) => s.closeAuthModal);
+  const setActiveTab = useCustomerAuthModalStore((s) => s.setActiveTab);
 
   const value = useMemo(
     () => ({
@@ -35,7 +44,7 @@ export function CustomerAuthModalProvider({ children }: { children: React.ReactN
       closeAuthModal,
       setActiveTab,
     }),
-    [isOpen, activeTab, openAuthModal, closeAuthModal],
+    [isOpen, activeTab, openAuthModal, closeAuthModal, setActiveTab],
   );
 
   return <CustomerAuthModalContext.Provider value={value}>{children}</CustomerAuthModalContext.Provider>;
@@ -43,13 +52,13 @@ export function CustomerAuthModalProvider({ children }: { children: React.ReactN
 
 export function useCustomerAuthModal() {
   const context = useContext(CustomerAuthModalContext);
-  if (!context) {
-    throw new Error('useCustomerAuthModal must be used within CustomerAuthModalProvider');
-  }
-  return context;
+  const store = useCustomerAuthModalStore();
+  return context ?? store;
 }
 
-/** Safe for product cards that may render outside the modal provider during tests. */
+/** Safe for product cards / guards that may render outside the modal provider. */
 export function useOptionalCustomerAuthModal() {
-  return useContext(CustomerAuthModalContext);
+  const context = useContext(CustomerAuthModalContext);
+  const store = useCustomerAuthModalStore();
+  return context ?? store;
 }

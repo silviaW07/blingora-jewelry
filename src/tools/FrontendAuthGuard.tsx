@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useUserSession } from '@/tools/FrontendSession';
-import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
+import { useCustomerAuthModalStore } from '@/frontend/auth/CustomerAuthModalContext';
 
 const ACCOUNT_AUTH_PATHS = ['/account', '/accountcenter', '/ordercenter'] as const;
 const LOGIN_PAGE_PATHS = ['/cart'] as const;
@@ -14,15 +14,14 @@ function pathNeedsAuth(pathname: string, prefixes: readonly string[]) {
 
 /**
  * Protects storefront routes that require a customer session.
- * Account-related paths open the shared login/register modal (mobile + desktop)
- * instead of hard-navigating to /customerlogin.
+ * Account paths: open shared login/register modal via zustand (no Context required),
+ * then leave the protected route.
  */
 export default function FrontendAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const session = useUserSession();
-  const authModal = useOptionalCustomerAuthModal();
-  const openAuthModal = authModal?.openAuthModal;
+  const openAuthModal = useCustomerAuthModalStore((s) => s.openAuthModal);
   const accountRedirectLock = useRef(false);
 
   useEffect(() => {
@@ -44,15 +43,8 @@ export default function FrontendAuthGuard({ children }: { children: React.ReactN
     if (isAccountPath) {
       if (accountRedirectLock.current) return;
       accountRedirectLock.current = true;
-
-      if (openAuthModal) {
-        openAuthModal('login');
-        router.replace('/');
-        return;
-      }
-
-      const redirect = encodeURIComponent(currentPath);
-      router.replace(`/customerlogin?redirect=${redirect}`);
+      openAuthModal('login');
+      router.replace('/');
       return;
     }
 

@@ -36,13 +36,15 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   const isCheckoutPage = CHECKOUT_PATHS.some((p) => normalizedPath === p || normalizedPath.startsWith(`${p}/`))
   const showPromotionBanner = !isFullscreen && !isCheckoutPage
 
+  // Keep original nesting: Guard outside → avoids pulling auth-modal/RPC into the
+  // outer module graph incorrectly. Auth modal open is driven by zustand store.
   return (
-    <I18nProvider>
-      <Suspense fallback={null}>
-        <CustomerAuthModalProvider>
-          <FrontendAuthGuard>
-            <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col">
-              <AuthExpiredDialog />
+    <FrontendAuthGuard>
+      <I18nProvider>
+        <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col">
+          <AuthExpiredDialog />
+          <Suspense fallback={null}>
+            <CustomerAuthModalProvider>
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
@@ -54,10 +56,10 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               </DecorateModeProvider>
               <CustomerAuthModal />
               <CustomerAuthModalDecorateBridge />
-            </div>
-          </FrontendAuthGuard>
-        </CustomerAuthModalProvider>
-      </Suspense>
-    </I18nProvider>
+            </CustomerAuthModalProvider>
+          </Suspense>
+        </div>
+      </I18nProvider>
+    </FrontendAuthGuard>
   )
 }
