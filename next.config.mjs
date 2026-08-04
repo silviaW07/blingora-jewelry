@@ -5,8 +5,14 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// monorepo 根：对齐 pnpm-lock.yaml 所在层级
-const monoRoot = path.resolve(__dirname, '../../../../')
+// Project root (this repo has pnpm-lock.yaml here).
+// NOTE: previously `../../../../` resolved to the drive root (e.g. D:\),
+// which broke Turbopack module resolution and made `@/frontend/actions`
+// fall through to real `use server` files → TypeError: is not a function.
+const monoRoot = __dirname
+const rpcFrontendActions = path.resolve(__dirname, './lib/rpc-generated/src/frontend/actions')
+const rpcBackendActions = path.resolve(__dirname, './lib/rpc-generated/src/backend/actions')
+const rpcAppActions = path.resolve(__dirname, './lib/rpc-generated/src/app/actions')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -62,14 +68,16 @@ const nextConfig = {
   transpilePackages: ['components'],
 
   // turbopack 与 webpack.resolve.alias 对齐：客户端必须走 RPC stub，不能打到真实 'use server' actions
+  // Keep action aliases MORE SPECIFIC than `@` → src, otherwise Turbopack may resolve
+  // `@/frontend/actions/*` into `src/frontend/actions/*` and crash with "is not a function".
   turbopack: {
     root: monoRoot,
     resolveAlias: {
-      '@/frontend/actions': path.resolve(__dirname, './lib/rpc-generated/src/frontend/actions'),
-      '@/backend/actions': path.resolve(__dirname, './lib/rpc-generated/src/backend/actions'),
-      '@/app/actions': path.resolve(__dirname, './lib/rpc-generated/src/app/actions'),
-      '@': path.resolve(__dirname, './src'),
+      '@/frontend/actions': rpcFrontendActions,
+      '@/backend/actions': rpcBackendActions,
+      '@/app/actions': rpcAppActions,
       '@/server': path.resolve(__dirname, './server'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
 
@@ -154,9 +162,9 @@ const nextConfig = {
     config.resolve = config.resolve || {}
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      '@/frontend/actions': path.resolve(__dirname, './lib/rpc-generated/src/frontend/actions'),
-      '@/backend/actions': path.resolve(__dirname, './lib/rpc-generated/src/backend/actions'),
-      '@/app/actions': path.resolve(__dirname, './lib/rpc-generated/src/app/actions'),
+      '@/frontend/actions': rpcFrontendActions,
+      '@/backend/actions': rpcBackendActions,
+      '@/app/actions': rpcAppActions,
     }
 
     config.module.rules.push(
