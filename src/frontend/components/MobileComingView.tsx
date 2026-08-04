@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
-import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import {
@@ -14,8 +13,8 @@ import {
 import { ProductDetail } from '@/frontend/route-params'
 
 /**
- * Mobile Coming page: grid of pure date cards (MM/DD) + preview image + wishlist.
- * Source: unpublished / teaser products grouped by admin publishedAt (fallback createdAt).
+ * Coming: pure MM/DD date cards + preview thumb + heart.
+ * No counts, banners, product lists, or labels like "Yesterday".
  */
 export default function MobileComingView() {
   const router = useRouter()
@@ -26,17 +25,25 @@ export default function MobileComingView() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getComingSoonDateCards()
-      .then((res) => {
+
+    const load = async () => {
+      try {
+        const api = getComingSoonDateCards
+        if (typeof api !== 'function') {
+          if (!cancelled) setCards([])
+          return
+        }
+        const res = await api()
         if (cancelled) return
-        setCards(Array.isArray(res.cards) ? res.cards : [])
-      })
-      .catch(() => {
+        setCards(Array.isArray(res?.cards) ? res.cards : [])
+      } catch {
         if (!cancelled) setCards([])
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false)
-      })
+      }
+    }
+
+    void load()
     return () => {
       cancelled = true
     }
@@ -56,19 +63,13 @@ export default function MobileComingView() {
       className="mobile-coming-page min-h-screen bg-[#f7f4ee] text-[#111111]"
       data-controller-name="移动端Coming新品预告"
     >
-      <MobileStorefrontHeader />
-
       <div className="mobile-coming-page__body">
-        <h1 className="mobile-coming-page__title">
-          {t('nav.coming', { defaultValue: 'Coming' })}
-        </h1>
-
         {loading ? (
           <div className="flex justify-center py-16 text-[#8b8477]">
-            <Loader2 className="size-6 animate-spin" />
+            <Loader2 className="size-6 animate-spin" aria-label={t('common.loading')} />
           </div>
         ) : cards.length === 0 ? (
-          <p className="mt-10 text-center text-sm text-[#8a8073]">
+          <p className="mt-12 text-center text-sm text-[#8a8073]">
             {t('mobile.noComingDates', {
               defaultValue: 'No upcoming previews yet',
             })}
@@ -79,39 +80,29 @@ export default function MobileComingView() {
             data-controller-name="Coming日期卡片网格"
           >
             {cards.map((card) => (
-              <article
-                key={card.date_key}
-                className="mobile-coming-card"
-              >
+              <article key={card.date_key} className="mobile-coming-card">
+                {/* Date bar — date only */}
                 <button
                   type="button"
                   className="mobile-coming-card__surface"
                   onClick={() => openPreview(card)}
-                  aria-label={`${card.date_label}`}
+                  aria-label={card.date_label}
                 >
                   <span className="mobile-coming-card__date">{card.date_label}</span>
                 </button>
 
-                <div className="mobile-coming-card__heart">
-                  <WishlistHeartButton
-                    productId={card.preview_product_id}
-                    productName={card.preview_product_name || card.date_label}
-                    size={18}
-                    className="!rounded-full bg-white/90 p-1.5 shadow-sm"
-                    requireAuth
-                  />
-                </div>
-
+                {/* Preview under date */}
                 <button
                   type="button"
                   className="mobile-coming-card__media"
                   onClick={() => openPreview(card)}
+                  aria-label={`${card.date_label} preview`}
                 >
                   {card.preview_image_url ? (
                     <OptimizedProductImage
                       src={card.preview_image_url}
-                      alt={card.date_label}
-                      sizes="50vw"
+                      alt=""
+                      sizes="(max-width: 480px) 50vw, 33vw"
                       imageWidth={480}
                       className="object-cover"
                     />
@@ -119,6 +110,19 @@ export default function MobileComingView() {
                     <span className="mobile-coming-card__media-empty" aria-hidden />
                   )}
                 </button>
+
+                {/* Heart: bottom-right of card */}
+                {card.preview_product_id ? (
+                  <div className="mobile-coming-card__heart">
+                    <WishlistHeartButton
+                      productId={card.preview_product_id}
+                      productName={card.preview_product_name || card.date_label}
+                      size={18}
+                      className="!rounded-full bg-white/95 p-1.5 shadow-sm"
+                      requireAuth
+                    />
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

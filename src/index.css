@@ -1351,14 +1351,7 @@ input:-webkit-autofill:active {
 }
 
 .mobile-coming-page__body {
-  padding: 0.85rem 0.75rem 1.25rem;
-}
-
-.mobile-coming-page__title {
-  margin: 0 0 0.85rem;
-  font-size: 1.15rem;
-  font-weight: 750;
-  letter-spacing: 0.04em;
+  padding: 0.75rem 0.75rem 1.25rem;
 }
 
 .mobile-coming-grid {
@@ -1378,12 +1371,13 @@ input:-webkit-autofill:active {
   box-shadow: 0 10px 28px -22px rgba(0, 0, 0, 0.55);
 }
 
+/* Date strip — label only (MM/DD) */
 .mobile-coming-card__surface {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 3.25rem;
-  padding: 0.65rem 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.5rem;
   border: 0;
   background: #2b2b2b;
   color: #fff;
@@ -1391,17 +1385,18 @@ input:-webkit-autofill:active {
 }
 
 .mobile-coming-card__date {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }
 
+/* Heart over thumbnail (bottom-right) */
 .mobile-coming-card__heart {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  z-index: 2;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  z-index: 3;
 }
 
 .mobile-coming-card__media {
@@ -1962,5 +1957,59 @@ input:-webkit-autofill:active {
 
   .mobile-cart-checkout-cta button {
     font-size: 0.9375rem;
+  }
+
+  .mobile-cart-recommend {
+    margin-top: 0.5rem;
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-cart-recommend__grid {
+    gap: 8px;
+  }
+
+  .mobile-cart-recommend__title {
+    font-size: 0.8125rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .mobile-cart-recommend__price {
+    font-size: 0.875rem !important;
+  }
+
+  .mobile-cart-recommend__media {
+    background: #e8e4dc;
+  }
+
+  /* Account center — compact mobile chrome */
+  .mobile-account-page {
+    --mobile-fs: 0.875rem;
+    font-size: var(--mobile-fs);
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-account-topbar {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .mobile-account-card {
+    margin-top: 0;
+  }
+
+  .mobile-account-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-account-scroll-field {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  .mobile-account-scroll-field input {
+    min-width: max(100%, 12rem);
+    width: max-content;
+    max-width: none;
   }
 }

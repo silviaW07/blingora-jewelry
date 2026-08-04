@@ -22,6 +22,8 @@ import { AuthExpiredDialog } from '@/frontend/auth/rpc-auth'
 const FULLSCREEN_PATHS = ['/customerlogin', '/customerregister']
 /** 结账/购物车页：隐藏全站粉色促销倒计时条，改用页面内专用导航头 */
 const CHECKOUT_PATHS = ['/cart', '/checkout']
+/** Coming 等精简单页：不显示促销横幅 / 搜索顶栏冗余 */
+const MINIMAL_STORE_PATHS = ['/coming', '/brand']
 
 interface RootLayoutProps {
   children: React.ReactNode
@@ -34,7 +36,10 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   const normalizedPath = (pathname || '/').toLowerCase().replace(/\/+$/, '') || '/'
   const isFullscreen = FULLSCREEN_PATHS.some((p) => normalizedPath.startsWith(p.toLowerCase()))
   const isCheckoutPage = CHECKOUT_PATHS.some((p) => normalizedPath === p || normalizedPath.startsWith(`${p}/`))
-  const showPromotionBanner = !isFullscreen && !isCheckoutPage
+  const isMinimalStorePage = MINIMAL_STORE_PATHS.some(
+    (p) => normalizedPath === p || normalizedPath.startsWith(`${p}/`),
+  )
+  const showPromotionBanner = !isFullscreen && !isCheckoutPage && !isMinimalStorePage
   // 完整页脚：移动端仅首页；桌面端全站（非全屏）
   const isStorefrontHome = normalizedPath === '/' || normalizedPath === '/home'
   const showFooter = !isFullscreen

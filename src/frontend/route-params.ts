@@ -280,7 +280,7 @@ export const AccountProfile = {
   path: '/account/profile',
   paramsMeta: {} as Record<string, ParamMeta>,
   getParams: (_sp: URLSearchParams) => ({}),
-  navigateTo: (router: AppRouterInstance) => router.push(AccountProfile.path),
+  navigateTo: (router: AppRouterInstance) => router.push('/account/profile/'),
 }
 
 export const AccountOrders = {
@@ -288,7 +288,7 @@ export const AccountOrders = {
   path: '/account/orders',
   paramsMeta: {} as Record<string, ParamMeta>,
   getParams: (_sp: URLSearchParams) => ({}),
-  navigateTo: (router: AppRouterInstance) => router.push(AccountOrders.path),
+  navigateTo: (router: AppRouterInstance) => router.push('/account/orders/'),
 }
 
 export const AccountOrderDetail = {
@@ -337,7 +337,7 @@ export const AccountAddresses = {
   path: '/account/addresses',
   paramsMeta: {} as Record<string, ParamMeta>,
   getParams: (_sp: URLSearchParams) => ({}),
-  navigateTo: (router: AppRouterInstance) => router.push(AccountAddresses.path),
+  navigateTo: (router: AppRouterInstance) => router.push('/account/addresses/'),
 }
 
 export const AccountCenter = {
@@ -345,10 +345,10 @@ export const AccountCenter = {
   path: '/account',
   paramsMeta: {} as Record<string, ParamMeta>,
   getParams: (_sp: URLSearchParams) => ({}),
-  navigateTo: (router: AppRouterInstance) => router.push(AccountProfile.path),
-  navigateToOrders: (router: AppRouterInstance) => router.push(AccountOrders.path),
-  navigateToAddresses: (router: AppRouterInstance) => router.push(AccountAddresses.path),
-  navigateToProfile: (router: AppRouterInstance) => router.push(AccountProfile.path),
+  navigateTo: (router: AppRouterInstance) => router.push('/account/profile/'),
+  navigateToOrders: (router: AppRouterInstance) => router.push('/account/orders/'),
+  navigateToAddresses: (router: AppRouterInstance) => router.push('/account/addresses/'),
+  navigateToProfile: (router: AppRouterInstance) => router.push('/account/profile/'),
 }
 
 // ================================================================

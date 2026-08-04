@@ -12,6 +12,7 @@ import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { CheckoutTopBar } from '@/frontend/components/CheckoutTopBar';
 import { CheckoutSmartPanel, type CheckoutAddressForm } from '@/frontend/components/CheckoutSmartPanel';
 import { OrderAmountOverview } from '@/frontend/components/OrderAmountOverview';
+import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
 import type { CartState, CartHandlers } from '@/frontend/hooks/useCart';
 import { useQuantityControl } from '@/frontend/hooks/useCart';
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder';
@@ -515,49 +516,120 @@ export const CartView = ({
         </div>
       </section>
 
-      {!state.loading && state.recommended && state.recommended.length > 0 && <section className="w-full border-t-2 border-[#f0dede] bg-[#FFF5F5]" data-controller-name="结账页为您推荐" data-api-unique-id='cartview-r581a4d48dec3e4ec-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-          <div className="storefront-container py-10 md:py-12" data-api-unique-id='cartview-rf06d969e16ae6d71-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-            <header className="mb-5" data-api-unique-id='cartview-ra7595b0b0ccd686f-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-              <div data-api-unique-id='cartview-r68dabd1d5659b43d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+      {!state.loading && state.recommended && state.recommended.length > 0 && (
+        <section
+          className="mobile-cart-recommend w-full border-t border-[#f0dede] bg-[#FFF5F5]"
+          data-controller-name="结账页为您推荐"
+          data-api-unique-id="cartview-r581a4d48dec3e4ec-s3843595280"
+          data-api-unique-page-name="src/frontend/components/CartView"
+        >
+          <div
+            className="storefront-container py-6 md:py-12"
+            data-api-unique-id="cartview-rf06d969e16ae6d71-s3843595280"
+            data-api-unique-page-name="src/frontend/components/CartView"
+          >
+            <header
+              className="mb-3 md:mb-5"
+              data-api-unique-id="cartview-ra7595b0b0ccd686f-s3843595280"
+              data-api-unique-page-name="src/frontend/components/CartView"
+            >
+              <div
+                data-api-unique-id="cartview-r68dabd1d5659b43d-s3843595280"
+                data-api-unique-page-name="src/frontend/components/CartView"
+              >
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a8073]">
                   Recommendation
                 </p>
-                <h2 className="font-header text-[#0F172A] text-xl md:text-2xl font-bold tracking-tight" data-api-unique-id='cartview-r34b74889e237a9ea-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-                  <DecorateText propKey="cart_recommend_title" as="span">Source more best-sellers</DecorateText>
+                <h2
+                  className="font-header text-base font-bold tracking-tight text-[#0F172A] md:text-2xl"
+                  data-api-unique-id="cartview-r34b74889e237a9ea-s3843595280"
+                  data-api-unique-page-name="src/frontend/components/CartView"
+                >
+                  <DecorateText propKey="cart_recommend_title" as="span">
+                    Source more best-sellers
+                  </DecorateText>
                 </h2>
-                <p className="mt-1 font-body text-sm text-[#64748B]" data-api-unique-id='cartview-r8f63598308bd3558-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-                  <DecorateText propKey="cart_recommend_desc" as="span">Continue browsing products often purchased together before checkout.</DecorateText>
+                <p
+                  className="mt-1 hidden font-body text-sm text-[#64748B] md:block"
+                  data-api-unique-id="cartview-r8f63598308bd3558-s3843595280"
+                  data-api-unique-page-name="src/frontend/components/CartView"
+                >
+                  <DecorateText propKey="cart_recommend_desc" as="span">
+                    Continue browsing products often purchased together before checkout.
+                  </DecorateText>
                 </p>
               </div>
             </header>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-api-unique-id='cartview-r0f2c1b4a9098bd6e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-              {state.recommended.map((prod) => <div key={prod.productId} className="flex cursor-pointer flex-col overflow-hidden rounded-[10px] border border-[#eaeaea] bg-white group" data-api-unique-id='cartview-rc51a6facd67736f2-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                  <div className="w-full aspect-[4/5] bg-[#E2E8F0] flex items-center justify-center overflow-hidden relative" data-api-unique-id='cartview-r19cf7a89b03fe4a2-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                      <EditableImg propKey={`rec-img-${prod.productId}`} keywords={prod.mainImageUrl} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" data-api-unique-id='cartview-r6697bd71f0f454a7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
-                    </div>
-                  <div className="p-3 flex flex-col flex-1" data-api-unique-id='cartview-r825df5e35dd12575-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                    <h3 className="font-header text-[#0F172A] text-sm font-semibold leading-tight line-clamp-1 mb-1.5" data-api-unique-id='cartview-r662c8ab85e63e654-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+            <div
+              className="mobile-cart-recommend__grid grid grid-cols-2 gap-2 md:grid-cols-2 lg:grid-cols-4 md:gap-3"
+              data-api-unique-id="cartview-r0f2c1b4a9098bd6e-s3843595280"
+              data-api-unique-page-name="src/frontend/components/CartView"
+            >
+              {state.recommended.map((prod) => (
+                <button
+                  key={prod.productId}
+                  type="button"
+                  onClick={() =>
+                    ProductDetail.navigateToById(router, { productId: prod.productId })
+                  }
+                  className="mobile-cart-recommend__card group flex cursor-pointer flex-col overflow-hidden rounded-[8px] border border-[#eaeaea] bg-white text-left transition hover:border-[#f0dede]"
+                  data-api-unique-id="cartview-rc51a6facd67736f2-s3843595280"
+                  data-api-unique-page-name="src/frontend/components/CartView"
+                  data-api-in-loop="1"
+                >
+                  <div
+                    className="mobile-cart-recommend__media relative aspect-square w-full overflow-hidden bg-[#e8e4dc]"
+                    data-api-unique-id="cartview-r19cf7a89b03fe4a2-s3843595280"
+                    data-api-unique-page-name="src/frontend/components/CartView"
+                    data-api-in-loop="1"
+                  >
+                    <OptimizedProductImage
+                      src={prod.mainImageUrl}
+                      alt={prod.name}
+                      sizes="(max-width: 768px) 45vw, 20vw"
+                      imageWidth={320}
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </div>
+                  <div
+                    className="flex flex-1 flex-col gap-1 p-2 md:p-3"
+                    data-api-unique-id="cartview-r825df5e35dd12575-s3843595280"
+                    data-api-unique-page-name="src/frontend/components/CartView"
+                    data-api-in-loop="1"
+                  >
+                    <h3
+                      className="mobile-cart-recommend__title font-header text-[0.8125rem] font-semibold leading-snug text-[#0F172A] line-clamp-2 md:text-sm"
+                      data-api-unique-id="cartview-r662c8ab85e63e654-s3843595280"
+                      data-api-unique-page-name="src/frontend/components/CartView"
+                      data-api-in-loop="1"
+                    >
                       {prod.name}
                     </h3>
-                    <div className="mt-auto space-y-0.5" data-api-unique-id='cartview-rd07fd5071a51e782-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                      <p className="font-body text-[#64748B] text-xs" data-api-unique-id='cartview-re76f2115bca04b94-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                        <DecorateText propKey="cart_recommend_price_prefix" as="span">Starting from</DecorateText>
-                      </p>
-                      <div className="flex items-center justify-between gap-2" data-api-unique-id='cartview-r0840ff8ba3bbe2f0-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                        <span className="font-display text-[#0F172A] font-bold text-base truncate" data-api-unique-id='cartview-rbf2c99820992fe8f-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                          {prod.priceMin}
-                        </span>
-                        <div className="flex items-center gap-1 text-[#0F172A] bg-[#E2E8F0] px-1.5 py-0.5 font-body text-[10px] font-semibold shrink-0" data-api-unique-id='cartview-ra3289afee01e1b15-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                          ⭐ {prod.ratingAverage}
-                        </div>
-                      </div>
+                    <div
+                      className="mt-auto"
+                      data-api-unique-id="cartview-rd07fd5071a51e782-s3843595280"
+                      data-api-unique-page-name="src/frontend/components/CartView"
+                      data-api-in-loop="1"
+                    >
+                      <span
+                        className="mobile-cart-recommend__price font-display text-sm font-bold text-[#0F172A] md:text-base"
+                        data-api-unique-id="cartview-rbf2c99820992fe8f-s3843595280"
+                        data-api-unique-page-name="src/frontend/components/CartView"
+                        data-api-in-loop="1"
+                      >
+                        {typeof prod.priceMin === 'number'
+                          ? formatUsd(Number(prod.priceMin) || 0)
+                          : prod.priceMin}
+                      </span>
                     </div>
                   </div>
-                </div>)}
+                </button>
+              ))}
             </div>
           </div>
-        </section>}
+        </section>
+      )}
 
       <Dialog open={state.isClearConfirmOpen} onOpenChange={handlers.setIsClearConfirmOpen} data-api-unique-id='cartview-r9ac9b7ee0589ca7e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
         <DialogContent className="bg-[#F8FAFC] border-0 rounded-none p-5 shadow-none max-w-md" data-api-unique-id='cartview-rd620c8ffed8994e1-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
