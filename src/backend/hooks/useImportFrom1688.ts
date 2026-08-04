@@ -487,10 +487,9 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   }
 
   const headerCells = splitLine(lines[0]).map(value => value.toLowerCase())
+  // SKU 不在映射字段中；9 列：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
   const headerAliases: Record<string, string[]> = {
     productCode: ['产品编号', '编号', 'product_code', 'product code'],
-    // SKU 仅识别显式表头；位置列回退绝不读取 SKU
-    skuCode: ['sku', '货号', 'sku编码'],
     productPrice: ['产品价格', '售价', '价格', 'price'],
     productName: ['名称', '产品名称', '商品名称', 'name'],
     brand: ['品牌', '品牌关键词', 'brand'],
@@ -509,7 +508,6 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   const hasNamedHeader = Object.keys(indexMap).length >= 2
   const dataLines = hasNamedHeader ? lines.slice(1) : lines
 
-  // 无表头：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量（+ 可选详情）；不含 SKU
   const fallbackIndex: Record<string, number> = {
     productCode: 0,
     productPrice: 1,
@@ -526,11 +524,9 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   const rows = dataLines.map((line, index) => {
     const columns = splitLine(line)
     const pick = (field: string) => {
-      if (field === 'skuCode') {
-        if (hasNamedHeader && indexMap.skuCode !== undefined) return columns[indexMap.skuCode] || ''
-        return ''
+      if (hasNamedHeader) {
+        return indexMap[field] !== undefined ? (columns[indexMap[field]] || '') : ''
       }
-      if (hasNamedHeader && indexMap[field] !== undefined) return columns[indexMap[field]] || ''
       const idx = fallbackIndex[field]
       return idx !== undefined ? (columns[idx] || '') : ''
     }
@@ -541,7 +537,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     return {
       rowId: `row-${index + 1}`,
       productCode: pick('productCode'),
-      skuCode: pick('skuCode'),
+      skuCode: '',
       productPrice: null,
       productPriceText,
       productName: pick('productName'),
@@ -558,7 +554,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
       imageUrl: '',
       detail: pick('detail'),
     }
-  }).filter(row => row.productName || row.productCode || row.skuCode)
+  }).filter(row => row.productName || row.productCode)
 
   return toPreviewImportRows(rows)
 }

@@ -4721,10 +4721,9 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
     }
 
     const headerCells = splitLine(lines[0]).map(value => value.toLowerCase())
+    // SKU 不在映射字段中：表格不读取、不要求 SKU 列；编码由产品编号在草稿/发布阶段生成
     const headerAliases: Record<string, string[]> = {
       productCode: ['产品编号', '编号', 'product_code', 'product code'],
-      // SKU 仅识别显式表头；位置列回退绝不读取 SKU，避免把价格误映射进来
-      skuCode: ['sku', '货号', 'sku编码'],
       productPrice: ['产品价格', '售价', '价格', 'price'],
       productName: ['名称', '产品名称', '商品名称', 'name'],
       brand: ['品牌', '品牌关键词', 'brand'],
@@ -4743,7 +4742,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
     const hasNamedHeader = Object.keys(indexMap).length >= 2
     const dataLines = hasNamedHeader ? lines.slice(1) : lines
 
-    // 无表头：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量（+ 可选详情）；不含 SKU
+    // 无表头固定 9 列：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量（+ 可选详情）
     const fallbackIndex: Record<string, number> = {
       productCode: 0,
       productPrice: 1,
@@ -4760,22 +4759,21 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
     const rows = dataLines.map((line, index) => {
       const columns = splitLine(line)
       const pick = (field: string) => {
-        // SKU：仅当存在显式命名表头时读取，从不走位置回退
-        if (field === 'skuCode') {
-          if (hasNamedHeader && indexMap.skuCode !== undefined) return columns[indexMap.skuCode] || ''
-          return ''
+        // 有命名表头时只读映射列，绝不位置回退（避免无 SKU 表把价格误读到其它字段）
+        if (hasNamedHeader) {
+          return indexMap[field] !== undefined ? (columns[indexMap[field]] || '') : ''
         }
-        if (hasNamedHeader && indexMap[field] !== undefined) return columns[indexMap[field]] || ''
         const idx = fallbackIndex[field]
         return idx !== undefined ? (columns[idx] || '') : ''
       }
       const color = pick('color')
       const spec = pick('spec')
       const productPriceText = preserveProductPriceRaw(pick('productPrice'))
-        return {
-          rowId: `row-${index + 1}`,
+      return {
+        rowId: `row-${index + 1}`,
         productCode: pick('productCode'),
-        skuCode: pick('skuCode'),
+        // 永不从表格取 SKU；预览展示空，草稿/发布按产品编号生成
+        skuCode: '',
         productPrice: null,
         productPriceText,
         productName: pick('productName'),
@@ -4792,7 +4790,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
         imageUrl: '',
         detail: pick('detail')
       }
-    }).filter(row => row.productName || row.productCode || row.skuCode)
+    }).filter(row => row.productName || row.productCode)
 
     return { rows }
   })
@@ -4902,7 +4900,8 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
       return {
         productCode,
         productName: normalizeText(firstRow.productName),
-        skuCode: normalizeText(firstRow.skuCode),
+        // 表格不产生 skuCode；实际编码见 skuTable.skuKey（buildSkuIdentifier）
+        skuCode: '',
         brand: normalizeText(firstRow.brand),
         supplierName: normalizeText(firstRow.supplierName),
         categoryName: normalizeText(firstRow.categoryName),
@@ -4958,7 +4957,6 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           normalizeText(row.detail),
           normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
           normalizeText(row.productCode) ? `产品编号：${normalizeText(row.productCode)}` : '',
-          normalizeText(row.skuCode) ? `SKU：${normalizeText(row.skuCode)}` : '',
         ].filter(Boolean).join('\n') || null
         const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(
           normalizeText(row.productName),
@@ -5052,7 +5050,6 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
               featureAttributes: [
                 ...(normalizeText(row.brand) ? [{ key: '品牌', value: normalizeText(row.brand) }] : []),
                 ...(normalizeText(row.productCode) ? [{ key: '产品编号', value: normalizeText(row.productCode) }] : []),
-                ...(normalizeText(row.skuCode) ? [{ key: 'SKU', value: normalizeText(row.skuCode) }] : []),
               ],
               skuTable: row.skuTable,
             } as any

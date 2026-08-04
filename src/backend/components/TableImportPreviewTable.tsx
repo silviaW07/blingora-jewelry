@@ -34,7 +34,7 @@ export function TableImportPreviewTable({ rows, onChange, onDelete }: Props) {
         <TableHeader className="bg-secondary/20">
           <TableRow>
             <TableHead className="w-[120px]">产品编号</TableHead>
-            <TableHead className="w-[140px]">SKU</TableHead>
+            <TableHead className="w-[160px]">SKU（自动）</TableHead>
             <TableHead className="w-[110px]">产品价格</TableHead>
             <TableHead className="w-[180px]">名称</TableHead>
             <TableHead className="w-[120px]">品牌</TableHead>
@@ -61,9 +61,12 @@ export function TableImportPreviewTable({ rows, onChange, onDelete }: Props) {
                 </TableCell>
                 <TableCell>
                   <Input
-                    value={row.skuCode}
-                    onChange={e => onChange(row.rowId, 'skuCode', e.target.value)}
-                    placeholder={row.productCode ? `自动生成（${row.productCode}…）` : '自动生成（按产品编号）'}
+                    value=""
+                    readOnly
+                    disabled
+                    title="不从表格读取 SKU，确认导入后按产品编号自动生成"
+                    placeholder={row.productCode ? `按 ${row.productCode} 自动生成` : '按产品编号自动生成'}
+                    className="bg-muted/40 text-muted-foreground"
                   />
                 </TableCell>
                 <TableCell>

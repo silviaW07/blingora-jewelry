@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo, ChangeEvent, createElement } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent, createElement } from 'react'
 import * as XLSX from 'xlsx'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductManagement, ImportFrom1688 } from '@/backend/route-params'
@@ -395,7 +395,8 @@ const defaultImportRow = (): BatchImportRowInput => ({
 
 const BATCH_IMPORT_HEADER_ALIASES: Record<keyof BatchImportRowInput, string[]> = {
   product_code: ['产品编号', '编号', 'product_code', 'product code'],
-  sku_code: ['sku', '货号', 'sku编码'],
+  // sku_code 故意不给表头别名：表格不映射 SKU，一律后端按 SPU 生成
+  sku_code: [],
   product_price: ['产品价格', '售价', '价格', 'price'],
   name: ['名称', '产品名称', '商品名称', 'name'],
   brand_keyword: ['品牌', '品牌关键词', 'brand'],
@@ -413,9 +414,10 @@ const BATCH_IMPORT_HEADER_ALIASES: Record<keyof BatchImportRowInput, string[]> =
 
 const mapColsToImportRow = (cols: string[], indexMap?: Partial<Record<keyof BatchImportRowInput, number>>): BatchImportRowInput => {
   const pick = (field: keyof BatchImportRowInput, fallbackIndex?: number) => {
-    if (indexMap && indexMap[field] !== undefined) return cols[indexMap[field]!] || ''
-    // sku_code 无位置回退：仅表头显式匹配（sku/货号/sku编码）时读取，避免把价格列误当 SKU
     if (field === 'sku_code') return ''
+    if (indexMap && indexMap[field] !== undefined) return cols[indexMap[field]!] || ''
+    // 有命名表头时不按位置回退未映射列
+    if (indexMap) return ''
     if (fallbackIndex !== undefined) return cols[fallbackIndex] || ''
     return ''
   }
@@ -427,7 +429,7 @@ const mapColsToImportRow = (cols: string[], indexMap?: Partial<Record<keyof Batc
   ]))
   return {
     product_code: pick('product_code'),
-    sku_code: pick('sku_code'),
+    sku_code: '',
     name: pick('name', 0),
     weight_gram: pick('weight_gram', 1),
     cost_price: pick('cost_price', 2),
@@ -448,7 +450,9 @@ const buildHeaderIndexMap = (headerRow: string[]): Partial<Record<keyof BatchImp
   const normalized = headerRow.map(cell => cell.trim().toLowerCase())
   const indexMap: Partial<Record<keyof BatchImportRowInput, number>> = {}
   ;(Object.keys(BATCH_IMPORT_HEADER_ALIASES) as Array<keyof BatchImportRowInput>).forEach(field => {
+    if (field === 'sku_code') return
     const aliases = BATCH_IMPORT_HEADER_ALIASES[field].map(item => item.toLowerCase())
+    if (aliases.length === 0) return
     const idx = normalized.findIndex(cell => aliases.includes(cell))
     if (idx >= 0) indexMap[field] = idx
   })
@@ -1063,6 +1067,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setPendingImportPage(next)
   }
 
+  // Prefer refs so refresh callback identity stays stable (avoids remount-driven re-fetch).
+  const pendingImportQueueLengthRef = useRef(0)
+  const pendingImportQueueErrorRef = useRef<string | null>(null)
+  pendingImportQueueLengthRef.current = pendingImportQueue.length
+  pendingImportQueueErrorRef.current = pendingImportQueueError
+
   const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false
     if (silent) {
@@ -1082,8 +1092,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         setPendingImportQueueTotal(0)
         setPendingImportSelectedIds([])
       }
-      if (!silent || pendingImportQueue.length === 0) {
-        if (pendingImportQueueError !== message) {
+      if (!silent || pendingImportQueueLengthRef.current === 0) {
+        if (pendingImportQueueErrorRef.current !== message) {
           toast.error(message)
         }
       }
@@ -1095,13 +1105,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         setPendingImportQueueLoading(false)
       }
     }
-  }, [applyPendingImportQueueResult, pendingImportQueue.length, pendingImportQueueError])
+  }, [applyPendingImportQueueResult])
+
   useEffect(() => {
     if (params.tab === 'pending_imports') {
       setActiveTab('pending_imports')
-      void refreshPendingImportQueue({ silent: true })
     }
-  }, [params.tab, refreshPendingImportQueue])
+  }, [params.tab])
 
   useEffect(() => {
     fetchCategoryOptions()
@@ -1117,11 +1127,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     fetchList()
   }, [fetchList])
 
+  // Defer heavy getPendingImportQueue until the pending tab is opened (not every products visit).
   useEffect(() => {
-    refreshPendingImportQueue()
-  }, [refreshPendingImportQueue])
+    if (activeTab !== 'pending_imports') return
+    void refreshPendingImportQueue()
+  }, [activeTab, refreshPendingImportQueue])
 
   useEffect(() => {
+    if (activeTab !== 'pending_imports') return
     if (!pendingImportActiveTask || !pollingTaskStatuses.includes(pendingImportActiveTask.task_status)) {
       return
     }
@@ -1129,7 +1142,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       refreshPendingImportQueue({ silent: true })
     }, 5000)
     return () => window.clearInterval(timer)
-  }, [pendingImportActiveTask, refreshPendingImportQueue])
+  }, [activeTab, pendingImportActiveTask, refreshPendingImportQueue])
 
   const loadCategoryProductPreview = useCallback(async (categoryId: string | null) => {
     if (!categoryId) {

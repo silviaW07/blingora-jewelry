@@ -1519,6 +1519,10 @@ const repairCharsetCorruptedProducts = async () => {
   return corrupted.length
 }
 
+/** Hot-path throttle: full charset scan must not run on every list open. */
+let lastProductCharsetRepairAt = 0
+const PRODUCT_CHARSET_REPAIR_INTERVAL_MS = 10 * 60 * 1000
+
 export const getProductList = requireRole([UserRole.ADMIN])(
   withResult(async (input: GetProductListInput): Promise<GetProductListOutput> => {
     try {
@@ -1527,13 +1531,17 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       console.error('[getProductList] failed to set utf8mb4 session charset', error)
     }
 
-    try {
-      const repairedCount = await repairCharsetCorruptedProducts()
-      if (repairedCount > 0) {
-        console.info(`[getProductList] repaired ${repairedCount} charset-corrupted products`)
+    // Side-effect repair was on every list call (findMany take 300 + updates) and added multi-hundred-ms latency.
+    if (Date.now() - lastProductCharsetRepairAt >= PRODUCT_CHARSET_REPAIR_INTERVAL_MS) {
+      lastProductCharsetRepairAt = Date.now()
+      try {
+        const repairedCount = await repairCharsetCorruptedProducts()
+        if (repairedCount > 0) {
+          console.info(`[getProductList] repaired ${repairedCount} charset-corrupted products`)
+        }
+      } catch (error) {
+        console.error('[getProductList] failed to repair charset-corrupted products', error)
       }
-    } catch (error) {
-      console.error('[getProductList] failed to repair charset-corrupted products', error)
     }
 
     const { keyword, category_id, status, goods_status, status_filter, supplier_name, brand_keyword, page = 1, page_size = 20 } = input
