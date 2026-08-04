@@ -153,16 +153,17 @@ export default function AccountAddressesView() {
             list.map((row) => (
               <article key={row.addressId} className="rounded-[22px] border border-[#ebe6dc] bg-[#fbfaf7] p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#1f1a14]">
+                  <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain">
+                    <p className="whitespace-nowrap text-sm font-semibold text-[#1f1a14]">
                       {row.recipientName}
                       {row.phone ? <span className="ml-2 font-normal text-[#6f6558]">{row.phone}</span> : null}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-[#5c554c]">
+                    <p className="mt-2 whitespace-nowrap text-sm leading-6 text-[#5c554c] md:whitespace-normal">
                       {row.countryName}
                       {row.stateName ? ` · ${row.stateName}` : ''}
                       {row.cityName ? ` · ${row.cityName}` : ''}
-                      <br />
+                      <br className="hidden md:block" />
+                      <span className="md:inline"> </span>
                       {row.addressLine1}
                       {row.addressLine2 ? ` ${row.addressLine2}` : ''}
                       {row.postalCode ? ` (${row.postalCode})` : ''}

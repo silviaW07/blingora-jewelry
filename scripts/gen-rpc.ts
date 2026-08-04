@@ -51,7 +51,22 @@ async function main() {
       src.matchAll(/export\s+const\s+([A-Za-z0-9_]+)\s*=\s*(?:require\w*|withResult|async\s*[\(:]|\()/g),
       m => m[1]
     );
-    const exportedNames = [...new Set([...functionExports, ...constFunctionExports])];
+    // Alias exports only: `export const getHomeCategoryGuide = getCategoryList`
+    // (RHS must be a bare identifier — not require*/withResult/async/( which are covered above)
+    const constAliasExports = Array.from(
+      src.matchAll(/export\s+const\s+([A-Za-z0-9_]+)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:;|$)/gm),
+      (m) => {
+        const rhs = m[2];
+        // Skip keywords accidentally captured as aliases
+        if (rhs === 'async' || rhs === 'await' || rhs === 'require' || rhs === 'withResult') return '';
+        return m[1];
+      },
+    ).filter(Boolean);
+    const exportedNames = [...new Set([
+      ...functionExports,
+      ...constFunctionExports,
+      ...constAliasExports,
+    ])];
     
     if (!exportedNames.length) continue;
 

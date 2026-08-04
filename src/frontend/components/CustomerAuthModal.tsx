@@ -174,7 +174,7 @@ export function CustomerAuthModal() {
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent
-        className="max-h-[min(92vh,820px)] w-full max-w-[560px] gap-0 overflow-hidden rounded-[24px] border-[#E2E8F0] p-0"
+        className="max-h-[min(92dvh,820px)] w-[calc(100%-1.5rem)] max-w-[560px] gap-0 overflow-hidden rounded-[24px] border-[#E2E8F0] p-0 sm:w-full"
         data-controller-name="登录注册弹窗"
         onInteractOutside={(event) => {
           if (isDecorateAuthOpen) event.preventDefault();

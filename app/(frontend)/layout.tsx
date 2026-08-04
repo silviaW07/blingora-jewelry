@@ -36,6 +36,8 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   const isCheckoutPage = CHECKOUT_PATHS.some((p) => normalizedPath === p || normalizedPath.startsWith(`${p}/`))
   const showPromotionBanner = !isFullscreen && !isCheckoutPage
 
+  // Keep original nesting: Guard outside → avoids pulling auth-modal/RPC into the
+  // outer module graph incorrectly. Auth modal open is driven by zustand store.
   return (
     <FrontendAuthGuard>
       <I18nProvider>
