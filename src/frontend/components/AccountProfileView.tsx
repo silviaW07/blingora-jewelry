@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
@@ -13,6 +14,28 @@ import {
   updateCustomerProfile,
   type CustomerProfile,
 } from '@/frontend/actions/AccountCenter'
+import { cn } from '@/lib/utils'
+
+/** Long values scroll horizontally on narrow screens instead of overflowing the card. */
+function ScrollableField({
+  label,
+  children,
+  className,
+}: {
+  label: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('min-w-0 space-y-1.5', className)}>
+      <label className="text-xs font-medium text-[#8a8073]">{label}</label>
+      <div className="min-w-0 overflow-x-auto overscroll-x-contain">{children}</div>
+    </div>
+  )
+}
+
+const fieldInputClass =
+  'min-w-0 w-full max-w-none overflow-x-auto whitespace-nowrap [text-overflow:clip]'
 
 export default function AccountProfileView() {
   const session = useUserSession()
@@ -86,14 +109,14 @@ export default function AccountProfileView() {
   return (
     <AccountShell title="个人信息修改" description="修改头像、姓名与绑定手机号。数据写入 sysuser 用户表。">
       {loading || !profile ? (
-        <div className="flex min-h-[240px] items-center justify-center gap-2 text-sm text-[#7a756c]">
+        <div className="flex min-h-[180px] items-center justify-center gap-2 text-sm text-[#7a756c] md:min-h-[240px]">
           <Loader2 className="size-4 animate-spin" />
           正在读取个人资料...
         </div>
       ) : (
-        <div className="mx-auto max-w-2xl space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-[#e8e2d8] bg-[#f6f2ea] text-2xl font-semibold text-[#1f1a14]">
+        <div className="mx-auto max-w-2xl space-y-4 md:space-y-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e8e2d8] bg-[#f6f2ea] text-xl font-semibold text-[#1f1a14] md:size-20 md:text-2xl">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatarUrl} alt="avatar" className="size-full object-cover" />
@@ -101,7 +124,7 @@ export default function AccountProfileView() {
                 username.slice(0, 1).toUpperCase() || 'U'
               )}
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <p className="text-sm font-medium text-[#1f1a14]">头像</p>
               <label className="inline-flex cursor-pointer items-center rounded-full border border-[#d8d4ca] bg-white px-4 py-2 text-xs font-semibold text-[#1f1a14] hover:bg-[#f7f4ee]">
                 {uploading ? '上传中...' : '上传头像'}
@@ -116,31 +139,47 @@ export default function AccountProfileView() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-xs font-medium text-[#8a8073]">登录账号</label>
-              <Input value={profile.account} disabled />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-xs font-medium text-[#8a8073]">邮箱</label>
-              <Input value={profile.email} disabled />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[#8a8073]">姓名</label>
-              <Input value={username} onChange={(e) => setUsername(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[#8a8073]">绑定手机号</label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="可选" />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-xs font-medium text-[#8a8073]">头像 URL</label>
-              <Input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="可粘贴图片地址" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[#8a8073]">偏好语言</label>
-              <Input value={preferredLocale} onChange={(e) => setPreferredLocale(e.target.value)} />
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2 md:gap-4">
+            <ScrollableField label="登录账号" className="sm:col-span-2">
+              <div className="flex h-9 min-w-0 items-center rounded-md border border-input bg-transparent px-3 text-base opacity-70 md:text-sm">
+                <span className="whitespace-nowrap">{profile.account}</span>
+              </div>
+            </ScrollableField>
+            <ScrollableField label="邮箱" className="sm:col-span-2">
+              <div className="flex h-9 min-w-0 items-center rounded-md border border-input bg-transparent px-3 text-base opacity-70 md:text-sm">
+                <span className="whitespace-nowrap">{profile.email}</span>
+              </div>
+            </ScrollableField>
+            <ScrollableField label="姓名">
+              <Input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={fieldInputClass}
+              />
+            </ScrollableField>
+            <ScrollableField label="绑定手机号">
+              <Input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="可选"
+                className={fieldInputClass}
+              />
+            </ScrollableField>
+            <ScrollableField label="头像 URL" className="sm:col-span-2">
+              <Input
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="可粘贴图片地址"
+                className={fieldInputClass}
+              />
+            </ScrollableField>
+            <ScrollableField label="偏好语言">
+              <Input
+                value={preferredLocale}
+                onChange={(e) => setPreferredLocale(e.target.value)}
+                className={fieldInputClass}
+              />
+            </ScrollableField>
           </div>
 
           <Button
