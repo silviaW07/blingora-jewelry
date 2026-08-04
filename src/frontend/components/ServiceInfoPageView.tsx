@@ -5,7 +5,7 @@ import EditableImg from '@/@base/EditableImg'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
+import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import type { ServicePageConfig } from '@/frontend/content/servicePages'
@@ -20,7 +20,7 @@ export default function ServiceInfoPageView({ config }: Props) {
 
   return (
     <div className="min-h-screen bg-[#FFF5F5] text-[#111111]">
-      <StorefrontStickyHeader />
+      <StorefrontResponsiveHeader />
       <main className="storefront-container py-8">
         <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6">
           <Button

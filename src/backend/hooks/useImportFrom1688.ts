@@ -464,8 +464,9 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     return ','
   }
   const delimiter = detectDelimiter(lines)
-  const expectedColumnCount = 10
-  const priceColumnIndex = 2
+  // 无表头约定 9 列（不含 SKU）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+  const expectedColumnCount = 9
+  const priceColumnIndex = 1
 
   const splitLine = (line: string) => {
     const rawParts = line.split(delimiter).map(value => value.trim())
@@ -488,6 +489,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   const headerCells = splitLine(lines[0]).map(value => value.toLowerCase())
   const headerAliases: Record<string, string[]> = {
     productCode: ['产品编号', '编号', 'product_code', 'product code'],
+    // SKU 仅识别显式表头；位置列回退绝不读取 SKU
     skuCode: ['sku', '货号', 'sku编码'],
     productPrice: ['产品价格', '售价', '价格', 'price'],
     productName: ['名称', '产品名称', '商品名称', 'name'],
@@ -497,6 +499,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     color: ['颜色', 'color'],
     spec: ['规格', '尺码', '尺寸', 'size', 'spec'],
     weight: ['重量', '重量(g)', 'weight'],
+    detail: ['详情', '描述', '商品详情', 'detail', 'description'],
   }
   const indexMap: Record<string, number> = {}
   Object.entries(headerAliases).forEach(([field, aliases]) => {
@@ -506,22 +509,27 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   const hasNamedHeader = Object.keys(indexMap).length >= 2
   const dataLines = hasNamedHeader ? lines.slice(1) : lines
 
+  // 无表头：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量（+ 可选详情）；不含 SKU
   const fallbackIndex: Record<string, number> = {
     productCode: 0,
-    skuCode: 1,
-    productPrice: 2,
-    productName: 3,
-    brand: 4,
-    supplierName: 5,
-    categoryName: 6,
-    color: 7,
-    spec: 8,
-    weight: 9,
+    productPrice: 1,
+    productName: 2,
+    brand: 3,
+    supplierName: 4,
+    categoryName: 5,
+    color: 6,
+    spec: 7,
+    weight: 8,
+    detail: 9,
   }
 
   const rows = dataLines.map((line, index) => {
     const columns = splitLine(line)
     const pick = (field: string) => {
+      if (field === 'skuCode') {
+        if (hasNamedHeader && indexMap.skuCode !== undefined) return columns[indexMap.skuCode] || ''
+        return ''
+      }
       if (hasNamedHeader && indexMap[field] !== undefined) return columns[indexMap[field]] || ''
       const idx = fallbackIndex[field]
       return idx !== undefined ? (columns[idx] || '') : ''
@@ -548,7 +556,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
       weight: pick('weight'),
       costPrice: null,
       imageUrl: '',
-      detail: '',
+      detail: pick('detail'),
     }
   }).filter(row => row.productName || row.productCode || row.skuCode)
 

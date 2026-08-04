@@ -1425,9 +1425,10 @@ function buildDraftSkus(row: BatchImportDraftRow, spuCode?: string): SkuItem[] {
   return combinations.map((attrs, index) => {
     const specValue = attrs.find(attr => attr.name === '规格' || attr.name === '尺码')?.value || row.spec || `SPEC${index + 1}`
     const colorValue = attrs.find(attr => attr.name === '颜色')?.value || row.color || ''
+    // 有 SPU 时始终按 SPU 生成 SKU，忽略表格 sku_code（常被误填为价格）
     const skuCode = spuCode
       ? buildSkuIdentifier(spuCode, specValue, colorValue, index)
-      : (row.sku_code?.trim() || generateUniqueCode('SKU'))
+      : generateUniqueCode('SKU')
     return {
       sku_code: skuCode,
       image_url: imageUrl,

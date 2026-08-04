@@ -49,7 +49,20 @@ const nextConfig = {
         {
           source: '/api/project_pz/getimage',
           destination: 'https://project.autocoder.cc/api/project_pz/getimage'
-        }
+        },
+        // Local dev has no nginx img-proxy — mirror prod proxy so alicdn images render
+        {
+          source: '/img-proxy/cbu01/:path*',
+          destination: 'https://cbu01.alicdn.com/:path*',
+        },
+        {
+          source: '/img-proxy/cbu02/:path*',
+          destination: 'https://cbu02.alicdn.com/:path*',
+        },
+        {
+          source: '/img-proxy/gw/:path*',
+          destination: 'https://gw.alicdn.com/:path*',
+        },
       ]
     }
   }),
@@ -89,13 +102,20 @@ const nextConfig = {
       { protocol: 'https', hostname: 'cbu02.alicdn.com', pathname: '/**' },
       { protocol: 'https', hostname: 'gw.alicdn.com', pathname: '/**' },
       { protocol: 'https', hostname: 'img.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'sc01.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'sc02.alicdn.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'sc04.alicdn.com', pathname: '/**' },
       { protocol: 'https', hostname: 'productp.s3.us-west-2.amazonaws.com', pathname: '/**' },
+      { protocol: 'https', hostname: '**.amazonaws.com', pathname: '/**' },
       { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },
-      { protocol: 'https', hostname: 'sourcingjewelry.com', pathname: '/img-proxy/**' },
+      { protocol: 'https', hostname: 'sourcingjewelry.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'www.sourcingjewelry.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'img.sourcingjewelry.com', pathname: '/**' },
       { protocol: 'https', hostname: 'www.autocoder.cc', pathname: '/**' },
       { protocol: 'https', hostname: 'autocoder.cc', pathname: '/**' },
       { protocol: 'https', hostname: 'project.autocoder.cc', pathname: '/**' },
       { protocol: 'https', hostname: 'pztest.koudingvip.com', pathname: '/**' },
+      { protocol: 'https', hostname: '**.koudingvip.com', pathname: '/**' },
       { protocol: 'http', hostname: '127.0.0.1', pathname: '/**' },
       { protocol: 'http', hostname: 'localhost', pathname: '/**' },
     ],

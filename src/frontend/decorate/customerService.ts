@@ -244,18 +244,45 @@ export function clampFloatPointInViewport(
   }
 }
 
-export function resolveFloatStyle(config: CustomerServiceConfig): CSSProperties {
+/** Mobile viewport: keep FAB bottom-right above bottom nav (ignore mid-screen drag coords). */
+export function isMobileStorefrontViewport(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(max-width: 767px)').matches
+}
+
+/**
+ * On phones, pin to bottom-right above `.mobile-bottom-nav`.
+ * Saved free anchors often place the icon mid-viewport and cover CATEGORIES / filters.
+ */
+export function resolveFloatStyle(
+  config: CustomerServiceConfig,
+  options?: { forceMobileSafe?: boolean },
+): CSSProperties {
   const size = clampFloatSize(config.floatSize)
   const normalized = normalizeCustomerServiceConfig(config)
+  const forceMobileSafe =
+    options?.forceMobileSafe ??
+    (typeof window !== 'undefined' && isMobileStorefrontViewport())
+
   const style: CSSProperties = {
     width: size,
     height: size,
-    zIndex: 60,
+    zIndex: forceMobileSafe ? 90 : 60,
     left: 'auto',
     right: 'auto',
     top: 'auto',
     bottom: 'auto',
     transform: 'none',
+  }
+
+  if (forceMobileSafe) {
+    // Matches CSS: var(--mobile-nav-height) + 16px safe gap
+    style.right = 16
+    style.bottom =
+      'calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 16px)'
+    style.left = 'auto'
+    style.top = 'auto'
+    return style
   }
 
   if (normalized.floatAnchorX === 'left') {

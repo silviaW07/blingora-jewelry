@@ -826,7 +826,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
     <div className="hidden bg-[#FFF5F5] text-[#111111] md:block" data-controller-name="首页独立站陈列布局">
       {/* 第 1 层：Logo / 搜索 + 目录导航 */}
       <section
-        className="border-b border-[#f0dede] bg-[#FFF5F5]"
+        className="storefront-desktop-chrome border-b border-[#f0dede] bg-[#FFF5F5]"
         data-controller-name="顶部品牌导航与搜索区"
       >
         <div className="storefront-container flex flex-col gap-2.5 py-2.5 sm:py-3">

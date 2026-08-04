@@ -90,6 +90,8 @@
     --storefront-max-w: 1440px;
     --storefront-gutter: 1.25rem; /* 20px */
     --storefront-gutter-sm: 0.75rem; /* 12px，<768px */
+    /* Bottom tab bar height — WhatsApp FAB parks above this on mobile */
+    --mobile-nav-height: 3.75rem;
     /* 兼容旧变量名 */
     --site-max-w: var(--storefront-max-w);
     --site-gutter: var(--storefront-gutter);
@@ -1254,13 +1256,23 @@ input:-webkit-autofill:active {
 
 @media (max-width: 767px) {
   .storefront-main-with-mobile-nav {
-    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px) + 0.5rem);
+    padding-bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
 
   .storefront-main-with-mobile-nav + footer,
   footer.site-footer,
   .site-footer {
-    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /*
+   * Desktop storefront chrome must never leak on phones.
+   * Covers sticky header + CATEGORIES mega strip even if a route forgets md:hidden wrappers.
+   * MobileStorefrontHeader uses data-controller-name="移动端统一顶栏" and is NOT hidden.
+   */
+  .storefront-desktop-chrome,
+  [data-controller-name='顶部品牌导航与搜索区'] {
+    display: none !important;
   }
 
   /* Mobile only: hide desktop CATEGORIES + L1 nav — must stay max-width:767 */
@@ -1292,11 +1304,41 @@ input:-webkit-autofill:active {
     font-size: clamp(18px, 5vw, 28px) !important;
   }
 
-  /* Lift WhatsApp float above bottom nav */
-  [data-controller-name='WhatsApp客服浮动按钮'],
-  a[aria-label*='WhatsApp'],
-  .whatsapp-float-root {
-    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  /*
+   * WhatsApp FAB: always bottom-right above bottom nav on mobile.
+   * Clear top/left/transform so saved mid-screen coords cannot stick the button over filters/CATEGORÍAS.
+   * z-index 90 sits under .mobile-bottom-nav (100). Decorate drag mode keeps free placement.
+   */
+  .whatsapp-float-root:not([data-float-drag-mode='1']),
+  a.whatsapp-float-btn[data-controller-name='全站WhatsApp悬浮客服']:not([data-float-drag-mode='1']) {
+    position: fixed !important;
+    top: auto !important;
+    left: auto !important;
+    right: 16px !important;
+    bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+    transform: none !important;
+    z-index: 90 !important;
+  }
+
+  /* Hide FAB when CATEGORIES flyout is open so it cannot cover nav links */
+  body:has(.floating-side-nav.is-open) .whatsapp-float-root,
+  body:has([data-controller-name='顶部目录导航'] [role='menu']) .whatsapp-float-root {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* Category listing shell: denser, closer to mobile home — less desktop card chrome */
+  [data-controller-name='分类页整体布局'] .storefront-container {
+    padding-top: 0.75rem;
+    padding-bottom: 1rem;
+  }
+
+  [data-controller-name='分类页整体布局'] [data-controller-name='商品结果展示区'] > div {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    background: transparent !important;
   }
 }
 

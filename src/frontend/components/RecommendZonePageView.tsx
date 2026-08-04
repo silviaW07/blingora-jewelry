@@ -4,7 +4,7 @@ import React, { useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, Package } from 'lucide-react'
 import { useHome } from '@/frontend/hooks/useHome'
-import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
+import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection'
 
 type RecommendZonePageViewProps = {
@@ -37,7 +37,7 @@ export const RecommendZonePageView = ({ zoneId: zoneIdProp }: RecommendZonePageV
 
   return (
     <div className="min-h-screen bg-[#FFF5F5] text-[#111111]">
-      <StorefrontStickyHeader />
+      <StorefrontResponsiveHeader />
       <main className="storefront-container py-8">
         {state.isLoadingRecommendZones ? (
           <div className="flex items-center justify-center gap-2 rounded-[32px] border border-[#f0dede] bg-white px-6 py-16 text-sm text-[#7a756c] shadow-[0_18px_45px_-36px_rgba(0,0,0,0.28)]">

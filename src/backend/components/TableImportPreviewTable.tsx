@@ -34,7 +34,7 @@ export function TableImportPreviewTable({ rows, onChange, onDelete }: Props) {
         <TableHeader className="bg-secondary/20">
           <TableRow>
             <TableHead className="w-[120px]">产品编号</TableHead>
-            <TableHead className="w-[120px]">SKU</TableHead>
+            <TableHead className="w-[140px]">SKU</TableHead>
             <TableHead className="w-[110px]">产品价格</TableHead>
             <TableHead className="w-[180px]">名称</TableHead>
             <TableHead className="w-[120px]">品牌</TableHead>
@@ -50,7 +50,7 @@ export function TableImportPreviewTable({ rows, onChange, onDelete }: Props) {
           {rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
-                暂无待导入商品。请上传含表头的 Excel/CSV，或粘贴 10 列数据后解析。
+                暂无待导入商品。请上传含表头的 Excel/CSV，或粘贴 9 列数据后解析（产品编号、产品价格、名称…，无 SKU 列）。
               </TableCell>
             </TableRow>
           ) : (
@@ -60,7 +60,11 @@ export function TableImportPreviewTable({ rows, onChange, onDelete }: Props) {
                   <Input value={row.productCode} onChange={e => onChange(row.rowId, 'productCode', e.target.value)} />
                 </TableCell>
                 <TableCell>
-                  <Input value={row.skuCode} onChange={e => onChange(row.rowId, 'skuCode', e.target.value)} />
+                  <Input
+                    value={row.skuCode}
+                    onChange={e => onChange(row.rowId, 'skuCode', e.target.value)}
+                    placeholder={row.productCode ? `自动生成（${row.productCode}…）` : '自动生成（按产品编号）'}
+                  />
                 </TableCell>
                 <TableCell>
                   <Input

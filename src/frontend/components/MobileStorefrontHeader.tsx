@@ -260,10 +260,12 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
 export function StorefrontResponsiveHeader({ isHome }: { isHome?: boolean }) {
   return (
     <>
-      <div className="md:hidden">
+      {/* Phones / small tablets: SOURCING JEWELRY mobile chrome (matches home) */}
+      <div className="md:hidden" data-storefront-chrome="mobile">
         <MobileStorefrontHeader />
       </div>
-      <div className="hidden md:block">
+      {/* Desktop only — also force-hidden by CSS .storefront-desktop-chrome ≤767 */}
+      <div className="hidden md:block" data-storefront-chrome="desktop">
         <StorefrontStickyHeader isHome={isHome} />
       </div>
     </>

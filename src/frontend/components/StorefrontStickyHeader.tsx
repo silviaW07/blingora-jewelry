@@ -332,7 +332,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
 
   return (
     <section
-      className="border-b border-[#f0dede] bg-white"
+      className="storefront-desktop-chrome border-b border-[#f0dede] bg-white"
       data-controller-name="顶部品牌导航与搜索区"
     >
       <div className="storefront-container relative flex flex-col gap-2.5 py-2.5 sm:py-3">

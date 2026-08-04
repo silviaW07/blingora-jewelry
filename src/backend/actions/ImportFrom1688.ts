@@ -4698,8 +4698,9 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
       return ','
     }
     const delimiter = detectDelimiter(lines)
-    const expectedColumnCount = 10
-    const priceColumnIndex = 2
+    // 无表头约定 9 列（不含 SKU）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+    const expectedColumnCount = 9
+    const priceColumnIndex = 1
 
     const splitLine = (line: string) => {
       const rawParts = line.split(delimiter).map(value => value.trim())
@@ -4722,6 +4723,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
     const headerCells = splitLine(lines[0]).map(value => value.toLowerCase())
     const headerAliases: Record<string, string[]> = {
       productCode: ['产品编号', '编号', 'product_code', 'product code'],
+      // SKU 仅识别显式表头；位置列回退绝不读取 SKU，避免把价格误映射进来
       skuCode: ['sku', '货号', 'sku编码'],
       productPrice: ['产品价格', '售价', '价格', 'price'],
       productName: ['名称', '产品名称', '商品名称', 'name'],
@@ -4741,23 +4743,28 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
     const hasNamedHeader = Object.keys(indexMap).length >= 2
     const dataLines = hasNamedHeader ? lines.slice(1) : lines
 
-    // 无表头时按约定 10 列顺序：产品编号、SKU、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+    // 无表头：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量（+ 可选详情）；不含 SKU
     const fallbackIndex: Record<string, number> = {
       productCode: 0,
-      skuCode: 1,
-      productPrice: 2,
-      productName: 3,
-      brand: 4,
-      supplierName: 5,
-      categoryName: 6,
-      color: 7,
-      spec: 8,
-      weight: 9
+      productPrice: 1,
+      productName: 2,
+      brand: 3,
+      supplierName: 4,
+      categoryName: 5,
+      color: 6,
+      spec: 7,
+      weight: 8,
+      detail: 9,
     }
 
     const rows = dataLines.map((line, index) => {
       const columns = splitLine(line)
       const pick = (field: string) => {
+        // SKU：仅当存在显式命名表头时读取，从不走位置回退
+        if (field === 'skuCode') {
+          if (hasNamedHeader && indexMap.skuCode !== undefined) return columns[indexMap.skuCode] || ''
+          return ''
+        }
         if (hasNamedHeader && indexMap[field] !== undefined) return columns[indexMap[field]] || ''
         const idx = fallbackIndex[field]
         return idx !== undefined ? (columns[idx] || '') : ''
@@ -4862,7 +4869,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         spuRows
           .map(row => (Number(row.weight) > 0 ? Math.round(Number(row.weight)) : null))
           .find(value => value != null) ?? null
-      const baseSku = normalizeText(firstRow.skuCode) || normalizeText(productCode)
+      // SKU 编码一律由产品编号（SPU 合并键）生成，不使用表格 skuCode（常被误填为价格）
       const colorList = colors.length > 0 ? colors : [null]
       const specList = specs.length > 0 ? specs : [null]
       const skuTable: PreviewSkuTableRow[] = []
@@ -4870,16 +4877,12 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
 
       for (const color of colorList) {
         for (const spec of specList) {
-          index += 1
           const attributes: Array<{ name: string; value: string }> = []
           if (color) attributes.push({ name: '颜色', value: color })
           if (spec) attributes.push({ name: '规格', value: spec })
-          const suffix = attributes.map(attr => attr.value).join('-')
           const mappedPrice = spec ? (priceBySpec.get(normalizeText(spec)) ?? scalarPrice) : scalarPrice
           skuTable.push({
-            skuKey: baseSku
-              ? (skuTable.length === 0 && colorList.length <= 1 && specList.length <= 1 ? baseSku : `${baseSku}-${suffix || index}`)
-              : `sku-${index}`,
+            skuKey: buildSkuIdentifier(productCode, spec, color, index),
             spec: attributes.map(attr => attr.value).join('/') || '默认规格',
             costPrice: mappedPrice,
             price: mappedPrice,
@@ -4888,6 +4891,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
             imageUrl: '',
             attributes: attributes.length > 0 ? attributes : [{ name: '规格', value: '默认规格' }],
           })
+          index += 1
         }
       }
 

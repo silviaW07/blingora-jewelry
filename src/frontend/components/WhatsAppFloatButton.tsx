@@ -45,6 +45,8 @@ export function WhatsAppFloatButton() {
   } = useDecorateMode()
   const [config, setConfig] = useState<CustomerServiceConfig>(() => readCustomerServiceLocal())
   const [dragOffset, setDragOffset] = useState<{ left: number; top: number } | null>(null)
+  /** When true, pin FAB bottom-right above mobile bottom nav (ignore saved mid-screen coords). */
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const rootRef = useRef<HTMLAnchorElement | null>(null)
   const dragRef = useRef<DragSession | null>(null)
 
@@ -75,6 +77,15 @@ export function WhatsAppFloatButton() {
     dragRef.current = null
   }, [isFloatDragMode])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(max-width: 767px)')
+    const syncViewport = () => setIsMobileViewport(mq.matches)
+    syncViewport()
+    mq.addEventListener('change', syncViewport)
+    return () => mq.removeEventListener('change', syncViewport)
+  }, [])
+
   // 页面加载 / 路由切换时，非装修态一律重新读取后台最新坐标
   useEffect(() => {
     if (isDecorateMode) return
@@ -94,11 +105,16 @@ export function WhatsAppFloatButton() {
 
   const active = isDecorateMode ? draftConfig : config
   const href = useMemo(() => buildWhatsAppUrl(active.whatsappNumber), [active.whatsappNumber])
-  const baseStyle = useMemo(() => resolveFloatStyle(active), [active])
+  // Decorate drag keeps free placement; visitors on mobile always get safe parking
+  const forceMobileSafe = isMobileViewport && !isFloatDragMode
+  const baseStyle = useMemo(
+    () => resolveFloatStyle(active, { forceMobileSafe }),
+    [active, forceMobileSafe],
+  )
   const size = clampFloatSize(active.floatSize || DEFAULT_CUSTOMER_SERVICE_CONFIG.floatSize)
 
   const style = useMemo(() => {
-    if (!dragOffset) return baseStyle
+    if (!dragOffset || forceMobileSafe) return baseStyle
     return {
       ...baseStyle,
       left: dragOffset.left,
@@ -107,7 +123,7 @@ export function WhatsAppFloatButton() {
       bottom: 'auto',
       transform: 'none',
     }
-  }, [baseStyle, dragOffset])
+  }, [baseStyle, dragOffset, forceMobileSafe])
 
   const commitDragPosition = useCallback(async () => {
     const el = rootRef.current
@@ -199,11 +215,14 @@ export function WhatsAppFloatButton() {
       className={`whatsapp-float-btn whatsapp-float-root fixed flex items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_28px_-10px_rgba(37,211,102,0.75)] transition select-none touch-none ${
         isFloatDragMode
           ? 'z-[120] cursor-grab ring-4 ring-[#2563EB]/70 ring-offset-2 active:cursor-grabbing hover:scale-100'
-          : 'hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'
+          : forceMobileSafe
+            ? 'z-[90] hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'
+            : 'z-[60] hover:bg-[#1ebe5d] hover:scale-105 active:scale-95'
       }`}
       style={style}
       data-controller-name="全站WhatsApp悬浮客服"
       data-float-drag-mode={isFloatDragMode ? '1' : '0'}
+      data-mobile-safe={forceMobileSafe ? '1' : '0'}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

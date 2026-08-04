@@ -169,7 +169,7 @@ export const ImportFrom1688View = ({
                     <ClipboardPaste className="w-4 h-4 text-primary" data-api-unique-id='importfrom1688view-rd37286c632c0fb06-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' />
                     表格导入商品
                   </CardTitle>
-                  <CardDescription data-api-unique-id='importfrom1688view-r7bbf29ec6efe974f-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>固定 10 列：产品编号、SKU、产品价格、名称、品牌、供应商、类目、颜色、规格、重量。预览不含图片列；确认后进入待上传区再上传多图。颜色/规格可用逗号分隔。</CardDescription>
+                  <CardDescription data-api-unique-id='importfrom1688view-r7bbf29ec6efe974f-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>固定 9 列（无 SKU）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量。SKU 由系统按产品编号自动生成；仅当表头含 sku/货号/sku编码 时才读取表格 SKU 作参考。预览不含图片列；确认后进入待上传区再上传多图。颜色/规格可用逗号分隔。</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6" data-api-unique-id='importfrom1688view-r1e23403c172d8136-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4" data-controller-name="表格导入来源入口" data-api-unique-id='importfrom1688view-r92f4322b74036c38-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>

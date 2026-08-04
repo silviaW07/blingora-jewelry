@@ -414,6 +414,8 @@ const BATCH_IMPORT_HEADER_ALIASES: Record<keyof BatchImportRowInput, string[]> =
 const mapColsToImportRow = (cols: string[], indexMap?: Partial<Record<keyof BatchImportRowInput, number>>): BatchImportRowInput => {
   const pick = (field: keyof BatchImportRowInput, fallbackIndex?: number) => {
     if (indexMap && indexMap[field] !== undefined) return cols[indexMap[field]!] || ''
+    // sku_code 无位置回退：仅表头显式匹配（sku/货号/sku编码）时读取，避免把价格列误当 SKU
+    if (field === 'sku_code') return ''
     if (fallbackIndex !== undefined) return cols[fallbackIndex] || ''
     return ''
   }
