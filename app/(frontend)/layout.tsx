@@ -37,12 +37,12 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   const showPromotionBanner = !isFullscreen && !isCheckoutPage
 
   return (
-    <FrontendAuthGuard>
-      <I18nProvider>
-        <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col">
-          <AuthExpiredDialog />
-          <Suspense fallback={null}>
-            <CustomerAuthModalProvider>
+    <I18nProvider>
+      <Suspense fallback={null}>
+        <CustomerAuthModalProvider>
+          <FrontendAuthGuard>
+            <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col">
+              <AuthExpiredDialog />
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
@@ -54,10 +54,10 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               </DecorateModeProvider>
               <CustomerAuthModal />
               <CustomerAuthModalDecorateBridge />
-            </CustomerAuthModalProvider>
-          </Suspense>
-        </div>
-      </I18nProvider>
-    </FrontendAuthGuard>
+            </div>
+          </FrontendAuthGuard>
+        </CustomerAuthModalProvider>
+      </Suspense>
+    </I18nProvider>
   )
 }

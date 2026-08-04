@@ -1,34 +1,70 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useUserSession } from '@/tools/FrontendSession';
+import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 
+const ACCOUNT_AUTH_PATHS = ['/account', '/accountcenter', '/ordercenter'] as const;
+const LOGIN_PAGE_PATHS = ['/cart'] as const;
+
+function pathNeedsAuth(pathname: string, prefixes: readonly string[]) {
+  return prefixes.some((prefix) => pathname.includes(prefix));
+}
+
+/**
+ * Protects storefront routes that require a customer session.
+ * Account-related paths open the shared login/register modal (mobile + desktop)
+ * instead of hard-navigating to /customerlogin.
+ */
 export default function FrontendAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const session = useUserSession();
-  const need_auth = ['/cart', '/account', '/accountcenter', '/ordercenter'];
+  const authModal = useOptionalCustomerAuthModal();
+  const openAuthModal = authModal?.openAuthModal;
+  const accountRedirectLock = useRef(false);
 
   useEffect(() => {
     if (!session._hasHydrated) return;
-    if (!session?.token) {
-      let has_need_auth = false;
-      for (const need_auth_path of need_auth) {
-        if (pathname.includes(need_auth_path)) {
-          has_need_auth = true;
-          break;
-        }
+
+    const token = session.token?.trim();
+    if (token) {
+      accountRedirectLock.current = false;
+      return;
+    }
+
+    const currentPath = pathname || '/';
+    const isAccountPath = pathNeedsAuth(currentPath, ACCOUNT_AUTH_PATHS);
+
+    if (!isAccountPath) {
+      accountRedirectLock.current = false;
+    }
+
+    if (isAccountPath) {
+      if (accountRedirectLock.current) return;
+      accountRedirectLock.current = true;
+
+      if (openAuthModal) {
+        openAuthModal('login');
+        router.replace('/');
+        return;
       }
-      if(!has_need_auth) return;
-      const redirect = encodeURIComponent(pathname || '/');
-      if (pathname.includes('/customerlogin')) {
-          router.replace(`/customerlogin`);
-          return;
+
+      const redirect = encodeURIComponent(currentPath);
+      router.replace(`/customerlogin?redirect=${redirect}`);
+      return;
+    }
+
+    if (pathNeedsAuth(currentPath, LOGIN_PAGE_PATHS)) {
+      const redirect = encodeURIComponent(currentPath);
+      if (currentPath.includes('/customerlogin')) {
+        router.replace(`/customerlogin`);
+        return;
       }
       router.replace(`/customerlogin?redirect=${redirect}`);
     }
-  }, [pathname, router, session]);
+  }, [pathname, router, session._hasHydrated, session.token, openAuthModal]);
 
   return children;
 }
