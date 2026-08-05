@@ -3452,6 +3452,7 @@ export const check1688OfferLiveStatus = async (sourceUrl: string): Promise<Check
 }
 
 /** 回填仍使用占位标题/主图，或仍残留旧版假红蓝黑 SKU 的待上传条目 */
+/** Optional 1688 network backfill — MUST NOT run on read/list RPCs (P0). Kept for future explicit maintenance RPC. */
 const backfillPendingImportOriginalMeta = async (limit = 6) => {
   const candidates = await prisma.importtaskitem.findMany({
     where: {
@@ -4730,6 +4731,29 @@ export const getImportTaskDetail = requireRole([UserRole.ADMIN])(
 let lastPendingQueueMaintenanceAt = 0
 const PENDING_QUEUE_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000
 
+/** In-process mutex: only one 1688/PDD parse job (startParseTask or reparse) at a time. */
+let parseJobBusy = false
+let parseJobLabel: string | null = null
+
+const acquireParseJob = (label: string) => {
+  if (parseJobBusy) {
+    throw new Error(
+      parseJobLabel
+        ? `已有解析任务进行中（${parseJobLabel}），请等待完成后再试`
+        : '已有解析任务进行中，请等待完成后再试',
+    )
+  }
+  parseJobBusy = true
+  parseJobLabel = label
+}
+
+const releaseParseJob = (label: string) => {
+  if (parseJobLabel === label || !parseJobLabel) {
+    parseJobBusy = false
+    parseJobLabel = null
+  }
+}
+
 export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
   withResult(async (input?: GetPendingImportQueueInput): Promise<GetPendingImportQueueOutput> => {
     const page = Math.max(1, Number(input?.page) || 1)
@@ -4751,6 +4775,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
 
     if (dueMaintenance) {
       lastPendingQueueMaintenanceAt = Date.now()
+      // P0: read paths may only run lightweight DB-only repairs — never network 1688 fetch.
       try {
         const repairedCount = await repairCharsetCorruptedPendingImportItems()
         if (repairedCount > 0) {
@@ -4767,15 +4792,6 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
         }
       } catch (error) {
         console.error('[getPendingImportQueue] failed to sanitize classic mock SKUs', error)
-      }
-
-      try {
-        const backfilledCount = await backfillPendingImportOriginalMeta(6)
-        if (backfilledCount > 0) {
-          console.info(`[getPendingImportQueue] backfilled ${backfilledCount} original 1688 titles/images`)
-        }
-      } catch (error) {
-        console.error('[getPendingImportQueue] failed to backfill original 1688 meta', error)
       }
 
       try {
@@ -5450,31 +5466,46 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       // ignore charset bootstrap failure; URL charset remains the primary guarantee
     }
 
-    const task = await prisma.importtask.findUnique({
-      where: { id: input.taskId },
-      include: { items: { orderBy: { createdAt: 'asc' } } }
-    })
+    const jobLabel = `task:${input.taskId}`
+    acquireParseJob(jobLabel)
 
-    if (!task) throw new Error('未找到该导入任务')
-    if (!['PENDING', 'RETRY_PENDING', 'RATE_LIMITED'].includes(task.status)) throw new Error('当前任务状态不允许开始解析')
+    let task: any = null
+    try {
+      task = await prisma.importtask.findUnique({
+        where: { id: input.taskId },
+        include: { items: { orderBy: { createdAt: 'asc' } } }
+      })
 
-    const startedAt = new Date()
-    await prisma.importtask.update({
-      where: { id: task.id },
-      data: { status: 'RUNNING', startedAt, finishedAt: null }
-    })
+      if (!task) throw new Error('未找到该导入任务')
+      if (!['PENDING', 'RETRY_PENDING', 'RATE_LIMITED'].includes(task.status)) {
+        throw new Error('当前任务状态不允许开始解析')
+      }
 
+      const startedAt = new Date()
+      await prisma.importtask.update({
+        where: { id: task.id },
+        data: { status: 'RUNNING', startedAt, finishedAt: null }
+      })
+    } catch (error) {
+      releaseParseJob(jobLabel)
+      throw error
+    }
+
+    // P0: ACK immediately after marking RUNNING; URL parsing continues in-process.
+    // UI must poll importtask / importtaskitem status (do not assume this RPC waits for completion).
+    const taskSnapshot = task!
+    void (async () => {
     let successCount = 0
     let failureCount = 0
     let rateLimitedCount = 0
-    const costDeductionUsd = task.markupRate ? Number(task.markupRate) : 0
-    const { minDelaySec, maxDelaySec } = getTaskDelayWindow(task)
+    const costDeductionUsd = taskSnapshot.markupRate ? Number(taskSnapshot.markupRate) : 0
+    const { minDelaySec, maxDelaySec } = getTaskDelayWindow(taskSnapshot as any)
     const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
     const categoryMap = await loadImportPricingCategories(prisma)
     const exchangeRate = await getGlobalExchangeRate(prisma)
 
-    for (let index = 0; index < task.items.length; index += 1) {
-      const item = task.items[index]
+    for (let index = 0; index < taskSnapshot.items.length; index += 1) {
+      const item = taskSnapshot.items[index]
       const fetchStartedAt = new Date()
 
       await prisma.importtaskitem.update({
@@ -5509,7 +5540,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             }
           })
           await prisma.importtask.update({
-            where: { id: task.id },
+            where: { id: taskSnapshot.id },
             data: { lastRateLimitedAt: now }
           })
         } else if (isPddUrl) {
@@ -5538,7 +5569,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             successCount += 1
             await persistPinduoduoParsedItem({
               item,
-              task,
+              task: taskSnapshot as any,
               fetched,
               secondaryCategories,
               categoryMap,
@@ -5619,7 +5650,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           )
           const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
           const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
-          const targetCategoryId = matchedSecondaryCategoryIds[0] || task.defaultCategoryId || null
+          const targetCategoryId = matchedSecondaryCategoryIds[0] || taskSnapshot.defaultCategoryId || null
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
           const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd))
           const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd))
@@ -5640,7 +5671,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
           const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : []
           const strategyStock =
-            toNumberOrNull((task.stockStrategyJson as StockStrategyJson | null)?.stock) ?? 100
+            toNumberOrNull((taskSnapshot.stockStrategyJson as StockStrategyJson | null)?.stock) ?? 100
           // 有颜色时展开真实色/码 SKU；仅当真正无 props 时才落 1 条「默认规格」
           const colorsEarly =
             Array.isArray(fetched.colors) && fetched.colors.length > 0
@@ -5793,7 +5824,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? 500,
               sourceCategoryName,
               coefficient: resolvedCoefficient,
-              goodsStatus: (task.defaultStatus || 'DRAFT') as any,
+              goodsStatus: (taskSnapshot.defaultStatus || 'DRAFT') as any,
               productDetail,
               skuSummaryText: skuTable.map(sku => sku.spec).filter(Boolean).join(' | ') || '默认规格',
               cnyPriceMin: resolvedFinalPriceMin,
@@ -5827,9 +5858,9 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       }
 
       const processedCount = index + 1
-      const progressPercent = Math.min(100, Math.round((processedCount / task.items.length) * 100))
+      const progressPercent = Math.min(100, Math.round((processedCount / taskSnapshot.items.length) * 100))
       await prisma.importtask.update({
-        where: { id: task.id },
+        where: { id: taskSnapshot.id },
         data: {
           successCount,
           failureCount: failureCount + rateLimitedCount,
@@ -5838,7 +5869,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
         }
       })
 
-      if (index < task.items.length - 1) {
+      if (index < taskSnapshot.items.length - 1) {
         await sleep(randomDelayMs(minDelaySec, maxDelaySec))
       }
     }
@@ -5853,7 +5884,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
     }
 
     await prisma.importtask.update({
-      where: { id: task.id },
+      where: { id: taskSnapshot.id },
       data: {
         status: finalStatus as any,
         successCount,
@@ -5861,6 +5892,33 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
         progressPercent: 100,
         finishedAt
       }
+    })
+    })().catch(async (error: any) => {
+      console.error('[startParseTask] background parse failed', error)
+      try {
+        await prisma.importtaskitem.updateMany({
+          where: {
+            importTaskId: taskSnapshot.id,
+            fetchStatus: { in: ['PENDING', 'RUNNING'] as any },
+          },
+          data: {
+            fetchStatus: 'FAILED' as any,
+            failureReason: `解析失败：${error?.message || '后台解析异常中断'}`,
+            fetchFinishedAt: new Date(),
+          },
+        })
+        await prisma.importtask.update({
+          where: { id: taskSnapshot.id },
+          data: {
+            status: 'FAILED' as any,
+            finishedAt: new Date(),
+          },
+        })
+      } catch (persistError) {
+        console.error('[startParseTask] failed to persist background error status', persistError)
+      }
+    }).finally(() => {
+      releaseParseJob(jobLabel)
     })
   })
 )
@@ -6697,194 +6755,201 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
       throw new Error('请至少选择一条待重新解析的商品')
     }
 
+    const jobLabel = `reparse:${input.itemIds.length}`
+    acquireParseJob(jobLabel)
+
     try {
-      await prisma.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
-    } catch {
-      // ignore charset bootstrap failure
-    }
-
-    const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
-    const categoryMap = await loadImportPricingCategories(prisma)
-    const exchangeRate = await getGlobalExchangeRate(prisma)
-
-    let success = 0
-    let fail = 0
-    const results: ReparsePendingImportItemResult[] = []
-
-    for (let index = 0; index < input.itemIds.length; index += 1) {
-      const itemId = input.itemIds[index]
-      let displayName = itemId
-
       try {
-        const item = await prisma.importtaskitem.findUnique({
-          where: { id: itemId },
-          include: { importTask: true },
-        })
+        await prisma.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
+      } catch {
+        // ignore charset bootstrap failure
+      }
 
-        if (!item) {
-          fail += 1
-          results.push({ itemId, success: false, name: itemId, reason: '待上传明细不存在' })
-          continue
-        }
+      const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
+      const categoryMap = await loadImportPricingCategories(prisma)
+      const exchangeRate = await getGlobalExchangeRate(prisma)
 
-        displayName =
-          normalizeText(item.parsedName) ||
-          normalizeText(item.sourceUrl) ||
-          itemId
+      let success = 0
+      let fail = 0
+      const results: ReparsePendingImportItemResult[] = []
 
-        if (item.isPublished || item.importedProductId) {
-          fail += 1
-          results.push({ itemId, success: false, name: displayName, reason: '该商品已发布，无法重新解析' })
-          continue
-        }
+      for (let index = 0; index < input.itemIds.length; index += 1) {
+        const itemId = input.itemIds[index]
+        let displayName = itemId
 
-        if (isTableImportSourceUrl(item.sourceUrl)) {
-          fail += 1
-          results.push({
-            itemId,
-            success: false,
-            name: displayName,
-            reason: '表格导入条目不支持重新解析，请直接编辑字段或删除后重新导入',
+        try {
+          const item = await prisma.importtaskitem.findUnique({
+            where: { id: itemId },
+            include: { importTask: true },
           })
-          continue
-        }
 
-        const sourceUrl = normalizeText(item.sourceUrl)
-        const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
-        const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
-        if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {
-          fail += 1
-          results.push({
-            itemId,
-            success: false,
-            name: displayName,
-            reason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
+          if (!item) {
+            fail += 1
+            results.push({ itemId, success: false, name: itemId, reason: '待上传明细不存在' })
+            continue
+          }
+
+          displayName =
+            normalizeText(item.parsedName) ||
+            normalizeText(item.sourceUrl) ||
+            itemId
+
+          if (item.isPublished || item.importedProductId) {
+            fail += 1
+            results.push({ itemId, success: false, name: displayName, reason: '该商品已发布，无法重新解析' })
+            continue
+          }
+
+          if (isTableImportSourceUrl(item.sourceUrl)) {
+            fail += 1
+            results.push({
+              itemId,
+              success: false,
+              name: displayName,
+              reason: '表格导入条目不支持重新解析，请直接编辑字段或删除后重新导入',
+            })
+            continue
+          }
+
+          const sourceUrl = normalizeText(item.sourceUrl)
+          const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
+          const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
+          if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {
+            fail += 1
+            results.push({
+              itemId,
+              success: false,
+              name: displayName,
+              reason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
+            })
+            continue
+          }
+
+          await prisma.importtaskitem.update({
+            where: { id: item.id },
+            data: {
+              fetchStatus: 'RUNNING' as any,
+              fetchStartedAt: new Date(),
+              fetchFinishedAt: null,
+              failureReason: null,
+            },
           })
-          continue
-        }
 
-        await prisma.importtaskitem.update({
-          where: { id: item.id },
-          data: {
-            fetchStatus: 'RUNNING' as any,
-            fetchStartedAt: new Date(),
-            fetchFinishedAt: null,
-            failureReason: null,
-          },
-        })
+          if (isPddUrl) {
+            const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
+            const fetched = fetchResult.preview
+            const hasRealParse =
+              fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
+            if (!hasRealParse) {
+              const reason =
+                fetchResult.outcome === 'expired'
+                  ? '该拼多多商品已下架或不存在'
+                  : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试'
+              await prisma.importtaskitem.update({
+                where: { id: item.id },
+                data: {
+                  fetchStatus: 'FAILED' as any,
+                  failureReason: reason,
+                  fetchFinishedAt: new Date(),
+                },
+              })
+              fail += 1
+              results.push({ itemId, success: false, name: displayName, reason })
+            } else {
+              const applied = await persistPinduoduoParsedItem({
+                item,
+                task: item.importTask as any,
+                fetched,
+                secondaryCategories,
+                categoryMap,
+                exchangeRate,
+              })
+              success += 1
+              results.push({ itemId, success: true, name: applied.productName })
+              displayName = applied.productName
+            }
+            continue
+          }
 
-        if (isPddUrl) {
-          const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
+          const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
           const fetched = fetchResult.preview
-          const hasRealParse =
-            fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
+          const hasRealParse = Boolean(
+            fetched.name ||
+            fetched.mainImageUrl ||
+            (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
+          )
+
           if (!hasRealParse) {
-            const reason =
-              fetchResult.outcome === 'expired'
-                ? '该拼多多商品已下架或不存在'
-                : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试'
+            const reason = resolveFetchFailureReason(fetchResult)
             await prisma.importtaskitem.update({
               where: { id: item.id },
               data: {
                 fetchStatus: 'FAILED' as any,
                 failureReason: reason,
                 fetchFinishedAt: new Date(),
+                // 清掉旧版演示 SKU，避免运营误当真规格
+                ...(isClassicMock1688SkuSummary(item.skuSummaryText) ||
+                isClassicMock1688SkuTable(((item.previewDataJson || {}) as PreviewDataJson).skuTable)
+                  ? {
+                      skuSummaryText: '默认规格',
+                      specSummaryJson: [{ name: '规格', values: ['默认规格'] }] as any,
+                      previewDataJson: {
+                        ...((item.previewDataJson || {}) as PreviewDataJson),
+                        colors: [],
+                        sizesByColor: {},
+                        skuTable: [
+                          buildNeutralFallbackSkuRow({
+                            costPrice: toNumberOrNull(item.costPrice) ?? 50,
+                            price: toNumberOrNull(item.costPrice) ?? 50,
+                            stock: toNumberOrNull(item.availableStock) ?? 100,
+                          }),
+                        ],
+                      } as any,
+                    }
+                  : {}),
               },
             })
             fail += 1
             results.push({ itemId, success: false, name: displayName, reason })
           } else {
-            const applied = await persistPinduoduoParsedItem({
-              item,
-              task: item.importTask as any,
+            const applied = await applyReparsed1688PreviewToItem({
+              item: item as any,
               fetched,
-              secondaryCategories,
               categoryMap,
+              secondaryCategories,
               exchangeRate,
             })
             success += 1
-            results.push({ itemId, success: true, name: applied.productName })
+            results.push({
+              itemId,
+              success: true,
+              name: applied.productName,
+            })
             displayName = applied.productName
           }
-          continue
-        }
-
-        const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
-        const fetched = fetchResult.preview
-        const hasRealParse = Boolean(
-          fetched.name ||
-          fetched.mainImageUrl ||
-          (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
-        )
-
-        if (!hasRealParse) {
-          const reason = resolveFetchFailureReason(fetchResult)
+        } catch (error: any) {
+          fail += 1
+          const reason = `重新解析失败：${error?.message || '抓取过程中发生未知错误'}`
+          results.push({ itemId, success: false, name: displayName, reason })
           await prisma.importtaskitem.update({
-            where: { id: item.id },
+            where: { id: itemId },
             data: {
               fetchStatus: 'FAILED' as any,
               failureReason: reason,
               fetchFinishedAt: new Date(),
-              // 清掉旧版演示 SKU，避免运营误当真规格
-              ...(isClassicMock1688SkuSummary(item.skuSummaryText) ||
-              isClassicMock1688SkuTable(((item.previewDataJson || {}) as PreviewDataJson).skuTable)
-                ? {
-                    skuSummaryText: '默认规格',
-                    specSummaryJson: [{ name: '规格', values: ['默认规格'] }] as any,
-                    previewDataJson: {
-                      ...((item.previewDataJson || {}) as PreviewDataJson),
-                      colors: [],
-                      sizesByColor: {},
-                      skuTable: [
-                        buildNeutralFallbackSkuRow({
-                          costPrice: toNumberOrNull(item.costPrice) ?? 50,
-                          price: toNumberOrNull(item.costPrice) ?? 50,
-                          stock: toNumberOrNull(item.availableStock) ?? 100,
-                        }),
-                      ],
-                    } as any,
-                  }
-                : {}),
             },
-          })
-          fail += 1
-          results.push({ itemId, success: false, name: displayName, reason })
-        } else {
-          const applied = await applyReparsed1688PreviewToItem({
-            item: item as any,
-            fetched,
-            categoryMap,
-            secondaryCategories,
-            exchangeRate,
-          })
-          success += 1
-          results.push({
-            itemId,
-            success: true,
-            name: applied.productName,
-          })
-          displayName = applied.productName
+          }).catch(() => undefined)
         }
-      } catch (error: any) {
-        fail += 1
-        const reason = `重新解析失败：${error?.message || '抓取过程中发生未知错误'}`
-        results.push({ itemId, success: false, name: displayName, reason })
-        await prisma.importtaskitem.update({
-          where: { id: itemId },
-          data: {
-            fetchStatus: 'FAILED' as any,
-            failureReason: reason,
-            fetchFinishedAt: new Date(),
-          },
-        }).catch(() => undefined)
+
+        if (index < input.itemIds.length - 1) {
+          await sleep(900)
+        }
       }
 
-      if (index < input.itemIds.length - 1) {
-        await sleep(900)
-      }
+      return { success_count: success, fail_count: fail, results }
+    } finally {
+      releaseParseJob(jobLabel)
     }
-
-    return { success_count: success, fail_count: fail, results }
   })
 )
 

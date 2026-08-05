@@ -1090,7 +1090,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const result = await getPendingImportQueue({
         page: 1,
         page_size: 80,
-        skip_maintenance: silent,
+        // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
+        skip_maintenance: true,
       } as any)
       applyPendingImportQueueResult(result)
       setPendingImportQueueError(null)

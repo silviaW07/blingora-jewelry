@@ -13,6 +13,12 @@ import { useAdminSession } from './BackendSession';
 const PROJECT_ID =
   process.env.NEXT_PUBLIC_PROJECT_ID || 'PROJ_fcb9e6ee_snap_20260726_092922_893';
 
+/** Default AbortController timeout for RPC fetch (ms). Override via rpcCallTimed / __rpcTimeoutMs. */
+export const RPC_DEFAULT_TIMEOUT_MS = 25_000;
+
+const TIMEOUT_ERROR_MESSAGE = (timeoutMs: number) =>
+  `请求超时（${Math.round(timeoutMs / 1000)}秒），请稍后重试`;
+
 // 本地：直连 RPC 后端；经隧道访问时走同源 /rpc（由 next rewrites 转发到 3100）
 const getApiUrl = () => {
   if (typeof window !== 'undefined') {
@@ -115,12 +121,59 @@ function getCurrentRole(actionName: string): string | undefined {
   return undefined;
 }
 
-export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T> {
+/** Strip optional trailing `{ __rpcTimeoutMs }` override bag from business args. */
+function takeTimeoutMs(args: any[]): { businessArgs: any[]; timeoutMs: number } {
+  if (args.length === 0) {
+    return { businessArgs: args, timeoutMs: RPC_DEFAULT_TIMEOUT_MS };
+  }
+  const last = args[args.length - 1];
+  if (
+    last &&
+    typeof last === 'object' &&
+    !Array.isArray(last) &&
+    Object.prototype.hasOwnProperty.call(last, '__rpcTimeoutMs')
+  ) {
+    const raw = Number((last as { __rpcTimeoutMs?: unknown }).__rpcTimeoutMs);
+    return {
+      businessArgs: args.slice(0, -1),
+      timeoutMs: Number.isFinite(raw) && raw > 0 ? raw : RPC_DEFAULT_TIMEOUT_MS,
+    };
+  }
+  return { businessArgs: args, timeoutMs: RPC_DEFAULT_TIMEOUT_MS };
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error: any) {
+    if (
+      error?.name === 'AbortError' ||
+      /aborted|AbortError/i.test(String(error?.message || ''))
+    ) {
+      throw new Error(TIMEOUT_ERROR_MESSAGE(timeoutMs));
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function rpcCallInternal<T>(
+  actionName: string,
+  businessArgs: any[],
+  timeoutMs: number,
+): Promise<T> {
   const rpcAuth = getRpcAuthModule(actionName);
   const token = rpcAuth.getToken();
 
   // 请求去重：相同请求并发时复用同一个 Promise
-  const dedupeKey = `${actionName}:${JSON.stringify(args)}`;
+  const dedupeKey = `${actionName}:${JSON.stringify(businessArgs)}:t${timeoutMs}`;
   if (pendingRequests.has(dedupeKey)) {
     return pendingRequests.get(dedupeKey)!;
   }
@@ -154,14 +207,21 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
         },
         body: JSON.stringify({
           actionName,
-          args: serializer.serialize(args)
+          args: serializer.serialize(businessArgs)
         }),
       };
 
       let resp: Response;
       try {
-        resp = await fetch(apiUrl, fetchOptions);
+        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
       } catch (networkError: any) {
+        const msg = String(networkError?.message || '');
+        if (/请求超时/.test(msg)) {
+          if (!shouldSilentServerError(actionName)) {
+            toast.error(msg, { id: 'rpc-timeout-error' });
+          }
+          throw networkError instanceof Error ? networkError : new Error(msg);
+        }
         const connectMsg =
           '无法连接后台 RPC（Failed to fetch）。请确认进程在线：pnpm run build:server && pm2 restart rpc（本地默认 :3100）';
         if (!shouldSilentServerError(actionName)) {
@@ -173,7 +233,7 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
       // 503 服务过载：延迟 0.5 秒重试 1 次，失败就放弃
       if (resp.status === 503) {
         await new Promise(r => setTimeout(r, 500));
-        resp = await fetch(apiUrl, fetchOptions);
+        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
         if (resp.status === 503) {
           if (!shouldSilentServerError(actionName)) {
             toast.error(ERROR_MESSAGES.SERVER_ERROR, { id: 'rpc-server-error' });
@@ -189,16 +249,14 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
         !/(loginCustomer|registerCustomer|checkEmailUnique)/i.test(actionLeafName(actionName))
       ) {
         await new Promise(r => setTimeout(r, 400));
-        resp = await fetch(apiUrl, fetchOptions);
+        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
       }
 
-      // 401 统一拦截
+      // 401 统一拦截 — reject so callers leave loading state (do not hang forever)
       if (resp.status === 401) {
         rpcAuth.handleUnauthorized();
         toast.error('Please login first', { id: 'auth-401' });
-        // 不 throw，返回一个永远不 resolve 的 Promise
-        // 这样上层 catch 不会触发，避免重复 toast
-        return new Promise<T>(() => {});
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 
       // 403 权限不足
@@ -274,4 +332,19 @@ export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T>
 
   pendingRequests.set(dedupeKey, request);
   return request;
+}
+
+export async function rpcCall<T>(actionName: string, ...args: any[]): Promise<T> {
+  const { businessArgs, timeoutMs } = takeTimeoutMs(args);
+  return rpcCallInternal<T>(actionName, businessArgs, timeoutMs);
+}
+
+/** Same as rpcCall but with an explicit AbortController timeout (ms). */
+export async function rpcCallTimed<T>(
+  timeoutMs: number,
+  actionName: string,
+  ...args: any[]
+): Promise<T> {
+  const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : RPC_DEFAULT_TIMEOUT_MS;
+  return rpcCallInternal<T>(actionName, args, ms);
 }

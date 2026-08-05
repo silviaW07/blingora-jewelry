@@ -1063,6 +1063,7 @@ export const useImportFrom1688 = (
       setParseWatchTaskId(res.taskId)
 
       try {
+        // ACK only — parse continues in background; polling effect watches task/item status
         await startParseTask({ taskId: res.taskId })
       } catch (parseError) {
         // 请求超时不代表服务端已停止；继续轮询待上传区，由最终状态决定提示
@@ -1071,8 +1072,7 @@ export const useImportFrom1688 = (
 
       if (embedded) {
         onTaskCreatedRef.current?.(res.taskId)
-        setIsParsingTask(false)
-        setParseWatchTaskId(null)
+        // Keep parseWatchTaskId so parent/poll can observe RUNNING → done
         return
       }
 
@@ -1331,7 +1331,11 @@ export const useImportFrom1688 = (
           item => `${item.name || item.itemId}：${formatPublishFailureReason(item.reason)}`,
         )
         if (details.length === 0) {
-          const latest = await getPendingImportQueue()
+          const latest = await getPendingImportQueue({
+            page: 1,
+            page_size: 80,
+            skip_maintenance: true,
+          } as any)
           const failed = latest.list.filter(
             item => selectedItemIds.includes(item.item_id) && item.item_publishStatus === 'FAILED',
           )
