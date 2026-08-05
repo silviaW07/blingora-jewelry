@@ -1827,6 +1827,9 @@ input:-webkit-autofill:active {
   --mobile-zone-gap: 0.5rem;
   --mobile-text: #4a4a4a;
   --mobile-text-strong: #333333;
+  --mobile-text-dark: #1a1a1a; /* chips + zone titles */
+  --mobile-text-mid: #666666; /* product / zone item names */
+  --mobile-text-soft: #888888; /* small helper copy */
   font-size: var(--mobile-fs);
   line-height: 1.35;
   color: var(--mobile-text);
@@ -1953,15 +1956,21 @@ input:-webkit-autofill:active {
   }
 }
 
-/* ----- Mobile only (<768): 2×2 grid, 32px icons, compact horizontal cards ----- */
+/* ----- Mobile only (<768): centered 2×2 flex, 32px icons, compact horizontal cards ----- */
 @media (max-width: 767px) {
   .home-service-cards {
-    grid-template-columns: repeat(2, 1fr);
-    align-items: start;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
     gap: 10px;
   }
 
+  /* max-width caps the flex base size so exactly two narrow cards fit per row */
   .home-service-card-cell {
+    flex: 0 1 auto;
+    width: 100%;
+    max-width: min(160px, calc(50% - 5px));
     height: auto;
   }
 
@@ -2023,7 +2032,7 @@ input:-webkit-autofill:active {
   .home-service-card__desc {
     font-size: 0.625rem;
     line-height: 1.35;
-    color: var(--mobile-text, #4a4a4a);
+    color: var(--mobile-text-soft, #888888);
   }
 }
 
@@ -2170,6 +2179,9 @@ input:-webkit-autofill:active {
     --mobile-fs: 0.8125rem;
     --mobile-text: #4a4a4a;
     --mobile-text-strong: #333333;
+    --mobile-text-dark: #1a1a1a;
+    --mobile-text-mid: #666666;
+    --mobile-text-soft: #888888;
     font-size: var(--mobile-fs);
     color: var(--mobile-text);
   }
@@ -2261,8 +2273,26 @@ input:-webkit-autofill:active {
     line-height: 1.3 !important;
   }
 
+  /* ----- Mobile grayscale tiering -----
+   dark = nav chips + zone titles, mid = item names, soft = helper copy.
+   Accents (active pink chip, banner white, dark CTA) stay untouched.
+  */
+  .mobile-home__chip:not([data-active='true']) {
+    color: var(--mobile-text-dark, #1a1a1a);
+  }
+
+  .home-zone-section__title--mobile {
+    color: var(--mobile-text-dark, #1a1a1a) !important;
+  }
+
   .mobile-zone-squircle__label {
     font-size: 0.75rem !important;
+    color: var(--mobile-text-mid, #666666) !important;
+  }
+
+  .mobile-home .storefront-product-grid h3,
+  .mobile-home .home-product-card h3 {
+    color: var(--mobile-text-mid, #666666) !important;
   }
 
   /* Mobile cart: compact left-thumb + right meta */

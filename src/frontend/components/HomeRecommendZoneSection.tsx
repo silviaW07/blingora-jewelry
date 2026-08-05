@@ -422,7 +422,7 @@ export const HomeRecommendZoneSection = ({
             as={HeadingTag}
             className={cn(
               isMobileSquircle
-                ? 'text-[0.875rem] font-semibold tracking-[0.02em] text-[#3a322a]'
+                ? 'home-zone-section__title--mobile text-[0.875rem] font-semibold tracking-[0.02em] text-[#3a322a]'
                 : cn(
                     headingAs === 'h1' ? 'text-[34px]' : 'text-[28px]',
                     'font-semibold tracking-[0.02em] text-[#4a4137]',
