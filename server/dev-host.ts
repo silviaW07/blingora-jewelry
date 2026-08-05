@@ -4,6 +4,16 @@ import path from 'path'
 import fs from 'fs'
 import express from 'express'
 import cors from 'cors'
+import dotenv from 'dotenv'
+
+// PM2 / systemd start this without a shell profile, so DATABASE_URL must come
+// from the project .env instead of the parent environment.
+for (const envFile of ['.env.local', '.env']) {
+  const envPath = path.resolve(__dirname, '..', envFile)
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath })
+  }
+}
 
 // ⚠️ 必须在 require PROJ_*.js 之前设置引擎路径，
 // 因为 _common.js 里打包了 PrismaClient，require 时就会尝试加载引擎
