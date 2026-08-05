@@ -1208,9 +1208,12 @@ export const useImportFrom1688 = (
         const result = await upload_project_file(file)
         const url = typeof result === 'string'
           ? result.trim()
-          : String((result as { file_url?: string; image_url?: string })?.file_url
-            || (result as { file_url?: string; image_url?: string })?.image_url
-            || '').trim()
+          : String(
+            (result as { file_url?: string; image_url?: string; url?: string })?.file_url
+              || (result as { file_url?: string; image_url?: string; url?: string })?.image_url
+              || (result as { file_url?: string; image_url?: string; url?: string })?.url
+              || '',
+          ).trim()
         if (!url) throw new Error('图片上传失败：未返回有效地址')
         uploaded.push(url)
       }

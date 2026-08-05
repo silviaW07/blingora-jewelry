@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent, createElement } from 'react'
-import * as XLSX from 'xlsx'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductManagement, ImportFrom1688 } from '@/backend/route-params'
 import {
@@ -11,6 +10,7 @@ import {
   updateProduct,
   batchUpdateProductStatus,
   batchDeleteProduct,
+  returnProductsToPendingUpload,
   batchImportProducts,
   batchUpdatePriceCoefficient,
   getHomeFeaturedKeywords,
@@ -71,7 +71,7 @@ import { toast } from 'sonner'
 import { upload_project_file } from '@/tools/tools'
 
 export type DrawerMode = 'create' | 'edit'
-export type BatchActionType = 'ACTIVE' | 'INACTIVE' | 'DELETE' | 'PENDING_DELETE' | 'PRICE_COEFFICIENT' | 'CATEGORY' | 'MANAGEMENT_STATUS' | 'WEIGHT_PRICE' | 'MIN_ORDER_QTY' | 'BIND_CATEGORIES' | 'UNBIND_CATEGORIES' | 'BIND_KEYWORDS' | null
+export type BatchActionType = 'ACTIVE' | 'INACTIVE' | 'DELETE' | 'PENDING_DELETE' | 'RETURN_TO_PENDING' | 'PRICE_COEFFICIENT' | 'CATEGORY' | 'MANAGEMENT_STATUS' | 'WEIGHT_PRICE' | 'MIN_ORDER_QTY' | 'BIND_CATEGORIES' | 'UNBIND_CATEGORIES' | 'BIND_KEYWORDS' | null
 type PriceAdjustMode = 'PRODUCT_COEFFICIENT' | 'CATEGORY_COEFFICIENT'
 type BatchWeightPriceMode = BatchAdjustTargetField
 
@@ -799,7 +799,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [filterManagementStatus, setFilterManagementStatus] = useState<ProductListFilterStatus>((params.status as ProductListStatusFilter) || 'ALL')
   const [filterSupplierName, setFilterSupplierName] = useState('')
   const [filterBrandKeyword, setFilterBrandKeyword] = useState('')
-  const [loading, setLoading] = useState(false)
+  // Show spinner immediately on route mount so navigation doesn't feel frozen.
+  const [loading, setLoading] = useState(true)
   const [list, setList] = useState<ProductListItem[]>([])
   const [total, setTotal] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
@@ -1004,6 +1005,29 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }, [])
 
+  // Dedupe binding-meta RPCs (drawer / batch dialogs / idle warm).
+  const bindingMetaPromiseRef = useRef<Promise<void> | null>(null)
+  const ensureBindingMeta = useCallback(() => {
+    if (!bindingMetaPromiseRef.current) {
+      bindingMetaPromiseRef.current = fetchBindingMeta().catch((err) => {
+        bindingMetaPromiseRef.current = null
+        throw err
+      })
+    }
+    return bindingMetaPromiseRef.current
+  }, [fetchBindingMeta])
+
+  const featuredKeywordsPromiseRef = useRef<Promise<void> | null>(null)
+  const ensureFeaturedKeywords = useCallback(() => {
+    if (!featuredKeywordsPromiseRef.current) {
+      featuredKeywordsPromiseRef.current = fetchHomeFeaturedKeywords().catch((err) => {
+        featuredKeywordsPromiseRef.current = null
+        throw err
+      })
+    }
+    return featuredKeywordsPromiseRef.current
+  }, [fetchHomeFeaturedKeywords])
+
   const fetchList = useCallback(async (overrides?: Partial<{
     keyword?: string
     category_id?: string
@@ -1129,9 +1153,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   useEffect(() => {
     fetchCategoryOptions()
-    fetchHomeFeaturedKeywords()
-    fetchBindingMeta()
-  }, [fetchBindingMeta, fetchHomeFeaturedKeywords])
+  }, [])
 
   useEffect(() => {
     setFilterCategoryId(params.categoryId || 'ALL')
@@ -1140,6 +1162,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   useEffect(() => {
     fetchList()
   }, [fetchList])
+
+  // Warm non-critical meta once after first list settles — avoids competing with getProductList on mount.
+  // (getProductBindingMeta re-fetches the full category tree; featured keywords only power advanced settings.)
+  const hasWarmedSecondaryMetaRef = useRef(false)
+  useEffect(() => {
+    if (loading || hasWarmedSecondaryMetaRef.current) return
+    hasWarmedSecondaryMetaRef.current = true
+    void ensureBindingMeta()
+    void ensureFeaturedKeywords()
+  }, [loading, ensureBindingMeta, ensureFeaturedKeywords])
 
   // Defer heavy getPendingImportQueue until the pending tab is opened (not every products visit).
   useEffect(() => {
@@ -1221,6 +1253,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }
 
   const handleOpenCreate = () => {
+    void ensureBindingMeta()
     setDrawerMode('create')
     setCurrentEditId(null)
     setFormData(defaultFormData)
@@ -1235,7 +1268,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setDrawerOpen(true)
     setSpecDimensions([])
     try {
-      const detail = await getProductDetail(id)
+      const [, detail] = await Promise.all([ensureBindingMeta(), getProductDetail(id)])
       setFormData({
         name: detail.name,
         category_id: detail.category_id,
@@ -1331,16 +1364,19 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }
 
   const uploadImageToProject = async (file: File) => {
+    // upload_project_file returns a non-empty URL string or throws with server detail
     const uploadResult = await upload_project_file(file)
-    // upload_project_file / upload_image_file 直接返回 URL 字符串
     if (typeof uploadResult === 'string') {
       const url = uploadResult.trim()
       if (!url) throw new Error('图片上传失败：未返回有效地址')
       return url
     }
-    const url = String((uploadResult as { file_url?: string; image_url?: string })?.file_url
-      || (uploadResult as { file_url?: string; image_url?: string })?.image_url
-      || '').trim()
+    const url = String(
+      (uploadResult as { file_url?: string; image_url?: string; url?: string })?.file_url
+        || (uploadResult as { file_url?: string; image_url?: string; url?: string })?.image_url
+        || (uploadResult as { file_url?: string; image_url?: string; url?: string })?.url
+        || '',
+    ).trim()
     if (!url) throw new Error('图片上传失败：未返回有效地址')
     return url
   }
@@ -2343,6 +2379,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     if (action === 'CATEGORY') {
       setBatchCategoryId(firstSelected?.category_id || 'ALL')
     }
+    if (action === 'BIND_CATEGORIES' || action === 'UNBIND_CATEGORIES' || action === 'BIND_KEYWORDS') {
+      void ensureBindingMeta()
+    }
     if (action === 'BIND_CATEGORIES') {
       setBatchBindCategoryIds([])
       setBatchUnbindCategoryIds([])
@@ -2390,6 +2429,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       } else if (confirmAction === 'DELETE') {
         const res = await batchDeleteProduct(targetProductIds)
         toast.success(`批量删除完成，成功: ${res.success_count}，失败: ${res.fail_count}`)
+      } else if (confirmAction === 'RETURN_TO_PENDING') {
+        const res = await returnProductsToPendingUpload({ product_ids: targetProductIds })
+        toast.success(`已退回待上传，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        setSelectedIds([])
+        setConfirmDialogOpen(false)
+        await Promise.all([fetchList(), refreshPendingImportQueue({ silent: true })])
+        if (res.success_count > 0) {
+          setActiveTab('pending_imports')
+        }
+        return
       } else if (confirmAction === 'PENDING_DELETE') {
         const res = await batchDeletePendingImportItems(confirmTargetIds)
         toast.success(`待上传条目已删除，成功: ${res.success_count}，失败: ${res.fail_count}`)
@@ -2613,6 +2662,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setBatchImportParsing(true)
     try {
       const buffer = await file.arrayBuffer()
+      // Lazy-load xlsx only when importing — keeps product-management first paint lighter.
+      const XLSX = await import('xlsx')
       const workbook = XLSX.read(buffer, { type: 'array' })
       const sheetName = workbook.SheetNames[0]
       if (!sheetName) throw new Error('未读取到有效工作表')

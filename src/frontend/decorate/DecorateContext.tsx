@@ -24,9 +24,9 @@ import {
   type CustomerServiceConfig,
 } from './customerService'
 import {
-  getCustomerServiceConfig,
   saveCustomerServiceConfig,
 } from '@/frontend/actions/CustomerService'
+import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
 import {
   getPageDecorateConfig,
   savePageDecorateConfig,
@@ -110,7 +110,7 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
       })
       .catch(() => undefined)
 
-    getCustomerServiceConfig()
+    loadCustomerServiceConfigCached()
       .then((res) => {
         if (!res.persisted) return
         setCustomerService(res.config)
@@ -133,7 +133,7 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
         writeDecorateStore(res.store)
       })
       .catch(() => undefined)
-    getCustomerServiceConfig()
+    loadCustomerServiceConfigCached({ force: true })
       .then((res) => {
         if (res.persisted) {
           setCustomerService(res.config)
@@ -259,7 +259,7 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
     // 拖拽已即时入库，退出时仍以本地（含已保存坐标）为准，再尝试与服务器对齐
     const local = readCustomerServiceLocal()
     setCustomerService(local)
-    getCustomerServiceConfig()
+    loadCustomerServiceConfigCached({ force: true })
       .then((res) => {
         if (!res.persisted) return
         setCustomerService(res.config)

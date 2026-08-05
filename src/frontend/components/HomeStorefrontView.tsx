@@ -51,8 +51,7 @@ import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZon
 import { MobileHomeStorefrontView } from '@/frontend/components/MobileHomeStorefrontView';
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder';
-import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages';
-import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefitKeys';
+import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid';
 import { useTranslation } from 'react-i18next';
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n';
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider';
@@ -64,33 +63,6 @@ interface Props {
 
 type RecommendProductCard = HomeRecommendProductCard;
 type RecommendCategoryCard = HomeRecommendCategoryCard;
-
-const serviceBenefitItems = [
-  {
-    title: SERVICE_PAGE_CONFIGS[0].title,
-    description: SERVICE_PAGE_CONFIGS[0].description,
-    iconSrc: SERVICE_PAGE_CONFIGS[0].iconSrc,
-    defaultHref: `/${SERVICE_PAGE_CONFIGS[0].slug}`,
-  },
-  {
-    title: SERVICE_PAGE_CONFIGS[1].title,
-    description: SERVICE_PAGE_CONFIGS[1].description,
-    iconSrc: SERVICE_PAGE_CONFIGS[1].iconSrc,
-    defaultHref: `/${SERVICE_PAGE_CONFIGS[1].slug}`,
-  },
-  {
-    title: SERVICE_PAGE_CONFIGS[2].title,
-    description: SERVICE_PAGE_CONFIGS[2].description,
-    iconSrc: SERVICE_PAGE_CONFIGS[2].iconSrc,
-    defaultHref: `/${SERVICE_PAGE_CONFIGS[2].slug}`,
-  },
-  {
-    title: SERVICE_PAGE_CONFIGS[3].title,
-    description: SERVICE_PAGE_CONFIGS[3].description,
-    iconSrc: SERVICE_PAGE_CONFIGS[3].iconSrc,
-    defaultHref: `/${SERVICE_PAGE_CONFIGS[3].slug}`,
-  },
-] as const;
 
 const isDefaultHomeQueryState = (state: HomeState) => {
   // 每日上新 / New：进入时间窗商品结果态（整段 6 个月或已选月份）
@@ -311,6 +283,19 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
 export const HomeStorefrontView = ({ state, handlers }: Props) => {
   const { getPatch, isDecorateMode } = useDecorateMode();
   const router = useRouter();
+  const [viewport, setViewport] = useState<'mobile' | 'desktop' | null>(() => {
+    if (typeof window === 'undefined') return null
+    return window.innerWidth < 768 ? 'mobile' : 'desktop'
+  })
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 767px)')
+    const apply = () => setViewport(mql.matches ? 'mobile' : 'desktop')
+    apply()
+    mql.addEventListener('change', apply)
+    return () => mql.removeEventListener('change', apply)
+  }, [])
+
   const {
     posters,
     activeBannerIndex,
@@ -819,11 +804,21 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
 
   return (
     <>
-    {/* Mobile: stream home (see MobileHomeStorefrontView). Desktop unchanged below. */}
-    <div className="md:hidden">
+    {/* Mount only the active viewport once known — avoids double React trees on mobile. */}
+    {viewport !== 'desktop' ? (
+    <div className={viewport === null ? 'md:hidden' : undefined}>
       <MobileHomeStorefrontView state={state} handlers={handlers} />
     </div>
-    <div className="hidden bg-[#FFF5F5] text-[#111111] md:block" data-controller-name="首页独立站陈列布局">
+    ) : null}
+    {viewport !== 'mobile' ? (
+    <div
+      className={
+        viewport === null
+          ? 'hidden bg-[#FFF5F5] text-[#111111] md:block'
+          : 'bg-[#FFF5F5] text-[#111111]'
+      }
+      data-controller-name="首页独立站陈列布局"
+    >
       {/* 第 1 层：Logo / 搜索 + 目录导航 */}
       <section
         className="storefront-desktop-chrome border-b border-[#f0dede] bg-[#FFF5F5]"
@@ -1159,80 +1154,10 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
           </section>
         ) : null}
 
-        {/* 第 3 层：四个服务图标（标题/描述/图标/链接均可可视化装修） */}
+        {/* 第 3 层：四个服务权益卡片（标题/描述/图标可装修，静态展示无跳转） */}
         {isDefaultHomeState ? (
           <section className="bg-transparent pt-2 pb-4 sm:pt-4" data-controller-name="首页服务权益条模块">
-            <div className="grid w-full items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {serviceBenefitItems.map((item, index) => {
-                const keys = getServiceBenefitDecorateKeys(index)
-                const cardPatch = getPatch(keys.card)
-                if (cardPatch?.hidden === true) {
-                  return null
-                }
-                const href =
-                  cardPatch?.href?.trim() ||
-                  getPatch(keys.title)?.href?.trim() ||
-                  item.defaultHref
-
-                const card = (
-                  <DecorateFrame
-                    propKey={keys.card}
-                    kind="block"
-                    className="flex h-full min-h-[132px] gap-4 rounded-[16px] border border-[#f0dede] bg-white px-5 py-3.5 text-left shadow-[0_18px_42px_-36px_rgba(0,0,0,0.22)] transition-transform duration-200 hover:-translate-y-0.5"
-                  >
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#f4efe8]">
-                      <EditableImg
-                        propKey={keys.icon}
-                        src={item.iconSrc}
-                        alt={item.title}
-                        className="size-7 object-contain"
-                        style={{ objectFit: 'contain', aspectRatio: '1 / 1', width: '1.75rem', height: '1.75rem' }}
-                        disableKeywordSearch
-                      />
-                    </div>
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center space-y-1">
-                      <DecorateText
-                        propKey={keys.title}
-                        as="h2"
-                        className="text-base font-semibold text-[#40372f]"
-                      >
-                        {item.title}
-                      </DecorateText>
-                      <DecorateText
-                        propKey={keys.desc}
-                        as="p"
-                        className="text-sm leading-6 text-[#7d7366]"
-                      >
-                        {item.description}
-                      </DecorateText>
-                    </div>
-                  </DecorateFrame>
-                )
-
-                if (isDecorateMode) {
-                  return (
-                    <div
-                      key={keys.card}
-                      className="h-full"
-                      data-controller-name="首页服务权益卡片"
-                    >
-                      {card}
-                    </div>
-                  )
-                }
-
-                return (
-                  <a
-                    key={keys.card}
-                    href={href}
-                    className="block h-full"
-                    data-controller-name="首页服务权益卡片"
-                  >
-                    {card}
-                  </a>
-                )
-              })}
-            </div>
+            <HomeServiceBenefitGrid />
           </section>
         ) : null}
 
@@ -1279,6 +1204,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
       </div>
       {/* 第 5 层页脚由 app/(frontend)/layout.tsx 的 Footer 提供，此处不重复渲染 */}
     </div>
+    ) : null}
     </>
   );
 };

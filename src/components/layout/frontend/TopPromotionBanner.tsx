@@ -103,18 +103,22 @@ export default function TopPromotionBanner() {
     [promotion?.end_time, nowMs],
   )
 
-  if (!loaded || !promotion?.enabled) return null
+  // Strict backend gate: no pink strip when disabled, expired, missing, or empty message
+  if (!loaded) return null
+  if (!promotion?.enabled) return null
   if (countdown.hasEndTime && countdown.isEnded) return null
+
+  const message = promotion.message?.trim() || ''
+  if (!message) return null
 
   const backgroundColor = promotion.background_color?.trim() || '#111827'
   const textColor = promotion.text_color?.trim() || '#FFFFFF'
-  const message = promotion.message?.trim() || ''
   const fontSizePx = resolveTopPromotionFontSizePx(promotion.font_size ?? 'md')
   const showCountdown = countdown.hasEndTime && !countdown.isEnded
 
   return (
     <>
-      {/* Mobile: slim strip (~32px) */}
+      {/* Mobile: slim strip (~32px); text truly centered, countdown absolute so it doesn't shift copy */}
       <div
         className="top-promo-mobile sticky top-0 z-50 w-full md:hidden"
         data-controller-name="站点顶部促销横幅"
@@ -123,11 +127,21 @@ export default function TopPromotionBanner() {
           color: softMobileFg(textColor, backgroundColor),
         }}
       >
-        <div className="mx-auto flex h-8 max-w-[1440px] items-center gap-2 overflow-hidden px-3 text-[11px] font-semibold leading-none">
-          <div className="min-w-0 flex-1 truncate text-left" style={{ fontWeight: 600 }}>
-            {message || 'Exclusive offer is now live.'}
+        <div className="relative mx-auto flex h-8 max-w-[1440px] items-center justify-center overflow-hidden px-3 text-[11px] font-semibold leading-none">
+          <div
+            className={cn(
+              'min-w-0 max-w-full truncate text-center',
+              showCountdown ? 'px-14' : null,
+            )}
+            style={{ fontWeight: 600 }}
+          >
+            {message}
           </div>
-          {showCountdown ? <CountdownRow parts={countdown.parts} compact /> : null}
+          {showCountdown ? (
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <CountdownRow parts={countdown.parts} compact />
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -142,7 +156,7 @@ export default function TopPromotionBanner() {
           style={{ fontSize: `${fontSizePx}px` }}
         >
           <div className="min-w-0 flex-1 text-center font-bold leading-snug" style={{ fontWeight: 700 }}>
-            {message || 'Exclusive offer is now live.'}
+            {message}
           </div>
           {showCountdown ? <CountdownRow parts={countdown.parts} /> : null}
         </div>

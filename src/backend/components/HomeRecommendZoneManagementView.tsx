@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { GripVertical, Plus, Edit2, Copy, Trash2, ChevronLeft, ChevronRight, AlertCircle, Package, Layers, Settings2, Monitor, Smartphone, Search, Upload, ImagePlus } from 'lucide-react';
 import type { HomeRecommendZoneManagementState, HomeRecommendZoneManagementHandlers } from '@/backend/hooks/useHomeRecommendZoneManagement';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import EditableImg from '@/@base/EditableImg';
 import type { ZoneType } from '@/backend/actions/HomeRecommendZoneManagement';
+import { cn } from '@/lib/utils';
 interface Props {
   state: HomeRecommendZoneManagementState;
   handlers: HomeRecommendZoneManagementHandlers;
@@ -28,6 +29,86 @@ const ZONE_TYPE_LABELS: Record<ZoneType, string> = {
   CATEGORY: '类目专区',
   SIDE_NAV: '侧边导航专区'
 };
+
+/** 快速发图：点击选择 + 拖拽文件夹图片到此区域 */
+const DisplayImageUploadZone = ({
+  loading,
+  onUpload,
+  compact = false,
+}: {
+  loading: boolean
+  onUpload: (files: FileList) => void
+  compact?: boolean
+}) => {
+  const [dragOver, setDragOver] = useState(false)
+
+  const handleFiles = (files: FileList | null | undefined) => {
+    if (files?.length) onUpload(files)
+  }
+
+  return (
+    <label
+      className={cn(
+        'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 transition',
+        compact ? 'py-4' : 'py-6',
+        loading
+          ? 'pointer-events-none border-muted bg-muted/30 opacity-70'
+          : dragOver
+            ? 'border-primary bg-primary/15 ring-2 ring-primary/30'
+            : 'border-primary/30 bg-primary/5 hover:border-primary hover:bg-primary/10',
+      )}
+      onDragEnter={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!loading) setDragOver(true)
+      }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!loading) setDragOver(true)
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragOver(false)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragOver(false)
+        handleFiles(e.dataTransfer.files)
+      }}
+    >
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        disabled={loading}
+        onChange={(e) => {
+          handleFiles(e.target.files)
+          e.target.value = ''
+        }}
+      />
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        {loading ? (
+          <Upload className="h-4 w-4 animate-pulse" />
+        ) : (
+          <ImagePlus className="h-4 w-4 text-primary" />
+        )}
+        {loading
+          ? '正在上传并创建草稿展示商品...'
+          : dragOver
+            ? '松开鼠标即可上传'
+            : '拖拽图片到此处，或点击选择'}
+      </div>
+      <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+        支持从文件夹拖入多张图片；将自动创建草稿展示商品，商品名称设为当天日期（YYYY-MM-DD）。
+      </p>
+    </label>
+  )
+}
+
 export const HomeRecommendZoneManagementView = ({
   state,
   handlers
@@ -302,8 +383,16 @@ export const HomeRecommendZoneManagementView = ({
                       </AlertDescription>
                     </Alert> : null}
 
+                  {state.drawerFormData.zoneType === 'PRODUCT' ? (
+                    <DisplayImageUploadZone
+                      compact
+                      loading={state.draftUploadLoading}
+                      onUpload={(files) => { void handlers.onUploadDisplayImages(files) }}
+                    />
+                  ) : null}
+
                   {state.drawerItems.length === 0 ? <div className="h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 bg-secondary/20 border-muted" data-api-unique-id="homerecommendzonemanagementview-r5eaebfc3261f9e8d-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                      <p className="text-sm text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rf931a82f0d8f4336-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">暂无内容，请点击上方按钮添加</p>
+                      <p className="text-sm text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rf931a82f0d8f4336-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">暂无内容，请点击上方按钮添加，或拖拽图片到上传区</p>
                     </div> : <div className="border rounded-md overflow-hidden bg-background" data-api-unique-id="homerecommendzonemanagementview-r7aa8e807b6faf5dc-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                       <Table data-api-unique-id="homerecommendzonemanagementview-r0f2c6dae745f034e-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                         <TableHeader className="bg-secondary/30" data-api-unique-id="homerecommendzonemanagementview-r80587fbfefcad104-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
@@ -425,49 +514,10 @@ export const HomeRecommendZoneManagementView = ({
 
           {state.drawerFormData.zoneType === 'PRODUCT' ? (
             <div className="border-b px-6 py-4">
-              <label
-                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 transition ${
-                  state.draftUploadLoading
-                    ? 'pointer-events-none border-muted bg-muted/30 opacity-70'
-                    : 'border-primary/30 bg-primary/5 hover:border-primary hover:bg-primary/10'
-                }`}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  if (e.dataTransfer.files?.length) {
-                    void handlers.onUploadDisplayImages(e.dataTransfer.files)
-                  }
-                }}
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  disabled={state.draftUploadLoading}
-                  onChange={(e) => {
-                    if (e.target.files?.length) {
-                      void handlers.onUploadDisplayImages(e.target.files)
-                      e.target.value = ''
-                    }
-                  }}
-                />
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  {state.draftUploadLoading ? (
-                    <Upload className="h-4 w-4 animate-pulse" />
-                  ) : (
-                    <ImagePlus className="h-4 w-4 text-primary" />
-                  )}
-                  {state.draftUploadLoading ? '正在上传并创建草稿展示商品...' : '本地上传图片（快速发图预览）'}
-                </div>
-                <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-                  支持拖拽或点击选择图片；系统将自动创建无价格/规格/库存的草稿展示商品，并绑定到当前专区。
-                </p>
-              </label>
+              <DisplayImageUploadZone
+                loading={state.draftUploadLoading}
+                onUpload={(files) => { void handlers.onUploadDisplayImages(files) }}
+              />
             </div>
           ) : null}
 

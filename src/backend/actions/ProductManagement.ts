@@ -322,6 +322,46 @@ export interface ProductManagementPendingImportQueueOutput {
   page_size?: number
 }
 
+/** List hot-path: never `include` full product rows (gallery/detail JSON blobs dominate IO). */
+const PRODUCT_LIST_QUERY_SELECT = {
+  id: true,
+  name: true,
+  productCode: true,
+  source: true,
+  supplierName: true,
+  brandName: true,
+  categoryId: true,
+  brandCategoryId: true,
+  goodsStatus: true,
+  weightGram: true,
+  costPrice: true,
+  priceCoefficient: true,
+  tradeInfoJson: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  category: { select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true } },
+  brandCategory: { select: { id: true, name: true } },
+  relationCategories: {
+    select: {
+      categoryId: true,
+      category: { select: { id: true, name: true } },
+    },
+  },
+  skus: {
+    select: {
+      id: true,
+      skuCode: true,
+      price: true,
+      originalPrice: true,
+      stock: true,
+      weightKg: true,
+      attributeJson: true,
+    },
+    orderBy: { skuCode: 'asc' as const },
+  },
+} as const
+
 type PublishedImportMatchDbRecord = {
   id: string
   name: string
@@ -530,7 +570,7 @@ export interface ProductBindingMetaOutput {
 }
 
 import prisma from '@/tools/prisma'
-import { withResult, UserRole, requireRole } from '@/backend/action_utils'
+import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { DEFAULT_PRICE_COEFFICIENT, resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
@@ -570,6 +610,14 @@ import {
   resolveEnglishProductTitle,
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
+
+export interface ReturnProductsToPendingUploadInput {
+  product_ids: string[]
+}
+
+export interface ReturnProductsToPendingUploadOutput extends BatchOperateOutput {
+  pending_item_ids: string[]
+}
 
 export interface ReclassifyPublishedProductsOutput {
   matched: number
@@ -762,28 +810,7 @@ async function findPublishedImportProductByName(name?: string | null): Promise<P
       id: matchedItem.importedProductId,
       source: 'IMPORT_1688'
     },
-    include: {
-      category: { select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true } },
-      brandCategory: { select: { id: true, name: true } },
-      relationCategories: {
-        select: {
-          categoryId: true,
-          category: { select: { id: true, name: true } },
-        },
-      },
-      skus: {
-        select: {
-          id: true,
-          skuCode: true,
-          price: true,
-          originalPrice: true,
-          stock: true,
-          weightKg: true,
-          attributeJson: true
-        },
-        orderBy: { skuCode: 'asc' }
-      }
-    }
+    select: PRODUCT_LIST_QUERY_SELECT,
   })
 }
 
@@ -1553,17 +1580,18 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       console.error('[getProductList] failed to set utf8mb4 session charset', error)
     }
 
-    // Side-effect repair was on every list call (findMany take 300 + updates) and added multi-hundred-ms latency.
+    // Side-effect repair must not block first paint (was awaited on every interval hit).
     if (Date.now() - lastProductCharsetRepairAt >= PRODUCT_CHARSET_REPAIR_INTERVAL_MS) {
       lastProductCharsetRepairAt = Date.now()
-      try {
-        const repairedCount = await repairCharsetCorruptedProducts()
-        if (repairedCount > 0) {
-          console.info(`[getProductList] repaired ${repairedCount} charset-corrupted products`)
-        }
-      } catch (error) {
-        console.error('[getProductList] failed to repair charset-corrupted products', error)
-      }
+      void repairCharsetCorruptedProducts()
+        .then((repairedCount) => {
+          if (repairedCount > 0) {
+            console.info(`[getProductList] repaired ${repairedCount} charset-corrupted products`)
+          }
+        })
+        .catch((error) => {
+          console.error('[getProductList] failed to repair charset-corrupted products', error)
+        })
     }
 
     const { keyword, category_id, status, goods_status, status_filter, supplier_name, brand_keyword, page = 1, page_size = 20 } = input
@@ -1621,36 +1649,16 @@ export const getProductList = requireRole([UserRole.ADMIN])(
 
     const skip = (page - 1) * page_size
 
-    const [products, publishedImportMatchRecord] = await Promise.all([
+    const [products, total, publishedImportMatchRecord] = await Promise.all([
       prisma.product.findMany({
         where: whereClause,
         skip,
         take: page_size,
         orderBy: { createdAt: 'desc' },
-        include: {
-          category: { select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true } },
-          brandCategory: { select: { id: true, name: true } },
-          relationCategories: {
-            select: {
-              categoryId: true,
-              category: { select: { id: true, name: true } },
-            },
-          },
-          skus: {
-            select: {
-              id: true,
-              skuCode: true,
-              price: true,
-              originalPrice: true,
-              stock: true,
-              weightKg: true,
-              attributeJson: true
-            },
-            orderBy: { skuCode: 'asc' }
-          }
-        }
+        select: PRODUCT_LIST_QUERY_SELECT,
       }),
-      findPublishedImportProductByName(keyword)
+      prisma.product.count({ where: whereClause }),
+      findPublishedImportProductByName(keyword),
     ])
 
     const allCategoryIds = products.flatMap(p => [
@@ -1660,7 +1668,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
     ]).filter(Boolean) as string[]
     const { categoryMap } = await getCategoryMetaMap(prisma, allCategoryIds)
 
-    const list = products.map(p => {
+    const list: ProductListItem[] = products.map(p => {
       const prices = p.skus.map(s => toNumber(s.price) ?? 0)
       const priceMin = prices.length > 0 ? Math.min(...prices) : 0
       const priceMax = prices.length > 0 ? Math.max(...prices) : 0
@@ -1737,7 +1745,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       list.unshift(published_import_match)
     }
 
-    return { list, total: list.length, published_import_match }
+    return { list, total, published_import_match }
   })
 )
 
@@ -2799,6 +2807,358 @@ export const batchDeletePendingImportItems = requireRole([UserRole.ADMIN])(
     return {
       success_count: existingIds.length,
       fail_count: Math.max(0, item_ids.length - existingIds.length)
+    }
+  })
+)
+
+function extractGalleryUrls(galleryJson: unknown, mainImageUrl?: string | null): string[] {
+  const fromGallery = Array.isArray(galleryJson)
+    ? galleryJson
+        .map((item: any) => String(item?.url || '').trim())
+        .filter(Boolean)
+    : []
+  const main = String(mainImageUrl || '').trim()
+  return Array.from(new Set([main, ...fromGallery].filter(Boolean)))
+}
+
+function mapParameterJsonToFeatureAttributes(parameterJson: unknown): Array<{ key: string; value: string }> {
+  if (!Array.isArray(parameterJson)) return []
+  const attrs: Array<{ key: string; value: string }> = []
+  for (const group of parameterJson as any[]) {
+    const items = Array.isArray(group?.items) ? group.items : []
+    for (const item of items) {
+      const key = String(item?.key || '').trim()
+      const value = String(item?.value || '').trim()
+      if (key && value) attrs.push({ key, value })
+    }
+  }
+  return attrs
+}
+
+function resolveReturnSourceUrl(product: {
+  id: string
+  productCode?: string | null
+  source?: string | null
+  tradeInfoJson?: any
+}): string {
+  const fromTrade = String(product.tradeInfoJson?.importSourceUrl || '').trim()
+  if (fromTrade) return fromTrade.slice(0, 700)
+  const code = String(product.productCode || product.id).trim()
+  if (product.source === 'TABLE_IMPORT') return `table-import://${code}`.slice(0, 700)
+  if (product.source === 'IMPORT_1688') return `product-return-1688://${product.id}`.slice(0, 700)
+  return `table-import://return-${code}`.slice(0, 700)
+}
+
+function buildPendingFieldsFromProduct(product: any, userId: string) {
+  const skus = Array.isArray(product.skus) ? product.skus : []
+  const skuTable = skus.map((sku: any, index: number) => {
+    const attributes = Array.isArray(sku.attributeJson)
+      ? (sku.attributeJson as SkuAttribute[])
+          .map(attr => ({
+            name: String(attr?.name || '规格').trim() || '规格',
+            value: String(attr?.value || '').trim() || '默认',
+          }))
+          .filter(attr => attr.value)
+      : [{ name: '规格', value: '默认规格' }]
+    const weightKg = toNumber(sku.weightKg)
+    const weightGrams =
+      weightKg != null
+        ? Math.round(weightKg * 1000)
+        : toNumber(product.weightGram) != null
+          ? Math.round(toNumber(product.weightGram)!)
+          : null
+    return {
+      skuKey: String(sku.skuCode || `sku-${index + 1}`),
+      spec: formatSkuSpecText(attributes),
+      costPrice: toNumber(product.costPrice),
+      price: toNumber(sku.price),
+      stock: Math.max(0, Number(sku.stock) || 0),
+      weightGrams,
+      imageUrl: String(sku.imageUrl || '').trim() || null,
+      attributes,
+    }
+  })
+
+  const prices = skuTable
+    .map((row: { price: number | null }) => row.price)
+    .filter((price: number | null): price is number => price != null && Number.isFinite(price))
+  const priceMin = prices.length > 0 ? Math.min(...prices) : toNumber(product.costPrice)
+  const priceMax = prices.length > 0 ? Math.max(...prices) : priceMin
+  const totalStock = skuTable.reduce((sum: number, row: { stock: number }) => sum + (row.stock || 0), 0)
+  const galleryUrls = extractGalleryUrls(product.galleryJson, product.mainImageUrl)
+  const mainImageUrl = galleryUrls[0] || String(product.mainImageUrl || '').trim() || null
+  const detailImages = galleryUrls.filter(url => url !== mainImageUrl)
+  const nameEn = getCachedEnglishTitle(null, product.translationsJson)
+  const nameEs = getCachedSpanishTitle(null, product.translationsJson)
+  const featureAttributes = mapParameterJsonToFeatureAttributes(product.parameterJson)
+  const minOrderQty = Math.max(1, Number(product.tradeInfoJson?.minOrderQty ?? 1) || 1)
+  const sourceUrl = resolveReturnSourceUrl(product)
+  const productName = String(product.name || '').trim()
+  const usdMin = priceMin != null ? Number((priceMin / USD_EXCHANGE_RATE).toFixed(2)) : null
+  const usdMax = priceMax != null ? Number((priceMax / USD_EXCHANGE_RATE).toFixed(2)) : null
+
+  const colorValues = Array.from(
+    new Set(
+      skuTable
+        .flatMap((row: { attributes: Array<{ name: string; value: string }> }) =>
+          row.attributes.filter(attr => /颜色|colour|color/i.test(attr.name)).map(attr => attr.value),
+        )
+        .filter(Boolean),
+    ),
+  )
+  const sizeValues = Array.from(
+    new Set(
+      skuTable
+        .flatMap((row: { attributes: Array<{ name: string; value: string }> }) =>
+          row.attributes
+            .filter(attr => /规格|尺码|尺寸|size/i.test(attr.name))
+            .map(attr => attr.value),
+        )
+        .filter(Boolean),
+    ),
+  )
+  const sizesByColor: Record<string, string[]> = {}
+  for (const row of skuTable) {
+    const color =
+      row.attributes.find((attr: { name: string }) => /颜色|colour|color/i.test(attr.name))?.value || ''
+    const size =
+      row.attributes.find((attr: { name: string }) => /规格|尺码|尺寸|size/i.test(attr.name))?.value ||
+      row.spec
+    if (!color) continue
+    if (!sizesByColor[color]) sizesByColor[color] = []
+    if (size && !sizesByColor[color].includes(size)) sizesByColor[color].push(size)
+  }
+
+  const linkedCategoryIds = Array.from(
+    new Set(
+      [
+        product.categoryId,
+        product.brandCategoryId,
+        ...((product.relationCategories || []).map((rel: { categoryId: string }) => rel.categoryId) || []),
+      ].filter(Boolean),
+    ),
+  ) as string[]
+
+  const previewDataJson = {
+    name: productName,
+    nameEn: nameEn || '',
+    nameEs: nameEs || '',
+    categoryId: product.categoryId || undefined,
+    matchedCategoryIds: linkedCategoryIds,
+    matchedCategoryNames: [],
+    price: priceMin ?? undefined,
+    mainImageUrl: mainImageUrl || undefined,
+    detailImages,
+    shortDescription: String(product.shortDescription || '').trim() || undefined,
+    featureAttributes,
+    skuTable,
+    colors: colorValues.map(label => {
+      const colorSku = skuTable.find((row: any) =>
+        row.attributes.some(
+          (attr: { name: string; value: string }) =>
+            /颜色|colour|color/i.test(attr.name) && attr.value === label && row.imageUrl,
+        ),
+      )
+      return { label, imageUrl: colorSku?.imageUrl || null }
+    }),
+    sizesByColor,
+    inboundIdentity: {
+      mode:
+        product.source === 'TABLE_IMPORT'
+          ? ('TABLE_PRODUCT_CODE_MERGED' as const)
+          : ('LINK_1688_INDEPENDENT' as const),
+      excelProductCode: product.productCode || null,
+      sourceUrl,
+      returnedFromProductId: product.id,
+    },
+    returnedFromProductId: product.id,
+    returnedProductCode: product.productCode || null,
+  }
+
+  const specSummaryJson = [
+    ...(colorValues.length ? [{ name: '颜色', values: colorValues }] : []),
+    ...(sizeValues.length ? [{ name: '规格', values: sizeValues }] : []),
+  ]
+
+  return {
+    operatorId: userId,
+    sourceUrl,
+    parsedName: productName.slice(0, 200) || null,
+    parsedMainImageUrl: mainImageUrl,
+    parsedPriceMin: priceMin,
+    parsedPriceMax: priceMax,
+    supplierName: product.supplierName || null,
+    mainImageUrl,
+    costPrice: toNumber(product.costPrice),
+    weightGrams: toNumber(product.weightGram) != null ? Math.round(toNumber(product.weightGram)!) : null,
+    sourceCategoryName: product.category?.name || product.brandName || null,
+    targetCategoryId: product.categoryId || null,
+    coefficient: toNumber(product.priceCoefficient),
+    goodsStatus: 'DRAFT' as any,
+    minimumOrderQuantity: minOrderQty,
+    availableStock: totalStock,
+    cnyPriceMin: priceMin,
+    cnyPriceMax: priceMax,
+    usdPriceMin: usdMin,
+    usdPriceMax: usdMax,
+    productDetail: product.detailText || product.shortDescription || null,
+    skuSummaryText: skuTable.map((row: { spec: string }) => row.spec).join(' | ') || null,
+    fetchStatus: 'COMPLETED' as any,
+    publishStatus: 'PENDING' as any,
+    fetchStartedAt: new Date(),
+    fetchFinishedAt: new Date(),
+    publishStartedAt: null,
+    publishedAt: null,
+    isSelected: true,
+    isPublished: false,
+    importedProductId: null,
+    failureReason: null,
+    specSummaryJson: specSummaryJson.length > 0 ? (specSummaryJson as any) : undefined,
+    previewDataJson: previewDataJson as any,
+  }
+}
+
+async function returnOneProductToPendingUpload(
+  tx: any,
+  productId: string,
+  userId: string,
+  sharedTaskId: string | null,
+): Promise<{ pendingItemId: string; taskId: string; createdNew: boolean }> {
+  const product = await tx.product.findUnique({
+    where: { id: productId },
+    include: {
+      category: { select: { id: true, name: true } },
+      skus: true,
+      relationCategories: { select: { categoryId: true } },
+    },
+  })
+  if (!product) throw new Error('商品不存在')
+  if (normalizeGoodsStatus(product.goodsStatus) === 'DELETED') {
+    throw new Error('已删除商品无法退回待上传')
+  }
+
+  const pendingFields = buildPendingFieldsFromProduct(product, userId)
+
+  const existingItem = await tx.importtaskitem.findFirst({
+    where: { importedProductId: productId },
+    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+  })
+
+  let pendingItemId: string
+  let taskId: string
+  let createdNew = false
+
+  if (existingItem) {
+    const updated = await tx.importtaskitem.update({
+      where: { id: existingItem.id },
+      data: {
+        ...pendingFields,
+        // Keep original source URL when present (1688 / table identity)
+        sourceUrl: existingItem.sourceUrl || pendingFields.sourceUrl,
+        previewDataJson: {
+          ...(typeof existingItem.previewDataJson === 'object' && existingItem.previewDataJson
+            ? (existingItem.previewDataJson as object)
+            : {}),
+          ...pendingFields.previewDataJson,
+          inboundIdentity: {
+            ...((pendingFields.previewDataJson as any)?.inboundIdentity || {}),
+            sourceUrl: existingItem.sourceUrl || pendingFields.sourceUrl,
+            returnedFromProductId: product.id,
+          },
+        } as any,
+      },
+    })
+    pendingItemId = updated.id
+    taskId = updated.importTaskId
+  } else {
+    let taskIdToUse = sharedTaskId
+    if (!taskIdToUse) {
+      const task = await tx.importtask.create({
+        data: {
+          creatorId: userId,
+          taskName: `退回待上传 ${new Date().toLocaleString('zh-CN')}`,
+          status: 'COMPLETED' as any,
+          sourceLinkCount: 1,
+          successCount: 1,
+          failureCount: 0,
+          progressPercent: 100,
+          defaultStatus: 'DRAFT' as any,
+          defaultCategoryId: product.categoryId || null,
+          queueConcurrency: 1,
+          rateLimitMinDelaySec: 0,
+          rateLimitMaxDelaySec: 0,
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        },
+      })
+      taskIdToUse = task.id
+    } else {
+      await tx.importtask.update({
+        where: { id: taskIdToUse },
+        data: {
+          sourceLinkCount: { increment: 1 },
+          successCount: { increment: 1 },
+        },
+      })
+    }
+    const created = await tx.importtaskitem.create({
+      data: {
+        importTaskId: taskIdToUse,
+        ...pendingFields,
+      },
+    })
+    pendingItemId = created.id
+    taskId = taskIdToUse
+    createdNew = true
+  }
+
+  // Mirror deleteProduct soft-remove so the SPU leaves Product List; republish creates a new product.
+  await tx.product.update({
+    where: { id: productId },
+    data: {
+      status: 'DRAFT',
+      goodsStatus: 'DELETED',
+    },
+  })
+  await tx.cartitem.updateMany({ where: { productId }, data: { status: 'INVALID' } })
+
+  return { pendingItemId, taskId, createdNew }
+}
+
+/**
+ * 将已发布商品退回待上传区：优先重开原 importtaskitem，否则按当前商品+SKU 新建 pending 行，
+ * 再软删除商品（与列表删除一致），以便从商品列表消失、出现在待上传区。
+ */
+export const returnProductsToPendingUpload = requireRole([UserRole.ADMIN])(
+  withResult(async (input: ReturnProductsToPendingUploadInput): Promise<ReturnProductsToPendingUploadOutput> => {
+    const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)))
+    if (productIds.length === 0) {
+      throw new Error('请先选择需要退回待上传的商品')
+    }
+
+    const { userId } = getAuthContext()
+    let success = 0
+    let fail = 0
+    const pendingItemIds: string[] = []
+    let sharedTaskId: string | null = null
+
+    for (const productId of productIds) {
+      try {
+        const result = await prisma.$transaction(async tx => {
+          return returnOneProductToPendingUpload(tx, productId, userId, sharedTaskId)
+        })
+        if (result.createdNew && !sharedTaskId) sharedTaskId = result.taskId
+        pendingItemIds.push(result.pendingItemId)
+        success += 1
+      } catch {
+        fail += 1
+      }
+    }
+
+    return {
+      success_count: success,
+      fail_count: fail,
+      pending_item_ids: pendingItemIds,
     }
   })
 )

@@ -17,14 +17,11 @@ import EditableImg from '@/@base/EditableImg'
 import { cn } from '@/lib/utils'
 import type { HomeHandlers, HomeState } from '@/frontend/hooks/useHome'
 import type { HomeRecommendZoneSection } from '@/frontend/actions/Home'
-import { DecorateText } from '@/frontend/decorate/DecorateText'
-import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { HomeRecommendZoneSection as RecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection'
 import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
-import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages'
-import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefitKeys'
+import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
@@ -51,16 +48,9 @@ const isDefaultHomeQueryState = (state: HomeState) => {
   )
 }
 
-const serviceBenefitItems = SERVICE_PAGE_CONFIGS.map((cfg) => ({
-  title: cfg.title,
-  iconSrc: cfg.iconSrc,
-  defaultHref: `/${cfg.slug}`,
-}))
-
 export function MobileHomeStorefrontView({ state, handlers }: Props) {
   const router = useRouter()
   const { t } = useTranslation()
-  const { getPatch, isDecorateMode } = useDecorateMode()
   const {
     posters,
     activeBannerIndex,
@@ -246,66 +236,12 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
             </div>
           </section>
 
-          {/* 3. Compact service chips — icon + title only, content-sized */}
+          {/* 3. Service benefit cards — shared with desktop, static, icon+title+desc */}
           <section
             className="mobile-home__services mb-3 px-3"
             data-controller-name="移动端服务权益网格"
           >
-            <div className="mobile-home__services-row flex flex-wrap items-start gap-1.5">
-              {serviceBenefitItems.map((item, index) => {
-                const keys = getServiceBenefitDecorateKeys(index)
-                const cardPatch = getPatch(keys.card)
-                if (cardPatch?.hidden === true) return null
-                const href =
-                  cardPatch?.href?.trim() ||
-                  getPatch(keys.title)?.href?.trim() ||
-                  item.defaultHref
-
-                const tile = (
-                  <div className="mobile-home__service-tile inline-flex w-auto max-w-full items-center gap-1.5 rounded-lg border border-[#efe8dc] bg-white px-2 py-1.5 shadow-[0_3px_10px_-9px_rgba(0,0,0,0.28)]">
-                    <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[#f5f1ea]">
-                      <EditableImg
-                        propKey={keys.icon}
-                        src={item.iconSrc}
-                        alt={item.title}
-                        className="size-3.5 object-contain"
-                        style={{ objectFit: 'contain', width: '0.875rem', height: '0.875rem' }}
-                        disableKeywordSearch
-                      />
-                    </div>
-                    <DecorateText
-                      propKey={keys.title}
-                      as="span"
-                      className="mobile-home__service-title whitespace-nowrap text-[0.6875rem] font-semibold leading-tight text-[#3a322a]"
-                    >
-                      {item.title}
-                    </DecorateText>
-                  </div>
-                )
-
-                if (isDecorateMode) {
-                  return (
-                    <div
-                      key={keys.card}
-                      className="mobile-home__service-link inline-flex w-auto max-w-full shrink-0"
-                      data-controller-name="移动端服务权益卡片"
-                    >
-                      {tile}
-                    </div>
-                  )
-                }
-                return (
-                  <a
-                    key={keys.card}
-                    href={href}
-                    className="mobile-home__service-link inline-flex w-auto max-w-full shrink-0"
-                    data-controller-name="移动端服务权益卡片"
-                  >
-                    {tile}
-                  </a>
-                )
-              })}
-            </div>
+            <HomeServiceBenefitGrid gridControllerName="移动端服务权益网格" />
           </section>
 
           {/* 6. All recommend zones with titles (CATEGORY + PRODUCT, includes 包包 etc.) */}
@@ -314,9 +250,24 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
             data-controller-name="移动端推荐专区"
           >
             {isLoadingRecommendZones ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-[#7a756c]">
-                <Loader2 className="size-4 animate-spin" />
-                {t('common.loading')}
+              <div
+                className="flex flex-col gap-4"
+                aria-busy="true"
+                aria-label={t('common.loading')}
+              >
+                {[0, 1].map((row) => (
+                  <div key={row} className="space-y-3">
+                    <div className="h-4 w-28 animate-pulse rounded bg-[#ebe4d8]" />
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {[0, 1, 2, 3].map((cell) => (
+                        <div
+                          key={cell}
+                          className="aspect-square animate-pulse rounded-2xl bg-[#ebe4d8]"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : contentZones.length > 0 ? (
               <div className="flex flex-col gap-4">

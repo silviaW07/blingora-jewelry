@@ -7,6 +7,7 @@ import {
   UserRole
 } from '@/backend/action_utils'
 import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
+import { toDateKeyInTimeZone } from '@/frontend/utils/dailyNewArrival'
 
 // ===== Enums =====
 /** 专区展示类型：商品专区(PRODUCT) | 类目专区(CATEGORY) */
@@ -927,9 +928,8 @@ export const createDraftDisplayProducts = requireRole([UserRole.ADMIN])(
       for (let index = 0; index < images.length; index += 1) {
         const image = images[index]
         const ids = makeDisplayProductIdentifiers()
-        const productName =
-          image.name ||
-          `展示商品 ${new Date().toLocaleString('zh-CN', { hour12: false })}-${index + 1}`
+        // Coming 按商品名称（YYYY-MM-DD）归日；忽略文件名以免乱码/随机 ID
+        const productName = toDateKeyInTimeZone(new Date(), 'Asia/Shanghai')
 
         const product = await tx.product.create({
           data: {

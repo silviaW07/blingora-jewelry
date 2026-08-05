@@ -64,6 +64,8 @@ export const reparsePendingImportItems = (...args: Parameters<Actions["reparsePe
   rpcCall<Awaited<ReturnType<Actions["reparsePendingImportItems"]>>>("src.backend.actions.ProductManagement.reparsePendingImportItems", ...args);
 export const batchDeletePendingImportItems = (...args: Parameters<Actions["batchDeletePendingImportItems"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchDeletePendingImportItems"]>>>("src.backend.actions.ProductManagement.batchDeletePendingImportItems", ...args);
+export const returnProductsToPendingUpload = (...args: Parameters<Actions["returnProductsToPendingUpload"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["returnProductsToPendingUpload"]>>>("src.backend.actions.ProductManagement.returnProductsToPendingUpload", ...args);
 export const deleteProduct = (...args: Parameters<Actions["deleteProduct"]>) => 
   rpcCall<Awaited<ReturnType<Actions["deleteProduct"]>>>("src.backend.actions.ProductManagement.deleteProduct", ...args);
 export const batchDeleteProduct = (...args: Parameters<Actions["batchDeleteProduct"]>) => 

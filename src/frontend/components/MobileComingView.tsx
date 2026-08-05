@@ -79,6 +79,8 @@ export default function MobileComingView() {
     ProductDetail.navigateToById(router, { productId: item.product_id })
   }
 
+  const showInitialSpinner = loading && products.length === 0
+
   return (
     <div
       className="mobile-coming-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
@@ -107,11 +109,11 @@ export default function MobileComingView() {
           })}
         </div>
 
-        {loading ? (
+        {showInitialSpinner ? (
           <div className="flex justify-center py-16 text-[#8b8477]">
             <Loader2 className="size-6 animate-spin" aria-label={t('common.loading')} />
           </div>
-        ) : products.length === 0 ? (
+        ) : products.length === 0 && !loading ? (
           <p className="mt-12 text-center text-sm text-[#8a8073]">
             {t('mobile.noComingProducts', {
               defaultValue: 'No previews for this day',
@@ -119,7 +121,10 @@ export default function MobileComingView() {
           </p>
         ) : (
           <div
-            className="mobile-coming-product-grid"
+            className={cn(
+              'mobile-coming-product-grid',
+              loading && 'opacity-60 transition-opacity',
+            )}
             data-controller-name="Coming日期商品网格"
           >
             {products.map((item) => (

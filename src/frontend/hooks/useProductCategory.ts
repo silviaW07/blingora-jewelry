@@ -324,6 +324,7 @@ export const useProductCategory = (): {
   const { openAuthModal } = useCustomerAuthModal()
 
   const isCategorySlugRoute = Boolean(pathname && pathname.startsWith('/category/'))
+  const isStorefrontHomePath = !pathname || pathname === '/' || pathname === '/home'
   const routeCategorySlug = useMemo(
     () => parseCategorySlugFromPathname(pathname),
     [pathname],
@@ -662,41 +663,73 @@ export const useProductCategory = (): {
   }, [selectedTopLevelCategoryId])
 
   useEffect(() => {
-    const lang = getCurrentLang()
-    getCategorySideNavZones({ lang })
-      .then((res) => {
-        setSideNavZones(Array.isArray(res.zones) ? res.zones : [])
+    // Home stream does not render keyword floors — skip 4 RPCs on `/`
+    if (isStorefrontHomePath) {
+      setLeftNavKeywordGroups([])
+      setRecommendationKeywordGroups([])
+      setLeftNavKeywords([])
+      setRecommendationKeywords([])
+      setActiveLeftNavGroupId('')
+      return
+    }
+
+    let cancelled = false
+    let idleId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const load = () => {
+      if (cancelled) return
+      getKeywordGroupList({ scene_area: 'LEFT_NAV' })
+        .then((res) => {
+          if (cancelled) return
+          const groups = Array.isArray(res.list) ? res.list : []
+          setLeftNavKeywordGroups(groups)
+          setActiveLeftNavGroupId((prev) =>
+            prev && groups.some((group) => group.group_id === prev) ? prev : groups[0]?.group_id || '',
+          )
+        })
+        .catch(() => undefined)
+
+      getKeywordGroupList({ scene_area: 'RECOMMENDATION' })
+        .then((res) => {
+          if (cancelled) return
+          const groups = Array.isArray(res.list) ? res.list : []
+          setRecommendationKeywordGroups(groups)
+          setActiveRecommendationGroupId((prev) =>
+            prev && groups.some((group) => group.group_id === prev) ? prev : '',
+          )
+        })
+        .catch(() => undefined)
+
+      getKeywordList({
+        scene_area: 'RECOMMENDATION',
+        scene_slot_key: 'PRODUCT_CATEGORY_RECOMMENDATION',
       })
-      .catch(() => {
-        // keep previous zones
-      })
-  }, [localeTick])
+        .then((res) => {
+          if (cancelled) return
+          setRecommendationKeywords(Array.isArray(res.list) ? res.list : [])
+        })
+        .catch(() => undefined)
+    }
+
+    // Defer keyword chrome so category list + products paint first
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(load, { timeout: 2200 })
+    } else {
+      timeoutId = setTimeout(load, 500)
+    }
+
+    return () => {
+      cancelled = true
+      if (idleId != null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [isStorefrontHomePath])
 
   useEffect(() => {
-    getKeywordGroupList({ scene_area: 'LEFT_NAV' })
-      .then((res) => {
-        const groups = Array.isArray(res.list) ? res.list : []
-        setLeftNavKeywordGroups(groups)
-        setActiveLeftNavGroupId((prev) => prev && groups.some((group) => group.group_id === prev) ? prev : groups[0]?.group_id || '')
-      })
-      .catch(() => {
-        // optional chrome — silent
-      })
-  }, [])
-
-  useEffect(() => {
-    getKeywordGroupList({ scene_area: 'RECOMMENDATION' })
-      .then((res) => {
-        const groups = Array.isArray(res.list) ? res.list : []
-        setRecommendationKeywordGroups(groups)
-        setActiveRecommendationGroupId((prev) => prev && groups.some((group) => group.group_id === prev) ? prev : '')
-      })
-      .catch(() => {
-        // optional chrome — silent
-      })
-  }, [])
-
-  useEffect(() => {
+    if (isStorefrontHomePath) return
     getKeywordList({
       scene_area: 'LEFT_NAV',
       group_id: activeLeftNavGroupId || undefined
@@ -707,20 +740,46 @@ export const useProductCategory = (): {
       .catch(() => {
         // optional
       })
-  }, [activeLeftNavGroupId])
+  }, [activeLeftNavGroupId, isStorefrontHomePath])
 
   useEffect(() => {
-    getKeywordList({
-      scene_area: 'RECOMMENDATION',
-      scene_slot_key: 'PRODUCT_CATEGORY_RECOMMENDATION'
-    })
-      .then((res) => {
-        setRecommendationKeywords(Array.isArray(res.list) ? res.list : [])
-      })
-      .catch(() => {
-        // optional
-      })
-  }, [])
+    // Home brand rail prefers recommend SIDE_NAV; defer category side-nav to idle
+    if (!isStorefrontHomePath) {
+      const lang = getCurrentLang()
+      getCategorySideNavZones({ lang })
+        .then((res) => {
+          setSideNavZones(Array.isArray(res.zones) ? res.zones : [])
+        })
+        .catch(() => undefined)
+      return
+    }
+
+    let cancelled = false
+    let idleId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    const load = () => {
+      if (cancelled) return
+      const lang = getCurrentLang()
+      getCategorySideNavZones({ lang })
+        .then((res) => {
+          if (cancelled) return
+          setSideNavZones(Array.isArray(res.zones) ? res.zones : [])
+        })
+        .catch(() => undefined)
+    }
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(load, { timeout: 2500 })
+    } else {
+      timeoutId = setTimeout(load, 600)
+    }
+    return () => {
+      cancelled = true
+      if (idleId != null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [localeTick, isStorefrontHomePath])
 
   useEffect(() => {
     if (posters.length <= 1) {
@@ -779,6 +838,20 @@ export const useProductCategory = (): {
     dailyNewArrivalCategoryId && queryState.categoryId === dailyNewArrivalCategoryId,
   )
 
+  /** Default home has no listing filters — product grid is unused (recommend zones render instead). */
+  const hasActiveListingQuery = Boolean(
+    queryState.categoryId ||
+      queryState.brandCategoryId ||
+      queryState.keywordId ||
+      queryState.keywordGroupId ||
+      queryState.searchKeyword ||
+      queryState.minPrice !== undefined ||
+      queryState.maxPrice !== undefined ||
+      queryState.hasDiscount ||
+      queryState.minRating !== undefined ||
+      queryState.stockStatus.length > 0,
+  )
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     const bump = () => setLocaleTick((n) => n + 1)
@@ -833,6 +906,14 @@ export const useProductCategory = (): {
       return
     }
 
+    // Home default stream: skip getProductList (up to 2000 rows) — zones/posters cover the UI
+    if (!hasActiveListingQuery) {
+      setProducts([])
+      setTotalCount(0)
+      setIsLoadingProducts(false)
+      return
+    }
+
     setIsLoadingProducts(true)
     // Keep prior product cards visible while fetching — avoids empty flash on category change
     const lang = getCurrentLang()
@@ -862,7 +943,7 @@ export const useProductCategory = (): {
         toast.error(err.message)
       })
       .finally(() => setIsLoadingProducts(false))
-  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
+  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
 
   const syncListingQueryToUrl = useCallback((patch: {
     sortBy?: SortByEnum

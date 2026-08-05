@@ -73,6 +73,10 @@ declare namespace NodeJS {
     NEXT_PUBLIC_API_BASE_URL: string;
     NEXT_PUBLIC_BASE_PATH?: string;
     NEXT_PUBLIC_PROJECT_ID?: string;
+    /** Optional override for image upload API (default: AutoCoder project image upload). */
+    NEXT_PUBLIC_IMAGE_UPLOAD_URL?: string;
+    /** Public CDN base for serving images (read path), e.g. https://img.example.com */
+    NEXT_PUBLIC_IMAGE_CDN_BASE?: string;
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?: string;
     DATABASE_URL: string;
   }

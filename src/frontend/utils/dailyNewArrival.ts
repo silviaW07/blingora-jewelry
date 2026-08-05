@@ -106,6 +106,25 @@ const pad2 = (n: number) => String(n).padStart(2, '0')
 export const toDateKey = (d: Date) =>
   `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 
+/**
+ * YYYY-MM-DD in an IANA timezone (default Asia/Shanghai).
+ * Used when admin creates Coming/display drafts so names align with Coming date chips.
+ */
+export const toDateKeyInTimeZone = (
+  date = new Date(),
+  timeZone = 'Asia/Shanghai',
+): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+
+/** True when product name is a calendar date key (Coming day grouping). */
+export const isDateKeyProductName = (name?: string | null) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(String(name || '').trim())
+
 /** MM/DD display label */
 export const toDateLabel = (d: Date) => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
 

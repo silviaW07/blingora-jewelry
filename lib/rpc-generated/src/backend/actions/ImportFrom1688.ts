@@ -6,6 +6,8 @@ export const loadAutoMatchSecondaryCategories = (...args: Parameters<Actions["lo
   rpcCall<Awaited<ReturnType<Actions["loadAutoMatchSecondaryCategories"]>>>("src.backend.actions.ImportFrom1688.loadAutoMatchSecondaryCategories", ...args);
 export const matchSecondaryCategoriesByTitle = (...args: Parameters<Actions["matchSecondaryCategoriesByTitle"]>) => 
   rpcCall<Awaited<ReturnType<Actions["matchSecondaryCategoriesByTitle"]>>>("src.backend.actions.ImportFrom1688.matchSecondaryCategoriesByTitle", ...args);
+export const resolveTableImportCategoryPath = (...args: Parameters<Actions["resolveTableImportCategoryPath"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["resolveTableImportCategoryPath"]>>>("src.backend.actions.ImportFrom1688.resolveTableImportCategoryPath", ...args);
 export const resolveImportCategoryOwnership = (...args: Parameters<Actions["resolveImportCategoryOwnership"]>) => 
   rpcCall<Awaited<ReturnType<Actions["resolveImportCategoryOwnership"]>>>("src.backend.actions.ImportFrom1688.resolveImportCategoryOwnership", ...args);
 export const expandLinkedCategoryIdsWithParents = (...args: Parameters<Actions["expandLinkedCategoryIdsWithParents"]>) => 
@@ -18,6 +20,8 @@ export const containsCategoryMatchToken = (...args: Parameters<Actions["contains
   rpcCall<Awaited<ReturnType<Actions["containsCategoryMatchToken"]>>>("src.backend.actions.ImportFrom1688.containsCategoryMatchToken", ...args);
 export const buildCategoryMatchCorpus = (...args: Parameters<Actions["buildCategoryMatchCorpus"]>) => 
   rpcCall<Awaited<ReturnType<Actions["buildCategoryMatchCorpus"]>>>("src.backend.actions.ImportFrom1688.buildCategoryMatchCorpus", ...args);
+export const splitTableCategoryPathTokens = (...args: Parameters<Actions["splitTableCategoryPathTokens"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["splitTableCategoryPathTokens"]>>>("src.backend.actions.ImportFrom1688.splitTableCategoryPathTokens", ...args);
 export const getCategoryOptions = (...args: Parameters<Actions["getCategoryOptions"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getCategoryOptions"]>>>("src.backend.actions.ImportFrom1688.getCategoryOptions", ...args);
 export const getImportTaskList = (...args: Parameters<Actions["getImportTaskList"]>) => 

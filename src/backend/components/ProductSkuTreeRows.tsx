@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ArrowDownCircle, ArrowUpCircle, Minus, Plus, Settings2, Trash2, X } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, Minus, Plus, RotateCcw, Settings2, Trash2, X } from 'lucide-react'
 import { Badge, Button, Checkbox, TableCell, TableRow } from '@/backend/components/ui'
 import EditableImg from '@/@base/EditableImg'
 import { SkuTreeEditableCell } from '@/backend/components/ProductSkuTreeCells'
@@ -275,6 +275,15 @@ export function ProductTreeRows({
                 <ArrowUpCircle className="w-4 h-4" />
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-amber-800"
+              title="退回待上传"
+              onClick={() => handlers.openConfirmDialog('RETURN_TO_PENDING', [item.product_id])}
+            >
+              <RotateCcw className="w-4 h-4" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handlers.openConfirmDialog('DELETE', [item.product_id])}>
               <Trash2 className="w-4 h-4" />
             </Button>

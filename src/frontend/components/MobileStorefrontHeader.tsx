@@ -24,7 +24,7 @@ import {
   DEFAULT_CUSTOMER_SERVICE_CONFIG,
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
-import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService'
+import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = ({ className }: { className?: string }) => (
@@ -72,7 +72,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
 
   useEffect(() => {
     let cancelled = false
-    getCustomerServiceConfig()
+    loadCustomerServiceConfigCached()
       .then((res: any) => {
         if (cancelled) return
         const n = String(

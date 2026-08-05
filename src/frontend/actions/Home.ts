@@ -17,6 +17,7 @@ import {
   getDateKeyRange,
   getLast6MonthsRangeStart,
   getMonthDateRange,
+  isDateKeyProductName,
   toDateKey,
   toDateLabel,
   toMonthKey,
@@ -932,9 +933,36 @@ export const getDailyNewArrivalProducts = withResult(async (
         ? { gte: rangeStart, lt: rangeEnd }
         : { gte: rangeStart },
     },
-    include: {
-      skus: true,
-      brandCategory: true,
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      mainImageUrl: true,
+      shortDescription: true,
+      status: true,
+      costPrice: true,
+      ratingAverage: true,
+      ratingCount: true,
+      sortWeight: true,
+      brandCategoryId: true,
+      tradeInfoJson: true,
+      createdAt: true,
+      translationsJson: true,
+      skus: {
+        select: {
+          id: true,
+          skuCode: true,
+          price: true,
+          originalPrice: true,
+          stock: true,
+          stockStatus: true,
+          imageUrl: true,
+        },
+        orderBy: { price: 'asc' },
+      },
+      brandCategory: {
+        select: { id: true, name: true },
+      },
       category: {
         select: {
           name: true,
@@ -974,6 +1002,7 @@ export const getDailyNewArrivalProducts = withResult(async (
     orderBy: {
       createdAt: 'desc',
     },
+    take: 200,
   })
 
   const exchangeRate = await getUsdExchangeRate(prisma)
@@ -1120,9 +1149,34 @@ const mapComingSoonProductItem = (
 })
 
 /**
+ * Resolve Coming day key for a product:
+ * - Prefer product.name when it is YYYY-MM-DD (recommend-zone quick upload)
+ * - Else publishedAt ?? createdAt
+ */
+const resolveComingDayFromProduct = (product: ComingSoonProductRow) => {
+  const name = String(product.name || '').trim()
+  if (isDateKeyProductName(name)) {
+    const range = getDateKeyRange(name)
+    if (range) {
+      return {
+        key: name,
+        label: toDateLabel(range.start),
+        anchorMs: range.start.getTime(),
+      }
+    }
+  }
+  const anchor = product.publishedAt || product.createdAt
+  return {
+    key: toDateKey(anchor),
+    label: toDateLabel(anchor),
+    anchorMs: anchor.getTime(),
+  }
+}
+
+/**
  * Coming 页日期卡片（legacy 摘要）：
  * - 来源：未上架/预告类商品（DRAFT / PREORDER / INACTIVE），或类目名含 预告|Coming|未上架
- * - 归日：优先 publishedAt（管理员配置的预告/计划日期），否则 createdAt
+ * - 归日：优先商品名称 YYYY-MM-DD（快速发图），否则 publishedAt，再否则 createdAt
  * - 排序：日期降序（新的在前）
  * - 卡片：每日一张，预览图取该日第一条商品主图；不返回数量文案
  */
@@ -1140,13 +1194,12 @@ export const getComingSoonDateCards = withResult(
     >()
 
     for (const product of products) {
-      const anchor = product.publishedAt || product.createdAt
-      const key = toDateKey(anchor)
-      if (!byDay.has(key)) {
-        byDay.set(key, {
-          label: toDateLabel(anchor),
+      const day = resolveComingDayFromProduct(product)
+      if (!byDay.has(day.key)) {
+        byDay.set(day.key, {
+          label: day.label,
           product,
-          anchorMs: anchor.getTime(),
+          anchorMs: day.anchorMs,
         })
       }
     }
@@ -1169,7 +1222,7 @@ export const getComingSoonDateCards = withResult(
 /**
  * Coming 页按日商品列表：
  * - 与 getComingSoonDateCards 同源
- * - 归日：publishedAt ?? createdAt 落在 date_key 当天
+ * - 归日：商品名称 = date_key（YYYY-MM-DD），或 publishedAt ?? createdAt 落在当天
  * - 排序：sortWeight desc → createdAt desc
  */
 export const getComingSoonProductsByDate = withResult(
@@ -1185,12 +1238,58 @@ export const getComingSoonProductsByDate = withResult(
 
     const date_key = toDateKey(range.start)
     const date_label = toDateLabel(range.start)
+    const teaserCategoryIds = await loadComingTeaserCategoryIds()
 
-    const products = await loadComingSoonProductRows(500)
+    // Date-scoped DB filter — name date key OR calendar day on publishedAt/createdAt
+    const dayWhere = {
+      OR: [
+        { name: date_key },
+        { publishedAt: { gte: range.start, lt: range.end } },
+        {
+          AND: [
+            { publishedAt: null },
+            { createdAt: { gte: range.start, lt: range.end } },
+          ],
+        },
+      ],
+    }
+
+    let products = await prisma.product.findMany({
+      where: {
+        AND: [
+          buildComingTeaserWhere(teaserCategoryIds) as object,
+          dayWhere,
+        ],
+      } as any,
+      select: comingTeaserSelect,
+      orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }],
+      take: 120,
+    })
+
+    if (products.length === 0) {
+      products = await prisma.product.findMany({
+        where: {
+          AND: [
+            {
+              status: 'ACTIVE',
+              category: { status: 'ACTIVE' },
+            },
+            dayWhere,
+          ],
+        },
+        select: comingTeaserSelect,
+        orderBy: [{ createdAt: 'desc' }],
+        take: 80,
+      })
+    }
+
+    // Date-named products (recommend-zone upload) only belong to their name day,
+    // even if createdAt/publishedAt fall on another calendar day.
     const list = products
       .filter((product) => {
-        const anchor = product.publishedAt || product.createdAt
-        return toDateKey(anchor) === date_key
+        const name = String(product.name || '').trim()
+        if (isDateKeyProductName(name)) return name === date_key
+        return true
       })
       .map((product) => mapComingSoonProductItem(product, input.lang))
 

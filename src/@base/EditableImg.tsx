@@ -3,7 +3,7 @@
 import React, { CSSProperties, useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
-import get_image_url from '../../src/tools/tools';
+import get_image_url from '@/tools/get-image-url';
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame';
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext';
 import { isDirectImageSrc } from '@/shared/imageUrl';

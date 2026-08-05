@@ -541,8 +541,21 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }
 
   const uploadImageToProject = async (file: File) => {
+    // upload_project_file returns a URL string (throws if empty / failed)
     const uploadResult = await upload_project_file(file)
-    return uploadResult.file_url
+    if (typeof uploadResult === 'string') {
+      const url = uploadResult.trim()
+      if (!url) throw new Error('图片上传失败：未返回有效地址')
+      return url
+    }
+    const url = String(
+      (uploadResult as { file_url?: string; image_url?: string; url?: string })?.file_url
+        || (uploadResult as { file_url?: string; image_url?: string; url?: string })?.image_url
+        || (uploadResult as { file_url?: string; image_url?: string; url?: string })?.url
+        || '',
+    ).trim()
+    if (!url) throw new Error('图片上传失败：未返回有效地址')
+    return url
   }
 
   const handleUploadMainImage = async (event: ChangeEvent<HTMLInputElement>) => {

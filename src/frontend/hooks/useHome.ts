@@ -8,15 +8,17 @@ import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { useUserSession } from '@/tools/FrontendSession';
 import {
   addCartItem,
-  getHomeFeaturedProducts,
-  getHomeRecommendZones,
   getDailyNewArrivalCalendar,
   getDailyNewArrivalProducts,
   type DailyNewArrivalMonthCard,
   type HomeRecommendZoneSection,
 } from '@/frontend/actions/Home'
 import type { ProductItem } from '@/frontend/actions/ProductCategory'
-import { buildLast6Months, formatMonthLabel } from '@/frontend/utils/dailyNewArrival';
+import { buildLast6Months, formatMonthLabel } from '@/frontend/utils/dailyNewArrival'
+import {
+  loadHomeRecommendZonesCached,
+  peekCachedHomeRecommendZones,
+} from '@/frontend/utils/homeRecommendZonesCache';
 
 export type {
   ProductCategoryBannerItem as HomeBannerItem,
@@ -80,10 +82,16 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
   const searchParams = useSearchParams()
   const userSession = useUserSession()
   const { openAuthModal } = useCustomerAuthModal()
-  const [recommendZones, setRecommendZones] = useState<HomeRecommendZoneSection[]>([])
-  const [isLoadingRecommendZones, setIsLoadingRecommendZones] = useState(true)
-  const [linkedCategoryProducts, setLinkedCategoryProducts] = useState<HomeLinkedCategoryProduct[]>([])
-  const [isLoadingLinkedCategoryProducts, setIsLoadingLinkedCategoryProducts] = useState(false)
+  const [recommendZones, setRecommendZones] = useState<HomeRecommendZoneSection[]>(() => {
+    if (typeof window === 'undefined') return []
+    return peekCachedHomeRecommendZones(getClientPreferredLang()) || []
+  })
+  const [isLoadingRecommendZones, setIsLoadingRecommendZones] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return !(peekCachedHomeRecommendZones(getClientPreferredLang())?.length)
+  })
+  const [linkedCategoryProducts] = useState<HomeLinkedCategoryProduct[]>([])
+  const [isLoadingLinkedCategoryProducts] = useState(false)
   const [dailyNewArrivalMonths, setDailyNewArrivalMonths] = useState<DailyNewArrivalMonthCard[]>([])
   const [selectedDailyNewArrivalMonthKey, setSelectedDailyNewArrivalMonthKey] = useState<string | null>(
     () => searchParams.get('dailyMonth') || null,
@@ -137,11 +145,14 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
   const filteredRecommendZones = useMemo(() => recommendZones, [recommendZones])
 
   useEffect(() => {
-    setIsLoadingRecommendZones(true)
     const lang = typeof window !== 'undefined' ? getClientPreferredLang() : 'en'
-    getHomeRecommendZones({ lang })
-      .then((res) => {
-        setRecommendZones(Array.isArray(res.zones) ? res.zones : [])
+    const cached = peekCachedHomeRecommendZones(lang)
+    // Keep showing cached zones while refreshing — never flash empty on locale tick
+    if (!cached?.length) setIsLoadingRecommendZones(true)
+
+    loadHomeRecommendZonesCached(lang)
+      .then((zones) => {
+        setRecommendZones(zones)
       })
       .catch((err: any) => {
         // Keep previous zones on transient 502 — avoid empty homepage flash
@@ -150,52 +161,8 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       .finally(() => setIsLoadingRecommendZones(false))
   }, [homeLocaleTick])
 
-  useEffect(() => {
-    const categoryId = selectedRecommendCategoryId?.trim() || ''
-    if (!categoryId) {
-      setLinkedCategoryProducts([])
-      setIsLoadingLinkedCategoryProducts(false)
-      return
-    }
-
-    let cancelled = false
-    setIsLoadingLinkedCategoryProducts(true)
-
-    getHomeFeaturedProducts({
-      categoryId,
-      lang: typeof window !== 'undefined' ? getClientPreferredLang() : 'en',
-    })
-      .then((res) => {
-        if (cancelled) return
-        setLinkedCategoryProducts(
-          (res.products || []).map((item) => ({
-            productId: item.productId,
-            productName: item.productName,
-            productCode: item.productCode,
-            mainImageUrl: item.mainImageUrl,
-            ratingAverage: item.ratingAverage,
-            ratingCount: item.ratingCount,
-            defaultSkuId: item.defaultSkuId,
-            price: item.price,
-            originalPrice: item.originalPrice,
-            brandName: item.brandName,
-            shortDescription: item.sellingPoints?.[0]?.content || null,
-          })),
-        )
-      })
-      .catch((err: any) => {
-        if (cancelled) return
-        // keep previous linked products; no toast storm on 502
-        console.warn('[getHomeFeaturedProducts]', err?.message || err)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingLinkedCategoryProducts(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedRecommendCategoryId, homeLocaleTick])
+  // getHomeFeaturedProducts / linkedCategoryProducts: intentionally not fetched —
+  // no current storefront view consumes them (was a pure waterfall after zones).
 
   const fallbackDailyNewArrivalMonths = useMemo(
     () =>
@@ -209,40 +176,59 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
     [],
   )
 
-  // 预加载发布月历，供顶部「每日上新」悬浮下拉使用（不依赖点击进入分类）
+  // 月历：桌面顶部下拉需要；延后到首屏专区之后，避免挡住推荐区 RPC
   useEffect(() => {
     let cancelled = false
-    setIsLoadingDailyNewArrivalCalendar(true)
+    let idleId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-    getDailyNewArrivalCalendar()
-      .then((res) => {
-        if (cancelled) return
+    const load = () => {
+      if (cancelled) return
+      setIsLoadingDailyNewArrivalCalendar(true)
+      getDailyNewArrivalCalendar()
+        .then((res) => {
+          if (cancelled) return
+          const months =
+            Array.isArray(res.months) && res.months.length > 0
+              ? res.months
+              : fallbackDailyNewArrivalMonths
+          setDailyNewArrivalMonths(months)
+          setDailyNewArrivalTotalActiveProducts(res.totalActiveProducts ?? 0)
+        })
+        .catch((err: any) => {
+          if (cancelled) return
+          setDailyNewArrivalMonths(fallbackDailyNewArrivalMonths)
+          setDailyNewArrivalTotalActiveProducts(0)
+          console.warn('[dailyNewArrivalCalendar]', err?.message || err)
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingDailyNewArrivalCalendar(false)
+        })
+    }
 
-        const months =
-          Array.isArray(res.months) && res.months.length > 0
-            ? res.months
-            : fallbackDailyNewArrivalMonths
-
-        setDailyNewArrivalMonths(months)
-        setDailyNewArrivalTotalActiveProducts(res.totalActiveProducts ?? 0)
-      })
-      .catch((err: any) => {
-        if (cancelled) return
-        setDailyNewArrivalMonths(fallbackDailyNewArrivalMonths)
-        setDailyNewArrivalTotalActiveProducts(0)
-        // Soft-fail: month dropdown still works with empty counts; avoid red toast on home
-        console.warn('[dailyNewArrivalCalendar]', err?.message || err)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingDailyNewArrivalCalendar(false)
-      })
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(load, { timeout: 1800 })
+    } else {
+      timeoutId = setTimeout(load, 400)
+    }
 
     return () => {
       cancelled = true
+      if (idleId != null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [fallbackDailyNewArrivalMonths])
 
+  // 仅在用户选中具体月份时拉商品 — 默认首页不再拉「近 6 个月全量上新」
   useEffect(() => {
+    if (!selectedDailyNewArrivalMonthKey) {
+      setDailyNewArrivalProducts([])
+      setIsLoadingDailyNewArrivalProducts(false)
+      return
+    }
+
     let cancelled = false
     setIsLoadingDailyNewArrivalProducts(true)
 
@@ -253,17 +239,13 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
           'en'
         : 'en'
 
-    const request = selectedDailyNewArrivalMonthKey
-      ? (() => {
-          const [yearText, monthText] = selectedDailyNewArrivalMonthKey.split('-')
-          const year = Number(yearText)
-          const month = Number(monthText)
-          if (!Number.isInteger(year) || !Number.isInteger(month)) {
-            return Promise.resolve({ list: [], total: 0 })
-          }
-          return getDailyNewArrivalProducts({ year, month, lang })
-        })()
-      : getDailyNewArrivalProducts({ lang }) // 最近 6 个月全部上新
+    const [yearText, monthText] = selectedDailyNewArrivalMonthKey.split('-')
+    const year = Number(yearText)
+    const month = Number(monthText)
+    const request =
+      Number.isInteger(year) && Number.isInteger(month)
+        ? getDailyNewArrivalProducts({ year, month, lang })
+        : Promise.resolve({ list: [] as ProductItem[], total: 0 })
 
     request
       .then((res) => {

@@ -1,6 +1,6 @@
 import React, { CSSProperties, useState, useEffect, useMemo } from 'react';
 import { LoadingOutlined } from '@ant-design/icons';
-import get_image_url from '../../src/tools/tools';
+import get_image_url from '@/tools/get-image-url';
 
 interface EditableImgProps {
     src?: string; // 图片的初始地址

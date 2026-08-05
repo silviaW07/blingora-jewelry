@@ -625,13 +625,21 @@ export const useHomeRecommendZoneManagement = (): {
 
       setDraftUploadLoading(true)
       try {
+        // 商品名称固定为当天日期 YYYY-MM-DD（Asia/Shanghai），供 Coming 按日归组
+        const dateProductName = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Shanghai',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date())
+
         const uploaded: Array<{ url: string; name?: string }> = []
         for (const file of fileList) {
           const url = await upload_project_file(file)
           if (!url) throw new Error(`图片上传失败：${file.name}`)
           uploaded.push({
             url,
-            name: file.name.replace(/\.[^.]+$/, '').slice(0, 80),
+            name: dateProductName,
           })
         }
 
