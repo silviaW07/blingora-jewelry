@@ -631,6 +631,7 @@ import {
   resolveEnglishProductTitle,
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
+import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
   extractPinduoduoGoodsId,
@@ -4728,6 +4729,9 @@ const createProductRecord = async (tx: any, params: {
       skipDuplicates: true
     })
   }
+
+  // Append price-threshold L2 tags by existing category name; never changes primary categoryId.
+  await syncProductPriceThresholdRelations(tx, product.id)
 
   return product
 }

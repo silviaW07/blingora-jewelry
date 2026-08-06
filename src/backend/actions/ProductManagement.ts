@@ -610,6 +610,11 @@ import {
   resolveEnglishProductTitle,
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
+import {
+  autoClassifyAllProductsByPriceThreshold,
+  syncProductPriceThresholdRelations,
+  type AutoClassifyPriceThresholdSummary,
+} from '@/backend/lib/priceThresholdAutoClassify'
 
 export interface ReturnProductsToPendingUploadInput {
   product_ids: string[]
@@ -1892,6 +1897,8 @@ export const createProduct = requireRole([UserRole.ADMIN])(
       })
       await replaceProductCategoryRelations(tx, product.id, input.linked_category_ids || [])
       await replaceProductKeywordRelations(tx, product.id, input.linked_keyword_ids || [])
+      // Price-threshold L2 tags (below13/below3): append-only, never touches primary categoryId.
+      await syncProductPriceThresholdRelations(tx, product.id)
       return product
     })
 
@@ -2071,6 +2078,8 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
       }
 
       await syncCartItemsValidState(tx, input.product_id)
+      // After SKU prices settle — bind/prune below13 / below3 without touching primary category.
+      await syncProductPriceThresholdRelations(tx, input.product_id)
     })
 
     return { success: true }
@@ -2130,6 +2139,10 @@ export const updateProductStatus = requireRole([UserRole.ADMIN])(
         }
       })
       await syncCartItemsValidState(tx, product_id)
+      // On shelf: keep brand/primary as-is; only bind Bags≤$13 / Jewelry≤$3 threshold L2s.
+      if (target_status === 'ACTIVE') {
+        await syncProductPriceThresholdRelations(tx, product_id)
+      }
     })
 
     return { success: true }
@@ -2230,9 +2243,12 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
     if (input.field === 'category_id') {
       const nextCategoryId = String(input.value || '').trim()
       if (!nextCategoryId) throw new Error('请选择目标分类')
-      await prisma.product.update({
-        where: { id: input.product_id },
-        data: { categoryId: nextCategoryId }
+      await prisma.$transaction(async tx => {
+        await tx.product.update({
+          where: { id: input.product_id },
+          data: { categoryId: nextCategoryId }
+        })
+        await syncProductPriceThresholdRelations(tx, input.product_id)
       })
       return { success: true }
     }
@@ -2251,6 +2267,9 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
           }
         })
         await syncCartItemsValidState(tx, input.product_id)
+        if (nextGoodsStatus === 'ACTIVE') {
+          await syncProductPriceThresholdRelations(tx, input.product_id)
+        }
       })
       return { success: true }
     }
@@ -2272,9 +2291,12 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
       if (!Number.isFinite(nextCostPrice) || nextCostPrice < 0) {
         throw new Error('成本价不能小于0')
       }
-      await prisma.product.update({
-        where: { id: input.product_id },
-        data: { costPrice: nextCostPrice }
+      await prisma.$transaction(async tx => {
+        await tx.product.update({
+          where: { id: input.product_id },
+          data: { costPrice: nextCostPrice }
+        })
+        await syncProductPriceThresholdRelations(tx, input.product_id)
       })
       return { success: true }
     }
@@ -2287,6 +2309,7 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
       await prisma.$transaction(async tx => {
         await applyProductCoefficient(tx, input.product_id, nextCoefficient)
         await syncCartItemsValidState(tx, input.product_id)
+        await syncProductPriceThresholdRelations(tx, input.product_id)
       })
       return { success: true }
     }
@@ -2305,7 +2328,10 @@ export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
     if (input.field === 'price') {
       const nextPrice = Number(input.value)
       if (!Number.isFinite(nextPrice) || nextPrice < 0) throw new Error('售价不能小于0')
-      await prisma.productsku.update({ where: { id: sku.id }, data: { price: nextPrice } })
+      await prisma.$transaction(async tx => {
+        await tx.productsku.update({ where: { id: sku.id }, data: { price: nextPrice } })
+        await syncProductPriceThresholdRelations(tx, input.product_id)
+      })
       return { success: true }
     }
 
@@ -3400,6 +3426,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
             },
           })
           await replaceProductCategoryRelations(tx, product.id, linkedCategoryIds)
+          await syncProductPriceThresholdRelations(tx, product.id)
         })
         matched += 1
       } catch {
@@ -3414,6 +3441,17 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
       total: products.length,
     }
   })
+)
+
+/**
+ * 价格阈值自动分类：按已有二级类目名称绑定关联（不改主类目）
+ * - 一级「包/Bags」且售价 ≤ 13 USD → 关联「below13 usd」
+ * - 一级「饰品/Jewelry」且售价 ≤ 3 USD → 关联「below3 usd」
+ */
+export const autoClassifyPriceThresholdProducts = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<AutoClassifyPriceThresholdSummary> => {
+    return autoClassifyAllProductsByPriceThreshold(prisma)
+  }),
 )
 
 export interface BatchTranslateProductTitlesToSpanishInput {

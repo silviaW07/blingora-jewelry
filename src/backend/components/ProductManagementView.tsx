@@ -296,6 +296,16 @@ export const ProductManagementView = ({
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-9 border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100"
+                  disabled={state.priceThresholdClassifyRunning}
+                  onClick={() => void handlers.handleAutoClassifyPriceThresholdProducts()}
+                >
+                  <Tags className={`w-4 h-4 mr-2 ${state.priceThresholdClassifyRunning ? 'animate-pulse' : ''}`} />
+                  {state.priceThresholdClassifyRunning ? '价格分类中...' : '价格阈值自动分类'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="h-9 border-violet-200 bg-violet-50/70 text-violet-800 hover:bg-violet-100"
                   disabled={state.spanishTitleBackfillRunning}
                   onClick={() => void handlers.handleBatchTranslateTitlesToSpanish()}

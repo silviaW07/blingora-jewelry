@@ -38,6 +38,7 @@ import {
   sync1688ProductStatus,
   batchAppendProductAdminNotes,
   reclassifyPublishedProductsBySecondaryMatch,
+  autoClassifyPriceThresholdProducts,
   batchTranslateProductTitlesToSpanish,
   unbindProductCategory as unbindProductCategoryAction,
   type PendingImportEditableField,
@@ -597,6 +598,7 @@ export interface ProductManagementState {
   sync1688NoteDialogOpen: boolean
   sync1688NoteDraft: string
   reclassifyRunning: boolean
+  priceThresholdClassifyRunning: boolean
   spanishTitleBackfillRunning: boolean
 }
 
@@ -727,6 +729,7 @@ export interface ProductManagementHandlers {
   submitSync1688Notes: () => Promise<void>
   deferSync1688Panel: () => void
   handleReclassifyPublishedProducts: () => Promise<void>
+  handleAutoClassifyPriceThresholdProducts: () => Promise<void>
   handleBatchTranslateTitlesToSpanish: () => Promise<void>
 }
 
@@ -896,6 +899,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [sync1688NoteDialogOpen, setSync1688NoteDialogOpen] = useState(false)
   const [sync1688NoteDraft, setSync1688NoteDraft] = useState('')
   const [reclassifyRunning, setReclassifyRunning] = useState(false)
+  const [priceThresholdClassifyRunning, setPriceThresholdClassifyRunning] = useState(false)
   const [spanishTitleBackfillRunning, setSpanishTitleBackfillRunning] = useState(false)
 
   const categoryMap = useMemo(() => new Map<string, CategoryTreeOption>(categoryOptions.map(item => [item.category_id, item])), [categoryOptions])
@@ -2331,6 +2335,30 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const handleAutoClassifyPriceThresholdProducts = async () => {
+    if (priceThresholdClassifyRunning) return
+    const confirmed = window.confirm(
+      '将扫描商品列表：一级「包」且售价≤13USD → 关联已有「below13 usd」；一级「饰品」且售价≤3USD → 关联已有「below3 usd」。不会改动主类目。是否继续？',
+    )
+    if (!confirmed) return
+
+    setPriceThresholdClassifyRunning(true)
+    try {
+      const result = await autoClassifyPriceThresholdProducts()
+      const missing = result.missing_targets?.length
+        ? `；未找到类目：${result.missing_targets.join('、')}`
+        : ''
+      toast.success(
+        `价格阈值分类完成：绑定 ${result.bound}，解除 ${result.unbound}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.scanned}）${missing}`,
+      )
+      await fetchList()
+    } catch (err: any) {
+      toast.error(err?.message || '价格阈值分类失败')
+    } finally {
+      setPriceThresholdClassifyRunning(false)
+    }
+  }
+
   const handleBatchTranslateTitlesToSpanish = async () => {
     if (spanishTitleBackfillRunning) return
     const scopeIds = selectedProductIds
@@ -3111,6 +3139,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       sync1688NoteDialogOpen,
       sync1688NoteDraft,
       reclassifyRunning,
+      priceThresholdClassifyRunning,
       spanishTitleBackfillRunning,
     },
     handlers: {
@@ -3242,6 +3271,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       submitSync1688Notes,
       deferSync1688Panel,
       handleReclassifyPublishedProducts,
+      handleAutoClassifyPriceThresholdProducts,
       handleBatchTranslateTitlesToSpanish,
     }
   }
