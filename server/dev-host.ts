@@ -1360,7 +1360,18 @@ try {
 
 const PORT = process.env.PORT || 3100
 
+app.get('/healthz', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: 'rpc',
+    port: Number(PORT),
+    pid: process.pid,
+    uptimeSec: Math.round(process.uptime()),
+  })
+})
+
 app.listen(PORT, () => {
   console.log(`[DEV] RPC Server running at http://localhost:${PORT}`)
   console.log(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)
+  console.log(`[DEV] healthz: http://localhost:${PORT}/healthz`)
 })
