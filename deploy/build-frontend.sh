@@ -21,10 +21,18 @@ if [[ -f .env ]]; then
     echo "UPLOAD_DIR=$UPLOAD_DIR" >> .env
     echo "==> appended UPLOAD_DIR to .env"
   fi
+  # NEXT_PUBLIC_* is inlined at build time — AutoCoder here forces the 200/day quota
+  if grep -q '^NEXT_PUBLIC_IMAGE_UPLOAD_URL=.*autocoder' .env; then
+    echo "==> disabling AutoCoder NEXT_PUBLIC_IMAGE_UPLOAD_URL in .env (causes 200/day quota)"
+    sed -i.bak '/^NEXT_PUBLIC_IMAGE_UPLOAD_URL=.*autocoder/d' .env || \
+      sed -i '' '/^NEXT_PUBLIC_IMAGE_UPLOAD_URL=.*autocoder/d' .env
+  fi
 else
   echo "UPLOAD_DIR=$UPLOAD_DIR" > .env
   echo "==> created .env with UPLOAD_DIR"
 fi
+unset NEXT_PUBLIC_IMAGE_UPLOAD_URL || true
+export NEXT_PUBLIC_IMAGE_UPLOAD_URL=
 
 echo "==> git pull"
 git pull --ff-only || git pull

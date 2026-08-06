@@ -10,19 +10,29 @@ const DEFAULT_PROJECT_ID =
   process.env.NEXT_PUBLIC_PROJECT_ID || 'PROJ_fcb9e6ee_snap_20260726_092922_893'
 
 /**
- * Self-hosted endpoint (app/api/upload-image). Primary target: the AutoCoder
- * cloud image API caps a project at 200 uploads/day, which bulk table/1688
- * imports exhaust within a single session.
- * Trailing slash matches next.config trailingSlash so POST is not 308-redirected.
+ * Self-hosted endpoint (app/api/upload-image). Do NOT use AutoCoder's cloud
+ * upload API — it caps the project at 200 uploads/day and bulk imports hit it
+ * immediately. Trailing slash matches next.config trailingSlash.
  */
 const SELF_HOSTED_UPLOAD_URL = `${(process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/+$/, '')}/api/upload-image/`
 
-const LEGACY_IMAGE_UPLOAD_URL = 'https://project.autocoder.cc/api/project/image/upload/project'
+/**
+ * Optional custom gateway. AutoCoder URLs are ignored even if present in .env —
+ * that env var used to force the quota-limited endpoint at build time.
+ */
+function resolveUploadTarget(): string {
+  const configured = (process.env.NEXT_PUBLIC_IMAGE_UPLOAD_URL || '').trim()
+  if (!configured) return SELF_HOSTED_UPLOAD_URL
+  if (/autocoder\.cc/i.test(configured)) {
+    console.warn(
+      '[upload] ignoring NEXT_PUBLIC_IMAGE_UPLOAD_URL pointing at AutoCoder (200/day quota); using self-hosted /api/upload-image/',
+    )
+    return SELF_HOSTED_UPLOAD_URL
+  }
+  return configured
+}
 
-/** Explicit override wins (e.g. pin an OSS/S3 gateway) and disables the fallback. */
-const CONFIGURED_UPLOAD_URL = (process.env.NEXT_PUBLIC_IMAGE_UPLOAD_URL || '').trim()
-
-const PRIMARY_UPLOAD_URL = CONFIGURED_UPLOAD_URL || SELF_HOSTED_UPLOAD_URL
+const PRIMARY_UPLOAD_URL = resolveUploadTarget()
 
 const URL_FIELD_KEYS = [
   'image_url',
@@ -139,19 +149,6 @@ function isQuotaFailure(message: string): boolean {
   return /上限|quota|limit exceeded|too many/i.test(message)
 }
 
-/**
- * Retry the legacy cloud endpoint only for transport faults / 5xx from our own server;
- * a 4xx (bad type, too large) or a quota message would fail again.
- */
-function shouldFallbackToLegacy(error: unknown): boolean {
-  if (CONFIGURED_UPLOAD_URL) return false
-  if (!(error instanceof Error)) return false
-  if (isQuotaFailure(error.message)) return false
-  const failure = error as UploadFailure
-  if (failure.transportError) return true
-  return typeof failure.httpStatus === 'number' && failure.httpStatus >= 500
-}
-
 /** POST the file to one endpoint; resolves to a URL or throws a described failure. */
 async function postToUploadEndpoint(
   targetUrl: string,
@@ -162,24 +159,12 @@ async function postToUploadEndpoint(
   formData.append('image', uploadFile)
   formData.append('project_id', project_id)
 
-  const isLegacy = targetUrl === LEGACY_IMAGE_UPLOAD_URL
-  const authToken =
-    (isLegacy &&
-      typeof localStorage !== 'undefined' &&
-      (localStorage.getItem('full_token') || localStorage.getItem('token') || '')) ||
-    ''
-
   let response: Response
   try {
     response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         Accept: 'application/json, text/plain, */*',
-        // AutoCoder-specific headers; harmless but pointless for the self-hosted route
-        ...(isLegacy
-          ? { 'AGC-language': 'en-US', 'X-Browser': 'Blink', 'X-Language': 'en' }
-          : {}),
-        ...(authToken ? { Authorization: authToken } : {}),
       },
       body: formData,
     })
@@ -238,9 +223,9 @@ async function postToUploadEndpoint(
 }
 
 /**
- * Upload an image to self-hosted storage (NEXT_PUBLIC_IMAGE_UPLOAD_URL overrides the target).
- * Compresses client-side (canvas) before send so callers automatically get smaller files.
- * Always returns a non-empty URL string, or throws with a server/friendly message.
+ * Upload an image to self-hosted storage only (never AutoCoder — that API is
+ * capped at 200 uploads/day). NEXT_PUBLIC_IMAGE_UPLOAD_URL may override to a
+ * non-AutoCoder gateway. Compresses client-side before send.
  */
 export async function upload_image_file(file: File, projectId?: string): Promise<string> {
   try {
@@ -269,24 +254,14 @@ export async function upload_image_file(file: File, projectId?: string): Promise
     }
 
     const project_id = (projectId && projectId.trim()) || DEFAULT_PROJECT_ID
-
-    try {
-      return await postToUploadEndpoint(PRIMARY_UPLOAD_URL, uploadFile, project_id)
-    } catch (primaryErr) {
-      if (!shouldFallbackToLegacy(primaryErr)) throw primaryErr
-
-      // Self-hosted storage is down (e.g. UPLOAD_DIR not writable) — one legacy attempt
-      console.warn('[upload] self-hosted upload failed, retrying AutoCoder once', primaryErr)
-      try {
-        return await postToUploadEndpoint(LEGACY_IMAGE_UPLOAD_URL, uploadFile, project_id)
-      } catch (legacyErr) {
-        console.error('[upload] AutoCoder fallback also failed', legacyErr)
-        // Surface the self-hosted failure: that is the one the operator must fix
-        throw primaryErr
-      }
-    }
+    return await postToUploadEndpoint(PRIMARY_UPLOAD_URL, uploadFile, project_id)
   } catch (error) {
     console.error('An error occurred while uploading image:', error)
+    if (error instanceof Error && isQuotaFailure(error.message)) {
+      throw new Error(
+        '图片上传失败：仍在调用已限流的旧图床。请清除浏览器缓存后重试，或确认已用 webpack 重新部署（上传应走 /api/upload-image/）。',
+      )
+    }
     throw error
   }
 }
