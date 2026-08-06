@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { ImagePlus, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
+import { PreviewableThumb } from '@/backend/components/ImageLightbox'
 import { Button, TableCell, TableRow } from '@/backend/components/ui'
 import { PendingImportSkuEditableCell } from '@/backend/components/PendingImportEditableCells'
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement'
@@ -229,14 +230,11 @@ function ColorImageUploader({
     <div className="flex flex-col gap-1.5 flex-shrink-0">
       {imageUrl ? (
         <div className="relative w-10 h-10 rounded border border-slate-200 overflow-hidden bg-white">
-          <button
-            type="button"
-            className="w-full h-full"
-            title="点击替换代表图"
-            onClick={() => {
-              const input = document.getElementById(`pending-sku-replace-${uploadKey}`) as HTMLInputElement | null
-              input?.click()
-            }}
+          <PreviewableThumb
+            src={imageUrl}
+            alt={`${colorLabel} 代表图`}
+            className="h-full w-full"
+            title="点击查看大图"
           >
             <EditableImg
               propKey={`pending-sku-${uploadKey}`}
@@ -244,22 +242,15 @@ function ColorImageUploader({
               keywords={imageUrl}
               description={`${colorLabel} 代表图`}
             />
-          </button>
+          </PreviewableThumb>
           <button
             type="button"
-            className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl bg-black/70 text-[10px] text-white"
+            className="absolute right-0 top-0 z-[1] flex h-4 w-4 items-center justify-center rounded-bl bg-black/70 text-[10px] text-white"
             title="删除代表图"
             onClick={() => void handlers.removePendingImportSkuImage(itemId, skuKey)}
           >
             ×
           </button>
-          <input
-            id={`pending-sku-replace-${uploadKey}`}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={e => handlers.replacePendingImportSkuImage(itemId, skuKey, e)}
-          />
         </div>
       ) : null}
       <Button

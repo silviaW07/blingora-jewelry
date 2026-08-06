@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { ArrowUpCircle, ImagePlus, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
+import { PreviewableThumb } from '@/backend/components/ImageLightbox'
 import { Badge, Button, Checkbox, TableCell, TableRow } from '@/backend/components/ui'
 import { PendingImportSkuChildRows } from '@/backend/components/PendingImportSkuChildRows'
 import {
@@ -13,6 +14,7 @@ import {
 import type { ProductManagementHandlers, ProductManagementState } from '@/backend/hooks/useProductManagement'
 import type { PendingImportQueueItem } from '@/backend/actions/ProductManagement'
 import type { ProductSource } from '@/backend/types/ProductManagement'
+import { cn } from '@/lib/utils'
 import {
   canPublishPendingImportItem,
   getEffectivePendingImportFetchStatus,
@@ -168,16 +170,15 @@ export function PendingImportTableRows({
                   ? item.item_galleryUrls
                   : (item.item_mainImageUrl || item.item_parsedMainImageUrl
                     ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
-                    : [])).map((url, imageIndex) => (
+                    : [])).map((url, imageIndex, allUrls) => {
+                  const canDelete = allUrls.length > 1
+                  return (
                   <div key={`${item.item_id}-${imageIndex}-${url}`} className="relative w-12 h-12 rounded border border-slate-100 overflow-hidden flex-shrink-0 bg-slate-50">
-                    <button
-                      type="button"
-                      className="w-full h-full"
-                      title="点击替换图片"
-                      onClick={() => {
-                        const input = document.getElementById(`pending-replace-${item.item_id}-${imageIndex}`) as HTMLInputElement | null
-                        input?.click()
-                      }}
+                    <PreviewableThumb
+                      src={url}
+                      alt={item.item_productName || item.item_parsedName || '商品图片'}
+                      className="h-full w-full"
+                      title="点击查看大图"
                     >
                       <EditableImg
                         propKey={`pending-${item.item_id}-${imageIndex}`}
@@ -185,12 +186,36 @@ export function PendingImportTableRows({
                         keywords={url || item.item_productName || 'product'}
                         description={item.item_productName || item.item_parsedName || '待上传商品'}
                       />
+                    </PreviewableThumb>
+                    <button
+                      type="button"
+                      className="absolute left-0 top-0 z-[2] flex h-4 w-4 items-center justify-center rounded-br bg-black/70 text-[9px] text-white"
+                      title="替换图片"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        event.preventDefault()
+                        const input = document.getElementById(`pending-replace-${item.item_id}-${imageIndex}`) as HTMLInputElement | null
+                        input?.click()
+                      }}
+                    >
+                      ✎
                     </button>
                     <button
                       type="button"
-                      className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl bg-black/70 text-[10px] text-white"
-                      title="删除图片"
-                      onClick={() => handlers.removePendingImportImage(item.item_id, imageIndex)}
+                      className={cn(
+                        'absolute right-0 top-0 z-[2] flex h-4 w-4 items-center justify-center rounded-bl text-[10px] text-white',
+                        canDelete ? 'bg-black/70 hover:bg-black/90' : 'cursor-not-allowed bg-black/40 opacity-60',
+                      )}
+                      title={canDelete ? '删除图片' : '至少保留一张主图，请先上传新图再删'}
+                      disabled={!canDelete}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        event.preventDefault()
+                        if (!canDelete) {
+                          return
+                        }
+                        void handlers.removePendingImportImage(item.item_id, imageIndex)
+                      }}
                     >
                       ×
                     </button>
@@ -202,7 +227,8 @@ export function PendingImportTableRows({
                       onChange={e => handlers.replacePendingImportImage(item.item_id, imageIndex, e)}
                     />
                   </div>
-                ))}
+                  )
+                })}
               </div>
               <div>
                 <Button

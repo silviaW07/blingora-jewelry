@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
 import { shouldBypassImageOptimizer } from '@/shared/imageUrl'
@@ -18,11 +18,14 @@ type Props = {
   height?: number
   sizes?: string
   priority?: boolean
+  /** Longest edge requested from alicdn (default 400 for cards) */
+  imageWidth?: number
 }
 
 /**
- * Product image: next/image (WebP) + same-origin proxy for alicdn + no-referrer fallback.
- * On error: once retry without size suffix / original src before locking the beige tile.
+ * Product image: same-origin proxy + sized alicdn thumbs.
+ * Proxy/upload URLs use native <img> (no Next optimizer queue) so gallery +
+ * color swatches can paint in parallel. Soft-retry before locking beige tile.
  */
 export function OptimizedProductImage({
   src,
@@ -33,19 +36,27 @@ export function OptimizedProductImage({
   height,
   sizes = '(max-width: 640px) 50vw, 25vw',
   priority = false,
-  /** Longest edge requested from alicdn (default 400 for cards) */
   imageWidth = 400,
-}: Props & { imageWidth?: number }) {
+}: Props) {
   const primary = toProxiedImageUrl(src, { width: imageWidth })
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setAttempt(0)
+    setFailed(false)
+  }, [src, imageWidth])
 
   const raw = String(src || '').trim()
   // attempt 0: resized proxy; 1: proxy without size; 2: original raw URL
   const displaySrc =
     attempt === 0 ? primary : attempt === 1 ? toProxiedImageUrl(src, { width: 0 }) || primary : raw
 
-  if (!primary || failed || !displaySrc) {
+  if (!primary && !raw) {
+    return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
+  }
+
+  if (failed || !displaySrc) {
     return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
   }
 
@@ -59,6 +70,44 @@ export function OptimizedProductImage({
     setFailed(true)
   }
 
+  // Same-origin proxy / uploads: native img avoids /_next/image contention
+  // when a PDP paints hero + 6 gallery + 8 color swatches at once.
+  if (skipOptimizer) {
+    if (fill) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${displaySrc}-${attempt}`}
+          src={displaySrc}
+          alt={alt}
+          className={cn('absolute inset-0 h-full w-full object-cover', className)}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'auto'}
+          referrerPolicy="no-referrer"
+          onError={handleError}
+        />
+      )
+    }
+
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={`${displaySrc}-${attempt}`}
+        src={displaySrc}
+        alt={alt}
+        width={width || imageWidth}
+        height={height || imageWidth}
+        className={cn('object-cover', className)}
+        loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
+        fetchPriority={priority ? 'high' : 'auto'}
+        referrerPolicy="no-referrer"
+        onError={handleError}
+      />
+    )
+  }
+
   if (fill) {
     return (
       <Image
@@ -70,7 +119,6 @@ export function OptimizedProductImage({
         priority={priority}
         className={cn('object-cover', className)}
         referrerPolicy="no-referrer"
-        unoptimized={skipOptimizer}
         onError={handleError}
       />
     )
@@ -87,7 +135,6 @@ export function OptimizedProductImage({
       priority={priority}
       className={cn('object-cover', className)}
       referrerPolicy="no-referrer"
-      unoptimized={skipOptimizer}
       onError={handleError}
     />
   )

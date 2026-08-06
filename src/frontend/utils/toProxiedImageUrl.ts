@@ -11,22 +11,38 @@ const ALICDN_HOSTS = new Set([
 const HAS_SIZE_SUFFIX = /_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i
 
 /**
+ * Remove alicdn resize suffix so thumbs can request a smaller size
+ * (`foo.jpg_960x960q80.jpg` → `foo.jpg`).
+ */
+export function stripAlicdnSize(url: string): string {
+  const raw = String(url || '').trim()
+  if (!raw) return raw
+  const [pathPart, query = ''] = raw.split('?')
+  if (!HAS_SIZE_SUFFIX.test(pathPart)) return raw
+  const stripped = pathPart.replace(/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i, '')
+  return query ? `${stripped}?${query}` : stripped
+}
+
+/**
  * Append Taobao/1688 CDN resize suffix before proxying.
  * Full ~280KB JPEG → `_400x400q80.jpg` ~25KB (verified via img-proxy).
+ * Always rewrites an existing size suffix to the requested width.
  */
 export function withAlicdnSize(url: string, width = 800, quality = 80): string {
   const raw = String(url || '').trim()
-  if (!raw || width <= 0) return raw
-  if (HAS_SIZE_SUFFIX.test(raw.split('?')[0] || '')) return raw
+  if (!raw) return raw
+  // width <= 0 → unsized original (used by image error retry)
+  if (width <= 0) return stripAlicdnSize(raw)
 
-  const [pathPart, query = ''] = raw.split('?')
+  const base = stripAlicdnSize(raw)
+  const [pathPart, query = ''] = base.split('?')
   const q = query ? `?${query}` : ''
 
   // /img-proxy/cbu01/...jpg  or absolute alicdn ...jpg
   if (/\.(jpe?g|png|webp)$/i.test(pathPart)) {
     return `${pathPart}_${width}x${width}q${quality}.jpg${q}`
   }
-  return raw
+  return base
 }
 
 /**

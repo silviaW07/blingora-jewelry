@@ -4,6 +4,7 @@ import React from 'react'
 import { ArrowDownCircle, ArrowUpCircle, Minus, Plus, RotateCcw, Settings2, Trash2, X } from 'lucide-react'
 import { Badge, Button, Checkbox, TableCell, TableRow } from '@/backend/components/ui'
 import EditableImg from '@/@base/EditableImg'
+import { PreviewableThumb } from '@/backend/components/ImageLightbox'
 import { SkuTreeEditableCell } from '@/backend/components/ProductSkuTreeCells'
 import {
   ProductGoodsStatusBadge,
@@ -79,11 +80,27 @@ export function ProductTreeRows({
         <TableCell>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded border border-slate-100 overflow-hidden flex-shrink-0 bg-slate-50">
-              <EditableImg
-                propKey={`prod-${item.product_id}`}
-                keywords={item.sku_code_base || 'industrial product'}
-                description={item.product_name}
-              />
+              {item.main_image_url ? (
+                <PreviewableThumb
+                  src={item.main_image_url}
+                  alt={item.product_name}
+                  className="h-full w-full"
+                  title="点击查看大图"
+                >
+                  <EditableImg
+                    propKey={`prod-${item.product_id}`}
+                    src={item.main_image_url}
+                    keywords={item.main_image_url}
+                    description={item.product_name}
+                  />
+                </PreviewableThumb>
+              ) : (
+                <EditableImg
+                  propKey={`prod-${item.product_id}`}
+                  keywords={item.sku_code_base || 'industrial product'}
+                  description={item.product_name}
+                />
+              )}
             </div>
             <div className="flex flex-col overflow-hidden">
               <ProductInlineEditableCell

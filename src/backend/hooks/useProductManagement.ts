@@ -2757,8 +2757,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const persistPendingImportGallery = async (itemId: string, galleryUrls: string[]) => {
     const unique = Array.from(new Set(galleryUrls.map(url => String(url || '').trim()).filter(Boolean)))
     if (unique.length === 0) {
-      toast.error('至少保留一张图片')
-      return
+      throw new Error('至少保留一张主图：可先点「上传/编辑图片」加新图，再删旧图')
     }
     await updatePendingImportGallery({
       itemId,

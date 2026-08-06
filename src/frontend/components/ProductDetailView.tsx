@@ -4,7 +4,6 @@ import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
-import EditableImg from '@/@base/EditableImg';
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -418,6 +417,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         className="size-full"
                         sizes="72px"
                         imageWidth={160}
+                        priority={index < 2}
                       />
                     </button>
                   ))}
@@ -536,10 +536,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             : t('common.color')}
                         </div>
                         <div className="product-color-swatch-list">
-                          {colorSwatches.map((swatch) => {
+                          {colorSwatches.map((swatch, swatchIndex) => {
                             const isSelected = manualColorValue === swatch.value
-                            const previewUrl =
-                              swatch.imageUrl || product.mainImageUrl || product.name || ''
+                            const previewUrl = swatch.imageUrl || product.mainImageUrl || ''
                             const colorLabel = translateColorName(t, swatch.value)
                             return (
                               <button
@@ -560,11 +559,16 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                   {colorLabel}
                                 </span>
                                 <span className="product-color-swatch-frame">
-                                  <EditableImg
-                                    propKey={`detail-color-${swatch.sku.id}`}
-                                    keywords={previewUrl}
-                                    className="size-full object-cover pointer-events-none"
-                                  />
+                                  {previewUrl ? (
+                                    <OptimizedProductImage
+                                      src={previewUrl}
+                                      alt={colorLabel}
+                                      className="pointer-events-none"
+                                      sizes="88px"
+                                      imageWidth={200}
+                                      priority={swatchIndex < 4}
+                                    />
+                                  ) : null}
                                 </span>
                               </button>
                             )
@@ -735,11 +739,13 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     className="overflow-hidden rounded-[2px] border border-[#ececec] text-left transition hover:border-[#111]"
                     onClick={() => handleRelatedClick(item.id)}
                   >
-                    <div className="aspect-square bg-[#f3f3f3]">
-                      <EditableImg
-                        propKey={`related-${item.id}`}
-                        keywords={item.mainImageUrl}
-                        className="size-full object-cover"
+                    <div className="relative aspect-square bg-[#f3f3f3]">
+                      <OptimizedProductImage
+                        src={item.mainImageUrl}
+                        alt={item.name}
+                        className="size-full"
+                        sizes="(max-width: 768px) 50vw, 25vw"
+                        imageWidth={400}
                       />
                     </div>
                     <div className="space-y-1 p-3">
