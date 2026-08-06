@@ -7084,7 +7084,8 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
       throw new Error('请至少选择一条待重新解析的商品')
     }
 
-    const jobLabel = `reparse:${input.itemIds.length}`
+    const itemIds = Array.from(new Set(input.itemIds.filter(Boolean)))
+    const jobLabel = `reparse:${itemIds.length}`
     acquireParseJob(jobLabel)
 
     try {
@@ -7094,191 +7095,215 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
         // ignore charset bootstrap failure
       }
 
-      const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
-      const categoryMap = await loadImportPricingCategories(prisma)
-      const exchangeRate = await getGlobalExchangeRate(prisma)
+      // Mark claimed rows RUNNING before ACK so the UI can poll without a second mutex trip.
+      await prisma.importtaskitem.updateMany({
+        where: {
+          id: { in: itemIds },
+          importedProductId: null,
+          isPublished: false,
+        },
+        data: {
+          fetchStatus: 'RUNNING' as any,
+          fetchStartedAt: new Date(),
+          fetchFinishedAt: null,
+          failureReason: null,
+        },
+      })
+    } catch (error) {
+      releaseParseJob(jobLabel)
+      throw error
+    }
 
+    // ACK immediately — full reparse (esp. with browser-captured HTML) exceeds the 25s RPC timeout.
+    // Holding the mutex across a sync loop caused "已有解析任务进行中" when the client retried.
+    void (async () => {
       let success = 0
       let fail = 0
-      const results: ReparsePendingImportItemResult[] = []
+      try {
+        const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
+        const categoryMap = await loadImportPricingCategories(prisma)
+        const exchangeRate = await getGlobalExchangeRate(prisma)
 
-      for (let index = 0; index < input.itemIds.length; index += 1) {
-        const itemId = input.itemIds[index]
-        let displayName = itemId
+        for (let index = 0; index < itemIds.length; index += 1) {
+          const itemId = itemIds[index]
+          let displayName = itemId
 
-        try {
-          const item = await prisma.importtaskitem.findUnique({
-            where: { id: itemId },
-            include: { importTask: true },
-          })
-
-          if (!item) {
-            fail += 1
-            results.push({ itemId, success: false, name: itemId, reason: '待上传明细不存在' })
-            continue
-          }
-
-          displayName =
-            normalizeText(item.parsedName) ||
-            normalizeText(item.sourceUrl) ||
-            itemId
-
-          if (item.isPublished || item.importedProductId) {
-            fail += 1
-            results.push({ itemId, success: false, name: displayName, reason: '该商品已发布，无法重新解析' })
-            continue
-          }
-
-          if (isTableImportSourceUrl(item.sourceUrl)) {
-            fail += 1
-            results.push({
-              itemId,
-              success: false,
-              name: displayName,
-              reason: '表格导入条目不支持重新解析，请直接编辑字段或删除后重新导入',
+          try {
+            const item = await prisma.importtaskitem.findUnique({
+              where: { id: itemId },
+              include: { importTask: true },
             })
-            continue
-          }
 
-          const sourceUrl = normalizeText(item.sourceUrl)
-          const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
-          const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
-          if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {
-            fail += 1
-            results.push({
-              itemId,
-              success: false,
-              name: displayName,
-              reason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
+            if (!item) {
+              fail += 1
+              continue
+            }
+
+            displayName =
+              normalizeText(item.parsedName) ||
+              normalizeText(item.sourceUrl) ||
+              itemId
+
+            if (item.isPublished || item.importedProductId) {
+              fail += 1
+              await prisma.importtaskitem.update({
+                where: { id: item.id },
+                data: {
+                  fetchStatus: 'FAILED' as any,
+                  failureReason: '该商品已发布，无法重新解析',
+                  fetchFinishedAt: new Date(),
+                },
+              })
+              continue
+            }
+
+            if (isTableImportSourceUrl(item.sourceUrl)) {
+              fail += 1
+              await prisma.importtaskitem.update({
+                where: { id: item.id },
+                data: {
+                  fetchStatus: 'FAILED' as any,
+                  failureReason: '表格导入条目不支持重新解析，请直接编辑字段或删除后重新导入',
+                  fetchFinishedAt: new Date(),
+                },
+              })
+              continue
+            }
+
+            const sourceUrl = normalizeText(item.sourceUrl)
+            const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
+            const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
+            if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {
+              fail += 1
+              await prisma.importtaskitem.update({
+                where: { id: item.id },
+                data: {
+                  fetchStatus: 'FAILED' as any,
+                  failureReason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
+                  fetchFinishedAt: new Date(),
+                },
+              })
+              continue
+            }
+
+            await prisma.importtaskitem.update({
+              where: { id: item.id },
+              data: {
+                fetchStatus: 'RUNNING' as any,
+                fetchStartedAt: new Date(),
+                fetchFinishedAt: null,
+                failureReason: null,
+              },
             })
-            continue
-          }
 
-          await prisma.importtaskitem.update({
-            where: { id: item.id },
-            data: {
-              fetchStatus: 'RUNNING' as any,
-              fetchStartedAt: new Date(),
-              fetchFinishedAt: null,
-              failureReason: null,
-            },
-          })
+            if (isPddUrl) {
+              const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
+              const fetched = fetchResult.preview
+              const hasRealParse =
+                fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
+              if (!hasRealParse) {
+                const reason =
+                  fetchResult.outcome === 'expired'
+                    ? '该拼多多商品已下架或不存在'
+                    : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试'
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: reason,
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                fail += 1
+              } else {
+                await persistPinduoduoParsedItem({
+                  item,
+                  task: item.importTask as any,
+                  fetched,
+                  secondaryCategories,
+                  categoryMap,
+                  exchangeRate,
+                })
+                success += 1
+              }
+              continue
+            }
 
-          if (isPddUrl) {
-            const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
+            const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
             const fetched = fetchResult.preview
-            const hasRealParse =
-              fetchResult.outcome === 'success' && hasMeaningfulPinduoduoPreview(fetched)
+            const hasRealParse = Boolean(
+              fetched.name ||
+              fetched.mainImageUrl ||
+              (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
+            )
+
             if (!hasRealParse) {
-              const reason =
-                fetchResult.outcome === 'expired'
-                  ? '该拼多多商品已下架或不存在'
-                  : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试'
+              const reason = resolveFetchFailureReason(fetchResult)
               await prisma.importtaskitem.update({
                 where: { id: item.id },
                 data: {
                   fetchStatus: 'FAILED' as any,
                   failureReason: reason,
                   fetchFinishedAt: new Date(),
+                  ...(isClassicMock1688SkuSummary(item.skuSummaryText) ||
+                  isClassicMock1688SkuTable(((item.previewDataJson || {}) as PreviewDataJson).skuTable)
+                    ? {
+                        skuSummaryText: '默认规格',
+                        specSummaryJson: [{ name: '规格', values: ['默认规格'] }] as any,
+                        previewDataJson: {
+                          ...((item.previewDataJson || {}) as PreviewDataJson),
+                          colors: [],
+                          sizesByColor: {},
+                          skuTable: [
+                            buildNeutralFallbackSkuRow({
+                              costPrice: toNumberOrNull(item.costPrice) ?? 50,
+                              price: toNumberOrNull(item.costPrice) ?? 50,
+                              stock: toNumberOrNull(item.availableStock) ?? 100,
+                            }),
+                          ],
+                        } as any,
+                      }
+                    : {}),
                 },
               })
               fail += 1
-              results.push({ itemId, success: false, name: displayName, reason })
             } else {
-              const applied = await persistPinduoduoParsedItem({
-                item,
-                task: item.importTask as any,
+              await applyReparsed1688PreviewToItem({
+                item: item as any,
                 fetched,
-                secondaryCategories,
                 categoryMap,
+                secondaryCategories,
                 exchangeRate,
               })
               success += 1
-              results.push({ itemId, success: true, name: applied.productName })
-              displayName = applied.productName
             }
-            continue
-          }
-
-          const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
-          const fetched = fetchResult.preview
-          const hasRealParse = Boolean(
-            fetched.name ||
-            fetched.mainImageUrl ||
-            (Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0),
-          )
-
-          if (!hasRealParse) {
-            const reason = resolveFetchFailureReason(fetchResult)
+          } catch (error: any) {
+            fail += 1
+            const reason = `重新解析失败：${error?.message || '抓取过程中发生未知错误'}`
             await prisma.importtaskitem.update({
-              where: { id: item.id },
+              where: { id: itemId },
               data: {
                 fetchStatus: 'FAILED' as any,
                 failureReason: reason,
                 fetchFinishedAt: new Date(),
-                // 清掉旧版演示 SKU，避免运营误当真规格
-                ...(isClassicMock1688SkuSummary(item.skuSummaryText) ||
-                isClassicMock1688SkuTable(((item.previewDataJson || {}) as PreviewDataJson).skuTable)
-                  ? {
-                      skuSummaryText: '默认规格',
-                      specSummaryJson: [{ name: '规格', values: ['默认规格'] }] as any,
-                      previewDataJson: {
-                        ...((item.previewDataJson || {}) as PreviewDataJson),
-                        colors: [],
-                        sizesByColor: {},
-                        skuTable: [
-                          buildNeutralFallbackSkuRow({
-                            costPrice: toNumberOrNull(item.costPrice) ?? 50,
-                            price: toNumberOrNull(item.costPrice) ?? 50,
-                            stock: toNumberOrNull(item.availableStock) ?? 100,
-                          }),
-                        ],
-                      } as any,
-                    }
-                  : {}),
               },
-            })
-            fail += 1
-            results.push({ itemId, success: false, name: displayName, reason })
-          } else {
-            const applied = await applyReparsed1688PreviewToItem({
-              item: item as any,
-              fetched,
-              categoryMap,
-              secondaryCategories,
-              exchangeRate,
-            })
-            success += 1
-            results.push({
-              itemId,
-              success: true,
-              name: applied.productName,
-            })
-            displayName = applied.productName
+            }).catch(() => undefined)
           }
-        } catch (error: any) {
-          fail += 1
-          const reason = `重新解析失败：${error?.message || '抓取过程中发生未知错误'}`
-          results.push({ itemId, success: false, name: displayName, reason })
-          await prisma.importtaskitem.update({
-            where: { id: itemId },
-            data: {
-              fetchStatus: 'FAILED' as any,
-              failureReason: reason,
-              fetchFinishedAt: new Date(),
-            },
-          }).catch(() => undefined)
+
+          if (index < itemIds.length - 1) {
+            await sleep(900)
+          }
         }
 
-        if (index < input.itemIds.length - 1) {
-          await sleep(900)
-        }
+        console.warn(`[reparsePendingImportItems] done success=${success} fail=${fail} total=${itemIds.length}`)
+      } catch (error) {
+        console.error('[reparsePendingImportItems] background job failed', error)
+      } finally {
+        releaseParseJob(jobLabel)
       }
+    })()
 
-      return { success_count: success, fail_count: fail, results }
-    } finally {
-      releaseParseJob(jobLabel)
-    }
+    return { success_count: 0, fail_count: 0, results: [] }
   })
 )
 

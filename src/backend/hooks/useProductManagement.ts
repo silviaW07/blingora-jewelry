@@ -1874,74 +1874,120 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         : item,
     ))
 
-    toast.message(`开始逐条重新解析 ${idsToParse.length} 条（其他操作不受影响）`)
+    toast.message(`已提交 ${idsToParse.length} 条重新解析，后台处理中…`)
 
+    try {
+      // One RPC for the whole batch. Server ACKs immediately and continues in-process;
+      // waiting per-item used to hit the 25s timeout and leave the mutex stuck.
+      await reparsePendingImportItems({ item_ids: idsToParse })
+    } catch (err: any) {
+      const reason = err?.message || '重新解析失败'
+      toast.error(reason)
+      setReparsingItemIds(prev => {
+        const next = { ...prev }
+        for (const id of idsToParse) delete next[id]
+        return next
+      })
+      try {
+        await refreshPendingImportQueue({ silent: true })
+      } catch {
+        // ignore
+      }
+      return
+    }
+
+    const idSet = new Set(idsToParse)
+    const deadline = Date.now() + Math.max(120_000, idsToParse.length * 45_000)
     let successCount = 0
     let failCount = 0
     const failureLines: string[] = []
 
-    for (const itemId of idsToParse) {
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 2500))
+      let tracked: typeof pendingImportQueue = []
       try {
-        // One item per RPC so React can paint between calls and the HTTP wait stays short.
-        const result = await reparsePendingImportItems({ item_ids: [itemId] })
-        await refreshPendingImportQueue({ silent: true })
-
-        const itemResult = Array.isArray(result.results) ? result.results[0] : undefined
-        if (result.fail_count > 0 || itemResult?.success === false) {
-          failCount += 1
-          const reason = itemResult?.reason || '重新解析失败'
-          const label = itemResult?.name || itemId
-          failureLines.push(`${label}：${reason}`)
-          toast.error(`解析失败：${label}`, {
-            description: reason,
-            duration: 6000,
-          })
-        } else {
-          successCount += 1
-        }
-      } catch (err: any) {
-        failCount += 1
-        const reason = err?.message || '重新解析失败'
-        failureLines.push(`${itemId}：${reason}`)
-        toast.error(reason)
-        try {
-          await refreshPendingImportQueue({ silent: true })
-        } catch {
-          // keep going; row flag cleared in finally
-        }
-      } finally {
-        setReparsingItemIds(prev => {
-          const next = { ...prev }
-          delete next[itemId]
-          return next
-        })
+        const result = await getPendingImportQueue({
+          page: 1,
+          page_size: 80,
+          skip_maintenance: true,
+        } as any)
+        applyPendingImportQueueResult(result)
+        const queue = Array.isArray(result?.list) ? result.list : []
+        tracked = queue.filter((item: any) => idSet.has(item.item_id))
+      } catch {
+        continue
       }
+
+      const stillRunning = tracked.some(item => item.item_fetchStatus === 'RUNNING')
+      if (stillRunning) continue
+
+      successCount = tracked.filter(item => item.item_fetchStatus === 'COMPLETED').length
+      const failed = tracked.filter(
+        item => item.item_fetchStatus === 'FAILED' || item.item_fetchStatus === 'RETRY_PENDING',
+      )
+      failCount = failed.length
+      for (const item of failed) {
+        failureLines.push(
+          `${item.item_productName || item.item_id}：${item.item_failureReason || '重新解析失败'}`,
+        )
+      }
+      break
     }
 
-    if (idsToParse.length > 1) {
-      const summary = `重新解析完成，成功: ${successCount}，失败: ${failCount}`
-      if (failCount > 0) {
-        toast.error(summary, {
-          description: failureLines.length > 0
-            ? createElement(
-                'div',
-                { className: 'mt-1 max-h-64 space-y-1 overflow-y-auto text-left' },
-                failureLines.map((line, index) =>
-                  createElement(
-                    'div',
-                    { key: `${index}-${line.slice(0, 24)}`, className: 'text-sm leading-5' },
-                    line,
-                  ),
-                ),
-              )
-            : '失败条目仍保留在待上传区，可稍后重试。',
-          duration: Math.min(20000, 6000 + failureLines.length * 1500),
-        })
-      } else {
-        toast.success(summary)
+    setReparsingItemIds(prev => {
+      const next = { ...prev }
+      for (const id of idsToParse) delete next[id]
+      return next
+    })
+
+    // Final refresh in case the poll loop timed out mid-flight
+    try {
+      const result = await getPendingImportQueue({
+        page: 1,
+        page_size: 80,
+        skip_maintenance: true,
+      } as any)
+      applyPendingImportQueueResult(result)
+      if (successCount + failCount === 0) {
+        const queue = Array.isArray(result?.list) ? result.list : []
+        const tracked = queue.filter((item: any) => idSet.has(item.item_id))
+        successCount = tracked.filter((item: any) => item.item_fetchStatus === 'COMPLETED').length
+        const failed = tracked.filter(
+          (item: any) => item.item_fetchStatus === 'FAILED' || item.item_fetchStatus === 'RETRY_PENDING',
+        )
+        failCount = failed.length
+        for (const item of failed) {
+          failureLines.push(
+            `${item.item_productName || item.item_id}：${item.item_failureReason || '重新解析失败'}`,
+          )
+        }
       }
-    } else if (successCount === 1) {
-      toast.success('重新解析成功')
+    } catch {
+      // ignore
+    }
+
+    const summary = `重新解析完成，成功: ${successCount}，失败: ${failCount}`
+    if (failCount > 0) {
+      toast.error(summary, {
+        description: failureLines.length > 0
+          ? createElement(
+              'div',
+              { className: 'mt-1 max-h-64 space-y-1 overflow-y-auto text-left' },
+              failureLines.map((line, index) =>
+                createElement(
+                  'div',
+                  { key: `${index}-${line.slice(0, 24)}`, className: 'text-sm leading-5' },
+                  line,
+                ),
+              ),
+            )
+          : '失败条目仍保留在待上传区，可稍后重试。',
+        duration: Math.min(20000, 6000 + failureLines.length * 1500),
+      })
+    } else if (successCount > 0) {
+      toast.success(idsToParse.length === 1 ? '重新解析成功' : summary)
+    } else {
+      toast.message('重新解析仍在进行或结果未就绪，请稍后刷新待上传区查看')
     }
   }
 
