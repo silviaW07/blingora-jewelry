@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rebuild + restart the Next.js frontend the stable way (webpack standalone).
-# Run from anywhere; script cds to the repo root.
+# Rebuild + restart frontend the ONLY supported production way.
+# Never run bare `next build` (Turbopack) or `next start` on this project.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,11 +12,22 @@ export NODE_ENV=production
 
 echo "==> repo: $ROOT"
 echo "==> UPLOAD_DIR=$UPLOAD_DIR"
+mkdir -p "$UPLOAD_DIR" "$ROOT/logs"
+chmod +x "$ROOT/deploy/"*.sh 2>/dev/null || true
 
-mkdir -p "$UPLOAD_DIR"
+# Ensure .env has UPLOAD_DIR so standalone-entry / future restarts keep it
+if [[ -f .env ]]; then
+  if ! grep -q '^UPLOAD_DIR=' .env; then
+    echo "UPLOAD_DIR=$UPLOAD_DIR" >> .env
+    echo "==> appended UPLOAD_DIR to .env"
+  fi
+else
+  echo "UPLOAD_DIR=$UPLOAD_DIR" > .env
+  echo "==> created .env with UPLOAD_DIR"
+fi
 
 echo "==> git pull"
-git pull --ff-only
+git pull --ff-only || git pull
 
 echo "==> pnpm install"
 pnpm install --frozen-lockfile || pnpm install
@@ -24,11 +35,17 @@ pnpm install --frozen-lockfile || pnpm install
 echo "==> clean .next"
 rm -rf .next
 
-echo "==> next build --webpack (NOT turbopack)"
+echo "==> next build --webpack"
 pnpm exec next build --webpack
 
 if [[ ! -f .next/standalone/server.js ]]; then
-  echo "ERROR: .next/standalone/server.js missing after build" >&2
+  echo "ERROR: .next/standalone/server.js missing" >&2
+  exit 1
+fi
+
+if find .next/standalone -name '*turbopack*' 2>/dev/null | grep -q .; then
+  echo "ERROR: turbopack chunks found in standalone — build was not webpack" >&2
+  find .next/standalone -name '*turbopack*' | head
   exit 1
 fi
 
@@ -39,25 +56,54 @@ cp -a .next/static .next/standalone/.next/
 rm -rf .next/standalone/public
 cp -a public .next/standalone/
 
-echo "==> restart PM2 frontend"
+echo "==> stop old frontend (and free :3000)"
 pm2 delete frontend >/dev/null 2>&1 || true
-# free port 3000 if a stray node still holds it
 if command -v fuser >/dev/null 2>&1; then
   fuser -k 3000/tcp >/dev/null 2>&1 || true
+elif command -v lsof >/dev/null 2>&1; then
+  lsof -ti:3000 | xargs -r kill -9 || true
 fi
+sleep 1
+
+echo "==> start via ecosystem (standalone-entry loads .env)"
 UPLOAD_DIR="$UPLOAD_DIR" pm2 start "$ROOT/deploy/ecosystem.config.cjs" --only frontend
 pm2 save
 
-sleep 2
-echo "==> listeners on :3000"
-ss -lntp | grep ':3000' || echo "WARNING: nothing listening on 3000"
+echo "==> wait for listen"
+ok=0
+for i in $(seq 1 30); do
+  if ss -lntp 2>/dev/null | grep -q ':3000'; then
+    ok=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$ok" != "1" ]]; then
+  echo "ERROR: nothing listening on :3000" >&2
+  pm2 logs frontend --lines 60 --nostream || true
+  exit 1
+fi
+
+echo "==> smoke home"
+home_code="$(curl -s -o /dev/null -m 30 -w '%{http_code}' http://127.0.0.1:3000/ || true)"
+echo "home HTTP:$home_code"
+if [[ "$home_code" != "200" && "$home_code" != "307" && "$home_code" != "308" ]]; then
+  echo "ERROR: homepage not healthy" >&2
+  pm2 logs frontend --lines 60 --nostream || true
+  exit 1
+fi
 
 echo "==> smoke upload"
 set +e
-RESP="$(curl -s -m 20 -w '\nHTTP:%{http_code}' -X POST \
+RESP="$(curl -s -m 30 -w '\nHTTP:%{http_code}' -X POST \
   -F "image=@${ROOT}/public/service-icons/payment.svg;type=image/svg+xml" \
   http://127.0.0.1:3000/api/upload-image/)"
 set -e
 echo "$RESP"
+echo "$RESP" | grep -q 'HTTP:200' || echo "WARNING: upload smoke did not return HTTP 200 (check UPLOAD_DIR perms)"
 
-echo "==> done. Check: pm2 logs frontend --lines 50"
+echo "==> optional: install cron healthcheck (every 2 min)"
+echo "    crontab -e  →  */2 * * * * $ROOT/deploy/healthcheck.sh >> $ROOT/logs/healthcheck.log 2>&1"
+
+echo "==> done"
+pm2 list
