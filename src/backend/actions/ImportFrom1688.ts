@@ -1162,14 +1162,31 @@ const to1688HdImageUrl = (raw?: string | null): string | null => {
   return hd
 }
 
+/**
+ * Same asset under different size suffixes / hosts must collapse to one gallery slot.
+ * Key is the pathname after HD normalization (ignore query + cbu01/cbu02 host swap).
+ */
+const imageUrlDedupeKey = (raw: string): string => {
+  const hd = to1688HdImageUrl(raw) || normalizeRemoteImageUrl(raw) || raw
+  try {
+    const parsed = new URL(hd)
+    return parsed.pathname.replace(/\/+/g, '/').toLowerCase()
+  } catch {
+    return hd.split(/[?#]/)[0].toLowerCase()
+  }
+}
+
 const dedupeImageUrls = (urls: Array<string | null | undefined>) => {
   const seen = new Set<string>()
   const result: string[] = []
   for (const raw of urls) {
     const url = normalizeRemoteImageUrl(raw)
-    if (!url || seen.has(url)) continue
-    seen.add(url)
-    result.push(url)
+    if (!url) continue
+    const key = imageUrlDedupeKey(url)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    // Prefer the unsized HD form when we can derive it.
+    result.push(to1688HdImageUrl(url) || url)
   }
   return result
 }
@@ -1354,13 +1371,13 @@ const resolve1688ImageUrls = async (params: {
   // HD 列表已去掉尺寸后缀；再按路径/图标规则过滤一遍
   const hdList = dedupeImageUrls(params.hdCandidates)
     .filter(url => isLikelyProductImageUrl(url))
-    .slice(0, 80)
+    .slice(0, 36)
   const fallbackList = dedupeImageUrls(
     dedupeImageUrls(params.watermarkedFallback)
       .filter(url => isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true }))
       .map(url => to1688HdImageUrl(url) || url)
       .filter(url => isLikelyProductImageUrl(url))
-  ).slice(0, 80)
+  ).slice(0, 36)
 
   let hdOk = false
   for (const url of hdList.slice(0, maxProbe)) {
@@ -1424,20 +1441,24 @@ const extract1688ImageCandidates = (html: string) => {
     isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true })
   )
 
-  const rawFromHtml = extractRawImageUrlsFromHtml(html)
-
   // 优先：offerImgList / imageList 等结构化商品图（视频已在上游跳过，色图/主图继续保留）
   const hdFromLists = gallerySourceUrls
     .map(to1688HdImageUrl)
     .filter((url): url is string => Boolean(url))
     .filter(url => isLikelyProductImageUrl(url))
 
-  // 详情描述区：仅保留已通过图标/尺寸过滤的 CDN 大图
-  const detailLike = rawFromHtml
-    .map(to1688HdImageUrl)
-    .filter((url): url is string => Boolean(url))
-    .filter(url => isLikelyProductImageUrl(url))
-    .filter(url => !/_sum\.|_?\d{2,4}x\d{2,4}/i.test(url))
+  // Browser-captured pages embed every img on the page (SKU swatches, icons, ads).
+  // When structured gallery lists exist, trust those and only lightly top up from DOM.
+  let detailLike: string[] = []
+  if (hdFromLists.length < 8) {
+    const rawFromHtml = extractRawImageUrlsFromHtml(html)
+    detailLike = rawFromHtml
+      .map(to1688HdImageUrl)
+      .filter((url): url is string => Boolean(url))
+      .filter(url => isLikelyProductImageUrl(url))
+      .filter(url => !/_sum\.|_?\d{2,4}x\d{2,4}/i.test(url))
+      .slice(0, 24)
+  }
 
   // 结构化商品图在前，详情大图在后，避免 UI 图标混入
   const hdCandidates = dedupeImageUrls([
@@ -1982,19 +2003,12 @@ const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688Offe
   })
   const mainImageUrl =
     resolvedImages.mainImageUrl || watermarkedFallback[0] || hdCandidates[0] || null
-  const colorImageCandidates = dedupeImageUrls([
-    ...(Array.isArray(multiSpec.colors) ? multiSpec.colors.map((item) => item.imageUrl) : []),
-    ...(Array.isArray(multiSpec.skuTable) ? multiSpec.skuTable.map((item) => item.imageUrl) : []),
-  ])
-    .map((url) => to1688HdImageUrl(url) || url)
-    .filter((url): url is string => Boolean(url))
-    .filter((url) => isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true }))
-
+  // Color / SKU swatches already live on sku rows — dumping them into the gallery
+  // duplicates every color shot (often once per size) and floods the pending UI.
   const detailImages = dedupeImageUrls([
-    ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
-    ...colorImageCandidates,
     ...(mainImageUrl ? [mainImageUrl] : []),
-  ]).slice(0, 120)
+    ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
+  ]).slice(0, 36)
 
   const supplierName =
     pickJsonStringField(html, 'companyName') || pickJsonStringField(html, 'loginId') || null
@@ -3305,19 +3319,11 @@ const fetch1688OfferPreviewOnce = async (
         watermarkedFallback[0] ||
         hdCandidates[0] ||
         null
-      const colorImageCandidates = dedupeImageUrls([
-        ...(Array.isArray(multiSpec.colors) ? multiSpec.colors.map(item => item.imageUrl) : []),
-        ...(Array.isArray(multiSpec.skuTable) ? multiSpec.skuTable.map(item => item.imageUrl) : []),
-      ])
-        .map(url => to1688HdImageUrl(url) || url)
-        .filter((url): url is string => Boolean(url))
-        .filter(url => isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true }))
-
+      // Gallery = offer carousel / detail shots only; color swatches stay on SKU rows.
       const detailImages = dedupeImageUrls([
-        ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
-        ...colorImageCandidates,
         ...(mainImageUrl ? [mainImageUrl] : []),
-      ]).slice(0, 120)
+        ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
+      ]).slice(0, 36)
 
       const finalDetailImages = detailImages.length > 0 ? detailImages : dedupeImageUrls([mainImageUrl])
 
