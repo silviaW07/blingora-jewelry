@@ -36,8 +36,9 @@ for (const envFile of ['.env.local', '.env']) {
 }
 
 // Optional egress proxy for scrapes (1688 blocks/times out from some hosts).
-// Set HTTPS_PROXY=http://user:pass@host:port in .env, then: pnpm add undici.
-// Must run after dotenv above, otherwise .env values are invisible here.
+// Set HTTPS_PROXY=http://user:pass@host:port in .env, then `pnpm add undici@6`.
+// Pin to 6.x: undici 7 calls webidl APIs that only exist on Node 22, and this
+// host runs Node 20. Must run after dotenv above, or .env values are invisible.
 const EGRESS_PROXY = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim()
 if (EGRESS_PROXY) {
   try {
