@@ -82,9 +82,17 @@ async function submitHtml(sourceUrl, html) {
     headers: { 'Content-Type': 'application/json', 'X-Ingest-Token': INGEST_TOKEN },
     body: JSON.stringify({ sourceUrl, html }),
   })
-  const body = await response.json().catch(() => ({}))
+  const raw = await response.text()
+  let body = {}
+  try {
+    body = JSON.parse(raw)
+  } catch {
+    body = { error: raw.slice(0, 200) }
+  }
   if (!response.ok || !body.ok) {
-    throw new Error(`提交失败 (${response.status}): ${body.error || '未知错误'}`)
+    throw new Error(
+      `提交失败 (${response.status}, ${(html.length / 1024).toFixed(0)}KB HTML): ${body.error || '未知错误'}`,
+    )
   }
   return body
 }

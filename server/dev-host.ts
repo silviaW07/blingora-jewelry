@@ -1375,7 +1375,9 @@ const app = express()
 app.use(cors({
   exposedHeaders: ['X-Auth-Role']  // 允许前端读取这个响应头
 }))
-app.use(express.json())
+// 12mb: browser-captured 1688 offer HTML routinely exceeds the 100kb default.
+// Route-level express.json({ limit }) does not override this global parser.
+app.use(express.json({ limit: '12mb' }))
 
 // 中间件：拦截请求头，从头组装 ALS 上下文
 app.use((req, _res, next) => {
