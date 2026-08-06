@@ -5,8 +5,13 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// monorepo 根：对齐 pnpm-lock.yaml 所在层级
-const monoRoot = path.resolve(__dirname, '../../../../')
+/**
+ * Tracing root MUST be this repo (or a real monorepo root that contains it).
+ * Using `../../../../` on the ECS deploy path nests the whole absolute path under
+ * `.next/standalone/home/admin/...` and then PM2 cannot find turbopack/webpack
+ * runtime chunks → every route 500s, including /api/upload-image.
+ */
+const monoRoot = path.resolve(__dirname)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
