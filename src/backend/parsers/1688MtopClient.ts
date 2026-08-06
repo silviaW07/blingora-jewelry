@@ -262,6 +262,14 @@ export async function fetch1688OfferViaMtop(
     const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
     const retText = Array.isArray(record?.ret) ? record!.ret.join(',') : String(record?.ret || '')
 
+    // Gateway rejects unknown names before signing, so a NOT_FOUNDED here means the
+    // API is retired — no point burning a token refresh on it.
+    if (/API_NOT_FOUNDED|API_LOCKED|FAIL_SYS_ILLEGAL_ACCESS/i.test(retText)) {
+      console.warn(`[1688-mtop] ${candidate.api} -> ${retText}`)
+      lastDetail = `${candidate.api}: ${retText}`
+      continue
+    }
+
     if (/TOKEN_EMPTY|TOKEN_EXOIRED|TOKEN_EXPIRED|ILLEGAL_ACCESS|SESSION_EXPIRED/i.test(retText)) {
       cookie = await bootstrap1688MtopCookies(cookie)
       const retry = await callSignedMtop(cookie, candidate)
@@ -278,6 +286,7 @@ export async function fetch1688OfferViaMtop(
     if (mtopHasOfferSignal(payload)) {
       return { ok: true, data: payload, api: candidate.api }
     }
+    console.warn(`[1688-mtop] ${candidate.api} -> ret=${retText || 'empty'}`)
     lastDetail = `${candidate.api}: ${retText || 'empty'}`
   }
 
