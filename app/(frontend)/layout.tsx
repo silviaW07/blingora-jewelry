@@ -55,7 +55,7 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
-                  <PageErrorBoundary key={pathname} onGoBack={handleGoBack}>{children}</PageErrorBoundary>
+                  <PageErrorBoundary onGoBack={handleGoBack}>{children}</PageErrorBoundary>
                 </main>
                 {showFooter ? (
                   <div className={isStorefrontHome ? undefined : 'hidden md:block'}>

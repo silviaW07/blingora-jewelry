@@ -1100,6 +1100,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   // Prefer refs so refresh callback identity stays stable (avoids remount-driven re-fetch).
   const pendingImportQueueLengthRef = useRef(0)
   const pendingImportQueueErrorRef = useRef<string | null>(null)
+  const pendingImportLastFetchedAtRef = useRef(0)
   pendingImportQueueLengthRef.current = pendingImportQueue.length
   pendingImportQueueErrorRef.current = pendingImportQueueError
 
@@ -1118,6 +1119,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         skip_maintenance: true,
       } as any)
       applyPendingImportQueueResult(result)
+      pendingImportLastFetchedAtRef.current = Date.now()
       setPendingImportQueueError(null)
     } catch (err: any) {
       const raw = String(err?.message || '')
@@ -1174,9 +1176,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }, [loading, ensureBindingMeta, ensureFeaturedKeywords])
 
   // Defer heavy getPendingImportQueue until the pending tab is opened (not every products visit).
+  // Revisit within 45s: keep existing rows visible and refresh silently (no blank spinner).
   useEffect(() => {
     if (activeTab !== 'pending_imports') return
-    void refreshPendingImportQueue()
+    const ageMs = Date.now() - pendingImportLastFetchedAtRef.current
+    const hasCachedRows = pendingImportQueueLengthRef.current > 0 && ageMs < 45_000
+    void refreshPendingImportQueue({ silent: hasCachedRows })
   }, [activeTab, refreshPendingImportQueue])
 
   useEffect(() => {
