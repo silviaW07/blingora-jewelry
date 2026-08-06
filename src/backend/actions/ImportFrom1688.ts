@@ -1247,6 +1247,57 @@ const extractJsonStringArrayField = (html: string, key: string): string[] => {
   return urls
 }
 
+/** Browser HTML repeats the same JSON blobs many times — gallery only needs the first list. */
+const extractFirstJsonStringArrayField = (html: string, key: string): string[] => {
+  const keyRe = new RegExp(`"${key}"\\s*:\\s*\\[`, 'i')
+  const matched = keyRe.exec(html)
+  if (!matched) return []
+  const startIdx = matched.index + matched[0].length - 1
+  let depth = 0
+  let inString = false
+  let escaped = false
+  let endIdx = -1
+  for (let i = startIdx; i < html.length; i += 1) {
+    const ch = html[i]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (ch === '\\') {
+        escaped = true
+        continue
+      }
+      if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+    if (ch === '[') depth += 1
+    else if (ch === ']') {
+      depth -= 1
+      if (depth === 0) {
+        endIdx = i
+        break
+      }
+    }
+    if (i - startIdx > 200_000) break
+  }
+  if (endIdx < 0) return []
+  const urls: string[] = []
+  const re = /"((?:\\.|[^"\\])*)"/g
+  let item: RegExpExecArray | null
+  const slice = html.slice(startIdx, endIdx + 1)
+  while ((item = re.exec(slice))) {
+    const decoded = decodeJsonLikeString(item[1])
+    if (!decoded || isLikely1688VideoAsset(decoded)) continue
+    urls.push(decoded)
+  }
+  return urls
+}
+
 /** 从 HTML/脚本中收集可能的商品图 URL（含协议相对地址）；附带 img 宽高属性用于过滤小图标 */
 const extractRawImageUrlsFromHtml = (html: string): string[] => {
   const urls: string[] = []
@@ -1371,13 +1422,13 @@ const resolve1688ImageUrls = async (params: {
   // HD 列表已去掉尺寸后缀；再按路径/图标规则过滤一遍
   const hdList = dedupeImageUrls(params.hdCandidates)
     .filter(url => isLikelyProductImageUrl(url))
-    .slice(0, 36)
+    .slice(0, 12)
   const fallbackList = dedupeImageUrls(
     dedupeImageUrls(params.watermarkedFallback)
       .filter(url => isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true }))
       .map(url => to1688HdImageUrl(url) || url)
       .filter(url => isLikelyProductImageUrl(url))
-  ).slice(0, 36)
+  ).slice(0, 12)
 
   let hdOk = false
   for (const url of hdList.slice(0, maxProbe)) {
@@ -1417,20 +1468,26 @@ const resolve1688ImageUrls = async (params: {
 
 /** 从 1688 详情 HTML 解析主图（水印缩略）与详情大图候选 */
 const extract1688ImageCandidates = (html: string) => {
-  const offerImgList = extractJsonStringArrayField(html, 'offerImgList')
+  // First occurrence only: full browser HTML repeats the same JSON many times, and
+  // imageList/images often dump every SKU swatch — that flooded the pending gallery.
+  const offerImgList = extractFirstJsonStringArrayField(html, 'offerImgList')
   const imageList =
-    extractJsonStringArrayField(html, 'imageList').length > 0
-      ? extractJsonStringArrayField(html, 'imageList')
-      : extractJsonStringArrayField(html, 'images')
-  const singleFields = [
-    pickJsonStringField(html, 'imgUrl'),
-    pickJsonStringField(html, 'imageUrl'),
-    pickJsonStringField(html, 'mainImage'),
-    pickJsonStringField(html, 'whiteImage'),
-    pickJsonStringField(html, 'fullPathImageURI'),
-  ].filter(Boolean) as string[]
+    offerImgList.length > 0
+      ? []
+      : extractFirstJsonStringArrayField(html, 'imageList').length > 0
+        ? extractFirstJsonStringArrayField(html, 'imageList')
+        : extractFirstJsonStringArrayField(html, 'images')
+  const singleFields =
+    offerImgList.length > 0
+      ? []
+      : ([
+          pickJsonStringField(html, 'imgUrl'),
+          pickJsonStringField(html, 'imageUrl'),
+          pickJsonStringField(html, 'mainImage'),
+          pickJsonStringField(html, 'whiteImage'),
+          pickJsonStringField(html, 'fullPathImageURI'),
+        ].filter(Boolean) as string[])
 
-  // JSON 主图列表优先；允许商品缩略尺寸后缀后续升格为大图（已跳过视频 URL）
   const gallerySourceUrls = dedupeImageUrls([
     ...offerImgList,
     ...imageList,
@@ -1441,32 +1498,17 @@ const extract1688ImageCandidates = (html: string) => {
     isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true })
   )
 
-  // 优先：offerImgList / imageList 等结构化商品图（视频已在上游跳过，色图/主图继续保留）
   const hdFromLists = gallerySourceUrls
     .map(to1688HdImageUrl)
     .filter((url): url is string => Boolean(url))
     .filter(url => isLikelyProductImageUrl(url))
 
-  // Browser-captured pages embed every img on the page (SKU swatches, icons, ads).
-  // When structured gallery lists exist, trust those and only lightly top up from DOM.
-  let detailLike: string[] = []
-  if (hdFromLists.length < 8) {
-    const rawFromHtml = extractRawImageUrlsFromHtml(html)
-    detailLike = rawFromHtml
-      .map(to1688HdImageUrl)
-      .filter((url): url is string => Boolean(url))
-      .filter(url => isLikelyProductImageUrl(url))
-      .filter(url => !/_sum\.|_?\d{2,4}x\d{2,4}/i.test(url))
-      .slice(0, 24)
-  }
+  // Structured carousel is enough; DOM scrape pulls color swatches + UI chrome.
+  const hdCandidates = dedupeImageUrls(hdFromLists)
+    .filter(url => isLikelyProductImageUrl(url))
+    .slice(0, 12)
 
-  // 结构化商品图在前，详情大图在后，避免 UI 图标混入
-  const hdCandidates = dedupeImageUrls([
-    ...hdFromLists,
-    ...detailLike,
-  ]).filter(url => isLikelyProductImageUrl(url))
-
-  return { hdCandidates, watermarkedFallback }
+  return { hdCandidates, watermarkedFallback: watermarkedFallback.slice(0, 12) }
 }
 
 /**
@@ -2008,7 +2050,7 @@ const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688Offe
   const detailImages = dedupeImageUrls([
     ...(mainImageUrl ? [mainImageUrl] : []),
     ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
-  ]).slice(0, 36)
+  ]).slice(0, 12)
 
   const supplierName =
     pickJsonStringField(html, 'companyName') || pickJsonStringField(html, 'loginId') || null
@@ -3323,7 +3365,7 @@ const fetch1688OfferPreviewOnce = async (
       const detailImages = dedupeImageUrls([
         ...(mainImageUrl ? [mainImageUrl] : []),
         ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
-      ]).slice(0, 36)
+      ]).slice(0, 12)
 
       const finalDetailImages = detailImages.length > 0 ? detailImages : dedupeImageUrls([mainImageUrl])
 
@@ -6815,13 +6857,16 @@ const applyReparsed1688PreviewToItem = async (params: {
     (!isPlaceholderPendingImage(item.mainImageUrl || item.parsedMainImageUrl)
       ? (item.mainImageUrl || item.parsedMainImageUrl)
       : null)
-  const detailImages =
-    Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0
-      ? fetched.detailImages
-      : dedupeImageUrls([
-          mainImageUrl,
-          ...((Array.isArray(currentPreview.detailImages) ? currentPreview.detailImages : []) as string[]),
-        ])
+  // Successful reparse must replace the gallery — merging kept the old flood of duplicates.
+  const detailImages = hasRealParse
+    ? dedupeImageUrls([
+        ...(mainImageUrl ? [mainImageUrl] : []),
+        ...(Array.isArray(fetched.detailImages) ? fetched.detailImages : []),
+      ]).slice(0, 12)
+    : dedupeImageUrls([
+        mainImageUrl,
+        ...((Array.isArray(currentPreview.detailImages) ? currentPreview.detailImages : []) as string[]),
+      ]).slice(0, 12)
 
   const supplierName =
     fetched.supplierName ||
