@@ -26,8 +26,18 @@ if (process.env.FORCE_IPV4 !== '0') {
   }
 }
 
+// PM2 / systemd start this without a shell profile, so DATABASE_URL must come
+// from the project .env instead of the parent environment.
+for (const envFile of ['.env.local', '.env']) {
+  const envPath = path.resolve(__dirname, '..', envFile)
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath })
+  }
+}
+
 // Optional egress proxy for scrapes (1688 blocks/times out from some hosts).
-// Set HTTPS_PROXY=http://user:pass@host:port in .env, then: pnpm add undici
+// Set HTTPS_PROXY=http://user:pass@host:port in .env, then: pnpm add undici.
+// Must run after dotenv above, otherwise .env values are invisible here.
 const EGRESS_PROXY = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim()
 if (EGRESS_PROXY) {
   try {
@@ -41,15 +51,8 @@ if (EGRESS_PROXY) {
       (error as Error).message,
     )
   }
-}
-
-// PM2 / systemd start this without a shell profile, so DATABASE_URL must come
-// from the project .env instead of the parent environment.
-for (const envFile of ['.env.local', '.env']) {
-  const envPath = path.resolve(__dirname, '..', envFile)
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath })
-  }
+} else {
+  console.log('[DEV] No HTTPS_PROXY configured; outbound fetch goes direct')
 }
 
 // ⚠️ 必须在 require PROJ_*.js 之前设置引擎路径，
