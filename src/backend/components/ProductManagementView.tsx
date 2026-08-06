@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages } from 'lucide-react';
+import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages } from 'lucide-react';
 import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Checkbox, Sheet, SheetContent, SheetHeader, SheetTitle, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Textarea, Badge, Card, CardContent, Separator, Alert, AlertTitle, AlertDescription, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/backend/components/ui';
 import EditableImg from '@/@base/EditableImg';
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement';
