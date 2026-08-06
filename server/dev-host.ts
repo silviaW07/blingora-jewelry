@@ -1420,8 +1420,86 @@ app.get('/healthz', (_req, res) => {
   })
 })
 
+// === Browser-captured 1688 HTML intake ===
+// 1688 only serves offer HTML to a real browser (TLS fingerprint + captcha gate),
+// so scripts/collect-1688.mjs drives Chrome locally and posts the HTML here. The
+// parser in ImportFrom1688 picks it up instead of fetching, which is why these
+// routes bypass the RPC envelope: the collector runs outside the app.
+const INGEST_TOKEN = (process.env.INGEST_TOKEN || '').trim()
+const OFFER_HTML_TTL_MS = 6 * 60 * 60 * 1000
+const offerHtmlInbox = new Map<string, { html: string; receivedAt: number }>()
+;(globalThis as any).__offerHtmlInbox = offerHtmlInbox
+
+const extractOfferId = (url: string): string | null =>
+  String(url || '').match(/(?:offer\/|offerId=)(\d{6,})/)?.[1] || null
+
+const requireIngestToken = (req: express.Request, res: express.Response): boolean => {
+  if (!INGEST_TOKEN) {
+    res.status(503).json({ ok: false, error: 'INGEST_TOKEN 未配置，请在 .env 中设置后重启 rpc' })
+    return false
+  }
+  if (req.get('X-Ingest-Token') !== INGEST_TOKEN) {
+    res.status(401).json({ ok: false, error: 'X-Ingest-Token 不匹配' })
+    return false
+  }
+  return true
+}
+
+app.get('/ingest/pending', async (req, res) => {
+  if (!requireIngestToken(req, res)) return
+  try {
+    const prisma = (globalThis as any).__runtimePrisma
+    const items = await prisma.importtaskitem.findMany({
+      where: {
+        fetchStatus: { notIn: ['COMPLETED', 'RUNNING'] },
+        importTask: { status: { in: ['PENDING', 'RETRY_PENDING', 'RATE_LIMITED', 'RUNNING'] } },
+      },
+      select: { id: true, sourceUrl: true, importTaskId: true },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    })
+    const offers = items
+      .filter((item: any) => /1688\.com/i.test(item.sourceUrl || ''))
+      .map((item: any) => ({ itemId: item.id, taskId: item.importTaskId, sourceUrl: item.sourceUrl }))
+    res.status(200).json({ ok: true, count: offers.length, offers })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: (error as Error).message })
+  }
+})
+
+app.post('/ingest/1688-html', express.json({ limit: '12mb' }), (req, res) => {
+  if (!requireIngestToken(req, res)) return
+
+  const sourceUrl = String(req.body?.sourceUrl || '')
+  const html = String(req.body?.html || '')
+  const offerId = extractOfferId(sourceUrl)
+
+  if (!offerId) {
+    res.status(400).json({ ok: false, error: `无法从链接解析商品 ID: ${sourceUrl}` })
+    return
+  }
+  // A punish page is ~3KB and would otherwise be cached as a "successful" capture.
+  if (html.length < 20_000 || /_____tmd_____|x5secdata/.test(html.slice(0, 4000))) {
+    res.status(422).json({
+      ok: false,
+      error: `抓到的疑似验证码页（${html.length} 字节），请在浏览器中手动通过验证后重试`,
+    })
+    return
+  }
+
+  const cutoff = Date.now() - OFFER_HTML_TTL_MS
+  for (const [key, entry] of offerHtmlInbox) {
+    if (entry.receivedAt < cutoff) offerHtmlInbox.delete(key)
+  }
+  offerHtmlInbox.set(offerId, { html, receivedAt: Date.now() })
+
+  console.log(`[ingest] stored 1688 HTML offer=${offerId} bytes=${html.length} inbox=${offerHtmlInbox.size}`)
+  res.status(200).json({ ok: true, offerId, bytes: html.length, inboxSize: offerHtmlInbox.size })
+})
+
 app.listen(PORT, () => {
   console.log(`[DEV] RPC Server running at http://localhost:${PORT}`)
   console.log(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)
   console.log(`[DEV] healthz: http://localhost:${PORT}/healthz`)
+  console.log(`[DEV] 1688 HTML intake: ${INGEST_TOKEN ? 'enabled' : 'DISABLED (set INGEST_TOKEN in .env)'}`)
 })

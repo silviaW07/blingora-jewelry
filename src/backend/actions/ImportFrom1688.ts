@@ -3415,7 +3415,38 @@ const attemptKindToOutcome = (
  * HTML 风控时按 5s / 30s / 60s+备用 UA 自动重试（最多 3 次）。
  * 无 Cookie 且首轮即风控时快速失败，避免空耗约 95s。
  */
+/**
+ * HTML captured by scripts/collect-1688.mjs and posted to POST /ingest/1688-html.
+ * 1688 gates offer pages on browser TLS fingerprint, so a server-side fetch always
+ * lands on the captcha page; a locally driven Chrome is the only way in.
+ */
+const takeCapturedOfferHtml = (sourceUrl: string): string | null => {
+  const inbox = (globalThis as any).__offerHtmlInbox as
+    | Map<string, { html: string; receivedAt: number }>
+    | undefined
+  if (!inbox) return null
+  const offerId = extract1688OfferId(sourceUrl)
+  if (!offerId) return null
+  const entry = inbox.get(offerId)
+  if (!entry) return null
+  // Consume it so a stale capture cannot silently satisfy a later re-parse.
+  inbox.delete(offerId)
+  return entry.html
+}
+
 const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch1688OfferPreviewResult> => {
+  const capturedHtml = takeCapturedOfferHtml(sourceUrl)
+  if (capturedHtml) {
+    const preview = await buildPreviewFromParsedHtml(capturedHtml)
+    if (preview) {
+      console.warn(
+        `[fetch1688OfferPreview] parsed browser-captured HTML (${capturedHtml.length} bytes) for ${sourceUrl}`,
+      )
+      return { preview, outcome: 'ok', failureReason: null }
+    }
+    console.warn(`[fetch1688OfferPreview] captured HTML unparseable for ${sourceUrl}; falling back to fetch`)
+  }
+
   const cookieReady = has1688CookieConfigured()
 
   // Cookie 可用时优先 MTop（详情 HTML 在境外/机房 IP 上极易命中 punish 页）
