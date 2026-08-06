@@ -33,12 +33,19 @@ export const isSelfHostedUploadUrl = (value?: string | null): boolean => {
 export const shouldBypassImageOptimizer = (value?: string | null): boolean => {
   const text = String(value || '').trim()
   if (!text) return false
-  return (
+  if (
     text.startsWith('/img-proxy/') ||
     text.startsWith('data:') ||
     text.startsWith('blob:') ||
     isSelfHostedUploadUrl(text)
-  )
+  ) {
+    return true
+  }
+  try {
+    return new URL(text).pathname.startsWith('/img-proxy/')
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -63,6 +70,14 @@ export const optimizeCatalogImageUrl = (
 
   try {
     const url = new URL(text)
+    // Absolute same-origin img-proxy (nginx JSON rewrite) — treat like relative
+    if (url.pathname.startsWith('/img-proxy/')) {
+      const path = `${url.pathname}${url.search}`
+      if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(url.pathname) && /\.(jpe?g|png|webp)$/i.test(url.pathname)) {
+        return `${url.pathname}_${width}x${width}q80.jpg${url.search}`
+      }
+      return path
+    }
     const host = url.hostname.toLowerCase()
 
     if (host.includes('images.unsplash.com')) {

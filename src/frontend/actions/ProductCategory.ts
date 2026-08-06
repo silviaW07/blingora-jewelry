@@ -1005,7 +1005,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   const page = input.page && input.page > 0 ? input.page : 1
   const pageSize = input.page_size && input.page_size > 0 ? input.page_size : 24
   const lang = normalizeProductLang(input.lang)
-  const exchangeRate = await getUsdExchangeRate(prisma)
+  const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
   const categoryContext = await resolveCategoryContext(input.category_id)
 
   const dbWhere: any = buildProductWhere(

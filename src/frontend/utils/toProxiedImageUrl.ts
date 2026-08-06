@@ -29,12 +29,32 @@ export function withAlicdnSize(url: string, width = 800, quality = 80): string {
   return raw
 }
 
+/**
+ * Normalize absolute same-origin proxy URLs
+ * (`https://sourcingjewelry.com/img-proxy/...`) to a relative `/img-proxy/...`
+ * so size suffixes + optimizer bypass still apply after nginx JSON rewrite.
+ */
+export function toRelativeImgProxyPath(url: string): string | null {
+  const raw = String(url || '').trim()
+  if (!raw) return null
+  if (raw.startsWith('/img-proxy/')) return raw
+  try {
+    const parsed = new URL(raw)
+    if (parsed.pathname.startsWith('/img-proxy/')) {
+      return `${parsed.pathname}${parsed.search}`
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
 function proxyPathForHost(host: string, pathname: string, search: string): string | null {
   if (host === 'cbu01.alicdn.com') return `/img-proxy/cbu01${pathname}${search}`
   if (host === 'cbu02.alicdn.com') return `/img-proxy/cbu02${pathname}${search}`
-  if (host === 'gw.alicdn.com' || host === 'img.alicdn.com') {
-    return `/img-proxy/cbu01${pathname}${search}`
-  }
+  // Must match deploy/nginx/sourcingjewelry.com.conf location /img-proxy/gw/
+  if (host === 'gw.alicdn.com') return `/img-proxy/gw${pathname}${search}`
+  if (host === 'img.alicdn.com') return `/img-proxy/cbu01${pathname}${search}`
   return null
 }
 
@@ -69,11 +89,11 @@ export function toProxiedImageUrl(
     return withAlicdnSize(raw, width, quality)
   }
 
-  // Already proxied — still apply size if missing
-  if (raw.startsWith('/img-proxy/')) {
-    const sized = withAlicdnSize(raw, width, quality)
+  // Relative or absolute same-origin /img-proxy — still apply size if missing
+  const relativeProxy = toRelativeImgProxyPath(raw)
+  if (relativeProxy) {
+    const sized = withAlicdnSize(relativeProxy, width, quality)
     if (IMAGE_CDN_BASE) {
-      // /img-proxy/cbu01/foo.jpg → https://img.../cbu01/foo.jpg
       return `${IMAGE_CDN_BASE}${sized.replace(/^\/img-proxy/, '')}`
     }
     return sized
@@ -88,21 +108,21 @@ export function toProxiedImageUrl(
     if (ALICDN_HOSTS.has(host) || host.endsWith('.alicdn.com')) {
       const sizedPath = withAlicdnSize(`${u.pathname}${u.search}`, width, quality)
       const sizedUrl = new URL(sizedPath, `https://${host}`)
-      const mappedHost =
-        host === 'cbu02.alicdn.com' || host.includes('cbu02') ? 'cbu02' : 'cbu01'
-      const keyPath = `/${mappedHost}${sizedUrl.pathname}${sizedUrl.search}`
 
-      if (IMAGE_CDN_BASE) {
-        return `${IMAGE_CDN_BASE}${keyPath}`
+      const proxied = proxyPathForHost(host, sizedUrl.pathname, sizedUrl.search)
+      if (proxied) {
+        if (IMAGE_CDN_BASE) {
+          return `${IMAGE_CDN_BASE}${proxied.replace(/^\/img-proxy/, '')}`
+        }
+        return proxied
       }
 
-      const proxied = proxyPathForHost(
-        mappedHost === 'cbu02' ? 'cbu02.alicdn.com' : 'cbu01.alicdn.com',
-        sizedUrl.pathname,
-        sizedUrl.search,
-      )
-      if (proxied) return proxied
-      return `/img-proxy/${mappedHost}${sizedUrl.pathname}${sizedUrl.search}`
+      // Unknown *.alicdn.com → default to cbu01 proxy bucket
+      const fallback = `/img-proxy/cbu01${sizedUrl.pathname}${sizedUrl.search}`
+      if (IMAGE_CDN_BASE) {
+        return `${IMAGE_CDN_BASE}${fallback.replace(/^\/img-proxy/, '')}`
+      }
+      return fallback
     }
 
     return raw

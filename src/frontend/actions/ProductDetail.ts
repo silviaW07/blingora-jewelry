@@ -354,7 +354,7 @@ export const getProductDetail = withResult(
     }
 
     const [exchangeRate, pricingConfig] = await Promise.all([
-      getUsdExchangeRate(prisma),
+      getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
       loadPricingPromotionConfig(prisma),
     ])
 
@@ -576,7 +576,7 @@ export const getDecoratePreviewProduct = withResult(
 export const getRelatedProducts = withResult(
   async (input: GetRelatedProductsInput): Promise<GetRelatedProductsOutput> => {
     const lang = normalizeProductLang(input.lang)
-    const exchangeRate = await getUsdExchangeRate(prisma)
+    const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
     const products = await prisma.product.findMany({
       where: {
         categoryId: input.categoryId,

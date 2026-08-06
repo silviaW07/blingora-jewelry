@@ -52,11 +52,13 @@ const formatListPrice = (price?: number | null, priceMax?: number | null) => {
   return `US$ ${formatPricePart(price)}`
 }
 
-/** Prefer SKU/color images; fall back to main image only when no variants exist. */
+/** Prefer SKU/color images; fall back to main image only when no variants exist. Cap to limit request fan-out. */
+const MAX_VARIANT_THUMBS = 6
+
 const resolveThumbnails = (item: ProductListCardItem) => {
   const fromVariants = (item.variant_thumbnails || []).filter((url) => Boolean(url?.trim()))
   if (fromVariants.length > 0) {
-    return fromVariants
+    return fromVariants.slice(0, MAX_VARIANT_THUMBS)
   }
 
   return item.main_image_url?.trim() ? [item.main_image_url.trim()] : []

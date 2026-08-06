@@ -166,16 +166,21 @@ export const useProductDetail = (): {
       const data = await getProductDetail({ productId, slug, lang })
       setProduct(data.product)
       setActiveImage(data.product.mainImageUrl)
+      // Unblock first paint — related products must not hold the full-page spinner
+      setLoading(false)
 
-      const relatedData = await getRelatedProducts({
+      void getRelatedProducts({
         categoryId: data.product.categoryId,
         excludeProductId: data.product.id,
         lang,
       })
-      setRelatedProducts(relatedData.list)
+        .then((relatedData) => setRelatedProducts(relatedData.list))
+        .catch((relatedErr) => {
+          console.warn('[useProductDetail] related products failed', relatedErr)
+          setRelatedProducts([])
+        })
     } catch (err: any) {
       setError(err.message || '获取商品详情失败')
-    } finally {
       setLoading(false)
     }
   }, [isDecorateMode, productId, router, searchParams, slug])

@@ -22,6 +22,7 @@ type Props = {
 
 /**
  * Product image: next/image (WebP) + same-origin proxy for alicdn + no-referrer fallback.
+ * On error: once retry without size suffix / original src before locking the beige tile.
  */
 export function OptimizedProductImage({
   src,
@@ -35,20 +36,34 @@ export function OptimizedProductImage({
   /** Longest edge requested from alicdn (default 400 for cards) */
   imageWidth = 400,
 }: Props & { imageWidth?: number }) {
-  const proxied = toProxiedImageUrl(src, { width: imageWidth })
+  const primary = toProxiedImageUrl(src, { width: imageWidth })
+  const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
 
-  if (!proxied || failed) {
+  const raw = String(src || '').trim()
+  // attempt 0: resized proxy; 1: proxy without size; 2: original raw URL
+  const displaySrc =
+    attempt === 0 ? primary : attempt === 1 ? toProxiedImageUrl(src, { width: 0 }) || primary : raw
+
+  if (!primary || failed || !displaySrc) {
     return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
   }
 
-  // Local /img-proxy (nginx-cached) and /api/uploads (compressed on upload) — skip optimizer
-  const skipOptimizer = shouldBypassImageOptimizer(proxied)
+  const skipOptimizer = shouldBypassImageOptimizer(displaySrc) || attempt > 0
+
+  const handleError = () => {
+    if (attempt < 2) {
+      setAttempt((n) => n + 1)
+      return
+    }
+    setFailed(true)
+  }
 
   if (fill) {
     return (
       <Image
-        src={proxied}
+        key={`${displaySrc}-${attempt}`}
+        src={displaySrc}
         alt={alt}
         fill
         sizes={sizes}
@@ -56,14 +71,15 @@ export function OptimizedProductImage({
         className={cn('object-cover', className)}
         referrerPolicy="no-referrer"
         unoptimized={skipOptimizer}
-        onError={() => setFailed(true)}
+        onError={handleError}
       />
     )
   }
 
   return (
     <Image
-      src={proxied}
+      key={`${displaySrc}-${attempt}`}
+      src={displaySrc}
       alt={alt}
       width={width || imageWidth}
       height={height || imageWidth}
@@ -72,7 +88,7 @@ export function OptimizedProductImage({
       className={cn('object-cover', className)}
       referrerPolicy="no-referrer"
       unoptimized={skipOptimizer}
-      onError={() => setFailed(true)}
+      onError={handleError}
     />
   )
 }
