@@ -2,9 +2,46 @@
 /* touch: reload Coming getComingSoonProductsByDate */
 import path from 'path'
 import fs from 'fs'
+import dns from 'dns'
+import net from 'net'
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+
+// Node 20 happy-eyeballs tries AAAA first; on hosts without working IPv6 egress
+// outbound fetch (1688 scrape, FX rates) dies with ETIMEDOUT in
+// internalConnectMultiple. Force IPv4 unless explicitly opted out.
+if (process.env.FORCE_IPV4 !== '0') {
+  try {
+    dns.setDefaultResultOrder('ipv4first')
+    const setAutoSelectFamily = (net as unknown as {
+      setDefaultAutoSelectFamily?: (value: boolean) => void
+    }).setDefaultAutoSelectFamily
+    if (typeof setAutoSelectFamily === 'function') {
+      setAutoSelectFamily(false)
+    }
+    console.log('[DEV] Outbound DNS forced to IPv4 (set FORCE_IPV4=0 to disable)')
+  } catch (error) {
+    console.warn('[DEV] Failed to force IPv4 DNS order', error)
+  }
+}
+
+// Optional egress proxy for scrapes (1688 blocks/times out from some hosts).
+// Set HTTPS_PROXY=http://user:pass@host:port in .env, then: pnpm add undici
+const EGRESS_PROXY = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim()
+if (EGRESS_PROXY) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ProxyAgent, setGlobalDispatcher } = require('undici')
+    setGlobalDispatcher(new ProxyAgent(EGRESS_PROXY))
+    console.log(`[DEV] Outbound fetch routed through proxy: ${EGRESS_PROXY.replace(/\/\/[^@]*@/, '//***@')}`)
+  } catch (error) {
+    console.warn(
+      '[DEV] HTTPS_PROXY set but undici is unavailable; run `pnpm add undici` to enable proxying',
+      (error as Error).message,
+    )
+  }
+}
 
 // PM2 / systemd start this without a shell profile, so DATABASE_URL must come
 // from the project .env instead of the parent environment.
