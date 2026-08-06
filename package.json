@@ -7,6 +7,7 @@
     "dev": "pnpm run gen_rpc && sh dev-client.sh && concurrently -n 'next,rpc' -c 'cyan,yellow' \"next dev --turbopack\" \"pnpm run dev:backend\"",
     "dev:frontend": "pnpm run gen_rpc && sh dev-client.sh && next dev --turbopack",
     "dev:backend": "ts-node-dev -r tsconfig-paths/register --transpile-only --project tsconfig.server.json server/dev-host.ts",
+    "build": "next build --webpack",
     "tunnel": "node scripts/tunnel.mjs",
     "tunnel:ngrok": "node scripts/tunnel.mjs --provider=ngrok",
     "gen_rpc": "node -e \"require('ts-node').register({transpileOnly:true,compilerOptions:{module:'commonjs',moduleResolution:'node'}}); require('./scripts/gen-rpc.ts')\"",

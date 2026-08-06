@@ -19,14 +19,11 @@ const nextConfig = {
   output: 'standalone',
 
   // 2. 文件追踪相关
+  // Do NOT exclude **/.next/** or **/node_modules/** — that strips runtime chunks
+  // from the standalone output and causes MODULE_NOT_FOUND at boot.
   outputFileTracingRoot: monoRoot,
   outputFileTracingExcludes: {
-    '*': [
-      '**/.next/**',
-      '**/node_modules/**',
-      '**/generated/**',
-      './code/generated/**'
-    ]
+    '*': ['**/generated/**', './code/generated/**'],
   },
 
   // 经 ngrok / cloudflare tunnel 访问时放行跨域 dev origin 检查
