@@ -213,7 +213,8 @@ async function callSignedMtop(
       payload = JSON.parse(matched[1])
     }
     return { payload, cookieHeader: cookie }
-  } catch {
+  } catch (error) {
+    console.warn('[1688-mtop] call failed', candidate.api, error)
     return null
   } finally {
     clearTimeout(timer)

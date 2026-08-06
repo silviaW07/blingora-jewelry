@@ -3436,6 +3436,23 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     return { preview: attempt.preview, outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
   }
 
+  // Pure network timeout: do not burn ~95s on risk-control waits
+  if (attempt.kind === 'network_error') {
+    if (cookieReady) {
+      const mtopNetworkRetry = await fetch1688OfferPreviewViaMtop(sourceUrl)
+      if (mtopNetworkRetry?.kind === 'parsed') {
+        return { preview: mtopNetworkRetry.preview, outcome: 'ok', failureReason: null }
+      }
+    }
+    console.warn(`[fetch1688OfferPreview] network_error for ${sourceUrl}; skipping long risk retries`)
+    return {
+      preview: attempt.preview,
+      outcome: 'failed',
+      failureReason:
+        '无法连接 1688（超时）。请在服务器执行: curl -I -m 15 https://detail.1688.com/ 与 curl -I -m 15 https://h5api.m.1688.com/ ，并确认 Cookie 仍有效后重试',
+    }
+  }
+
   // No cookie + risk/empty/http on first hit → operator must configure login cookie
   if (
     !cookieReady &&
@@ -3461,8 +3478,8 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
 
   if (attempt.kind !== 'risk_control') {
     const mapped = attemptKindToOutcome(attempt.kind)
-    // 空结果也可能是隐性风控：有 Cookie 时仍走重试
-    if (attempt.kind === 'empty' || attempt.kind === 'http_error' || attempt.kind === 'network_error') {
+    // 空结果也可能是隐性风控：有 Cookie 时仍走重试（network_error 已在上方短路）
+    if (attempt.kind === 'empty' || attempt.kind === 'http_error') {
       console.warn(
         `[fetch1688OfferPreview] initial=${attempt.kind} for ${sourceUrl}, treating as soft-fail and entering risk retry path`,
       )
@@ -3497,7 +3514,16 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     if (attempt.kind === 'expired') {
       return { preview: attempt.preview, outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
     }
-    if (attempt.kind !== 'risk_control' && attempt.kind !== 'empty' && attempt.kind !== 'http_error' && attempt.kind !== 'network_error') {
+    if (attempt.kind === 'network_error') {
+      console.warn(`[fetch1688OfferPreview] ${step.label} network_error for ${sourceUrl}; aborting remaining waits`)
+      return {
+        preview: attempt.preview,
+        outcome: 'failed',
+        failureReason:
+          '无法连接 1688（超时）。服务器访问 detail.1688.com / h5api.m.1688.com 可能被阻断，请检查出网或稍后重试',
+      }
+    }
+    if (attempt.kind !== 'risk_control' && attempt.kind !== 'empty' && attempt.kind !== 'http_error') {
       return { preview: attempt.preview, ...attemptKindToOutcome(attempt.kind) }
     }
     console.warn(`[fetch1688OfferPreview] ${step.label} still ${attempt.kind} for ${sourceUrl}`)
