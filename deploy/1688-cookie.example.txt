@@ -1,0 +1,9 @@
+# Paste your full 1688 browser Cookie on a single line below (no "Cookie:" prefix).
+# Required for parsing: login session cookies; ideally include _m_h5_tk and _m_h5_tk_enc.
+# How to copy:
+#   1. Log into 1688.com in Chrome
+#   2. Open any offer page → F12 → Network → click any request → Request Headers → Cookie
+#   3. Paste into: secrets/1688-cookie.txt  (same directory as secrets/pdd-cookie.txt)
+#   4. pm2 restart rpc --update-env
+#
+# DO NOT commit the real cookie file.

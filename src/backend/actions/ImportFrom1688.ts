@@ -639,6 +639,10 @@ import {
   isPinduoduoProductUrl,
   type PinduoduoProductPreview,
 } from '@/backend/parsers/PinduoduoParser'
+import {
+  fetch1688OfferViaMtop,
+  normalize1688Cookie,
+} from '@/backend/parsers/1688MtopClient'
 
 const buildImportSkuSegments = (sku: PendingImportSkuItem, index: number) => {
   const attrs = Array.isArray(sku.attributes) ? sku.attributes : []
@@ -1899,12 +1903,13 @@ const is1688ExpiredOfferHtml = (html: string): boolean => {
   )
 }
 
-const FAILURE_REASON_RISK_CONTROL = '风控拦截，请稍后重试'
+const FAILURE_REASON_RISK_CONTROL =
+  '风控拦截或 Cookie 已失效：请更新 secrets/1688-cookie.txt（从已登录 1688 的浏览器复制完整 Cookie，需含 _m_h5_tk），然后执行 pm2 restart rpc --update-env 后重试'
 const FAILURE_REASON_EXPIRED = '链接已失效'
 const FAILURE_REASON_NETWORK = '请求 1688 页面失败或超时，请稍后重试'
 const FAILURE_REASON_EMPTY = '未能解析到商品数据，请检查链接或稍后重试'
 const FAILURE_REASON_NO_COOKIE =
-  '风控拦截：请配置 COOKIE_1688（环境变量或 secrets/1688-cookie.txt）后重试'
+  '风控拦截：请配置 COOKIE_1688（环境变量）或写入 secrets/1688-cookie.txt 后执行 pm2 restart rpc --update-env 再重试'
 
 const read1688CookieFromDisk = (): string => {
   try {
@@ -1912,32 +1917,146 @@ const read1688CookieFromDisk = (): string => {
     const fs = require('fs') as typeof import('fs')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path') as typeof import('path')
-    const candidates = [
-      process.env.COOKIE_1688_FILE,
-      path.join(process.cwd(), 'secrets', '1688-cookie.txt'),
-      path.join(process.cwd(), '.1688-cookie'),
-    ].filter(Boolean) as string[]
+    const candidates: string[] = []
+    if (process.env.COOKIE_1688_FILE) candidates.push(process.env.COOKIE_1688_FILE)
+
+    // Explicit production path (PM2 cwd sometimes diverges after restarts)
+    candidates.push('/home/admin/my-website/blingora-jewelry/secrets/1688-cookie.txt')
+
+    // Walk up from cwd so standalone / nested cwd still finds repo secrets/
+    let dir = process.cwd()
+    for (let i = 0; i < 6; i += 1) {
+      candidates.push(path.join(dir, 'secrets', '1688-cookie.txt'))
+      candidates.push(path.join(dir, '.1688-cookie'))
+      const parent = path.dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+
+    const seen = new Set<string>()
     for (const file of candidates) {
+      if (!file || seen.has(file)) continue
+      seen.add(file)
       if (fs.existsSync(file)) {
-        const text = fs.readFileSync(file, 'utf8').trim()
-        if (text) return text
+        const text = normalize1688Cookie(fs.readFileSync(file, 'utf8'))
+        if (text) {
+          console.warn(`[1688-cookie] loaded from ${file} (len=${text.length}, has_m_h5_tk=${/\_m_h5_tk=/.test(text)})`)
+          return text
+        }
       }
     }
-  } catch {
-    // optional cookie file
+  } catch (error) {
+    console.warn('[1688-cookie] disk read failed', error)
   }
   return ''
 }
 
 const resolve1688Cookie = (): string =>
-  (
+  normalize1688Cookie(
     (typeof process !== 'undefined' &&
       (process.env.COOKIE_1688 || process.env.ALIBABA_COOKIE || process.env.COOKIE1688 || '').trim()) ||
-    read1688CookieFromDisk() ||
-    ''
-  ).trim()
+      read1688CookieFromDisk() ||
+      '',
+  )
 
 const has1688CookieConfigured = (): boolean => Boolean(resolve1688Cookie())
+
+/** Wrap mtop JSON so existing HTML extractors (skuProps / subject / images) can dig it. */
+const buildFakeHtmlFromMtopPayload = (payload: unknown): string => {
+  try {
+    const json = JSON.stringify(payload)
+    return `<!doctype html><html><head><meta charset="utf-8"/><title>1688</title></head><body><script>window.__INIT_DATA__=${json};window.context=${json};</script></body></html>`
+  } catch {
+    return ''
+  }
+}
+
+const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688OfferPreview | null> => {
+  if (!html || html.length < 40) return null
+  const name = extract1688OfferTitleFromHtml(html)
+  const multiSpec = parse1688MultiSpecFromHtml(html)
+  const { hdCandidates, watermarkedFallback } = extract1688ImageCandidates(html)
+  const resolvedImages = await resolve1688ImageUrls({
+    hdCandidates,
+    watermarkedFallback,
+  })
+  const mainImageUrl =
+    resolvedImages.mainImageUrl || watermarkedFallback[0] || hdCandidates[0] || null
+  const colorImageCandidates = dedupeImageUrls([
+    ...(Array.isArray(multiSpec.colors) ? multiSpec.colors.map((item) => item.imageUrl) : []),
+    ...(Array.isArray(multiSpec.skuTable) ? multiSpec.skuTable.map((item) => item.imageUrl) : []),
+  ])
+    .map((url) => to1688HdImageUrl(url) || url)
+    .filter((url): url is string => Boolean(url))
+    .filter((url) => isLikelyProductImageUrl(url, { allowProductThumbUpgrade: true }))
+
+  const detailImages = dedupeImageUrls([
+    ...(resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []),
+    ...colorImageCandidates,
+    ...(mainImageUrl ? [mainImageUrl] : []),
+  ]).slice(0, 120)
+
+  const supplierName =
+    pickJsonStringField(html, 'companyName') || pickJsonStringField(html, 'loginId') || null
+  const productDetail =
+    pickJsonStringField(html, 'description') || pickJsonStringField(html, 'offerDescription') || null
+  const sourceCategoryName =
+    pickJsonStringField(html, 'leafCategoryName') || pickJsonStringField(html, 'categoryName') || null
+  const priceText =
+    pickJsonStringField(html, 'price') ||
+    pickJsonStringField(html, 'priceDisplay') ||
+    pickJsonStringField(html, 'offerPrice')
+  const { min: priceMinFromText, max: priceMaxFromText } = parsePriceRangeText(priceText)
+  const featureAttributes = parse1688FeatureAttributes(html)
+  const priceMin = multiSpec.priceMin ?? priceMinFromText
+  const priceMax = multiSpec.priceMax ?? priceMaxFromText ?? priceMin
+
+  if (!(name || mainImageUrl || multiSpec.skuTable.length > 0)) return null
+
+  return {
+    name: name ? name.slice(0, 180) : null,
+    mainImageUrl,
+    detailImages: detailImages.length > 0 ? detailImages : dedupeImageUrls([mainImageUrl]),
+    supplierName: supplierName ? supplierName.slice(0, 120) : null,
+    productDetail: productDetail ? productDetail.slice(0, 2000) : null,
+    sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
+    priceMin,
+    priceMax,
+    featureAttributes,
+    skuTable: multiSpec.skuTable,
+    colors: multiSpec.colors,
+    sizesByColor: multiSpec.sizesByColor,
+    specSummary: multiSpec.specSummary,
+  }
+}
+
+/** Prefer signed mtop JSON when Cookie is available (HTML detail pages are often punished). */
+const fetch1688OfferPreviewViaMtop = async (
+  sourceUrl: string,
+): Promise<Fetch1688AttemptResult | null> => {
+  const cookie = resolve1688Cookie()
+  const offerId = extract1688OfferId(sourceUrl)
+  if (!cookie || !offerId) return null
+
+  try {
+    const mtop = await fetch1688OfferViaMtop(offerId, cookie)
+    if (!mtop.ok) {
+      console.warn(`[fetch1688OfferPreview] mtop fallback skipped: ${mtop.reason}`, mtop.detail || '')
+      return null
+    }
+    const html = buildFakeHtmlFromMtopPayload(mtop.data)
+    const preview = await buildPreviewFromParsedHtml(html)
+    if (!preview) {
+      console.warn(`[fetch1688OfferPreview] mtop ${mtop.api} returned JSON but no parseable fields`)
+      return null
+    }
+    console.warn(`[fetch1688OfferPreview] mtop ${mtop.api} parsed offer ${offerId}`)
+    return { kind: 'parsed', preview, detail: `mtop:${mtop.api}` }
+  } catch (error) {
+    console.warn('[fetch1688OfferPreview] mtop fallback error', error)
+    return null
+  }
+}
 
 const UA_MOBILE_SAFARI =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
@@ -3292,11 +3411,21 @@ const attemptKindToOutcome = (
 }
 
 /**
- * 抓取 1688 商品预览：风控时按 5s / 30s / 60s+备用 UA 自动重试（最多 3 次）。
+ * 抓取 1688 商品预览：有 Cookie 时优先走签名 MTop JSON；失败再 HTML。
+ * HTML 风控时按 5s / 30s / 60s+备用 UA 自动重试（最多 3 次）。
  * 无 Cookie 且首轮即风控时快速失败，避免空耗约 95s。
  */
 const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch1688OfferPreviewResult> => {
   const cookieReady = has1688CookieConfigured()
+
+  // Cookie 可用时优先 MTop（详情 HTML 在境外/机房 IP 上极易命中 punish 页）
+  if (cookieReady) {
+    const mtopAttempt = await fetch1688OfferPreviewViaMtop(sourceUrl)
+    if (mtopAttempt?.kind === 'parsed') {
+      return { preview: mtopAttempt.preview, outcome: 'ok', failureReason: null }
+    }
+  }
+
   let attempt = await fetch1688OfferPreviewOnce(sourceUrl, { attemptLabel: 'initial' })
 
   if (attempt.kind === 'parsed') {
@@ -3322,6 +3451,14 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     }
   }
 
+  // HTML 风控后，再给 MTop 一次机会（可能刚 bootstrap 到 token）
+  if (cookieReady && (attempt.kind === 'risk_control' || attempt.kind === 'empty')) {
+    const mtopRetry = await fetch1688OfferPreviewViaMtop(sourceUrl)
+    if (mtopRetry?.kind === 'parsed') {
+      return { preview: mtopRetry.preview, outcome: 'ok', failureReason: null }
+    }
+  }
+
   if (attempt.kind !== 'risk_control') {
     const mapped = attemptKindToOutcome(attempt.kind)
     // 空结果也可能是隐性风控：有 Cookie 时仍走重试
@@ -3339,6 +3476,15 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
   for (const step of RISK_CONTROL_RETRY_SCHEDULE) {
     console.warn(`[fetch1688OfferPreview] ${step.label} waiting ${step.waitMs}ms for ${sourceUrl}`)
     await sleep(step.waitMs)
+
+    if (cookieReady) {
+      const mtopDuringRetry = await fetch1688OfferPreviewViaMtop(sourceUrl)
+      if (mtopDuringRetry?.kind === 'parsed') {
+        console.warn(`[fetch1688OfferPreview] ${step.label} mtop succeeded for ${sourceUrl}`)
+        return { preview: mtopDuringRetry.preview, outcome: 'ok', failureReason: null }
+      }
+    }
+
     attempt = await fetch1688OfferPreviewOnce(sourceUrl, {
       useBackupUa: step.useBackupUa,
       attemptLabel: step.label,
@@ -5610,6 +5756,10 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
     const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
     const categoryMap = await loadImportPricingCategories(prisma)
     const exchangeRate = await getGlobalExchangeRate(prisma)
+    const cookieSnapshot = resolve1688Cookie()
+    console.warn(
+      `[startParseTask] task=${taskSnapshot.id} items=${taskSnapshot.items.length} cookieConfigured=${Boolean(cookieSnapshot)} cookieLen=${cookieSnapshot.length} hasMtopTk=${/_m_h5_tk=/.test(cookieSnapshot)} cwd=${process.cwd()}`,
+    )
 
     for (let index = 0; index < taskSnapshot.items.length; index += 1) {
       const item = taskSnapshot.items[index]

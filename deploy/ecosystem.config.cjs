@@ -40,6 +40,8 @@ function readEnvKey(key) {
 
 const UPLOAD_DIR = readEnvKey('UPLOAD_DIR') || UPLOAD_DEFAULT
 const DATABASE_URL = readEnvKey('DATABASE_URL')
+const COOKIE_1688 = readEnvKey('COOKIE_1688') || readEnvKey('ALIBABA_COOKIE') || ''
+const COOKIE_PDD = readEnvKey('COOKIE_PDD') || readEnvKey('PDD_COOKIE') || ''
 
 module.exports = {
   apps: [
@@ -85,6 +87,8 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: '3100',
         ...(DATABASE_URL ? { DATABASE_URL } : {}),
+        ...(COOKIE_1688 ? { COOKIE_1688 } : {}),
+        ...(COOKIE_PDD ? { COOKIE_PDD } : {}),
         TS_NODE_PROJECT: path.join(ROOT, 'tsconfig.server.json'),
       },
     },

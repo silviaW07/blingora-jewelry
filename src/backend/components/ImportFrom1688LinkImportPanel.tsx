@@ -125,10 +125,16 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
         ) : (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>链接格式说明</AlertTitle>
-            <AlertDescription>
-              像 https://detail.1688.com/offer/...html 这样的完整商品详情页链接可以继续使用。当前导入任务只校验链接以
-              http 或 https 开头，不会因为是 detail.1688.com/offer 格式而被拦截。
+            <AlertTitle>1688 登录 Cookie 必填</AlertTitle>
+            <AlertDescription className="space-y-1">
+              <p>
+                详情页常被风控拦截。请在已登录 1688 的浏览器打开任意商品页 → F12 → Network → 点开任意请求 → 复制完整
+                Cookie（建议含 _m_h5_tk），写入服务器 secrets/1688-cookie.txt，或设置环境变量 COOKIE_1688，然后执行
+                pm2 restart rpc --update-env。
+              </p>
+              <p className="text-muted-foreground">
+                配置后请对失败条目点「重新解析」。Cookie 大约一天会过期，失效后需重新粘贴。
+              </p>
             </AlertDescription>
           </Alert>
         )}
