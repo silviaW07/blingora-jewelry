@@ -43,11 +43,17 @@ if [[ ! -f .next/standalone/server.js ]]; then
   exit 1
 fi
 
-if find .next/standalone -name '*turbopack*' 2>/dev/null | grep -q .; then
-  echo "ERROR: turbopack chunks found in standalone — build was not webpack" >&2
-  find .next/standalone -name '*turbopack*' | head
+# Only fail if the APP server output still requires turbopack runtime.
+# (Next's own package under node_modules may contain the word "turbopack" — ignore that.)
+if [[ -e '.next/standalone/.next/server/chunks/ssr/[turbopack]_runtime.js' ]] || \
+   [[ -e '.next/standalone/.next/server/chunks/[turbopack]_runtime.js' ]] || \
+   find .next/standalone/.next/server -name '[turbopack]_runtime.js' 2>/dev/null | grep -q .; then
+  echo "ERROR: standalone server still depends on [turbopack]_runtime.js — rebuild with --webpack" >&2
+  find .next/standalone/.next/server -name '[turbopack]_runtime.js' 2>/dev/null | head
   exit 1
 fi
+
+echo "==> webpack standalone OK (no app turbopack runtime)"
 
 echo "==> copy static + public into standalone"
 mkdir -p .next/standalone/.next
