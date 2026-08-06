@@ -784,12 +784,21 @@ const resolveImportCategoryCoefficient = (
 ) => {
   const current = categoryId ? categoryMap.get(categoryId) || null : null
   const parent = current?.parentId ? categoryMap.get(current.parentId) || null : null
+  // Brand shelf L2 must not drive import pricing — fall through to default via nulls.
+  const currentIsBrandChild =
+    parent && String(parent.name || '').trim().toLowerCase() === 'brand'
+  const parentIsBrandShelf = parent && String(parent.name || '').trim().toLowerCase() === 'brand'
+
   const own =
-    current && !isAggregatePricingCategoryName(current.name)
+    current &&
+    !currentIsBrandChild &&
+    !isAggregatePricingCategoryName(current.name)
       ? toNumberOrNull(current.priceCoefficient)
       : null
   const parentCoefficient =
-    parent && !isAggregatePricingCategoryName(parent.name)
+    parent &&
+    !parentIsBrandShelf &&
+    !isAggregatePricingCategoryName(parent.name)
       ? toNumberOrNull(parent.priceCoefficient)
       : null
   return resolveCategoryPriceCoefficient(own, parentCoefficient)
@@ -4359,7 +4368,10 @@ const persistPinduoduoParsedItem = async (params: {
   )
   const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
   const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
-  const targetCategoryId = matchedSecondaryCategoryIds[0] || task.defaultCategoryId || null
+  const targetCategoryId = pickImportPricingTargetCategory(
+    matchedSecondaryCategories,
+    task.defaultCategoryId,
+  )
   // 系数仅作分类归属参考展示；拼多多售价按加价百分比计算
   const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
 
@@ -4723,9 +4735,9 @@ const createProductRecord = async (tx: any, params: {
 export type AutoMatchedSecondaryCategory = {
   id: string
   name: string
-  /** 分类管理「品牌关键词」；导入自动归类时与类目名同等参与匹配 */
+  /** 分类管理「品牌关键词」；可命中关联，但不作为导入定价目标类目 */
   keywords: string[]
-  /** 一级父类名称；Brand 下二级优先作为主分类 */
+  /** 一级父类名称；parent 为 Brand 时仅作货架标签，不参与售价系数 */
   parentName?: string | null
 }
 
@@ -4826,7 +4838,8 @@ const isBrandParentSecondaryCategory = (category: AutoMatchedSecondaryCategory) 
 
 /**
  * 按标题/详情是否包含二级类目名或其品牌关键词进行匹配（大小写不敏感）。
- * 多命中时：Brand 下二级优先，再按「最长命中词」降序，主分类取第一项。
+ * 多命中时：真实一级/二级商品类目优先于 Brand 货架；同档再按「最长命中词」降序。
+ * 主分类（定价用）应取第一项非 Brand 命中，见 pickImportPricingTargetCategory。
  */
 export function matchSecondaryCategoriesByTitle(
   title: string,
@@ -4852,11 +4865,21 @@ export function matchSecondaryCategoriesByTitle(
 
   scored.sort(
     (a, b) =>
-      Number(isBrandParentSecondaryCategory(b.category)) - Number(isBrandParentSecondaryCategory(a.category)) ||
+      // Prefer real L1→L2 product categories over Brand shelf L2s for import targeting.
+      Number(isBrandParentSecondaryCategory(a.category)) - Number(isBrandParentSecondaryCategory(b.category)) ||
       b.bestTokenLength - a.bestTokenLength ||
       a.category.name.localeCompare(b.category.name, 'zh-CN'),
   )
   return scored.map(item => item.category)
+}
+
+/** Import pricing / 待上传目标分类：只用商品二级类目，不用 Brand 货架。 */
+export function pickImportPricingTargetCategory(
+  matched: AutoMatchedSecondaryCategory[],
+  fallbackId?: string | null,
+): string | null {
+  const pricingHit = matched.find(category => !isBrandParentSecondaryCategory(category))
+  return pricingHit?.id || fallbackId || null
 }
 
 /**
@@ -5490,7 +5513,9 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         normalizeText(row.categoryId) ||
         pathResolved.targetCategoryId ||
         exactCell?.id ||
-        (!categoryCell ? matchedSecondaryCategoryIds[0] : null) ||
+        (!categoryCell
+          ? pickImportPricingTargetCategory(autoMatchedSecondaryCategories, null)
+          : null) ||
         input.defaultCategoryId ||
         null
 
@@ -5971,7 +5996,11 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           )
           const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
           const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
-          const targetCategoryId = matchedSecondaryCategoryIds[0] || taskSnapshot.defaultCategoryId || null
+          // Pricing target = real L1/L2 only; Brand hits stay in matched* for shelf linking.
+          const targetCategoryId = pickImportPricingTargetCategory(
+            matchedSecondaryCategories,
+            taskSnapshot.defaultCategoryId,
+          )
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
           const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd))
           const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd))
@@ -6838,12 +6867,13 @@ const applyReparsed1688PreviewToItem = async (params: {
   )
   const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
   const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
-  // 重新解析时：标题命中的 L2 优先于旧 targetCategoryId
+  // 重新解析：定价目标只用商品二级类目；Brand 命中不覆盖售价系数
   const targetCategoryId =
-    matchedSecondaryCategoryIds[0] || item.targetCategoryId || item.importTask.defaultCategoryId || null
-  const resolvedCoefficient =
-    toNumberOrNull(item.coefficient) ??
-    resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
+    pickImportPricingTargetCategory(matchedSecondaryCategories, null) ||
+    item.targetCategoryId ||
+    item.importTask.defaultCategoryId ||
+    null
+  const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
 
   const rawPriceMin = fetched.priceMin ?? toNumberOrNull(item.costPrice) ?? 50
   const rawPriceMax = fetched.priceMax ?? rawPriceMin
