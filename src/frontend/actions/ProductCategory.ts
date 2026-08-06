@@ -266,6 +266,12 @@ import {
   toDecimalNumber,
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import {
+  collectBrandKeywordTexts,
+  collectTranslationSearchTexts,
+  productMatchesSearchTokens,
+  tokenizeProductSearch,
+} from '@/shared/productSearch'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
@@ -573,31 +579,11 @@ const buildProductWhere = (
     }
   }
 
-  const normalizedSearchKeyword = typeof searchKeyword === 'string' ? searchKeyword.trim() : ''
-  if (normalizedSearchKeyword) {
-    // MySQL 不支持 Prisma mode:'insensitive'；依赖库表 utf8mb4_unicode_ci 做大小写不敏感 LIKE
-    where.AND = [
-      ...(Array.isArray(where.AND) ? where.AND : []),
-      {
-        OR: [
-          {
-            name: {
-              contains: normalizedSearchKeyword,
-            },
-          },
-          {
-            skus: {
-              some: {
-                skuCode: {
-                  contains: normalizedSearchKeyword,
-                },
-              },
-            },
-          },
-        ],
-      },
-    ]
-  }
+  // Search tokens are NOT applied in Prisma here on purpose:
+  // English storefront titles live in translationsJson, and MySQL LIKE on
+  // product.name alone misses "chanel bag" when the stored name is Chinese/CL.
+  // Token AND fuzzy matching runs in-memory after fetch (see getProductList).
+  void searchKeyword
 
   return where
 }
@@ -1020,11 +1006,21 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     dbWhere.ratingAverage = { gte: input.min_rating }
   }
 
+  const searchTokens = tokenizeProductSearch(input.search_keyword)
+  // Broader take when searching so translated English titles are not truncated away
+  // before the in-memory fuzzy filter runs.
+  const listTake = searchTokens.length > 0 ? 5000 : 2000
+
   const dbProducts = await prisma.product.findMany({
     where: dbWhere,
     include: {
       skus: true,
-      brandCategory: true,
+      brandCategory: {
+        select: {
+          name: true,
+          brandKeywordsJson: true,
+        },
+      },
       category: {
         select: {
           id: true,
@@ -1076,20 +1072,38 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         }
       }
     },
-    take: 2000
+    take: listTake
   })
-
-  const normalizedSearchKeyword =
-    typeof input.search_keyword === 'string' ? input.search_keyword.trim().toLowerCase() : ''
 
   let items: ProductItem[] = dbProducts
     .filter((p) => {
-      if (!normalizedSearchKeyword) return true
-      const nameMatched = (p.name || '').toLowerCase().includes(normalizedSearchKeyword)
-      const skuMatched = p.skus.some((sku) =>
-        (sku.skuCode || '').toLowerCase().includes(normalizedSearchKeyword),
+      if (!searchTokens.length) return true
+      const translationTexts = collectTranslationSearchTexts(
+        (p as { translationsJson?: unknown }).translationsJson,
       )
-      return nameMatched || skuMatched
+      const displayName = resolveProductDisplayName(
+        p.name,
+        (p as { translationsJson?: unknown }).translationsJson,
+        lang,
+      )
+      const brandKeywords = collectBrandKeywordTexts(
+        (p.brandCategory as { brandKeywordsJson?: unknown } | null)?.brandKeywordsJson,
+      )
+      const relatedCategoryNames = (p.relationCategories || [])
+        .map((rel) => rel.category?.name)
+        .filter(Boolean)
+      return productMatchesSearchTokens(searchTokens, [
+        p.name,
+        displayName,
+        p.shortDescription,
+        p.brandCategory?.name,
+        p.category?.name,
+        p.category?.parent?.name,
+        ...brandKeywords,
+        ...relatedCategoryNames,
+        ...translationTexts,
+        ...p.skus.map((sku) => sku.skuCode),
+      ])
     })
     .map((p) => {
     const skus = p.skus

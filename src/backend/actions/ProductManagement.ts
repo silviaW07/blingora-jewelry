@@ -1978,6 +1978,29 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
       validateActivePreconditions(input)
     }
 
+    const existingProduct = await prisma.product.findUnique({
+      where: { id: input.product_id },
+      select: { name: true, translationsJson: true },
+    })
+    if (!existingProduct) throw new Error('商品不存在')
+
+    const nextName = String(input.name || '').trim()
+    const nameChanged = nextName !== String(existingProduct.name || '').trim()
+    let nextTranslationsJson: Record<string, unknown> | undefined
+    if (nameChanged) {
+      // Storefront EN/ES titles come from translationsJson — keep them in sync on rename.
+      const nameEn = await resolveEnglishProductTitle(nextName)
+      const hadSpanish = Boolean(getCachedSpanishTitle(null, existingProduct.translationsJson))
+      const nameEs = hadSpanish
+        ? await resolveSpanishProductTitle(nextName, null, nameEn, null)
+        : getCachedSpanishTitle(null, existingProduct.translationsJson) || null
+      nextTranslationsJson = mergeProductTitleTranslations(existingProduct.translationsJson, {
+        nameZh: nextName,
+        nameEn,
+        nameEs,
+      })
+    }
+
     await prisma.$transaction(async tx => {
       const { categoryMap } = await getCategoryMetaMap(tx, [input.category_id])
       const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, input.category_id)
@@ -1987,7 +2010,7 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
       await tx.product.update({
         where: { id: input.product_id },
         data: {
-          name: input.name,
+          name: nextName,
           supplierName: input.supplier_name?.trim() || null,
           brandName: input.brand_keyword?.trim() || null,
           status: input.submit_action,
@@ -2000,7 +2023,8 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
           parameterJson: (input.parameter_json as any) || null,
           tradeInfoJson: normalizeTradeInfo(input.trade_info_json) as any,
           faqJson: (input.faq_json as any) || null,
-          category: { connect: { id: input.category_id } }
+          category: { connect: { id: input.category_id } },
+          ...(nextTranslationsJson ? { translationsJson: nextTranslationsJson as any } : {}),
         }
       })
 
@@ -2173,7 +2197,25 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
     if (input.field === 'product_name') {
       const nextName = String(input.value || '').trim()
       if (!nextName) throw new Error('商品名称不能为空')
-      await prisma.product.update({ where: { id: input.product_id }, data: { name: nextName } })
+      // Storefront EN/ES titles come from translationsJson, not product.name.
+      // Refresh them whenever the admin renames, or the list stays on stale English.
+      const nameEn = await resolveEnglishProductTitle(nextName)
+      const hadSpanish = Boolean(getCachedSpanishTitle(null, product.translationsJson))
+      const nameEs = hadSpanish
+        ? await resolveSpanishProductTitle(nextName, null, nameEn, null)
+        : getCachedSpanishTitle(null, product.translationsJson) || null
+      const nextJson = mergeProductTitleTranslations(product.translationsJson, {
+        nameZh: nextName,
+        nameEn,
+        nameEs,
+      })
+      await prisma.product.update({
+        where: { id: input.product_id },
+        data: {
+          name: nextName,
+          translationsJson: nextJson as any,
+        },
+      })
       return { success: true }
     }
 
