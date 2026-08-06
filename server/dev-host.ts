@@ -44,7 +44,16 @@ if (EGRESS_PROXY) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { ProxyAgent, setGlobalDispatcher } = require('undici')
-    setGlobalDispatcher(new ProxyAgent(EGRESS_PROXY))
+    // A reverse-tunnelled proxy adds a full round trip before the target is even
+    // dialled, so undici's 10s connect default fires long before 1688 answers.
+    setGlobalDispatcher(
+      new ProxyAgent({
+        uri: EGRESS_PROXY,
+        connectTimeout: 30_000,
+        headersTimeout: 60_000,
+        bodyTimeout: 60_000,
+      }),
+    )
     console.log(`[DEV] Outbound fetch routed through proxy: ${EGRESS_PROXY.replace(/\/\/[^@]*@/, '//***@')}`)
   } catch (error) {
     console.warn(
