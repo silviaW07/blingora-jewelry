@@ -1901,6 +1901,43 @@ const is1688ExpiredOfferHtml = (html: string): boolean => {
 
 const FAILURE_REASON_RISK_CONTROL = '风控拦截，请稍后重试'
 const FAILURE_REASON_EXPIRED = '链接已失效'
+const FAILURE_REASON_NETWORK = '请求 1688 页面失败或超时，请稍后重试'
+const FAILURE_REASON_EMPTY = '未能解析到商品数据，请检查链接或稍后重试'
+const FAILURE_REASON_NO_COOKIE =
+  '风控拦截：请配置 COOKIE_1688（环境变量或 secrets/1688-cookie.txt）后重试'
+
+const read1688CookieFromDisk = (): string => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path')
+    const candidates = [
+      process.env.COOKIE_1688_FILE,
+      path.join(process.cwd(), 'secrets', '1688-cookie.txt'),
+      path.join(process.cwd(), '.1688-cookie'),
+    ].filter(Boolean) as string[]
+    for (const file of candidates) {
+      if (fs.existsSync(file)) {
+        const text = fs.readFileSync(file, 'utf8').trim()
+        if (text) return text
+      }
+    }
+  } catch {
+    // optional cookie file
+  }
+  return ''
+}
+
+const resolve1688Cookie = (): string =>
+  (
+    (typeof process !== 'undefined' &&
+      (process.env.COOKIE_1688 || process.env.ALIBABA_COOKIE || process.env.COOKIE1688 || '').trim()) ||
+    read1688CookieFromDisk() ||
+    ''
+  ).trim()
+
+const has1688CookieConfigured = (): boolean => Boolean(resolve1688Cookie())
 
 const UA_MOBILE_SAFARI =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
@@ -1913,7 +1950,8 @@ const UA_BACKUP_DESKTOP =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
 
 /**
- * 1688 抓取请求头：贴近真实 Chrome 导航；可选 Cookie（COOKIE_1688 / ALIBABA_COOKIE）。
+ * 1688 抓取请求头：贴近真实 Chrome 导航。
+ * Cookie 来自 COOKIE_1688 / ALIBABA_COOKIE / secrets/1688-cookie.txt。
  * 无 Cookie 时直连极易命中 _____tmd_____/punish 人机验证页。
  */
 const build1688RequestHeaders = (ua: string): Record<string, string> => {
@@ -1940,10 +1978,7 @@ const build1688RequestHeaders = (ua: string): Record<string, string> => {
     headers['Sec-Ch-Ua-Mobile'] = '?1'
     headers['Sec-Ch-Ua-Platform'] = '"Android"'
   }
-  const cookie =
-    (typeof process !== 'undefined' &&
-      (process.env.COOKIE_1688 || process.env.ALIBABA_COOKIE || process.env.COOKIE1688 || '').trim()) ||
-    ''
+  const cookie = resolve1688Cookie()
   if (cookie) {
     headers.Cookie = cookie
   }
@@ -3242,16 +3277,26 @@ const attemptKindToOutcome = (
   kind: Fetch1688AttemptKind,
 ): { outcome: Fetch1688Outcome; failureReason: string | null } => {
   if (kind === 'parsed') return { outcome: 'ok', failureReason: null }
-  if (kind === 'risk_control') return { outcome: 'risk_control', failureReason: FAILURE_REASON_RISK_CONTROL }
+  if (kind === 'risk_control') {
+    return {
+      outcome: 'risk_control',
+      failureReason: has1688CookieConfigured()
+        ? FAILURE_REASON_RISK_CONTROL
+        : FAILURE_REASON_NO_COOKIE,
+    }
+  }
   if (kind === 'expired') return { outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
-  return { outcome: 'failed', failureReason: FAILURE_REASON_RISK_CONTROL }
+  if (kind === 'network_error') return { outcome: 'failed', failureReason: FAILURE_REASON_NETWORK }
+  if (kind === 'empty') return { outcome: 'failed', failureReason: FAILURE_REASON_EMPTY }
+  return { outcome: 'failed', failureReason: FAILURE_REASON_EMPTY }
 }
 
 /**
  * 抓取 1688 商品预览：风控时按 5s / 30s / 60s+备用 UA 自动重试（最多 3 次）。
- * 导入与重新解析共用此路径；宁可慢成功，也不把风控误标为「链接已失效」。
+ * 无 Cookie 且首轮即风控时快速失败，避免空耗约 95s。
  */
 const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch1688OfferPreviewResult> => {
+  const cookieReady = has1688CookieConfigured()
   let attempt = await fetch1688OfferPreviewOnce(sourceUrl, { attemptLabel: 'initial' })
 
   if (attempt.kind === 'parsed') {
@@ -3262,9 +3307,24 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     return { preview: attempt.preview, outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
   }
 
+  // No cookie + risk/empty/http on first hit → operator must configure login cookie
+  if (
+    !cookieReady &&
+    (attempt.kind === 'risk_control' || attempt.kind === 'empty' || attempt.kind === 'http_error')
+  ) {
+    console.warn(
+      `[fetch1688OfferPreview] no COOKIE_1688 configured; aborting retries after ${attempt.kind} for ${sourceUrl}`,
+    )
+    return {
+      preview: attempt.preview,
+      outcome: 'risk_control',
+      failureReason: FAILURE_REASON_NO_COOKIE,
+    }
+  }
+
   if (attempt.kind !== 'risk_control') {
     const mapped = attemptKindToOutcome(attempt.kind)
-    // 空结果也可能是隐性风控：仍走重试，避免过早失败
+    // 空结果也可能是隐性风控：有 Cookie 时仍走重试
     if (attempt.kind === 'empty' || attempt.kind === 'http_error' || attempt.kind === 'network_error') {
       console.warn(
         `[fetch1688OfferPreview] initial=${attempt.kind} for ${sourceUrl}, treating as soft-fail and entering risk retry path`,
@@ -3297,7 +3357,6 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     console.warn(`[fetch1688OfferPreview] ${step.label} still ${attempt.kind} for ${sourceUrl}`)
   }
 
-  // 3 次重试后仍失败：标失败（风控），绝不标「链接已失效」
   const finalKind = attempt.kind === 'expired' ? 'expired' : 'risk_control'
   if (finalKind === 'expired') {
     return { preview: attempt.preview, outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
@@ -3306,7 +3365,7 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
   return {
     preview: attempt.preview,
     outcome: 'risk_control',
-    failureReason: FAILURE_REASON_RISK_CONTROL,
+    failureReason: cookieReady ? FAILURE_REASON_RISK_CONTROL : FAILURE_REASON_NO_COOKIE,
   }
 }
 
@@ -4785,6 +4844,45 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
         console.error('[getPendingImportQueue] failed to repair charset-corrupted pending import items', error)
       }
 
+      // Reclaim items stuck in RUNNING after RPC crash / killed parse job (~15 min)
+      try {
+        const stuckBefore = new Date(Date.now() - 15 * 60 * 1000)
+        const stuckItems = await prisma.importtaskitem.updateMany({
+          where: {
+            fetchStatus: 'RUNNING' as any,
+            OR: [
+              { fetchStartedAt: { lt: stuckBefore } },
+              { fetchStartedAt: null, updatedAt: { lt: stuckBefore } },
+            ],
+          },
+          data: {
+            fetchStatus: 'RETRY_PENDING' as any,
+            failureReason: '解析超时中断，请重新解析',
+            fetchFinishedAt: new Date(),
+          },
+        })
+        const stuckTasks = await prisma.importtask.updateMany({
+          where: {
+            status: 'RUNNING' as any,
+            startedAt: { lt: stuckBefore },
+          },
+          data: {
+            status: 'RETRY_PENDING' as any,
+            finishedAt: new Date(),
+          },
+        })
+        if (stuckItems.count > 0 || stuckTasks.count > 0) {
+          console.info(
+            `[getPendingImportQueue] reclaimed stuck RUNNING items=${stuckItems.count} tasks=${stuckTasks.count}`,
+          )
+          // Allow a new parse job if the previous process died holding the mutex
+          parseJobBusy = false
+          parseJobLabel = null
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
+      }
+
       try {
         const sanitizedMockCount = await sanitizeClassicMockPendingImportItems(40)
         if (sanitizedMockCount > 0) {
@@ -5318,9 +5416,18 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
       throw new Error('请输入有效的商品链接')
     }
 
-    const validUrls = uniqueUrls.filter(u => u.startsWith('http://') || u.startsWith('https://'))
-    if (validUrls.length === 0) {
+    const httpUrls = uniqueUrls.filter(u => u.startsWith('http://') || u.startsWith('https://'))
+    if (httpUrls.length === 0) {
       throw new Error('链接格式不正确，需以 http 或 https 开头')
+    }
+
+    const validUrls = httpUrls.filter(
+      u => is1688ImportSourceUrl(u) || isPinduoduoProductUrl(u),
+    )
+    if (validUrls.length === 0) {
+      throw new Error(
+        '请粘贴有效的1688商品详情链接（需含 offer/数字，如 https://detail.1688.com/offer/123.html）或拼多多商品链接',
+      )
     }
 
     let stockStrategyJson: any = null
@@ -5521,29 +5628,9 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       try {
         const sourceUrl = item.sourceUrl || ''
         const isPddUrl = isPinduoduoProductUrl(sourceUrl)
-        const is1688OfferUrl = /1688\.com\/.*offer\/\d+/i.test(sourceUrl) || /detail\.1688\.com\/offer\/\d+/i.test(sourceUrl)
-        const looksOffline = /offline|下架|sold.?out|removed/i.test(sourceUrl)
-        const looksTimeout = /timeout|error|超时/i.test(sourceUrl)
-        const looksRateLimited = /rate-limit|限流/i.test(sourceUrl)
+        const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
 
-        if (looksRateLimited) {
-          rateLimitedCount += 1
-          const now = new Date()
-          await prisma.importtaskitem.update({
-            where: { id: item.id },
-            data: {
-              fetchStatus: 'RATE_LIMITED' as any,
-              failureReason: isPddUrl
-                ? '解析失败：触发拼多多限流，请稍后重试'
-                : '解析失败：触发1688限流，请稍后重试',
-              fetchFinishedAt: now
-            }
-          })
-          await prisma.importtask.update({
-            where: { id: taskSnapshot.id },
-            data: { lastRateLimitedAt: now }
-          })
-        } else if (isPddUrl) {
+        if (isPddUrl) {
           const fetchResult = await fetchPinduoduoProductPreview(sourceUrl)
           const fetched = fetchResult.preview
           const hasRealParse =
@@ -5587,28 +5674,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               fetchFinishedAt: new Date()
             }
           })
-        } else if (looksOffline) {
-          failureCount += 1
-          await prisma.importtaskitem.update({
-            where: { id: item.id },
-            data: {
-              fetchStatus: 'FAILED' as any,
-              failureReason: '解析失败：该1688商品已下架',
-              fetchFinishedAt: new Date()
-            }
-          })
-        } else if (looksTimeout) {
-          failureCount += 1
-          await prisma.importtaskitem.update({
-            where: { id: item.id },
-            data: {
-              fetchStatus: 'FAILED' as any,
-              failureReason: '解析失败：网络超时，请稍后重试',
-              fetchFinishedAt: new Date()
-            }
-          })
         } else {
-          const basePrice = 50 + Math.floor(Math.random() * 50)
           const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
           const fetched = fetchResult.preview
           const hasRealParse = Boolean(
@@ -5791,9 +5857,14 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           const previewData: PreviewDataJson = {
             name: productName,
             ...(await (async () => {
-              const nameEn = await resolveEnglishProductTitle(productName)
-              const nameEs = await resolveSpanishProductTitle(productName, null, nameEn)
-              return { nameEn, nameEs }
+              try {
+                const nameEn = await resolveEnglishProductTitle(productName)
+                const nameEs = await resolveSpanishProductTitle(productName, null, nameEn)
+                return { nameEn, nameEs }
+              } catch (translateErr) {
+                console.warn('[startParseTask] title translate failed, keeping Chinese only', translateErr)
+                return {}
+              }
             })()),
             categoryId: targetCategoryId || undefined,
             matchedCategoryIds: matchedSecondaryCategoryIds,
