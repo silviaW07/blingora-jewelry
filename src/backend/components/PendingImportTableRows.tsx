@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { ArrowUpCircle, ImagePlus, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
 import { PreviewableThumb } from '@/backend/components/ImageLightbox'
@@ -82,14 +82,7 @@ export function PendingImportTableRows({
   const targetCategoryOption = state.categoryOptions.find(option => option.category_id === item.item_targetCategoryId)
   const targetCategoryName = targetCategoryOption?.category_name
   const isReparsing = !!state.reparsingItemIds[item.item_id]
-  // Re-evaluate stuck→ready heuristic while the page stays open.
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    if (item.item_fetchStatus === 'COMPLETED' || item.item_isPublished) return
-    setNowMs(Date.now())
-    const timer = window.setInterval(() => setNowMs(Date.now()), 30_000)
-    return () => window.clearInterval(timer)
-  }, [item.item_fetchStatus, item.item_isPublished, item.item_updatedAt, item.item_createdAt])
+  const nowMs = state.pendingImportNowMs
   const readinessSnapshot = snapshotFromPendingImportQueueItem(item)
   const effectivelyReady = isPendingImportEffectivelyReady(readinessSnapshot, nowMs)
   const effectiveFetchStatus = getEffectivePendingImportFetchStatus(readinessSnapshot, nowMs)

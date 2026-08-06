@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { ArrowDownCircle, ArrowUpCircle, Minus, Plus, RotateCcw, Settings2, Trash2, X } from 'lucide-react'
-import { Badge, Button, Checkbox, TableCell, TableRow } from '@/backend/components/ui'
+import { Badge, Button, Checkbox, Input, TableCell, TableRow } from '@/backend/components/ui'
 import EditableImg from '@/@base/EditableImg'
 import { PreviewableThumb } from '@/backend/components/ImageLightbox'
 import { SkuTreeEditableCell } from '@/backend/components/ProductSkuTreeCells'
@@ -261,7 +261,36 @@ export function ProductTreeRows({
           {minOrderQty ? `${Number(minOrderQty).toLocaleString()} 件` : '--'}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
-          {item.total_stock.toLocaleString()}
+          {state.productStockEditingId === item.product_id ? (
+            <Input
+              type="number"
+              min={0}
+              className="ml-auto h-8 w-24 text-right"
+              value={state.productStockEditingValue}
+              autoFocus
+              onChange={(e) => handlers.setProductStockEditingValue(e.target.value)}
+              onBlur={() => void handlers.submitProductStockEdit()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void handlers.submitProductStockEdit()
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  handlers.cancelProductStockEdit()
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="ml-auto block w-full text-right hover:text-primary hover:underline"
+              title="点击编辑可用库存"
+              onClick={() => handlers.startProductStockEdit(item.product_id, item.total_stock)}
+            >
+              {item.total_stock.toLocaleString()}
+            </button>
+          )}
         </TableCell>
         <TableCell className="text-center">
           <Badge variant={statusConfig[item.status].variant} className="rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider">

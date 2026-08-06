@@ -515,6 +515,18 @@ export interface BatchAppendProductAdminNotesInput {
   note: string
 }
 
+export interface BatchAppendTitleSuffixInput {
+  /** Product list ids OR pending-import item ids (depending on action) */
+  ids: string[]
+  suffix: string
+}
+
+export interface BatchAppendTitleSuffixOutput {
+  success_count: number
+  skip_count: number
+  fail_count: number
+}
+
 export type CreatePendingImportTaskInput = CreateImportTaskInput
 export type CreatePendingImportTaskOutput = CreateImportTaskOutput
 export type StartPendingImportTaskInput = StartParseTaskInput
@@ -581,6 +593,7 @@ import {
   retryImportTask as retryPendingImportTask,
   getPendingImportQueue as getImportFrom1688PendingImportQueue,
   inlineUpdatePendingImportItemField as updateImportFrom1688PendingImportItemField,
+  batchUpdatePendingImportItemField as batchUpdateImportFrom1688PendingImportItemField,
   inlineUpdatePendingImportSkuField as updateImportFrom1688PendingImportSkuField,
   publishPendingImportItems as publishImportFrom1688PendingImportItems,
   reparsePendingImportItems as reparseImportFrom1688PendingImportItems,
@@ -615,6 +628,12 @@ import {
   syncProductPriceThresholdRelations,
   type AutoClassifyPriceThresholdSummary,
 } from '@/backend/lib/priceThresholdAutoClassify'
+import {
+  appendTitleSuffixIfMissing,
+  normalizeTitleSuffix,
+  titleAlreadyHasSuffix,
+} from '@/shared/titleSuffix'
+import { DEFAULT_AVAILABLE_STOCK } from '@/shared/resolveInitialStock'
 
 export interface ReturnProductsToPendingUploadInput {
   product_ids: string[]
@@ -1488,7 +1507,7 @@ function buildDraftSkus(row: BatchImportDraftRow, spuCode?: string): SkuItem[] {
       image_url: imageUrl,
       price,
       original_price: originalPrice,
-      stock: 1,
+      stock: DEFAULT_AVAILABLE_STOCK,
       attribute_json: attrs,
       weight_kg: weightKg,
       usd_display_price: toUsdDisplayPrice(price),
@@ -2809,6 +2828,23 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
   })
 )
 
+export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_ids: string[]
+    field: Extract<
+      PendingImportEditableField,
+      'weight_grams' | 'minimum_order_quantity' | 'available_stock' | 'coefficient'
+    >
+    value: string | number
+  }): Promise<BatchOperateOutput> => {
+    return batchUpdateImportFrom1688PendingImportItemField({
+      itemIds: input.item_ids,
+      field: input.field,
+      value: input.value,
+    })
+  })
+)
+
 export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
   withResult(async (input: {
     item_id: string
@@ -3371,8 +3407,169 @@ export const batchAppendProductAdminNotes = requireRole([UserRole.ADMIN])(
   })
 )
 
+function appendLiteralSuffixToCachedTitle(title: string, suffix: string): string {
+  if (titleAlreadyHasSuffix(title, suffix)) return title
+  return `${String(title || '').trimEnd()}${suffix}`
+}
+
 /**
- * 一键重新归类：扫描 ACTIVE + DRAFT 商品的标题+详情，按 ACTIVE 二级类目名/品牌关键词匹配。
+ * 商品列表：批量在标题末尾加后缀（已有相同后缀则跳过）。
+ * 仅改 name / translationsJson 标题，不改类目。
+ */
+export const batchAppendProductTitleSuffix = requireRole([UserRole.ADMIN])(
+  withResult(async (input: BatchAppendTitleSuffixInput): Promise<BatchAppendTitleSuffixOutput> => {
+    const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
+    const suffix = normalizeTitleSuffix(input.suffix)
+    if (ids.length === 0) throw new Error('请先勾选商品')
+    if (!suffix) throw new Error('后缀不能为空')
+
+    let success = 0
+    let skip = 0
+    let fail = 0
+
+    for (const productId of ids) {
+      try {
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { id: true, name: true, translationsJson: true },
+        })
+        if (!product) {
+          fail += 1
+          continue
+        }
+
+        const nextName = appendTitleSuffixIfMissing(product.name, suffix)
+        if (!nextName) {
+          skip += 1
+          continue
+        }
+
+        const existingEn = getCachedEnglishTitle(null, product.translationsJson)
+        const existingEs = getCachedSpanishTitle(null, product.translationsJson)
+        const nextJson = mergeProductTitleTranslations(product.translationsJson, {
+          nameZh: nextName,
+          nameEn: existingEn ? appendLiteralSuffixToCachedTitle(existingEn, suffix) : null,
+          nameEs: existingEs ? appendLiteralSuffixToCachedTitle(existingEs, suffix) : null,
+        })
+
+        await prisma.product.update({
+          where: { id: productId },
+          data: {
+            name: nextName,
+            translationsJson: nextJson as any,
+          },
+        })
+        success += 1
+      } catch {
+        fail += 1
+      }
+    }
+
+    return { success_count: success, skip_count: skip, fail_count: fail }
+  }),
+)
+
+/**
+ * 待上传区：批量在 parsedName 末尾加后缀（已有相同后缀则跳过）。
+ * 同步预览 JSON 名称，不改类目。
+ */
+export const batchAppendPendingImportTitleSuffix = requireRole([UserRole.ADMIN])(
+  withResult(async (input: BatchAppendTitleSuffixInput): Promise<BatchAppendTitleSuffixOutput> => {
+    const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
+    const suffix = normalizeTitleSuffix(input.suffix)
+    if (ids.length === 0) throw new Error('请先勾选待上传商品')
+    if (!suffix) throw new Error('后缀不能为空')
+
+    let success = 0
+    let skip = 0
+    let fail = 0
+
+    for (const itemId of ids) {
+      try {
+        const item = await prisma.importtaskitem.findUnique({
+          where: { id: itemId },
+          select: {
+            id: true,
+            parsedName: true,
+            isPublished: true,
+            previewDataJson: true,
+          },
+        })
+        if (!item || item.isPublished) {
+          fail += 1
+          continue
+        }
+
+        const currentName = String(item.parsedName || '').trim()
+        const nextName = appendTitleSuffixIfMissing(currentName, suffix)
+        if (!nextName) {
+          skip += 1
+          continue
+        }
+
+        const preview = ((item.previewDataJson || {}) as Record<string, unknown>)
+        const prevEn = typeof preview.nameEn === 'string' ? preview.nameEn : ''
+        const prevEs = typeof preview.nameEs === 'string' ? preview.nameEs : ''
+
+        await prisma.importtaskitem.update({
+          where: { id: itemId },
+          data: {
+            parsedName: nextName,
+            previewDataJson: {
+              ...preview,
+              name: nextName,
+              ...(prevEn
+                ? { nameEn: appendLiteralSuffixToCachedTitle(prevEn, suffix) }
+                : {}),
+              ...(prevEs
+                ? { nameEs: appendLiteralSuffixToCachedTitle(prevEs, suffix) }
+                : {}),
+            } as any,
+          },
+        })
+        success += 1
+      } catch {
+        fail += 1
+      }
+    }
+
+    return { success_count: success, skip_count: skip, fail_count: fail }
+  }),
+)
+
+/**
+ * 商品列表：统一设置某商品下全部 SKU 的可用库存（后台专用，不改类目）。
+ */
+export const updateProductStock = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    product_id: string
+    stock: number
+  }): Promise<UpdateProductOutput> => {
+    const productId = String(input.product_id || '').trim()
+    const nextStock = Math.round(Number(input.stock))
+    if (!productId) throw new Error('商品 ID 不能为空')
+    if (!Number.isFinite(nextStock) || nextStock < 0) throw new Error('库存不能小于0')
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    })
+    if (!product) throw new Error('商品不存在')
+
+    await prisma.productsku.updateMany({
+      where: { productId },
+      data: {
+        stock: nextStock,
+        stockStatus: getStockStatus(nextStock) as any,
+      },
+    })
+
+    return { success: true }
+  }),
+)
+
+/**
+ * 一键重新归类：扫描 ACTIVE + DRAFT 商品的标题与详情，按 ACTIVE 二级类目名/品牌关键词匹配。
  * 多命中时 Brand 下二级优先；主分类 categoryId 取命中第一项（Brand L2），并同步关联与 brandCategoryId。
  */
 export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole.ADMIN])(

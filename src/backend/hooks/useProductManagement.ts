@@ -31,6 +31,7 @@ import {
   retryPendingImportTaskForProductManagement,
   getPendingImportQueue,
   inlineUpdatePendingImportItemField,
+  batchUpdatePendingImportItemField,
   inlineUpdatePendingImportSkuField,
   updatePendingImportGallery,
   publishPendingImportItems,
@@ -40,6 +41,10 @@ import {
   reclassifyPublishedProductsBySecondaryMatch,
   autoClassifyPriceThresholdProducts,
   batchTranslateProductTitlesToSpanish,
+  batchAppendProductTitleSuffix,
+  batchAppendPendingImportTitleSuffix,
+  updateProductStock,
+  batchUpdateMinOrderQty,
   unbindProductCategory as unbindProductCategoryAction,
   type PendingImportEditableField,
   type ProductSkuInlineField,
@@ -55,7 +60,6 @@ import {
   type Sync1688StatusItem,
   type CategoryProductPreviewItem
 } from '@/backend/actions/ProductManagement'
-import * as ProductManagementActionModule from '@/backend/actions/ProductManagement'
 import type {
   ProductStatus,
   ProductListItem,
@@ -573,6 +577,8 @@ export interface ProductManagementState {
   shouldShowPendingImportLanding: boolean
   shouldShowPublishedDraftLanding: boolean
   pendingImportSelectedIds: string[]
+  /** Shared clock for pending readiness heuristics (avoids per-row intervals). */
+  pendingImportNowMs: number
   pendingImportInlineEditingCell: PendingImportEditableCell | null
   pendingImportInlineEditingValue: string
   pendingImportInlineSaving: boolean
@@ -600,6 +606,9 @@ export interface ProductManagementState {
   reclassifyRunning: boolean
   priceThresholdClassifyRunning: boolean
   spanishTitleBackfillRunning: boolean
+  titleSuffixRunning: boolean
+  productStockEditingId: string | null
+  productStockEditingValue: string
 }
 
 export interface ProductManagementHandlers {
@@ -731,6 +740,12 @@ export interface ProductManagementHandlers {
   handleReclassifyPublishedProducts: () => Promise<void>
   handleAutoClassifyPriceThresholdProducts: () => Promise<void>
   handleBatchTranslateTitlesToSpanish: () => Promise<void>
+  handleBatchAppendTitleSuffix: (suffix: string) => Promise<void>
+  handleBatchAppendPendingTitleSuffix: (suffix: string) => Promise<void>
+  startProductStockEdit: (productId: string, stock: number) => void
+  setProductStockEditingValue: (value: string) => void
+  cancelProductStockEdit: () => void
+  submitProductStockEdit: () => Promise<void>
 }
 
 const buildGalleryFromText = (mainImageUrl: string, detailText: string, galleryInput: Array<{ url: string; sort: number }> = []) => {
@@ -874,6 +889,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const pendingImportPageSize = 50
   const [publishedImportMatch, setPublishedImportMatch] = useState<ProductListItem | null>(null)
   const [pendingImportSelectedIds, setPendingImportSelectedIds] = useState<string[]>([])
+  const [pendingImportNowMs, setPendingImportNowMs] = useState(() => Date.now())
   const [pendingImportInlineEditingCell, setPendingImportInlineEditingCell] = useState<PendingImportEditableCell | null>(null)
   const [pendingImportInlineEditingValue, setPendingImportInlineEditingValue] = useState('')
   const [pendingImportInlineSaving, setPendingImportInlineSaving] = useState(false)
@@ -901,6 +917,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [reclassifyRunning, setReclassifyRunning] = useState(false)
   const [priceThresholdClassifyRunning, setPriceThresholdClassifyRunning] = useState(false)
   const [spanishTitleBackfillRunning, setSpanishTitleBackfillRunning] = useState(false)
+  const [titleSuffixRunning, setTitleSuffixRunning] = useState(false)
+  const [productStockEditingId, setProductStockEditingId] = useState<string | null>(null)
+  const [productStockEditingValue, setProductStockEditingValue] = useState('')
 
   const categoryMap = useMemo(() => new Map<string, CategoryTreeOption>(categoryOptions.map(item => [item.category_id, item])), [categoryOptions])
 
@@ -1040,6 +1059,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     supplier_name: string
     brand_keyword: string
     page: number
+    clear_selection?: boolean
   }>) => {
     setLoading(true)
     try {
@@ -1063,7 +1083,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       setList(result.list)
       setTotal(result.total)
       setPublishedImportMatch(result.published_import_match || null)
-      setSelectedIds([])
+      if (overrides?.clear_selection) {
+        setSelectedIds([])
+      }
     } catch (err: any) {
       setPublishedImportMatch(null)
       toast.error(err.message || '获取商品列表失败')
@@ -1075,31 +1097,23 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const applyPendingImportQueueResult = useCallback((result: ProductManagementPendingImportQueueOutput) => {
     setPendingImportActiveTask(result.activeTask || null)
     const visibleItems = (result.list || []).filter(item => !item.item_isPublished)
+    // Server already paginates; keep current page rows as the queue snapshot.
     setPendingImportQueue(visibleItems)
-    // Prefer server total when paginated; fall back to page length
     setPendingImportQueueTotal(
-      typeof result.total === 'number' && result.total >= visibleItems.length
-        ? result.total
-        : visibleItems.length,
+      typeof result.total === 'number' ? result.total : visibleItems.length,
     )
     setPendingImportSelectedIds(prev => prev.filter(id => visibleItems.some(item => item.item_id === id)))
-    setPendingImportPage(prev => {
-      const total = typeof result.total === 'number' ? result.total : visibleItems.length
-      const totalPages = Math.max(1, Math.ceil(total / 50))
-      return Math.min(prev, totalPages)
-    })
+    if (typeof result.page === 'number' && result.page > 0) {
+      setPendingImportPage(result.page)
+    }
   }, [])
 
   const pendingImportTotalPages = Math.max(1, Math.ceil(pendingImportQueueTotal / pendingImportPageSize))
-  const pendingImportPagedQueue = useMemo(() => {
-    const start = (pendingImportPage - 1) * pendingImportPageSize
-    return pendingImportQueue.slice(start, start + pendingImportPageSize)
-  }, [pendingImportQueue, pendingImportPage, pendingImportPageSize])
+  // Server returns the current page; no client-side slice.
+  const pendingImportPagedQueue = pendingImportQueue
 
-  const handleSetPendingImportPage = (page: number) => {
-    const next = Math.max(1, Math.min(page, pendingImportTotalPages))
-    setPendingImportPage(next)
-  }
+  const pendingImportPageRef = useRef(pendingImportPage)
+  pendingImportPageRef.current = pendingImportPage
 
   // Prefer refs so refresh callback identity stays stable (avoids remount-driven re-fetch).
   const pendingImportQueueLengthRef = useRef(0)
@@ -1108,8 +1122,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   pendingImportQueueLengthRef.current = pendingImportQueue.length
   pendingImportQueueErrorRef.current = pendingImportQueueError
 
-  const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean }) => {
+  const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number }) => {
     const silent = options?.silent ?? false
+    const page = Math.max(1, options?.page ?? pendingImportPageRef.current)
     if (silent) {
       setPendingImportRefreshing(true)
     } else {
@@ -1117,8 +1132,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
     try {
       const result = await getPendingImportQueue({
-        page: 1,
-        page_size: 80,
+        page,
+        page_size: pendingImportPageSize,
         // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
         skip_maintenance: true,
       } as any)
@@ -1149,7 +1164,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         setPendingImportQueueLoading(false)
       }
     }
-  }, [applyPendingImportQueueResult])
+  }, [applyPendingImportQueueResult, pendingImportPageSize])
+
+  const handleSetPendingImportPage = (page: number) => {
+    const next = Math.max(1, Math.min(page, Math.max(1, Math.ceil(pendingImportQueueTotal / pendingImportPageSize))))
+    setPendingImportPage(next)
+    void refreshPendingImportQueue({ silent: true, page: next })
+  }
 
   useEffect(() => {
     if (params.tab === 'pending_imports') {
@@ -1187,6 +1208,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const hasCachedRows = pendingImportQueueLengthRef.current > 0 && ageMs < 45_000
     void refreshPendingImportQueue({ silent: hasCachedRows })
   }, [activeTab, refreshPendingImportQueue])
+
+  // One shared clock for pending readiness heuristics (replaces per-row 30s timers).
+  useEffect(() => {
+    if (activeTab !== 'pending_imports') return
+    setPendingImportNowMs(Date.now())
+    const timer = window.setInterval(() => setPendingImportNowMs(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [activeTab])
 
   useEffect(() => {
     if (activeTab !== 'pending_imports') return
@@ -1916,8 +1945,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       let tracked: typeof pendingImportQueue = []
       try {
         const result = await getPendingImportQueue({
-          page: 1,
-          page_size: 80,
+          page: pendingImportPageRef.current,
+          page_size: pendingImportPageSize,
           skip_maintenance: true,
         } as any)
         applyPendingImportQueueResult(result)
@@ -1952,8 +1981,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     // Final refresh in case the poll loop timed out mid-flight
     try {
       const result = await getPendingImportQueue({
-        page: 1,
-        page_size: 80,
+        page: pendingImportPageRef.current,
+        page_size: pendingImportPageSize,
         skip_maintenance: true,
       } as any)
       applyPendingImportQueueResult(result)
@@ -2388,6 +2417,88 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const handleBatchAppendTitleSuffix = async (suffix: string) => {
+    if (titleSuffixRunning) return
+    const ids = selectedProductIds
+    if (ids.length === 0) {
+      toast.error('请先勾选商品')
+      return
+    }
+    setTitleSuffixRunning(true)
+    try {
+      const result = await batchAppendProductTitleSuffix({ ids, suffix })
+      toast.success(
+        `批量加后缀完成：更新 ${result.success_count}，跳过 ${result.skip_count}，失败 ${result.fail_count}`,
+      )
+      await fetchList()
+    } catch (err: any) {
+      toast.error(err?.message || '批量加后缀失败')
+      throw err
+    } finally {
+      setTitleSuffixRunning(false)
+    }
+  }
+
+  const handleBatchAppendPendingTitleSuffix = async (suffix: string) => {
+    if (titleSuffixRunning) return
+    const ids = pendingImportSelectedIds
+    if (ids.length === 0) {
+      toast.error('请先勾选待上传商品')
+      return
+    }
+    setTitleSuffixRunning(true)
+    try {
+      const result = await batchAppendPendingImportTitleSuffix({ ids, suffix })
+      toast.success(
+        `批量加后缀完成：更新 ${result.success_count}，跳过 ${result.skip_count}，失败 ${result.fail_count}`,
+      )
+      await refreshPendingImportQueue({ silent: true })
+    } catch (err: any) {
+      toast.error(err?.message || '批量加后缀失败')
+      throw err
+    } finally {
+      setTitleSuffixRunning(false)
+    }
+  }
+
+  const startProductStockEdit = (productId: string, stock: number) => {
+    setProductStockEditingId(productId)
+    setProductStockEditingValue(String(stock ?? 0))
+  }
+
+  const cancelProductStockEdit = () => {
+    setProductStockEditingId(null)
+    setProductStockEditingValue('')
+  }
+
+  const submitProductStockEdit = async () => {
+    if (!productStockEditingId) return
+    const nextStock = Math.round(Number(productStockEditingValue))
+    if (!Number.isFinite(nextStock) || nextStock < 0) {
+      toast.error('库存不能小于0')
+      return
+    }
+    try {
+      await updateProductStock({ product_id: productStockEditingId, stock: nextStock })
+      toast.success('可用库存已更新')
+      const editedId = productStockEditingId
+      cancelProductStockEdit()
+      setList((prev) =>
+        prev.map((item) =>
+          item.product_id === editedId
+            ? {
+                ...item,
+                total_stock: nextStock,
+                skus: (item.skus || []).map((sku) => ({ ...sku, stock: nextStock })),
+              }
+            : item,
+        ),
+      )
+    } catch (err: any) {
+      toast.error(err?.message || '更新库存失败')
+    }
+  }
+
   const validateSubmit = (action: 'DRAFT' | 'ACTIVE' | 'INACTIVE') => {
     if (action !== 'ACTIVE') return true
     if (!formData.name.trim()) return toast.error('请填写商品名称'), false
@@ -2479,17 +2590,27 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
     if (action === 'WEIGHT_PRICE') {
       setBatchWeightPriceMode('price_coefficient')
-      setBatchWeightPriceValue(firstSelected?.price_coefficient ? String(firstSelected.price_coefficient) : '')
+      const firstPending = pendingImportQueue.find((item) => ids.includes(item.item_id))
+      const pendingCoeff = firstPending?.item_coefficient
+      setBatchWeightPriceValue(
+        firstSelected?.price_coefficient
+          ? String(firstSelected.price_coefficient)
+          : pendingCoeff != null && Number(pendingCoeff) > 0
+            ? String(pendingCoeff)
+            : '',
+      )
     }
     if (action === 'MIN_ORDER_QTY') {
       const firstSkuSelection = ids.find(isSkuSelectionId)
       const firstSku = firstSkuSelection
         ? list.flatMap((item) => item.skus || []).find((sku) => sku.sku_id === fromSkuSelectionId(firstSkuSelection))
         : null
+      const firstPending = pendingImportQueue.find((item) => ids.includes(item.item_id))
       setBatchMinOrderQty(
         String(
           firstSku?.min_order_qty ??
           firstSelected?.min_order_qty ??
+          firstPending?.item_minimumOrderQuantity ??
           1,
         ),
       )
@@ -2562,7 +2683,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         const res = await batchUpdateManagementStatus({ product_ids: targetProductIds, target_status: batchManagementStatus })
         toast.success(`状态已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
       } else if (confirmAction === 'WEIGHT_PRICE') {
-        if (!targetProductIds.length) throw new Error('请先选择商品')
         const mode = batchWeightPriceMode === 'weight_gram' ? 'weight_gram' : 'price_coefficient'
         const raw = String(batchWeightPriceValue ?? '').trim()
         if (!raw) throw new Error(mode === 'weight_gram' ? '请输入重量' : '请输入价格系数')
@@ -2570,39 +2690,87 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         if (!Number.isFinite(nextValue) || nextValue <= 0) {
           throw new Error(mode === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0')
         }
-        const res = await batchUpdateProductWeightPrice({
-          product_ids: targetProductIds,
-          field: mode,
-          value: nextValue,
-        })
-        toast.success(mode === 'weight_gram'
-          ? `重量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
-          : `价格系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
-        // 即时反映到列表「当前系数」，不依赖慢刷新/旧类目系数口径
-        if (mode === 'price_coefficient' && res.success_count > 0) {
-          setList(prev => prev.map(item =>
-            targetProductIds.includes(item.product_id)
-              ? {
-                  ...item,
-                  price_coefficient: nextValue,
-                  effective_price_coefficient: nextValue,
-                }
-              : item,
-          ))
-        } else if (mode === 'weight_gram' && res.success_count > 0) {
-          setList(prev => prev.map(item =>
-            targetProductIds.includes(item.product_id)
-              ? { ...item, weight_gram: nextValue }
-              : item,
-          ))
+
+        const pendingTargetIds = confirmTargetIds.filter((id) =>
+          pendingImportQueue.some((item) => item.item_id === id),
+        )
+        const usePendingScope =
+          activeTab === 'pending_imports' ||
+          (pendingTargetIds.length > 0 && targetProductIds.length === 0)
+
+        if (usePendingScope) {
+          if (!pendingTargetIds.length) throw new Error('请先勾选待上传商品')
+          const field = mode === 'weight_gram' ? 'weight_grams' : 'coefficient'
+          const res = await batchUpdatePendingImportItemField({
+            item_ids: pendingTargetIds,
+            field,
+            value: nextValue,
+          })
+          toast.success(mode === 'weight_gram'
+            ? `待上传重量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
+            : `待上传价格系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
+          setPendingImportSelectedIds([])
+          setConfirmDialogOpen(false)
+          await refreshPendingImportQueue({ silent: true })
+          return
+        } else {
+          if (!targetProductIds.length) throw new Error('请先选择商品')
+          const res = await batchUpdateProductWeightPrice({
+            product_ids: targetProductIds,
+            field: mode,
+            value: nextValue,
+          })
+          toast.success(mode === 'weight_gram'
+            ? `重量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
+            : `价格系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
+          if (mode === 'price_coefficient' && res.success_count > 0) {
+            setList(prev => prev.map(item =>
+              targetProductIds.includes(item.product_id)
+                ? {
+                    ...item,
+                    price_coefficient: nextValue,
+                    effective_price_coefficient: nextValue,
+                  }
+                : item,
+            ))
+          } else if (mode === 'weight_gram' && res.success_count > 0) {
+            setList(prev => prev.map(item =>
+              targetProductIds.includes(item.product_id)
+                ? { ...item, weight_gram: nextValue }
+                : item,
+            ))
+          }
         }
       } else if (confirmAction === 'MIN_ORDER_QTY') {
-        const res = await (ProductManagementActionModule as any).batchUpdateMinOrderQty({
-          product_ids: targetProductIds,
-          sku_ids: targetSkuIds,
-          min_order_qty: Number(batchMinOrderQty),
-        })
-        toast.success(`起订量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        const qty = Math.round(Number(batchMinOrderQty))
+        if (!Number.isFinite(qty) || qty <= 0) throw new Error('起订量必须大于0')
+        const pendingTargetIds = confirmTargetIds.filter((id) =>
+          pendingImportQueue.some((item) => item.item_id === id),
+        )
+        const usePendingScope =
+          activeTab === 'pending_imports' ||
+          (pendingTargetIds.length > 0 && targetProductIds.length === 0)
+
+        if (usePendingScope) {
+          if (!pendingTargetIds.length) throw new Error('请先勾选待上传商品')
+          const res = await batchUpdatePendingImportItemField({
+            item_ids: pendingTargetIds,
+            field: 'minimum_order_quantity',
+            value: qty,
+          })
+          toast.success(`待上传起订量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
+          setPendingImportSelectedIds([])
+          setConfirmDialogOpen(false)
+          await refreshPendingImportQueue({ silent: true })
+          return
+        } else {
+          const res = await batchUpdateMinOrderQty({
+            product_ids: targetProductIds,
+            sku_ids: targetSkuIds,
+            min_order_qty: qty,
+          })
+          toast.success(`起订量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        }
       } else if (confirmAction === 'BIND_CATEGORIES') {
         if (!batchBindCategoryIds.length) throw new Error('请至少选择一个关联类目')
         const res = await batchBindProductCategories({ product_ids: targetProductIds, linked_category_ids: batchBindCategoryIds })
@@ -3114,6 +3282,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       shouldShowPendingImportLanding,
       shouldShowPublishedDraftLanding,
       pendingImportSelectedIds,
+      pendingImportNowMs,
       pendingImportInlineEditingCell,
       pendingImportInlineEditingValue,
       pendingImportInlineSaving,
@@ -3141,6 +3310,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       reclassifyRunning,
       priceThresholdClassifyRunning,
       spanishTitleBackfillRunning,
+      titleSuffixRunning,
+      productStockEditingId,
+      productStockEditingValue,
     },
     handlers: {
       setActiveTab,
@@ -3273,6 +3445,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       handleReclassifyPublishedProducts,
       handleAutoClassifyPriceThresholdProducts,
       handleBatchTranslateTitlesToSpanish,
+      handleBatchAppendTitleSuffix,
+      handleBatchAppendPendingTitleSuffix,
+      startProductStockEdit,
+      setProductStockEditingValue,
+      cancelProductStockEdit,
+      submitProductStockEdit,
     }
   }
 }

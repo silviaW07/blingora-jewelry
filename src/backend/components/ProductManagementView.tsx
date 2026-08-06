@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, Coins, FolderTree, DollarSign, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages } from 'lucide-react';
+import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages } from 'lucide-react';
 import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Checkbox, Sheet, SheetContent, SheetHeader, SheetTitle, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Textarea, Badge, Card, CardContent, Separator, Alert, AlertTitle, AlertDescription, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/backend/components/ui';
 import EditableImg from '@/@base/EditableImg';
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement';
@@ -11,6 +11,7 @@ import { PendingImportTableRows } from '@/backend/components/PendingImportTableR
 import { ImportFrom1688CollectModal } from '@/backend/components/ImportFrom1688CollectModal'
 import { ImportFromPinduoduoCollectModal } from '@/backend/components/ImportFromPinduoduoCollectModal'
 import { Sync1688StatusResultPanel } from '@/backend/components/Sync1688StatusResultPanel'
+import { SharedProductBatchUtilityButtons } from '@/backend/components/SharedProductBatchUtilityButtons'
 import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus, PendingImportItemFetchStatus, PendingImportItemPublishStatus, PendingImportTaskStatus } from '@/backend/types/ProductManagement';
 const STATUS_CONFIG: Record<ProductStatus, {
   label: string;
@@ -257,6 +258,14 @@ export const ProductManagementView = ({
                 <Button variant="outline" size="sm" className="h-9 border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={() => handlers.openConfirmDialog('PENDING_DELETE', state.pendingImportSelectedIds)} data-api-unique-id='productmanagementview-rpendingbulkdelete-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <Trash2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkdeleteicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量删除
                 </Button>
+                <SharedProductBatchUtilityButtons
+                  selectedCount={state.pendingImportSelectedIds.length}
+                  disabled={state.pendingImportPublishing}
+                  titleSuffixLoading={state.titleSuffixRunning}
+                  onOpenWeightPrice={() => handlers.openConfirmDialog('WEIGHT_PRICE', state.pendingImportSelectedIds)}
+                  onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.pendingImportSelectedIds)}
+                  onConfirmTitleSuffix={handlers.handleBatchAppendPendingTitleSuffix}
+                />
               </> : <>
                 <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('ACTIVE', selectedProductIds)} data-api-unique-id='productmanagementview-r698d32f132f9413e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <ArrowUpCircle className="w-4 h-4 mr-2 text-emerald-600" data-api-unique-id='productmanagementview-r510343d934b6d95a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量上架
@@ -276,12 +285,13 @@ export const ProductManagementView = ({
                 <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('UNBIND_CATEGORIES', selectedProductIds)} data-api-unique-id='productmanagementview-runbindcats-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <Unlink className="w-4 h-4 mr-2 text-rose-600" data-api-unique-id='productmanagementview-runbindcatsicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量移除类目
                 </Button>
-                <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('WEIGHT_PRICE', selectedProductIds)} data-api-unique-id='productmanagementview-rbaf0430c0ae5b44c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                  <DollarSign className="w-4 h-4 mr-2 text-sky-600" data-api-unique-id='productmanagementview-r19e6a94b0b5bdd35-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量修改价格重量
-                </Button>
-                <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasSelected} onClick={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.selectedIds)} data-api-unique-id='productmanagementview-rminorderbatch-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                  <Coins className="w-4 h-4 mr-2 text-violet-600" data-api-unique-id='productmanagementview-rminorderbatchicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量设置起订量
-                </Button>
+                <SharedProductBatchUtilityButtons
+                  selectedCount={selectedProductIds.length}
+                  titleSuffixLoading={state.titleSuffixRunning}
+                  onOpenWeightPrice={() => handlers.openConfirmDialog('WEIGHT_PRICE', selectedProductIds)}
+                  onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.selectedIds)}
+                  onConfirmTitleSuffix={handlers.handleBatchAppendTitleSuffix}
+                />
                 <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('DELETE', selectedProductIds)} data-api-unique-id='productmanagementview-r05e8a0586f9bdefb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <Trash2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r03ccea60e0274f2e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量删除
                 </Button>

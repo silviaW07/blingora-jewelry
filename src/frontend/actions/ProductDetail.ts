@@ -89,7 +89,7 @@ export interface ProductSkuData {
   minOrderQty: number | null    // data-from: productsku-minOrderQty（为空时继承商品级）
   price: number                 // data-from: productsku-price (USD)
   originalPrice: number | null  // data-from: productsku-originalPrice (USD)
-  stock: number                 // data-from: productsku-stock
+  /** Admin-only numeric stock is intentionally omitted from storefront payloads. */
   stockStatus: StockStatus      // data-from: productsku-stockStatus
   attributeJson: SkuAttribute[] // data-from: productsku-attributeJson
   deliveryDays: number | null   // data-from: productsku-deliveryDays
@@ -473,7 +473,6 @@ export const getProductDetail = withResult(
         minOrderQty: null,
         price,
         originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
-        stock: sku.stock,
         stockStatus: sku.stockStatus as StockStatus,
         attributeJson: attrs,
         deliveryDays: sku.deliveryDays,
@@ -646,7 +645,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
       throw new Error('该商品当前不可购买')
     }
     if (input.quantity > sku.stock) {
-      throw new Error(`库存不足，当前仅剩 ${sku.stock} 件`)
+      throw new Error('库存不足，请减少购买数量')
     }
 
     // 2. 查找或创建用户购物车
@@ -675,7 +674,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     if (existingItem) {
       const newQuantity = existingItem.quantity + input.quantity
       if (newQuantity > sku.stock) {
-        throw new Error(`加购后总量将超过可用库存，当前库存为 ${sku.stock} 件`)
+        throw new Error('加购后数量超过可用库存，请减少购买数量')
       }
       await prisma.cartitem.update({
         where: { id: existingItem.id },
@@ -755,7 +754,7 @@ export const setCartSkuQuantity = requireRole([UserRole.CUSTOMER])(
     }
 
     if (targetQty > sku.stock) {
-      throw new Error(`库存不足，当前仅剩 ${sku.stock} 件`)
+      throw new Error('库存不足，请减少购买数量')
     }
 
     if (existingItem) {

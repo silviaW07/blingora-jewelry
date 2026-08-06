@@ -320,7 +320,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           <button
             type="button"
             className="product-sku-stepper-btn"
-            disabled={!canUseStepper || qty >= sku.stock || sku.stock <= 0}
+            disabled={!canUseStepper || qty >= 9999 || sku.stockStatus === 'OUT_OF_STOCK'}
             aria-label="增加数量并选中尺码"
             onClick={() => void handleSkuQuantityChange(sku.id, 'inc')}
           >

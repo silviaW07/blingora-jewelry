@@ -305,7 +305,14 @@ export const useProductDetail = (): {
 
   const isPurchasable = product?.status === 'ACTIVE'
   const isSkuValid = !!selectedSku
-  const isStockAvailable = !!(selectedSku && selectedSku.stock > 0)
+  const isStockAvailable = !!(
+    selectedSku &&
+    selectedSku.stockStatus !== 'OUT_OF_STOCK'
+  )
+  /** Soft qty cap for storefront — never expose admin numeric stock. */
+  const STOREFRONT_QTY_CAP = 9999
+  const skuQtyCap = (sku: { stockStatus: string } | null | undefined) =>
+    sku && sku.stockStatus !== 'OUT_OF_STOCK' ? STOREFRONT_QTY_CAP : 0
   const totalSelectedQty = useMemo(
     () => Object.values(skuQuantities).reduce((sum, qty) => sum + (qty || 0), 0),
     [skuQuantities],
@@ -379,7 +386,7 @@ export const useProductDetail = (): {
       setQuantity(1)
       // 选中尺码后默认数量为 1（仅本地，不直接加购）
       const nextQty = Math.max(1, skuQuantitiesRef.current[sku.id] || 0)
-      const capped = Math.min(sku.stock, nextQty) || 1
+      const capped = Math.min(skuQtyCap(sku), nextQty) || 1
       skuQuantitiesRef.current = { [sku.id]: capped }
       setSkuQuantities({ [sku.id]: capped })
       setSelectionHighlight({ color: false, size: false })
@@ -439,9 +446,10 @@ export const useProductDetail = (): {
 
   const handleQuantityChange = (type: 'inc' | 'dec') => {
     if (!selectedSku) return
+    const cap = skuQtyCap(selectedSku)
     if (type === 'inc') {
-      if (quantity < selectedSku.stock) setQuantity(prev => prev + 1)
-      else toast.warning(`库存上限为 ${selectedSku.stock}`)
+      if (quantity < cap) setQuantity(prev => prev + 1)
+      else toast.warning('已达可购数量上限')
     } else {
       if (quantity > 1) setQuantity(prev => prev - 1)
     }
@@ -475,13 +483,14 @@ export const useProductDetail = (): {
     const current = skuQuantitiesRef.current[sku.id] ?? skuQuantities[sku.id] ?? 0
 
     let next = current
-    if (type === 'inc') next = Math.min(sku.stock, current + 1)
+    const cap = skuQtyCap(sku)
+    if (type === 'inc') next = Math.min(cap, current + 1)
     else if (type === 'dec') next = Math.max(0, current - 1)
-    else next = Math.max(0, Math.min(sku.stock, Number(value) || 0))
+    else next = Math.max(0, Math.min(cap, Number(value) || 0))
 
     // 数量为 0 时点 - 保持 0；点 + 从 0→1 即选中该尺码
     if (next === current) {
-      if (type === 'inc' && current >= sku.stock) toast.warning(`库存上限为 ${sku.stock}`)
+      if (type === 'inc' && current >= cap) toast.warning('已达可购数量上限')
       return
     }
 
@@ -546,7 +555,7 @@ export const useProductDetail = (): {
 
     // 已选中颜色+尺码但数量为 0 时，默认加购 1 件
     if (lines.length === 0 && selectedSku) {
-      const qty = Math.min(1, selectedSku.stock)
+      const qty = skuQtyCap(selectedSku) > 0 ? 1 : 0
       if (qty <= 0) {
         toast.error('该规格暂无库存')
         return

@@ -632,6 +632,7 @@ import {
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
+import { resolveInitialStock, DEFAULT_AVAILABLE_STOCK } from '@/shared/resolveInitialStock'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
   extractPinduoduoGoodsId,
@@ -3239,7 +3240,7 @@ const parse1688MultiSpecFromHtml = (html: string): {
       sizesByColor,
       costPrice: prices.length ? Math.min(...prices) : 0,
       price: prices.length ? Math.min(...prices) : 0,
-      stock: 100,
+      stock: DEFAULT_AVAILABLE_STOCK,
     })
     for (const row of expanded) {
       skuTable.push(row)
@@ -3831,7 +3832,7 @@ const backfillPendingImportOriginalMeta = async (limit = 6) => {
         const fallbackSku = buildNeutralFallbackSkuRow({
           costPrice: fallbackCost,
           price: fallbackCost,
-          stock: toNumberOrNull(item.availableStock) ?? 100,
+          stock: resolveInitialStock(item.availableStock),
         })
         await prisma.importtaskitem.update({
           where: { id: item.id },
@@ -3875,7 +3876,7 @@ const backfillPendingImportOriginalMeta = async (limit = 6) => {
       sizesByColor: Object.keys(meta.sizesByColor).length ? meta.sizesByColor : currentPreview.sizesByColor,
       costPrice: nextPriceMin ?? 50,
       price: nextPriceMin ?? 50,
-      stock: toNumberOrNull(item.availableStock) ?? 100,
+      stock: resolveInitialStock(item.availableStock),
     })
     let nextSpecSummary: SpecSummaryJson[] =
       meta.specSummary.length > 0
@@ -3973,7 +3974,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
       sizesByColor: recoverableSizesByColor,
       costPrice: fallbackCost,
       price: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin) ?? fallbackCost,
-      stock: toNumberOrNull(item.availableStock) ?? 100,
+      stock: resolveInitialStock(item.availableStock),
       weightGrams: toNumberOrNull(item.weightGrams),
     })
     if (expanded.length > 0) {
@@ -3983,7 +3984,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         cost_price: toNumberOrNull(row.costPrice),
         price: toNumberOrNull(row.price),
         weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
-        stock: toNumberOrNull(row.stock ?? item.availableStock) ?? 0,
+        stock: resolveInitialStock(row.stock ?? item.availableStock),
         image_url: normalizeText(row.imageUrl) || null,
         attributes: row.attributes || [],
       }))
@@ -3991,7 +3992,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
     const fallback = buildNeutralFallbackSkuRow({
       costPrice: fallbackCost,
       price: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin) ?? fallbackCost,
-      stock: toNumberOrNull(item.availableStock) ?? 100,
+      stock: resolveInitialStock(item.availableStock),
     })
     return [
       {
@@ -4000,7 +4001,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         cost_price: fallback.costPrice,
         price: fallback.price,
         weight_grams: fallback.weightGrams,
-        stock: fallback.stock ?? 0,
+        stock: resolveInitialStock(fallback.stock),
         image_url: fallback.imageUrl,
         attributes: fallback.attributes || [{ name: '规格', value: '默认规格' }],
       },
@@ -4013,7 +4014,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
     sizesByColor: recoverableSizesByColor,
     costPrice: toNumberOrNull(item.costPrice) ?? 50,
     price: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin) ?? 50,
-    stock: toNumberOrNull(item.availableStock) ?? 100,
+    stock: resolveInitialStock(item.availableStock),
     weightGrams: toNumberOrNull(item.weightGrams),
   })
 
@@ -4028,7 +4029,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         cost_price: toNumberOrNull(row.costPrice ?? item.costPrice),
         price: toNumberOrNull(row.price ?? item.cnyPriceMin ?? item.parsedPriceMin),
         weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
-        stock: toNumberOrNull(row.stock ?? item.availableStock) ?? 0,
+        stock: resolveInitialStock(row.stock ?? item.availableStock),
         image_url: normalizeText(row.imageUrl) || null,
         attributes
       }
@@ -4046,7 +4047,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         cost_price: toNumberOrNull(row.costPrice ?? item.costPrice),
         price: toNumberOrNull(row.price ?? item.cnyPriceMin ?? item.parsedPriceMin),
         weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
-        stock: toNumberOrNull(row.stock ?? item.availableStock) ?? 0,
+        stock: resolveInitialStock(row.stock ?? item.availableStock),
         image_url: normalizeText(row.imageUrl) || null,
         attributes
       }
@@ -4063,7 +4064,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         cost_price: toNumberOrNull(item.costPrice),
         price: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
         weight_grams: toNumberOrNull(item.weightGrams),
-        stock: toNumberOrNull(item.availableStock) ?? 0,
+        stock: resolveInitialStock(item.availableStock),
         image_url: null,
         attributes
       }
@@ -4077,7 +4078,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
     cost_price: toNumberOrNull(item.costPrice),
     price: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
     weight_grams: toNumberOrNull(item.weightGrams),
-    stock: toNumberOrNull(item.availableStock) ?? 0,
+    stock: resolveInitialStock(item.availableStock),
     image_url: null,
     attributes
   }]
@@ -4117,7 +4118,7 @@ const sanitizeClassicMockPendingImportItems = async (limit = 40) => {
     const fallbackSku = buildNeutralFallbackSkuRow({
       costPrice: fallbackCost,
       price: fallbackCost,
-      stock: toNumberOrNull(item.availableStock) ?? 100,
+      stock: resolveInitialStock(item.availableStock),
     })
     await prisma.importtaskitem.update({
       where: { id: item.id },
@@ -4244,8 +4245,9 @@ const PENDING_IMPORT_QUEUE_WHERE = {
 } as const
 
 /** Soft cap so admin open never pulls unbounded preview JSON (table import / 1688 drafts). */
-const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 80
+const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 50
 const MAX_PENDING_QUEUE_PAGE_SIZE = 200
+const PUBLISH_PENDING_CONCURRENCY = 3
 
 const loadPendingImportQueueSnapshot = async (opts?: {
   page?: number
@@ -4358,7 +4360,7 @@ const persistPinduoduoParsedItem = async (params: {
   const goodsId = fetched.goodsId || extractPinduoduoGoodsId(sourceUrl) || item.id.slice(0, 6)
   const markupMultiplier = resolvePinduoduoMarkupMultiplier(task)
   const strategyStock =
-    toNumberOrNull((task.stockStrategyJson as StockStrategyJson | null)?.stock) ?? 100
+    resolveInitialStock((task.stockStrategyJson as StockStrategyJson | null)?.stock)
   const productName = fetched.name || `[拼多多抓取] 商品 ${goodsId}`
   const productDetail =
     fetched.productDetail || '自动采集的拼多多商品详情，请运营补充图文与说明。'
@@ -4437,7 +4439,7 @@ const persistPinduoduoParsedItem = async (params: {
       spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
       costPrice: nextCost,
       price: nextPrice,
-      stock: toNumberOrNull(row.stock) ?? strategyStock,
+      stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
       weightGrams: toNumberOrNull(row.weightGrams) ?? 500,
       imageUrl: normalizeText(row.imageUrl) || null,
       attributes:
@@ -4629,7 +4631,7 @@ const createProductRecord = async (tx: any, params: {
         cost_price: params.costPrice ?? null,
         price: params.price,
         weight_grams: params.weightGrams ?? null,
-        stock: params.stock ?? 0,
+        stock: params.stock ?? DEFAULT_AVAILABLE_STOCK,
         image_url: null,
         attributes: params.skuSummaryText
           ? [{ name: '来源SKU', value: params.skuSummaryText }]
@@ -4689,7 +4691,9 @@ const createProductRecord = async (tx: any, params: {
           const usedSkuCodes = new Set<string>()
           return draftSkus.map((sku, index) => {
             const skuPrice = toNumberOrNull(sku.price) ?? params.price
-            const skuStock = Math.max(0, Math.round(toNumberOrNull(sku.stock) ?? params.stock ?? 0))
+            const skuStock = resolveInitialStock(
+              toNumberOrNull(sku.stock) ?? params.stock,
+            )
             const skuWeightGrams = toNumberOrNull(sku.weight_grams) ?? params.weightGrams
             const sizeLabel =
               sku.attributes?.find(attr => isSizeDimensionName(attr.name))?.value || null
@@ -6025,7 +6029,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
           const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : []
           const strategyStock =
-            toNumberOrNull((taskSnapshot.stockStrategyJson as StockStrategyJson | null)?.stock) ?? 100
+            resolveInitialStock((taskSnapshot.stockStrategyJson as StockStrategyJson | null)?.stock)
           // 有颜色时展开真实色/码 SKU；仅当真正无 props 时才落 1 条「默认规格」
           const colorsEarly =
             Array.isArray(fetched.colors) && fetched.colors.length > 0
@@ -6064,7 +6068,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
                 spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
                 costPrice: nextCost,
                 price: nextPrice,
-                stock: toNumberOrNull(row.stock) ?? strategyStock,
+                stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
                 weightGrams: toNumberOrNull(row.weightGrams) ?? 500,
                 // 无独立色图时保持空，待运营在待上传区补填；禁止回填主图冒充色图
                 imageUrl: normalizeText(row.imageUrl) || null,
@@ -6191,7 +6195,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               usdPriceMin: resolvedUsdMin,
               usdPriceMax: resolvedUsdMax,
               minimumOrderQuantity: 1,
-              availableStock: totalStock > 0 ? totalStock : 100,
+              availableStock: resolveInitialStock(totalStock),
               targetCategoryId,
               parsedPriceMin: rawPriceMin,
               parsedPriceMax: rawPriceMax,
@@ -6388,7 +6392,9 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
         data.targetCategoryId = String(rawValue || '') || null
         break
       case 'coefficient':
-        throw new Error('1688 导入商品的售价系数由目标分类自动计算，无需手动修改')
+        if (numericValue === null || numericValue <= 0) throw new Error('价格系数必须大于0')
+        data.coefficient = numericValue
+        break
       case 'goods_status':
         if (!['DRAFT', 'ACTIVE', 'INACTIVE'].includes(String(rawValue))) throw new Error('货物状态无效')
         data.goodsStatus = rawValue as any
@@ -6434,7 +6440,7 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
         throw new Error('暂不支持的待上传字段')
     }
 
-    if (['target_category_id', 'cost_price'].includes(input.field)) {
+    if (['target_category_id', 'cost_price', 'coefficient'].includes(input.field)) {
       const nextCategoryId =
         input.field === 'target_category_id'
           ? (String(rawValue || '') || null)
@@ -6444,7 +6450,10 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
           ? numericValue
           : toNumberOrNull(item.costPrice)
       const categoryMap = await loadImportPricingCategories(prisma)
-      const coefficient = resolveImportCategoryCoefficient(categoryMap, nextCategoryId)
+      const coefficient =
+        input.field === 'coefficient'
+          ? Number(numericValue)
+          : resolveImportCategoryCoefficient(categoryMap, nextCategoryId)
       const exchangeRate = await getGlobalExchangeRate(prisma)
       const nextDrafts = recalculatePendingSkuPrices(resolvePendingSkuDrafts(item), nextCostPrice, coefficient)
       const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
@@ -6477,6 +6486,126 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
       data
     })
   })
+)
+
+/**
+ * Batch update pending fields in one client round-trip.
+ * weight/MOQ/stock use updateMany; coefficient recalculates SKU prices per item.
+ */
+export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    itemIds: string[]
+    field: Extract<
+      PendingImportInlineField,
+      'weight_grams' | 'minimum_order_quantity' | 'available_stock' | 'coefficient'
+    >
+    value: string | number
+  }): Promise<{ success_count: number; fail_count: number }> => {
+    const itemIds = Array.from(new Set((input.itemIds || []).map((id) => String(id || '').trim()).filter(Boolean)))
+    if (!itemIds.length) {
+      return { success_count: 0, fail_count: 0 }
+    }
+
+    const numericValue =
+      typeof input.value === 'number' ? input.value : toNumberOrNull(input.value)
+    if (numericValue === null || !Number.isFinite(numericValue)) {
+      throw new Error('请输入有效数值')
+    }
+
+    if (input.field === 'coefficient') {
+      if (numericValue <= 0) throw new Error('价格系数必须大于0')
+      const [items, exchangeRate] = await Promise.all([
+        prisma.importtaskitem.findMany({
+          where: { id: { in: itemIds }, isPublished: false },
+          include: { importTask: true },
+        }),
+        getGlobalExchangeRate(prisma),
+      ])
+      const fail_count = Math.max(0, itemIds.length - items.length)
+      if (!items.length) {
+        return { success_count: 0, fail_count }
+      }
+
+      let success = 0
+      let fail = fail_count
+      for (const item of items) {
+        try {
+          const nextCostPrice = toNumberOrNull(item.costPrice)
+          const nextDrafts = recalculatePendingSkuPrices(
+            resolvePendingSkuDrafts(item),
+            nextCostPrice,
+            numericValue,
+          )
+          const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
+          const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+          const nextCategoryId = item.targetCategoryId || item.importTask.defaultCategoryId || null
+          await prisma.importtaskitem.update({
+            where: { id: item.id },
+            data: {
+              coefficient: numericValue,
+              cnyPriceMin: priceSummary.cnyMin,
+              cnyPriceMax: priceSummary.cnyMax,
+              usdPriceMin: priceSummary.usdMin,
+              usdPriceMax: priceSummary.usdMax,
+              previewDataJson: {
+                ...currentPreview,
+                categoryId: nextCategoryId || undefined,
+                price: priceSummary.cnyMin ?? currentPreview.price,
+                skuTable: nextDrafts.map((sku) => ({
+                  skuKey: sku.sku_key,
+                  spec: sku.spec_text,
+                  costPrice: sku.cost_price,
+                  price: sku.price,
+                  stock: sku.stock,
+                  weightGrams: sku.weight_grams,
+                  imageUrl: sku.image_url || undefined,
+                  attributes: sku.attributes,
+                })),
+              } as any,
+            },
+          })
+          success += 1
+        } catch {
+          fail += 1
+        }
+      }
+      return { success_count: success, fail_count: fail }
+    }
+
+    const data: Record<string, number> = {}
+    if (input.field === 'weight_grams') {
+      if (numericValue <= 0) throw new Error('重量必须大于0')
+      data.weightGrams = numericValue
+    } else if (input.field === 'minimum_order_quantity') {
+      if (numericValue <= 0) throw new Error('起订量必须大于0')
+      data.minimumOrderQuantity = Math.round(numericValue)
+    } else if (input.field === 'available_stock') {
+      if (numericValue < 0) throw new Error('可用库存不能小于0')
+      data.availableStock = Math.round(numericValue)
+    } else {
+      throw new Error('暂不支持的批量待上传字段')
+    }
+
+    const existing = await prisma.importtaskitem.findMany({
+      where: { id: { in: itemIds }, isPublished: false },
+      select: { id: true },
+    })
+    const eligibleIds = existing.map((row) => row.id)
+    const fail_count = Math.max(0, itemIds.length - eligibleIds.length)
+    if (!eligibleIds.length) {
+      return { success_count: 0, fail_count }
+    }
+
+    const result = await prisma.importtaskitem.updateMany({
+      where: { id: { in: eligibleIds }, isPublished: false },
+      data,
+    })
+
+    return {
+      success_count: result.count,
+      fail_count: Math.max(0, itemIds.length - result.count),
+    }
+  }),
 )
 
 export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
@@ -6575,11 +6704,18 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
       throw new Error('请至少选择一条待上传商品')
     }
 
+    // Hoist shared lookups once — previously reloaded inside every item transaction.
+    const [secondaryCategories, exchangeRate, categoryMap] = await Promise.all([
+      loadAutoMatchSecondaryCategories(prisma),
+      getGlobalExchangeRate(prisma),
+      loadImportPricingCategories(prisma),
+    ])
+
     let success = 0
     let fail = 0
     const failures: PublishPendingImportFailure[] = []
 
-    for (const itemId of input.itemIds) {
+    const publishOne = async (itemId: string) => {
       let failureName = ''
       try {
         await prisma.$transaction(async tx => {
@@ -6639,7 +6775,6 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             item.productDetail,
             previewData.shortDescription,
           )
-          const secondaryCategories = await loadAutoMatchSecondaryCategories(tx)
           const rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(
             productName,
             secondaryCategories,
@@ -6672,7 +6807,6 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             ...autoMatchedCategoryIds,
             item.targetCategoryId || '',
           ])
-          const categoryMap = await loadImportPricingCategories(tx)
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId)
           const baseCostPrice = toNumberOrNull(item.costPrice)
           const pendingSkus = recalculatePendingSkuPrices(
@@ -6680,10 +6814,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             baseCostPrice,
             resolvedCoefficient,
           )
-          const priceSummary = summarizePendingSkuPrices(
-            pendingSkus,
-            await getGlobalExchangeRate(tx),
-          )
+          const priceSummary = summarizePendingSkuPrices(pendingSkus, exchangeRate)
           const price = priceSummary.cnyMin ?? priceSummary.cnyMax ?? toNumberOrNull((item.previewDataJson as any)?.price)
 
           if (!productName.trim()) throw new Error('商品名称不能为空')
@@ -6735,7 +6866,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             source: creationSource,
             sourceUrl: creationSource === 'IMPORT_1688' ? item.sourceUrl : null,
             status: 'ACTIVE',
-            stock: item.availableStock ?? 0,
+            stock: resolveInitialStock(item.availableStock),
             supplierName: item.supplierName || null,
             costPrice: baseCostPrice,
             weightGrams: toNumberOrNull(item.weightGrams),
@@ -6787,12 +6918,10 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             }
           })
         })
-        success += 1
+        return { ok: true as const }
       } catch (error: any) {
-        fail += 1
         const reason = String(error?.message || '发布失败').trim() || '发布失败'
         const name = failureName || itemId
-        failures.push({ itemId, name, reason })
         await prisma.importtaskitem.update({
           where: { id: itemId },
           data: {
@@ -6800,8 +6929,28 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             failureReason: reason
           }
         }).catch(() => undefined)
+        return { ok: false as const, itemId, name, reason }
       }
     }
+
+    const itemIds = input.itemIds
+    let cursor = 0
+    const workers = Array.from(
+      { length: Math.min(PUBLISH_PENDING_CONCURRENCY, itemIds.length) },
+      async () => {
+        while (cursor < itemIds.length) {
+          const index = cursor++
+          const result = await publishOne(itemIds[index])
+          if (result.ok) {
+            success += 1
+          } else {
+            fail += 1
+            failures.push({ itemId: result.itemId, name: result.name, reason: result.reason })
+          }
+        }
+      },
+    )
+    await Promise.all(workers)
 
     return { success_count: success, fail_count: fail, failures }
   })
@@ -6954,7 +7103,7 @@ const applyReparsed1688PreviewToItem = async (params: {
       spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
       costPrice: nextCost,
       price: nextPrice,
-      stock: toNumberOrNull(row.stock) ?? strategyStock,
+      stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
       weightGrams: toNumberOrNull(row.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? 500,
       imageUrl: normalizeText(row.imageUrl) || null,
       attributes:
@@ -7292,7 +7441,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
                             buildNeutralFallbackSkuRow({
                               costPrice: toNumberOrNull(item.costPrice) ?? 50,
                               price: toNumberOrNull(item.costPrice) ?? 50,
-                              stock: toNumberOrNull(item.availableStock) ?? 100,
+                              stock: resolveInitialStock(item.availableStock),
                             }),
                           ],
                         } as any,
