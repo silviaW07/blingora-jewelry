@@ -189,6 +189,7 @@ const nextConfig = {
       '@/frontend/actions': path.resolve(__dirname, './lib/rpc-generated/src/frontend/actions'),
       '@/backend/actions': path.resolve(__dirname, './lib/rpc-generated/src/backend/actions'),
       '@/app/actions': path.resolve(__dirname, './lib/rpc-generated/src/app/actions'),
+      '@': path.resolve(__dirname, './src'),
     }
 
     config.module.rules.push(
@@ -209,12 +210,8 @@ const nextConfig = {
         enforce: 'pre',
         use: [{ loader: path.resolve(__dirname, './src/default/source-attributes-loader.js') }]
       },
-      // rpc-loader for actions
-      {
-        test: /[\\/]actions[\\/].+\.ts$|[\\/]app[\\/].+[\\/]actions\.ts$/,
-        exclude: /node_modules/,
-        use: [{ loader: path.resolve(__dirname, 'scripts/rpc-loader.js') }]
-      }
+      // NOTE: do NOT add scripts/rpc-loader.js — that file was never in the repo.
+      // Client actions are redirected via resolve.alias → lib/rpc-generated (same as turbopack).
     )
     return config
   },
