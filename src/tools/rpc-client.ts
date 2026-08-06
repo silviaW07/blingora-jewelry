@@ -38,7 +38,7 @@ const ERROR_MESSAGES = {
   UNAUTHORIZED: 'Please login',
   FORBIDDEN: 'Permission denied',
   NOT_FOUND: 'Resource not found',
-  SERVER_ERROR: 'Server is taking a break, please try again later',
+  SERVER_ERROR: '后台服务异常，请稍后重试。若反复出现请在服务器执行 bash deploy/ensure-online.sh',
   OPERATION_FAILED: 'Operation failed',
 };
 
