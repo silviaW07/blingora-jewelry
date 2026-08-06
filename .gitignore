@@ -27,6 +27,9 @@ build/
 # Local tunnel binaries (download separately)
 tools/bin/
 
+# Self-hosted image uploads (production sets UPLOAD_DIR outside the repo)
+/uploads/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

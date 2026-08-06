@@ -1956,47 +1956,61 @@ input:-webkit-autofill:active {
   }
 }
 
-/* ----- Mobile only (<768): centered 2×2 flex, 32px icons, compact horizontal cards ----- */
+/* ----- Mobile only (<768): equal 2×2 grid, aligned with page gutters ----- */
 @media (max-width: 767px) {
+  /*
+   * Stay inside parent `.mobile-home__services.px-3` (same gutters as banner / zones).
+   * 2 equal columns + stretch → four cards same width/height; icon+text row vertically centered.
+   * !important on size tokens so decorate inline padding/fontSize cannot desync the four cards.
+   */
   .home-service-cards {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 10px;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 10px !important;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
   }
 
-  /* max-width caps the flex base size so exactly two narrow cards fit per row */
   .home-service-card-cell {
-    flex: 0 1 auto;
+    display: flex;
     width: 100%;
-    max-width: min(160px, calc(50% - 5px));
-    height: auto;
+    min-width: 0;
+    height: 100%;
   }
 
   .home-service-card {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    height: auto;
-    gap: 10px;
-    padding: 10px 12px;
+    flex: 1 1 auto;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100%;
+    height: 100%;
+    min-height: 72px;
+    gap: 8px !important;
+    padding: 10px !important;
     text-align: left;
-    border-color: #efe8dc;
-    border-radius: 12px;
-    box-shadow: 0 3px 10px -9px rgba(0, 0, 0, 0.28);
+    border: 1px solid #efe8dc;
+    border-radius: 10px !important;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-sizing: border-box;
   }
 
+  /* Locked icon well — same size on every card */
   .home-service-card__icon {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
-    max-width: 32px;
-    max-height: 32px;
-    flex-shrink: 0;
-    border-radius: 0;
-    background: transparent;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    max-width: 36px !important;
+    max-height: 36px !important;
+    flex-shrink: 0 !important;
+    border-radius: 50% !important;
+    background: #f3f1ed !important;
   }
 
   .home-service-card__icon-img,
@@ -2004,35 +2018,38 @@ input:-webkit-autofill:active {
   .home-service-card__icon-img svg,
   img.home-service-card__icon-img {
     display: block;
-    width: 32px !important;
-    height: 32px !important;
-    max-width: 32px !important;
-    max-height: 32px !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
+    width: 18px !important;
+    height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
     flex-shrink: 0 !important;
     object-fit: contain !important;
   }
 
+  /* Text column takes remaining width; wraps the same way in every card */
   .home-service-card__body {
-    flex: 1 1 auto;
+    flex: 1 1 0 !important;
     align-items: flex-start;
     justify-content: center;
-    gap: 2px;
+    gap: 2px !important;
+    min-width: 0;
     width: auto;
   }
 
   .home-service-card__title {
-    font-size: 0.8125rem;
-    font-weight: 700;
-    line-height: 1.3;
+    font-size: 0.75rem !important; /* 12px — locked */
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
     color: var(--mobile-text-strong, #333);
   }
 
   .home-service-card__desc {
-    font-size: 0.625rem;
-    line-height: 1.35;
-    color: var(--mobile-text-soft, #888888);
+    font-size: 0.625rem !important; /* 10px — locked */
+    font-weight: 400 !important;
+    line-height: 1.3 !important;
+    color: var(--mobile-text-soft, #888888) !important;
   }
 }
 

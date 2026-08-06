@@ -154,6 +154,12 @@ const nextConfig = {
         source: '/:path*.(js|css|woff2|woff|ttf|otf|png|jpg|jpeg|gif|webp|avif|svg|ico)',
         headers: [{ key: 'Cache-Control', value: week }],
       },
+      // Self-hosted uploads use uuid keys and never change — must stay after the
+      // generic extension rule above, otherwise that rule downgrades it to 7 days
+      {
+        source: '/api/uploads/:path*',
+        headers: [{ key: 'Cache-Control', value: immutable }],
+      },
     ]
   },
 

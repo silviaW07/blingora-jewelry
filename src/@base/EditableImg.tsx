@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import get_image_url from '@/tools/get-image-url';
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame';
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext';
-import { isDirectImageSrc } from '@/shared/imageUrl';
+import { isDirectImageSrc, shouldBypassImageOptimizer } from '@/shared/imageUrl';
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
 
 
@@ -257,7 +257,6 @@ const EditableImg = ({
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
                 const proxied = toProxiedImageUrl(raw, { width: 800 }) || raw
-                const isLocalProxy = proxied.startsWith('/img-proxy/')
                 return (
                     <Image
                         {...(imgProps as any)}
@@ -266,7 +265,7 @@ const EditableImg = ({
                         height={800}
                         sizes="(max-width: 768px) 100vw, 80vw"
                         priority={loading === 'eager'}
-                        unoptimized={isLocalProxy || proxied.startsWith('data:')}
+                        unoptimized={shouldBypassImageOptimizer(proxied)}
                         style={{
                             ...mergedStyle,
                             width: '100%',

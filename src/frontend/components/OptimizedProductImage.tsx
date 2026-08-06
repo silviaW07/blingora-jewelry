@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
+import { shouldBypassImageOptimizer } from '@/shared/imageUrl'
 
 export { toProxiedImageUrl }
 
@@ -41,8 +42,8 @@ export function OptimizedProductImage({
     return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
   }
 
-  // Local /img-proxy — nginx already caches; skip Next optimizer round-trip
-  const isLocalProxy = proxied.startsWith('/img-proxy/')
+  // Local /img-proxy (nginx-cached) and /api/uploads (compressed on upload) — skip optimizer
+  const skipOptimizer = shouldBypassImageOptimizer(proxied)
 
   if (fill) {
     return (
@@ -54,7 +55,7 @@ export function OptimizedProductImage({
         priority={priority}
         className={cn('object-cover', className)}
         referrerPolicy="no-referrer"
-        unoptimized={isLocalProxy}
+        unoptimized={skipOptimizer}
         onError={() => setFailed(true)}
       />
     )
@@ -70,7 +71,7 @@ export function OptimizedProductImage({
       priority={priority}
       className={cn('object-cover', className)}
       referrerPolicy="no-referrer"
-      unoptimized={isLocalProxy}
+      unoptimized={skipOptimizer}
       onError={() => setFailed(true)}
     />
   )

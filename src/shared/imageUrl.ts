@@ -14,6 +14,33 @@ export const isDirectImageSrc = (value?: string | null): value is string => {
   }
 }
 
+/** 自建上传（app/api/upload-image → /api/uploads/...）地址判断，含绝对地址形式 */
+export const isSelfHostedUploadUrl = (value?: string | null): boolean => {
+  const text = String(value || '').trim()
+  if (!text) return false
+  if (text.startsWith('/api/uploads/')) return true
+  try {
+    return new URL(text).pathname.startsWith('/api/uploads/')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 跳过 Next 图片优化器：这些地址的字节已经压缩过或由 nginx 缓存
+ * （/img-proxy 走 nginx 缓存；/api/uploads 上传前已在浏览器压缩）。
+ */
+export const shouldBypassImageOptimizer = (value?: string | null): boolean => {
+  const text = String(value || '').trim()
+  if (!text) return false
+  return (
+    text.startsWith('/img-proxy/') ||
+    text.startsWith('data:') ||
+    text.startsWith('blob:') ||
+    isSelfHostedUploadUrl(text)
+  )
+}
+
 /**
  * 对已知图床 URL 追加压缩参数（优先 WebP / 限制宽度），降低首页类目卡加载体积。
  * 无法识别的地址原样返回。

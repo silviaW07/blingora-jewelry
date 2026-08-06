@@ -9,9 +9,20 @@
 const DEFAULT_PROJECT_ID =
   process.env.NEXT_PUBLIC_PROJECT_ID || 'PROJ_fcb9e6ee_snap_20260726_092922_893'
 
-const DEFAULT_IMAGE_UPLOAD_URL =
-  process.env.NEXT_PUBLIC_IMAGE_UPLOAD_URL ||
-  'https://project.autocoder.cc/api/project/image/upload/project'
+/**
+ * Self-hosted endpoint (app/api/upload-image). Primary target: the AutoCoder
+ * cloud image API caps a project at 200 uploads/day, which bulk table/1688
+ * imports exhaust within a single session.
+ * Trailing slash matches next.config trailingSlash so POST is not 308-redirected.
+ */
+const SELF_HOSTED_UPLOAD_URL = `${(process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/+$/, '')}/api/upload-image/`
+
+const LEGACY_IMAGE_UPLOAD_URL = 'https://project.autocoder.cc/api/project/image/upload/project'
+
+/** Explicit override wins (e.g. pin an OSS/S3 gateway) and disables the fallback. */
+const CONFIGURED_UPLOAD_URL = (process.env.NEXT_PUBLIC_IMAGE_UPLOAD_URL || '').trim()
+
+const PRIMARY_UPLOAD_URL = CONFIGURED_UPLOAD_URL || SELF_HOSTED_UPLOAD_URL
 
 const URL_FIELD_KEYS = [
   'image_url',
@@ -113,8 +124,121 @@ function formatUploadFailure(data: unknown, fallback: string): string {
   return `${fallback}（${msg}）`
 }
 
+/** Extra context so the caller can decide whether a second endpoint is worth trying. */
+type UploadFailure = Error & { httpStatus?: number; transportError?: boolean }
+
+function uploadError(
+  message: string,
+  meta: { httpStatus?: number; transportError?: boolean } = {},
+): UploadFailure {
+  return Object.assign(new Error(message), meta)
+}
+
+/** Quota rejections are permanent for the day — never worth retrying. */
+function isQuotaFailure(message: string): boolean {
+  return /上限|quota|limit exceeded|too many/i.test(message)
+}
+
 /**
- * Upload an image to AutoCoder project storage (or NEXT_PUBLIC_IMAGE_UPLOAD_URL).
+ * Retry the legacy cloud endpoint only for transport faults / 5xx from our own server;
+ * a 4xx (bad type, too large) or a quota message would fail again.
+ */
+function shouldFallbackToLegacy(error: unknown): boolean {
+  if (CONFIGURED_UPLOAD_URL) return false
+  if (!(error instanceof Error)) return false
+  if (isQuotaFailure(error.message)) return false
+  const failure = error as UploadFailure
+  if (failure.transportError) return true
+  return typeof failure.httpStatus === 'number' && failure.httpStatus >= 500
+}
+
+/** POST the file to one endpoint; resolves to a URL or throws a described failure. */
+async function postToUploadEndpoint(
+  targetUrl: string,
+  uploadFile: File,
+  project_id: string,
+): Promise<string> {
+  const formData = new FormData()
+  formData.append('image', uploadFile)
+  formData.append('project_id', project_id)
+
+  const isLegacy = targetUrl === LEGACY_IMAGE_UPLOAD_URL
+  const authToken =
+    (isLegacy &&
+      typeof localStorage !== 'undefined' &&
+      (localStorage.getItem('full_token') || localStorage.getItem('token') || '')) ||
+    ''
+
+  let response: Response
+  try {
+    response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        // AutoCoder-specific headers; harmless but pointless for the self-hosted route
+        ...(isLegacy
+          ? { 'AGC-language': 'en-US', 'X-Browser': 'Blink', 'X-Language': 'en' }
+          : {}),
+        ...(authToken ? { Authorization: authToken } : {}),
+      },
+      body: formData,
+    })
+  } catch (networkErr) {
+    throw uploadError(
+      `图片上传失败：网络请求未完成（${networkErr instanceof Error ? networkErr.message : String(networkErr)}）`,
+      { transportError: true },
+    )
+  }
+
+  let data: unknown = null
+  const rawText = await response.text()
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText)
+    } catch {
+      // Plain text URL body
+      if (response.ok && isLikelyUrl(rawText)) {
+        return rawText.trim()
+      }
+      if (!response.ok) {
+        throw uploadError(
+          `图片上传失败：HTTP ${response.status}${rawText.slice(0, 120) ? ` — ${rawText.slice(0, 120)}` : ''}`,
+          { httpStatus: response.status },
+        )
+      }
+      throw uploadError(
+        formatUploadFailure(
+          null,
+          `图片上传失败：未返回有效地址（响应非 JSON，HTTP ${response.status}）`,
+        ),
+        { httpStatus: response.status },
+      )
+    }
+  }
+
+  if (!response.ok) {
+    console.error('Failed to upload image. Status:', response.status, data)
+    throw uploadError(formatUploadFailure(data, `图片上传失败：HTTP ${response.status}`), {
+      httpStatus: response.status,
+    })
+  }
+
+  const url = pickUploadUrl(data)
+  if (url) return url
+
+  const codeHint =
+    data && typeof data === 'object' && 'code' in (data as object)
+      ? `code=${String((data as { code?: unknown }).code)}`
+      : 'no url field'
+
+  console.error('Image upload response missing URL:', data)
+  throw uploadError(formatUploadFailure(data, `图片上传失败：未返回有效地址（${codeHint}）`), {
+    httpStatus: response.status,
+  })
+}
+
+/**
+ * Upload an image to self-hosted storage (NEXT_PUBLIC_IMAGE_UPLOAD_URL overrides the target).
  * Compresses client-side (canvas) before send so callers automatically get smaller files.
  * Always returns a non-empty URL string, or throws with a server/friendly message.
  */
@@ -146,66 +270,21 @@ export async function upload_image_file(file: File, projectId?: string): Promise
 
     const project_id = (projectId && projectId.trim()) || DEFAULT_PROJECT_ID
 
-    const formData = new FormData()
-    formData.append('image', uploadFile)
-    formData.append('project_id', project_id)
+    try {
+      return await postToUploadEndpoint(PRIMARY_UPLOAD_URL, uploadFile, project_id)
+    } catch (primaryErr) {
+      if (!shouldFallbackToLegacy(primaryErr)) throw primaryErr
 
-    const authToken =
-      (typeof localStorage !== 'undefined' &&
-        (localStorage.getItem('full_token') || localStorage.getItem('token') || '')) ||
-      ''
-
-    const response = await fetch(DEFAULT_IMAGE_UPLOAD_URL, {
-      method: 'POST',
-      headers: {
-        'AGC-language': 'en-US',
-        Accept: 'application/json, text/plain, */*',
-        'X-Browser': 'Blink',
-        'X-Language': 'en',
-        ...(authToken ? { Authorization: authToken } : {}),
-      },
-      body: formData,
-    })
-
-    let data: unknown = null
-    const rawText = await response.text()
-    if (rawText) {
+      // Self-hosted storage is down (e.g. UPLOAD_DIR not writable) — one legacy attempt
+      console.warn('[upload] self-hosted upload failed, retrying AutoCoder once', primaryErr)
       try {
-        data = JSON.parse(rawText)
-      } catch {
-        // Plain text URL body
-        if (response.ok && isLikelyUrl(rawText)) {
-          return rawText.trim()
-        }
-        if (!response.ok) {
-          throw new Error(
-            `图片上传失败：HTTP ${response.status}${rawText.slice(0, 120) ? ` — ${rawText.slice(0, 120)}` : ''}`,
-          )
-        }
-        throw new Error(
-          formatUploadFailure(
-            null,
-            `图片上传失败：未返回有效地址（响应非 JSON，HTTP ${response.status}）`,
-          ),
-        )
+        return await postToUploadEndpoint(LEGACY_IMAGE_UPLOAD_URL, uploadFile, project_id)
+      } catch (legacyErr) {
+        console.error('[upload] AutoCoder fallback also failed', legacyErr)
+        // Surface the self-hosted failure: that is the one the operator must fix
+        throw primaryErr
       }
     }
-
-    if (!response.ok) {
-      console.error('Failed to upload image. Status:', response.status, data)
-      throw new Error(formatUploadFailure(data, `图片上传失败：HTTP ${response.status}`))
-    }
-
-    const url = pickUploadUrl(data)
-    if (url) return url
-
-    const codeHint =
-      data && typeof data === 'object' && 'code' in (data as object)
-        ? `code=${String((data as { code?: unknown }).code)}`
-        : 'no url field'
-
-    console.error('Image upload response missing URL:', data)
-    throw new Error(formatUploadFailure(data, `图片上传失败：未返回有效地址（${codeHint}）`))
   } catch (error) {
     console.error('An error occurred while uploading image:', error)
     throw error
