@@ -130,28 +130,22 @@ type MtopApiCandidate = {
   data: Record<string, unknown>
 }
 
+/**
+ * Only `mtop.alibaba.detail.subpage.getdetail` is still served by the gateway — as of
+ * 2026-08 the `mtop.1688.wireless.widget.offer.detail.get`, `mtop.china.detail.data.get`
+ * and `mtop.1688.trade.service.offerDetailService` names all answer
+ * FAIL_SYS_API_NOT_FOUNDED, and calling them only spends risk-control budget.
+ */
 const buildOfferDetailCandidates = (offerId: string): MtopApiCandidate[] => [
-  {
-    api: 'mtop.1688.wireless.widget.offer.detail.get',
-    version: '1.0',
-    data: { offerId },
-  },
   {
     api: 'mtop.alibaba.detail.subpage.getdetail',
     version: '2.0',
     data: { offerId, detail_v: '3.3.5' },
   },
-  {
-    api: 'mtop.china.detail.data.get',
-    version: '1.0',
-    data: { offerId },
-  },
-  {
-    api: 'mtop.1688.trade.service.offerDetailService',
-    version: '1.0',
-    data: { offerId },
-  },
 ]
+
+/** RGV587_ERROR is Alibaba throttling, not a hard reject — spaced retries sometimes land. */
+const RGV587_BACKOFF_MS = [4_000, 12_000, 30_000]
 
 const isMtopSuccess = (payload: unknown): boolean => {
   const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
@@ -277,6 +271,36 @@ export async function fetch1688OfferViaMtop(
         return { ok: true, data: retry.payload, api: candidate.api }
       }
       lastDetail = `${candidate.api}: ${retText || 'token error'}`
+      continue
+    }
+
+    if (/RGV587_ERROR|SM::/i.test(retText)) {
+      let throttled = retText
+      for (const waitMs of RGV587_BACKOFF_MS) {
+        console.warn(
+          `[1688-mtop] ${candidate.api} throttled (${throttled}) — retrying in ${waitMs}ms`,
+        )
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+        cookie = await bootstrap1688MtopCookies(cookie)
+        const retry = await callSignedMtop(cookie, candidate)
+        if (!retry) {
+          throttled = 'network/parse error'
+          continue
+        }
+        cookie = retry.cookieHeader
+        if (mtopHasOfferSignal(retry.payload)) {
+          return { ok: true, data: retry.payload, api: candidate.api }
+        }
+        const retryRecord =
+          retry.payload && typeof retry.payload === 'object'
+            ? (retry.payload as Record<string, unknown>)
+            : null
+        throttled = Array.isArray(retryRecord?.ret)
+          ? retryRecord!.ret.join(',')
+          : String(retryRecord?.ret || 'empty')
+        if (!/RGV587_ERROR|SM::/i.test(throttled)) break
+      }
+      lastDetail = `${candidate.api}: ${throttled}`
       continue
     }
 
