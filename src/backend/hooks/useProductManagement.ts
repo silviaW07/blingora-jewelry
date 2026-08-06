@@ -886,7 +886,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportQueueTotal, setPendingImportQueueTotal] = useState(0)
   const [pendingImportQueueError, setPendingImportQueueError] = useState<string | null>(null)
   const [pendingImportPage, setPendingImportPage] = useState(1)
-  const pendingImportPageSize = 50
+  const pendingImportPageSize = 30
   const [publishedImportMatch, setPublishedImportMatch] = useState<ProductListItem | null>(null)
   const [pendingImportSelectedIds, setPendingImportSelectedIds] = useState<string[]>([])
   const [pendingImportNowMs, setPendingImportNowMs] = useState(() => Date.now())
@@ -1131,12 +1131,15 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       setPendingImportQueueLoading(true)
     }
     try {
-      const result = await getPendingImportQueue({
-        page,
-        page_size: pendingImportPageSize,
-        // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
-        skip_maintenance: true,
-      } as any)
+      const result = await getPendingImportQueue(
+        {
+          page,
+          page_size: pendingImportPageSize,
+          // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
+          skip_maintenance: true,
+        } as any,
+        { __rpcTimeoutMs: 60_000 },
+      )
       applyPendingImportQueueResult(result)
       pendingImportLastFetchedAtRef.current = Date.now()
       setPendingImportQueueError(null)
@@ -1944,11 +1947,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       await new Promise(resolve => setTimeout(resolve, 2500))
       let tracked: typeof pendingImportQueue = []
       try {
-        const result = await getPendingImportQueue({
-          page: pendingImportPageRef.current,
-          page_size: pendingImportPageSize,
-          skip_maintenance: true,
-        } as any)
+        const result = await getPendingImportQueue(
+          {
+            page: pendingImportPageRef.current,
+            page_size: pendingImportPageSize,
+            skip_maintenance: true,
+          } as any,
+          { __rpcTimeoutMs: 60_000 },
+        )
         applyPendingImportQueueResult(result)
         const queue = Array.isArray(result?.list) ? result.list : []
         tracked = queue.filter((item: any) => idSet.has(item.item_id))
@@ -1980,11 +1986,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     // Final refresh in case the poll loop timed out mid-flight
     try {
-      const result = await getPendingImportQueue({
-        page: pendingImportPageRef.current,
-        page_size: pendingImportPageSize,
-        skip_maintenance: true,
-      } as any)
+      const result = await getPendingImportQueue(
+        {
+          page: pendingImportPageRef.current,
+          page_size: pendingImportPageSize,
+          skip_maintenance: true,
+        } as any,
+        { __rpcTimeoutMs: 60_000 },
+      )
       applyPendingImportQueueResult(result)
       if (successCount + failCount === 0) {
         const queue = Array.isArray(result?.list) ? result.list : []

@@ -4178,10 +4178,14 @@ const summarizePendingSkuPrices = (
 const buildPendingItemStructure = (item: any, task?: any): PendingImportItemRecord => {
   const preview = (item.previewDataJson as unknown as PreviewDataJson) || {}
   const mainImage = item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null
-  const galleryUrls = dedupeImageUrls([
+  const rawGallery = dedupeImageUrls([
     ...(mainImage ? [mainImage] : []),
     ...((Array.isArray(preview.detailImages) ? preview.detailImages : []).filter(Boolean)),
   ])
+  // List payload: cap gallery + truncate detail HTML so queue open stays under RPC timeout.
+  const galleryUrls = rawGallery.slice(0, 12)
+  const rawDetail = String(item.productDetail || '')
+  const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail
   return {
   item_id: item.id,
   item_importTaskId: item.importTaskId,
@@ -4203,7 +4207,7 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   item_matchedCategoryNames: Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean))),
   item_coefficient: toNumberOrNull(item.coefficient),
   item_goodsStatus: (item.goodsStatus as ProductStatusType) || ((task?.defaultStatus as ProductStatusType) || 'DRAFT'),
-  item_productDetail: item.productDetail || null,
+  item_productDetail: listDetail || null,
   item_skuSummaryText: item.skuSummaryText || null,
   item_cnyPriceMin: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
   item_cnyPriceMax: toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax),
@@ -4245,9 +4249,60 @@ const PENDING_IMPORT_QUEUE_WHERE = {
 } as const
 
 /** Soft cap so admin open never pulls unbounded preview JSON (table import / 1688 drafts). */
-const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 50
-const MAX_PENDING_QUEUE_PAGE_SIZE = 200
+const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 30
+const MAX_PENDING_QUEUE_PAGE_SIZE = 100
 const PUBLISH_PENDING_CONCURRENCY = 3
+
+const PENDING_QUEUE_ITEM_SELECT = {
+  id: true,
+  importTaskId: true,
+  sourceUrl: true,
+  fetchStatus: true,
+  publishStatus: true,
+  isPublished: true,
+  importedProductId: true,
+  failureReason: true,
+  parsedName: true,
+  supplierName: true,
+  mainImageUrl: true,
+  parsedMainImageUrl: true,
+  costPrice: true,
+  weightGrams: true,
+  sourceCategoryName: true,
+  targetCategoryId: true,
+  coefficient: true,
+  goodsStatus: true,
+  productDetail: true,
+  skuSummaryText: true,
+  cnyPriceMin: true,
+  cnyPriceMax: true,
+  parsedPriceMin: true,
+  parsedPriceMax: true,
+  usdPriceMin: true,
+  usdPriceMax: true,
+  minimumOrderQuantity: true,
+  availableStock: true,
+  createdAt: true,
+  updatedAt: true,
+  previewDataJson: true,
+  specSummaryJson: true,
+  importTask: {
+    select: {
+      id: true,
+      taskName: true,
+      status: true,
+      sourceLinkCount: true,
+      successCount: true,
+      failureCount: true,
+      progressPercent: true,
+      defaultStatus: true,
+      defaultCategoryId: true,
+      lastRateLimitedAt: true,
+      startedAt: true,
+      finishedAt: true,
+    },
+  },
+} as const
 
 const loadPendingImportQueueSnapshot = async (opts?: {
   page?: number
@@ -4268,9 +4323,37 @@ const loadPendingImportQueueSnapshot = async (opts?: {
         },
       },
       orderBy: [{ createdAt: 'desc' }],
+      select: {
+        id: true,
+        taskName: true,
+        status: true,
+        sourceLinkCount: true,
+        successCount: true,
+        failureCount: true,
+        progressPercent: true,
+        defaultStatus: true,
+        defaultCategoryId: true,
+        lastRateLimitedAt: true,
+        startedAt: true,
+        finishedAt: true,
+      },
     }),
     prisma.importtask.findFirst({
       orderBy: [{ createdAt: 'desc' }],
+      select: {
+        id: true,
+        taskName: true,
+        status: true,
+        sourceLinkCount: true,
+        successCount: true,
+        failureCount: true,
+        progressPercent: true,
+        defaultStatus: true,
+        defaultCategoryId: true,
+        lastRateLimitedAt: true,
+        startedAt: true,
+        finishedAt: true,
+      },
     }),
     prisma.importtaskitem.count({ where: PENDING_IMPORT_QUEUE_WHERE as any }),
     prisma.importtaskitem.findMany({
@@ -4279,9 +4362,7 @@ const loadPendingImportQueueSnapshot = async (opts?: {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       skip,
       take: pageSize,
-      include: {
-        importTask: true,
-      },
+      select: PENDING_QUEUE_ITEM_SELECT,
     }),
   ])
 
