@@ -451,6 +451,9 @@ export const ImportFrom1688View = ({
                                 确认并发布上架 ({state.selectedItemIds.length})
                               </Button>
                               {selectedItemsMissingCategoryCount > 0 ? <p className="text-xs text-destructive leading-5" data-api-unique-id='importfrom1688view-r37abf4b459e8329f-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>当前已选商品中有 {selectedItemsMissingCategoryCount} 条未设置目标分类，请先在右侧修正区补齐分类后再发布。</p> : <p className="text-xs text-muted-foreground leading-5" data-api-unique-id='importfrom1688view-r5c879163a9ff63c1-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>解析完成的商品会直接进入待上传区；发布失败的商品也会继续保留在这里，方便补字段后再次发布。</p>}
+                              {state.taskId && state.currentTask && ['PENDING', 'RETRY_PENDING', 'RATE_LIMITED'].includes(state.currentTask.task_status) ? <Button variant="outline" size="sm" onClick={() => handlers.handleStartParseTask(state.currentTask!.task_id)} disabled={state.isParsingTask} data-api-unique-id='importfrom1688view-start-parse' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
+                                  {state.isParsingTask ? '解析中…' : '开始解析'}
+                                </Button> : null}
                               {state.taskId && state.currentTask && ['FAILED', 'PARTIAL_SUCCESS', 'COMPLETED', 'RATE_LIMITED'].includes(state.currentTask.task_status) ? <Button variant="outline" size="sm" onClick={() => handlers.handleRetryTask(state.currentTask!.task_id)} data-api-unique-id='importfrom1688view-ra64837f195205f17-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
                                   重试当前任务解析
                                 </Button> : null}

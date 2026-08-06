@@ -141,6 +141,8 @@ export interface ImportFrom1688State {
   createForm: CreateFormFields
   isSubmitting: boolean
   isParsingTask: boolean
+  /** Task waiting for local HTML capture +「开始解析」; null when none. */
+  pendingParseTaskId: string | null
   currentTask: PendingImportQueueTaskSummary | null
   currentItems: PendingImportItemRecord[]
   createFormCategoryWarning: string | null
@@ -180,6 +182,7 @@ export interface ImportFrom1688Handlers {
   handleCreateFormChange: <K extends keyof CreateFormFields>(field: K, value: CreateFormFields[K]) => void
   handleEditFormChange: <K extends keyof EditItemFormFields>(field: K, value: EditItemFormFields[K]) => void
   handleCreateTask: () => Promise<void>
+  handleStartParseTask: (taskId?: string) => Promise<void>
   handleToggleSelectAll: (checked: boolean) => void
   handleToggleSelectItem: (id: string, checked: boolean) => void
   setActiveItemId: (id: string | null) => void
@@ -620,6 +623,7 @@ export const useImportFrom1688 = (
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isParsingTask, setIsParsingTask] = useState(false)
+  const [pendingParseTaskId, setPendingParseTaskId] = useState<string | null>(null)
   const [feedbackDialog, setFeedbackDialog] = useState<FeedbackDialogState>({
     open: false,
     variant: 'info',
@@ -1044,11 +1048,9 @@ export const useImportFrom1688 = (
       return
     }
     if (!createForm.defaultCategoryId) {
-      setCreateFormCategoryWarning('当前未设置默认分类。链接仍可继续解析，但后续确认导入前需要先在右侧修正区补齐目标分类，否则会在发布阶段失败。')
+      setCreateFormCategoryWarning('当前未设置默认分类。链接仍可提交，但后续确认导入前需要先补齐目标分类，否则会在发布阶段失败。')
     }
     setIsSubmitting(true)
-    setIsParsingTask(true)
-    parseResultNotifiedRef.current = null
     try {
       const res = await createImportTask({
         urls: createForm.urls,
@@ -1057,44 +1059,70 @@ export const useImportFrom1688 = (
         defaultStatus: createForm.defaultStatus,
         stockStrategyStock: createForm.stockStrategyStock === '' ? undefined : createForm.stockStrategyStock
       })
-      toast.success('任务已创建，正在解析中…')
       setCreateFormCategoryWarning(null)
       setCreateForm(prev => ({ ...prev, urls: '' }))
-      setParseWatchTaskId(res.taskId)
-
-      try {
-        // ACK only — parse continues in background; polling effect watches task/item status
-        await startParseTask({ taskId: res.taskId })
-      } catch (parseError) {
-        // 请求超时不代表服务端已停止；继续轮询待上传区，由最终状态决定提示
-        toast.error(`解析进行中或请求超时：${(parseError as Error).message}`)
-      }
+      setPendingParseTaskId(res.taskId)
+      toast.success('链接已提交。请先在本机运行采集器，完成后再点「开始解析」')
 
       if (embedded) {
-        onTaskCreatedRef.current?.(res.taskId)
-        // Keep parseWatchTaskId so parent/poll can observe RUNNING → done
+        // Keep modal open so the operator can run the collector then click 开始解析.
         return
       }
 
       ImportFrom1688.navigateToTaskDetail(router, { taskId: res.taskId })
-      const snapshot = await loadDetail(res.taskId)
-      if (snapshot && !isTaskStillParsing(snapshot.task?.task_status) && !snapshot.items.some(item => item.item_fetchStatus === 'PENDING' || item.item_fetchStatus === 'RUNNING')) {
-        setIsParsingTask(false)
-        setParseWatchTaskId(null)
-        notifyParseResult(res.taskId, snapshot.items, snapshot.task?.task_status)
-      }
+      await loadDetail(res.taskId)
     } catch (error) {
-      setIsParsingTask(false)
-      setParseWatchTaskId(null)
       const message = formatParseFailureReason((error as Error).message)
       showFeedbackDialog({
         variant: 'error',
         title: message,
-        description: '创建导入任务失败，请检查链接与网络后重试。',
+        description: '提交导入任务失败，请检查链接与网络后重试。',
         details: [message]
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleStartParseTask = async (explicitTaskId?: string) => {
+    const id = explicitTaskId || pendingParseTaskId || taskId || currentTask?.task_id
+    if (!id) {
+      toast.error('请先提交 1688 链接，创建导入任务后再解析')
+      return
+    }
+
+    setIsParsingTask(true)
+    parseResultNotifiedRef.current = null
+    setParseWatchTaskId(id)
+    try {
+      // ACK only — parse continues in background; polling effect watches task/item status
+      await startParseTask({ taskId: id })
+      toast.success('已开始解析。请稍候，完成后会出现在待上传区')
+      setPendingParseTaskId(null)
+
+      if (embedded) {
+        onTaskCreatedRef.current?.(id)
+        return
+      }
+
+      if (!taskId || taskId !== id) {
+        ImportFrom1688.navigateToTaskDetail(router, { taskId: id })
+      }
+      const snapshot = await loadDetail(id)
+      if (
+        snapshot &&
+        !isTaskStillParsing(snapshot.task?.task_status) &&
+        !snapshot.items.some(
+          item => item.item_fetchStatus === 'PENDING' || item.item_fetchStatus === 'RUNNING',
+        )
+      ) {
+        setIsParsingTask(false)
+        setParseWatchTaskId(null)
+        notifyParseResult(id, snapshot.items, snapshot.task?.task_status)
+      }
+    } catch (parseError) {
+      // 请求超时不代表服务端已停止；继续轮询待上传区，由最终状态决定提示
+      toast.error(`解析进行中或请求超时：${(parseError as Error).message}`)
     }
   }
 
@@ -1441,6 +1469,7 @@ export const useImportFrom1688 = (
       createForm,
       isSubmitting,
       isParsingTask,
+      pendingParseTaskId,
       currentTask,
       currentItems,
       createFormCategoryWarning,
@@ -1479,6 +1508,7 @@ export const useImportFrom1688 = (
       handleCreateFormChange,
       handleEditFormChange,
       handleCreateTask,
+      handleStartParseTask,
       handleToggleSelectAll,
       handleToggleSelectItem,
       setActiveItemId,

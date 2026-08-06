@@ -18,6 +18,8 @@ const PRODUCT_STATUS_LABELS: Record<ProductStatusType, string> = {
   INACTIVE: '下架',
 }
 
+const PARSE_READY_STATUSES = new Set(['PENDING', 'RETRY_PENDING', 'RATE_LIMITED'])
+
 interface Props {
   state: ImportFrom1688State
   handlers: ImportFrom1688Handlers
@@ -27,6 +29,13 @@ interface Props {
  * 1688 链接导入核心表单（从 ImportFrom1688 工作台原样抽出，供独立页与商品管理弹窗复用）
  */
 export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
+  const parseTargetId =
+    state.pendingParseTaskId ||
+    (state.currentTask && PARSE_READY_STATUSES.has(state.currentTask.task_status)
+      ? state.currentTask.task_id
+      : null)
+  const canStartParse = Boolean(parseTargetId) && !state.isSubmitting && !state.isParsingTask
+
   return (
     <Card className="shadow-sm border-border overflow-hidden" data-controller-name="1688链接导入任务表单">
       <CardHeader className="bg-secondary/50 border-b py-4">
@@ -34,7 +43,9 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           <Link2 className="w-4 h-4 text-primary" />
           1688 链接导入任务
         </CardTitle>
-        <CardDescription>保留原有解析任务、失败重试、字段修正与确认导入能力。</CardDescription>
+        <CardDescription>
+          分两步：先提交链接，本机采集器抓页后再点解析（服务器无法直接打开 1688）。
+        </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
         <div className="space-y-2">
@@ -60,7 +71,7 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
               placeholder="选择导入分类"
             />
             <p className="text-xs text-muted-foreground">
-              建议必选。选择细分品类，系统将自动归属到对应一级大类。未设置时链接仍可解析，但发布会因缺少目标分类失败。
+              建议必选。选择细分品类，系统将自动归属到对应一级大类。未设置时链接仍可提交，但发布会因缺少目标分类失败。
             </p>
           </div>
 
@@ -125,38 +136,66 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
         ) : (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>1688 登录 Cookie 必填</AlertTitle>
+            <AlertTitle>推荐流程：提交 → 本机采集 → 解析</AlertTitle>
             <AlertDescription className="space-y-1">
               <p>
-                详情页常被风控拦截。请在已登录 1688 的浏览器打开任意商品页 → F12 → Network → 点开任意请求 → 复制完整
-                Cookie（建议含 _m_h5_tk），写入服务器 secrets/1688-cookie.txt，或设置环境变量 COOKIE_1688，然后执行
-                pm2 restart rpc --update-env。
+                1）点「提交链接」只创建任务，不会立刻抓 1688。2）本机双击
+                deploy/collect-1688.bat（或 pnpm run collect:1688）用已登录 Chrome 抓页并上传。3）回到这里点「开始解析」。
               </p>
               <p className="text-muted-foreground">
-                配置后请对失败条目点「重新解析」。Cookie 大约一天会过期，失效后需重新粘贴。
+                采集与解析之间不要重启 rpc（收件箱在内存里）。解析失败可再采集后点「重新解析」。
               </p>
             </AlertDescription>
           </Alert>
         )}
 
-        {state.isSubmitting || state.isParsingTask ? (
+        {state.isSubmitting ? (
           <Alert>
             <RefreshCw className="w-4 h-4 animate-spin" />
-            <AlertTitle>正在抓取解析</AlertTitle>
+            <AlertTitle>正在提交链接</AlertTitle>
+            <AlertDescription>正在创建导入任务，请稍候…</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {state.isParsingTask ? (
+          <Alert>
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <AlertTitle>正在解析</AlertTitle>
             <AlertDescription>
-              系统正在解析 1688 链接，请稍候。解析成功后商品会自动出现在【待上传区】，状态为「草稿」。
+              系统正在用已采集的页面解析商品。完成后会出现在【待上传区】。
             </AlertDescription>
           </Alert>
         ) : null}
 
-        <Button
-          className="w-full md:w-auto h-11 bg-primary hover:bg-primary text-primary-foreground font-semibold"
-          onClick={handlers.handleCreateTask}
-          disabled={state.isSubmitting || state.isParsingTask || !state.createForm.urls.trim()}
-        >
-          {state.isSubmitting || state.isParsingTask ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
-          {state.isParsingTask ? '解析中…' : state.isSubmitting ? '创建任务中…' : '开始解析导入'}
-        </Button>
+        {state.pendingParseTaskId && !state.isParsingTask ? (
+          <Alert>
+            <Info className="w-4 h-4" />
+            <AlertTitle>链接已提交，等待采集后解析</AlertTitle>
+            <AlertDescription>
+              任务 {state.pendingParseTaskId.slice(0, 8)}… 已创建。请先完成本机采集，再点「开始解析」。
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            className="h-11 bg-primary hover:bg-primary text-primary-foreground font-semibold"
+            onClick={handlers.handleCreateTask}
+            disabled={state.isSubmitting || state.isParsingTask || !state.createForm.urls.trim()}
+          >
+            {state.isSubmitting ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
+            {state.isSubmitting ? '提交中…' : '提交链接'}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-11 font-semibold"
+            onClick={() => handlers.handleStartParseTask(parseTargetId || undefined)}
+            disabled={!canStartParse}
+          >
+            {state.isParsingTask ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
+            {state.isParsingTask ? '解析中…' : '开始解析'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
