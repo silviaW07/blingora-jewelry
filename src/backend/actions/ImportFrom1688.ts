@@ -5191,6 +5191,47 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       console.error('[getPendingImportQueue] failed to set utf8mb4 session charset', error)
     }
 
+    // Always reclaim hung RUNNING jobs — even when skip_maintenance is true.
+    // The admin UI always passes skip_maintenance, so parking this behind maintenance
+    // left "采集中" stuck for hours and blocked reparse via the in-process mutex.
+    try {
+      const itemStuckBefore = new Date(Date.now() - 10 * 60 * 1000)
+      const taskStuckBefore = new Date(Date.now() - 20 * 60 * 1000)
+      const stuckItems = await prisma.importtaskitem.updateMany({
+        where: {
+          fetchStatus: 'RUNNING' as any,
+          OR: [
+            { fetchStartedAt: { lt: itemStuckBefore } },
+            { fetchStartedAt: null, updatedAt: { lt: itemStuckBefore } },
+          ],
+        },
+        data: {
+          fetchStatus: 'RETRY_PENDING' as any,
+          failureReason: '解析超时中断，请重新解析',
+          fetchFinishedAt: new Date(),
+        },
+      })
+      const stuckTasks = await prisma.importtask.updateMany({
+        where: {
+          status: 'RUNNING' as any,
+          startedAt: { lt: taskStuckBefore },
+        },
+        data: {
+          status: 'RETRY_PENDING' as any,
+          finishedAt: new Date(),
+        },
+      })
+      if (stuckItems.count > 0 || stuckTasks.count > 0) {
+        console.info(
+          `[getPendingImportQueue] reclaimed stuck RUNNING items=${stuckItems.count} tasks=${stuckTasks.count}`,
+        )
+        parseJobBusy = false
+        parseJobLabel = null
+      }
+    } catch (error) {
+      console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
+    }
+
     const dueMaintenance =
       !skipMaintenance &&
       Date.now() - lastPendingQueueMaintenanceAt >= PENDING_QUEUE_MAINTENANCE_INTERVAL_MS
@@ -5205,45 +5246,6 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
         }
       } catch (error) {
         console.error('[getPendingImportQueue] failed to repair charset-corrupted pending import items', error)
-      }
-
-      // Reclaim items stuck in RUNNING after RPC crash / killed parse job (~15 min)
-      try {
-        const stuckBefore = new Date(Date.now() - 15 * 60 * 1000)
-        const stuckItems = await prisma.importtaskitem.updateMany({
-          where: {
-            fetchStatus: 'RUNNING' as any,
-            OR: [
-              { fetchStartedAt: { lt: stuckBefore } },
-              { fetchStartedAt: null, updatedAt: { lt: stuckBefore } },
-            ],
-          },
-          data: {
-            fetchStatus: 'RETRY_PENDING' as any,
-            failureReason: '解析超时中断，请重新解析',
-            fetchFinishedAt: new Date(),
-          },
-        })
-        const stuckTasks = await prisma.importtask.updateMany({
-          where: {
-            status: 'RUNNING' as any,
-            startedAt: { lt: stuckBefore },
-          },
-          data: {
-            status: 'RETRY_PENDING' as any,
-            finishedAt: new Date(),
-          },
-        })
-        if (stuckItems.count > 0 || stuckTasks.count > 0) {
-          console.info(
-            `[getPendingImportQueue] reclaimed stuck RUNNING items=${stuckItems.count} tasks=${stuckTasks.count}`,
-          )
-          // Allow a new parse job if the previous process died holding the mutex
-          parseJobBusy = false
-          parseJobLabel = null
-        }
-      } catch (error) {
-        console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
       }
 
       try {

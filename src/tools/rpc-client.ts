@@ -14,7 +14,7 @@ const PROJECT_ID =
   process.env.NEXT_PUBLIC_PROJECT_ID || 'PROJ_fcb9e6ee_snap_20260726_092922_893';
 
 /** Default AbortController timeout for RPC fetch (ms). Override via rpcCallTimed / __rpcTimeoutMs. */
-export const RPC_DEFAULT_TIMEOUT_MS = 25_000;
+export const RPC_DEFAULT_TIMEOUT_MS = 60_000;
 
 const TIMEOUT_ERROR_MESSAGE = (timeoutMs: number) =>
   `请求超时（${Math.round(timeoutMs / 1000)}秒），请稍后重试`;

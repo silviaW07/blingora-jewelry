@@ -1138,25 +1138,32 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
           skip_maintenance: true,
         } as any,
-        { __rpcTimeoutMs: 60_000 },
+        { __rpcTimeoutMs: 90_000 },
       )
       applyPendingImportQueueResult(result)
       pendingImportLastFetchedAtRef.current = Date.now()
       setPendingImportQueueError(null)
     } catch (err: any) {
       const raw = String(err?.message || '')
+      const isTimeout = /请求超时/.test(raw)
       const message = /Failed to fetch|无法连接|NetworkError|fetch failed/i.test(raw)
         ? '无法连接后台 RPC。请执行：pnpm run build:server && pm2 restart rpc'
         : raw || '获取待上传区数据失败'
       if (!silent) {
-        setPendingImportActiveTask(null)
-        setPendingImportQueue([])
-        setPendingImportQueueTotal(0)
-        setPendingImportSelectedIds([])
+        if (!isTimeout) {
+          setPendingImportActiveTask(null)
+          setPendingImportQueue([])
+          setPendingImportQueueTotal(0)
+          setPendingImportSelectedIds([])
+        }
       }
       if (!silent || pendingImportQueueLengthRef.current === 0) {
         if (pendingImportQueueErrorRef.current !== message) {
-          toast.error(message)
+          if (isTimeout) {
+            toast.message('待上传区加载超时，采集进行中时请稍后刷新；卡住超过约 20 分钟的采集任务会自动中断')
+          } else {
+            toast.error(message)
+          }
         }
       }
       setPendingImportQueueError(message)
@@ -1940,6 +1947,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       return
     }
 
+    // Global parse mutex: collect/reparse share one in-process slot on the RPC host.
+    if (
+      pendingImportActiveTask &&
+      (pendingImportActiveTask.task_status === 'RUNNING' ||
+        pendingImportActiveTask.task_status === 'PENDING' ||
+        pendingImportActiveTask.task_status === 'RETRY_PENDING')
+    ) {
+      toast.error('当前有采集/解析任务进行中，请等任务结束后再点「重新解析」')
+      return
+    }
+
     const idsToParse = targetItemIds.filter(id => !reparsingItemIds[id])
     if (!idsToParse.length) {
       toast.message('所选条目已在解析中')
@@ -1961,23 +1979,30 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     toast.message(`已提交 ${idsToParse.length} 条重新解析，后台处理中…`)
 
     try {
-      // One RPC for the whole batch. Server ACKs immediately and continues in-process;
-      // waiting per-item used to hit the 25s timeout and leave the mutex stuck.
-      await reparsePendingImportItems({ item_ids: idsToParse })
+      // Server ACKs after marking RUNNING; still use a longer client timeout under load.
+      await reparsePendingImportItems(
+        { item_ids: idsToParse },
+        { __rpcTimeoutMs: 60_000 } as any,
+      )
     } catch (err: any) {
       const reason = err?.message || '重新解析失败'
-      toast.error(reason)
-      setReparsingItemIds(prev => {
-        const next = { ...prev }
-        for (const id of idsToParse) delete next[id]
-        return next
-      })
-      try {
-        await refreshPendingImportQueue({ silent: true })
-      } catch {
-        // ignore
+      // Timeout does not mean the server stopped — items may already be RUNNING in background.
+      if (/请求超时/.test(reason)) {
+        toast.message('提交响应较慢，将继续轮询解析进度（后台可能仍在处理）')
+      } else {
+        toast.error(reason)
+        setReparsingItemIds(prev => {
+          const next = { ...prev }
+          for (const id of idsToParse) delete next[id]
+          return next
+        })
+        try {
+          await refreshPendingImportQueue({ silent: true })
+        } catch {
+          // ignore
+        }
+        return
       }
-      return
     }
 
     const idSet = new Set(idsToParse)
@@ -2005,12 +2030,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         continue
       }
 
-      const stillRunning = tracked.some(item => item.item_fetchStatus === 'RUNNING')
-      if (stillRunning) continue
+      const stillRunning = tracked.some((item: any) => item.item_fetchStatus === 'RUNNING')
+      if (stillRunning || tracked.length === 0) continue
 
-      successCount = tracked.filter(item => item.item_fetchStatus === 'COMPLETED').length
+      successCount = tracked.filter((item: any) => item.item_fetchStatus === 'COMPLETED').length
       const failed = tracked.filter(
-        item => item.item_fetchStatus === 'FAILED' || item.item_fetchStatus === 'RETRY_PENDING',
+        (item: any) => item.item_fetchStatus === 'FAILED' || item.item_fetchStatus === 'RETRY_PENDING',
       )
       failCount = failed.length
       for (const item of failed) {
