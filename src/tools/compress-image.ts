@@ -4,13 +4,13 @@
  * Skips GIF / SVG / already-small files.
  */
 
-const MAX_EDGE_PX = 1280
-const JPEG_QUALITY = 0.78
-const WEBP_QUALITY = 0.78
+const MAX_EDGE_PX = 1024
+const JPEG_QUALITY = 0.72
+const WEBP_QUALITY = 0.72
 /** Generic small-file skip (PNG / unknown) */
-const SKIP_UNDER_BYTES = 450 * 1024
-/** JPEG/WebP product photos under this size are already web-friendly — skip re-encode */
-const SKIP_JPEG_WEBP_UNDER_BYTES = 1024 * 1024
+const SKIP_UNDER_BYTES = 120 * 1024
+/** Only truly small JPEG/WebP files skip re-encode on high-latency cross-border upload. */
+const SKIP_JPEG_WEBP_UNDER_BYTES = 150 * 1024
 /** Prefer JPEG conversion for opaque images larger than this */
 const PREFER_JPEG_OVER_PNG_BYTES = 400 * 1024
 

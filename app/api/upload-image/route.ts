@@ -30,10 +30,12 @@ function isFileLike(value: unknown): value is File {
 }
 
 export async function POST(request: NextRequest) {
-  // Reject oversized bodies before buffering them
+  // A gallery is sent as one multipart request. Keep a generous body cap while
+  // enforcing the existing per-image limit below.
   const declaredLength = Number(request.headers.get('content-length') || 0)
-  if (declaredLength > MAX_UPLOAD_BYTES * 1.1) {
-    return fail(`图片上传失败：文件超过 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB 限制`, 413)
+  const maxBatchBytes = MAX_UPLOAD_BYTES * 12
+  if (declaredLength > maxBatchBytes * 1.05) {
+    return fail(`图片上传失败：单次上传总大小超过 ${maxBatchBytes / 1024 / 1024}MB`, 413)
   }
 
   let form: FormData
@@ -43,36 +45,61 @@ export async function POST(request: NextRequest) {
     return fail('图片上传失败：请求不是合法的 multipart/form-data', 400)
   }
 
-  // `image` is the field the client has always used; `file` accepted for convenience
-  const entry = form.get('image') ?? form.get('file')
-  if (!isFileLike(entry)) {
+  // `image` is repeatable for galleries; `file` remains accepted for compatibility.
+  const entries = [
+    ...form.getAll('image'),
+    ...form.getAll('file'),
+  ].filter(isFileLike)
+  if (!entries.length) {
     return fail('图片上传失败：缺少 image 字段', 400)
   }
-
-  const ext = extensionForUpload(entry.name, entry.type)
-  if (!ext) {
-    return fail(`图片上传失败：不支持的文件类型（${entry.type || entry.name || 'unknown'}）`, 415)
+  if (entries.length > 24) {
+    return fail('图片上传失败：单次最多上传 24 张图片', 413)
   }
 
-  const bytes = new Uint8Array(await entry.arrayBuffer())
-  if (!bytes.byteLength) {
-    return fail('图片上传失败：文件内容为空', 400)
-  }
-  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
-    return fail(
-      `图片上传失败：文件超过 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB 限制（${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB）`,
-      413,
-    )
+  const prepared: Array<{ bytes: Uint8Array; ext: string }> = []
+  for (const entry of entries) {
+    const ext = extensionForUpload(entry.name, entry.type)
+    if (!ext) {
+      return fail(`图片上传失败：不支持的文件类型（${entry.type || entry.name || 'unknown'}）`, 415)
+    }
+    const bytes = new Uint8Array(await entry.arrayBuffer())
+    if (!bytes.byteLength) {
+      return fail(`图片上传失败：${entry.name || '图片'}内容为空`, 400)
+    }
+    if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+      return fail(
+        `图片上传失败：${entry.name || '图片'}超过 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB 限制（${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB）`,
+        413,
+      )
+    }
+    prepared.push({ bytes, ext })
   }
 
   try {
-    const saved = await saveUploadedImage(bytes, ext)
+    const saved = await Promise.all(
+      prepared.map(({ bytes, ext }) => saveUploadedImage(bytes, ext)),
+    )
+    const first = saved[0]
     return NextResponse.json({
       code: 200,
       message: 'ok',
-      // Duplicated at both levels so any caller shape (`data.image_url` / `image_url`) resolves
-      data: { image_url: saved.url, url: saved.url, key: saved.key, size: saved.size },
-      image_url: saved.url,
+      // Keep legacy single-image fields while exposing the complete ordered gallery.
+      data: {
+        image_url: first.url,
+        url: first.url,
+        key: first.key,
+        size: first.size,
+        images: saved.map(item => ({
+          image_url: item.url,
+          url: item.url,
+          key: item.key,
+          size: item.size,
+        })),
+        urls: saved.map(item => item.url),
+      },
+      image_url: first.url,
+      images: saved.map(item => ({ image_url: item.url, url: item.url })),
     })
   } catch (error) {
     // Almost always a permission / missing-dir problem on the server (check UPLOAD_DIR)

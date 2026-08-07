@@ -222,6 +222,79 @@ async function postToUploadEndpoint(
   })
 }
 
+function pickBatchUploadUrls(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object') return []
+  const root = payload as Record<string, unknown>
+  const data =
+    root.data && typeof root.data === 'object'
+      ? (root.data as Record<string, unknown>)
+      : root
+
+  if (Array.isArray(data.urls)) {
+    return data.urls
+      .map(value => (typeof value === 'string' && isLikelyUrl(value) ? value.trim() : ''))
+      .filter(Boolean)
+  }
+
+  const images = Array.isArray(data.images)
+    ? data.images
+    : Array.isArray(root.images)
+      ? root.images
+      : []
+  return images.map(image => pickUploadUrl(image)).filter(Boolean)
+}
+
+/** Upload an ordered gallery in one multipart request (one cross-border round trip). */
+async function postBatchToUploadEndpoint(
+  targetUrl: string,
+  uploadFiles: File[],
+  projectId: string,
+): Promise<string[]> {
+  const formData = new FormData()
+  for (const file of uploadFiles) formData.append('image', file)
+  formData.append('project_id', projectId)
+
+  let response: Response
+  try {
+    response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { Accept: 'application/json, text/plain, */*' },
+      body: formData,
+    })
+  } catch (networkErr) {
+    throw uploadError(
+      `图片批量上传失败：网络请求未完成（${networkErr instanceof Error ? networkErr.message : String(networkErr)}）`,
+      { transportError: true },
+    )
+  }
+
+  const rawText = await response.text()
+  let data: unknown = null
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText)
+    } catch {
+      throw uploadError(`图片批量上传失败：服务器响应格式异常（HTTP ${response.status}）`, {
+        httpStatus: response.status,
+      })
+    }
+  }
+  if (!response.ok) {
+    throw uploadError(formatUploadFailure(data, `图片批量上传失败：HTTP ${response.status}`), {
+      httpStatus: response.status,
+    })
+  }
+
+  const urls = pickBatchUploadUrls(data)
+  if (urls.length !== uploadFiles.length) {
+    throw uploadError(
+      `图片批量上传失败：选择 ${uploadFiles.length} 张，服务器仅返回 ${urls.length} 张`,
+      { httpStatus: response.status },
+    )
+  }
+  return urls
+}
+
 /**
  * Upload an image to self-hosted storage only (never AutoCoder — that API is
  * capped at 200 uploads/day). NEXT_PUBLIC_IMAGE_UPLOAD_URL may override to a
@@ -313,12 +386,37 @@ export async function upload_image_files(
 ): Promise<string[]> {
   const list = files.filter(Boolean)
   if (!list.length) return []
-  return mapPool(
-    list,
-    options?.concurrency ?? 4,
-    file => upload_image_file(file, options?.projectId, { skipCompress: options?.skipCompress }),
-    options?.onProgress,
-  )
+
+  const maxSize = 5 * 1024 * 1024
+  let prepared = list
+  if (!options?.skipCompress) {
+    const { compressImageForUpload } = await import('./compress-image')
+    prepared = await mapPool(
+      list,
+      Math.min(options?.concurrency ?? 4, 4),
+      async file => {
+        try {
+          return await compressImageForUpload(file)
+        } catch (error) {
+          console.warn('[upload] image compression failed, using original', error)
+          return file
+        }
+      },
+    )
+  }
+  for (const file of prepared) {
+    if (file.size > maxSize) {
+      throw new Error(
+        `图片上传失败：${file.name} 超过 5MB 限制（压缩后 ${(file.size / 1024 / 1024).toFixed(1)}MB）`,
+      )
+    }
+  }
+
+  options?.onProgress?.(0, list.length)
+  const projectId = options?.projectId?.trim() || DEFAULT_PROJECT_ID
+  const urls = await postBatchToUploadEndpoint(PRIMARY_UPLOAD_URL, prepared, projectId)
+  options?.onProgress?.(urls.length, list.length)
+  return urls
 }
 
 /** Alias used by product management upload flows */
