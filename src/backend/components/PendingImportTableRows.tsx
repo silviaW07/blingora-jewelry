@@ -69,7 +69,7 @@ function extractBrand(item: PendingImportQueueItem) {
   return matched?.[1]?.trim() || ''
 }
 
-export function PendingImportTableRows({
+function PendingImportTableRowsInner({
   item,
   state,
   handlers,
@@ -545,3 +545,61 @@ export function PendingImportTableRows({
     </>
   )
 }
+
+function pendingImportRowPropsEqual(
+  prev: PendingImportTableRowsProps,
+  next: PendingImportTableRowsProps,
+) {
+  if (prev.item !== next.item) return false
+  if (prev.fetchStatusConfig !== next.fetchStatusConfig) return false
+  if (prev.publishStatusConfig !== next.publishStatusConfig) return false
+  if (prev.sourceConfig !== next.sourceConfig) return false
+  // handlers is a fresh object each render; identity must not force re-render.
+
+  const id = next.item.item_id
+  const ps = prev.state
+  const ns = next.state
+  if (ps.expandedPendingImportIds.includes(id) !== ns.expandedPendingImportIds.includes(id)) return false
+  if (ps.pendingImportSelectedIds.includes(id) !== ns.pendingImportSelectedIds.includes(id)) return false
+  if (!!ps.reparsingItemIds[id] !== !!ns.reparsingItemIds[id]) return false
+  if (ps.pendingImportInlineSaving !== ns.pendingImportInlineSaving) return false
+  if (ps.pendingImportSkuSaving !== ns.pendingImportSkuSaving) return false
+  if (ps.pendingImportNowMs !== ns.pendingImportNowMs) return false
+
+  const prevEdit = ps.pendingImportInlineEditingCell
+  const nextEdit = ns.pendingImportInlineEditingCell
+  const prevEditingThis = prevEdit?.itemId === id
+  const nextEditingThis = nextEdit?.itemId === id
+  if (prevEditingThis !== nextEditingThis) return false
+  if (nextEditingThis && (prevEdit?.field !== nextEdit?.field || ps.pendingImportInlineEditingValue !== ns.pendingImportInlineEditingValue)) {
+    return false
+  }
+
+  const prevSkuEdit = ps.pendingImportSkuEditingCell
+  const nextSkuEdit = ns.pendingImportSkuEditingCell
+  const prevSkuEditingThis = prevSkuEdit?.itemId === id
+  const nextSkuEditingThis = nextSkuEdit?.itemId === id
+  if (prevSkuEditingThis !== nextSkuEditingThis) return false
+  if (
+    nextSkuEditingThis &&
+    (prevSkuEdit?.skuKey !== nextSkuEdit?.skuKey ||
+      prevSkuEdit?.field !== nextSkuEdit?.field ||
+      ps.pendingImportSkuEditingValue !== ns.pendingImportSkuEditingValue)
+  ) {
+    return false
+  }
+
+  const prevCat = ps.pendingCategoryPicker
+  const nextCat = ns.pendingCategoryPicker
+  if ((prevCat?.itemId === id) !== (nextCat?.itemId === id)) return false
+  if (nextCat?.itemId === id && prevCat?.selectedId !== nextCat?.selectedId) return false
+
+  // Category name display depends on options; only re-render when this item's option changes.
+  const prevCatName = ps.categoryOptions.find((o) => o.category_id === next.item.item_targetCategoryId)?.category_name
+  const nextCatName = ns.categoryOptions.find((o) => o.category_id === next.item.item_targetCategoryId)?.category_name
+  if (prevCatName !== nextCatName) return false
+
+  return true
+}
+
+export const PendingImportTableRows = React.memo(PendingImportTableRowsInner, pendingImportRowPropsEqual)

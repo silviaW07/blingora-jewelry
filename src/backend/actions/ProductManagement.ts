@@ -3327,38 +3327,49 @@ export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
     const unknown: Sync1688StatusItem[] = []
     let skipped_count = 0
 
-    for (const productId of productIds) {
-      const product = byId.get(productId)
-      if (!product) {
-        skipped_count += 1
-        continue
-      }
+    const SYNC_CONCURRENCY = 5
+    const workItems = productIds
+      .map((productId) => {
+        const product = byId.get(productId)
+        if (!product) {
+          skipped_count += 1
+          return null
+        }
+        const sourceUrl = String(product.sourceUrl || '').trim()
+        const is1688Url = /1688\.com/i.test(sourceUrl) && /offer\/\d+/i.test(sourceUrl)
+        if (!is1688Url) {
+          skipped_count += 1
+          return null
+        }
+        return { product, sourceUrl }
+      })
+      .filter((row): row is { product: (typeof products)[number]; sourceUrl: string } => !!row)
 
-      const sourceUrl = String(product.sourceUrl || '').trim()
-      const is1688Url = /1688\.com/i.test(sourceUrl) && /offer\/\d+/i.test(sourceUrl)
-      if (!is1688Url) {
-        skipped_count += 1
-        continue
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(SYNC_CONCURRENCY, workItems.length || 1) }, async () => {
+      while (true) {
+        const index = cursor++
+        if (index >= workItems.length) return
+        const { product, sourceUrl } = workItems[index]
+        const live = await check1688OfferLiveStatus(sourceUrl)
+        const item: Sync1688StatusItem = {
+          product_id: product.id,
+          product_name: product.name,
+          product_code: product.productCode,
+          source_url: sourceUrl,
+          supplier_name: product.supplierName,
+          current_status: product.status as ProductStatus,
+          offer_status: live.status,
+          offer_name: live.offer_name,
+          reason: live.reason
+        }
+        if (live.status === 'DELISTED') delisted.push(item)
+        else if (live.status === 'OUT_OF_STOCK') out_of_stock.push(item)
+        else if (live.status === 'NORMAL') normal.push(item)
+        else unknown.push(item)
       }
-
-      const live = await check1688OfferLiveStatus(sourceUrl)
-      const item: Sync1688StatusItem = {
-        product_id: product.id,
-        product_name: product.name,
-        product_code: product.productCode,
-        source_url: sourceUrl,
-        supplier_name: product.supplierName,
-        current_status: product.status as ProductStatus,
-        offer_status: live.status,
-        offer_name: live.offer_name,
-        reason: live.reason
-      }
-
-      if (live.status === 'DELISTED') delisted.push(item)
-      else if (live.status === 'OUT_OF_STOCK') out_of_stock.push(item)
-      else if (live.status === 'NORMAL') normal.push(item)
-      else unknown.push(item)
-    }
+    })
+    await Promise.all(workers)
 
     return { delisted, out_of_stock, normal, unknown, skipped_count }
   })

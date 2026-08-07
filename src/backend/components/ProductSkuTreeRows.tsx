@@ -40,7 +40,7 @@ interface ProductTreeRowsProps {
   sourceConfig: SourceConfig
 }
 
-export function ProductTreeRows({
+function ProductTreeRowsInner({
   item,
   state,
   handlers,
@@ -437,3 +437,54 @@ export function ProductTreeRows({
     </>
   )
 }
+
+function productTreeRowPropsEqual(prev: ProductTreeRowsProps, next: ProductTreeRowsProps) {
+  if (prev.item !== next.item) return false
+  if (prev.statusConfig !== next.statusConfig) return false
+  if (prev.goodsStatusConfigMap !== next.goodsStatusConfigMap) return false
+  if (prev.sourceConfig !== next.sourceConfig) return false
+  // handlers is a fresh object each render; identity must not force re-render.
+
+  const id = next.item.product_id
+  const ps = prev.state
+  const ns = next.state
+  if (ps.expandedProductIds.includes(id) !== ns.expandedProductIds.includes(id)) return false
+  if (ps.selectedIds.includes(id) !== ns.selectedIds.includes(id)) return false
+  if (ps.inlineSaving !== ns.inlineSaving) return false
+  if (ps.productSkuSaving !== ns.productSkuSaving) return false
+
+  const prevEdit = ps.inlineEditingCell
+  const nextEdit = ns.inlineEditingCell
+  const prevEditingThis = prevEdit?.productId === id
+  const nextEditingThis = nextEdit?.productId === id
+  if (prevEditingThis !== nextEditingThis) return false
+  if (nextEditingThis && (prevEdit?.field !== nextEdit?.field || ps.inlineEditingValue !== ns.inlineEditingValue)) {
+    return false
+  }
+
+  const prevSkuEdit = ps.productSkuEditingCell
+  const nextSkuEdit = ns.productSkuEditingCell
+  const prevSkuEditingThis = prevSkuEdit?.productId === id
+  const nextSkuEditingThis = nextSkuEdit?.productId === id
+  if (prevSkuEditingThis !== nextSkuEditingThis) return false
+  if (
+    nextSkuEditingThis &&
+    (prevSkuEdit?.skuId !== nextSkuEdit?.skuId ||
+      prevSkuEdit?.field !== nextSkuEdit?.field ||
+      ps.productSkuEditingValue !== ns.productSkuEditingValue)
+  ) {
+    return false
+  }
+
+  if ((ps.productStockEditingId === id) !== (ns.productStockEditingId === id)) return false
+  if (ns.productStockEditingId === id && ps.productStockEditingValue !== ns.productStockEditingValue) return false
+
+  const prevCat = ps.productCategoryPicker
+  const nextCat = ns.productCategoryPicker
+  if ((prevCat?.productId === id) !== (nextCat?.productId === id)) return false
+  if (nextCat?.productId === id && prevCat?.selectedId !== nextCat?.selectedId) return false
+
+  return true
+}
+
+export const ProductTreeRows = React.memo(ProductTreeRowsInner, productTreeRowPropsEqual)

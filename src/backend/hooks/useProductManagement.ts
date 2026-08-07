@@ -1760,7 +1760,28 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value: payloadValue
       })
       toast.success('待上传条目已更新')
-      await refreshPendingImportQueue({ silent: true })
+      // Price/coefficient changes recalculate SKUs server-side — refresh. Scalars patch locally.
+      if (field === 'coefficient' || field === 'cost_price' || field === 'cny_price_min' || field === 'cny_price_max' || field === 'usd_price_min' || field === 'usd_price_max') {
+        await refreshPendingImportQueue({ silent: true })
+      } else {
+        setPendingImportQueue((prev) =>
+          prev.map((item) => {
+            if (item.item_id !== itemId) return item
+            if (field === 'product_name') return { ...item, item_productName: String(payloadValue || '') }
+            if (field === 'product_detail') return { ...item, item_productDetail: String(payloadValue || '') }
+            if (field === 'sku_summary_text') return { ...item, item_skuSummaryText: String(payloadValue || '') }
+            if (field === 'supplier_name') return { ...item, item_supplierName: String(payloadValue || '') || null }
+            if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
+            if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
+            if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
+            if (field === 'weight_grams') return { ...item, item_weightGrams: Number(payloadValue) }
+            if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
+            if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
+            if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
+            return item
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存待上传条目失败')
       throw err
@@ -1802,8 +1823,30 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value: payloadValue
       })
       toast.success('待上传条目已更新')
+      const field = pendingImportInlineEditingCell.field
+      const itemId = pendingImportInlineEditingCell.itemId
       cancelPendingImportInlineEdit()
-      await refreshPendingImportQueue({ silent: true })
+      if (field === 'coefficient' || field === 'cost_price' || field === 'cny_price_min' || field === 'cny_price_max' || field === 'usd_price_min' || field === 'usd_price_max') {
+        await refreshPendingImportQueue({ silent: true })
+      } else {
+        setPendingImportQueue((prev) =>
+          prev.map((item) => {
+            if (item.item_id !== itemId) return item
+            if (field === 'product_name') return { ...item, item_productName: String(payloadValue || '') }
+            if (field === 'product_detail') return { ...item, item_productDetail: String(payloadValue || '') }
+            if (field === 'sku_summary_text') return { ...item, item_skuSummaryText: String(payloadValue || '') }
+            if (field === 'supplier_name') return { ...item, item_supplierName: String(payloadValue || '') || null }
+            if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
+            if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
+            if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
+            if (field === 'weight_grams') return { ...item, item_weightGrams: Number(payloadValue) }
+            if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
+            if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
+            if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
+            return item
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存待上传条目失败')
     } finally {
@@ -2108,8 +2151,31 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value
       })
       toast.success('SKU 已更新')
+      const { productId, skuId, field } = productSkuEditingCell
       cancelProductSkuInlineEdit()
-      await fetchList()
+      // cost_price may recalculate sell price server-side — full refresh.
+      if (field === 'cost_price') {
+        await fetchList()
+      } else {
+        setList((prev) =>
+          prev.map((item) => {
+            if (item.product_id !== productId) return item
+            const skus = (item.skus || []).map((sku) => {
+              if (sku.sku_id !== skuId) return sku
+              if (field === 'stock') return { ...sku, stock: Number(value) }
+              if (field === 'price') return { ...sku, price: Number(value) }
+              if (field === 'weight_gram') {
+                const grams = Number(value)
+                return { ...sku, weight_gram: grams, weight_kg: Number((grams / 1000).toFixed(3)) }
+              }
+              if (field === 'spec_text') return { ...sku, spec_text: String(value) }
+              return sku
+            })
+            const total_stock = skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0)
+            return { ...item, skus, total_stock }
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存 SKU 失败')
     } finally {
@@ -2161,8 +2227,26 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value
       })
       toast.success('待上传 SKU 已更新')
+      const { itemId, skuKey, field } = pendingImportSkuEditingCell
       cancelPendingImportSkuInlineEdit()
-      await refreshPendingImportQueue({ silent: true })
+      if (field === 'cost_price') {
+        await refreshPendingImportQueue({ silent: true })
+      } else {
+        setPendingImportQueue((prev) =>
+          prev.map((item) => {
+            if (item.item_id !== itemId) return item
+            const skus = (item.item_skus || []).map((sku) => {
+              if (sku.sku_key !== skuKey) return sku
+              if (field === 'stock') return { ...sku, stock: Number(value) }
+              if (field === 'price') return { ...sku, price: Number(value) }
+              if (field === 'weight_grams') return { ...sku, weight_grams: Number(value) }
+              if (field === 'spec_text') return { ...sku, spec_text: String(value) }
+              return sku
+            })
+            return { ...item, item_skus: skus }
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存待上传 SKU 失败')
     } finally {
@@ -2205,8 +2289,27 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         })
       }
       toast.success(`已同步更新 ${colorSkus.length} 个规格`)
+      const { itemId, field } = pendingImportSkuEditingCell
+      const skuKeys = new Set(colorSkus.map((sku) => sku.sku_key))
       cancelPendingImportSkuInlineEdit()
-      await refreshPendingImportQueue({ silent: true })
+      if (field === 'cost_price') {
+        await refreshPendingImportQueue({ silent: true })
+      } else {
+        setPendingImportQueue((prev) =>
+          prev.map((item) => {
+            if (item.item_id !== itemId) return item
+            const skus = (item.item_skus || []).map((sku) => {
+              if (!skuKeys.has(sku.sku_key)) return sku
+              if (field === 'stock') return { ...sku, stock: Number(value) }
+              if (field === 'price') return { ...sku, price: Number(value) }
+              if (field === 'weight_grams') return { ...sku, weight_grams: Number(value) }
+              if (field === 'spec_text') return { ...sku, spec_text: String(value) }
+              return sku
+            })
+            return { ...item, item_skus: skus }
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存颜色组失败')
     } finally {
@@ -2795,8 +2898,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       }
       setConfirmDialogOpen(false)
       setSelectedIds([])
-      // await 刷新保证系数/重量与 SKU 售价一致；乐观更新先给用户即时反馈
-      await fetchList()
+      // Scalar batch ops already patched `list`; refresh quietly without blocking the dialog close.
+      const softRefreshOnly =
+        confirmAction === 'WEIGHT_PRICE' ||
+        confirmAction === 'MIN_ORDER_QTY' ||
+        (confirmAction === 'PRICE_COEFFICIENT' && batchPriceAdjustMode === 'PRODUCT_COEFFICIENT')
+      if (softRefreshOnly) {
+        void fetchList()
+      } else {
+        await fetchList()
+      }
     } catch (err: any) {
       toast.error(err.message || '操作失败')
     } finally {
@@ -2837,7 +2948,21 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value: payloadValue
       })
       toast.success('商品信息已更新')
-      await fetchList()
+      // Scalar fields: patch locally. Price-affecting fields need a full list refresh.
+      if (field === 'cost_price' || field === 'price_coefficient' || field === 'category_id') {
+        await fetchList()
+      } else {
+        setList((prev) =>
+          prev.map((item) => {
+            if (item.product_id !== productId) return item
+            if (field === 'product_name') return { ...item, product_name: String(payloadValue || '') }
+            if (field === 'supplier_name') return { ...item, supplier_name: String(payloadValue || '') || null }
+            if (field === 'goods_status') return { ...item, goods_status: payloadValue as any }
+            if (field === 'weight_gram') return { ...item, weight_gram: Number(payloadValue) }
+            return item
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存商品失败')
       throw err
@@ -2873,8 +2998,23 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value: payloadValue
       })
       toast.success('商品信息已更新')
+      const field = inlineEditingCell.field
+      const productId = inlineEditingCell.productId
       cancelInlineEdit()
-      await fetchList()
+      if (field === 'cost_price' || field === 'price_coefficient' || field === 'category_id') {
+        await fetchList()
+      } else {
+        setList((prev) =>
+          prev.map((item) => {
+            if (item.product_id !== productId) return item
+            if (field === 'product_name') return { ...item, product_name: String(payloadValue || '') }
+            if (field === 'supplier_name') return { ...item, supplier_name: String(payloadValue || '') || null }
+            if (field === 'goods_status') return { ...item, goods_status: payloadValue as any }
+            if (field === 'weight_gram') return { ...item, weight_gram: Number(payloadValue) }
+            return item
+          }),
+        )
+      }
     } catch (err: any) {
       toast.error(err.message || '保存失败')
     } finally {
