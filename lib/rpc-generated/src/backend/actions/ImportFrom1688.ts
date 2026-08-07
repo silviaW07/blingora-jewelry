@@ -6,6 +6,8 @@ export const loadAutoMatchSecondaryCategories = (...args: Parameters<Actions["lo
   rpcCall<Awaited<ReturnType<Actions["loadAutoMatchSecondaryCategories"]>>>("src.backend.actions.ImportFrom1688.loadAutoMatchSecondaryCategories", ...args);
 export const matchSecondaryCategoriesByTitle = (...args: Parameters<Actions["matchSecondaryCategoriesByTitle"]>) => 
   rpcCall<Awaited<ReturnType<Actions["matchSecondaryCategoriesByTitle"]>>>("src.backend.actions.ImportFrom1688.matchSecondaryCategoriesByTitle", ...args);
+export const pickImportPricingTargetCategory = (...args: Parameters<Actions["pickImportPricingTargetCategory"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["pickImportPricingTargetCategory"]>>>("src.backend.actions.ImportFrom1688.pickImportPricingTargetCategory", ...args);
 export const resolveTableImportCategoryPath = (...args: Parameters<Actions["resolveTableImportCategoryPath"]>) => 
   rpcCall<Awaited<ReturnType<Actions["resolveTableImportCategoryPath"]>>>("src.backend.actions.ImportFrom1688.resolveTableImportCategoryPath", ...args);
 export const resolveImportCategoryOwnership = (...args: Parameters<Actions["resolveImportCategoryOwnership"]>) => 
@@ -28,6 +30,10 @@ export const getImportTaskList = (...args: Parameters<Actions["getImportTaskList
   rpcCall<Awaited<ReturnType<Actions["getImportTaskList"]>>>("src.backend.actions.ImportFrom1688.getImportTaskList", ...args);
 export const getImportTaskDetail = (...args: Parameters<Actions["getImportTaskDetail"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getImportTaskDetail"]>>>("src.backend.actions.ImportFrom1688.getImportTaskDetail", ...args);
+export const getParseJobRuntimeStatus = (...args: Parameters<Actions["getParseJobRuntimeStatus"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getParseJobRuntimeStatus"]>>>("src.backend.actions.ImportFrom1688.getParseJobRuntimeStatus", ...args);
+export const cancelPendingImportParseJob = (...args: Parameters<Actions["cancelPendingImportParseJob"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["cancelPendingImportParseJob"]>>>("src.backend.actions.ImportFrom1688.cancelPendingImportParseJob", ...args);
 export const getPendingImportQueue = (...args: Parameters<Actions["getPendingImportQueue"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getPendingImportQueue"]>>>("src.backend.actions.ImportFrom1688.getPendingImportQueue", ...args);
 export const parseTableImportContent = (...args: Parameters<Actions["parseTableImportContent"]>) => 
@@ -46,6 +52,8 @@ export const updatePendingImportGallery = (...args: Parameters<Actions["updatePe
   rpcCall<Awaited<ReturnType<Actions["updatePendingImportGallery"]>>>("src.backend.actions.ImportFrom1688.updatePendingImportGallery", ...args);
 export const inlineUpdatePendingImportItemField = (...args: Parameters<Actions["inlineUpdatePendingImportItemField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportItemField"]>>>("src.backend.actions.ImportFrom1688.inlineUpdatePendingImportItemField", ...args);
+export const batchUpdatePendingImportItemField = (...args: Parameters<Actions["batchUpdatePendingImportItemField"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchUpdatePendingImportItemField"]>>>("src.backend.actions.ImportFrom1688.batchUpdatePendingImportItemField", ...args);
 export const inlineUpdatePendingImportSkuField = (...args: Parameters<Actions["inlineUpdatePendingImportSkuField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportSkuField"]>>>("src.backend.actions.ImportFrom1688.inlineUpdatePendingImportSkuField", ...args);
 export const publishPendingImportItems = (...args: Parameters<Actions["publishPendingImportItems"]>) => 

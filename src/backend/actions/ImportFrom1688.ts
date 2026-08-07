@@ -5156,6 +5156,8 @@ const PENDING_QUEUE_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000
 /** In-process mutex: only one 1688/PDD parse job (startParseTask or reparse) at a time. */
 let parseJobBusy = false
 let parseJobLabel: string | null = null
+/** Cooperative cancel — background loops check between items. */
+let parseJobCancelRequested = false
 
 const acquireParseJob = (label: string) => {
   if (parseJobBusy) {
@@ -5167,14 +5169,73 @@ const acquireParseJob = (label: string) => {
   }
   parseJobBusy = true
   parseJobLabel = label
+  parseJobCancelRequested = false
 }
 
 const releaseParseJob = (label: string) => {
   if (parseJobLabel === label || !parseJobLabel) {
     parseJobBusy = false
     parseJobLabel = null
+    parseJobCancelRequested = false
   }
 }
+
+const isParseJobCancelled = () => parseJobCancelRequested
+
+const requestCancelParseJob = () => {
+  parseJobCancelRequested = true
+  parseJobBusy = false
+  parseJobLabel = null
+}
+
+export const getParseJobRuntimeStatus = () => ({
+  busy: parseJobBusy,
+  label: parseJobLabel,
+  cancel_requested: parseJobCancelRequested,
+})
+
+export interface CancelPendingImportParseJobOutput {
+  cancelled: boolean
+  task_count: number
+  item_count: number
+  message: string
+}
+
+/** Stop collect/reparse: mark RUNNING rows retryable and signal in-process loops to exit. */
+export const cancelPendingImportParseJob = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<CancelPendingImportParseJobOutput> => {
+    requestCancelParseJob()
+
+    const tasks = await prisma.importtask.updateMany({
+      where: {
+        status: { in: ['PENDING', 'RUNNING', 'RATE_LIMITED'] as any },
+      },
+      data: {
+        status: 'RETRY_PENDING' as any,
+        finishedAt: new Date(),
+      },
+    })
+
+    const items = await prisma.importtaskitem.updateMany({
+      where: {
+        fetchStatus: 'RUNNING' as any,
+        isPublished: false,
+      },
+      data: {
+        fetchStatus: 'RETRY_PENDING' as any,
+        failureReason: '用户终止解析',
+        fetchFinishedAt: new Date(),
+      },
+    })
+
+    return {
+      cancelled: true,
+      task_count: tasks.count,
+      item_count: items.count,
+      message: `已终止解析（任务 ${tasks.count}，条目 ${items.count}）`,
+    }
+  }),
+)
 
 export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
   withResult(async (input?: GetPendingImportQueueInput): Promise<GetPendingImportQueueOutput> => {
@@ -5197,6 +5258,18 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
     try {
       const itemStuckBefore = new Date(Date.now() - 10 * 60 * 1000)
       const taskStuckBefore = new Date(Date.now() - 20 * 60 * 1000)
+
+      // Zombie: finishedAt already set but status still RUNNING (crash mid-finalize).
+      const zombieTasks = await prisma.importtask.updateMany({
+        where: {
+          status: 'RUNNING' as any,
+          finishedAt: { not: null },
+        },
+        data: {
+          status: 'RETRY_PENDING' as any,
+        },
+      })
+
       const stuckItems = await prisma.importtaskitem.updateMany({
         where: {
           fetchStatus: 'RUNNING' as any,
@@ -5221,12 +5294,13 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
           finishedAt: new Date(),
         },
       })
-      if (stuckItems.count > 0 || stuckTasks.count > 0) {
+      if (zombieTasks.count > 0 || stuckItems.count > 0 || stuckTasks.count > 0) {
         console.info(
-          `[getPendingImportQueue] reclaimed stuck RUNNING items=${stuckItems.count} tasks=${stuckTasks.count}`,
+          `[getPendingImportQueue] reclaimed stuck RUNNING zombieTasks=${zombieTasks.count} items=${stuckItems.count} tasks=${stuckTasks.count}`,
         )
         parseJobBusy = false
         parseJobLabel = null
+        parseJobCancelRequested = false
       }
     } catch (error) {
       console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
@@ -5983,6 +6057,30 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
     )
 
     for (let index = 0; index < taskSnapshot.items.length; index += 1) {
+      if (isParseJobCancelled()) {
+        console.warn(`[startParseTask] cancelled by user at index=${index} task=${taskSnapshot.id}`)
+        await prisma.importtaskitem.updateMany({
+          where: {
+            importTaskId: taskSnapshot.id,
+            fetchStatus: { in: ['PENDING', 'RUNNING'] as any },
+          },
+          data: {
+            fetchStatus: 'RETRY_PENDING' as any,
+            failureReason: '用户终止解析',
+            fetchFinishedAt: new Date(),
+          },
+        })
+        await prisma.importtask.update({
+          where: { id: taskSnapshot.id },
+          data: {
+            status: 'RETRY_PENDING' as any,
+            finishedAt: new Date(),
+            progressPercent: Math.min(100, Math.round((index / Math.max(1, taskSnapshot.items.length)) * 100)),
+          },
+        })
+        break
+      }
+
       const item = taskSnapshot.items[index]
       const fetchStartedAt = new Date()
 
@@ -6322,6 +6420,17 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
     const totalFailures = failureCount + rateLimitedCount
     const finishedAt = new Date()
+    if (isParseJobCancelled()) {
+      await prisma.importtask.update({
+        where: { id: taskSnapshot.id },
+        data: {
+          status: 'RETRY_PENDING' as any,
+          successCount,
+          failureCount: totalFailures,
+          finishedAt,
+        },
+      }).catch(() => undefined)
+    } else {
     let finalStatus: ImportTaskStatusType = 'COMPLETED'
     if (successCount === 0 && totalFailures > 0) {
       finalStatus = rateLimitedCount > 0 && failureCount === 0 ? 'RATE_LIMITED' : 'FAILED'
@@ -6339,6 +6448,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
         finishedAt
       }
     })
+    }
     })().catch(async (error: any) => {
       console.error('[startParseTask] background parse failed', error)
       try {
@@ -7391,6 +7501,26 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
         const exchangeRate = await getGlobalExchangeRate(prisma)
 
         for (let index = 0; index < itemIds.length; index += 1) {
+          if (isParseJobCancelled()) {
+            console.warn(`[reparsePendingImportItems] cancelled by user at index=${index}`)
+            const remainingIds = itemIds.slice(index)
+            if (remainingIds.length) {
+              await prisma.importtaskitem.updateMany({
+                where: {
+                  id: { in: remainingIds },
+                  fetchStatus: { in: ['PENDING', 'RUNNING'] as any },
+                  isPublished: false,
+                },
+                data: {
+                  fetchStatus: 'RETRY_PENDING' as any,
+                  failureReason: '用户终止解析',
+                  fetchFinishedAt: new Date(),
+                },
+              })
+            }
+            break
+          }
+
           const itemId = itemIds[index]
           let displayName = itemId
 

@@ -54,6 +54,8 @@ export const getPendingImportQueue = (...args: Parameters<Actions["getPendingImp
   rpcCall<Awaited<ReturnType<Actions["getPendingImportQueue"]>>>("src.backend.actions.ProductManagement.getPendingImportQueue", ...args);
 export const inlineUpdatePendingImportItemField = (...args: Parameters<Actions["inlineUpdatePendingImportItemField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportItemField"]>>>("src.backend.actions.ProductManagement.inlineUpdatePendingImportItemField", ...args);
+export const batchUpdatePendingImportItemField = (...args: Parameters<Actions["batchUpdatePendingImportItemField"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchUpdatePendingImportItemField"]>>>("src.backend.actions.ProductManagement.batchUpdatePendingImportItemField", ...args);
 export const inlineUpdatePendingImportSkuField = (...args: Parameters<Actions["inlineUpdatePendingImportSkuField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportSkuField"]>>>("src.backend.actions.ProductManagement.inlineUpdatePendingImportSkuField", ...args);
 export const updatePendingImportGallery = (...args: Parameters<Actions["updatePendingImportGallery"]>) => 
@@ -62,6 +64,8 @@ export const publishPendingImportItems = (...args: Parameters<Actions["publishPe
   rpcCall<Awaited<ReturnType<Actions["publishPendingImportItems"]>>>("src.backend.actions.ProductManagement.publishPendingImportItems", ...args);
 export const reparsePendingImportItems = (...args: Parameters<Actions["reparsePendingImportItems"]>) => 
   rpcCall<Awaited<ReturnType<Actions["reparsePendingImportItems"]>>>("src.backend.actions.ProductManagement.reparsePendingImportItems", ...args);
+export const cancelPendingImportParseJob = (...args: Parameters<Actions["cancelPendingImportParseJob"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["cancelPendingImportParseJob"]>>>("src.backend.actions.ProductManagement.cancelPendingImportParseJob", ...args);
 export const batchDeletePendingImportItems = (...args: Parameters<Actions["batchDeletePendingImportItems"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchDeletePendingImportItems"]>>>("src.backend.actions.ProductManagement.batchDeletePendingImportItems", ...args);
 export const returnProductsToPendingUpload = (...args: Parameters<Actions["returnProductsToPendingUpload"]>) => 
@@ -74,8 +78,16 @@ export const sync1688ProductStatus = (...args: Parameters<Actions["sync1688Produ
   rpcCall<Awaited<ReturnType<Actions["sync1688ProductStatus"]>>>("src.backend.actions.ProductManagement.sync1688ProductStatus", ...args);
 export const batchAppendProductAdminNotes = (...args: Parameters<Actions["batchAppendProductAdminNotes"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchAppendProductAdminNotes"]>>>("src.backend.actions.ProductManagement.batchAppendProductAdminNotes", ...args);
+export const batchAppendProductTitleSuffix = (...args: Parameters<Actions["batchAppendProductTitleSuffix"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchAppendProductTitleSuffix"]>>>("src.backend.actions.ProductManagement.batchAppendProductTitleSuffix", ...args);
+export const batchAppendPendingImportTitleSuffix = (...args: Parameters<Actions["batchAppendPendingImportTitleSuffix"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchAppendPendingImportTitleSuffix"]>>>("src.backend.actions.ProductManagement.batchAppendPendingImportTitleSuffix", ...args);
+export const updateProductStock = (...args: Parameters<Actions["updateProductStock"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateProductStock"]>>>("src.backend.actions.ProductManagement.updateProductStock", ...args);
 export const reclassifyPublishedProductsBySecondaryMatch = (...args: Parameters<Actions["reclassifyPublishedProductsBySecondaryMatch"]>) => 
   rpcCall<Awaited<ReturnType<Actions["reclassifyPublishedProductsBySecondaryMatch"]>>>("src.backend.actions.ProductManagement.reclassifyPublishedProductsBySecondaryMatch", ...args);
+export const autoClassifyPriceThresholdProducts = (...args: Parameters<Actions["autoClassifyPriceThresholdProducts"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["autoClassifyPriceThresholdProducts"]>>>("src.backend.actions.ProductManagement.autoClassifyPriceThresholdProducts", ...args);
 export const batchTranslateProductTitlesToSpanish = (...args: Parameters<Actions["batchTranslateProductTitlesToSpanish"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchTranslateProductTitlesToSpanish"]>>>("src.backend.actions.ProductManagement.batchTranslateProductTitlesToSpanish", ...args);
 export const getHomeFeaturedKeywords = (...args: Parameters<Actions["getHomeFeaturedKeywords"]>) => 

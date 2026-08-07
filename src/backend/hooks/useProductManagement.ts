@@ -36,6 +36,7 @@ import {
   updatePendingImportGallery,
   publishPendingImportItems,
   reparsePendingImportItems,
+  cancelPendingImportParseJob,
   sync1688ProductStatus,
   batchAppendProductAdminNotes,
   reclassifyPublishedProductsBySecondaryMatch,
@@ -560,6 +561,12 @@ export interface ProductManagementState {
   pendingImportPublishing: boolean
   /** True when any pending-import row is currently re-parsing (derived). */
   pendingImportReparsing: boolean
+  /** True while cancel RPC is in flight. */
+  pendingImportParseCancelling: boolean
+  /** Collect task or row reparse is actively running. */
+  pendingImportParseActive: boolean
+  /** Short human label for what is currently being parsed. */
+  pendingImportParseStatusLabel: string
   /** Per-row reparse lock — only these rows show「解析中...」; other UI stays interactive. */
   reparsingItemIds: Record<string, true>
   pendingImportQueueLoading: boolean
@@ -714,6 +721,8 @@ export interface ProductManagementHandlers {
   cancelPendingCategoryPicker: () => void
   publishSelectedPendingImportItems: (itemIdsOverride?: string[]) => Promise<void>
   reparseSelectedPendingImportItems: (itemIdsOverride?: string[]) => Promise<void>
+  cancelPendingImportParse: () => Promise<void>
+  handlePendingImportParseButton: () => Promise<void>
   deleteSelectedPendingImportItems: (itemIdsOverride?: string[]) => Promise<void>
   publishPendingImportItem: (itemId: string) => Promise<void>
   toggleProductExpand: (productId: string) => void
@@ -879,9 +888,20 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportRefreshing, setPendingImportRefreshing] = useState(false)
   const [pendingImportPublishing, setPendingImportPublishing] = useState(false)
   const [reparsingItemIds, setReparsingItemIds] = useState<Record<string, true>>({})
+  const [pendingImportParseCancelling, setPendingImportParseCancelling] = useState(false)
   const pendingImportReparsing = Object.keys(reparsingItemIds).length > 0
   const [pendingImportQueueLoading, setPendingImportQueueLoading] = useState(false)
   const [pendingImportActiveTask, setPendingImportActiveTask] = useState<PendingImportQueueTaskSummary | null>(null)
+  const pendingImportCollectRunning = Boolean(
+    pendingImportActiveTask &&
+      ['PENDING', 'RUNNING', 'RATE_LIMITED'].includes(pendingImportActiveTask.task_status),
+  )
+  const pendingImportParseActive = pendingImportReparsing || pendingImportCollectRunning
+  const pendingImportParseStatusLabel = pendingImportReparsing
+    ? `正在重新解析已选 ${Object.keys(reparsingItemIds).length} 条商品`
+    : pendingImportCollectRunning && pendingImportActiveTask
+      ? `正在采集「${pendingImportActiveTask.task_taskName}」（${pendingImportActiveTask.task_progressPercent}% · ${pendingImportActiveTask.task_sourceLinkCount} 条链接）`
+      : ''
   const [pendingImportQueue, setPendingImportQueue] = useState<PendingImportQueueItem[]>([])
   const [pendingImportQueueTotal, setPendingImportQueueTotal] = useState(0)
   const [pendingImportQueueError, setPendingImportQueueError] = useState<string | null>(null)
@@ -1943,18 +1963,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const reparseSelectedPendingImportItems = async (itemIdsOverride?: string[]) => {
     const targetItemIds = itemIdsOverride?.length ? itemIdsOverride : pendingImportSelectedIds
     if (!targetItemIds.length) {
-      toast.error('请先选择待重新解析的条目')
+      toast.error('请先勾选要解析的商品')
       return
     }
 
-    // Global parse mutex: collect/reparse share one in-process slot on the RPC host.
-    if (
-      pendingImportActiveTask &&
-      (pendingImportActiveTask.task_status === 'RUNNING' ||
-        pendingImportActiveTask.task_status === 'PENDING' ||
-        pendingImportActiveTask.task_status === 'RETRY_PENDING')
-    ) {
-      toast.error('当前有采集/解析任务进行中，请等任务结束后再点「重新解析」')
+    if (pendingImportParseActive) {
+      toast.error('当前正在解析中，请先点「终止解析」')
       return
     }
 
@@ -1976,7 +1990,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         : item,
     ))
 
-    toast.message(`已提交 ${idsToParse.length} 条重新解析，后台处理中…`)
+    toast.message(`已开始解析 ${idsToParse.length} 条商品…`)
 
     try {
       // Server ACKs after marking RUNNING; still use a longer client timeout under load.
@@ -1985,7 +1999,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         { __rpcTimeoutMs: 60_000 } as any,
       )
     } catch (err: any) {
-      const reason = err?.message || '重新解析失败'
+      const reason = err?.message || '解析失败'
       // Timeout does not mean the server stopped — items may already be RUNNING in background.
       if (/请求超时/.test(reason)) {
         toast.message('提交响应较慢，将继续轮询解析进度（后台可能仍在处理）')
@@ -2100,10 +2114,33 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         duration: Math.min(20000, 6000 + failureLines.length * 1500),
       })
     } else if (successCount > 0) {
-      toast.success(idsToParse.length === 1 ? '重新解析成功' : summary)
+      toast.success(idsToParse.length === 1 ? '解析成功' : summary)
     } else {
-      toast.message('重新解析仍在进行或结果未就绪，请稍后刷新待上传区查看')
+      toast.message('解析仍在进行或结果未就绪，请稍后刷新待上传区查看')
     }
+  }
+
+  const cancelPendingImportParse = async () => {
+    if (pendingImportParseCancelling) return
+    setPendingImportParseCancelling(true)
+    try {
+      const result = await cancelPendingImportParseJob()
+      setReparsingItemIds({})
+      toast.success(result?.message || '已终止解析')
+      await refreshPendingImportQueue({ silent: true })
+    } catch (err: any) {
+      toast.error(err?.message || '终止解析失败')
+    } finally {
+      setPendingImportParseCancelling(false)
+    }
+  }
+
+  const handlePendingImportParseButton = async () => {
+    if (pendingImportParseActive || pendingImportParseCancelling) {
+      await cancelPendingImportParse()
+      return
+    }
+    await reparseSelectedPendingImportItems()
   }
 
   const deleteSelectedPendingImportItems = async (itemIdsOverride?: string[]) => {
@@ -3440,6 +3477,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       pendingImportRefreshing,
       pendingImportPublishing,
       pendingImportReparsing,
+      pendingImportParseCancelling,
+      pendingImportParseActive,
+      pendingImportParseStatusLabel,
       reparsingItemIds,
       pendingImportQueueLoading,
       pendingImportActiveTask,
@@ -3593,6 +3633,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       cancelPendingCategoryPicker,
       publishSelectedPendingImportItems,
       reparseSelectedPendingImportItems,
+      cancelPendingImportParse,
+      handlePendingImportParseButton,
       deleteSelectedPendingImportItems,
       publishPendingImportItem,
       toggleProductExpand,

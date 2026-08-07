@@ -597,6 +597,7 @@ import {
   inlineUpdatePendingImportSkuField as updateImportFrom1688PendingImportSkuField,
   publishPendingImportItems as publishImportFrom1688PendingImportItems,
   reparsePendingImportItems as reparseImportFrom1688PendingImportItems,
+  cancelPendingImportParseJob as cancelImportFrom1688PendingImportParseJob,
   updatePendingImportGallery as updateImportFrom1688PendingImportGallery,
   check1688OfferLiveStatus,
   loadAutoMatchSecondaryCategories,
@@ -613,6 +614,7 @@ import {
   type PublishPendingImportItemsOutput,
   type ReparsePendingImportItemsOutput,
   type ReparsePendingImportItemResult,
+  type CancelPendingImportParseJobOutput,
   type UpdatePendingImportGalleryInput
 } from '@/backend/actions/ImportFrom1688'
 import {
@@ -2878,6 +2880,12 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
 export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
   withResult(async (input: ReparsePendingImportItemsInput): Promise<ReparsePendingImportItemsOutput> => {
     return reparseImportFrom1688PendingImportItems({ itemIds: input.item_ids })
+  })
+)
+
+export const cancelPendingImportParseJob = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<CancelPendingImportParseJobOutput> => {
+    return cancelImportFrom1688PendingImportParseJob()
   })
 )
 

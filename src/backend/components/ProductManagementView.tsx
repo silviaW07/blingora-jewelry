@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages } from 'lucide-react';
+import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages, Square } from 'lucide-react';
 import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Checkbox, Sheet, SheetContent, SheetHeader, SheetTitle, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Textarea, Badge, Card, CardContent, Separator, Alert, AlertTitle, AlertDescription, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/backend/components/ui';
 import EditableImg from '@/@base/EditableImg';
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement';
@@ -176,6 +176,12 @@ export const ProductManagementView = ({
   const showPublishedLandingNotice = state.shouldShowPublishedDraftLanding;
   const isPendingTab = state.activeTab === 'pending_imports';
   const activeSelectionCount = isPendingTab ? state.pendingImportSelectedIds.length : state.selectedIds.length;
+  const pendingParseActive = state.pendingImportParseActive || state.pendingImportParseCancelling;
+  const pendingParseButtonLabel = state.pendingImportParseCancelling
+    ? '终止中…'
+    : pendingParseActive
+      ? '终止解析'
+      : '解析';
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id='productmanagementview-r557b459a1eb090b6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
       <section className="w-full bg-white border-b" data-controller-name="商品检索与筛选" data-api-unique-id='productmanagementview-r04bd34ec02b335d2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
         <div className="container mx-auto px-8 py-6" data-api-unique-id='productmanagementview-rb1fe9b44bb50f022-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
@@ -249,12 +255,26 @@ export const ProductManagementView = ({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4" data-api-unique-id='productmanagementview-rdbf826b6f43eda19-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
             <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-r4ec6b7a2733f5aa5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               {isPendingTab ? <>
-                <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing || pendingParseActive} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <ArrowUpCircle className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkpublishicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportPublishing ? '发布中...' : '批量发布并上架'}
                 </Button>
-                <Button variant="outline" className="h-9 border-slate-200" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={handlers.reparseSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkreparse-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                  <RefreshCw className={`w-4 h-4 mr-2 ${state.pendingImportReparsing ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-rpendingbulkreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportReparsing ? `解析中 (${Object.keys(state.reparsingItemIds).length})…` : '重新解析'}
+                <Button
+                  variant={pendingParseActive ? 'destructive' : 'outline'}
+                  className={pendingParseActive ? 'h-9' : 'h-9 border-slate-200'}
+                  disabled={state.pendingImportPublishing || state.pendingImportParseCancelling || (!pendingParseActive && !hasPendingSelected)}
+                  onClick={() => void handlers.handlePendingImportParseButton()}
+                  title={pendingParseActive ? (state.pendingImportParseStatusLabel || '点击终止当前解析') : '解析勾选的待上传商品'}
+                  data-api-unique-id='productmanagementview-rpendingbulkreparse-s2030557363'
+                  data-api-unique-page-name='src/backend/components/ProductManagementView'
+                >
+                  {pendingParseActive
+                    ? <Square className="w-4 h-4 mr-2 fill-current" />
+                    : <RefreshCw className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />}
+                  {pendingParseButtonLabel}
                 </Button>
+                {state.pendingImportParseStatusLabel ? (
+                  <span className="text-xs text-sky-700 max-w-[280px] leading-snug">{state.pendingImportParseStatusLabel}</span>
+                ) : null}
                 <Button variant="outline" size="sm" className="h-9 border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={() => handlers.openConfirmDialog('PENDING_DELETE', state.pendingImportSelectedIds)} data-api-unique-id='productmanagementview-rpendingbulkdelete-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <Trash2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkdeleteicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量删除
                 </Button>
@@ -439,7 +459,18 @@ export const ProductManagementView = ({
                       <Button variant="outline" className="h-10 border-slate-200" disabled={state.pendingImportRefreshing || state.pendingImportQueueLoading} onClick={() => handlers.refreshPendingImportQueue()} data-api-unique-id='productmanagementview-r229f655f659cc41f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                         <RotateCcw className={`w-4 h-4 mr-2 ${state.pendingImportRefreshing || state.pendingImportQueueLoading ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-r87fece432f878dec-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />刷新队列
                       </Button>
-                      {pendingTaskNeedsRetry && <Button variant="outline" className="h-10 border-amber-200 text-amber-700 hover:bg-amber-50" disabled={state.pendingImportRefreshing} onClick={handlers.retryPendingImportActiveTask} data-api-unique-id='productmanagementview-r97745bd15744d9cb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                      {pendingParseActive ? (
+                        <Button
+                          variant="destructive"
+                          className="h-10"
+                          disabled={state.pendingImportParseCancelling}
+                          onClick={() => void handlers.cancelPendingImportParse()}
+                        >
+                          <Square className="w-4 h-4 mr-2 fill-current" />
+                          {state.pendingImportParseCancelling ? '终止中…' : '终止解析'}
+                        </Button>
+                      ) : null}
+                      {pendingTaskNeedsRetry && <Button variant="outline" className="h-10 border-amber-200 text-amber-700 hover:bg-amber-50" disabled={state.pendingImportRefreshing || pendingParseActive} onClick={handlers.retryPendingImportActiveTask} data-api-unique-id='productmanagementview-r97745bd15744d9cb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                           <RotateCcw className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r0f2549fa27ce998f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />重试任务
                         </Button>}
                       <Button className="h-10 bg-primary text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-r7e7ba40d1c878dab-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
@@ -520,8 +551,19 @@ export const ProductManagementView = ({
                       <Button className="h-10 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-r21dd9eb44fdc6480-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                         <ArrowUpCircle className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-ra4cb692981cf2dd5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportPublishing ? '发布中...' : '一键发布并上架'}
                       </Button>
-                      <Button variant="outline" className="h-10 border-slate-200" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={handlers.reparseSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingreparse-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <RefreshCw className={`w-4 h-4 mr-2 ${state.pendingImportReparsing ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-rpendingreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportReparsing ? `解析中 (${Object.keys(state.reparsingItemIds).length})…` : '重新解析'}
+                      <Button
+                        variant={pendingParseActive ? 'destructive' : 'outline'}
+                        className={pendingParseActive ? 'h-10' : 'h-10 border-slate-200'}
+                        disabled={state.pendingImportPublishing || state.pendingImportParseCancelling || (!pendingParseActive && !hasPendingSelected)}
+                        onClick={() => void handlers.handlePendingImportParseButton()}
+                        title={pendingParseActive ? (state.pendingImportParseStatusLabel || '点击终止当前解析') : '解析勾选的待上传商品'}
+                        data-api-unique-id='productmanagementview-rpendingreparse-s2030557363'
+                        data-api-unique-page-name='src/backend/components/ProductManagementView'
+                      >
+                        {pendingParseActive
+                          ? <Square className="w-4 h-4 mr-2 fill-current" />
+                          : <RefreshCw className={`w-4 h-4 mr-2 ${state.pendingImportReparsing ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-rpendingreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />}
+                        {pendingParseButtonLabel}
                       </Button>
                     </div>
                   </div>
