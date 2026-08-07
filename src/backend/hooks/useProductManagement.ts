@@ -567,6 +567,14 @@ export interface ProductManagementState {
   pendingImportParseActive: boolean
   /** Short human label for what is currently being parsed. */
   pendingImportParseStatusLabel: string
+  /** Server in-process parse job (reparse/collect) — survives refresh. */
+  pendingImportParseJob: {
+    busy: boolean
+    label: string | null
+    total: number
+    done: number
+    cancel_requested: boolean
+  } | null
   /** Per-row reparse lock — only these rows show「解析中...」; other UI stays interactive. */
   reparsingItemIds: Record<string, true>
   pendingImportQueueLoading: boolean
@@ -889,19 +897,48 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportPublishing, setPendingImportPublishing] = useState(false)
   const [reparsingItemIds, setReparsingItemIds] = useState<Record<string, true>>({})
   const [pendingImportParseCancelling, setPendingImportParseCancelling] = useState(false)
-  const pendingImportReparsing = Object.keys(reparsingItemIds).length > 0
+  const [pendingImportParseJob, setPendingImportParseJob] = useState<{
+    busy: boolean
+    label: string | null
+    total: number
+    done: number
+    cancel_requested: boolean
+  } | null>(null)
+  const pendingImportReparsing =
+    Object.keys(reparsingItemIds).length > 0 || Boolean(pendingImportParseJob?.busy && /^reparse:/.test(pendingImportParseJob.label || ''))
   const [pendingImportQueueLoading, setPendingImportQueueLoading] = useState(false)
   const [pendingImportActiveTask, setPendingImportActiveTask] = useState<PendingImportQueueTaskSummary | null>(null)
   const pendingImportCollectRunning = Boolean(
     pendingImportActiveTask &&
       ['PENDING', 'RUNNING', 'RATE_LIMITED'].includes(pendingImportActiveTask.task_status),
   )
-  const pendingImportParseActive = pendingImportReparsing || pendingImportCollectRunning
-  const pendingImportParseStatusLabel = pendingImportReparsing
-    ? `正在重新解析已选 ${Object.keys(reparsingItemIds).length} 条商品`
-    : pendingImportCollectRunning && pendingImportActiveTask
-      ? `正在采集「${pendingImportActiveTask.task_taskName}」（${pendingImportActiveTask.task_progressPercent}% · ${pendingImportActiveTask.task_sourceLinkCount} 条链接）`
-      : ''
+  const pendingImportParseActive =
+    pendingImportReparsing || pendingImportCollectRunning || Boolean(pendingImportParseJob?.busy)
+  const pendingImportParseStatusLabel = (() => {
+    const job = pendingImportParseJob
+    if (job?.busy) {
+      const done = Math.max(0, job.done)
+      const total = Math.max(0, job.total)
+      if (/^reparse:/.test(job.label || '')) {
+        return total > 0
+          ? `正在重新解析 ${done}/${total}…`
+          : `正在重新解析（${job.label}）…`
+      }
+      if (/^task:/.test(job.label || '')) {
+        return total > 0
+          ? `正在解析采集任务 ${done}/${total}…`
+          : '正在解析采集任务…'
+      }
+      return job.label ? `正在解析（${job.label}）…` : '正在解析…'
+    }
+    if (Object.keys(reparsingItemIds).length > 0) {
+      return `正在重新解析已选 ${Object.keys(reparsingItemIds).length} 条商品`
+    }
+    if (pendingImportCollectRunning && pendingImportActiveTask) {
+      return `正在采集「${pendingImportActiveTask.task_taskName}」（${pendingImportActiveTask.task_progressPercent}% · ${pendingImportActiveTask.task_sourceLinkCount} 条链接）`
+    }
+    return ''
+  })()
   const [pendingImportQueue, setPendingImportQueue] = useState<PendingImportQueueItem[]>([])
   const [pendingImportQueueTotal, setPendingImportQueueTotal] = useState(0)
   const [pendingImportQueueError, setPendingImportQueueError] = useState<string | null>(null)
@@ -1126,6 +1163,32 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     if (typeof result.page === 'number' && result.page > 0) {
       setPendingImportPage(result.page)
     }
+
+    const job = result.parse_job || null
+    setPendingImportParseJob(job)
+    // Restore row-level「解析中」from server so refresh still shows progress + 终止解析.
+    if (job?.busy) {
+      const runningIds = visibleItems
+        .filter(item => item.item_fetchStatus === 'RUNNING')
+        .map(item => item.item_id)
+      if (runningIds.length > 0) {
+        setReparsingItemIds(prev => {
+          const next = { ...prev }
+          for (const id of runningIds) next[id] = true
+          return next
+        })
+      }
+    } else {
+      setReparsingItemIds(prev => {
+        const ids = Object.keys(prev)
+        if (!ids.length) return prev
+        const stillRunning = visibleItems.some(
+          item => prev[item.item_id] && item.item_fetchStatus === 'RUNNING',
+        )
+        if (stillRunning) return prev
+        return {}
+      })
+    }
   }, [])
 
   const pendingImportTotalPages = Math.max(1, Math.ceil(pendingImportQueueTotal / pendingImportPageSize))
@@ -1249,14 +1312,23 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   useEffect(() => {
     if (activeTab !== 'pending_imports') return
-    if (!pendingImportActiveTask || !pollingTaskStatuses.includes(pendingImportActiveTask.task_status)) {
+    const taskPolling =
+      pendingImportActiveTask && pollingTaskStatuses.includes(pendingImportActiveTask.task_status)
+    const parseJobPolling = Boolean(pendingImportParseJob?.busy) || Object.keys(reparsingItemIds).length > 0
+    if (!taskPolling && !parseJobPolling) {
       return
     }
     const timer = window.setInterval(() => {
       refreshPendingImportQueue({ silent: true })
-    }, 5000)
+    }, 3000)
     return () => window.clearInterval(timer)
-  }, [activeTab, pendingImportActiveTask, refreshPendingImportQueue])
+  }, [
+    activeTab,
+    pendingImportActiveTask,
+    pendingImportParseJob?.busy,
+    reparsingItemIds,
+    refreshPendingImportQueue,
+  ])
 
   const loadCategoryProductPreview = useCallback(async (categoryId: string | null) => {
     if (!categoryId) {
@@ -2126,6 +2198,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     try {
       const result = await cancelPendingImportParseJob()
       setReparsingItemIds({})
+      setPendingImportParseJob(null)
       toast.success(result?.message || '已终止解析')
       await refreshPendingImportQueue({ silent: true })
     } catch (err: any) {
@@ -3480,6 +3553,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       pendingImportParseCancelling,
       pendingImportParseActive,
       pendingImportParseStatusLabel,
+      pendingImportParseJob,
       reparsingItemIds,
       pendingImportQueueLoading,
       pendingImportActiveTask,

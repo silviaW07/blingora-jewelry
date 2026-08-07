@@ -447,6 +447,52 @@ export const ProductManagementView = ({
 
               <Card className="border-primary/10 shadow-sm overflow-hidden" data-controller-name="1688采集任务头" data-api-unique-id='productmanagementview-r2de9471194d05392-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <CardContent className="p-6 space-y-5" data-api-unique-id='productmanagementview-r386095967bd4b83f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                  {state.pendingImportParseJob?.busy ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider text-sky-700">当前解析进度</div>
+                          <div className="mt-1 text-base font-semibold text-sky-950">
+                            {state.pendingImportParseStatusLabel || '正在解析…'}
+                          </div>
+                          {state.pendingImportParseJob.label ? (
+                            <div className="mt-1 text-xs text-sky-700/80 font-mono">{state.pendingImportParseJob.label}</div>
+                          ) : null}
+                        </div>
+                        <Button
+                          variant="destructive"
+                          className="h-10"
+                          disabled={state.pendingImportParseCancelling}
+                          onClick={() => void handlers.cancelPendingImportParse()}
+                        >
+                          <Square className="w-4 h-4 mr-2 fill-current" />
+                          {state.pendingImportParseCancelling ? '终止中…' : '终止解析'}
+                        </Button>
+                      </div>
+                      {state.pendingImportParseJob.total > 0 ? (
+                        <>
+                          <div className="flex items-end justify-between gap-3">
+                            <div className="text-3xl font-header font-bold text-sky-900">
+                              {Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100))}%
+                            </div>
+                            <span className="text-xs text-sky-700">
+                              已完成 {state.pendingImportParseJob.done} / {state.pendingImportParseJob.total}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-sky-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-sky-600 transition-all"
+                              style={{
+                                width: `${Math.max(0, Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100)))}%`,
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-sky-800">后台正在处理，进度会每几秒自动刷新。若长时间无变化可点「终止解析」后重试。</p>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap items-start justify-between gap-4" data-api-unique-id='productmanagementview-r63bbb93f19ce6661-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                     <div className="space-y-2" data-api-unique-id='productmanagementview-r77e8586743ac3f02-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                       <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-rb5b0868c746cbb7f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>

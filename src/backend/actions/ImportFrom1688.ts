@@ -362,6 +362,8 @@ export interface GetPendingImportQueueOutput {
   total: number
   page?: number
   page_size?: number
+  /** In-process collect/reparse job — survives page refresh so UI can show progress + 终止解析 */
+  parse_job?: PendingImportParseJobStatus
 }
 
 interface PendingImportQueueSnapshot {
@@ -5158,8 +5160,10 @@ let parseJobBusy = false
 let parseJobLabel: string | null = null
 /** Cooperative cancel — background loops check between items. */
 let parseJobCancelRequested = false
+/** Live progress for admin UI (survives page refresh via getPendingImportQueue). */
+let parseJobProgress: { total: number; done: number } | null = null
 
-const acquireParseJob = (label: string) => {
+const acquireParseJob = (label: string, total = 0) => {
   if (parseJobBusy) {
     throw new Error(
       parseJobLabel
@@ -5170,6 +5174,7 @@ const acquireParseJob = (label: string) => {
   parseJobBusy = true
   parseJobLabel = label
   parseJobCancelRequested = false
+  parseJobProgress = { total: Math.max(0, total), done: 0 }
 }
 
 const releaseParseJob = (label: string) => {
@@ -5177,20 +5182,40 @@ const releaseParseJob = (label: string) => {
     parseJobBusy = false
     parseJobLabel = null
     parseJobCancelRequested = false
+    parseJobProgress = null
   }
 }
 
 const isParseJobCancelled = () => parseJobCancelRequested
 
+const bumpParseJobProgress = (done: number, total?: number) => {
+  if (!parseJobProgress) return
+  parseJobProgress = {
+    total: typeof total === 'number' ? total : parseJobProgress.total,
+    done: Math.max(0, done),
+  }
+}
+
 const requestCancelParseJob = () => {
   parseJobCancelRequested = true
   parseJobBusy = false
   parseJobLabel = null
+  parseJobProgress = null
 }
 
-export const getParseJobRuntimeStatus = () => ({
+export interface PendingImportParseJobStatus {
+  busy: boolean
+  label: string | null
+  total: number
+  done: number
+  cancel_requested: boolean
+}
+
+export const getParseJobRuntimeStatus = (): PendingImportParseJobStatus => ({
   busy: parseJobBusy,
   label: parseJobLabel,
+  total: parseJobProgress?.total ?? 0,
+  done: parseJobProgress?.done ?? 0,
   cancel_requested: parseJobCancelRequested,
 })
 
@@ -5301,6 +5326,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
         parseJobBusy = false
         parseJobLabel = null
         parseJobCancelRequested = false
+        parseJobProgress = null
       }
     } catch (error) {
       console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
@@ -5380,6 +5406,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       total: snapshot.total,
       page,
       page_size: pageSize,
+      parse_job: getParseJobRuntimeStatus(),
     }
   })
 )
@@ -6029,6 +6056,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
         throw new Error('当前任务状态不允许开始解析')
       }
 
+      bumpParseJobProgress(0, task.items.length)
       const startedAt = new Date()
       await prisma.importtask.update({
         where: { id: task.id },
@@ -6402,6 +6430,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       }
 
       const processedCount = index + 1
+      bumpParseJobProgress(processedCount, taskSnapshot.items.length)
       const progressPercent = Math.min(100, Math.round((processedCount / taskSnapshot.items.length) * 100))
       await prisma.importtask.update({
         where: { id: taskSnapshot.id },
@@ -7462,7 +7491,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
 
     const itemIds = Array.from(new Set(input.itemIds.filter(Boolean)))
     const jobLabel = `reparse:${itemIds.length}`
-    acquireParseJob(jobLabel)
+    acquireParseJob(jobLabel, itemIds.length)
 
     try {
       try {
@@ -7521,6 +7550,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
             break
           }
 
+          bumpParseJobProgress(index, itemIds.length)
           const itemId = itemIds[index]
           let displayName = itemId
 
@@ -7685,6 +7715,8 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
               },
             }).catch(() => undefined)
           }
+
+          bumpParseJobProgress(index + 1, itemIds.length)
 
           if (index < itemIds.length - 1) {
             await sleep(900)

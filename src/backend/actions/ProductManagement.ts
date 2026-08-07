@@ -320,6 +320,7 @@ export interface ProductManagementPendingImportQueueOutput {
   total: number
   page?: number
   page_size?: number
+  parse_job?: PendingImportParseJobStatus
 }
 
 /** List hot-path: never `include` full product rows (gallery/detail JSON blobs dominate IO). */
@@ -615,7 +616,8 @@ import {
   type ReparsePendingImportItemsOutput,
   type ReparsePendingImportItemResult,
   type CancelPendingImportParseJobOutput,
-  type UpdatePendingImportGalleryInput
+  type UpdatePendingImportGalleryInput,
+  type PendingImportParseJobStatus,
 } from '@/backend/actions/ImportFrom1688'
 import {
   buildProductTranslationsJson,
