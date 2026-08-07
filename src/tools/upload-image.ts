@@ -227,24 +227,30 @@ async function postToUploadEndpoint(
  * capped at 200 uploads/day). NEXT_PUBLIC_IMAGE_UPLOAD_URL may override to a
  * non-AutoCoder gateway. Compresses client-side before send.
  */
-export async function upload_image_file(file: File, projectId?: string): Promise<string> {
+export async function upload_image_file(
+  file: File,
+  projectId?: string,
+  options?: { skipCompress?: boolean },
+): Promise<string> {
   try {
     const maxSize = 5 * 1024 * 1024
 
     // Dynamic import: keep compress-image off upload-image's static module graph
     // so compress HMR does not tightly couple invalidation of upload.
     let uploadFile = file
-    try {
-      const { compressImageForUpload } = await import('./compress-image')
-      uploadFile = await compressImageForUpload(file)
-      if (uploadFile.size !== file.size || uploadFile.type !== file.type) {
-        console.info(
-          `[upload] compressed image: ${(file.size / 1024).toFixed(0)}KB → ${(uploadFile.size / 1024).toFixed(0)}KB (${uploadFile.type})`,
-        )
+    if (!options?.skipCompress) {
+      try {
+        const { compressImageForUpload } = await import('./compress-image')
+        uploadFile = await compressImageForUpload(file)
+        if (uploadFile.size !== file.size || uploadFile.type !== file.type) {
+          console.info(
+            `[upload] compressed image: ${(file.size / 1024).toFixed(0)}KB → ${(uploadFile.size / 1024).toFixed(0)}KB (${uploadFile.type})`,
+          )
+        }
+      } catch (compressErr) {
+        console.warn('[upload] image compression failed, uploading original', compressErr)
+        uploadFile = file
       }
-    } catch (compressErr) {
-      console.warn('[upload] image compression failed, uploading original', compressErr)
-      uploadFile = file
     }
 
     if (uploadFile.size > maxSize) {
@@ -266,5 +272,55 @@ export async function upload_image_file(file: File, projectId?: string): Promise
   }
 }
 
+/** Run async work over items with a fixed concurrency (keeps order in results). */
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+  onItemDone?: (done: number, total: number) => void,
+): Promise<R[]> {
+  if (!items.length) return []
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  let done = 0
+  const run = async () => {
+    while (true) {
+      const index = cursor
+      cursor += 1
+      if (index >= items.length) return
+      results[index] = await worker(items[index], index)
+      done += 1
+      onItemDone?.(done, items.length)
+    }
+  }
+  const pool = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(Array.from({ length: pool }, () => run()))
+  return results
+}
+
+/**
+ * Upload many images with limited parallelism (default 4).
+ * Much faster than serial await for gallery / multi-select uploads.
+ */
+export async function upload_image_files(
+  files: File[],
+  options?: {
+    projectId?: string
+    concurrency?: number
+    skipCompress?: boolean
+    onProgress?: (done: number, total: number) => void
+  },
+): Promise<string[]> {
+  const list = files.filter(Boolean)
+  if (!list.length) return []
+  return mapPool(
+    list,
+    options?.concurrency ?? 4,
+    file => upload_image_file(file, options?.projectId, { skipCompress: options?.skipCompress }),
+    options?.onProgress,
+  )
+}
+
 /** Alias used by product management upload flows */
 export const upload_project_file = upload_image_file
+export const upload_project_files = upload_image_files

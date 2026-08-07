@@ -28,7 +28,7 @@ import type {
   SideNavCategoryItem,
 } from '@/backend/actions/HomeRecommendZoneManagement'
 import { toast } from 'sonner'
-import { upload_project_file } from '@/tools/tools'
+import { upload_project_files } from '@/tools/tools'
 
 export interface FormFields {
   title: string
@@ -633,15 +633,19 @@ export const useHomeRecommendZoneManagement = (): {
           day: '2-digit',
         }).format(new Date())
 
-        const uploaded: Array<{ url: string; name?: string }> = []
-        for (const file of fileList) {
-          const url = await upload_project_file(file)
-          if (!url) throw new Error(`图片上传失败：${file.name}`)
-          uploaded.push({
+        const urls = await upload_project_files(fileList, {
+          concurrency: 4,
+          onProgress: (done, total) => {
+            if (total > 1) toast.message(`图片上传中 ${done}/${total}`)
+          },
+        })
+        const uploaded: Array<{ url: string; name?: string }> = urls.map((url, index) => {
+          if (!url) throw new Error(`图片上传失败：${fileList[index]?.name || 'unknown'}`)
+          return {
             url,
             name: dateProductName,
-          })
-        }
+          }
+        })
 
         const res = await createDraftDisplayProducts({
           zoneId: editingId,

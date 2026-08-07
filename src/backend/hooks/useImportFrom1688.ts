@@ -25,7 +25,7 @@ import {
   updatePendingImportGallery
 } from '@/backend/actions/ImportFrom1688'
 import type { TableImportDraftRow as ActionTableImportDraftRow } from '@/backend/actions/ImportFrom1688'
-import { upload_project_file } from '@/tools/tools'
+import { upload_project_files } from '@/tools/tools'
 import type { ChangeEvent } from 'react'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
@@ -1231,20 +1231,12 @@ export const useImportFrom1688 = (
     if (!files.length) return
     setPendingImageUploadingId(itemId)
     try {
-      const uploaded: string[] = []
-      for (const file of files) {
-        const result = await upload_project_file(file)
-        const url = typeof result === 'string'
-          ? result.trim()
-          : String(
-            (result as { file_url?: string; image_url?: string; url?: string })?.file_url
-              || (result as { file_url?: string; image_url?: string; url?: string })?.image_url
-              || (result as { file_url?: string; image_url?: string; url?: string })?.url
-              || '',
-          ).trim()
-        if (!url) throw new Error('图片上传失败：未返回有效地址')
-        uploaded.push(url)
-      }
+      const uploaded = await upload_project_files(files, {
+        concurrency: 4,
+        onProgress: (done, total) => {
+          if (total > 1) toast.message(`图片上传中 ${done}/${total}`)
+        },
+      })
       const item = currentItems.find(row => row.item_id === itemId)
       const current = item?.item_galleryUrls?.length
         ? item.item_galleryUrls

@@ -74,7 +74,7 @@ import type {
   SelectOption
 } from '@/backend/actions/ProductManagement'
 import { toast } from 'sonner'
-import { upload_project_file } from '@/tools/tools'
+import { upload_project_file, upload_project_files } from '@/tools/tools'
 
 export type DrawerMode = 'create' | 'edit'
 export type BatchActionType = 'ACTIVE' | 'INACTIVE' | 'DELETE' | 'PENDING_DELETE' | 'RETURN_TO_PENDING' | 'PRICE_COEFFICIENT' | 'CATEGORY' | 'MANAGEMENT_STATUS' | 'WEIGHT_PRICE' | 'MIN_ORDER_QTY' | 'BIND_CATEGORIES' | 'UNBIND_CATEGORIES' | 'BIND_KEYWORDS' | null
@@ -1519,6 +1519,26 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     ).trim()
     if (!url) throw new Error('图片上传失败：未返回有效地址')
     return url
+  }
+
+  const uploadImagesToProject = async (files: File[]) => {
+    let lastToastAt = 0
+    const urls = await upload_project_files(files, {
+      concurrency: 4,
+      onProgress: (done, total) => {
+        if (total <= 1) return
+        const now = Date.now()
+        if (done === total || now - lastToastAt > 800) {
+          lastToastAt = now
+          toast.message(`图片上传中 ${done}/${total}`)
+        }
+      },
+    })
+    return urls.map(url => {
+      const trimmed = String(url || '').trim()
+      if (!trimmed) throw new Error('图片上传失败：未返回有效地址')
+      return trimmed
+    })
   }
 
   const handleUploadMainImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -3247,10 +3267,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     if (files.length === 0) return
     setBatchImportImageUploadingKey(`row-${index}`)
     try {
-      const uploaded: string[] = []
-      for (const file of files) {
-        uploaded.push(await uploadImageToProject(file))
-      }
+      const uploaded = await uploadImagesToProject(files)
       const current = batchImportRows[index]?.gallery_urls || []
       syncBatchImportGallery(index, [...current, ...uploaded])
       toast.success(`已上传 ${uploaded.length} 张图片`)
@@ -3312,10 +3329,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     if (files.length === 0) return
     setPendingImportImageUploadingId(itemId)
     try {
-      const uploaded: string[] = []
-      for (const file of files) {
-        uploaded.push(await uploadImageToProject(file))
-      }
+      const uploaded = await uploadImagesToProject(files)
       const item = pendingImportQueue.find(row => row.item_id === itemId)
       const current = item?.item_galleryUrls?.length
         ? item.item_galleryUrls

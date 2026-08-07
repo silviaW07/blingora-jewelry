@@ -1,13 +1,16 @@
 /**
  * Client-side image compression for upload flows.
- * Canvas-based, no extra deps. Skips GIF / SVG / tiny files.
+ * Prefers createImageBitmap (faster decode/downscale) over HTMLImageElement + high-quality canvas.
+ * Skips GIF / SVG / already-small files.
  */
 
-const MAX_EDGE_PX = 1920
-const JPEG_QUALITY = 0.85
-const WEBP_QUALITY = 0.84
-/** Skip compression when already small enough for fast upload */
-const SKIP_UNDER_BYTES = 250 * 1024
+const MAX_EDGE_PX = 1280
+const JPEG_QUALITY = 0.78
+const WEBP_QUALITY = 0.78
+/** Generic small-file skip (PNG / unknown) */
+const SKIP_UNDER_BYTES = 450 * 1024
+/** JPEG/WebP product photos under this size are already web-friendly — skip re-encode */
+const SKIP_JPEG_WEBP_UNDER_BYTES = 1024 * 1024
 /** Prefer JPEG conversion for opaque images larger than this */
 const PREFER_JPEG_OVER_PNG_BYTES = 400 * 1024
 
@@ -43,39 +46,20 @@ function mimeFromFile(file: File): string {
 
 function shouldSkipCompress(file: File): boolean {
   const mime = mimeFromFile(file)
-  // GIF: keep animation; SVG: vector / not safe on canvas
   if (mime === 'image/gif' || mime === 'image/svg+xml') return true
   if (extensionOf(file.name) === 'gif' || extensionOf(file.name) === 'svg') return true
-  // Not a raster image we can re-encode
   if (mime && !mime.startsWith('image/')) return true
   return false
 }
 
-function loadImageFromFile(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      resolve(img)
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('无法读取图片，压缩跳过'))
-    }
-    img.src = url
-  })
-}
-
 function canvasHasTransparency(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
   try {
-    // Downsample via a small offscreen canvas for a cheap alpha probe
     const sample = document.createElement('canvas')
-    const sw = Math.min(64, w)
-    const sh = Math.min(64, h)
+    const sw = Math.min(48, w)
+    const sh = Math.min(48, h)
     sample.width = sw
     sample.height = sh
-    const sctx = sample.getContext('2d', { alpha: true })
+    const sctx = sample.getContext('2d', { alpha: true, willReadFrequently: true })
     if (!sctx) return false
     sctx.drawImage(ctx.canvas, 0, 0, w, h, 0, 0, sw, sh)
     const data = sctx.getImageData(0, 0, sw, sh).data
@@ -84,7 +68,6 @@ function canvasHasTransparency(ctx: CanvasRenderingContext2D, w: number, h: numb
     }
     return false
   } catch {
-    // Tainted canvas or getImageData blocked — assume no transparency for raster uploads
     return false
   }
 }
@@ -94,14 +77,59 @@ function canvasToBlob(
   type: string,
   quality?: number,
 ): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), type, quality)
+  return new Promise(resolve => {
+    canvas.toBlob(blob => resolve(blob), type, quality)
   })
 }
 
 function replaceExtension(originalName: string, newExt: string): string {
-  const base = basenameWithoutExt(originalName)
-  return `${base}.${newExt}`
+  return `${basenameWithoutExt(originalName)}.${newExt}`
+}
+
+async function decodeBitmap(
+  file: File,
+  maxEdge: number,
+): Promise<{ bitmap: ImageBitmap; didScale: boolean }> {
+  // First pass: decode (honor EXIF orientation when supported)
+  const full = await createImageBitmap(file, {
+    imageOrientation: 'from-image',
+  } as ImageBitmapOptions)
+
+  const srcW = full.width
+  const srcH = full.height
+  const scale = Math.min(1, maxEdge / Math.max(srcW, srcH))
+  if (scale >= 1) return { bitmap: full, didScale: false }
+
+  const targetW = Math.max(1, Math.round(srcW * scale))
+  const targetH = Math.max(1, Math.round(srcH * scale))
+  try {
+    // Second pass: downscale from bitmap (cheaper than re-decoding the file)
+    const resized = await createImageBitmap(full, {
+      resizeWidth: targetW,
+      resizeHeight: targetH,
+      resizeQuality: 'medium',
+    } as ImageBitmapOptions)
+    full.close()
+    return { bitmap: resized, didScale: true }
+  } catch {
+    return { bitmap: full, didScale: false }
+  }
+}
+
+async function loadViaImageElement(file: File): Promise<{ width: number; height: number; draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void; dispose: () => void }> {
+  const url = URL.createObjectURL(file)
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image()
+    el.onload = () => resolve(el)
+    el.onerror = () => reject(new Error('无法读取图片'))
+    el.src = url
+  })
+  return {
+    width: img.naturalWidth || img.width,
+    height: img.naturalHeight || img.height,
+    draw: (ctx, w, h) => ctx.drawImage(img, 0, 0, w, h),
+    dispose: () => URL.revokeObjectURL(url),
+  }
 }
 
 /**
@@ -123,39 +151,75 @@ export async function compressImageForUpload(
   if (shouldSkipCompress(file)) return file
   if (file.size > 0 && file.size < skipUnder) return file
 
-  let img: HTMLImageElement
+  const srcMime = mimeFromFile(file)
+  const isJpegLike =
+    srcMime === 'image/jpeg' ||
+    srcMime === 'image/jpg' ||
+    srcMime === 'image/webp' ||
+    extensionOf(file.name) === 'jpg' ||
+    extensionOf(file.name) === 'jpeg' ||
+    extensionOf(file.name) === 'webp'
+  // Phone/product JPEGs under ~1MB: upload as-is (biggest perceived speedup)
+  if (isJpegLike && file.size > 0 && file.size < SKIP_JPEG_WEBP_UNDER_BYTES) {
+    return file
+  }
+
+  const isPng = srcMime === 'image/png' || extensionOf(file.name) === 'png'
+
+  let bitmap: ImageBitmap | null = null
+  let fallback: Awaited<ReturnType<typeof loadViaImageElement>> | null = null
+  let outW = 0
+  let outH = 0
+  let didScale = false
+
   try {
-    img = await loadImageFromFile(file)
+    if (typeof createImageBitmap === 'function') {
+      const decoded = await decodeBitmap(file, maxEdge)
+      bitmap = decoded.bitmap
+      didScale = decoded.didScale
+      outW = bitmap.width
+      outH = bitmap.height
+    } else {
+      fallback = await loadViaImageElement(file)
+      const scale = Math.min(1, maxEdge / Math.max(fallback.width, fallback.height))
+      didScale = scale < 1
+      outW = Math.max(1, Math.round(fallback.width * scale))
+      outH = Math.max(1, Math.round(fallback.height * scale))
+    }
   } catch {
     return file
   }
 
-  const srcW = img.naturalWidth || img.width
-  const srcH = img.naturalHeight || img.height
-  if (!srcW || !srcH) return file
-
-  const scale = Math.min(1, maxEdge / Math.max(srcW, srcH))
-  const targetW = Math.max(1, Math.round(srcW * scale))
-  const targetH = Math.max(1, Math.round(srcH * scale))
+  if (!outW || !outH) {
+    bitmap?.close()
+    fallback?.dispose()
+    return file
+  }
 
   const canvas = document.createElement('canvas')
-  canvas.width = targetW
-  canvas.height = targetH
-  const ctx = canvas.getContext('2d', { alpha: true })
-  if (!ctx) return file
+  canvas.width = outW
+  canvas.height = outH
+  const ctx = canvas.getContext('2d', { alpha: isPng, desynchronized: true })
+  if (!ctx) {
+    bitmap?.close()
+    fallback?.dispose()
+    return file
+  }
 
   ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(img, 0, 0, targetW, targetH)
+  ctx.imageSmoothingQuality = 'medium'
+  if (bitmap) {
+    ctx.drawImage(bitmap, 0, 0, outW, outH)
+    bitmap.close()
+  } else if (fallback) {
+    fallback.draw(ctx, outW, outH)
+    fallback.dispose()
+  }
 
-  const srcMime = mimeFromFile(file)
-  const isPng = srcMime === 'image/png' || extensionOf(file.name) === 'png'
-  const hasAlpha = isPng && canvasHasTransparency(ctx, targetW, targetH)
+  const hasAlpha = isPng && canvasHasTransparency(ctx, outW, outH)
 
-  // Keep PNG when transparency is needed
   if (hasAlpha) {
-    // Only re-encode if we scaled down; otherwise leave original PNG
-    if (scale >= 1 && file.size < PREFER_JPEG_OVER_PNG_BYTES * 2) {
+    if (!didScale && file.size < PREFER_JPEG_OVER_PNG_BYTES * 2) {
       return file
     }
     const pngBlob = await canvasToBlob(canvas, 'image/png')
@@ -166,7 +230,6 @@ export async function compressImageForUpload(
     })
   }
 
-  // Try WebP when source was WebP and browser supports it
   if (srcMime === 'image/webp') {
     const webpBlob = await canvasToBlob(canvas, 'image/webp', options.quality ?? WEBP_QUALITY)
     if (webpBlob && webpBlob.size < file.size) {
@@ -177,18 +240,15 @@ export async function compressImageForUpload(
     }
   }
 
-  // Opaque raster → JPEG (smaller for product photos)
-  // White backdrop so any residual alpha doesn't become black
   ctx.globalCompositeOperation = 'destination-over'
   ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, targetW, targetH)
+  ctx.fillRect(0, 0, outW, outH)
   ctx.globalCompositeOperation = 'source-over'
 
   const jpegBlob = await canvasToBlob(canvas, 'image/jpeg', quality)
   if (!jpegBlob) return file
 
-  // Only use compressed result if smaller (or we had to shrink dimensions)
-  if (jpegBlob.size >= file.size && scale >= 1) {
+  if (jpegBlob.size >= file.size && !didScale) {
     return file
   }
 
@@ -197,6 +257,3 @@ export async function compressImageForUpload(
     lastModified: Date.now(),
   })
 }
-
-// Named-export-only module (no default). Browser APIs only inside functions above.
-// Keep free of imports from ./tools to avoid cyclic HMR factory invalidation.
