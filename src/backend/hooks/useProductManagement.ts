@@ -74,7 +74,7 @@ import type {
   SelectOption
 } from '@/backend/actions/ProductManagement'
 import { toast } from 'sonner'
-import { upload_project_file, upload_project_files } from '@/tools/tools'
+import { upload_project_file, upload_project_files_detailed } from '@/tools/tools'
 
 export type DrawerMode = 'create' | 'edit'
 export type BatchActionType = 'ACTIVE' | 'INACTIVE' | 'DELETE' | 'PENDING_DELETE' | 'RETURN_TO_PENDING' | 'PRICE_COEFFICIENT' | 'CATEGORY' | 'MANAGEMENT_STATUS' | 'WEIGHT_PRICE' | 'MIN_ORDER_QTY' | 'BIND_CATEGORIES' | 'UNBIND_CATEGORIES' | 'BIND_KEYWORDS' | null
@@ -1523,7 +1523,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const uploadImagesToProject = async (files: File[]) => {
     let lastToastAt = 0
-    const urls = await upload_project_files(files, {
+    const result = await upload_project_files_detailed(files, {
       concurrency: 4,
       onProgress: (done, total) => {
         if (total <= 1) return
@@ -1534,11 +1534,22 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         }
       },
     })
-    return urls.map(url => {
+    const urls = result.urls.map(url => {
       const trimmed = String(url || '').trim()
       if (!trimmed) throw new Error('图片上传失败：未返回有效地址')
       return trimmed
     })
+    if (result.failures.length && urls.length === 0) {
+      throw new Error(
+        `所选 ${files.length} 张图片全部上传失败：${result.failures[0]?.message || '网络异常'}`,
+      )
+    }
+    if (result.failures.length) {
+      toast.warning(
+        `已保存 ${urls.length}/${files.length} 张；失败 ${result.failures.length} 张，可重新选择失败图片上传`,
+      )
+    }
+    return urls
   }
 
   const handleUploadMainImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -3327,18 +3338,35 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const files = Array.from(event.target.files || [])
     event.target.value = ''
     if (files.length === 0) return
+    const itemBeforeUpload = pendingImportQueue.find(row => row.item_id === itemId)
+    const current = itemBeforeUpload?.item_galleryUrls?.length
+      ? itemBeforeUpload.item_galleryUrls
+      : (itemBeforeUpload?.item_mainImageUrl || itemBeforeUpload?.item_parsedMainImageUrl
+          ? [itemBeforeUpload.item_mainImageUrl || itemBeforeUpload.item_parsedMainImageUrl!]
+          : [])
+    const previewUrls = files.map(file => URL.createObjectURL(file))
+
+    // Optimistic local thumbnails: selected files appear immediately while the
+    // compressed batch is crossing the network.
+    setPendingImportQueue(prev => prev.map(item =>
+      item.item_id === itemId
+        ? { ...item, item_galleryUrls: [...current, ...previewUrls] }
+        : item,
+    ))
     setPendingImportImageUploadingId(itemId)
     try {
       const uploaded = await uploadImagesToProject(files)
-      const item = pendingImportQueue.find(row => row.item_id === itemId)
-      const current = item?.item_galleryUrls?.length
-        ? item.item_galleryUrls
-        : (item?.item_mainImageUrl || item?.item_parsedMainImageUrl ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!] : [])
       await persistPendingImportGallery(itemId, [...current, ...uploaded])
       toast.success(`已上传 ${uploaded.length} 张图片`)
     } catch (err: any) {
+      setPendingImportQueue(prev => prev.map(item =>
+        item.item_id === itemId
+          ? { ...item, item_galleryUrls: current }
+          : item,
+      ))
       toast.error(err.message || '图片上传失败')
     } finally {
+      previewUrls.forEach(url => URL.revokeObjectURL(url))
       setPendingImportImageUploadingId(null)
     }
   }

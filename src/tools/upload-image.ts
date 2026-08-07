@@ -384,8 +384,45 @@ export async function upload_image_files(
     onProgress?: (done: number, total: number) => void
   },
 ): Promise<string[]> {
+  const result = await upload_image_files_detailed(files, options)
+  if (result.failures.length) {
+    const error = new Error(
+      `有 ${result.failures.length} 张图片上传失败：${result.failures.map(item => item.fileName).slice(0, 3).join('、')}`,
+    ) as Error & { partialUrls?: string[]; failures?: UploadImageFailure[] }
+    error.partialUrls = result.urls
+    error.failures = result.failures
+    throw error
+  }
+  return result.urls
+}
+
+export type UploadImageFailure = {
+  index: number
+  fileName: string
+  message: string
+}
+
+export type UploadImageBatchResult = {
+  urls: string[]
+  failures: UploadImageFailure[]
+}
+
+/**
+ * Fast path: one compressed multipart request.
+ * Recovery path: if that request fails, retry each image independently once and
+ * return successful URLs so callers can persist partial progress.
+ */
+export async function upload_image_files_detailed(
+  files: File[],
+  options?: {
+    projectId?: string
+    concurrency?: number
+    skipCompress?: boolean
+    onProgress?: (done: number, total: number) => void
+  },
+): Promise<UploadImageBatchResult> {
   const list = files.filter(Boolean)
-  if (!list.length) return []
+  if (!list.length) return { urls: [], failures: [] }
 
   const maxSize = 5 * 1024 * 1024
   let prepared = list
@@ -414,11 +451,52 @@ export async function upload_image_files(
 
   options?.onProgress?.(0, list.length)
   const projectId = options?.projectId?.trim() || DEFAULT_PROJECT_ID
-  const urls = await postBatchToUploadEndpoint(PRIMARY_UPLOAD_URL, prepared, projectId)
-  options?.onProgress?.(urls.length, list.length)
-  return urls
+  try {
+    const urls = await postBatchToUploadEndpoint(PRIMARY_UPLOAD_URL, prepared, projectId)
+    options?.onProgress?.(urls.length, list.length)
+    return { urls, failures: [] }
+  } catch (batchError) {
+    console.warn('[upload] batch request failed; retrying images individually', batchError)
+  }
+
+  let completed = 0
+  const recovered = await mapPool(
+    prepared,
+    options?.concurrency ?? 4,
+    async (file, index) => {
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const url = await postToUploadEndpoint(PRIMARY_UPLOAD_URL, file, projectId)
+          completed += 1
+          options?.onProgress?.(completed, list.length)
+          return { index, url, error: null }
+        } catch (error) {
+          lastError = error
+        }
+      }
+      completed += 1
+      options?.onProgress?.(completed, list.length)
+      return { index, url: '', error: lastError }
+    },
+  )
+
+  return {
+    urls: recovered.map(item => item.url).filter(Boolean),
+    failures: recovered
+      .filter(item => !item.url)
+      .map(item => ({
+        index: item.index,
+        fileName: list[item.index]?.name || `第 ${item.index + 1} 张`,
+        message:
+          item.error instanceof Error
+            ? item.error.message
+            : String(item.error || '上传失败'),
+      })),
+  }
 }
 
 /** Alias used by product management upload flows */
 export const upload_project_file = upload_image_file
 export const upload_project_files = upload_image_files
+export const upload_project_files_detailed = upload_image_files_detailed

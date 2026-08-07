@@ -11,4 +11,13 @@
 
 export { get_image_url } from './get-image-url'
 export { default } from './get-image-url'
-export { upload_image_file, upload_image_files, upload_project_file, upload_project_files } from './upload-image'
+export {
+  upload_image_file,
+  upload_image_files,
+  upload_image_files_detailed,
+  upload_project_file,
+  upload_project_files,
+  upload_project_files_detailed,
+  type UploadImageBatchResult,
+  type UploadImageFailure,
+} from './upload-image'
