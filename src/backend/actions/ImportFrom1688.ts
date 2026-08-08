@@ -4661,11 +4661,7 @@ const persistPinduoduoParsedItem = async (params: {
 
   const previewData: PreviewDataJson = {
     name: productName,
-    ...(await (async () => {
-      const nameEn = await resolveEnglishProductTitle(productName)
-      const nameEs = await resolveSpanishProductTitle(productName, null, nameEn)
-      return { nameEn, nameEs }
-    })()),
+    // 采集阶段不再翻译（改为上架时翻译并缓存），保证「传图」快速、逐条切换不卡
     categoryId: targetCategoryId || undefined,
     matchedCategoryIds: matchedSecondaryCategoryIds,
     matchedCategoryNames: matchedSecondaryCategoryNames,
@@ -6420,16 +6416,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
           const previewData: PreviewDataJson = {
             name: productName,
-            ...(await (async () => {
-              try {
-                const nameEn = await resolveEnglishProductTitle(productName)
-                const nameEs = await resolveSpanishProductTitle(productName, null, nameEn)
-                return { nameEn, nameEs }
-              } catch (translateErr) {
-                console.warn('[startParseTask] title translate failed, keeping Chinese only', translateErr)
-                return {}
-              }
-            })()),
+            // 采集/解析阶段不再翻译（移至上架时翻译+缓存），显著加快「传图」并让逐条切换不卡顿
             categoryId: targetCategoryId || undefined,
             matchedCategoryIds: matchedSecondaryCategoryIds,
             matchedCategoryNames: matchedSecondaryCategoryNames,
@@ -7012,6 +6999,28 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
       let failureName = ''
       const MAX_PUBLISH_ATTEMPTS = 5
       let lastError: any = null
+
+      // 翻译移出事务：上架时先按 parsedName 预翻译（带缓存+超时），事务内只读结果。
+      // 这样缩短事务时长、降低 SPU 撞号与连接占用；采集阶段则完全不翻译。
+      let preNameEn = ''
+      let preNameEs = ''
+      try {
+        const pre = await prisma.importtaskitem.findUnique({
+          where: { id: itemId },
+          select: { parsedName: true, previewDataJson: true },
+        })
+        const preName = normalizeText(pre?.parsedName) || ''
+        const prePreview = (pre?.previewDataJson as PreviewDataJson | null) || {}
+        preNameEn =
+          String(prePreview.nameEn || '').trim() ||
+          (await resolveEnglishProductTitle(preName))
+        preNameEs =
+          String(prePreview.nameEs || '').trim() ||
+          (await resolveSpanishProductTitle(preName, null, preNameEn))
+      } catch {
+        // 预翻译失败不阻断上架：事务内仍有兜底翻译/字典回落
+      }
+
       for (let attempt = 1; attempt <= MAX_PUBLISH_ATTEMPTS; attempt++) {
       try {
         await prisma.$transaction(async tx => {
@@ -7144,11 +7153,14 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           // - 1688：每条 pending item（= 每条链接）→ 一个新父商品，绝不按标题/图/货号合并
           // - 表格：合并已在 createProductsFromTable 完成，此处一对一发布
           const creationSource = resolvePendingCreationSource(item.sourceUrl)
+          // 优先用事务外预翻译结果；仅当预翻译为空时才在事务内兜底翻译（极少发生）
           const nameEn =
             String(previewData.nameEn || '').trim() ||
+            preNameEn ||
             (await resolveEnglishProductTitle(productName))
           const nameEs =
             String(previewData.nameEs || '').trim() ||
+            preNameEs ||
             (await resolveSpanishProductTitle(productName, null, nameEn))
           const newProduct = await createProductRecord(tx, {
             categoryId,
@@ -7496,15 +7508,7 @@ const applyReparsed1688PreviewToItem = async (params: {
   const previewData: PreviewDataJson = {
     ...currentPreview,
     name: productName,
-    ...(await (async () => {
-      const nameEn = await resolveEnglishProductTitle(productName, currentPreview.nameEn)
-      const nameEs = await resolveSpanishProductTitle(
-        productName,
-        currentPreview.nameEs,
-        nameEn,
-      )
-      return { nameEn, nameEs }
-    })()),
+    // 重解析同样不在采集阶段翻译（移至上架），保留已有的历史翻译（若有）由 spread 带出
     categoryId: targetCategoryId || undefined,
     matchedCategoryIds: matchedSecondaryCategoryIds,
     matchedCategoryNames: matchedSecondaryCategoryNames,

@@ -447,7 +447,7 @@ export const ProductManagementView = ({
               </div>
             </div>
             <div
-              className={state.activeTab === 'pending_imports' ? 'space-y-6' : 'hidden'}
+              className={state.activeTab === 'pending_imports' ? 'space-y-4' : 'hidden'}
               aria-hidden={state.activeTab !== 'pending_imports'}
               data-controller-name="1688待上传区"
               data-api-unique-id='productmanagementview-r797d689e3a37a2c1-s2030557363'
@@ -463,7 +463,7 @@ export const ProductManagementView = ({
                 </Alert>}
 
               <Card className="border-primary/10 shadow-sm overflow-hidden" data-controller-name="1688采集任务头" data-api-unique-id='productmanagementview-r2de9471194d05392-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <CardContent className="p-6 space-y-5" data-api-unique-id='productmanagementview-r386095967bd4b83f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                <CardContent className="p-4 space-y-3" data-api-unique-id='productmanagementview-r386095967bd4b83f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   {state.pendingImportParseJob?.busy ? (
                     <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -516,7 +516,6 @@ export const ProductManagementView = ({
                         <Badge variant="outline" className={pendingTaskStatusConfig?.className || 'bg-slate-100 text-slate-700 border-slate-200'} data-api-unique-id='productmanagementview-r7a258ae9a556e006-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{pendingTaskStatusConfig?.label || '暂无任务'}</Badge>
                         <span className="text-lg font-header font-bold text-slate-900" data-api-unique-id='productmanagementview-r66804f41c04825e8-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask?.task_taskName || '暂无进行中的 1688 采集任务'}</span>
                       </div>
-                      <p className="text-sm text-slate-500" data-api-unique-id='productmanagementview-r19bc22fd1c70b38e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>通过多链接异步采集 1688 商品，自动沉淀到待上传区，支持逐项校对后再一键发布到正式商品库。</p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-r9a7728f5e417ad3a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                       <Button variant="outline" className="h-10 border-slate-200" disabled={state.pendingImportRefreshing || state.pendingImportQueueLoading} onClick={() => handlers.refreshPendingImportQueue()} data-api-unique-id='productmanagementview-r229f655f659cc41f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
@@ -536,9 +535,6 @@ export const ProductManagementView = ({
                       {pendingTaskNeedsRetry && <Button variant="outline" className="h-10 border-amber-200 text-amber-700 hover:bg-amber-50" disabled={state.pendingImportRefreshing || pendingParseActive} onClick={handlers.retryPendingImportActiveTask} data-api-unique-id='productmanagementview-r97745bd15744d9cb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                           <RotateCcw className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r0f2549fa27ce998f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />重试任务
                         </Button>}
-                      <Button className="h-10 bg-primary text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-r7e7ba40d1c878dab-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r8219a059ef86c2cc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />前往导入工作台
-                      </Button>
                     </div>
                   </div>
 
@@ -570,24 +566,6 @@ export const ProductManagementView = ({
                             <div className="flex items-center justify-between gap-3" data-api-unique-id='productmanagementview-r11a24737234dc5b0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><span data-api-unique-id='productmanagementview-r2c079ebbbc68c73c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>默认状态</span><Badge variant="outline" data-api-unique-id='productmanagementview-r83855182d66dfea4-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{STATUS_CONFIG[state.pendingImportActiveTask.task_defaultStatus].label}</Badge></div>
                             <div className="flex items-center justify-between gap-3" data-api-unique-id='productmanagementview-rf01185b17abda3c2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><span data-api-unique-id='productmanagementview-rdd78c971ccc95ef5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>默认分类</span><span className="font-medium" data-api-unique-id='productmanagementview-r2f465738f02e10ac-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.categoryOptions.find(option => option.category_id === state.pendingImportActiveTask?.task_defaultCategoryId)?.category_name || state.pendingImportActiveTask.task_defaultCategoryId || '未配置'}</span></div>
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 text-sm text-slate-600" data-api-unique-id='productmanagementview-re7c049b17528a9e9-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <div className="rounded-lg border border-slate-200 bg-white p-4" data-api-unique-id='productmanagementview-r15172b918aeeabd3-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="font-semibold text-slate-900 mb-2" data-api-unique-id='productmanagementview-rc6a7774014789fe2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>时间线</div>
-                          <div className="space-y-1 text-xs" data-api-unique-id='productmanagementview-r340b795d45e1f113-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                            <div data-api-unique-id='productmanagementview-rf5722ad633c04a37-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>开始时间：{state.pendingImportActiveTask.task_startedAt ? new Date(state.pendingImportActiveTask.task_startedAt).toLocaleString() : '等待执行'}</div>
-                            <div data-api-unique-id='productmanagementview-r0eb63dfc699dc031-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>完成时间：{state.pendingImportActiveTask.task_finishedAt ? new Date(state.pendingImportActiveTask.task_finishedAt).toLocaleString() : '尚未完成'}</div>
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white p-4" data-api-unique-id='productmanagementview-rcbb8cac467247c7f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="font-semibold text-slate-900 mb-2" data-api-unique-id='productmanagementview-rb1e81af849d10303-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>待上传提示</div>
-                          <p className="text-xs leading-relaxed" data-api-unique-id='productmanagementview-rcbcfdb1f7535f8fb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>发布成功的条目会自动从待上传主列表隐藏，但任务头会保留整批任务的成功 / 失败统计，方便运营追踪当前采集批次表现。</p>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white p-4" data-api-unique-id='productmanagementview-rb942d06d8db42457-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="font-semibold text-slate-900 mb-2" data-api-unique-id='productmanagementview-rf4e7957e952f2a81-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>限流与轮询</div>
-                          <p className="text-xs leading-relaxed" data-api-unique-id='productmanagementview-r3afd414b8baafa68-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>系统会在采集中自动轮询刷新。{state.pendingImportActiveTask.task_lastRateLimitedAt ? `最近一次限流：${new Date(state.pendingImportActiveTask.task_lastRateLimitedAt).toLocaleString()}` : '当前未检测到限流。'}</p>
                         </div>
                       </div>
                     </> : <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-6 flex items-center justify-between gap-4" data-api-unique-id='productmanagementview-rcf7b6282dab05ada-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>

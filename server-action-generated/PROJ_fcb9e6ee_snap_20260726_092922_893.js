@@ -84942,6 +84942,7 @@ const _CheckoutOrder = /*#__PURE__*/ _interop_require_wildcard(__webpack_require
 const _Cart = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(2109));
 const _AccountCenter = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(27329));
 const _UserManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9517));
+const _SuffixConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(30126));
 const _ShippingChannelConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(13738));
 const _ProductMinOrder = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(24166));
 const _ProductManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(30929));
@@ -84954,6 +84955,7 @@ const _Dashboard = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6
 const _CategoryManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(78782));
 const _BannerManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(52008));
 const _AdminRegister = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(22503));
+const _AdminManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(25009));
 const _AdminLogin = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(34249));
 function _getRequireWildcardCache(nodeInterop) {
     if (typeof WeakMap !== "function") return null;
@@ -84998,6 +85000,7 @@ const registry = {
     'src.frontend.actions.Cart': _Cart,
     'src.frontend.actions.AccountCenter': _AccountCenter,
     'src.backend.actions.UserManagement': _UserManagement,
+    'src.backend.actions.SuffixConfig': _SuffixConfig,
     'src.backend.actions.ShippingChannelConfig': _ShippingChannelConfig,
     'src.backend.actions.ProductMinOrder': _ProductMinOrder,
     'src.backend.actions.ProductManagement': _ProductManagement,
@@ -85010,6 +85013,7 @@ const registry = {
     'src.backend.actions.CategoryManagement': _CategoryManagement,
     'src.backend.actions.BannerManagement': _BannerManagement,
     'src.backend.actions.AdminRegister': _AdminRegister,
+    'src.backend.actions.AdminManagement': _AdminManagement,
     'src.backend.actions.AdminLogin': _AdminLogin
 };
 
@@ -85731,6 +85735,7 @@ _export(exports, {
 });
 var UserRole = /*#__PURE__*/ function(UserRole) {
     UserRole["ADMIN"] = "ADMIN";
+    UserRole["SUB_ADMIN"] = "SUB_ADMIN";
     return UserRole;
 }({});
 class UnauthorizedError extends Error {
@@ -85773,6 +85778,8 @@ Object.defineProperty(exports, "adminLogin", ({
 }));
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
+const _passwordsecurity = __webpack_require__(40411);
+const _roles = __webpack_require__(93384);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -85784,18 +85791,27 @@ const adminLogin = (0, _action_utils.withResult)(async (input)=>{
     const user = await _prisma.default.sysuser.findUnique({
         where: {
             account: sysuser_account
+        },
+        select: {
+            id: true,
+            account: true,
+            password: true,
+            username: true,
+            role: true,
+            status: true,
+            avatarUrl: true
         }
     });
     if (!user) {
         throw new Error('账号或密码错误');
     }
     // 2. 验证密码
-    const hashedPassword = (0, _action_utils.hashPassword)(sysuser_password);
-    if (hashedPassword !== user.password) {
+    const passwordCheck = (0, _passwordsecurity.verifyStoredPassword)(sysuser_password, user.password);
+    if (!passwordCheck.valid) {
         throw new Error('账号或密码错误');
     }
     // 3. 验证角色
-    if (user.role !== 'ADMIN') {
+    if (!(0, _roles.isBackendStaffRole)(user.role)) {
         throw new Error('此账号无后台访问权限');
     }
     // 4. 验证状态
@@ -85808,7 +85824,10 @@ const adminLogin = (0, _action_utils.withResult)(async (input)=>{
             id: user.id
         },
         data: {
-            lastLoginAt: new Date()
+            lastLoginAt: new Date(),
+            ...passwordCheck.needsUpgrade ? {
+                password: (0, _passwordsecurity.hashSecurePassword)(sysuser_password)
+            } : {}
         }
     });
     // 6. 签发 Token
@@ -85823,6 +85842,319 @@ const adminLogin = (0, _action_utils.withResult)(async (input)=>{
         sysuser_avatarUrl: user.avatarUrl || ''
     };
 });
+
+
+/***/ },
+
+/***/ 25009
+(__unused_webpack_module, exports, __webpack_require__) {
+
+'use server';
+"use strict";
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get createAdminAccount () {
+        return createAdminAccount;
+    },
+    get deleteAdminAccount () {
+        return deleteAdminAccount;
+    },
+    get listAdminAccounts () {
+        return listAdminAccounts;
+    },
+    get resetAdminPassword () {
+        return resetAdminPassword;
+    },
+    get updateAdminRole () {
+        return updateAdminRole;
+    },
+    get updateAdminStatus () {
+        return updateAdminStatus;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
+const _action_utils = __webpack_require__(79153);
+const _passwordsecurity = __webpack_require__(40411);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+// ===== Helpers =====
+const STAFF_ROLES = [
+    'ADMIN',
+    'SUB_ADMIN'
+];
+const normalize = (raw)=>String(raw !== null && raw !== void 0 ? raw : '').trim();
+const isValidEmail = (email)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const toItem = (row, currentUserId)=>{
+    var _row_phone;
+    return {
+        id: row.id,
+        account: row.account,
+        username: row.username,
+        email: row.email,
+        role: row.role,
+        status: row.status,
+        phone: (_row_phone = row.phone) !== null && _row_phone !== void 0 ? _row_phone : null,
+        lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
+        createdAt: row.createdAt.toISOString(),
+        isSelf: row.id === currentUserId
+    };
+};
+const ADMIN_SELECT = {
+    id: true,
+    account: true,
+    username: true,
+    email: true,
+    role: true,
+    status: true,
+    phone: true,
+    lastLoginAt: true,
+    createdAt: true
+};
+/** 统计当前处于「激活状态的主管理员」数量，用于防止把系统唯一管理员禁用/降级/删除。 */ const countActivePrimaryAdmins = async (excludeId)=>_prisma.default.sysuser.count({
+        where: {
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            ...excludeId ? {
+                id: {
+                    not: excludeId
+                }
+            } : {}
+        }
+    });
+const listAdminAccounts = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    const currentUserId = (0, _action_utils.getAuthContext)().userId;
+    const rows = await _prisma.default.sysuser.findMany({
+        where: {
+            role: {
+                in: STAFF_ROLES
+            }
+        },
+        orderBy: [
+            {
+                role: 'asc'
+            },
+            {
+                createdAt: 'asc'
+            }
+        ],
+        select: ADMIN_SELECT
+    });
+    return rows.map((row)=>toItem(row, currentUserId));
+}));
+const createAdminAccount = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _ref;
+    const account = normalize(input === null || input === void 0 ? void 0 : input.account);
+    const email = normalize(input === null || input === void 0 ? void 0 : input.email);
+    const password = String((_ref = input === null || input === void 0 ? void 0 : input.password) !== null && _ref !== void 0 ? _ref : '');
+    const username = normalize(input === null || input === void 0 ? void 0 : input.username) || account;
+    const role = (input === null || input === void 0 ? void 0 : input.role) === 'ADMIN' ? 'ADMIN' : 'SUB_ADMIN';
+    if (!account) throw new Error('账号不能为空');
+    if (account.length > 50) throw new Error('账号长度不能超过 50 个字符');
+    if (!email) throw new Error('邮箱不能为空');
+    if (!isValidEmail(email)) throw new Error('邮箱格式不正确');
+    (0, _passwordsecurity.validateAdminPassword)(password);
+    const existAccount = await _prisma.default.sysuser.findUnique({
+        where: {
+            account
+        },
+        select: {
+            id: true
+        }
+    });
+    if (existAccount) throw new Error('该账号已存在，请更换账号');
+    const existEmail = await _prisma.default.sysuser.findUnique({
+        where: {
+            email
+        },
+        select: {
+            id: true
+        }
+    });
+    if (existEmail) throw new Error('该邮箱已被使用，请更换邮箱');
+    const created = await _prisma.default.sysuser.create({
+        data: {
+            account,
+            username,
+            email,
+            password: (0, _passwordsecurity.hashSecurePassword)(password),
+            role,
+            status: 'ACTIVE'
+        },
+        select: ADMIN_SELECT
+    });
+    return toItem(created, (0, _action_utils.getAuthContext)().userId);
+}));
+const updateAdminRole = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = normalize(input === null || input === void 0 ? void 0 : input.id);
+    if (!id) throw new Error('缺少账号 ID');
+    const nextRole = (input === null || input === void 0 ? void 0 : input.role) === 'ADMIN' ? 'ADMIN' : 'SUB_ADMIN';
+    const target = await _prisma.default.sysuser.findUnique({
+        where: {
+            id
+        },
+        select: {
+            id: true,
+            role: true,
+            status: true
+        }
+    });
+    if (!target || !STAFF_ROLES.includes(target.role)) {
+        throw new Error('账号不存在或不是管理员账号');
+    }
+    // 把最后一个激活主管理员降级为子管理员会导致无人可管理，需拦截。
+    if (target.role === 'ADMIN' && nextRole !== 'ADMIN') {
+        const remainingAdmins = await countActivePrimaryAdmins(id);
+        if (remainingAdmins < 1) {
+            throw new Error('系统必须至少保留 1 个主管理员，无法降级该账号');
+        }
+    }
+    const updated = await _prisma.default.sysuser.update({
+        where: {
+            id
+        },
+        data: {
+            role: nextRole
+        },
+        select: ADMIN_SELECT
+    });
+    return toItem(updated, (0, _action_utils.getAuthContext)().userId);
+}));
+const updateAdminStatus = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = normalize(input === null || input === void 0 ? void 0 : input.id);
+    if (!id) throw new Error('缺少账号 ID');
+    const nextStatus = (input === null || input === void 0 ? void 0 : input.status) === 'DISABLED' ? 'DISABLED' : 'ACTIVE';
+    const currentUserId = (0, _action_utils.getAuthContext)().userId;
+    if (id === currentUserId && nextStatus === 'DISABLED') {
+        throw new Error('不能禁用当前登录的自己');
+    }
+    const target = await _prisma.default.sysuser.findUnique({
+        where: {
+            id
+        },
+        select: {
+            id: true,
+            role: true,
+            status: true
+        }
+    });
+    if (!target || !STAFF_ROLES.includes(target.role)) {
+        throw new Error('账号不存在或不是管理员账号');
+    }
+    if (target.role === 'ADMIN' && nextStatus === 'DISABLED') {
+        const remainingAdmins = await countActivePrimaryAdmins(id);
+        if (remainingAdmins < 1) {
+            throw new Error('系统必须至少保留 1 个激活的主管理员，无法禁用该账号');
+        }
+    }
+    const updated = await _prisma.default.sysuser.update({
+        where: {
+            id
+        },
+        data: {
+            status: nextStatus
+        },
+        select: ADMIN_SELECT
+    });
+    return toItem(updated, currentUserId);
+}));
+const resetAdminPassword = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _ref;
+    const id = normalize(input === null || input === void 0 ? void 0 : input.id);
+    if (!id) throw new Error('缺少账号 ID');
+    const password = String((_ref = input === null || input === void 0 ? void 0 : input.password) !== null && _ref !== void 0 ? _ref : '');
+    (0, _passwordsecurity.validateAdminPassword)(password);
+    const target = await _prisma.default.sysuser.findUnique({
+        where: {
+            id
+        },
+        select: {
+            id: true,
+            role: true
+        }
+    });
+    if (!target || !STAFF_ROLES.includes(target.role)) {
+        throw new Error('账号不存在或不是管理员账号');
+    }
+    await _prisma.default.sysuser.update({
+        where: {
+            id
+        },
+        data: {
+            password: (0, _passwordsecurity.hashSecurePassword)(password)
+        }
+    });
+    return {
+        success: true
+    };
+}));
+const deleteAdminAccount = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = normalize(input === null || input === void 0 ? void 0 : input.id);
+    if (!id) throw new Error('缺少账号 ID');
+    const currentUserId = (0, _action_utils.getAuthContext)().userId;
+    if (id === currentUserId) {
+        throw new Error('不能删除当前登录的自己');
+    }
+    const target = await _prisma.default.sysuser.findUnique({
+        where: {
+            id
+        },
+        select: {
+            id: true,
+            role: true,
+            status: true,
+            _count: {
+                select: {
+                    importTasks: true,
+                    importTaskItems: true
+                }
+            }
+        }
+    });
+    if (!target || !STAFF_ROLES.includes(target.role)) {
+        throw new Error('账号不存在或不是管理员账号');
+    }
+    if (target.role === 'ADMIN') {
+        const remainingAdmins = await countActivePrimaryAdmins(id);
+        if (remainingAdmins < 1) {
+            throw new Error('系统必须至少保留 1 个主管理员，无法删除该账号');
+        }
+    }
+    // 该账号发起过 1688/表格导入时，硬删会触发外键约束报错；引导改用「禁用」。
+    if (target._count.importTasks > 0 || target._count.importTaskItems > 0) {
+        throw new Error('该账号存在关联的商品导入任务/待上传记录，禁止删除；如需停用请改用「禁用」');
+    }
+    await _prisma.default.sysuser.delete({
+        where: {
+            id
+        }
+    });
+    return {
+        success: true
+    };
+}));
 
 
 /***/ },
@@ -85843,6 +86175,7 @@ Object.defineProperty(exports, "registerAdmin", ({
 }));
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
+const _passwordsecurity = __webpack_require__(40411);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -85854,8 +86187,16 @@ const registerAdmin = (0, _action_utils.withResult)(async (input)=>{
         throw new Error('两次输入的密码不一致');
     }
     // 2. 基础校验：密码复杂度（至少8位，包含字母和数字）
-    if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/.test(input.password)) {
-        throw new Error('密码至少8个字符，且必须包含字母和数字');
+    (0, _passwordsecurity.validateAdminPassword)(input.password);
+    // Public registration is bootstrap-only. Once a primary administrator
+    // exists, additional staff must be created from authenticated admin management.
+    const existingPrimaryAdmins = await _prisma.default.sysuser.count({
+        where: {
+            role: 'ADMIN'
+        }
+    });
+    if (existingPrimaryAdmins > 0) {
+        throw new Error('系统已完成管理员初始化，请由主管理员在账号管理中新增子管理员');
     }
     // 3. 业务校验：账号唯一性
     const existAccount = await _prisma.default.sysuser.findUnique({
@@ -85886,8 +86227,7 @@ const registerAdmin = (0, _action_utils.withResult)(async (input)=>{
         data: {
             account: input.account,
             email: input.email,
-            password: (0, _action_utils.hashPassword)(input.password),
-            passwordPlain: String(input.password || '').slice(0, 255) || null,
+            password: (0, _passwordsecurity.hashSecurePassword)(input.password),
             role: 'ADMIN',
             status: 'ACTIVE',
             username: input.account
@@ -89056,6 +89396,7 @@ _export(exports, {
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
 const _homeRecommendZoneCache = __webpack_require__(78196);
+const _dailyNewArrival = __webpack_require__(3535);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -89842,9 +90183,8 @@ const createDraftDisplayProducts = (0, _action_utils.requireRole)([
         for(let index = 0; index < images.length; index += 1){
             const image = images[index];
             const ids = makeDisplayProductIdentifiers();
-            const productName = image.name || `展示商品 ${new Date().toLocaleString('zh-CN', {
-                hour12: false
-            })}-${index + 1}`;
+            // Coming 按商品名称（YYYY-MM-DD）归日；忽略文件名以免乱码/随机 ID
+            const productName = (0, _dailyNewArrival.toDateKeyInTimeZone)(new Date(), 'Asia/Shanghai');
             const product = await tx.product.create({
                 data: {
                     categoryId: category.id,
@@ -89955,8 +90295,14 @@ function _export(target, all) {
     });
 }
 _export(exports, {
+    get batchUpdatePendingImportItemField () {
+        return batchUpdatePendingImportItemField;
+    },
     get buildCategoryMatchCorpus () {
         return buildCategoryMatchCorpus;
+    },
+    get cancelPendingImportParseJob () {
+        return cancelPendingImportParseJob;
     },
     get check1688OfferLiveStatus () {
         return check1688OfferLiveStatus;
@@ -89991,6 +90337,9 @@ _export(exports, {
     get getImportTaskList () {
         return getImportTaskList;
     },
+    get getParseJobRuntimeStatus () {
+        return getParseJobRuntimeStatus;
+    },
     get getPendingImportQueue () {
         return getPendingImportQueue;
     },
@@ -90012,6 +90361,9 @@ _export(exports, {
     get parseTableImportContent () {
         return parseTableImportContent;
     },
+    get pickImportPricingTargetCategory () {
+        return pickImportPricingTargetCategory;
+    },
     get publishPendingImportItems () {
         return publishPendingImportItems;
     },
@@ -90021,8 +90373,14 @@ _export(exports, {
     get resolveImportCategoryOwnership () {
         return resolveImportCategoryOwnership;
     },
+    get resolveTableImportCategoryPath () {
+        return resolveTableImportCategoryPath;
+    },
     get retryImportTask () {
         return retryImportTask;
+    },
+    get splitTableCategoryPathTokens () {
+        return splitTableCategoryPathTokens;
     },
     get startParseTask () {
         return startParseTask;
@@ -90042,8 +90400,12 @@ const _categorySlug = __webpack_require__(27863);
 const _productIdentifiers = __webpack_require__(92969);
 const _pendingImportReadiness = __webpack_require__(64481);
 const _resolveProductTitleEn = __webpack_require__(64205);
+const _priceThresholdAutoClassify = __webpack_require__(77744);
+const _resolveInitialStock = __webpack_require__(35196);
 const _sortSizeLabels = __webpack_require__(15784);
 const _PinduoduoParser = __webpack_require__(52966);
+const _1688MtopClient = __webpack_require__(54314);
+const _onebound1688 = __webpack_require__(10402);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -90289,6 +90651,26 @@ const generateStructuredSpuCode = async (tx, shortCode, now = new Date())=>{
     }, 0);
     return `${prefix}${String(maxSerial + 1).padStart(4, '0')}`;
 };
+/**
+ * 判断是否为「商品 SPU 编号 / slug」唯一约束冲突。
+ * 并发批量发布时，多个独立事务可能读到同一个最大流水号并生成相同的
+ * productCode / slug（`product_slug_key` / `product_productCode_key`），
+ * 需要在上层用新流水号自动重试，而不是直接判发布失败。
+ */ const isSpuCodeCollisionError = (error)=>{
+    var _ref;
+    var _error_meta;
+    if (!error) return false;
+    const message = String((_ref = error === null || error === void 0 ? void 0 : error.message) !== null && _ref !== void 0 ? _ref : '');
+    const target = error === null || error === void 0 ? void 0 : (_error_meta = error.meta) === null || _error_meta === void 0 ? void 0 : _error_meta.target;
+    const targetText = Array.isArray(target) ? target.join(',') : String(target !== null && target !== void 0 ? target : '');
+    if ((error === null || error === void 0 ? void 0 : error.code) === 'P2002') {
+        if (/slug|product_?code/i.test(targetText)) return true;
+        if (/product_slug_key|product_productcode_key|slug|productcode/i.test(message)) return true;
+        return false;
+    }
+    // 兜底：部分 MySQL 适配器不填充 meta.target，只能靠报错文本识别。
+    return /Unique constraint failed on the constraint:\s*`?product_(slug|productCode)_key`?/i.test(message);
+};
 const normalizeText = (value)=>String(value !== null && value !== void 0 ? value : '').trim();
 const normalizeCommaText = (value)=>normalizeText(value).replace(/，/g, ',');
 const DEFAULT_GLOBAL_EXCHANGE_RATE = 6.5;
@@ -90310,8 +90692,11 @@ const loadImportPricingCategories = async (db)=>{
 const resolveImportCategoryCoefficient = (categoryMap, categoryId)=>{
     const current = categoryId ? categoryMap.get(categoryId) || null : null;
     const parent = (current === null || current === void 0 ? void 0 : current.parentId) ? categoryMap.get(current.parentId) || null : null;
-    const own = current && !(0, _categoryPricing.isAggregatePricingCategoryName)(current.name) ? toNumberOrNull(current.priceCoefficient) : null;
-    const parentCoefficient = parent && !(0, _categoryPricing.isAggregatePricingCategoryName)(parent.name) ? toNumberOrNull(parent.priceCoefficient) : null;
+    // Brand shelf L2 must not drive import pricing — fall through to default via nulls.
+    const currentIsBrandChild = parent && String(parent.name || '').trim().toLowerCase() === 'brand';
+    const parentIsBrandShelf = parent && String(parent.name || '').trim().toLowerCase() === 'brand';
+    const own = current && !currentIsBrandChild && !(0, _categoryPricing.isAggregatePricingCategoryName)(current.name) ? toNumberOrNull(current.priceCoefficient) : null;
+    const parentCoefficient = parent && !parentIsBrandShelf && !(0, _categoryPricing.isAggregatePricingCategoryName)(parent.name) ? toNumberOrNull(parent.priceCoefficient) : null;
     return (0, _priceCoefficient.resolveCategoryPriceCoefficient)(own, parentCoefficient);
 };
 const getGlobalExchangeRate = async (db)=>{
@@ -90533,6 +90918,11 @@ const buildParameterJsonFromAttrs = (attrs)=>{
 /** 统一补全协议：trim、`//`→https:、http→https */ const normalizeRemoteImageUrl = (raw)=>{
     const value = String(raw || '').trim();
     if (!value || /^data:/i.test(value)) return null;
+    // Self-hosted uploads are stored as same-origin paths. Treat them as valid
+    // gallery images instead of dropping every image except the main-image fallback.
+    if (/^\/api\/uploads\/[A-Za-z0-9._/-]+$/i.test(value) && !value.split('/').includes('..')) {
+        return value;
+    }
     if (value.startsWith('//')) return `https:${value}`;
     if (/^http:\/\//i.test(value)) return `https://${value.slice(7)}`;
     if (/^https:\/\//i.test(value)) return value;
@@ -90651,14 +91041,29 @@ const isKnownTooSmallImage = (url, htmlSize)=>{
     if (!hd || isObviousIconOrUiAssetUrl(hd)) return null;
     return hd;
 };
+/**
+ * Same asset under different size suffixes / hosts must collapse to one gallery slot.
+ * Key is the pathname after HD normalization (ignore query + cbu01/cbu02 host swap).
+ */ const imageUrlDedupeKey = (raw)=>{
+    const hd = to1688HdImageUrl(raw) || normalizeRemoteImageUrl(raw) || raw;
+    try {
+        const parsed = new URL(hd);
+        return parsed.pathname.replace(/\/+/g, '/').toLowerCase();
+    } catch  {
+        return hd.split(/[?#]/)[0].toLowerCase();
+    }
+};
 const dedupeImageUrls = (urls)=>{
     const seen = new Set();
     const result = [];
     for (const raw of urls){
         const url = normalizeRemoteImageUrl(raw);
-        if (!url || seen.has(url)) continue;
-        seen.add(url);
-        result.push(url);
+        if (!url) continue;
+        const key = imageUrlDedupeKey(url);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        // Prefer the unsized HD form when we can derive it.
+        result.push(to1688HdImageUrl(url) || url);
     }
     return result;
 };
@@ -90713,6 +91118,55 @@ const dedupeImageUrls = (urls)=>{
             if (!decoded || isLikely1688VideoAsset(decoded)) continue;
             urls.push(decoded);
         }
+    }
+    return urls;
+};
+/** Browser HTML repeats the same JSON blobs many times — gallery only needs the first list. */ const extractFirstJsonStringArrayField = (html, key)=>{
+    const keyRe = new RegExp(`"${key}"\\s*:\\s*\\[`, 'i');
+    const matched = keyRe.exec(html);
+    if (!matched) return [];
+    const startIdx = matched.index + matched[0].length - 1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let endIdx = -1;
+    for(let i = startIdx; i < html.length; i += 1){
+        const ch = html[i];
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch === '"') inString = false;
+            continue;
+        }
+        if (ch === '"') {
+            inString = true;
+            continue;
+        }
+        if (ch === '[') depth += 1;
+        else if (ch === ']') {
+            depth -= 1;
+            if (depth === 0) {
+                endIdx = i;
+                break;
+            }
+        }
+        if (i - startIdx > 200000) break;
+    }
+    if (endIdx < 0) return [];
+    const urls = [];
+    const re = /"((?:\\.|[^"\\])*)"/g;
+    let item;
+    const slice = html.slice(startIdx, endIdx + 1);
+    while(item = re.exec(slice)){
+        const decoded = decodeJsonLikeString(item[1]);
+        if (!decoded || isLikely1688VideoAsset(decoded)) continue;
+        urls.push(decoded);
     }
     return urls;
 };
@@ -90818,10 +91272,10 @@ const probeRemoteImageUrl = async (url)=>{
     var _params_maxProbe;
     const maxProbe = (_params_maxProbe = params.maxProbe) !== null && _params_maxProbe !== void 0 ? _params_maxProbe : 3;
     // HD 列表已去掉尺寸后缀；再按路径/图标规则过滤一遍
-    const hdList = dedupeImageUrls(params.hdCandidates).filter((url)=>isLikelyProductImageUrl(url)).slice(0, 80);
+    const hdList = dedupeImageUrls(params.hdCandidates).filter((url)=>isLikelyProductImageUrl(url)).slice(0, 12);
     const fallbackList = dedupeImageUrls(dedupeImageUrls(params.watermarkedFallback).filter((url)=>isLikelyProductImageUrl(url, {
             allowProductThumbUpgrade: true
-        })).map((url)=>to1688HdImageUrl(url) || url).filter((url)=>isLikelyProductImageUrl(url))).slice(0, 80);
+        })).map((url)=>to1688HdImageUrl(url) || url).filter((url)=>isLikelyProductImageUrl(url))).slice(0, 12);
     let hdOk = false;
     for (const url of hdList.slice(0, maxProbe)){
         if (await probeRemoteImageUrl(url)) {
@@ -90858,16 +91312,17 @@ const probeRemoteImageUrl = async (url)=>{
     };
 };
 /** 从 1688 详情 HTML 解析主图（水印缩略）与详情大图候选 */ const extract1688ImageCandidates = (html)=>{
-    const offerImgList = extractJsonStringArrayField(html, 'offerImgList');
-    const imageList = extractJsonStringArrayField(html, 'imageList').length > 0 ? extractJsonStringArrayField(html, 'imageList') : extractJsonStringArrayField(html, 'images');
-    const singleFields = [
+    // First occurrence only: full browser HTML repeats the same JSON many times, and
+    // imageList/images often dump every SKU swatch — that flooded the pending gallery.
+    const offerImgList = extractFirstJsonStringArrayField(html, 'offerImgList');
+    const imageList = offerImgList.length > 0 ? [] : extractFirstJsonStringArrayField(html, 'imageList').length > 0 ? extractFirstJsonStringArrayField(html, 'imageList') : extractFirstJsonStringArrayField(html, 'images');
+    const singleFields = offerImgList.length > 0 ? [] : [
         pickJsonStringField(html, 'imgUrl'),
         pickJsonStringField(html, 'imageUrl'),
         pickJsonStringField(html, 'mainImage'),
         pickJsonStringField(html, 'whiteImage'),
         pickJsonStringField(html, 'fullPathImageURI')
     ].filter(Boolean);
-    // JSON 主图列表优先；允许商品缩略尺寸后缀后续升格为大图（已跳过视频 URL）
     const gallerySourceUrls = dedupeImageUrls([
         ...offerImgList,
         ...imageList,
@@ -90878,19 +91333,12 @@ const probeRemoteImageUrl = async (url)=>{
     const watermarkedFallback = gallerySourceUrls.filter((url)=>isLikelyProductImageUrl(url, {
             allowProductThumbUpgrade: true
         }));
-    const rawFromHtml = extractRawImageUrlsFromHtml(html);
-    // 优先：offerImgList / imageList 等结构化商品图（视频已在上游跳过，色图/主图继续保留）
     const hdFromLists = gallerySourceUrls.map(to1688HdImageUrl).filter((url)=>Boolean(url)).filter((url)=>isLikelyProductImageUrl(url));
-    // 详情描述区：仅保留已通过图标/尺寸过滤的 CDN 大图
-    const detailLike = rawFromHtml.map(to1688HdImageUrl).filter((url)=>Boolean(url)).filter((url)=>isLikelyProductImageUrl(url)).filter((url)=>!/_sum\.|_?\d{2,4}x\d{2,4}/i.test(url));
-    // 结构化商品图在前，详情大图在后，避免 UI 图标混入
-    const hdCandidates = dedupeImageUrls([
-        ...hdFromLists,
-        ...detailLike
-    ]).filter((url)=>isLikelyProductImageUrl(url));
+    // Structured carousel is enough; DOM scrape pulls color swatches + UI chrome.
+    const hdCandidates = dedupeImageUrls(hdFromLists).filter((url)=>isLikelyProductImageUrl(url)).slice(0, 12);
     return {
         hdCandidates,
-        watermarkedFallback
+        watermarkedFallback: watermarkedFallback.slice(0, 12)
     };
 };
 /**
@@ -91193,14 +91641,137 @@ const empty1688OfferPreview = ()=>({
     if (is1688RiskControlHtml(html)) return false;
     return /商品不存在|该商品已失效|已下架|找不到该商品|页面不存在|offer.*(removed|not\s*found)|商品已删除|下架处理|该商品已经失效|商品已下架/i.test(html);
 };
-const FAILURE_REASON_RISK_CONTROL = '风控拦截，请稍后重试';
+const FAILURE_REASON_RISK_CONTROL = '风控拦截或 Cookie 已失效：请更新 secrets/1688-cookie.txt（从已登录 1688 的浏览器复制完整 Cookie，需含 _m_h5_tk），然后执行 pm2 restart rpc --update-env 后重试';
 const FAILURE_REASON_EXPIRED = '链接已失效';
+const FAILURE_REASON_NETWORK = '请求 1688 页面失败或超时，请稍后重试';
+const FAILURE_REASON_EMPTY = '未能解析到商品数据，请检查链接或稍后重试';
+const FAILURE_REASON_NO_COOKIE = '风控拦截：请配置 COOKIE_1688（环境变量）或写入 secrets/1688-cookie.txt 后执行 pm2 restart rpc --update-env 再重试';
+const read1688CookieFromDisk = ()=>{
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = __webpack_require__(79896);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const path = __webpack_require__(16928);
+        const candidates = [];
+        if (process.env.COOKIE_1688_FILE) candidates.push(process.env.COOKIE_1688_FILE);
+        // Explicit production path (PM2 cwd sometimes diverges after restarts)
+        candidates.push('/home/admin/my-website/blingora-jewelry/secrets/1688-cookie.txt');
+        // Walk up from cwd so standalone / nested cwd still finds repo secrets/
+        let dir = process.cwd();
+        for(let i = 0; i < 6; i += 1){
+            candidates.push(path.join(dir, 'secrets', '1688-cookie.txt'));
+            candidates.push(path.join(dir, '.1688-cookie'));
+            const parent = path.dirname(dir);
+            if (parent === dir) break;
+            dir = parent;
+        }
+        const seen = new Set();
+        for (const file of candidates){
+            if (!file || seen.has(file)) continue;
+            seen.add(file);
+            if (fs.existsSync(file)) {
+                const text = (0, _1688MtopClient.normalize1688Cookie)(fs.readFileSync(file, 'utf8'));
+                if (text) {
+                    console.warn(`[1688-cookie] loaded from ${file} (len=${text.length}, has_m_h5_tk=${/\_m_h5_tk=/.test(text)})`);
+                    return text;
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('[1688-cookie] disk read failed', error);
+    }
+    return '';
+};
+const resolve1688Cookie = ()=>(0, _1688MtopClient.normalize1688Cookie)(typeof process !== 'undefined' && (process.env.COOKIE_1688 || process.env.ALIBABA_COOKIE || process.env.COOKIE1688 || '').trim() || read1688CookieFromDisk() || '');
+const has1688CookieConfigured = ()=>Boolean(resolve1688Cookie());
+/** Wrap mtop JSON so existing HTML extractors (skuProps / subject / images) can dig it. */ const buildFakeHtmlFromMtopPayload = (payload)=>{
+    try {
+        const json = JSON.stringify(payload);
+        return `<!doctype html><html><head><meta charset="utf-8"/><title>1688</title></head><body><script>window.__INIT_DATA__=${json};window.context=${json};</script></body></html>`;
+    } catch  {
+        return '';
+    }
+};
+const buildPreviewFromParsedHtml = async (html)=>{
+    var _multiSpec_priceMin, _ref, _multiSpec_priceMax;
+    if (!html || html.length < 40) return null;
+    const name = extract1688OfferTitleFromHtml(html);
+    const multiSpec = parse1688MultiSpecFromHtml(html);
+    const { hdCandidates, watermarkedFallback } = extract1688ImageCandidates(html);
+    const resolvedImages = await resolve1688ImageUrls({
+        hdCandidates,
+        watermarkedFallback
+    });
+    const mainImageUrl = resolvedImages.mainImageUrl || watermarkedFallback[0] || hdCandidates[0] || null;
+    // Color / SKU swatches already live on sku rows — dumping them into the gallery
+    // duplicates every color shot (often once per size) and floods the pending UI.
+    const detailImages = dedupeImageUrls([
+        ...mainImageUrl ? [
+            mainImageUrl
+        ] : [],
+        ...resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []
+    ]).slice(0, 12);
+    const supplierName = pickJsonStringField(html, 'companyName') || pickJsonStringField(html, 'loginId') || null;
+    const productDetail = pickJsonStringField(html, 'description') || pickJsonStringField(html, 'offerDescription') || null;
+    const sourceCategoryName = pickJsonStringField(html, 'leafCategoryName') || pickJsonStringField(html, 'categoryName') || null;
+    const priceText = pickJsonStringField(html, 'price') || pickJsonStringField(html, 'priceDisplay') || pickJsonStringField(html, 'offerPrice');
+    const { min: priceMinFromText, max: priceMaxFromText } = parsePriceRangeText(priceText);
+    const featureAttributes = parse1688FeatureAttributes(html);
+    const priceMin = (_multiSpec_priceMin = multiSpec.priceMin) !== null && _multiSpec_priceMin !== void 0 ? _multiSpec_priceMin : priceMinFromText;
+    const priceMax = (_ref = (_multiSpec_priceMax = multiSpec.priceMax) !== null && _multiSpec_priceMax !== void 0 ? _multiSpec_priceMax : priceMaxFromText) !== null && _ref !== void 0 ? _ref : priceMin;
+    if (!(name || mainImageUrl || multiSpec.skuTable.length > 0)) return null;
+    return {
+        name: name ? name.slice(0, 180) : null,
+        mainImageUrl,
+        detailImages: detailImages.length > 0 ? detailImages : dedupeImageUrls([
+            mainImageUrl
+        ]),
+        supplierName: supplierName ? supplierName.slice(0, 120) : null,
+        productDetail: productDetail ? productDetail.slice(0, 2000) : null,
+        sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
+        priceMin,
+        priceMax,
+        featureAttributes,
+        skuTable: multiSpec.skuTable,
+        colors: multiSpec.colors,
+        sizesByColor: multiSpec.sizesByColor,
+        specSummary: multiSpec.specSummary
+    };
+};
+/** Prefer signed mtop JSON when Cookie is available (HTML detail pages are often punished). */ const fetch1688OfferPreviewViaMtop = async (sourceUrl)=>{
+    const cookie = resolve1688Cookie();
+    const offerId = extract1688OfferId(sourceUrl);
+    if (!cookie || !offerId) return null;
+    try {
+        const mtop = await (0, _1688MtopClient.fetch1688OfferViaMtop)(offerId, cookie);
+        if (!mtop.ok) {
+            console.warn(`[fetch1688OfferPreview] mtop fallback skipped: ${mtop.reason}`, mtop.detail || '');
+            return null;
+        }
+        const html = buildFakeHtmlFromMtopPayload(mtop.data);
+        const preview = await buildPreviewFromParsedHtml(html);
+        if (!preview) {
+            console.warn(`[fetch1688OfferPreview] mtop ${mtop.api} returned JSON but no parseable fields`);
+            return null;
+        }
+        console.warn(`[fetch1688OfferPreview] mtop ${mtop.api} parsed offer ${offerId}`);
+        return {
+            kind: 'parsed',
+            preview,
+            detail: `mtop:${mtop.api}`
+        };
+    } catch (error) {
+        console.warn('[fetch1688OfferPreview] mtop fallback error', error);
+        return null;
+    }
+};
 const UA_MOBILE_SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const UA_ANDROID_CHROME = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
 const UA_DESKTOP_CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 /** 第 3 次风控重试使用的备用 UA */ const UA_BACKUP_DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0';
 /**
- * 1688 抓取请求头：贴近真实 Chrome 导航；可选 Cookie（COOKIE_1688 / ALIBABA_COOKIE）。
+ * 1688 抓取请求头：贴近真实 Chrome 导航。
+ * Cookie 来自 COOKIE_1688 / ALIBABA_COOKIE / secrets/1688-cookie.txt。
  * 无 Cookie 时直连极易命中 _____tmd_____/punish 人机验证页。
  */ const build1688RequestHeaders = (ua)=>{
     const isMobile = /Mobile|Android|iPhone/i.test(ua);
@@ -91225,7 +91796,7 @@ const UA_DESKTOP_CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit
         headers['Sec-Ch-Ua-Mobile'] = '?1';
         headers['Sec-Ch-Ua-Platform'] = '"Android"';
     }
-    const cookie = typeof process !== 'undefined' && (process.env.COOKIE_1688 || process.env.ALIBABA_COOKIE || process.env.COOKIE1688 || '').trim() || '';
+    const cookie = resolve1688Cookie();
     if (cookie) {
         headers.Cookie = cookie;
     }
@@ -92094,7 +92665,7 @@ const readSkuMapStock = (row)=>{
             sizesByColor,
             costPrice: prices.length ? Math.min(...prices) : 0,
             price: prices.length ? Math.min(...prices) : 0,
-            stock: 100
+            stock: _resolveInitialStock.DEFAULT_AVAILABLE_STOCK
         });
         for (const row of expanded){
             var _row_attributes_find, _row_attributes, _row_attributes_find1, _row_attributes1;
@@ -92227,19 +92798,13 @@ const readSkuMapStock = (row)=>{
                 watermarkedFallback
             });
             const mainImageUrl = resolvedImages.mainImageUrl || watermarkedFallback[0] || hdCandidates[0] || null;
-            const colorImageCandidates = dedupeImageUrls([
-                ...Array.isArray(multiSpec.colors) ? multiSpec.colors.map((item)=>item.imageUrl) : [],
-                ...Array.isArray(multiSpec.skuTable) ? multiSpec.skuTable.map((item)=>item.imageUrl) : []
-            ]).map((url)=>to1688HdImageUrl(url) || url).filter((url)=>Boolean(url)).filter((url)=>isLikelyProductImageUrl(url, {
-                    allowProductThumbUpgrade: true
-                }));
+            // Gallery = offer carousel / detail shots only; color swatches stay on SKU rows.
             const detailImages = dedupeImageUrls([
-                ...resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : [],
-                ...colorImageCandidates,
                 ...mainImageUrl ? [
                     mainImageUrl
-                ] : []
-            ]).slice(0, 120);
+                ] : [],
+                ...resolvedImages.detailImages.length > 0 ? resolvedImages.detailImages : []
+            ]).slice(0, 12);
             const finalDetailImages = detailImages.length > 0 ? detailImages : dedupeImageUrls([
                 mainImageUrl
             ]);
@@ -92314,23 +92879,99 @@ const attemptKindToOutcome = (kind)=>{
         outcome: 'ok',
         failureReason: null
     };
-    if (kind === 'risk_control') return {
-        outcome: 'risk_control',
-        failureReason: FAILURE_REASON_RISK_CONTROL
-    };
+    if (kind === 'risk_control') {
+        return {
+            outcome: 'risk_control',
+            failureReason: has1688CookieConfigured() ? FAILURE_REASON_RISK_CONTROL : FAILURE_REASON_NO_COOKIE
+        };
+    }
     if (kind === 'expired') return {
         outcome: 'expired',
         failureReason: FAILURE_REASON_EXPIRED
     };
+    if (kind === 'network_error') return {
+        outcome: 'failed',
+        failureReason: FAILURE_REASON_NETWORK
+    };
+    if (kind === 'empty') return {
+        outcome: 'failed',
+        failureReason: FAILURE_REASON_EMPTY
+    };
     return {
         outcome: 'failed',
-        failureReason: FAILURE_REASON_RISK_CONTROL
+        failureReason: FAILURE_REASON_EMPTY
     };
 };
 /**
- * 抓取 1688 商品预览：风控时按 5s / 30s / 60s+备用 UA 自动重试（最多 3 次）。
- * 导入与重新解析共用此路径；宁可慢成功，也不把风控误标为「链接已失效」。
- */ const fetch1688OfferPreviewDetailed = async (sourceUrl)=>{
+ * 抓取 1688 商品预览：有 Cookie 时优先走签名 MTop JSON；失败再 HTML。
+ * HTML 风控时按 5s / 30s / 60s+备用 UA 自动重试（最多 3 次）。
+ * 无 Cookie 且首轮即风控时快速失败，避免空耗约 95s。
+ */ /**
+ * HTML captured by scripts/collect-1688.mjs and posted to POST /ingest/1688-html.
+ * 1688 gates offer pages on browser TLS fingerprint, so a server-side fetch always
+ * lands on the captcha page; a locally driven Chrome is the only way in.
+ */ const takeCapturedOfferHtml = (sourceUrl)=>{
+    const inbox = globalThis.__offerHtmlInbox;
+    if (!inbox) return null;
+    const offerId = extract1688OfferId(sourceUrl);
+    if (!offerId) return null;
+    const entry = inbox.get(offerId);
+    if (!entry) return null;
+    // Consume it so a stale capture cannot silently satisfy a later re-parse.
+    inbox.delete(offerId);
+    return entry.html;
+};
+const fetch1688OfferPreviewDetailed = async (sourceUrl)=>{
+    const capturedHtml = takeCapturedOfferHtml(sourceUrl);
+    if (capturedHtml) {
+        const preview = await buildPreviewFromParsedHtml(capturedHtml);
+        if (preview) {
+            console.warn(`[fetch1688OfferPreview] parsed browser-captured HTML (${capturedHtml.length} bytes) for ${sourceUrl}`);
+            return {
+                preview,
+                outcome: 'ok',
+                failureReason: null
+            };
+        }
+        console.warn(`[fetch1688OfferPreview] captured HTML unparseable for ${sourceUrl}; falling back to fetch`);
+    }
+    // Paid OneBound API is the primary source. Browser-captured HTML stays first
+    // (already available / free). When OneBound is configured but fails, do NOT
+    // fall back to Cookie/MTop — those retries only hit 1688 risk-control waits.
+    if ((0, _onebound1688.hasOneBound1688Configured)()) {
+        const oneBound = await (0, _onebound1688.fetchOneBound1688Preview)(sourceUrl);
+        if (oneBound.kind === 'parsed') {
+            return {
+                preview: oneBound.preview,
+                outcome: 'ok',
+                failureReason: null
+            };
+        }
+        if (oneBound.kind === 'failed') {
+            const detail = [
+                oneBound.errorCode,
+                oneBound.reason
+            ].filter(Boolean).join(' ');
+            console.warn(`[onebound1688] fail-fast (no Cookie fallback): ${detail}`);
+            return {
+                preview: empty1688OfferPreview(),
+                outcome: 'failed',
+                failureReason: `OneBound 解析失败：${oneBound.reason || '未知错误'}${oneBound.errorCode ? `（${oneBound.errorCode}）` : ''}`
+            };
+        }
+    }
+    const cookieReady = has1688CookieConfigured();
+    // Cookie 可用时优先 MTop（详情 HTML 在境外/机房 IP 上极易命中 punish 页）
+    if (cookieReady) {
+        const mtopAttempt = await fetch1688OfferPreviewViaMtop(sourceUrl);
+        if ((mtopAttempt === null || mtopAttempt === void 0 ? void 0 : mtopAttempt.kind) === 'parsed') {
+            return {
+                preview: mtopAttempt.preview,
+                outcome: 'ok',
+                failureReason: null
+            };
+        }
+    }
     let attempt = await fetch1688OfferPreviewOnce(sourceUrl, {
         attemptLabel: 'initial'
     });
@@ -92348,10 +92989,49 @@ const attemptKindToOutcome = (kind)=>{
             failureReason: FAILURE_REASON_EXPIRED
         };
     }
+    // Pure network timeout: do not burn ~95s on risk-control waits
+    if (attempt.kind === 'network_error') {
+        if (cookieReady) {
+            const mtopNetworkRetry = await fetch1688OfferPreviewViaMtop(sourceUrl);
+            if ((mtopNetworkRetry === null || mtopNetworkRetry === void 0 ? void 0 : mtopNetworkRetry.kind) === 'parsed') {
+                return {
+                    preview: mtopNetworkRetry.preview,
+                    outcome: 'ok',
+                    failureReason: null
+                };
+            }
+        }
+        console.warn(`[fetch1688OfferPreview] network_error for ${sourceUrl}; skipping long risk retries`);
+        return {
+            preview: attempt.preview,
+            outcome: 'failed',
+            failureReason: '无法连接 1688（超时）。请在服务器执行: curl -I -m 15 https://detail.1688.com/ 与 curl -I -m 15 https://h5api.m.1688.com/ ，并确认 Cookie 仍有效后重试'
+        };
+    }
+    // No cookie + risk/empty/http on first hit → operator must configure login cookie
+    if (!cookieReady && (attempt.kind === 'risk_control' || attempt.kind === 'empty' || attempt.kind === 'http_error')) {
+        console.warn(`[fetch1688OfferPreview] no COOKIE_1688 configured; aborting retries after ${attempt.kind} for ${sourceUrl}`);
+        return {
+            preview: attempt.preview,
+            outcome: 'risk_control',
+            failureReason: FAILURE_REASON_NO_COOKIE
+        };
+    }
+    // HTML 风控后，再给 MTop 一次机会（可能刚 bootstrap 到 token）
+    if (cookieReady && (attempt.kind === 'risk_control' || attempt.kind === 'empty')) {
+        const mtopRetry = await fetch1688OfferPreviewViaMtop(sourceUrl);
+        if ((mtopRetry === null || mtopRetry === void 0 ? void 0 : mtopRetry.kind) === 'parsed') {
+            return {
+                preview: mtopRetry.preview,
+                outcome: 'ok',
+                failureReason: null
+            };
+        }
+    }
     if (attempt.kind !== 'risk_control') {
         const mapped = attemptKindToOutcome(attempt.kind);
-        // 空结果也可能是隐性风控：仍走重试，避免过早失败
-        if (attempt.kind === 'empty' || attempt.kind === 'http_error' || attempt.kind === 'network_error') {
+        // 空结果也可能是隐性风控：有 Cookie 时仍走重试（network_error 已在上方短路）
+        if (attempt.kind === 'empty' || attempt.kind === 'http_error') {
             console.warn(`[fetch1688OfferPreview] initial=${attempt.kind} for ${sourceUrl}, treating as soft-fail and entering risk retry path`);
         } else {
             return {
@@ -92365,6 +93045,17 @@ const attemptKindToOutcome = (kind)=>{
     for (const step of RISK_CONTROL_RETRY_SCHEDULE){
         console.warn(`[fetch1688OfferPreview] ${step.label} waiting ${step.waitMs}ms for ${sourceUrl}`);
         await sleep(step.waitMs);
+        if (cookieReady) {
+            const mtopDuringRetry = await fetch1688OfferPreviewViaMtop(sourceUrl);
+            if ((mtopDuringRetry === null || mtopDuringRetry === void 0 ? void 0 : mtopDuringRetry.kind) === 'parsed') {
+                console.warn(`[fetch1688OfferPreview] ${step.label} mtop succeeded for ${sourceUrl}`);
+                return {
+                    preview: mtopDuringRetry.preview,
+                    outcome: 'ok',
+                    failureReason: null
+                };
+            }
+        }
         attempt = await fetch1688OfferPreviewOnce(sourceUrl, {
             useBackupUa: step.useBackupUa,
             attemptLabel: step.label
@@ -92384,7 +93075,15 @@ const attemptKindToOutcome = (kind)=>{
                 failureReason: FAILURE_REASON_EXPIRED
             };
         }
-        if (attempt.kind !== 'risk_control' && attempt.kind !== 'empty' && attempt.kind !== 'http_error' && attempt.kind !== 'network_error') {
+        if (attempt.kind === 'network_error') {
+            console.warn(`[fetch1688OfferPreview] ${step.label} network_error for ${sourceUrl}; aborting remaining waits`);
+            return {
+                preview: attempt.preview,
+                outcome: 'failed',
+                failureReason: '无法连接 1688（超时）。服务器访问 detail.1688.com / h5api.m.1688.com 可能被阻断，请检查出网或稍后重试'
+            };
+        }
+        if (attempt.kind !== 'risk_control' && attempt.kind !== 'empty' && attempt.kind !== 'http_error') {
             return {
                 preview: attempt.preview,
                 ...attemptKindToOutcome(attempt.kind)
@@ -92392,7 +93091,6 @@ const attemptKindToOutcome = (kind)=>{
         }
         console.warn(`[fetch1688OfferPreview] ${step.label} still ${attempt.kind} for ${sourceUrl}`);
     }
-    // 3 次重试后仍失败：标失败（风控），绝不标「链接已失效」
     const finalKind = attempt.kind === 'expired' ? 'expired' : 'risk_control';
     if (finalKind === 'expired') {
         return {
@@ -92405,7 +93103,7 @@ const attemptKindToOutcome = (kind)=>{
     return {
         preview: attempt.preview,
         outcome: 'risk_control',
-        failureReason: FAILURE_REASON_RISK_CONTROL
+        failureReason: cookieReady ? FAILURE_REASON_RISK_CONTROL : FAILURE_REASON_NO_COOKIE
     };
 };
 /** 从 1688 商品详情页抓取原标题 / 主图(优先高清原图) / 供应商 / 多规格 SKU（优先移动端页，SSR 更完整） */ const fetch1688OfferPreview = async (sourceUrl)=>{
@@ -92580,7 +93278,7 @@ const check1688OfferLiveStatus = async (sourceUrl)=>{
     }
     return lastUnknown;
 };
-/** 回填仍使用占位标题/主图，或仍残留旧版假红蓝黑 SKU 的待上传条目 */ const backfillPendingImportOriginalMeta = async (limit = 6)=>{
+/** 回填仍使用占位标题/主图，或仍残留旧版假红蓝黑 SKU 的待上传条目 */ /** Optional 1688 network backfill — MUST NOT run on read/list RPCs (P0). Kept for future explicit maintenance RPC. */ const backfillPendingImportOriginalMeta = async (limit = 6)=>{
     const candidates = await _prisma.default.importtaskitem.findMany({
         where: {
             isPublished: false,
@@ -92619,7 +93317,7 @@ const check1688OfferLiveStatus = async (sourceUrl)=>{
     }).slice(0, limit);
     let updated = 0;
     for (const item of targets){
-        var _meta_priceMin, _item_cnyPriceMin, _ref, _meta_priceMax, _item_cnyPriceMax, _toNumberOrNull, _toNumberOrNull1;
+        var _meta_priceMin, _item_cnyPriceMin, _ref, _meta_priceMax, _item_cnyPriceMax, _toNumberOrNull;
         const meta = await fetch1688OfferPreview(item.sourceUrl);
         const currentPreview = item.previewDataJson || {};
         const hadMockSkus = isClassicMock1688SkuSummary(item.skuSummaryText) || isClassicMock1688SkuTable(currentPreview.skuTable);
@@ -92627,12 +93325,12 @@ const check1688OfferLiveStatus = async (sourceUrl)=>{
         if (!hasRealMeta) {
             // 仍抓不到真数据：至少清掉旧版假红蓝黑 SKU，避免运营误当真规格
             if (hadMockSkus) {
-                var _toNumberOrNull2, _ref1, _item_costPrice, _toNumberOrNull3;
-                const fallbackCost = (_toNumberOrNull2 = toNumberOrNull((_ref1 = (_item_costPrice = item.costPrice) !== null && _item_costPrice !== void 0 ? _item_costPrice : item.cnyPriceMin) !== null && _ref1 !== void 0 ? _ref1 : item.parsedPriceMin)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 50;
+                var _toNumberOrNull1, _ref1, _item_costPrice;
+                const fallbackCost = (_toNumberOrNull1 = toNumberOrNull((_ref1 = (_item_costPrice = item.costPrice) !== null && _item_costPrice !== void 0 ? _item_costPrice : item.cnyPriceMin) !== null && _ref1 !== void 0 ? _ref1 : item.parsedPriceMin)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 50;
                 const fallbackSku = buildNeutralFallbackSkuRow({
                     costPrice: fallbackCost,
                     price: fallbackCost,
-                    stock: (_toNumberOrNull3 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull3 !== void 0 ? _toNumberOrNull3 : 100
+                    stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock)
                 });
                 await _prisma.default.importtaskitem.update({
                     where: {
@@ -92682,7 +93380,7 @@ const check1688OfferLiveStatus = async (sourceUrl)=>{
             sizesByColor: Object.keys(meta.sizesByColor).length ? meta.sizesByColor : currentPreview.sizesByColor,
             costPrice: nextPriceMin !== null && nextPriceMin !== void 0 ? nextPriceMin : 50,
             price: nextPriceMin !== null && nextPriceMin !== void 0 ? nextPriceMin : 50,
-            stock: (_toNumberOrNull = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 100
+            stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock)
         });
         let nextSpecSummary = meta.specSummary.length > 0 ? meta.specSummary : shouldReplaceSkus && !isDefaultOnlySkuTable(nextSkuTable) ? [
             ...meta.colors.length ? [
@@ -92734,7 +93432,7 @@ const check1688OfferLiveStatus = async (sourceUrl)=>{
                 cnyPriceMax: nextPriceMax,
                 parsedPriceMin: nextPriceMin,
                 parsedPriceMax: nextPriceMax,
-                costPrice: (_toNumberOrNull1 = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : nextPriceMin,
+                costPrice: (_toNumberOrNull = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : nextPriceMin,
                 ...shouldReplaceSkus ? {
                     skuSummaryText: nextSkuSummary,
                     specSummaryJson: nextSpecSummary,
@@ -92761,33 +93459,33 @@ const check1688OfferLiveStatus = async (sourceUrl)=>{
     return updated;
 };
 const resolvePendingSkuDrafts = (item)=>{
-    var _toNumberOrNull, _toNumberOrNull1, _item_cnyPriceMin, _toNumberOrNull2, _item_cnyPriceMin1, _toNumberOrNull3;
+    var _toNumberOrNull, _toNumberOrNull1, _item_cnyPriceMin, _item_cnyPriceMin1;
     const preview = item.previewDataJson || {};
     const table = Array.isArray(preview.skuTable) ? preview.skuTable : [];
     const recoverableSizesByColor = resolveRecoverableSizesByColor(preview, Array.isArray(item.specSummaryJson) ? item.specSummaryJson : []);
     const hadMock = isClassicMock1688SkuTable(table) || isClassicMock1688SkuSummary(item.skuSummaryText);
     if (hadMock) {
-        var _toNumberOrNull4, _ref, _item_costPrice, _toNumberOrNull5, _item_cnyPriceMin2, _toNumberOrNull6, _toNumberOrNull7, _item_cnyPriceMin3, _toNumberOrNull8, _fallback_stock;
-        const fallbackCost = (_toNumberOrNull4 = toNumberOrNull((_ref = (_item_costPrice = item.costPrice) !== null && _item_costPrice !== void 0 ? _item_costPrice : item.cnyPriceMin) !== null && _ref !== void 0 ? _ref : item.parsedPriceMin)) !== null && _toNumberOrNull4 !== void 0 ? _toNumberOrNull4 : 50;
+        var _toNumberOrNull2, _ref, _item_costPrice, _toNumberOrNull3, _item_cnyPriceMin2, _toNumberOrNull4, _item_cnyPriceMin3;
+        const fallbackCost = (_toNumberOrNull2 = toNumberOrNull((_ref = (_item_costPrice = item.costPrice) !== null && _item_costPrice !== void 0 ? _item_costPrice : item.cnyPriceMin) !== null && _ref !== void 0 ? _ref : item.parsedPriceMin)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 50;
         // 假红蓝黑清掉后：若预览仍有真实 colors，展开色/码，禁止只发「默认规格」
         const expanded = expandSkuTableFromColors({
             colors: preview.colors || [],
             sizesByColor: recoverableSizesByColor,
             costPrice: fallbackCost,
-            price: (_toNumberOrNull5 = toNumberOrNull((_item_cnyPriceMin2 = item.cnyPriceMin) !== null && _item_cnyPriceMin2 !== void 0 ? _item_cnyPriceMin2 : item.parsedPriceMin)) !== null && _toNumberOrNull5 !== void 0 ? _toNumberOrNull5 : fallbackCost,
-            stock: (_toNumberOrNull6 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull6 !== void 0 ? _toNumberOrNull6 : 100,
+            price: (_toNumberOrNull3 = toNumberOrNull((_item_cnyPriceMin2 = item.cnyPriceMin) !== null && _item_cnyPriceMin2 !== void 0 ? _item_cnyPriceMin2 : item.parsedPriceMin)) !== null && _toNumberOrNull3 !== void 0 ? _toNumberOrNull3 : fallbackCost,
+            stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
             weightGrams: toNumberOrNull(item.weightGrams)
         });
         if (expanded.length > 0) {
             return expanded.map((row, index)=>{
-                var _row_weightGrams, _toNumberOrNull, _row_stock;
+                var _row_weightGrams, _row_stock;
                 return {
                     sku_key: normalizeText(row.skuKey) || `sku-${index + 1}`,
                     spec_text: normalizeText(row.spec) || formatSpecText(row.attributes || []),
                     cost_price: toNumberOrNull(row.costPrice),
                     price: toNumberOrNull(row.price),
                     weight_grams: toNumberOrNull((_row_weightGrams = row.weightGrams) !== null && _row_weightGrams !== void 0 ? _row_weightGrams : item.weightGrams),
-                    stock: (_toNumberOrNull = toNumberOrNull((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0,
+                    stock: (0, _resolveInitialStock.resolveInitialStock)((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock),
                     image_url: normalizeText(row.imageUrl) || null,
                     attributes: row.attributes || []
                 };
@@ -92795,8 +93493,8 @@ const resolvePendingSkuDrafts = (item)=>{
         }
         const fallback = buildNeutralFallbackSkuRow({
             costPrice: fallbackCost,
-            price: (_toNumberOrNull7 = toNumberOrNull((_item_cnyPriceMin3 = item.cnyPriceMin) !== null && _item_cnyPriceMin3 !== void 0 ? _item_cnyPriceMin3 : item.parsedPriceMin)) !== null && _toNumberOrNull7 !== void 0 ? _toNumberOrNull7 : fallbackCost,
-            stock: (_toNumberOrNull8 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull8 !== void 0 ? _toNumberOrNull8 : 100
+            price: (_toNumberOrNull4 = toNumberOrNull((_item_cnyPriceMin3 = item.cnyPriceMin) !== null && _item_cnyPriceMin3 !== void 0 ? _item_cnyPriceMin3 : item.parsedPriceMin)) !== null && _toNumberOrNull4 !== void 0 ? _toNumberOrNull4 : fallbackCost,
+            stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock)
         });
         return [
             {
@@ -92805,7 +93503,7 @@ const resolvePendingSkuDrafts = (item)=>{
                 cost_price: fallback.costPrice,
                 price: fallback.price,
                 weight_grams: fallback.weightGrams,
-                stock: (_fallback_stock = fallback.stock) !== null && _fallback_stock !== void 0 ? _fallback_stock : 0,
+                stock: (0, _resolveInitialStock.resolveInitialStock)(fallback.stock),
                 image_url: fallback.imageUrl,
                 attributes: fallback.attributes || [
                     {
@@ -92822,12 +93520,12 @@ const resolvePendingSkuDrafts = (item)=>{
         sizesByColor: recoverableSizesByColor,
         costPrice: (_toNumberOrNull = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 50,
         price: (_toNumberOrNull1 = toNumberOrNull((_item_cnyPriceMin = item.cnyPriceMin) !== null && _item_cnyPriceMin !== void 0 ? _item_cnyPriceMin : item.parsedPriceMin)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 50,
-        stock: (_toNumberOrNull2 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 100,
+        stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
         weightGrams: toNumberOrNull(item.weightGrams)
     });
     if (resolvedTable.length > 0 && !isDefaultOnlySkuTable(resolvedTable)) {
         return resolvedTable.map((row, index)=>{
-            var _row_costPrice, _ref, _row_price, _row_weightGrams, _toNumberOrNull, _row_stock;
+            var _row_costPrice, _ref, _row_price, _row_weightGrams, _row_stock;
             const attributes = Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
                     name: normalizeText(attr.name) || '规格',
                     value: normalizeText(attr.value) || '默认'
@@ -92838,7 +93536,7 @@ const resolvePendingSkuDrafts = (item)=>{
                 cost_price: toNumberOrNull((_row_costPrice = row.costPrice) !== null && _row_costPrice !== void 0 ? _row_costPrice : item.costPrice),
                 price: toNumberOrNull((_ref = (_row_price = row.price) !== null && _row_price !== void 0 ? _row_price : item.cnyPriceMin) !== null && _ref !== void 0 ? _ref : item.parsedPriceMin),
                 weight_grams: toNumberOrNull((_row_weightGrams = row.weightGrams) !== null && _row_weightGrams !== void 0 ? _row_weightGrams : item.weightGrams),
-                stock: (_toNumberOrNull = toNumberOrNull((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0,
+                stock: (0, _resolveInitialStock.resolveInitialStock)((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock),
                 image_url: normalizeText(row.imageUrl) || null,
                 attributes
             };
@@ -92846,7 +93544,7 @@ const resolvePendingSkuDrafts = (item)=>{
     }
     if (table.length > 0) {
         return table.map((row, index)=>{
-            var _row_costPrice, _ref, _row_price, _row_weightGrams, _toNumberOrNull, _row_stock;
+            var _row_costPrice, _ref, _row_price, _row_weightGrams, _row_stock;
             const attributes = Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
                     name: normalizeText(attr.name) || '规格',
                     value: normalizeText(attr.value) || '默认'
@@ -92857,7 +93555,7 @@ const resolvePendingSkuDrafts = (item)=>{
                 cost_price: toNumberOrNull((_row_costPrice = row.costPrice) !== null && _row_costPrice !== void 0 ? _row_costPrice : item.costPrice),
                 price: toNumberOrNull((_ref = (_row_price = row.price) !== null && _row_price !== void 0 ? _row_price : item.cnyPriceMin) !== null && _ref !== void 0 ? _ref : item.parsedPriceMin),
                 weight_grams: toNumberOrNull((_row_weightGrams = row.weightGrams) !== null && _row_weightGrams !== void 0 ? _row_weightGrams : item.weightGrams),
-                stock: (_toNumberOrNull = toNumberOrNull((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0,
+                stock: (0, _resolveInitialStock.resolveInitialStock)((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock),
                 image_url: normalizeText(row.imageUrl) || null,
                 attributes
             };
@@ -92866,7 +93564,7 @@ const resolvePendingSkuDrafts = (item)=>{
     const summary = normalizeText(item.skuSummaryText);
     if (summary.includes('|')) {
         return summary.split('|').map((part, index)=>{
-            var _item_cnyPriceMin, _toNumberOrNull;
+            var _item_cnyPriceMin;
             const attributes = parseSpecAttributes(part);
             return {
                 sku_key: `sku-${index + 1}`,
@@ -92874,7 +93572,7 @@ const resolvePendingSkuDrafts = (item)=>{
                 cost_price: toNumberOrNull(item.costPrice),
                 price: toNumberOrNull((_item_cnyPriceMin = item.cnyPriceMin) !== null && _item_cnyPriceMin !== void 0 ? _item_cnyPriceMin : item.parsedPriceMin),
                 weight_grams: toNumberOrNull(item.weightGrams),
-                stock: (_toNumberOrNull = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0,
+                stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
                 image_url: null,
                 attributes
             };
@@ -92888,7 +93586,7 @@ const resolvePendingSkuDrafts = (item)=>{
             cost_price: toNumberOrNull(item.costPrice),
             price: toNumberOrNull((_item_cnyPriceMin1 = item.cnyPriceMin) !== null && _item_cnyPriceMin1 !== void 0 ? _item_cnyPriceMin1 : item.parsedPriceMin),
             weight_grams: toNumberOrNull(item.weightGrams),
-            stock: (_toNumberOrNull3 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull3 !== void 0 ? _toNumberOrNull3 : 0,
+            stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
             image_url: null,
             attributes
         }
@@ -92916,7 +93614,7 @@ const resolvePendingSkuDrafts = (item)=>{
     });
     let updated = 0;
     for (const item of candidates){
-        var _toNumberOrNull, _ref, _item_costPrice, _toNumberOrNull1;
+        var _toNumberOrNull, _ref, _item_costPrice;
         if (updated >= limit) break;
         const preview = item.previewDataJson || {};
         const hadMock = isClassicMock1688SkuSummary(item.skuSummaryText) || isClassicMock1688SkuTable(preview.skuTable);
@@ -92925,7 +93623,7 @@ const resolvePendingSkuDrafts = (item)=>{
         const fallbackSku = buildNeutralFallbackSkuRow({
             costPrice: fallbackCost,
             price: fallbackCost,
-            stock: (_toNumberOrNull1 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 100
+            stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock)
         });
         await _prisma.default.importtaskitem.update({
             where: {
@@ -92980,15 +93678,19 @@ const summarizePendingSkuPrices = (drafts, exchangeRate)=>{
     };
 };
 const buildPendingItemStructure = (item, task)=>{
-    var _item_cnyPriceMin, _item_cnyPriceMax, _item_minimumOrderQuantity, _item_availableStock;
+    var _item_cnyPriceMin, _item_cnyPriceMax;
     const preview = item.previewDataJson || {};
     const mainImage = item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null;
-    const galleryUrls = dedupeImageUrls([
+    const rawGallery = dedupeImageUrls([
         ...mainImage ? [
             mainImage
         ] : [],
         ...(Array.isArray(preview.detailImages) ? preview.detailImages : []).filter(Boolean)
     ]);
+    // List payload: cap gallery + truncate detail HTML so queue open stays under RPC timeout.
+    const galleryUrls = rawGallery.slice(0, 12);
+    const rawDetail = String(item.productDetail || '');
+    const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail;
     return {
         item_id: item.id,
         item_importTaskId: item.importTaskId,
@@ -93010,14 +93712,14 @@ const buildPendingItemStructure = (item, task)=>{
         item_matchedCategoryNames: Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean))),
         item_coefficient: toNumberOrNull(item.coefficient),
         item_goodsStatus: item.goodsStatus || (task === null || task === void 0 ? void 0 : task.defaultStatus) || 'DRAFT',
-        item_productDetail: item.productDetail || null,
+        item_productDetail: listDetail || null,
         item_skuSummaryText: item.skuSummaryText || null,
         item_cnyPriceMin: toNumberOrNull((_item_cnyPriceMin = item.cnyPriceMin) !== null && _item_cnyPriceMin !== void 0 ? _item_cnyPriceMin : item.parsedPriceMin),
         item_cnyPriceMax: toNumberOrNull((_item_cnyPriceMax = item.cnyPriceMax) !== null && _item_cnyPriceMax !== void 0 ? _item_cnyPriceMax : item.parsedPriceMax),
         item_usdPriceMin: toNumberOrNull(item.usdPriceMin),
         item_usdPriceMax: toNumberOrNull(item.usdPriceMax),
-        item_minimumOrderQuantity: (_item_minimumOrderQuantity = item.minimumOrderQuantity) !== null && _item_minimumOrderQuantity !== void 0 ? _item_minimumOrderQuantity : null,
-        item_availableStock: (_item_availableStock = item.availableStock) !== null && _item_availableStock !== void 0 ? _item_availableStock : null,
+        item_minimumOrderQuantity: (0, _resolveInitialStock.resolveInitialMinOrderQty)(item.minimumOrderQuantity),
+        item_availableStock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
         item_parsedName: item.parsedName || null,
         item_parsedMainImageUrl: item.parsedMainImageUrl || null,
         item_createdAt: item.createdAt,
@@ -93039,75 +93741,166 @@ const buildPendingTaskSummary = (task)=>({
         task_startedAt: task.startedAt || null,
         task_finishedAt: task.finishedAt || null
     });
-const loadPendingImportQueueSnapshot = async ()=>{
-    const activeTask = await _prisma.default.importtask.findFirst({
-        where: {
-            status: {
+const PENDING_IMPORT_QUEUE_WHERE = {
+    isPublished: false,
+    importedProductId: null,
+    OR: [
+        {
+            fetchStatus: 'COMPLETED'
+        },
+        {
+            publishStatus: {
                 in: [
+                    'FAILED',
                     'PENDING',
-                    'RUNNING',
-                    'RATE_LIMITED',
-                    'RETRY_PENDING',
-                    'PARTIAL_SUCCESS'
+                    'RUNNING'
                 ]
             }
         },
-        orderBy: [
-            {
-                createdAt: 'desc'
+        {
+            fetchStatus: {
+                in: [
+                    'PENDING',
+                    'RUNNING',
+                    'FAILED',
+                    'RATE_LIMITED',
+                    'RETRY_PENDING'
+                ]
             }
-        ]
-    });
-    const fallbackTask = activeTask ? activeTask : await _prisma.default.importtask.findFirst({
-        orderBy: [
-            {
-                createdAt: 'desc'
-            }
-        ]
-    });
-    const items = await _prisma.default.importtaskitem.findMany({
-        where: {
-            isPublished: false,
-            importedProductId: null,
-            OR: [
-                {
-                    fetchStatus: 'COMPLETED'
-                },
-                {
-                    publishStatus: {
-                        in: [
-                            'FAILED',
-                            'PENDING',
-                            'RUNNING'
-                        ]
-                    }
-                },
-                {
-                    fetchStatus: {
-                        in: [
-                            'PENDING',
-                            'RUNNING',
-                            'FAILED',
-                            'RATE_LIMITED',
-                            'RETRY_PENDING'
-                        ]
-                    }
-                }
-            ]
-        },
-        // 按导入时间正序，保留 Excel 原始行顺序（不再倒序）
-        orderBy: [
-            {
-                createdAt: 'asc'
-            },
-            {
-                id: 'asc'
-            }
-        ],
-        include: {
-            importTask: true
         }
-    });
+    ]
+};
+/** Soft cap so admin open never pulls unbounded preview JSON (table import / 1688 drafts). */ const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 30;
+const MAX_PENDING_QUEUE_PAGE_SIZE = 100;
+const PUBLISH_PENDING_CONCURRENCY = 3;
+const PENDING_QUEUE_ITEM_SELECT = {
+    id: true,
+    importTaskId: true,
+    sourceUrl: true,
+    fetchStatus: true,
+    publishStatus: true,
+    isPublished: true,
+    importedProductId: true,
+    failureReason: true,
+    parsedName: true,
+    supplierName: true,
+    mainImageUrl: true,
+    parsedMainImageUrl: true,
+    costPrice: true,
+    weightGrams: true,
+    sourceCategoryName: true,
+    targetCategoryId: true,
+    coefficient: true,
+    goodsStatus: true,
+    productDetail: true,
+    skuSummaryText: true,
+    cnyPriceMin: true,
+    cnyPriceMax: true,
+    parsedPriceMin: true,
+    parsedPriceMax: true,
+    usdPriceMin: true,
+    usdPriceMax: true,
+    minimumOrderQuantity: true,
+    availableStock: true,
+    createdAt: true,
+    updatedAt: true,
+    previewDataJson: true,
+    specSummaryJson: true,
+    importTask: {
+        select: {
+            id: true,
+            taskName: true,
+            status: true,
+            sourceLinkCount: true,
+            successCount: true,
+            failureCount: true,
+            progressPercent: true,
+            defaultStatus: true,
+            defaultCategoryId: true,
+            lastRateLimitedAt: true,
+            startedAt: true,
+            finishedAt: true
+        }
+    }
+};
+const loadPendingImportQueueSnapshot = async (opts)=>{
+    const page = Math.max(1, Number(opts === null || opts === void 0 ? void 0 : opts.page) || 1);
+    const pageSize = Math.min(MAX_PENDING_QUEUE_PAGE_SIZE, Math.max(1, Number(opts === null || opts === void 0 ? void 0 : opts.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE));
+    const skip = (page - 1) * pageSize;
+    const [activeTask, fallbackTask, total, items] = await Promise.all([
+        _prisma.default.importtask.findFirst({
+            where: {
+                status: {
+                    in: [
+                        'PENDING',
+                        'RUNNING',
+                        'RATE_LIMITED',
+                        'RETRY_PENDING',
+                        'PARTIAL_SUCCESS'
+                    ]
+                }
+            },
+            orderBy: [
+                {
+                    createdAt: 'desc'
+                }
+            ],
+            select: {
+                id: true,
+                taskName: true,
+                status: true,
+                sourceLinkCount: true,
+                successCount: true,
+                failureCount: true,
+                progressPercent: true,
+                defaultStatus: true,
+                defaultCategoryId: true,
+                lastRateLimitedAt: true,
+                startedAt: true,
+                finishedAt: true
+            }
+        }),
+        _prisma.default.importtask.findFirst({
+            orderBy: [
+                {
+                    createdAt: 'desc'
+                }
+            ],
+            select: {
+                id: true,
+                taskName: true,
+                status: true,
+                sourceLinkCount: true,
+                successCount: true,
+                failureCount: true,
+                progressPercent: true,
+                defaultStatus: true,
+                defaultCategoryId: true,
+                lastRateLimitedAt: true,
+                startedAt: true,
+                finishedAt: true
+            }
+        }),
+        _prisma.default.importtaskitem.count({
+            where: PENDING_IMPORT_QUEUE_WHERE
+        }),
+        _prisma.default.importtaskitem.findMany({
+            where: PENDING_IMPORT_QUEUE_WHERE,
+            // 按导入时间正序，保留 Excel 原始行顺序
+            orderBy: [
+                {
+                    createdAt: 'asc'
+                },
+                {
+                    id: 'asc'
+                }
+            ],
+            skip,
+            take: pageSize,
+            select: PENDING_QUEUE_ITEM_SELECT
+        })
+    ]);
+    const task = activeTask || fallbackTask;
     const sortedItems = [
         ...items
     ].sort((a, b)=>{
@@ -93123,10 +93916,10 @@ const loadPendingImportQueueSnapshot = async ()=>{
         return String(a.id).localeCompare(String(b.id));
     });
     // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
-    // （表格合并仅发生在 createProductsFromTable；1688 每条链接在解析时已是独立条目）
     return {
-        activeTask: fallbackTask ? buildPendingTaskSummary(fallbackTask) : null,
-        items: sortedItems.map((item)=>buildPendingItemStructure(item, item.importTask))
+        activeTask: task ? buildPendingTaskSummary(task) : null,
+        items: sortedItems.map((item)=>buildPendingItemStructure(item, item.importTask)),
+        total
     };
 };
 /** 判断待上传条目是否来自表格导入（绝不与 1688 链接共用合并键） */ const isTableImportSourceUrl = (sourceUrl)=>String(sourceUrl || '').startsWith('table-import://');
@@ -93154,19 +93947,19 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
  * 将拼多多抓取结果写入待上传明细（与 1688 任务互不共用解析器）。
  * 售价 = 采集价 × (1 + 加价百分比)；成本保留采集价。
  */ const persistPinduoduoParsedItem = async (params)=>{
-    var _toNumberOrNull, _fetched_priceMin, _fetched_priceMax, _toNumberOrNull1, _toNumberOrNull2;
+    var _fetched_priceMin, _fetched_priceMax, _toNumberOrNull, _toNumberOrNull1;
     var _task_stockStrategyJson, _skuTable_, _skuTable_1;
     const { item, task, fetched, secondaryCategories, categoryMap, exchangeRate } = params;
     const sourceUrl = item.sourceUrl || '';
     const goodsId = fetched.goodsId || (0, _PinduoduoParser.extractPinduoduoGoodsId)(sourceUrl) || item.id.slice(0, 6);
     const markupMultiplier = resolvePinduoduoMarkupMultiplier(task);
-    const strategyStock = (_toNumberOrNull = toNumberOrNull((_task_stockStrategyJson = task.stockStrategyJson) === null || _task_stockStrategyJson === void 0 ? void 0 : _task_stockStrategyJson.stock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 100;
+    const strategyStock = (0, _resolveInitialStock.resolveInitialStock)((_task_stockStrategyJson = task.stockStrategyJson) === null || _task_stockStrategyJson === void 0 ? void 0 : _task_stockStrategyJson.stock);
     const productName = fetched.name || `[拼多多抓取] 商品 ${goodsId}`;
     const productDetail = fetched.productDetail || '自动采集的拼多多商品详情，请运营补充图文与说明。';
     const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
     const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
     const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
-    const targetCategoryId = matchedSecondaryCategoryIds[0] || task.defaultCategoryId || null;
+    const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
     // 系数仅作分类归属参考展示；拼多多售价按加价百分比计算
     const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
     const rawPriceMin = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : 0;
@@ -93214,7 +94007,7 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
             spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
             costPrice: nextCost,
             price: nextPrice,
-            stock: (_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock,
+            stock: (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock),
             weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
             imageUrl: normalizeText(row.imageUrl) || null,
             attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
@@ -93292,14 +94085,7 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
     }, 0);
     const previewData = {
         name: productName,
-        ...await (async ()=>{
-            const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(productName);
-            const nameEs = await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(productName, null, nameEn);
-            return {
-                nameEn,
-                nameEs
-            };
-        })(),
+        // 采集阶段不再翻译（改为上架时翻译并缓存），保证「传图」快速、逐条切换不卡
         categoryId: targetCategoryId || undefined,
         matchedCategoryIds: matchedSecondaryCategoryIds,
         matchedCategoryNames: matchedSecondaryCategoryNames,
@@ -93329,8 +94115,8 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
             supplierName: fetched.supplierName || null,
             mainImageUrl,
             parsedMainImageUrl: mainImageUrl,
-            costPrice: (_toNumberOrNull1 = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : costMin,
-            weightGrams: (_toNumberOrNull2 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
+            costPrice: (_toNumberOrNull = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : costMin,
+            weightGrams: (_toNumberOrNull1 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 500,
             sourceCategoryName: null,
             coefficient: resolvedCoefficient,
             goodsStatus: task.defaultStatus || 'DRAFT',
@@ -93340,8 +94126,9 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
             cnyPriceMax: resolvedFinalPriceMax,
             usdPriceMin: resolvedUsdMin,
             usdPriceMax: resolvedUsdMax,
-            minimumOrderQuantity: 1,
-            availableStock: totalStock > 0 ? totalStock : strategyStock,
+            minimumOrderQuantity: _resolveInitialStock.DEFAULT_MIN_ORDER_QTY,
+            // B：OneBound/1688 真实库存优先，全 0 即缺货；缺省时回落 1000
+            availableStock: (0, _resolveInitialStock.resolveInitialStock)(totalStock),
             targetCategoryId,
             parsedPriceMin: rawPriceMin,
             parsedPriceMax: rawPriceMax,
@@ -93381,7 +94168,7 @@ const createProductRecord = async (tx, params)=>{
             cost_price: (_params_costPrice = params.costPrice) !== null && _params_costPrice !== void 0 ? _params_costPrice : null,
             price: params.price,
             weight_grams: (_params_weightGrams = params.weightGrams) !== null && _params_weightGrams !== void 0 ? _params_weightGrams : null,
-            stock: (_params_stock = params.stock) !== null && _params_stock !== void 0 ? _params_stock : 0,
+            stock: (_params_stock = params.stock) !== null && _params_stock !== void 0 ? _params_stock : _resolveInitialStock.DEFAULT_AVAILABLE_STOCK,
             image_url: null,
             attributes: params.skuSummaryText ? [
                 {
@@ -93434,25 +94221,23 @@ const createProductRecord = async (tx, params)=>{
                 })),
             shortDescription: params.shortDescription,
             translationsJson: translationsJson,
-            tradeInfoJson: params.minOrderQty || params.sourceUrl ? {
-                ...params.minOrderQty ? {
-                    minOrderQty: params.minOrderQty
-                } : {},
+            tradeInfoJson: {
+                minOrderQty: (0, _resolveInitialStock.resolveInitialMinOrderQty)(params.minOrderQty),
                 ...params.sourceUrl ? {
                     importSourceUrl: params.sourceUrl
                 } : {},
                 ...params.source === 'IMPORT_1688' && params.sourceUrl ? {
                     offerId: extract1688OfferId(params.sourceUrl)
                 } : {}
-            } : undefined,
+            },
             skus: {
                 create: (()=>{
                     const usedSkuCodes = new Set();
                     return draftSkus.map((sku, index)=>{
-                        var _toNumberOrNull, _ref, _toNumberOrNull1, _toNumberOrNull2;
+                        var _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
                         var _sku_attributes_find, _sku_attributes, _sku_attributes_find1, _sku_attributes1, _sku_attributes2;
                         const skuPrice = (_toNumberOrNull = toNumberOrNull(sku.price)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : params.price;
-                        const skuStock = Math.max(0, Math.round((_ref = (_toNumberOrNull1 = toNumberOrNull(sku.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : params.stock) !== null && _ref !== void 0 ? _ref : 0));
+                        const skuStock = (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(sku.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : params.stock);
                         const skuWeightGrams = (_toNumberOrNull2 = toNumberOrNull(sku.weight_grams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : params.weightGrams;
                         const sizeLabel = ((_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>isSizeDimensionName(attr.name))) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value) || null;
                         const materialLabel = ((_sku_attributes1 = sku.attributes) === null || _sku_attributes1 === void 0 ? void 0 : (_sku_attributes_find1 = _sku_attributes1.find((attr)=>/^(材质|材料|material)$/i.test(normalizeText(attr.name)))) === null || _sku_attributes_find1 === void 0 ? void 0 : _sku_attributes_find1.value) || null;
@@ -93467,6 +94252,7 @@ const createProductRecord = async (tx, params)=>{
                         return {
                             skuCode,
                             imageUrl: sku.image_url || null,
+                            minOrderQty: (0, _resolveInitialStock.resolveInitialMinOrderQty)(params.minOrderQty),
                             price: skuPrice,
                             stock: skuStock,
                             stockStatus: skuStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
@@ -93495,6 +94281,8 @@ const createProductRecord = async (tx, params)=>{
             skipDuplicates: true
         });
     }
+    // Append price-threshold L2 tags by existing category name; never changes primary categoryId.
+    await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product.id);
     return product;
 };
 const normalizeCategoryMatchText = (value)=>String(value || '').trim().toUpperCase().replace(/\s+/g, '');
@@ -93584,8 +94372,72 @@ function matchSecondaryCategoriesByTitle(title, categories, detailText) {
             bestTokenLength
         };
     }).filter((item)=>Boolean(item));
-    scored.sort((a, b)=>Number(isBrandParentSecondaryCategory(b.category)) - Number(isBrandParentSecondaryCategory(a.category)) || b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
+    scored.sort((a, b)=>// Prefer real L1→L2 product categories over Brand shelf L2s for import targeting.
+        Number(isBrandParentSecondaryCategory(a.category)) - Number(isBrandParentSecondaryCategory(b.category)) || b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
     return scored.map((item)=>item.category);
+}
+function pickImportPricingTargetCategory(matched, fallbackId) {
+    const pricingHit = matched.find((category)=>!isBrandParentSecondaryCategory(category));
+    return (pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.id) || fallbackId || null;
+}
+const splitTableCategoryPathTokens = (raw)=>normalizeText(raw).split(/[,，/|；;]+/).map((token)=>token.trim()).filter(Boolean);
+const categoryNameFuzzyMatch = (dbName, token)=>{
+    const a = normalizeCategoryMatchText(dbName);
+    const b = normalizeCategoryMatchText(token);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    // Bag ↔ Bags, Handbag ↔ Handbags
+    if (a.endsWith('S') && a.slice(0, -1) === b) return true;
+    if (b.endsWith('S') && b.slice(0, -1) === a) return true;
+    // 长类目名包含短词（handbag ⊂ handbags 已在上面；也可 Bags 含子类时宽松包含）
+    if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) return true;
+    return false;
+};
+function resolveTableImportCategoryPath(categoryCell, categories) {
+    const tokens = splitTableCategoryPathTokens(categoryCell);
+    const empty = {
+        l1Token: null,
+        l2Token: null,
+        primaryId: null,
+        secondaryId: null,
+        targetCategoryId: null,
+        sourceCategoryLabel: null,
+        matchedCategory: null,
+        parentCategory: null
+    };
+    if (!tokens.length) return empty;
+    const l1Token = tokens[0] || null;
+    const l2Token = tokens[1] || null;
+    const usable = categories.filter((c)=>!c.isBrandCategory);
+    const levelOf = (c)=>{
+        if (c.level != null && Number.isFinite(Number(c.level))) return Number(c.level);
+        return c.parentId ? 2 : 1;
+    };
+    const level1 = usable.filter((c)=>levelOf(c) === 1);
+    const level2 = usable.filter((c)=>levelOf(c) === 2);
+    const matchPrimary = (l1Token ? level1.find((c)=>categoryNameFuzzyMatch(c.name, l1Token)) || usable.find((c)=>categoryNameFuzzyMatch(c.name, l1Token) && levelOf(c) === 1) : null) || null;
+    let matchSecondary = null;
+    if (l2Token) {
+        const underPrimary = matchPrimary ? level2.filter((c)=>c.parentId === matchPrimary.id) : level2;
+        matchSecondary = underPrimary.find((c)=>categoryNameFuzzyMatch(c.name, l2Token)) || level2.find((c)=>categoryNameFuzzyMatch(c.name, l2Token)) || null;
+    }
+    // 仅写了一级时，也可把 L2 写成与一级同名的误填，回退一级
+    const target = matchSecondary || matchPrimary || null;
+    const parent = (target === null || target === void 0 ? void 0 : target.parentId) ? usable.find((c)=>c.id === target.parentId) || null : null;
+    const labelParts = [
+        l1Token,
+        l2Token
+    ].filter(Boolean);
+    return {
+        l1Token,
+        l2Token,
+        primaryId: (matchPrimary === null || matchPrimary === void 0 ? void 0 : matchPrimary.id) || (parent === null || parent === void 0 ? void 0 : parent.id) || null,
+        secondaryId: (matchSecondary === null || matchSecondary === void 0 ? void 0 : matchSecondary.id) || null,
+        targetCategoryId: (target === null || target === void 0 ? void 0 : target.id) || null,
+        sourceCategoryLabel: labelParts.length ? labelParts.join(', ') : null,
+        matchedCategory: target,
+        parentCategory: parent || matchPrimary
+    };
 }
 const getCategoryOptions = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -93676,94 +94528,251 @@ const getImportTaskDetail = (0, _action_utils.requireRole)([
         items: task.items.map(mapTaskItem)
     };
 }));
-const getPendingImportQueue = (0, _action_utils.requireRole)([
+/** Queue list is a hot path — full charset/mock sweeps at most once per 10 minutes. */ let lastPendingQueueMaintenanceAt = 0;
+const PENDING_QUEUE_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000;
+/** In-process mutex: only one 1688/PDD parse job (startParseTask or reparse) at a time. */ let parseJobBusy = false;
+let parseJobLabel = null;
+/** Cooperative cancel — background loops check between items. */ let parseJobCancelRequested = false;
+/** Live progress for admin UI (survives page refresh via getPendingImportQueue). */ let parseJobProgress = null;
+const acquireParseJob = (label, total = 0)=>{
+    if (parseJobBusy) {
+        throw new Error(parseJobLabel ? `已有解析任务进行中（${parseJobLabel}），请等待完成后再试` : '已有解析任务进行中，请等待完成后再试');
+    }
+    parseJobBusy = true;
+    parseJobLabel = label;
+    parseJobCancelRequested = false;
+    parseJobProgress = {
+        total: Math.max(0, total),
+        done: 0
+    };
+};
+const releaseParseJob = (label)=>{
+    if (parseJobLabel === label || !parseJobLabel) {
+        parseJobBusy = false;
+        parseJobLabel = null;
+        parseJobCancelRequested = false;
+        parseJobProgress = null;
+    }
+};
+const isParseJobCancelled = ()=>parseJobCancelRequested;
+const bumpParseJobProgress = (done, total)=>{
+    if (!parseJobProgress) return;
+    parseJobProgress = {
+        total: typeof total === 'number' ? total : parseJobProgress.total,
+        done: Math.max(0, done)
+    };
+};
+const requestCancelParseJob = ()=>{
+    parseJobCancelRequested = true;
+    parseJobBusy = false;
+    parseJobLabel = null;
+    parseJobProgress = null;
+};
+const getParseJobRuntimeStatus = ()=>{
+    var _ref, _ref1;
+    return {
+        busy: parseJobBusy,
+        label: parseJobLabel,
+        total: (_ref = parseJobProgress === null || parseJobProgress === void 0 ? void 0 : parseJobProgress.total) !== null && _ref !== void 0 ? _ref : 0,
+        done: (_ref1 = parseJobProgress === null || parseJobProgress === void 0 ? void 0 : parseJobProgress.done) !== null && _ref1 !== void 0 ? _ref1 : 0,
+        cancel_requested: parseJobCancelRequested
+    };
+};
+const cancelPendingImportParseJob = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async ()=>{
+    requestCancelParseJob();
+    const tasks = await _prisma.default.importtask.updateMany({
+        where: {
+            status: {
+                in: [
+                    'PENDING',
+                    'RUNNING',
+                    'RATE_LIMITED'
+                ]
+            }
+        },
+        data: {
+            status: 'RETRY_PENDING',
+            finishedAt: new Date()
+        }
+    });
+    const items = await _prisma.default.importtaskitem.updateMany({
+        where: {
+            fetchStatus: 'RUNNING',
+            isPublished: false
+        },
+        data: {
+            fetchStatus: 'RETRY_PENDING',
+            failureReason: '用户终止解析',
+            fetchFinishedAt: new Date()
+        }
+    });
+    return {
+        cancelled: true,
+        task_count: tasks.count,
+        item_count: items.count,
+        message: `已终止解析（任务 ${tasks.count}，条目 ${items.count}）`
+    };
+}));
+const getPendingImportQueue = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const page = Math.max(1, Number(input === null || input === void 0 ? void 0 : input.page) || 1);
+    const pageSize = Math.min(MAX_PENDING_QUEUE_PAGE_SIZE, Math.max(1, Number(input === null || input === void 0 ? void 0 : input.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE));
+    const skipMaintenance = Boolean(input === null || input === void 0 ? void 0 : input.skip_maintenance);
     try {
         await _prisma.default.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
     } catch (error) {
         console.error('[getPendingImportQueue] failed to set utf8mb4 session charset', error);
     }
+    // Always reclaim hung RUNNING jobs — even when skip_maintenance is true.
+    // The admin UI always passes skip_maintenance, so parking this behind maintenance
+    // left "采集中" stuck for hours and blocked reparse via the in-process mutex.
     try {
-        const repairedCount = await repairCharsetCorruptedPendingImportItems();
-        if (repairedCount > 0) {
-            console.info(`[getPendingImportQueue] repaired ${repairedCount} charset-corrupted pending import items`);
-        }
-    } catch (error) {
-        console.error('[getPendingImportQueue] failed to repair charset-corrupted pending import items', error);
-    }
-    try {
-        const sanitizedMockCount = await sanitizeClassicMockPendingImportItems(40);
-        if (sanitizedMockCount > 0) {
-            console.info(`[getPendingImportQueue] cleared ${sanitizedMockCount} classic mock 红/蓝/黑 SKU rows`);
-        }
-    } catch (error) {
-        console.error('[getPendingImportQueue] failed to sanitize classic mock SKUs', error);
-    }
-    try {
-        const backfilledCount = await backfillPendingImportOriginalMeta(6);
-        if (backfilledCount > 0) {
-            console.info(`[getPendingImportQueue] backfilled ${backfilledCount} original 1688 titles/images`);
-        }
-    } catch (error) {
-        console.error('[getPendingImportQueue] failed to backfill original 1688 meta', error);
-    }
-    try {
-        const inconsistentPublishedItems = await _prisma.default.importtaskitem.findMany({
+        const itemStuckBefore = new Date(Date.now() - 10 * 60 * 1000);
+        const taskStuckBefore = new Date(Date.now() - 20 * 60 * 1000);
+        // Zombie: finishedAt already set but status still RUNNING (crash mid-finalize).
+        const zombieTasks = await _prisma.default.importtask.updateMany({
             where: {
-                importedProductId: {
+                status: 'RUNNING',
+                finishedAt: {
                     not: null
-                },
+                }
+            },
+            data: {
+                status: 'RETRY_PENDING'
+            }
+        });
+        const stuckItems = await _prisma.default.importtaskitem.updateMany({
+            where: {
+                fetchStatus: 'RUNNING',
                 OR: [
                     {
-                        isPublished: false
-                    },
-                    {
-                        publishStatus: {
-                            not: 'COMPLETED'
+                        fetchStartedAt: {
+                            lt: itemStuckBefore
                         }
                     },
                     {
-                        fetchStatus: {
-                            not: 'COMPLETED'
+                        fetchStartedAt: null,
+                        updatedAt: {
+                            lt: itemStuckBefore
                         }
-                    },
-                    {
-                        publishedAt: null
                     }
                 ]
             },
-            select: {
-                id: true,
-                importedProductId: true,
-                fetchStatus: true,
-                publishStatus: true,
-                publishedAt: true
+            data: {
+                fetchStatus: 'RETRY_PENDING',
+                failureReason: '解析超时中断，请重新解析',
+                fetchFinishedAt: new Date()
             }
         });
-        const recoveryOperations = inconsistentPublishedItems.flatMap((item)=>{
-            const recoveryData = buildPublishedImportItemRecoveryData(item);
-            if (!recoveryData) {
-                return [];
+        const stuckTasks = await _prisma.default.importtask.updateMany({
+            where: {
+                status: 'RUNNING',
+                startedAt: {
+                    lt: taskStuckBefore
+                }
+            },
+            data: {
+                status: 'RETRY_PENDING',
+                finishedAt: new Date()
             }
-            return _prisma.default.importtaskitem.update({
-                where: {
-                    id: item.id
-                },
-                data: recoveryData
-            });
         });
-        if (recoveryOperations.length > 0) {
-            await _prisma.default.$transaction(recoveryOperations);
+        if (zombieTasks.count > 0 || stuckItems.count > 0 || stuckTasks.count > 0) {
+            console.info(`[getPendingImportQueue] reclaimed stuck RUNNING zombieTasks=${zombieTasks.count} items=${stuckItems.count} tasks=${stuckTasks.count}`);
+            parseJobBusy = false;
+            parseJobLabel = null;
+            parseJobCancelRequested = false;
+            parseJobProgress = null;
         }
     } catch (error) {
-        console.error('[getPendingImportQueue] failed to repair published import items, fallback to queue snapshot', error);
+        console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error);
     }
-    const snapshot = await loadPendingImportQueueSnapshot();
+    const dueMaintenance = !skipMaintenance && Date.now() - lastPendingQueueMaintenanceAt >= PENDING_QUEUE_MAINTENANCE_INTERVAL_MS;
+    if (dueMaintenance) {
+        lastPendingQueueMaintenanceAt = Date.now();
+        // P0: read paths may only run lightweight DB-only repairs — never network 1688 fetch.
+        try {
+            const repairedCount = await repairCharsetCorruptedPendingImportItems();
+            if (repairedCount > 0) {
+                console.info(`[getPendingImportQueue] repaired ${repairedCount} charset-corrupted pending import items`);
+            }
+        } catch (error) {
+            console.error('[getPendingImportQueue] failed to repair charset-corrupted pending import items', error);
+        }
+        try {
+            const sanitizedMockCount = await sanitizeClassicMockPendingImportItems(40);
+            if (sanitizedMockCount > 0) {
+                console.info(`[getPendingImportQueue] cleared ${sanitizedMockCount} classic mock 红/蓝/黑 SKU rows`);
+            }
+        } catch (error) {
+            console.error('[getPendingImportQueue] failed to sanitize classic mock SKUs', error);
+        }
+        try {
+            const inconsistentPublishedItems = await _prisma.default.importtaskitem.findMany({
+                where: {
+                    importedProductId: {
+                        not: null
+                    },
+                    OR: [
+                        {
+                            isPublished: false
+                        },
+                        {
+                            publishStatus: {
+                                not: 'COMPLETED'
+                            }
+                        },
+                        {
+                            fetchStatus: {
+                                not: 'COMPLETED'
+                            }
+                        },
+                        {
+                            publishedAt: null
+                        }
+                    ]
+                },
+                select: {
+                    id: true,
+                    importedProductId: true,
+                    fetchStatus: true,
+                    publishStatus: true,
+                    publishedAt: true
+                },
+                take: 100
+            });
+            const recoveryOperations = inconsistentPublishedItems.flatMap((item)=>{
+                const recoveryData = buildPublishedImportItemRecoveryData(item);
+                if (!recoveryData) {
+                    return [];
+                }
+                return _prisma.default.importtaskitem.update({
+                    where: {
+                        id: item.id
+                    },
+                    data: recoveryData
+                });
+            });
+            if (recoveryOperations.length > 0) {
+                await _prisma.default.$transaction(recoveryOperations);
+            }
+        } catch (error) {
+            console.error('[getPendingImportQueue] failed to repair published import items, fallback to queue snapshot', error);
+        }
+    }
+    const snapshot = await loadPendingImportQueueSnapshot({
+        page,
+        page_size: pageSize
+    });
     return {
         activeTask: snapshot.activeTask,
         list: snapshot.items,
-        total: snapshot.items.length
+        total: snapshot.total,
+        page,
+        page_size: pageSize,
+        parse_job: getParseJobRuntimeStatus()
     };
 }));
 const parseTableImportContent = (0, _action_utils.requireRole)([
@@ -93783,8 +94792,9 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
         return ',';
     };
     const delimiter = detectDelimiter(lines);
-    const expectedColumnCount = 10;
-    const priceColumnIndex = 2;
+    // 无表头约定 9 列（不含 SKU）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+    const expectedColumnCount = 9;
+    const priceColumnIndex = 1;
     const splitLine = (line)=>{
         const rawParts = line.split(delimiter).map((value)=>value.trim());
         if (delimiter !== ',' || rawParts.length <= expectedColumnCount) {
@@ -93801,17 +94811,13 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
         ];
     };
     const headerCells = splitLine(lines[0]).map((value)=>value.toLowerCase());
+    // SKU 不在映射字段中：表格不读取、不要求 SKU 列；编码由产品编号在草稿/发布阶段生成
     const headerAliases = {
         productCode: [
             '产品编号',
             '编号',
             'product_code',
             'product code'
-        ],
-        skuCode: [
-            'sku',
-            '货号',
-            'sku编码'
         ],
         productPrice: [
             '产品价格',
@@ -93871,23 +94877,26 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
     });
     const hasNamedHeader = Object.keys(indexMap).length >= 2;
     const dataLines = hasNamedHeader ? lines.slice(1) : lines;
-    // 无表头时按约定 10 列顺序：产品编号、SKU、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+    // 无表头固定 9 列：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量（+ 可选详情）
     const fallbackIndex = {
         productCode: 0,
-        skuCode: 1,
-        productPrice: 2,
-        productName: 3,
-        brand: 4,
-        supplierName: 5,
-        categoryName: 6,
-        color: 7,
-        spec: 8,
-        weight: 9
+        productPrice: 1,
+        productName: 2,
+        brand: 3,
+        supplierName: 4,
+        categoryName: 5,
+        color: 6,
+        spec: 7,
+        weight: 8,
+        detail: 9
     };
     const rows = dataLines.map((line, index)=>{
         const columns = splitLine(line);
         const pick = (field)=>{
-            if (hasNamedHeader && indexMap[field] !== undefined) return columns[indexMap[field]] || '';
+            // 有命名表头时只读映射列，绝不位置回退（避免无 SKU 表把价格误读到其它字段）
+            if (hasNamedHeader) {
+                return indexMap[field] !== undefined ? columns[indexMap[field]] || '' : '';
+            }
             const idx = fallbackIndex[field];
             return idx !== undefined ? columns[idx] || '' : '';
         };
@@ -93897,7 +94906,8 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
         return {
             rowId: `row-${index + 1}`,
             productCode: pick('productCode'),
-            skuCode: pick('skuCode'),
+            // 永不从表格取 SKU；预览展示空，草稿/发布按产品编号生成
+            skuCode: '',
             productPrice: null,
             productPriceText,
             productName: pick('productName'),
@@ -93914,7 +94924,7 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
             imageUrl: '',
             detail: pick('detail')
         };
-    }).filter((row)=>row.productName || row.productCode || row.skuCode);
+    }).filter((row)=>row.productName || row.productCode);
     return {
         rows
     };
@@ -93936,13 +94946,11 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             id: true,
             name: true,
             parentId: true,
-            priceCoefficient: true
+            level: true,
+            priceCoefficient: true,
+            isBrandCategory: true
         }
     });
-    const categoryByName = new Map(categories.map((item)=>[
-            item.name.trim().toLowerCase(),
-            item
-        ]));
     const groupedRows = groupTableImportRowsByProductCode(rows);
     const dedupe = (values)=>Array.from(new Set(values.map((value)=>normalizeText(value)).filter(Boolean)));
     /** 表格导入专用：同产品编号多行合并为一个 SPU 草稿（1688 禁止复用） */ const buildTableMergedDraft = (productCode, spuRows)=>{
@@ -93987,7 +94995,7 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             }
         }
         const weightGrams = (_spuRows_map_find1 = spuRows.map((row)=>Number(row.weight) > 0 ? Math.round(Number(row.weight)) : null).find((value)=>value != null)) !== null && _spuRows_map_find1 !== void 0 ? _spuRows_map_find1 : null;
-        const baseSku = normalizeText(firstRow.skuCode) || normalizeText(productCode);
+        // SKU 编码一律由产品编号（SPU 合并键）生成，不使用表格 skuCode（常被误填为价格）
         const colorList = colors.length > 0 ? colors : [
             null
         ];
@@ -93999,7 +95007,6 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
         for (const color of colorList){
             for (const spec of specList){
                 var _priceBySpec_get;
-                index += 1;
                 const attributes = [];
                 if (color) attributes.push({
                     name: '颜色',
@@ -94009,10 +95016,9 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
                     name: '规格',
                     value: spec
                 });
-                const suffix = attributes.map((attr)=>attr.value).join('-');
                 const mappedPrice = spec ? (_priceBySpec_get = priceBySpec.get(normalizeText(spec))) !== null && _priceBySpec_get !== void 0 ? _priceBySpec_get : scalarPrice : scalarPrice;
                 skuTable.push({
-                    skuKey: baseSku ? skuTable.length === 0 && colorList.length <= 1 && specList.length <= 1 ? baseSku : `${baseSku}-${suffix || index}` : `sku-${index}`,
+                    skuKey: (0, _productIdentifiers.buildSkuIdentifier)(productCode, spec, color, index),
                     spec: attributes.map((attr)=>attr.value).join('/') || '默认规格',
                     costPrice: mappedPrice,
                     price: mappedPrice,
@@ -94026,13 +95032,15 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
                         }
                     ]
                 });
+                index += 1;
             }
         }
         const skuPrices = skuTable.map((sku)=>toNumberOrNull(sku.price)).filter((value)=>value !== null);
         return {
             productCode,
             productName: normalizeText(firstRow.productName),
-            skuCode: normalizeText(firstRow.skuCode),
+            // 表格不产生 skuCode；实际编码见 skuTable.skuKey（buildSkuIdentifier）
+            skuCode: '',
             brand: normalizeText(firstRow.brand),
             supplierName: normalizeText(firstRow.supplierName),
             categoryName: normalizeText(firstRow.categoryName),
@@ -94062,6 +95070,123 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             priceMax: skuPrices.length ? Math.max(...skuPrices) : scalarPrice
         };
     };
+    // Pre-build drafts OUTSIDE the transaction — never call translation APIs inside a DB txn
+    // (55 rows of title EN/ES previously held the transaction open until client Failed to fetch).
+    const mergedDrafts = Array.from(groupedRows.entries()).map(([productCode, spuRows])=>buildTableMergedDraft(productCode, spuRows));
+    // 品牌关键词匹配仅可作参考标签；有「类目」单元格时主类目严禁被标题里的 LV/COACH 覆盖
+    const secondaryCategories = await loadAutoMatchSecondaryCategories(_prisma.default);
+    const itemCreates = mergedDrafts.map((row, index)=>{
+        var _row_priceMin;
+        const categoryCell = normalizeText(row.categoryName);
+        const pathResolved = resolveTableImportCategoryPath(categoryCell, categories);
+        // 精确整格名兜底（不走品牌类目）
+        const exactCell = categoryCell && !pathResolved.targetCategoryId ? categories.find((item)=>!item.isBrandCategory && item.name.trim().toLowerCase() === categoryCell.toLowerCase()) || null : null;
+        // 仅当类目列为空时，才用标题/详情做二级类目自动命中（排除 Brand 下 LV/COACH 的优先级仍在匹配器里，
+        // 这里空格时才走；有类目词时彻底关掉）
+        const autoMatchedSecondaryCategories = categoryCell ? [] : matchSecondaryCategoriesByTitle(normalizeText(row.productName), secondaryCategories, [
+            normalizeText(row.detail)
+        ].filter(Boolean).join('\n') || null);
+        const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map((category)=>category.id);
+        const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map((category)=>category.name);
+        const categoryId = normalizeText(row.categoryId) || pathResolved.targetCategoryId || (exactCell === null || exactCell === void 0 ? void 0 : exactCell.id) || (!categoryCell ? pickImportPricingTargetCategory(autoMatchedSecondaryCategories, null) : null) || input.defaultCategoryId || null;
+        const productDetailText = [
+            normalizeText(row.detail),
+            normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
+            normalizeText(row.productCode) ? `产品编号：${normalizeText(row.productCode)}` : '',
+            // 仅记录表格类目原文，供运营对照；不写入品牌到「类目」语义
+            pathResolved.sourceCategoryLabel ? `类目：${pathResolved.sourceCategoryLabel}` : categoryCell ? `类目：${categoryCell}` : ''
+        ].filter(Boolean).join('\n') || null;
+        const resolvedCategory = categoryId ? categories.find((item)=>item.id === categoryId) || null : null;
+        const resolvedParent = (resolvedCategory === null || resolvedCategory === void 0 ? void 0 : resolvedCategory.parentId) ? categories.find((item)=>item.id === resolvedCategory.parentId) || null : pathResolved.parentCategory || null;
+        // 系数：二级优先，否则一级；不使用品牌类目系数
+        const matchedCoefficient = (0, _priceCoefficient.resolveCategoryPriceCoefficient)(resolvedCategory && !(0, _categoryPricing.isAggregatePricingCategoryName)(resolvedCategory.name) ? toNumberOrNull(resolvedCategory.priceCoefficient) : null, resolvedParent && !(0, _categoryPricing.isAggregatePricingCategoryName)(resolvedParent.name) ? toNumberOrNull(resolvedParent.priceCoefficient) : null);
+        // sourceCategoryName：表格类目路径原文（Bag, Handbag），不是 LV/COACH
+        const sourceCategoryName = pathResolved.sourceCategoryLabel || categoryCell || matchedSecondaryCategoryNames[0] || (resolvedCategory === null || resolvedCategory === void 0 ? void 0 : resolvedCategory.name) || null;
+        const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`;
+        const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null;
+        const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null;
+        const zhName = normalizeText(row.productName);
+        return {
+            operatorId: userId,
+            sourceUrl: `table-import://${productCode}`,
+            parsedName: zhName,
+            parsedMainImageUrl: null,
+            parsedPriceMin: row.priceMin,
+            parsedPriceMax: row.priceMax,
+            supplierName: normalizeText(row.supplierName) || null,
+            mainImageUrl: null,
+            costPrice: row.priceMin,
+            weightGrams: row.weightGrams,
+            sourceCategoryName,
+            targetCategoryId: categoryId,
+            coefficient: matchedCoefficient,
+            goodsStatus: 'DRAFT',
+            minimumOrderQuantity: _resolveInitialStock.DEFAULT_MIN_ORDER_QTY,
+            // B：真实库存优先（全 0 即缺货），缺省回落 1000
+            availableStock: (0, _resolveInitialStock.resolveInitialStock)(row.skuTable.reduce((sum, sku)=>sum + (sku.stock || 0), 0)),
+            cnyPriceMin: row.priceMin,
+            cnyPriceMax: row.priceMax,
+            usdPriceMin: usdMin,
+            usdPriceMax: usdMax,
+            productDetail: productDetailText,
+            skuSummaryText: row.skuTable.map((sku)=>sku.spec).join(' | '),
+            fetchStatus: 'COMPLETED',
+            publishStatus: 'PENDING',
+            isSelected: true,
+            isPublished: false,
+            fetchStartedAt: new Date(),
+            fetchFinishedAt: new Date(),
+            specSummaryJson: row.specSummary,
+            // 发布时再补 EN/ES；导入热路径禁止 await 翻译以防超时
+            previewDataJson: {
+                name: zhName,
+                nameEn: '',
+                nameEs: '',
+                categoryId: categoryId || undefined,
+                /** 表格类目路径解析结果（主类目用；品牌永不进入此列表作为主类目） */ tableCategoryPath: {
+                    raw: categoryCell || null,
+                    l1: pathResolved.l1Token,
+                    l2: pathResolved.l2Token,
+                    primaryId: pathResolved.primaryId,
+                    secondaryId: pathResolved.secondaryId
+                },
+                brand: normalizeText(row.brand) || undefined,
+                matchedCategoryIds: matchedSecondaryCategoryIds,
+                matchedCategoryNames: matchedSecondaryCategoryNames,
+                price: (_row_priceMin = row.priceMin) !== null && _row_priceMin !== void 0 ? _row_priceMin : undefined,
+                mainImageUrl: undefined,
+                detailImages: [],
+                shortDescription: normalizeText(row.brand) || undefined,
+                importSortIndex: index,
+                inboundIdentity: {
+                    mode: 'TABLE_PRODUCT_CODE_MERGED',
+                    excelProductCode: productCode,
+                    sourceUrl: `table-import://${productCode}`
+                },
+                featureAttributes: [
+                    ...normalizeText(row.brand) ? [
+                        {
+                            key: '品牌',
+                            value: normalizeText(row.brand)
+                        }
+                    ] : [],
+                    ...normalizeText(row.productCode) ? [
+                        {
+                            key: '产品编号',
+                            value: normalizeText(row.productCode)
+                        }
+                    ] : [],
+                    ...sourceCategoryName ? [
+                        {
+                            key: '类目',
+                            value: sourceCategoryName
+                        }
+                    ] : []
+                ],
+                skuTable: row.skuTable
+            }
+        };
+    });
     const task = await _prisma.default.$transaction(async (tx)=>{
         const newTask = await tx.importtask.create({
             data: {
@@ -94081,111 +95206,18 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
                 finishedAt: new Date()
             }
         });
-        const mergedDrafts = Array.from(groupedRows.entries()).map(([productCode, spuRows])=>buildTableMergedDraft(productCode, spuRows));
-        const secondaryCategories = await loadAutoMatchSecondaryCategories(tx);
-        for (const [index, row] of mergedDrafts.entries()){
-            var _row_priceMin;
-            const categoryName = normalizeText(row.categoryName);
-            const matchedByCell = categoryName ? categoryByName.get(categoryName.toLowerCase()) : null;
-            const productDetailText = [
-                normalizeText(row.detail),
-                normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
-                normalizeText(row.productCode) ? `产品编号：${normalizeText(row.productCode)}` : '',
-                normalizeText(row.skuCode) ? `SKU：${normalizeText(row.skuCode)}` : ''
-            ].filter(Boolean).join('\n') || null;
-            const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(normalizeText(row.productName), secondaryCategories, productDetailText);
-            const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map((category)=>category.id);
-            const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map((category)=>category.name);
-            // 类目单元格优先；否则用标题/详情命中的 L2；再回退默认类目
-            const categoryId = row.categoryId || (matchedByCell === null || matchedByCell === void 0 ? void 0 : matchedByCell.id) || matchedSecondaryCategoryIds[0] || input.defaultCategoryId || null;
-            const resolvedCategory = categoryId ? categories.find((item)=>item.id === categoryId) : null;
-            const resolvedParent = (resolvedCategory === null || resolvedCategory === void 0 ? void 0 : resolvedCategory.parentId) ? categories.find((item)=>item.id === resolvedCategory.parentId) : (matchedByCell === null || matchedByCell === void 0 ? void 0 : matchedByCell.parentId) ? categories.find((item)=>item.id === matchedByCell.parentId) : null;
-            const matchedCoefficient = (0, _priceCoefficient.resolveCategoryPriceCoefficient)(resolvedCategory && !(0, _categoryPricing.isAggregatePricingCategoryName)(resolvedCategory.name) ? toNumberOrNull(resolvedCategory.priceCoefficient) : matchedByCell && !(0, _categoryPricing.isAggregatePricingCategoryName)(matchedByCell.name) ? toNumberOrNull(matchedByCell.priceCoefficient) : null, resolvedParent && !(0, _categoryPricing.isAggregatePricingCategoryName)(resolvedParent.name) ? toNumberOrNull(resolvedParent.priceCoefficient) : null);
-            const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`;
-            const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null;
-            const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null;
+        for (const item of itemCreates){
             await tx.importtaskitem.create({
                 data: {
                     importTaskId: newTask.id,
-                    operatorId: userId,
-                    sourceUrl: `table-import://${productCode}`,
-                    parsedName: normalizeText(row.productName),
-                    parsedMainImageUrl: null,
-                    parsedPriceMin: row.priceMin,
-                    parsedPriceMax: row.priceMax,
-                    supplierName: normalizeText(row.supplierName) || null,
-                    mainImageUrl: null,
-                    costPrice: row.priceMin,
-                    weightGrams: row.weightGrams,
-                    sourceCategoryName: categoryName || matchedSecondaryCategoryNames[0] || null,
-                    targetCategoryId: categoryId,
-                    coefficient: matchedCoefficient,
-                    goodsStatus: 'DRAFT',
-                    minimumOrderQuantity: 1,
-                    availableStock: row.skuTable.reduce((sum, sku)=>sum + (sku.stock || 0), 0),
-                    cnyPriceMin: row.priceMin,
-                    cnyPriceMax: row.priceMax,
-                    usdPriceMin: usdMin,
-                    usdPriceMax: usdMax,
-                    productDetail: productDetailText,
-                    skuSummaryText: row.skuTable.map((sku)=>sku.spec).join(' | '),
-                    fetchStatus: 'COMPLETED',
-                    publishStatus: 'PENDING',
-                    isSelected: true,
-                    isPublished: false,
-                    fetchStartedAt: new Date(),
-                    fetchFinishedAt: new Date(),
-                    specSummaryJson: row.specSummary,
-                    previewDataJson: {
-                        name: normalizeText(row.productName),
-                        ...await (async ()=>{
-                            const zhName = normalizeText(row.productName);
-                            const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(zhName);
-                            const nameEs = await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(zhName, null, nameEn);
-                            return {
-                                nameEn,
-                                nameEs
-                            };
-                        })(),
-                        categoryId: categoryId || undefined,
-                        matchedCategoryIds: matchedSecondaryCategoryIds,
-                        matchedCategoryNames: matchedSecondaryCategoryNames,
-                        price: (_row_priceMin = row.priceMin) !== null && _row_priceMin !== void 0 ? _row_priceMin : undefined,
-                        mainImageUrl: undefined,
-                        detailImages: [],
-                        shortDescription: normalizeText(row.brand) || undefined,
-                        importSortIndex: index,
-                        inboundIdentity: {
-                            mode: 'TABLE_PRODUCT_CODE_MERGED',
-                            excelProductCode: productCode,
-                            sourceUrl: `table-import://${productCode}`
-                        },
-                        featureAttributes: [
-                            ...normalizeText(row.brand) ? [
-                                {
-                                    key: '品牌',
-                                    value: normalizeText(row.brand)
-                                }
-                            ] : [],
-                            ...normalizeText(row.productCode) ? [
-                                {
-                                    key: '产品编号',
-                                    value: normalizeText(row.productCode)
-                                }
-                            ] : [],
-                            ...normalizeText(row.skuCode) ? [
-                                {
-                                    key: 'SKU',
-                                    value: normalizeText(row.skuCode)
-                                }
-                            ] : []
-                        ],
-                        skuTable: row.skuTable
-                    }
+                    ...item
                 }
             });
         }
         return newTask;
+    }, {
+        timeout: 120000,
+        maxWait: 15000
     });
     return {
         taskId: task.id,
@@ -94211,9 +95243,13 @@ const createImportTask = (0, _action_utils.requireRole)([
     if (uniqueUrls.length === 0) {
         throw new Error('请输入有效的商品链接');
     }
-    const validUrls = uniqueUrls.filter((u)=>u.startsWith('http://') || u.startsWith('https://'));
-    if (validUrls.length === 0) {
+    const httpUrls = uniqueUrls.filter((u)=>u.startsWith('http://') || u.startsWith('https://'));
+    if (httpUrls.length === 0) {
         throw new Error('链接格式不正确，需以 http 或 https 开头');
+    }
+    const validUrls = httpUrls.filter((u)=>is1688ImportSourceUrl(u) || (0, _PinduoduoParser.isPinduoduoProductUrl)(u));
+    if (validUrls.length === 0) {
+        throw new Error('请粘贴有效的1688商品详情链接（需含 offer/数字，如 https://detail.1688.com/offer/123.html）或拼多多商品链接');
     }
     let stockStrategyJson = null;
     if (typeof input.stockStrategyStock === 'number') {
@@ -94344,415 +95380,457 @@ const startParseTask = (0, _action_utils.requireRole)([
     } catch  {
     // ignore charset bootstrap failure; URL charset remains the primary guarantee
     }
-    const task = await _prisma.default.importtask.findUnique({
-        where: {
-            id: input.taskId
-        },
-        include: {
-            items: {
-                orderBy: {
-                    createdAt: 'asc'
-                }
-            }
-        }
-    });
-    if (!task) throw new Error('未找到该导入任务');
-    if (![
-        'PENDING',
-        'RETRY_PENDING',
-        'RATE_LIMITED'
-    ].includes(task.status)) throw new Error('当前任务状态不允许开始解析');
-    const startedAt = new Date();
-    await _prisma.default.importtask.update({
-        where: {
-            id: task.id
-        },
-        data: {
-            status: 'RUNNING',
-            startedAt,
-            finishedAt: null
-        }
-    });
-    let successCount = 0;
-    let failureCount = 0;
-    let rateLimitedCount = 0;
-    const costDeductionUsd = task.markupRate ? Number(task.markupRate) : 0;
-    const { minDelaySec, maxDelaySec } = getTaskDelayWindow(task);
-    const secondaryCategories = await loadAutoMatchSecondaryCategories(_prisma.default);
-    const categoryMap = await loadImportPricingCategories(_prisma.default);
-    const exchangeRate = await getGlobalExchangeRate(_prisma.default);
-    for(let index = 0; index < task.items.length; index += 1){
-        const item = task.items[index];
-        const fetchStartedAt = new Date();
-        await _prisma.default.importtaskitem.update({
+    const jobLabel = `task:${input.taskId}`;
+    acquireParseJob(jobLabel);
+    let task = null;
+    try {
+        task = await _prisma.default.importtask.findUnique({
             where: {
-                id: item.id
+                id: input.taskId
             },
-            data: {
-                fetchStatus: 'RUNNING',
-                fetchStartedAt,
-                fetchFinishedAt: null,
-                failureReason: null
+            include: {
+                items: {
+                    orderBy: {
+                        createdAt: 'asc'
+                    }
+                }
             }
         });
-        try {
-            const sourceUrl = item.sourceUrl || '';
-            const isPddUrl = (0, _PinduoduoParser.isPinduoduoProductUrl)(sourceUrl);
-            const is1688OfferUrl = /1688\.com\/.*offer\/\d+/i.test(sourceUrl) || /detail\.1688\.com\/offer\/\d+/i.test(sourceUrl);
-            const looksOffline = /offline|下架|sold.?out|removed/i.test(sourceUrl);
-            const looksTimeout = /timeout|error|超时/i.test(sourceUrl);
-            const looksRateLimited = /rate-limit|限流/i.test(sourceUrl);
-            if (looksRateLimited) {
-                rateLimitedCount += 1;
-                const now = new Date();
-                await _prisma.default.importtaskitem.update({
-                    where: {
-                        id: item.id
-                    },
-                    data: {
-                        fetchStatus: 'RATE_LIMITED',
-                        failureReason: isPddUrl ? '解析失败：触发拼多多限流，请稍后重试' : '解析失败：触发1688限流，请稍后重试',
-                        fetchFinishedAt: now
-                    }
-                });
-                await _prisma.default.importtask.update({
-                    where: {
-                        id: task.id
-                    },
-                    data: {
-                        lastRateLimitedAt: now
-                    }
-                });
-            } else if (isPddUrl) {
-                const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
-                const fetched = fetchResult.preview;
-                const hasRealParse = fetchResult.outcome === 'success' && (0, _PinduoduoParser.hasMeaningfulPinduoduoPreview)(fetched);
-                if (!hasRealParse) {
-                    failureCount += 1;
-                    const failReason = fetchResult.outcome === 'expired' ? '解析失败：该拼多多商品已下架或不存在' : fetchResult.failureReason || '解析失败：拼多多风控/抓取失败，请稍后重试';
-                    const goodsId = (0, _PinduoduoParser.extractPinduoduoGoodsId)(sourceUrl) || item.id.slice(0, 6);
-                    await _prisma.default.importtaskitem.update({
-                        where: {
-                            id: item.id
-                        },
-                        data: {
-                            parsedName: fetched.name || `[拼多多抓取] 商品 ${goodsId}`,
-                            fetchStatus: 'FAILED',
-                            failureReason: failReason,
-                            fetchFinishedAt: new Date()
-                        }
-                    });
-                } else {
-                    successCount += 1;
-                    await persistPinduoduoParsedItem({
-                        item,
-                        task,
-                        fetched,
-                        secondaryCategories,
-                        categoryMap,
-                        exchangeRate,
-                        importSortIndex: index
-                    });
-                }
-            } else if (!is1688OfferUrl) {
-                failureCount += 1;
-                await _prisma.default.importtaskitem.update({
-                    where: {
-                        id: item.id
-                    },
-                    data: {
-                        fetchStatus: 'FAILED',
-                        failureReason: '解析失败：链接错误，请粘贴有效的1688或拼多多商品详情页链接',
-                        fetchFinishedAt: new Date()
-                    }
-                });
-            } else if (looksOffline) {
-                failureCount += 1;
-                await _prisma.default.importtaskitem.update({
-                    where: {
-                        id: item.id
-                    },
-                    data: {
-                        fetchStatus: 'FAILED',
-                        failureReason: '解析失败：该1688商品已下架',
-                        fetchFinishedAt: new Date()
-                    }
-                });
-            } else if (looksTimeout) {
-                failureCount += 1;
-                await _prisma.default.importtaskitem.update({
-                    where: {
-                        id: item.id
-                    },
-                    data: {
-                        fetchStatus: 'FAILED',
-                        failureReason: '解析失败：网络超时，请稍后重试',
-                        fetchFinishedAt: new Date()
-                    }
-                });
-            } else {
-                const basePrice = 50 + Math.floor(Math.random() * 50);
-                const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl);
-                const fetched = fetchResult.preview;
-                const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
-                if (!hasRealParse) {
-                    failureCount += 1;
-                    const failReason = fetchResult.outcome === 'expired' ? FAILURE_REASON_EXPIRED : fetchResult.failureReason || FAILURE_REASON_RISK_CONTROL;
-                    const offerId = extract1688OfferId(sourceUrl) || item.id.slice(0, 6);
-                    await _prisma.default.importtaskitem.update({
-                        where: {
-                            id: item.id
-                        },
-                        data: {
-                            parsedName: fetched.name || `[1688抓取] 商品 ${offerId}`,
-                            fetchStatus: 'FAILED',
-                            failureReason: failReason,
-                            fetchFinishedAt: new Date()
-                        }
-                    });
-                } else {
-                    var _fetched_priceMin, _fetched_priceMax, _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
-                    var _task_stockStrategyJson, _skuTable_, _skuTable_1;
-                    successCount += 1;
-                    const rawPriceMin = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : basePrice;
-                    const rawPriceMax = (_fetched_priceMax = fetched.priceMax) !== null && _fetched_priceMax !== void 0 ? _fetched_priceMax : rawPriceMin + 20;
-                    const offerId = extract1688OfferId(sourceUrl) || item.id.slice(0, 6);
-                    // 抓不到标题时用明显占位，便于运营识别并重试；绝不假装已解析成功
-                    const productName = fetched.name || `[1688抓取] 商品 ${offerId}`;
-                    const productDetail = fetched.productDetail || '自动采集的商品详情，请运营补充图文与说明。';
-                    const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
-                    const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
-                    const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
-                    const targetCategoryId = matchedSecondaryCategoryIds[0] || task.defaultCategoryId || null;
-                    const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
-                    const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd));
-                    const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd));
-                    const finalPriceMin = roundCurrency(adjustedCostMin * resolvedCoefficient);
-                    const finalPriceMax = roundCurrency(adjustedCostMax * resolvedCoefficient);
-                    const mainImageUrl = fetched.mainImageUrl || (hasRealParse ? 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158' : null);
-                    const detailImages = Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0 ? fetched.detailImages : mainImageUrl ? [
-                        mainImageUrl
-                    ] : [];
-                    // 无真实供应商时留空，避免「假供应商」掩盖解析失败
-                    const supplierName = fetched.supplierName || null;
-                    const sourceCategoryName = fetched.sourceCategoryName || null;
-                    const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : [];
-                    const strategyStock = (_toNumberOrNull = toNumberOrNull((_task_stockStrategyJson = task.stockStrategyJson) === null || _task_stockStrategyJson === void 0 ? void 0 : _task_stockStrategyJson.stock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 100;
-                    // 有颜色时展开真实色/码 SKU；仅当真正无 props 时才落 1 条「默认规格」
-                    const colorsEarly = Array.isArray(fetched.colors) && fetched.colors.length > 0 ? fetched.colors.map((color)=>({
-                            label: normalizeText(color.label),
-                            imageUrl: normalizeText(color.imageUrl) || null
-                        })).filter((color)=>color.label) : [];
-                    const sizesByColorEarly = fetched.sizesByColor && typeof fetched.sizesByColor === 'object' ? Object.fromEntries(Object.entries(fetched.sizesByColor).map(([color, sizes])=>[
-                            color,
-                            Array.from(new Set((sizes || []).map((size)=>normalizeText(size)).filter(Boolean)))
-                        ])) : {};
-                    const baseSkuRows = resolveSkuTableOrExpandFromColors({
-                        skuTable: parsedSkuRows,
-                        colors: colorsEarly,
-                        sizesByColor: sizesByColorEarly,
-                        costPrice: adjustedCostMin,
-                        price: finalPriceMin,
-                        stock: strategyStock
-                    });
-                    const skuTable = baseSkuRows.map((row, index)=>{
-                        var _ref, _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
-                        // 源站价扣减后再乘类目系数；无独立价时回退到商品级源价
-                        const sourceCost = (_ref = (_toNumberOrNull = toNumberOrNull(row.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : toNumberOrNull(row.price)) !== null && _ref !== void 0 ? _ref : rawPriceMin;
-                        const nextCost = Math.max(0, roundCurrency(sourceCost - costDeductionUsd));
-                        const nextPrice = roundCurrency(nextCost * resolvedCoefficient);
-                        return {
-                            skuKey: normalizeText(row.skuKey) || `sku-${index + 1}`,
-                            spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
-                            costPrice: nextCost,
-                            price: nextPrice,
-                            stock: (_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock,
-                            weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
-                            // 无独立色图时保持空，待运营在待上传区补填；禁止回填主图冒充色图
-                            imageUrl: normalizeText(row.imageUrl) || null,
-                            attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
-                                    name: normalizeText(attr.name) || '规格',
-                                    value: normalizeText(attr.value) || '默认'
-                                })) : parseSpecAttributes(row.spec || '默认规格')
-                        };
-                    });
-                    const colors = colorsEarly.length > 0 ? colorsEarly : parsedSkuRows.length > 0 ? Array.from(new Set(skuTable.map((sku)=>{
-                        var _sku_attributes_find, _sku_attributes;
-                        return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '颜色')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
-                    }).filter(Boolean))).map((label)=>{
-                        var _skuTable_find;
-                        return {
-                            label,
-                            imageUrl: ((_skuTable_find = skuTable.find((sku)=>{
-                                var _sku_attributes;
-                                return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : _sku_attributes.some((attr)=>attr.name === '颜色' && attr.value === label);
-                            })) === null || _skuTable_find === void 0 ? void 0 : _skuTable_find.imageUrl) || null
-                        };
-                    }) : [];
-                    const sizesByColor = {
-                        ...sizesByColorEarly
-                    };
-                    if (Object.keys(sizesByColor).length === 0) {
-                        for (const sku of skuTable){
-                            var _sku_attributes_find, _sku_attributes, _sku_attributes_find1, _sku_attributes1;
-                            const color = (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '颜色')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
-                            const size = (_sku_attributes1 = sku.attributes) === null || _sku_attributes1 === void 0 ? void 0 : (_sku_attributes_find1 = _sku_attributes1.find((attr)=>attr.name === '尺码')) === null || _sku_attributes_find1 === void 0 ? void 0 : _sku_attributes_find1.value;
-                            if (!color || !size) continue;
-                            const list = sizesByColor[color] || [];
-                            if (!list.includes(size)) list.push(size);
-                            sizesByColor[color] = list;
-                        }
-                    }
-                    const specSummary = Array.isArray(fetched.specSummary) && fetched.specSummary.length > 0 ? fetched.specSummary : [
-                        ...colors.length ? [
-                            {
-                                name: '颜色',
-                                values: colors.map((item)=>item.label)
-                            }
-                        ] : [],
-                        ...(()=>{
-                            const sizeValues = Array.from(new Set([
-                                ...Object.values(sizesByColor).flat(),
-                                ...skuTable.map((sku)=>{
-                                    var _sku_attributes_find, _sku_attributes;
-                                    return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '尺码')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
-                                }).filter(Boolean)
-                            ].filter(Boolean)));
-                            return sizeValues.length ? [
-                                {
-                                    name: '尺码',
-                                    values: sizeValues
-                                }
-                            ] : [];
-                        })()
-                    ];
-                    if (specSummary.length === 0) {
-                        specSummary.push({
-                            name: '规格',
-                            values: [
-                                '默认规格'
-                            ]
-                        });
-                    }
-                    const skuPrices = skuTable.map((sku)=>toNumberOrNull(sku.price)).filter((value)=>value !== null);
-                    const resolvedFinalPriceMin = skuPrices.length ? Math.min(...skuPrices) : finalPriceMin;
-                    const resolvedFinalPriceMax = skuPrices.length ? Math.max(...skuPrices) : finalPriceMax;
-                    const resolvedUsdMin = roundCurrency(resolvedFinalPriceMin / exchangeRate);
-                    const resolvedUsdMax = roundCurrency(resolvedFinalPriceMax / exchangeRate);
-                    const totalStock = skuTable.reduce((sum, sku)=>{
-                        var _toNumberOrNull;
-                        return sum + ((_toNumberOrNull = toNumberOrNull(sku.stock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0);
-                    }, 0);
-                    const previewData = {
-                        name: productName,
-                        ...await (async ()=>{
-                            const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(productName);
-                            const nameEs = await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(productName, null, nameEn);
-                            return {
-                                nameEn,
-                                nameEs
-                            };
-                        })(),
-                        categoryId: targetCategoryId || undefined,
-                        matchedCategoryIds: matchedSecondaryCategoryIds,
-                        matchedCategoryNames: matchedSecondaryCategoryNames,
-                        price: resolvedFinalPriceMin,
-                        mainImageUrl: mainImageUrl || undefined,
-                        detailImages,
-                        shortDescription: productDetail,
-                        featureAttributes: fetched.featureAttributes || [],
-                        colors,
-                        sizesByColor,
-                        inboundIdentity: {
-                            mode: 'LINK_1688_INDEPENDENT',
-                            offerId,
-                            sourceUrl
-                        },
-                        skuTable
-                    };
-                    await _prisma.default.importtaskitem.update({
-                        where: {
-                            id: item.id
-                        },
-                        data: {
-                            parsedName: productName,
-                            supplierName,
-                            mainImageUrl,
-                            parsedMainImageUrl: mainImageUrl,
-                            costPrice: (_toNumberOrNull1 = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : adjustedCostMin,
-                            weightGrams: (_toNumberOrNull2 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
-                            sourceCategoryName,
-                            coefficient: resolvedCoefficient,
-                            goodsStatus: task.defaultStatus || 'DRAFT',
-                            productDetail,
-                            skuSummaryText: skuTable.map((sku)=>sku.spec).filter(Boolean).join(' | ') || '默认规格',
-                            cnyPriceMin: resolvedFinalPriceMin,
-                            cnyPriceMax: resolvedFinalPriceMax,
-                            usdPriceMin: resolvedUsdMin,
-                            usdPriceMax: resolvedUsdMax,
-                            minimumOrderQuantity: 1,
-                            availableStock: totalStock > 0 ? totalStock : 100,
-                            targetCategoryId,
-                            parsedPriceMin: rawPriceMin,
-                            parsedPriceMax: rawPriceMax,
-                            specSummaryJson: specSummary,
-                            previewDataJson: previewData,
-                            fetchStatus: 'COMPLETED',
-                            failureReason: null,
-                            fetchFinishedAt: new Date()
-                        }
-                    });
-                }
-            }
-        } catch (error) {
-            failureCount += 1;
-            await _prisma.default.importtaskitem.update({
-                where: {
-                    id: item.id
-                },
-                data: {
-                    fetchStatus: 'FAILED',
-                    failureReason: `解析失败：${(error === null || error === void 0 ? void 0 : error.message) || '抓取过程中发生未知错误'}`,
-                    fetchFinishedAt: new Date()
-                }
-            });
+        if (!task) throw new Error('未找到该导入任务');
+        if (![
+            'PENDING',
+            'RETRY_PENDING',
+            'RATE_LIMITED'
+        ].includes(task.status)) {
+            throw new Error('当前任务状态不允许开始解析');
         }
-        const processedCount = index + 1;
-        const progressPercent = Math.min(100, Math.round(processedCount / task.items.length * 100));
+        bumpParseJobProgress(0, task.items.length);
+        const startedAt = new Date();
         await _prisma.default.importtask.update({
             where: {
                 id: task.id
             },
             data: {
-                successCount,
-                failureCount: failureCount + rateLimitedCount,
-                progressPercent,
-                lastScheduledAt: new Date()
+                status: 'RUNNING',
+                startedAt,
+                finishedAt: null
             }
         });
-        if (index < task.items.length - 1) {
-            await sleep(randomDelayMs(minDelaySec, maxDelaySec));
-        }
+    } catch (error) {
+        releaseParseJob(jobLabel);
+        throw error;
     }
-    const totalFailures = failureCount + rateLimitedCount;
-    const finishedAt = new Date();
-    let finalStatus = 'COMPLETED';
-    if (successCount === 0 && totalFailures > 0) {
-        finalStatus = rateLimitedCount > 0 && failureCount === 0 ? 'RATE_LIMITED' : 'FAILED';
-    } else if (totalFailures > 0) {
-        finalStatus = 'PARTIAL_SUCCESS';
-    }
-    await _prisma.default.importtask.update({
-        where: {
-            id: task.id
-        },
-        data: {
-            status: finalStatus,
-            successCount,
-            failureCount: totalFailures,
-            progressPercent: 100,
-            finishedAt
+    // P0: ACK immediately after marking RUNNING; URL parsing continues in-process.
+    // UI must poll importtask / importtaskitem status (do not assume this RPC waits for completion).
+    const taskSnapshot = task;
+    void (async ()=>{
+        let successCount = 0;
+        let failureCount = 0;
+        let rateLimitedCount = 0;
+        const costDeductionUsd = taskSnapshot.markupRate ? Number(taskSnapshot.markupRate) : 0;
+        const { minDelaySec, maxDelaySec } = getTaskDelayWindow(taskSnapshot);
+        const secondaryCategories = await loadAutoMatchSecondaryCategories(_prisma.default);
+        const categoryMap = await loadImportPricingCategories(_prisma.default);
+        const exchangeRate = await getGlobalExchangeRate(_prisma.default);
+        const cookieSnapshot = resolve1688Cookie();
+        console.warn(`[startParseTask] task=${taskSnapshot.id} items=${taskSnapshot.items.length} cookieConfigured=${Boolean(cookieSnapshot)} cookieLen=${cookieSnapshot.length} hasMtopTk=${/_m_h5_tk=/.test(cookieSnapshot)} cwd=${process.cwd()}`);
+        for(let index = 0; index < taskSnapshot.items.length; index += 1){
+            if (isParseJobCancelled()) {
+                console.warn(`[startParseTask] cancelled by user at index=${index} task=${taskSnapshot.id}`);
+                await _prisma.default.importtaskitem.updateMany({
+                    where: {
+                        importTaskId: taskSnapshot.id,
+                        fetchStatus: {
+                            in: [
+                                'PENDING',
+                                'RUNNING'
+                            ]
+                        }
+                    },
+                    data: {
+                        fetchStatus: 'RETRY_PENDING',
+                        failureReason: '用户终止解析',
+                        fetchFinishedAt: new Date()
+                    }
+                });
+                await _prisma.default.importtask.update({
+                    where: {
+                        id: taskSnapshot.id
+                    },
+                    data: {
+                        status: 'RETRY_PENDING',
+                        finishedAt: new Date(),
+                        progressPercent: Math.min(100, Math.round(index / Math.max(1, taskSnapshot.items.length) * 100))
+                    }
+                });
+                break;
+            }
+            const item = taskSnapshot.items[index];
+            const fetchStartedAt = new Date();
+            await _prisma.default.importtaskitem.update({
+                where: {
+                    id: item.id
+                },
+                data: {
+                    fetchStatus: 'RUNNING',
+                    fetchStartedAt,
+                    fetchFinishedAt: null,
+                    failureReason: null
+                }
+            });
+            try {
+                const sourceUrl = item.sourceUrl || '';
+                const isPddUrl = (0, _PinduoduoParser.isPinduoduoProductUrl)(sourceUrl);
+                const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl);
+                if (isPddUrl) {
+                    const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
+                    const fetched = fetchResult.preview;
+                    const hasRealParse = fetchResult.outcome === 'success' && (0, _PinduoduoParser.hasMeaningfulPinduoduoPreview)(fetched);
+                    if (!hasRealParse) {
+                        failureCount += 1;
+                        const failReason = fetchResult.outcome === 'expired' ? '解析失败：该拼多多商品已下架或不存在' : fetchResult.failureReason || '解析失败：拼多多风控/抓取失败，请稍后重试';
+                        const goodsId = (0, _PinduoduoParser.extractPinduoduoGoodsId)(sourceUrl) || item.id.slice(0, 6);
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                parsedName: fetched.name || `[拼多多抓取] 商品 ${goodsId}`,
+                                fetchStatus: 'FAILED',
+                                failureReason: failReason,
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                    } else {
+                        successCount += 1;
+                        await persistPinduoduoParsedItem({
+                            item,
+                            task: taskSnapshot,
+                            fetched,
+                            secondaryCategories,
+                            categoryMap,
+                            exchangeRate,
+                            importSortIndex: index
+                        });
+                    }
+                } else if (!is1688OfferUrl) {
+                    failureCount += 1;
+                    await _prisma.default.importtaskitem.update({
+                        where: {
+                            id: item.id
+                        },
+                        data: {
+                            fetchStatus: 'FAILED',
+                            failureReason: '解析失败：链接错误，请粘贴有效的1688或拼多多商品详情页链接',
+                            fetchFinishedAt: new Date()
+                        }
+                    });
+                } else {
+                    const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl);
+                    const fetched = fetchResult.preview;
+                    const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
+                    if (!hasRealParse) {
+                        failureCount += 1;
+                        const failReason = fetchResult.outcome === 'expired' ? FAILURE_REASON_EXPIRED : fetchResult.failureReason || FAILURE_REASON_RISK_CONTROL;
+                        const offerId = extract1688OfferId(sourceUrl) || item.id.slice(0, 6);
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                parsedName: fetched.name || `[1688抓取] 商品 ${offerId}`,
+                                fetchStatus: 'FAILED',
+                                failureReason: failReason,
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                    } else {
+                        var _fetched_priceMin, _fetched_priceMax, _toNumberOrNull, _toNumberOrNull1;
+                        var _taskSnapshot_stockStrategyJson, _skuTable_, _skuTable_1;
+                        successCount += 1;
+                        const rawPriceMin = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : basePrice;
+                        const rawPriceMax = (_fetched_priceMax = fetched.priceMax) !== null && _fetched_priceMax !== void 0 ? _fetched_priceMax : rawPriceMin + 20;
+                        const offerId = extract1688OfferId(sourceUrl) || item.id.slice(0, 6);
+                        // 抓不到标题时用明显占位，便于运营识别并重试；绝不假装已解析成功
+                        const productName = fetched.name || `[1688抓取] 商品 ${offerId}`;
+                        const productDetail = fetched.productDetail || '自动采集的商品详情，请运营补充图文与说明。';
+                        const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
+                        const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
+                        const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
+                        // Pricing target = real L1/L2 only; Brand hits stay in matched* for shelf linking.
+                        const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, taskSnapshot.defaultCategoryId);
+                        const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
+                        const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd));
+                        const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd));
+                        const finalPriceMin = roundCurrency(adjustedCostMin * resolvedCoefficient);
+                        const finalPriceMax = roundCurrency(adjustedCostMax * resolvedCoefficient);
+                        const mainImageUrl = fetched.mainImageUrl || (hasRealParse ? 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158' : null);
+                        const detailImages = Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0 ? fetched.detailImages : mainImageUrl ? [
+                            mainImageUrl
+                        ] : [];
+                        // 无真实供应商时留空，避免「假供应商」掩盖解析失败
+                        const supplierName = fetched.supplierName || null;
+                        const sourceCategoryName = fetched.sourceCategoryName || null;
+                        const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : [];
+                        const strategyStock = (0, _resolveInitialStock.resolveInitialStock)((_taskSnapshot_stockStrategyJson = taskSnapshot.stockStrategyJson) === null || _taskSnapshot_stockStrategyJson === void 0 ? void 0 : _taskSnapshot_stockStrategyJson.stock);
+                        // 有颜色时展开真实色/码 SKU；仅当真正无 props 时才落 1 条「默认规格」
+                        const colorsEarly = Array.isArray(fetched.colors) && fetched.colors.length > 0 ? fetched.colors.map((color)=>({
+                                label: normalizeText(color.label),
+                                imageUrl: normalizeText(color.imageUrl) || null
+                            })).filter((color)=>color.label) : [];
+                        const sizesByColorEarly = fetched.sizesByColor && typeof fetched.sizesByColor === 'object' ? Object.fromEntries(Object.entries(fetched.sizesByColor).map(([color, sizes])=>[
+                                color,
+                                Array.from(new Set((sizes || []).map((size)=>normalizeText(size)).filter(Boolean)))
+                            ])) : {};
+                        const baseSkuRows = resolveSkuTableOrExpandFromColors({
+                            skuTable: parsedSkuRows,
+                            colors: colorsEarly,
+                            sizesByColor: sizesByColorEarly,
+                            costPrice: adjustedCostMin,
+                            price: finalPriceMin,
+                            stock: strategyStock
+                        });
+                        const skuTable = baseSkuRows.map((row, index)=>{
+                            var _ref, _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
+                            // 源站价扣减后再乘类目系数；无独立价时回退到商品级源价
+                            const sourceCost = (_ref = (_toNumberOrNull = toNumberOrNull(row.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : toNumberOrNull(row.price)) !== null && _ref !== void 0 ? _ref : rawPriceMin;
+                            const nextCost = Math.max(0, roundCurrency(sourceCost - costDeductionUsd));
+                            const nextPrice = roundCurrency(nextCost * resolvedCoefficient);
+                            return {
+                                skuKey: normalizeText(row.skuKey) || `sku-${index + 1}`,
+                                spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
+                                costPrice: nextCost,
+                                price: nextPrice,
+                                stock: (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock),
+                                weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
+                                // 无独立色图时保持空，待运营在待上传区补填；禁止回填主图冒充色图
+                                imageUrl: normalizeText(row.imageUrl) || null,
+                                attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
+                                        name: normalizeText(attr.name) || '规格',
+                                        value: normalizeText(attr.value) || '默认'
+                                    })) : parseSpecAttributes(row.spec || '默认规格')
+                            };
+                        });
+                        const colors = colorsEarly.length > 0 ? colorsEarly : parsedSkuRows.length > 0 ? Array.from(new Set(skuTable.map((sku)=>{
+                            var _sku_attributes_find, _sku_attributes;
+                            return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '颜色')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
+                        }).filter(Boolean))).map((label)=>{
+                            var _skuTable_find;
+                            return {
+                                label,
+                                imageUrl: ((_skuTable_find = skuTable.find((sku)=>{
+                                    var _sku_attributes;
+                                    return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : _sku_attributes.some((attr)=>attr.name === '颜色' && attr.value === label);
+                                })) === null || _skuTable_find === void 0 ? void 0 : _skuTable_find.imageUrl) || null
+                            };
+                        }) : [];
+                        const sizesByColor = {
+                            ...sizesByColorEarly
+                        };
+                        if (Object.keys(sizesByColor).length === 0) {
+                            for (const sku of skuTable){
+                                var _sku_attributes_find, _sku_attributes, _sku_attributes_find1, _sku_attributes1;
+                                const color = (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '颜色')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
+                                const size = (_sku_attributes1 = sku.attributes) === null || _sku_attributes1 === void 0 ? void 0 : (_sku_attributes_find1 = _sku_attributes1.find((attr)=>attr.name === '尺码')) === null || _sku_attributes_find1 === void 0 ? void 0 : _sku_attributes_find1.value;
+                                if (!color || !size) continue;
+                                const list = sizesByColor[color] || [];
+                                if (!list.includes(size)) list.push(size);
+                                sizesByColor[color] = list;
+                            }
+                        }
+                        const specSummary = Array.isArray(fetched.specSummary) && fetched.specSummary.length > 0 ? fetched.specSummary : [
+                            ...colors.length ? [
+                                {
+                                    name: '颜色',
+                                    values: colors.map((item)=>item.label)
+                                }
+                            ] : [],
+                            ...(()=>{
+                                const sizeValues = Array.from(new Set([
+                                    ...Object.values(sizesByColor).flat(),
+                                    ...skuTable.map((sku)=>{
+                                        var _sku_attributes_find, _sku_attributes;
+                                        return (_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>attr.name === '尺码')) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value;
+                                    }).filter(Boolean)
+                                ].filter(Boolean)));
+                                return sizeValues.length ? [
+                                    {
+                                        name: '尺码',
+                                        values: sizeValues
+                                    }
+                                ] : [];
+                            })()
+                        ];
+                        if (specSummary.length === 0) {
+                            specSummary.push({
+                                name: '规格',
+                                values: [
+                                    '默认规格'
+                                ]
+                            });
+                        }
+                        const skuPrices = skuTable.map((sku)=>toNumberOrNull(sku.price)).filter((value)=>value !== null);
+                        const resolvedFinalPriceMin = skuPrices.length ? Math.min(...skuPrices) : finalPriceMin;
+                        const resolvedFinalPriceMax = skuPrices.length ? Math.max(...skuPrices) : finalPriceMax;
+                        const resolvedUsdMin = roundCurrency(resolvedFinalPriceMin / exchangeRate);
+                        const resolvedUsdMax = roundCurrency(resolvedFinalPriceMax / exchangeRate);
+                        const totalStock = skuTable.reduce((sum, sku)=>{
+                            var _toNumberOrNull;
+                            return sum + ((_toNumberOrNull = toNumberOrNull(sku.stock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0);
+                        }, 0);
+                        const previewData = {
+                            name: productName,
+                            // 采集/解析阶段不再翻译（移至上架时翻译+缓存），显著加快「传图」并让逐条切换不卡顿
+                            categoryId: targetCategoryId || undefined,
+                            matchedCategoryIds: matchedSecondaryCategoryIds,
+                            matchedCategoryNames: matchedSecondaryCategoryNames,
+                            price: resolvedFinalPriceMin,
+                            mainImageUrl: mainImageUrl || undefined,
+                            detailImages,
+                            shortDescription: productDetail,
+                            featureAttributes: fetched.featureAttributes || [],
+                            colors,
+                            sizesByColor,
+                            inboundIdentity: {
+                                mode: 'LINK_1688_INDEPENDENT',
+                                offerId,
+                                sourceUrl
+                            },
+                            skuTable
+                        };
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                parsedName: productName,
+                                supplierName,
+                                mainImageUrl,
+                                parsedMainImageUrl: mainImageUrl,
+                                costPrice: (_toNumberOrNull = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : adjustedCostMin,
+                                weightGrams: (_toNumberOrNull1 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 500,
+                                sourceCategoryName,
+                                coefficient: resolvedCoefficient,
+                                goodsStatus: taskSnapshot.defaultStatus || 'DRAFT',
+                                productDetail,
+                                skuSummaryText: skuTable.map((sku)=>sku.spec).filter(Boolean).join(' | ') || '默认规格',
+                                cnyPriceMin: resolvedFinalPriceMin,
+                                cnyPriceMax: resolvedFinalPriceMax,
+                                usdPriceMin: resolvedUsdMin,
+                                usdPriceMax: resolvedUsdMax,
+                                minimumOrderQuantity: _resolveInitialStock.DEFAULT_MIN_ORDER_QTY,
+                                // B：真实库存优先（全 0 即缺货），缺省回落 1000
+                                availableStock: (0, _resolveInitialStock.resolveInitialStock)(totalStock),
+                                targetCategoryId,
+                                parsedPriceMin: rawPriceMin,
+                                parsedPriceMax: rawPriceMax,
+                                specSummaryJson: specSummary,
+                                previewDataJson: previewData,
+                                fetchStatus: 'COMPLETED',
+                                failureReason: null,
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                failureCount += 1;
+                await _prisma.default.importtaskitem.update({
+                    where: {
+                        id: item.id
+                    },
+                    data: {
+                        fetchStatus: 'FAILED',
+                        failureReason: `解析失败：${(error === null || error === void 0 ? void 0 : error.message) || '抓取过程中发生未知错误'}`,
+                        fetchFinishedAt: new Date()
+                    }
+                });
+            }
+            const processedCount = index + 1;
+            bumpParseJobProgress(processedCount, taskSnapshot.items.length);
+            const progressPercent = Math.min(100, Math.round(processedCount / taskSnapshot.items.length * 100));
+            await _prisma.default.importtask.update({
+                where: {
+                    id: taskSnapshot.id
+                },
+                data: {
+                    successCount,
+                    failureCount: failureCount + rateLimitedCount,
+                    progressPercent,
+                    lastScheduledAt: new Date()
+                }
+            });
+            if (index < taskSnapshot.items.length - 1) {
+                await sleep(randomDelayMs(minDelaySec, maxDelaySec));
+            }
         }
+        const totalFailures = failureCount + rateLimitedCount;
+        const finishedAt = new Date();
+        if (isParseJobCancelled()) {
+            await _prisma.default.importtask.update({
+                where: {
+                    id: taskSnapshot.id
+                },
+                data: {
+                    status: 'RETRY_PENDING',
+                    successCount,
+                    failureCount: totalFailures,
+                    finishedAt
+                }
+            }).catch(()=>undefined);
+        } else {
+            let finalStatus = 'COMPLETED';
+            if (successCount === 0 && totalFailures > 0) {
+                finalStatus = rateLimitedCount > 0 && failureCount === 0 ? 'RATE_LIMITED' : 'FAILED';
+            } else if (totalFailures > 0) {
+                finalStatus = 'PARTIAL_SUCCESS';
+            }
+            await _prisma.default.importtask.update({
+                where: {
+                    id: taskSnapshot.id
+                },
+                data: {
+                    status: finalStatus,
+                    successCount,
+                    failureCount: totalFailures,
+                    progressPercent: 100,
+                    finishedAt
+                }
+            });
+        }
+    })().catch(async (error)=>{
+        console.error('[startParseTask] background parse failed', error);
+        try {
+            await _prisma.default.importtaskitem.updateMany({
+                where: {
+                    importTaskId: taskSnapshot.id,
+                    fetchStatus: {
+                        in: [
+                            'PENDING',
+                            'RUNNING'
+                        ]
+                    }
+                },
+                data: {
+                    fetchStatus: 'FAILED',
+                    failureReason: `解析失败：${(error === null || error === void 0 ? void 0 : error.message) || '后台解析异常中断'}`,
+                    fetchFinishedAt: new Date()
+                }
+            });
+            await _prisma.default.importtask.update({
+                where: {
+                    id: taskSnapshot.id
+                },
+                data: {
+                    status: 'FAILED',
+                    finishedAt: new Date()
+                }
+            });
+        } catch (persistError) {
+            console.error('[startParseTask] failed to persist background error status', persistError);
+        }
+    }).finally(()=>{
+        releaseParseJob(jobLabel);
     });
 }));
 const updateTaskItemPreview = (0, _action_utils.requireRole)([
@@ -94872,7 +95950,9 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
             data.targetCategoryId = String(rawValue || '') || null;
             break;
         case 'coefficient':
-            throw new Error('1688 导入商品的售价系数由目标分类自动计算，无需手动修改');
+            if (numericValue === null || numericValue <= 0) throw new Error('价格系数必须大于0');
+            data.coefficient = numericValue;
+            break;
         case 'goods_status':
             if (![
                 'DRAFT',
@@ -94906,11 +95986,14 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
             data.usdPriceMax = numericValue;
             break;
         case 'minimum_order_quantity':
-            if (numericValue === null || numericValue <= 0) throw new Error('起订量必须大于0');
-            data.minimumOrderQuantity = Math.round(numericValue);
+            data.minimumOrderQuantity = (0, _resolveInitialStock.resolveInitialMinOrderQty)(numericValue);
             break;
         case 'available_stock':
-            if (numericValue === null || numericValue < 0) throw new Error('可用库存不能小于0');
+            if (numericValue === null || numericValue === undefined || !Number.isFinite(numericValue)) {
+                data.availableStock = _resolveInitialStock.DEFAULT_AVAILABLE_STOCK;
+                break;
+            }
+            if (numericValue < 0) throw new Error('可用库存不能小于0');
             data.availableStock = Math.round(numericValue);
             break;
         case 'main_image_url':
@@ -94923,13 +96006,14 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
     }
     if ([
         'target_category_id',
-        'cost_price'
+        'cost_price',
+        'coefficient'
     ].includes(input.field)) {
         var _priceSummary_cnyMin;
         const nextCategoryId = input.field === 'target_category_id' ? String(rawValue || '') || null : item.targetCategoryId || item.importTask.defaultCategoryId || null;
         const nextCostPrice = input.field === 'cost_price' ? numericValue : toNumberOrNull(item.costPrice);
         const categoryMap = await loadImportPricingCategories(_prisma.default);
-        const coefficient = resolveImportCategoryCoefficient(categoryMap, nextCategoryId);
+        const coefficient = input.field === 'coefficient' ? Number(numericValue) : resolveImportCategoryCoefficient(categoryMap, nextCategoryId);
         const exchangeRate = await getGlobalExchangeRate(_prisma.default);
         const nextDrafts = recalculatePendingSkuPrices(resolvePendingSkuDrafts(item), nextCostPrice, coefficient);
         const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate);
@@ -94961,6 +96045,140 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
         },
         data
     });
+}));
+const batchUpdatePendingImportItemField = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const itemIds = Array.from(new Set((input.itemIds || []).map((id)=>String(id || '').trim()).filter(Boolean)));
+    if (!itemIds.length) {
+        return {
+            success_count: 0,
+            fail_count: 0
+        };
+    }
+    const numericValue = typeof input.value === 'number' ? input.value : toNumberOrNull(input.value);
+    if (numericValue === null || !Number.isFinite(numericValue)) {
+        throw new Error('请输入有效数值');
+    }
+    if (input.field === 'coefficient') {
+        if (numericValue <= 0) throw new Error('价格系数必须大于0');
+        const [items, exchangeRate] = await Promise.all([
+            _prisma.default.importtaskitem.findMany({
+                where: {
+                    id: {
+                        in: itemIds
+                    },
+                    isPublished: false
+                },
+                include: {
+                    importTask: true
+                }
+            }),
+            getGlobalExchangeRate(_prisma.default)
+        ]);
+        const fail_count = Math.max(0, itemIds.length - items.length);
+        if (!items.length) {
+            return {
+                success_count: 0,
+                fail_count
+            };
+        }
+        let success = 0;
+        let fail = fail_count;
+        for (const item of items){
+            try {
+                var _priceSummary_cnyMin;
+                const nextCostPrice = toNumberOrNull(item.costPrice);
+                const nextDrafts = recalculatePendingSkuPrices(resolvePendingSkuDrafts(item), nextCostPrice, numericValue);
+                const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate);
+                const currentPreview = item.previewDataJson || {};
+                const nextCategoryId = item.targetCategoryId || item.importTask.defaultCategoryId || null;
+                await _prisma.default.importtaskitem.update({
+                    where: {
+                        id: item.id
+                    },
+                    data: {
+                        coefficient: numericValue,
+                        cnyPriceMin: priceSummary.cnyMin,
+                        cnyPriceMax: priceSummary.cnyMax,
+                        usdPriceMin: priceSummary.usdMin,
+                        usdPriceMax: priceSummary.usdMax,
+                        previewDataJson: {
+                            ...currentPreview,
+                            categoryId: nextCategoryId || undefined,
+                            price: (_priceSummary_cnyMin = priceSummary.cnyMin) !== null && _priceSummary_cnyMin !== void 0 ? _priceSummary_cnyMin : currentPreview.price,
+                            skuTable: nextDrafts.map((sku)=>({
+                                    skuKey: sku.sku_key,
+                                    spec: sku.spec_text,
+                                    costPrice: sku.cost_price,
+                                    price: sku.price,
+                                    stock: sku.stock,
+                                    weightGrams: sku.weight_grams,
+                                    imageUrl: sku.image_url || undefined,
+                                    attributes: sku.attributes
+                                }))
+                        }
+                    }
+                });
+                success += 1;
+            } catch  {
+                fail += 1;
+            }
+        }
+        return {
+            success_count: success,
+            fail_count: fail
+        };
+    }
+    const data = {};
+    if (input.field === 'weight_grams') {
+        if (numericValue <= 0) throw new Error('重量必须大于0');
+        data.weightGrams = numericValue;
+    } else if (input.field === 'minimum_order_quantity') {
+        data.minimumOrderQuantity = (0, _resolveInitialStock.resolveInitialMinOrderQty)(numericValue);
+    } else if (input.field === 'available_stock') {
+        if (numericValue === null || numericValue === undefined || Number.isNaN(numericValue)) {
+            data.availableStock = _resolveInitialStock.DEFAULT_AVAILABLE_STOCK;
+        } else if (numericValue < 0) {
+            throw new Error('可用库存不能小于0');
+        } else {
+            data.availableStock = Math.round(numericValue);
+        }
+    } else {
+        throw new Error('暂不支持的批量待上传字段');
+    }
+    const existing = await _prisma.default.importtaskitem.findMany({
+        where: {
+            id: {
+                in: itemIds
+            },
+            isPublished: false
+        },
+        select: {
+            id: true
+        }
+    });
+    const eligibleIds = existing.map((row)=>row.id);
+    const fail_count = Math.max(0, itemIds.length - eligibleIds.length);
+    if (!eligibleIds.length) {
+        return {
+            success_count: 0,
+            fail_count
+        };
+    }
+    const result = await _prisma.default.importtaskitem.updateMany({
+        where: {
+            id: {
+                in: eligibleIds
+            },
+            isPublished: false
+        },
+        data
+    });
+    return {
+        success_count: result.count,
+        fail_count: Math.max(0, itemIds.length - result.count)
+    };
 }));
 const inlineUpdatePendingImportSkuField = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -95063,211 +96281,272 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     if (!input.itemIds.length) {
         throw new Error('请至少选择一条待上传商品');
     }
+    // Hoist shared lookups once — previously reloaded inside every item transaction.
+    const [secondaryCategories, exchangeRate, categoryMap] = await Promise.all([
+        loadAutoMatchSecondaryCategories(_prisma.default),
+        getGlobalExchangeRate(_prisma.default),
+        loadImportPricingCategories(_prisma.default)
+    ]);
     let success = 0;
     let fail = 0;
     const failures = [];
-    for (const itemId of input.itemIds){
+    const publishOne = async (itemId)=>{
         let failureName = '';
+        const MAX_PUBLISH_ATTEMPTS = 5;
+        let lastError = null;
+        // 翻译移出事务：上架时先按 parsedName 预翻译（带缓存+超时），事务内只读结果。
+        // 这样缩短事务时长、降低 SPU 撞号与连接占用；采集阶段则完全不翻译。
+        let preNameEn = '';
+        let preNameEs = '';
         try {
-            await _prisma.default.$transaction(async (tx)=>{
-                var _ref, _priceSummary_cnyMin, _item_availableStock, _item_minimumOrderQuantity, _priceSummary_cnyMin1;
-                var _item_previewDataJson, _item_previewDataJson1, _item_previewDataJson2;
-                const item = await tx.importtaskitem.findUnique({
-                    where: {
-                        id: itemId
-                    },
-                    include: {
-                        importTask: true
+            const pre = await _prisma.default.importtaskitem.findUnique({
+                where: {
+                    id: itemId
+                },
+                select: {
+                    parsedName: true,
+                    previewDataJson: true
+                }
+            });
+            const preName = normalizeText(pre === null || pre === void 0 ? void 0 : pre.parsedName) || '';
+            const prePreview = (pre === null || pre === void 0 ? void 0 : pre.previewDataJson) || {};
+            preNameEn = String(prePreview.nameEn || '').trim() || await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(preName);
+            preNameEs = String(prePreview.nameEs || '').trim() || await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(preName, null, preNameEn);
+        } catch  {
+        // 预翻译失败不阻断上架：事务内仍有兜底翻译/字典回落
+        }
+        for(let attempt = 1; attempt <= MAX_PUBLISH_ATTEMPTS; attempt++){
+            try {
+                await _prisma.default.$transaction(async (tx)=>{
+                    var _ref, _priceSummary_cnyMin, _priceSummary_cnyMin1;
+                    var _item_previewDataJson, _item_previewDataJson1, _item_previewDataJson2;
+                    const item = await tx.importtaskitem.findUnique({
+                        where: {
+                            id: itemId
+                        },
+                        include: {
+                            importTask: true
+                        }
+                    });
+                    if (!item) throw new Error('待上传明细不存在');
+                    failureName = normalizeText(item.parsedName) || normalizeText(item.sourceUrl) || itemId;
+                    const recoveredPublishedData = buildPublishedImportItemRecoveryData(item);
+                    if (recoveredPublishedData) {
+                        await tx.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: recoveredPublishedData
+                        });
+                        throw new Error('该商品已发布');
                     }
-                });
-                if (!item) throw new Error('待上传明细不存在');
-                failureName = normalizeText(item.parsedName) || normalizeText(item.sourceUrl) || itemId;
-                const recoveredPublishedData = buildPublishedImportItemRecoveryData(item);
-                if (recoveredPublishedData) {
+                    if (item.isPublished) throw new Error('该商品已发布');
+                    const pendingSkusForReadiness = resolvePendingSkuDrafts(item);
+                    const readinessSnapshot = {
+                        fetchStatus: item.fetchStatus,
+                        isPublished: item.isPublished,
+                        title: item.parsedName,
+                        mainImageUrl: item.mainImageUrl || item.parsedMainImageUrl,
+                        galleryUrls: [
+                            item.mainImageUrl,
+                            item.parsedMainImageUrl,
+                            ...(Array.isArray((_item_previewDataJson = item.previewDataJson) === null || _item_previewDataJson === void 0 ? void 0 : _item_previewDataJson.detailImages) ? item.previewDataJson.detailImages : []) || []
+                        ],
+                        prices: [
+                            ...pendingSkusForReadiness.map((sku)=>sku.price),
+                            toNumberOrNull(item.cnyPriceMin),
+                            toNumberOrNull(item.cnyPriceMax),
+                            toNumberOrNull(item.costPrice),
+                            toNumberOrNull(item.parsedPriceMin),
+                            toNumberOrNull(item.usdPriceMin),
+                            toNumberOrNull((_item_previewDataJson1 = item.previewDataJson) === null || _item_previewDataJson1 === void 0 ? void 0 : _item_previewDataJson1.price)
+                        ],
+                        updatedAt: item.updatedAt,
+                        createdAt: item.createdAt
+                    };
+                    const effectivelyReady = (0, _pendingImportReadiness.isPendingImportEffectivelyReady)(readinessSnapshot);
+                    if (item.fetchStatus !== 'COMPLETED' && !effectivelyReady) {
+                        throw new Error('仅可发布采集完成的商品');
+                    }
+                    const productName = item.parsedName || '';
+                    const mainImageUrl = item.mainImageUrl || item.parsedMainImageUrl || '';
+                    const previewData = item.previewDataJson || {};
+                    const detailForMatch = buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription);
+                    const rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, detailForMatch);
+                    const previewMatchedIds = Array.from(new Set((previewData.matchedCategoryIds || []).filter(Boolean)));
+                    // 发布时重新扫描标题+详情；若预览已有多标签则合并去重
+                    const autoMatchedCategoryIds = Array.from(new Set([
+                        ...rematchedSecondaryCategories.map((category)=>category.id),
+                        ...previewMatchedIds
+                    ]));
+                    const autoMatchedCategoryNames = rematchedSecondaryCategories.map((category)=>category.name);
+                    // 发布时标题/详情重新命中的 L2 优先作为主分类（修复：旧 targetCategoryId 覆盖导致 Brand 下商品数为 0）
+                    const selectedCategoryId = autoMatchedCategoryIds[0] || item.targetCategoryId || item.importTask.defaultCategoryId || '';
+                    if (!selectedCategoryId) throw new Error('请选择目标分类');
+                    const ownership = await resolveImportCategoryOwnership(tx, selectedCategoryId);
+                    const categoryId = ownership.primaryCategoryId;
+                    // 主分类 + 自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
+                    const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
+                        ...ownership.linkedCategoryIds,
+                        ...autoMatchedCategoryIds,
+                        item.targetCategoryId || ''
+                    ]);
+                    const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId);
+                    const baseCostPrice = toNumberOrNull(item.costPrice);
+                    const pendingSkus = recalculatePendingSkuPrices(pendingSkusForReadiness, baseCostPrice, resolvedCoefficient);
+                    const priceSummary = summarizePendingSkuPrices(pendingSkus, exchangeRate);
+                    const price = (_ref = (_priceSummary_cnyMin = priceSummary.cnyMin) !== null && _priceSummary_cnyMin !== void 0 ? _priceSummary_cnyMin : priceSummary.cnyMax) !== null && _ref !== void 0 ? _ref : toNumberOrNull((_item_previewDataJson2 = item.previewDataJson) === null || _item_previewDataJson2 === void 0 ? void 0 : _item_previewDataJson2.price);
+                    if (!productName.trim()) throw new Error('商品名称不能为空');
+                    if (!mainImageUrl.trim()) throw new Error('主图不能为空');
+                    if (!categoryId) throw new Error('请选择目标分类');
+                    if (price === null || price < 0) throw new Error('请补充有效售价区间');
+                    await tx.importtaskitem.update({
+                        where: {
+                            id: itemId
+                        },
+                        data: {
+                            ...item.fetchStatus !== 'COMPLETED' ? {
+                                fetchStatus: 'COMPLETED',
+                                fetchFinishedAt: item.fetchFinishedAt || new Date()
+                            } : {},
+                            publishStatus: 'RUNNING',
+                            failureReason: null
+                        }
+                    });
+                    const featureAttrs = Array.isArray(previewData === null || previewData === void 0 ? void 0 : previewData.featureAttributes) ? previewData.featureAttributes : [];
+                    const parameterJson = buildParameterJsonFromAttrs(featureAttrs);
+                    const galleryUrls = Array.from(new Set([
+                        mainImageUrl,
+                        ...(Array.isArray(previewData.detailImages) ? previewData.detailImages : []).filter(Boolean)
+                    ].filter(Boolean)));
+                    // 1688 / 表格发布共用 createProductRecord，但各自独立建 SPU：
+                    // - 1688：每条 pending item（= 每条链接）→ 一个新父商品，绝不按标题/图/货号合并
+                    // - 表格：合并已在 createProductsFromTable 完成，此处一对一发布
+                    const creationSource = resolvePendingCreationSource(item.sourceUrl);
+                    // 优先用事务外预翻译结果；仅当预翻译为空时才在事务内兜底翻译（极少发生）
+                    const nameEn = String(previewData.nameEn || '').trim() || preNameEn || await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(productName);
+                    const nameEs = String(previewData.nameEs || '').trim() || preNameEs || await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(productName, null, nameEn);
+                    const newProduct = await createProductRecord(tx, {
+                        categoryId,
+                        name: productName,
+                        nameEn,
+                        nameEs,
+                        mainImageUrl,
+                        galleryUrls,
+                        shortDescription: buildShortDescription(item.productDetail || '', [
+                            item.supplierName || '',
+                            item.sourceCategoryName || ''
+                        ]),
+                        price,
+                        source: creationSource,
+                        sourceUrl: creationSource === 'IMPORT_1688' ? item.sourceUrl : null,
+                        status: 'ACTIVE',
+                        stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
+                        supplierName: item.supplierName || null,
+                        costPrice: baseCostPrice,
+                        weightGrams: toNumberOrNull(item.weightGrams),
+                        goodsStatus: 'ACTIVE',
+                        detailText: item.productDetail || null,
+                        parameterJson,
+                        priceCoefficient: null,
+                        minOrderQty: (0, _resolveInitialStock.resolveInitialMinOrderQty)(item.minimumOrderQuantity),
+                        skuSummaryText: item.skuSummaryText || null,
+                        skus: pendingSkus,
+                        linkedCategoryIds,
+                        brandCategoryId: autoMatchedCategoryIds[0] || null,
+                        brandMatchKeyword: autoMatchedCategoryNames[0] || null,
+                        autoBrandMatched: autoMatchedCategoryIds.length > 0
+                    });
                     await tx.importtaskitem.update({
                         where: {
                             id: item.id
                         },
-                        data: recoveredPublishedData
-                    });
-                    throw new Error('该商品已发布');
-                }
-                if (item.isPublished) throw new Error('该商品已发布');
-                const pendingSkusForReadiness = resolvePendingSkuDrafts(item);
-                const readinessSnapshot = {
-                    fetchStatus: item.fetchStatus,
-                    isPublished: item.isPublished,
-                    title: item.parsedName,
-                    mainImageUrl: item.mainImageUrl || item.parsedMainImageUrl,
-                    galleryUrls: [
-                        item.mainImageUrl,
-                        item.parsedMainImageUrl,
-                        ...(Array.isArray((_item_previewDataJson = item.previewDataJson) === null || _item_previewDataJson === void 0 ? void 0 : _item_previewDataJson.detailImages) ? item.previewDataJson.detailImages : []) || []
-                    ],
-                    prices: [
-                        ...pendingSkusForReadiness.map((sku)=>sku.price),
-                        toNumberOrNull(item.cnyPriceMin),
-                        toNumberOrNull(item.cnyPriceMax),
-                        toNumberOrNull(item.costPrice),
-                        toNumberOrNull(item.parsedPriceMin),
-                        toNumberOrNull(item.usdPriceMin),
-                        toNumberOrNull((_item_previewDataJson1 = item.previewDataJson) === null || _item_previewDataJson1 === void 0 ? void 0 : _item_previewDataJson1.price)
-                    ],
-                    updatedAt: item.updatedAt,
-                    createdAt: item.createdAt
-                };
-                const effectivelyReady = (0, _pendingImportReadiness.isPendingImportEffectivelyReady)(readinessSnapshot);
-                if (item.fetchStatus !== 'COMPLETED' && !effectivelyReady) {
-                    throw new Error('仅可发布采集完成的商品');
-                }
-                const productName = item.parsedName || '';
-                const mainImageUrl = item.mainImageUrl || item.parsedMainImageUrl || '';
-                const previewData = item.previewDataJson || {};
-                const detailForMatch = buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription);
-                const secondaryCategories = await loadAutoMatchSecondaryCategories(tx);
-                const rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, detailForMatch);
-                const previewMatchedIds = Array.from(new Set((previewData.matchedCategoryIds || []).filter(Boolean)));
-                // 发布时重新扫描标题+详情；若预览已有多标签则合并去重
-                const autoMatchedCategoryIds = Array.from(new Set([
-                    ...rematchedSecondaryCategories.map((category)=>category.id),
-                    ...previewMatchedIds
-                ]));
-                const autoMatchedCategoryNames = rematchedSecondaryCategories.map((category)=>category.name);
-                // 发布时标题/详情重新命中的 L2 优先作为主分类（修复：旧 targetCategoryId 覆盖导致 Brand 下商品数为 0）
-                const selectedCategoryId = autoMatchedCategoryIds[0] || item.targetCategoryId || item.importTask.defaultCategoryId || '';
-                if (!selectedCategoryId) throw new Error('请选择目标分类');
-                const ownership = await resolveImportCategoryOwnership(tx, selectedCategoryId);
-                const categoryId = ownership.primaryCategoryId;
-                // 主分类 + 自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
-                const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
-                    ...ownership.linkedCategoryIds,
-                    ...autoMatchedCategoryIds,
-                    item.targetCategoryId || ''
-                ]);
-                const categoryMap = await loadImportPricingCategories(tx);
-                const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId);
-                const baseCostPrice = toNumberOrNull(item.costPrice);
-                const pendingSkus = recalculatePendingSkuPrices(pendingSkusForReadiness, baseCostPrice, resolvedCoefficient);
-                const priceSummary = summarizePendingSkuPrices(pendingSkus, await getGlobalExchangeRate(tx));
-                const price = (_ref = (_priceSummary_cnyMin = priceSummary.cnyMin) !== null && _priceSummary_cnyMin !== void 0 ? _priceSummary_cnyMin : priceSummary.cnyMax) !== null && _ref !== void 0 ? _ref : toNumberOrNull((_item_previewDataJson2 = item.previewDataJson) === null || _item_previewDataJson2 === void 0 ? void 0 : _item_previewDataJson2.price);
-                if (!productName.trim()) throw new Error('商品名称不能为空');
-                if (!mainImageUrl.trim()) throw new Error('主图不能为空');
-                if (!categoryId) throw new Error('请选择目标分类');
-                if (price === null || price < 0) throw new Error('请补充有效售价区间');
-                await tx.importtaskitem.update({
-                    where: {
-                        id: itemId
-                    },
-                    data: {
-                        ...item.fetchStatus !== 'COMPLETED' ? {
+                        data: {
                             fetchStatus: 'COMPLETED',
-                            fetchFinishedAt: item.fetchFinishedAt || new Date()
-                        } : {},
-                        publishStatus: 'RUNNING',
-                        failureReason: null
-                    }
+                            publishStatus: 'COMPLETED',
+                            isPublished: true,
+                            importedProductId: newProduct.id,
+                            targetCategoryId: categoryId,
+                            coefficient: resolvedCoefficient,
+                            cnyPriceMin: priceSummary.cnyMin,
+                            cnyPriceMax: priceSummary.cnyMax,
+                            usdPriceMin: priceSummary.usdMin,
+                            usdPriceMax: priceSummary.usdMax,
+                            previewDataJson: {
+                                ...previewData || {},
+                                categoryId,
+                                matchedCategoryIds: autoMatchedCategoryIds,
+                                matchedCategoryNames: autoMatchedCategoryNames,
+                                price: (_priceSummary_cnyMin1 = priceSummary.cnyMin) !== null && _priceSummary_cnyMin1 !== void 0 ? _priceSummary_cnyMin1 : previewData.price || undefined,
+                                skuTable: pendingSkus.map((sku)=>({
+                                        skuKey: sku.sku_key,
+                                        spec: sku.spec_text,
+                                        costPrice: sku.cost_price,
+                                        price: sku.price,
+                                        stock: sku.stock,
+                                        weightGrams: sku.weight_grams,
+                                        imageUrl: sku.image_url || undefined,
+                                        attributes: sku.attributes
+                                    }))
+                            },
+                            publishedAt: new Date(),
+                            failureReason: null
+                        }
+                    });
                 });
-                const featureAttrs = Array.isArray(previewData === null || previewData === void 0 ? void 0 : previewData.featureAttributes) ? previewData.featureAttributes : [];
-                const parameterJson = buildParameterJsonFromAttrs(featureAttrs);
-                const galleryUrls = Array.from(new Set([
-                    mainImageUrl,
-                    ...(Array.isArray(previewData.detailImages) ? previewData.detailImages : []).filter(Boolean)
-                ].filter(Boolean)));
-                // 1688 / 表格发布共用 createProductRecord，但各自独立建 SPU：
-                // - 1688：每条 pending item（= 每条链接）→ 一个新父商品，绝不按标题/图/货号合并
-                // - 表格：合并已在 createProductsFromTable 完成，此处一对一发布
-                const creationSource = resolvePendingCreationSource(item.sourceUrl);
-                const nameEn = String(previewData.nameEn || '').trim() || await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(productName);
-                const nameEs = String(previewData.nameEs || '').trim() || await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(productName, null, nameEn);
-                const newProduct = await createProductRecord(tx, {
-                    categoryId,
-                    name: productName,
-                    nameEn,
-                    nameEs,
-                    mainImageUrl,
-                    galleryUrls,
-                    shortDescription: buildShortDescription(item.productDetail || '', [
-                        item.supplierName || '',
-                        item.sourceCategoryName || ''
-                    ]),
-                    price,
-                    source: creationSource,
-                    sourceUrl: creationSource === 'IMPORT_1688' ? item.sourceUrl : null,
-                    status: 'ACTIVE',
-                    stock: (_item_availableStock = item.availableStock) !== null && _item_availableStock !== void 0 ? _item_availableStock : 0,
-                    supplierName: item.supplierName || null,
-                    costPrice: baseCostPrice,
-                    weightGrams: toNumberOrNull(item.weightGrams),
-                    goodsStatus: 'ACTIVE',
-                    detailText: item.productDetail || null,
-                    parameterJson,
-                    priceCoefficient: null,
-                    minOrderQty: (_item_minimumOrderQuantity = item.minimumOrderQuantity) !== null && _item_minimumOrderQuantity !== void 0 ? _item_minimumOrderQuantity : null,
-                    skuSummaryText: item.skuSummaryText || null,
-                    skus: pendingSkus,
-                    linkedCategoryIds,
-                    brandCategoryId: autoMatchedCategoryIds[0] || null,
-                    brandMatchKeyword: autoMatchedCategoryNames[0] || null,
-                    autoBrandMatched: autoMatchedCategoryIds.length > 0
-                });
-                await tx.importtaskitem.update({
-                    where: {
-                        id: item.id
-                    },
-                    data: {
-                        fetchStatus: 'COMPLETED',
-                        publishStatus: 'COMPLETED',
-                        isPublished: true,
-                        importedProductId: newProduct.id,
-                        targetCategoryId: categoryId,
-                        coefficient: resolvedCoefficient,
-                        cnyPriceMin: priceSummary.cnyMin,
-                        cnyPriceMax: priceSummary.cnyMax,
-                        usdPriceMin: priceSummary.usdMin,
-                        usdPriceMax: priceSummary.usdMax,
-                        previewDataJson: {
-                            ...previewData || {},
-                            categoryId,
-                            matchedCategoryIds: autoMatchedCategoryIds,
-                            matchedCategoryNames: autoMatchedCategoryNames,
-                            price: (_priceSummary_cnyMin1 = priceSummary.cnyMin) !== null && _priceSummary_cnyMin1 !== void 0 ? _priceSummary_cnyMin1 : previewData.price || undefined,
-                            skuTable: pendingSkus.map((sku)=>({
-                                    skuKey: sku.sku_key,
-                                    spec: sku.spec_text,
-                                    costPrice: sku.cost_price,
-                                    price: sku.price,
-                                    stock: sku.stock,
-                                    weightGrams: sku.weight_grams,
-                                    imageUrl: sku.image_url || undefined,
-                                    attributes: sku.attributes
-                                }))
-                        },
-                        publishedAt: new Date(),
-                        failureReason: null
-                    }
-                });
-            });
-            success += 1;
-        } catch (error) {
-            fail += 1;
-            const reason = String((error === null || error === void 0 ? void 0 : error.message) || '发布失败').trim() || '发布失败';
-            const name = failureName || itemId;
-            failures.push({
-                itemId,
-                name,
-                reason
-            });
-            await _prisma.default.importtaskitem.update({
-                where: {
-                    id: itemId
-                },
-                data: {
-                    publishStatus: 'FAILED',
-                    failureReason: reason
+                return {
+                    ok: true
+                };
+            } catch (error) {
+                lastError = error;
+                // 仅对「SPU 编号 / slug」唯一冲突自动重试：并发发布抢占了同一个流水号，
+                // 等待其它事务提交后用新号重试，避免把可发布商品误判为「发布失败」。
+                if (isSpuCodeCollisionError(error) && attempt < MAX_PUBLISH_ATTEMPTS) {
+                    await new Promise((resolve)=>setTimeout(resolve, 40 * attempt + Math.floor(Math.random() * 60)));
+                    continue;
                 }
-            }).catch(()=>undefined);
+                break;
+            }
         }
-    }
+        const reason = String((lastError === null || lastError === void 0 ? void 0 : lastError.message) || '发布失败').trim() || '发布失败';
+        const name = failureName || itemId;
+        await _prisma.default.importtaskitem.update({
+            where: {
+                id: itemId
+            },
+            data: {
+                publishStatus: 'FAILED',
+                failureReason: reason
+            }
+        }).catch(()=>undefined);
+        return {
+            ok: false,
+            itemId,
+            name,
+            reason
+        };
+    };
+    const itemIds = input.itemIds;
+    let cursor = 0;
+    const workers = Array.from({
+        length: Math.min(PUBLISH_PENDING_CONCURRENCY, itemIds.length)
+    }, async ()=>{
+        while(cursor < itemIds.length){
+            const index = cursor++;
+            const result = await publishOne(itemIds[index]);
+            if (result.ok) {
+                success += 1;
+            } else {
+                fail += 1;
+                failures.push({
+                    itemId: result.itemId,
+                    name: result.name,
+                    reason: result.reason
+                });
+            }
+        }
+    });
+    await Promise.all(workers);
     return {
         success_count: success,
         fail_count: fail,
@@ -95275,7 +96554,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     };
 }));
 /** 将重新抓取到的 1688 预览写回待上传条目（标题/主图/SKU/价格等） */ const applyReparsed1688PreviewToItem = async (params)=>{
-    var _ref, _toNumberOrNull, _toNumberOrNull1, _ref1, _fetched_priceMin, _fetched_priceMax, _toNumberOrNull2, _ref2, _toNumberOrNull3;
+    var _ref, _toNumberOrNull, _ref1, _fetched_priceMin, _fetched_priceMax, _toNumberOrNull1, _ref2, _toNumberOrNull2;
     var _item_importTask_stockStrategyJson, _fetched_featureAttributes, _skuTable_, _skuTable_1;
     const { item, fetched, categoryMap, secondaryCategories, exchangeRate } = params;
     const sourceUrl = item.sourceUrl;
@@ -95290,9 +96569,9 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
     const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
     const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
-    // 重新解析时：标题命中的 L2 优先于旧 targetCategoryId
-    const targetCategoryId = matchedSecondaryCategoryIds[0] || item.targetCategoryId || item.importTask.defaultCategoryId || null;
-    const resolvedCoefficient = (_toNumberOrNull1 = toNumberOrNull(item.coefficient)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
+    // 重新解析：定价目标只用商品二级类目；Brand 命中不覆盖售价系数
+    const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, null) || item.targetCategoryId || item.importTask.defaultCategoryId || null;
+    const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
     const rawPriceMin = (_ref1 = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : toNumberOrNull(item.costPrice)) !== null && _ref1 !== void 0 ? _ref1 : 50;
     const rawPriceMax = (_fetched_priceMax = fetched.priceMax) !== null && _fetched_priceMax !== void 0 ? _fetched_priceMax : rawPriceMin;
     const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd));
@@ -95300,10 +96579,16 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     const finalPriceMin = roundCurrency(adjustedCostMin * resolvedCoefficient);
     const finalPriceMax = roundCurrency(adjustedCostMax * resolvedCoefficient);
     const mainImageUrl = fetched.mainImageUrl || (!isPlaceholderPendingImage(item.mainImageUrl || item.parsedMainImageUrl) ? item.mainImageUrl || item.parsedMainImageUrl : null);
-    const detailImages = Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0 ? fetched.detailImages : dedupeImageUrls([
+    // Successful reparse must replace the gallery — merging kept the old flood of duplicates.
+    const detailImages = hasRealParse ? dedupeImageUrls([
+        ...mainImageUrl ? [
+            mainImageUrl
+        ] : [],
+        ...Array.isArray(fetched.detailImages) ? fetched.detailImages : []
+    ]).slice(0, 12) : dedupeImageUrls([
         mainImageUrl,
         ...Array.isArray(currentPreview.detailImages) ? currentPreview.detailImages : []
-    ]);
+    ]).slice(0, 12);
     const supplierName = fetched.supplierName || (isPlaceholderPendingName(item.parsedName) ? null : item.supplierName);
     const sourceCategoryName = fetched.sourceCategoryName || item.sourceCategoryName || null;
     const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : [];
@@ -95337,7 +96622,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             spec: normalizeText(row.spec) || formatSpecText(row.attributes || []),
             costPrice: nextCost,
             price: nextPrice,
-            stock: (_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock,
+            stock: (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock),
             weightGrams: (_ref1 = (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : toNumberOrNull(item.weightGrams)) !== null && _ref1 !== void 0 ? _ref1 : 500,
             imageUrl: normalizeText(row.imageUrl) || null,
             attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
@@ -95419,14 +96704,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     const previewData = {
         ...currentPreview,
         name: productName,
-        ...await (async ()=>{
-            const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(productName, currentPreview.nameEn);
-            const nameEs = await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(productName, currentPreview.nameEs, nameEn);
-            return {
-                nameEn,
-                nameEs
-            };
-        })(),
+        // 重解析同样不在采集阶段翻译（移至上架），保留已有的历史翻译（若有）由 spread 带出
         categoryId: targetCategoryId || undefined,
         matchedCategoryIds: matchedSecondaryCategoryIds,
         matchedCategoryNames: matchedSecondaryCategoryNames,
@@ -95453,8 +96731,8 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             supplierName,
             mainImageUrl,
             parsedMainImageUrl: mainImageUrl,
-            costPrice: (_toNumberOrNull2 = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : adjustedCostMin,
-            weightGrams: (_ref2 = (_toNumberOrNull3 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull3 !== void 0 ? _toNumberOrNull3 : toNumberOrNull(item.weightGrams)) !== null && _ref2 !== void 0 ? _ref2 : 500,
+            costPrice: (_toNumberOrNull1 = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : adjustedCostMin,
+            weightGrams: (_ref2 = (_toNumberOrNull2 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : toNumberOrNull(item.weightGrams)) !== null && _ref2 !== void 0 ? _ref2 : 500,
             sourceCategoryName,
             coefficient: resolvedCoefficient,
             goodsStatus: item.goodsStatus || item.importTask.defaultStatus || 'DRAFT',
@@ -95464,7 +96742,9 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             cnyPriceMax: resolvedFinalPriceMax,
             usdPriceMin: resolvedUsdMin,
             usdPriceMax: resolvedUsdMax,
-            availableStock: totalStock > 0 ? totalStock : strategyStock,
+            minimumOrderQuantity: (0, _resolveInitialStock.resolveInitialMinOrderQty)(item.minimumOrderQuantity),
+            // B：真实库存优先（全 0 即缺货），缺省回落 1000
+            availableStock: (0, _resolveInitialStock.resolveInitialStock)(totalStock),
             targetCategoryId,
             parsedPriceMin: rawPriceMin,
             parsedPriceMax: rawPriceMax,
@@ -95491,217 +96771,254 @@ const reparsePendingImportItems = (0, _action_utils.requireRole)([
     if (!input.itemIds.length) {
         throw new Error('请至少选择一条待重新解析的商品');
     }
+    const itemIds = Array.from(new Set(input.itemIds.filter(Boolean)));
+    const jobLabel = `reparse:${itemIds.length}`;
+    acquireParseJob(jobLabel, itemIds.length);
     try {
-        await _prisma.default.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
-    } catch  {
-    // ignore charset bootstrap failure
-    }
-    const secondaryCategories = await loadAutoMatchSecondaryCategories(_prisma.default);
-    const categoryMap = await loadImportPricingCategories(_prisma.default);
-    const exchangeRate = await getGlobalExchangeRate(_prisma.default);
-    let success = 0;
-    let fail = 0;
-    const results = [];
-    for(let index = 0; index < input.itemIds.length; index += 1){
-        const itemId = input.itemIds[index];
-        let displayName = itemId;
         try {
-            const item = await _prisma.default.importtaskitem.findUnique({
-                where: {
-                    id: itemId
+            await _prisma.default.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
+        } catch  {
+        // ignore charset bootstrap failure
+        }
+        // Mark claimed rows RUNNING before ACK so the UI can poll without a second mutex trip.
+        await _prisma.default.importtaskitem.updateMany({
+            where: {
+                id: {
+                    in: itemIds
                 },
-                include: {
-                    importTask: true
+                importedProductId: null,
+                isPublished: false
+            },
+            data: {
+                fetchStatus: 'RUNNING',
+                fetchStartedAt: new Date(),
+                fetchFinishedAt: null,
+                failureReason: null
+            }
+        });
+    } catch (error) {
+        releaseParseJob(jobLabel);
+        throw error;
+    }
+    // ACK immediately — full reparse (esp. with browser-captured HTML) exceeds the 25s RPC timeout.
+    // Holding the mutex across a sync loop caused "已有解析任务进行中" when the client retried.
+    void (async ()=>{
+        let success = 0;
+        let fail = 0;
+        try {
+            const secondaryCategories = await loadAutoMatchSecondaryCategories(_prisma.default);
+            const categoryMap = await loadImportPricingCategories(_prisma.default);
+            const exchangeRate = await getGlobalExchangeRate(_prisma.default);
+            for(let index = 0; index < itemIds.length; index += 1){
+                if (isParseJobCancelled()) {
+                    console.warn(`[reparsePendingImportItems] cancelled by user at index=${index}`);
+                    const remainingIds = itemIds.slice(index);
+                    if (remainingIds.length) {
+                        await _prisma.default.importtaskitem.updateMany({
+                            where: {
+                                id: {
+                                    in: remainingIds
+                                },
+                                fetchStatus: {
+                                    in: [
+                                        'PENDING',
+                                        'RUNNING'
+                                    ]
+                                },
+                                isPublished: false
+                            },
+                            data: {
+                                fetchStatus: 'RETRY_PENDING',
+                                failureReason: '用户终止解析',
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                    }
+                    break;
                 }
-            });
-            if (!item) {
-                fail += 1;
-                results.push({
-                    itemId,
-                    success: false,
-                    name: itemId,
-                    reason: '待上传明细不存在'
-                });
-                continue;
-            }
-            displayName = normalizeText(item.parsedName) || normalizeText(item.sourceUrl) || itemId;
-            if (item.isPublished || item.importedProductId) {
-                fail += 1;
-                results.push({
-                    itemId,
-                    success: false,
-                    name: displayName,
-                    reason: '该商品已发布，无法重新解析'
-                });
-                continue;
-            }
-            if (isTableImportSourceUrl(item.sourceUrl)) {
-                fail += 1;
-                results.push({
-                    itemId,
-                    success: false,
-                    name: displayName,
-                    reason: '表格导入条目不支持重新解析，请直接编辑字段或删除后重新导入'
-                });
-                continue;
-            }
-            const sourceUrl = normalizeText(item.sourceUrl);
-            const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl);
-            const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl);
-            if (!sourceUrl || !is1688OfferUrl && !isPddUrl) {
-                fail += 1;
-                results.push({
-                    itemId,
-                    success: false,
-                    name: displayName,
-                    reason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析'
-                });
-                continue;
-            }
-            await _prisma.default.importtaskitem.update({
-                where: {
-                    id: item.id
-                },
-                data: {
-                    fetchStatus: 'RUNNING',
-                    fetchStartedAt: new Date(),
-                    fetchFinishedAt: null,
-                    failureReason: null
-                }
-            });
-            if (isPddUrl) {
-                const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
-                const fetched = fetchResult.preview;
-                const hasRealParse = fetchResult.outcome === 'success' && (0, _PinduoduoParser.hasMeaningfulPinduoduoPreview)(fetched);
-                if (!hasRealParse) {
-                    const reason = fetchResult.outcome === 'expired' ? '该拼多多商品已下架或不存在' : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试';
+                bumpParseJobProgress(index, itemIds.length);
+                const itemId = itemIds[index];
+                let displayName = itemId;
+                try {
+                    const item = await _prisma.default.importtaskitem.findUnique({
+                        where: {
+                            id: itemId
+                        },
+                        include: {
+                            importTask: true
+                        }
+                    });
+                    if (!item) {
+                        fail += 1;
+                        continue;
+                    }
+                    displayName = normalizeText(item.parsedName) || normalizeText(item.sourceUrl) || itemId;
+                    if (item.isPublished || item.importedProductId) {
+                        fail += 1;
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                fetchStatus: 'FAILED',
+                                failureReason: '该商品已发布，无法重新解析',
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                        continue;
+                    }
+                    if (isTableImportSourceUrl(item.sourceUrl)) {
+                        fail += 1;
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                fetchStatus: 'FAILED',
+                                failureReason: '表格导入条目不支持重新解析，请直接编辑字段或删除后重新导入',
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                        continue;
+                    }
+                    const sourceUrl = normalizeText(item.sourceUrl);
+                    const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl);
+                    const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl);
+                    if (!sourceUrl || !is1688OfferUrl && !isPddUrl) {
+                        fail += 1;
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                fetchStatus: 'FAILED',
+                                failureReason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
+                                fetchFinishedAt: new Date()
+                            }
+                        });
+                        continue;
+                    }
                     await _prisma.default.importtaskitem.update({
                         where: {
                             id: item.id
+                        },
+                        data: {
+                            fetchStatus: 'RUNNING',
+                            fetchStartedAt: new Date(),
+                            fetchFinishedAt: null,
+                            failureReason: null
+                        }
+                    });
+                    if (isPddUrl) {
+                        const fetchResult = await (0, _PinduoduoParser.fetchPinduoduoProductPreview)(sourceUrl);
+                        const fetched = fetchResult.preview;
+                        const hasRealParse = fetchResult.outcome === 'success' && (0, _PinduoduoParser.hasMeaningfulPinduoduoPreview)(fetched);
+                        if (!hasRealParse) {
+                            const reason = fetchResult.outcome === 'expired' ? '该拼多多商品已下架或不存在' : fetchResult.failureReason || '拼多多风控/抓取失败，请稍后重试';
+                            await _prisma.default.importtaskitem.update({
+                                where: {
+                                    id: item.id
+                                },
+                                data: {
+                                    fetchStatus: 'FAILED',
+                                    failureReason: reason,
+                                    fetchFinishedAt: new Date()
+                                }
+                            });
+                            fail += 1;
+                        } else {
+                            await persistPinduoduoParsedItem({
+                                item,
+                                task: item.importTask,
+                                fetched,
+                                secondaryCategories,
+                                categoryMap,
+                                exchangeRate
+                            });
+                            success += 1;
+                        }
+                        continue;
+                    }
+                    const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl);
+                    const fetched = fetchResult.preview;
+                    const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
+                    if (!hasRealParse) {
+                        var _toNumberOrNull, _toNumberOrNull1;
+                        const reason = resolveFetchFailureReason(fetchResult);
+                        await _prisma.default.importtaskitem.update({
+                            where: {
+                                id: item.id
+                            },
+                            data: {
+                                fetchStatus: 'FAILED',
+                                failureReason: reason,
+                                fetchFinishedAt: new Date(),
+                                ...isClassicMock1688SkuSummary(item.skuSummaryText) || isClassicMock1688SkuTable((item.previewDataJson || {}).skuTable) ? {
+                                    skuSummaryText: '默认规格',
+                                    specSummaryJson: [
+                                        {
+                                            name: '规格',
+                                            values: [
+                                                '默认规格'
+                                            ]
+                                        }
+                                    ],
+                                    previewDataJson: {
+                                        ...item.previewDataJson || {},
+                                        colors: [],
+                                        sizesByColor: {},
+                                        skuTable: [
+                                            buildNeutralFallbackSkuRow({
+                                                costPrice: (_toNumberOrNull = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 50,
+                                                price: (_toNumberOrNull1 = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 50,
+                                                stock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock)
+                                            })
+                                        ]
+                                    }
+                                } : {}
+                            }
+                        });
+                        fail += 1;
+                    } else {
+                        await applyReparsed1688PreviewToItem({
+                            item: item,
+                            fetched,
+                            categoryMap,
+                            secondaryCategories,
+                            exchangeRate
+                        });
+                        success += 1;
+                    }
+                } catch (error) {
+                    fail += 1;
+                    const reason = `重新解析失败：${(error === null || error === void 0 ? void 0 : error.message) || '抓取过程中发生未知错误'}`;
+                    await _prisma.default.importtaskitem.update({
+                        where: {
+                            id: itemId
                         },
                         data: {
                             fetchStatus: 'FAILED',
                             failureReason: reason,
                             fetchFinishedAt: new Date()
                         }
-                    });
-                    fail += 1;
-                    results.push({
-                        itemId,
-                        success: false,
-                        name: displayName,
-                        reason
-                    });
-                } else {
-                    const applied = await persistPinduoduoParsedItem({
-                        item,
-                        task: item.importTask,
-                        fetched,
-                        secondaryCategories,
-                        categoryMap,
-                        exchangeRate
-                    });
-                    success += 1;
-                    results.push({
-                        itemId,
-                        success: true,
-                        name: applied.productName
-                    });
-                    displayName = applied.productName;
+                    }).catch(()=>undefined);
                 }
-                continue;
+                bumpParseJobProgress(index + 1, itemIds.length);
+                if (index < itemIds.length - 1) {
+                    await sleep(900);
+                }
             }
-            const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl);
-            const fetched = fetchResult.preview;
-            const hasRealParse = Boolean(fetched.name || fetched.mainImageUrl || Array.isArray(fetched.skuTable) && fetched.skuTable.length > 0);
-            if (!hasRealParse) {
-                var _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
-                const reason = resolveFetchFailureReason(fetchResult);
-                await _prisma.default.importtaskitem.update({
-                    where: {
-                        id: item.id
-                    },
-                    data: {
-                        fetchStatus: 'FAILED',
-                        failureReason: reason,
-                        fetchFinishedAt: new Date(),
-                        // 清掉旧版演示 SKU，避免运营误当真规格
-                        ...isClassicMock1688SkuSummary(item.skuSummaryText) || isClassicMock1688SkuTable((item.previewDataJson || {}).skuTable) ? {
-                            skuSummaryText: '默认规格',
-                            specSummaryJson: [
-                                {
-                                    name: '规格',
-                                    values: [
-                                        '默认规格'
-                                    ]
-                                }
-                            ],
-                            previewDataJson: {
-                                ...item.previewDataJson || {},
-                                colors: [],
-                                sizesByColor: {},
-                                skuTable: [
-                                    buildNeutralFallbackSkuRow({
-                                        costPrice: (_toNumberOrNull = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 50,
-                                        price: (_toNumberOrNull1 = toNumberOrNull(item.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 50,
-                                        stock: (_toNumberOrNull2 = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 100
-                                    })
-                                ]
-                            }
-                        } : {}
-                    }
-                });
-                fail += 1;
-                results.push({
-                    itemId,
-                    success: false,
-                    name: displayName,
-                    reason
-                });
-            } else {
-                const applied = await applyReparsed1688PreviewToItem({
-                    item: item,
-                    fetched,
-                    categoryMap,
-                    secondaryCategories,
-                    exchangeRate
-                });
-                success += 1;
-                results.push({
-                    itemId,
-                    success: true,
-                    name: applied.productName
-                });
-                displayName = applied.productName;
-            }
+            console.warn(`[reparsePendingImportItems] done success=${success} fail=${fail} total=${itemIds.length}`);
         } catch (error) {
-            fail += 1;
-            const reason = `重新解析失败：${(error === null || error === void 0 ? void 0 : error.message) || '抓取过程中发生未知错误'}`;
-            results.push({
-                itemId,
-                success: false,
-                name: displayName,
-                reason
-            });
-            await _prisma.default.importtaskitem.update({
-                where: {
-                    id: itemId
-                },
-                data: {
-                    fetchStatus: 'FAILED',
-                    failureReason: reason,
-                    fetchFinishedAt: new Date()
-                }
-            }).catch(()=>undefined);
+            console.error('[reparsePendingImportItems] background job failed', error);
+        } finally{
+            releaseParseJob(jobLabel);
         }
-        if (index < input.itemIds.length - 1) {
-            await sleep(900);
-        }
-    }
+    })();
     return {
-        success_count: success,
-        fail_count: fail,
-        results
+        success_count: 0,
+        fail_count: 0,
+        results: []
     };
 }));
 const confirmImportProducts = (0, _action_utils.requireRole)([
@@ -95772,7 +97089,8 @@ const retryImportTask = (0, _action_utils.requireRole)([
                 cnyPriceMax: null,
                 usdPriceMin: null,
                 usdPriceMax: null,
-                minimumOrderQuantity: null,
+                minimumOrderQuantity: _resolveInitialStock.DEFAULT_MIN_ORDER_QTY,
+                // 重置为待解析：库存留空，真解析回填或使用时回落 1000
                 availableStock: null,
                 specSummaryJson: undefined,
                 previewDataJson: undefined,
@@ -96765,8 +98083,17 @@ function _export(target, all) {
     });
 }
 _export(exports, {
+    get autoClassifyPriceThresholdProducts () {
+        return autoClassifyPriceThresholdProducts;
+    },
+    get batchAppendPendingImportTitleSuffix () {
+        return batchAppendPendingImportTitleSuffix;
+    },
     get batchAppendProductAdminNotes () {
         return batchAppendProductAdminNotes;
+    },
+    get batchAppendProductTitleSuffix () {
+        return batchAppendProductTitleSuffix;
     },
     get batchBindProductCategories () {
         return batchBindProductCategories;
@@ -96795,6 +98122,9 @@ _export(exports, {
     get batchUpdateMinOrderQty () {
         return batchUpdateMinOrderQty;
     },
+    get batchUpdatePendingImportItemField () {
+        return batchUpdatePendingImportItemField;
+    },
     get batchUpdatePriceCoefficient () {
         return batchUpdatePriceCoefficient;
     },
@@ -96806,6 +98136,9 @@ _export(exports, {
     },
     get batchUpdateProductWeightPrice () {
         return batchUpdateProductWeightPrice;
+    },
+    get cancelPendingImportParseJob () {
+        return cancelPendingImportParseJob;
     },
     get createPendingImportTaskForProductManagement () {
         return createPendingImportTaskForProductManagement;
@@ -96861,6 +98194,9 @@ _export(exports, {
     get retryPendingImportTaskForProductManagement () {
         return retryPendingImportTaskForProductManagement;
     },
+    get returnProductsToPendingUpload () {
+        return returnProductsToPendingUpload;
+    },
     get saveHomeFeaturedKeywords () {
         return saveHomeFeaturedKeywords;
     },
@@ -96881,6 +98217,9 @@ _export(exports, {
     },
     get updateProductStatus () {
         return updateProductStatus;
+    },
+    get updateProductStock () {
+        return updateProductStock;
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
@@ -96891,11 +98230,72 @@ const _categorySlug = __webpack_require__(27863);
 const _productIdentifiers = __webpack_require__(92969);
 const _ImportFrom1688 = __webpack_require__(13371);
 const _resolveProductTitleEn = __webpack_require__(64205);
+const _priceThresholdAutoClassify = __webpack_require__(77744);
+const _titleSuffix = __webpack_require__(73101);
+const _resolveInitialStock = __webpack_require__(35196);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
     };
 }
+/** List hot-path: never `include` full product rows (gallery/detail JSON blobs dominate IO). */ const PRODUCT_LIST_QUERY_SELECT = {
+    id: true,
+    name: true,
+    productCode: true,
+    source: true,
+    supplierName: true,
+    brandName: true,
+    categoryId: true,
+    brandCategoryId: true,
+    goodsStatus: true,
+    weightGram: true,
+    costPrice: true,
+    priceCoefficient: true,
+    tradeInfoJson: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+    category: {
+        select: {
+            id: true,
+            name: true,
+            parentId: true,
+            level: true,
+            priceCoefficient: true
+        }
+    },
+    brandCategory: {
+        select: {
+            id: true,
+            name: true
+        }
+    },
+    relationCategories: {
+        select: {
+            categoryId: true,
+            category: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
+    },
+    skus: {
+        select: {
+            id: true,
+            skuCode: true,
+            price: true,
+            originalPrice: true,
+            stock: true,
+            weightKg: true,
+            attributeJson: true
+        },
+        orderBy: {
+            skuCode: 'asc'
+        }
+    }
+};
 const USD_EXCHANGE_RATE = 6.5;
 function toNumber(value) {
     if (value === null || value === undefined) return null;
@@ -97008,6 +98408,16 @@ function getStockStatus(stock) {
  */ function resolveEffectiveCoefficient(ownCategoryCoefficient, parentCategoryCoefficient = null) {
     return (0, _priceCoefficient.resolveCategoryPriceCoefficient)(toNumber(ownCategoryCoefficient), toNumber(parentCategoryCoefficient));
 }
+/**
+ * 列表/详情「当前系数」：商品级 priceCoefficient 优先（批量改价系数写在这儿），
+ * 未设置或无效时再回退主类目继承系数。否则批量改完商品系数列表仍只显示类目系数看起来像「没更新」。
+ */ function resolveListDisplayCoefficient(productPriceCoefficient, ownCategoryCoefficient, parentCategoryCoefficient = null) {
+    const productCoeff = toNumber(productPriceCoefficient);
+    if (productCoeff != null && Number.isFinite(productCoeff) && productCoeff > 0) {
+        return productCoeff;
+    }
+    return resolveEffectiveCoefficient(ownCategoryCoefficient, parentCategoryCoefficient);
+}
 function getCategoryHierarchyCoefficients(categoryMap, categoryId, fallback) {
     const current = (categoryId ? categoryMap.get(categoryId) : null) || fallback || null;
     const parent = (current === null || current === void 0 ? void 0 : current.parentId) ? categoryMap.get(current.parentId) || null : null;
@@ -97064,48 +98474,7 @@ async function findPublishedImportProductByName(name) {
             id: matchedItem.importedProductId,
             source: 'IMPORT_1688'
         },
-        include: {
-            category: {
-                select: {
-                    id: true,
-                    name: true,
-                    parentId: true,
-                    level: true,
-                    priceCoefficient: true
-                }
-            },
-            brandCategory: {
-                select: {
-                    id: true,
-                    name: true
-                }
-            },
-            relationCategories: {
-                select: {
-                    categoryId: true,
-                    category: {
-                        select: {
-                            id: true,
-                            name: true
-                        }
-                    }
-                }
-            },
-            skus: {
-                select: {
-                    id: true,
-                    skuCode: true,
-                    price: true,
-                    originalPrice: true,
-                    stock: true,
-                    weightKg: true,
-                    attributeJson: true
-                },
-                orderBy: {
-                    skuCode: 'asc'
-                }
-            }
-        }
+        select: PRODUCT_LIST_QUERY_SELECT
     });
 }
 async function mapProductToListItem(product) {
@@ -97130,7 +98499,7 @@ async function mapProductToListItem(product) {
     const { own, parent, main, current } = getCategoryHierarchyCoefficients(categoryMap, pricingCategoryId || product.categoryId, pricingCategoryId ? categoryMap.get(pricingCategoryId) || null : product.category);
     const categoryEffectiveCoefficient = own !== null && own > 0 || parent !== null && parent > 0 ? (0, _priceCoefficient.resolveCategoryPriceCoefficient)(own, parent) : null;
     const mainCategoryCoefficient = categoryEffectiveCoefficient !== null && categoryEffectiveCoefficient !== void 0 ? categoryEffectiveCoefficient : toNumber(main === null || main === void 0 ? void 0 : main.priceCoefficient);
-    const effectiveCoefficient = resolveEffectiveCoefficient(own, parent);
+    const effectiveCoefficient = resolveListDisplayCoefficient(toNumber(product.priceCoefficient), own, parent);
     const mappedGoodsStatus = product.status === 'DRAFT' ? 'DELETED' : normalizeGoodsStatus(product.goodsStatus) || mapProductStatusToGoodsStatus(product.status);
     return {
         product_id: product.id,
@@ -97182,7 +98551,7 @@ function mapProductSkusToListItems(product) {
         return {
             sku_id: sku.id,
             sku_code: sku.skuCode,
-            min_order_qty: null,
+            min_order_qty: sku.minOrderQty != null ? Math.max(1, Number(sku.minOrderQty) || 1) : null,
             price,
             original_price: originalPrice,
             stock: sku.stock,
@@ -97796,16 +99165,17 @@ function buildDraftSkus(row, spuCode) {
         return next;
     }, []);
     return combinations.map((attrs, index)=>{
-        var _attrs_find, _attrs_find1, _row_sku_code;
+        var _attrs_find, _attrs_find1;
         const specValue = ((_attrs_find = attrs.find((attr)=>attr.name === '规格' || attr.name === '尺码')) === null || _attrs_find === void 0 ? void 0 : _attrs_find.value) || row.spec || `SPEC${index + 1}`;
         const colorValue = ((_attrs_find1 = attrs.find((attr)=>attr.name === '颜色')) === null || _attrs_find1 === void 0 ? void 0 : _attrs_find1.value) || row.color || '';
-        const skuCode = spuCode ? (0, _productIdentifiers.buildSkuIdentifier)(spuCode, specValue, colorValue, index) : ((_row_sku_code = row.sku_code) === null || _row_sku_code === void 0 ? void 0 : _row_sku_code.trim()) || generateUniqueCode('SKU');
+        // 有 SPU 时始终按 SPU 生成 SKU，忽略表格 sku_code（常被误填为价格）
+        const skuCode = spuCode ? (0, _productIdentifiers.buildSkuIdentifier)(spuCode, specValue, colorValue, index) : generateUniqueCode('SKU');
         return {
             sku_code: skuCode,
             image_url: imageUrl,
             price,
             original_price: originalPrice,
-            stock: 1,
+            stock: _resolveInitialStock.DEFAULT_AVAILABLE_STOCK,
             attribute_json: attrs,
             weight_kg: weightKg,
             usd_display_price: toUsdDisplayPrice(price),
@@ -97896,6 +99266,8 @@ const getCategoryOptions = (0, _action_utils.requireRole)([
     }));
     return corrupted.length;
 };
+/** Hot-path throttle: full charset scan must not run on every list open. */ let lastProductCharsetRepairAt = 0;
+const PRODUCT_CHARSET_REPAIR_INTERVAL_MS = 10 * 60 * 1000;
 const getProductList = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
@@ -97904,13 +99276,16 @@ const getProductList = (0, _action_utils.requireRole)([
     } catch (error) {
         console.error('[getProductList] failed to set utf8mb4 session charset', error);
     }
-    try {
-        const repairedCount = await repairCharsetCorruptedProducts();
-        if (repairedCount > 0) {
-            console.info(`[getProductList] repaired ${repairedCount} charset-corrupted products`);
-        }
-    } catch (error) {
-        console.error('[getProductList] failed to repair charset-corrupted products', error);
+    // Side-effect repair must not block first paint (was awaited on every interval hit).
+    if (Date.now() - lastProductCharsetRepairAt >= PRODUCT_CHARSET_REPAIR_INTERVAL_MS) {
+        lastProductCharsetRepairAt = Date.now();
+        void repairCharsetCorruptedProducts().then((repairedCount)=>{
+            if (repairedCount > 0) {
+                console.info(`[getProductList] repaired ${repairedCount} charset-corrupted products`);
+            }
+        }).catch((error)=>{
+            console.error('[getProductList] failed to repair charset-corrupted products', error);
+        });
     }
     const { keyword, category_id, status, goods_status, status_filter, supplier_name, brand_keyword, page = 1, page_size = 20 } = input;
     const whereClause = {};
@@ -97989,7 +99364,7 @@ const getProductList = (0, _action_utils.requireRole)([
         };
     }
     const skip = (page - 1) * page_size;
-    const [products, publishedImportMatchRecord] = await Promise.all([
+    const [products, total, publishedImportMatchRecord] = await Promise.all([
         _prisma.default.product.findMany({
             where: whereClause,
             skip,
@@ -97997,48 +99372,10 @@ const getProductList = (0, _action_utils.requireRole)([
             orderBy: {
                 createdAt: 'desc'
             },
-            include: {
-                category: {
-                    select: {
-                        id: true,
-                        name: true,
-                        parentId: true,
-                        level: true,
-                        priceCoefficient: true
-                    }
-                },
-                brandCategory: {
-                    select: {
-                        id: true,
-                        name: true
-                    }
-                },
-                relationCategories: {
-                    select: {
-                        categoryId: true,
-                        category: {
-                            select: {
-                                id: true,
-                                name: true
-                            }
-                        }
-                    }
-                },
-                skus: {
-                    select: {
-                        id: true,
-                        skuCode: true,
-                        price: true,
-                        originalPrice: true,
-                        stock: true,
-                        weightKg: true,
-                        attributeJson: true
-                    },
-                    orderBy: {
-                        skuCode: 'asc'
-                    }
-                }
-            }
+            select: PRODUCT_LIST_QUERY_SELECT
+        }),
+        _prisma.default.product.count({
+            where: whereClause
         }),
         findPublishedImportProductByName(keyword)
     ]);
@@ -98064,7 +99401,7 @@ const getProductList = (0, _action_utils.requireRole)([
         const { own, parent, main, current } = getCategoryHierarchyCoefficients(categoryMap, pricingCategoryId || p.categoryId, pricingCategoryId ? categoryMap.get(pricingCategoryId) || null : p.category);
         const categoryEffectiveCoefficient = own !== null && own > 0 || parent !== null && parent > 0 ? (0, _priceCoefficient.resolveCategoryPriceCoefficient)(own, parent) : null;
         const mainCategoryCoefficient = categoryEffectiveCoefficient !== null && categoryEffectiveCoefficient !== void 0 ? categoryEffectiveCoefficient : toNumber(main === null || main === void 0 ? void 0 : main.priceCoefficient);
-        const effectiveCoefficient = resolveEffectiveCoefficient(own, parent);
+        const effectiveCoefficient = resolveListDisplayCoefficient(toNumber(p.priceCoefficient), own, parent);
         const mappedGoodsStatus = normalizeGoodsStatus(p.goodsStatus) || mapProductStatusToGoodsStatus(p.status);
         return {
             product_id: p.id,
@@ -98087,7 +99424,7 @@ const getProductList = (0, _action_utils.requireRole)([
             cost_price: toNumber(p.costPrice),
             price_coefficient: toNumber(p.priceCoefficient),
             effective_price_coefficient: effectiveCoefficient,
-            min_order_qty: Number((_ref1 = (_p_tradeInfoJson = p.tradeInfoJson) === null || _p_tradeInfoJson === void 0 ? void 0 : _p_tradeInfoJson.minOrderQty) !== null && _ref1 !== void 0 ? _ref1 : 0) || null,
+            min_order_qty: Math.max(1, Number((_ref1 = (_p_tradeInfoJson = p.tradeInfoJson) === null || _p_tradeInfoJson === void 0 ? void 0 : _p_tradeInfoJson.minOrderQty) !== null && _ref1 !== void 0 ? _ref1 : 1) || 1),
             price_min: priceMin,
             price_max: priceMax,
             usd_display_price_min: (_toUsdDisplayPrice = toUsdDisplayPrice(priceMin)) !== null && _toUsdDisplayPrice !== void 0 ? _toUsdDisplayPrice : 0,
@@ -98110,7 +99447,7 @@ const getProductList = (0, _action_utils.requireRole)([
     }
     return {
         list,
-        total: list.length,
+        total,
         published_import_match
     };
 }));
@@ -98160,7 +99497,7 @@ const getProductDetail = (0, _action_utils.requireRole)([
         main_category_id: (main === null || main === void 0 ? void 0 : main.id) || p.categoryId,
         main_category_name: (main === null || main === void 0 ? void 0 : main.name) || (current === null || current === void 0 ? void 0 : current.name) || ((_p_category1 = p.category) === null || _p_category1 === void 0 ? void 0 : _p_category1.name) || '--',
         main_category_price_coefficient: mainCategoryCoefficient,
-        effective_price_coefficient: resolveEffectiveCoefficient(own, parent),
+        effective_price_coefficient: resolveListDisplayCoefficient(toNumber(p.priceCoefficient), own, parent),
         linked_category_ids: Array.from((_p_relationCategories = p.relationCategories) !== null && _p_relationCategories !== void 0 ? _p_relationCategories : [], (item)=>item.categoryId),
         linked_keyword_ids: Array.from((_p_relationKeywords = p.relationKeywords) !== null && _p_relationKeywords !== void 0 ? _p_relationKeywords : [], (item)=>item.keywordId),
         name: p.name,
@@ -98180,7 +99517,7 @@ const getProductDetail = (0, _action_utils.requireRole)([
         selling_points_json: p.sellingPointsJson,
         detail_content_json: p.detailContentJson || buildDetailContent(p.detailText || undefined, null),
         parameter_json: p.parameterJson,
-        trade_info_json: p.tradeInfoJson,
+        trade_info_json: normalizeTradeInfo(p.tradeInfoJson),
         faq_json: p.faqJson,
         skus: p.skus.map((s)=>{
             var _toNumber;
@@ -98188,7 +99525,7 @@ const getProductDetail = (0, _action_utils.requireRole)([
                 sku_id: s.id,
                 sku_code: s.skuCode,
                 image_url: s.imageUrl,
-                min_order_qty: null,
+                min_order_qty: s.minOrderQty != null ? Math.max(1, Number(s.minOrderQty) || 1) : null,
                 price: (_toNumber = toNumber(s.price)) !== null && _toNumber !== void 0 ? _toNumber : 0,
                 original_price: toNumber(s.originalPrice),
                 stock: s.stock,
@@ -98257,17 +99594,17 @@ const createProduct = (0, _action_utils.requireRole)([
                 },
                 skus: {
                     create: input.skus.map((s)=>{
-                        var _s_min_order_qty;
                         const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : s.price;
                         const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : s.original_price || null;
+                        const nextStock = (0, _resolveInitialStock.resolveInitialStock)(s.stock);
                         return {
                             skuCode: s.sku_code || generateUniqueCode('SKU'),
                             imageUrl: s.image_url || null,
-                            minOrderQty: (_s_min_order_qty = s.min_order_qty) !== null && _s_min_order_qty !== void 0 ? _s_min_order_qty : null,
+                            minOrderQty: s.min_order_qty != null ? (0, _resolveInitialStock.resolveInitialMinOrderQty)(s.min_order_qty) : null,
                             price: nextPrice,
                             originalPrice: nextOriginalPrice,
-                            stock: s.stock,
-                            stockStatus: getStockStatus(s.stock),
+                            stock: nextStock,
+                            stockStatus: getStockStatus(nextStock),
                             attributeJson: s.attribute_json || [],
                             deliveryDays: s.delivery_days || null,
                             weightKg: s.weight_kg || null,
@@ -98279,6 +99616,8 @@ const createProduct = (0, _action_utils.requireRole)([
         });
         await replaceProductCategoryRelations(tx, product.id, input.linked_category_ids || []);
         await replaceProductKeywordRelations(tx, product.id, input.linked_keyword_ids || []);
+        // Price-threshold L2 tags (below13/below3): append-only, never touches primary categoryId.
+        await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product.id);
         return product;
     });
     return {
@@ -98381,6 +99720,30 @@ const updateProduct = (0, _action_utils.requireRole)([
     if (input.submit_action === 'ACTIVE') {
         validateActivePreconditions(input);
     }
+    const existingProduct = await _prisma.default.product.findUnique({
+        where: {
+            id: input.product_id
+        },
+        select: {
+            name: true,
+            translationsJson: true
+        }
+    });
+    if (!existingProduct) throw new Error('商品不存在');
+    const nextName = String(input.name || '').trim();
+    const nameChanged = nextName !== String(existingProduct.name || '').trim();
+    let nextTranslationsJson;
+    if (nameChanged) {
+        // Storefront EN/ES titles come from translationsJson — keep them in sync on rename.
+        const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(nextName);
+        const hadSpanish = Boolean((0, _resolveProductTitleEn.getCachedSpanishTitle)(null, existingProduct.translationsJson));
+        const nameEs = hadSpanish ? await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(nextName, null, nameEn, null) : (0, _resolveProductTitleEn.getCachedSpanishTitle)(null, existingProduct.translationsJson) || null;
+        nextTranslationsJson = (0, _resolveProductTitleEn.mergeProductTitleTranslations)(existingProduct.translationsJson, {
+            nameZh: nextName,
+            nameEn,
+            nameEs
+        });
+    }
     await _prisma.default.$transaction(async (tx)=>{
         var _input_cost_price, _input_weight_gram, _input_cost_price1, _input_price_coefficient;
         var _input_supplier_name, _input_brand_keyword;
@@ -98395,7 +99758,7 @@ const updateProduct = (0, _action_utils.requireRole)([
                 id: input.product_id
             },
             data: {
-                name: input.name,
+                name: nextName,
                 supplierName: ((_input_supplier_name = input.supplier_name) === null || _input_supplier_name === void 0 ? void 0 : _input_supplier_name.trim()) || null,
                 brandName: ((_input_brand_keyword = input.brand_keyword) === null || _input_brand_keyword === void 0 ? void 0 : _input_brand_keyword.trim()) || null,
                 status: input.submit_action,
@@ -98412,7 +99775,10 @@ const updateProduct = (0, _action_utils.requireRole)([
                     connect: {
                         id: input.category_id
                     }
-                }
+                },
+                ...nextTranslationsJson ? {
+                    translationsJson: nextTranslationsJson
+                } : {}
             }
         });
         await replaceProductCategoryRelations(tx, input.product_id, input.linked_category_ids || []);
@@ -98482,6 +99848,8 @@ const updateProduct = (0, _action_utils.requireRole)([
             }
         }
         await syncCartItemsValidState(tx, input.product_id);
+        // After SKU prices settle — bind/prune below13 / below3 without touching primary category.
+        await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
     });
     return {
         success: true
@@ -98545,6 +99913,10 @@ const updateProductStatus = (0, _action_utils.requireRole)([
             }
         });
         await syncCartItemsValidState(tx, product_id);
+        // On shelf: keep brand/primary as-is; only bind Bags≤$13 / Jewelry≤$3 threshold L2s.
+        if (target_status === 'ACTIVE') {
+            await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product_id);
+        }
     });
     return {
         success: true
@@ -98617,12 +99989,23 @@ const inlineUpdateProductField = (0, _action_utils.requireRole)([
     if (input.field === 'product_name') {
         const nextName = String(input.value || '').trim();
         if (!nextName) throw new Error('商品名称不能为空');
+        // Storefront EN/ES titles come from translationsJson, not product.name.
+        // Refresh them whenever the admin renames, or the list stays on stale English.
+        const nameEn = await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(nextName);
+        const hadSpanish = Boolean((0, _resolveProductTitleEn.getCachedSpanishTitle)(null, product.translationsJson));
+        const nameEs = hadSpanish ? await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(nextName, null, nameEn, null) : (0, _resolveProductTitleEn.getCachedSpanishTitle)(null, product.translationsJson) || null;
+        const nextJson = (0, _resolveProductTitleEn.mergeProductTitleTranslations)(product.translationsJson, {
+            nameZh: nextName,
+            nameEn,
+            nameEs
+        });
         await _prisma.default.product.update({
             where: {
                 id: input.product_id
             },
             data: {
-                name: nextName
+                name: nextName,
+                translationsJson: nextJson
             }
         });
         return {
@@ -98645,13 +100028,16 @@ const inlineUpdateProductField = (0, _action_utils.requireRole)([
     if (input.field === 'category_id') {
         const nextCategoryId = String(input.value || '').trim();
         if (!nextCategoryId) throw new Error('请选择目标分类');
-        await _prisma.default.product.update({
-            where: {
-                id: input.product_id
-            },
-            data: {
-                categoryId: nextCategoryId
-            }
+        await _prisma.default.$transaction(async (tx)=>{
+            await tx.product.update({
+                where: {
+                    id: input.product_id
+                },
+                data: {
+                    categoryId: nextCategoryId
+                }
+            });
+            await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
         });
         return {
             success: true
@@ -98673,6 +100059,9 @@ const inlineUpdateProductField = (0, _action_utils.requireRole)([
                 }
             });
             await syncCartItemsValidState(tx, input.product_id);
+            if (nextGoodsStatus === 'ACTIVE') {
+                await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
+            }
         });
         return {
             success: true
@@ -98710,13 +100099,16 @@ const inlineUpdateProductField = (0, _action_utils.requireRole)([
         if (!Number.isFinite(nextCostPrice) || nextCostPrice < 0) {
             throw new Error('成本价不能小于0');
         }
-        await _prisma.default.product.update({
-            where: {
-                id: input.product_id
-            },
-            data: {
-                costPrice: nextCostPrice
-            }
+        await _prisma.default.$transaction(async (tx)=>{
+            await tx.product.update({
+                where: {
+                    id: input.product_id
+                },
+                data: {
+                    costPrice: nextCostPrice
+                }
+            });
+            await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
         });
         return {
             success: true
@@ -98729,6 +100121,38 @@ const inlineUpdateProductField = (0, _action_utils.requireRole)([
         }
         await _prisma.default.$transaction(async (tx)=>{
             await applyProductCoefficient(tx, input.product_id, nextCoefficient);
+            await syncCartItemsValidState(tx, input.product_id);
+            await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
+        });
+        return {
+            success: true
+        };
+    }
+    if (input.field === 'min_order_qty') {
+        const nextValue = Math.max(1, Math.round(Number(input.value)));
+        if (!Number.isFinite(nextValue) || nextValue <= 0) {
+            throw new Error('起订量必须大于0');
+        }
+        await _prisma.default.$transaction(async (tx)=>{
+            const current = await tx.product.findUnique({
+                where: {
+                    id: input.product_id
+                },
+                select: {
+                    tradeInfoJson: true
+                }
+            });
+            if (!current) throw new Error('商品不存在');
+            const nextTradeInfo = normalizeTradeInfo(current.tradeInfoJson || null);
+            nextTradeInfo.minOrderQty = nextValue;
+            await tx.product.update({
+                where: {
+                    id: input.product_id
+                },
+                data: {
+                    tradeInfoJson: nextTradeInfo
+                }
+            });
             await syncCartItemsValidState(tx, input.product_id);
         });
         return {
@@ -98750,13 +100174,16 @@ const inlineUpdateProductSkuField = (0, _action_utils.requireRole)([
     if (input.field === 'price') {
         const nextPrice = Number(input.value);
         if (!Number.isFinite(nextPrice) || nextPrice < 0) throw new Error('售价不能小于0');
-        await _prisma.default.productsku.update({
-            where: {
-                id: sku.id
-            },
-            data: {
-                price: nextPrice
-            }
+        await _prisma.default.$transaction(async (tx)=>{
+            await tx.productsku.update({
+                where: {
+                    id: sku.id
+                },
+                data: {
+                    price: nextPrice
+                }
+            });
+            await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
         });
         return {
             success: true
@@ -99123,17 +100550,22 @@ const batchUpdateManagementStatus = (0, _action_utils.requireRole)([
 const batchUpdateProductWeightPrice = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
-    if (!input.product_ids.length) throw new Error('请先选择商品');
+    var _input_product_ids;
+    if (!((_input_product_ids = input.product_ids) === null || _input_product_ids === void 0 ? void 0 : _input_product_ids.length)) throw new Error('请先选择商品');
     const nextValue = Number(input.value);
+    // Accept aliases so前端/历史 payload (coefficient) 也能命中商品系数字段
+    const rawField = String(input.field || '').trim();
+    const field = rawField === 'weight_gram' || rawField === 'weight' ? 'weight_gram' : 'price_coefficient';
     if (!Number.isFinite(nextValue) || nextValue <= 0) {
-        throw new Error(input.field === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0');
+        throw new Error(field === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0');
     }
     let success = 0;
     let fail = 0;
+    const errors = [];
     for (const productId of input.product_ids){
         try {
             await _prisma.default.$transaction(async (tx)=>{
-                if (input.field === 'weight_gram') {
+                if (field === 'weight_gram') {
                     await tx.product.update({
                         where: {
                             id: productId
@@ -99151,6 +100583,7 @@ const batchUpdateProductWeightPrice = (0, _action_utils.requireRole)([
                         }
                     });
                 } else {
+                    // 写入 product.priceCoefficient 并按新系数重算 SKU 售价
                     await applyProductCoefficient(tx, productId, nextValue);
                 }
                 await syncCartItemsValidState(tx, productId);
@@ -99158,7 +100591,11 @@ const batchUpdateProductWeightPrice = (0, _action_utils.requireRole)([
             success++;
         } catch (error) {
             fail++;
+            errors.push(`${productId}: ${(error === null || error === void 0 ? void 0 : error.message) || '更新失败'}`);
         }
+    }
+    if (success === 0 && fail > 0) {
+        throw new Error(errors[0] || '批量更新价格系数/重量失败');
     }
     return {
         success_count: success,
@@ -99255,8 +100692,8 @@ const retryPendingImportTaskForProductManagement = (0, _action_utils.requireRole
 }));
 const getPendingImportQueue = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
-])((0, _action_utils.withResult)(async ()=>{
-    const queue = await (0, _ImportFrom1688.getPendingImportQueue)();
+])((0, _action_utils.withResult)(async (input)=>{
+    const queue = await (0, _ImportFrom1688.getPendingImportQueue)(input);
     return queue;
 }));
 const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
@@ -99270,6 +100707,15 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
     return {
         success: true
     };
+}));
+const batchUpdatePendingImportItemField = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    return (0, _ImportFrom1688.batchUpdatePendingImportItemField)({
+        itemIds: input.item_ids,
+        field: input.field,
+        value: input.value
+    });
 }));
 const inlineUpdatePendingImportSkuField = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -99305,6 +100751,11 @@ const reparsePendingImportItems = (0, _action_utils.requireRole)([
     return (0, _ImportFrom1688.reparsePendingImportItems)({
         itemIds: input.item_ids
     });
+}));
+const cancelPendingImportParseJob = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    return (0, _ImportFrom1688.cancelPendingImportParseJob)();
 }));
 const batchDeletePendingImportItems = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -99344,6 +100795,343 @@ const batchDeletePendingImportItems = (0, _action_utils.requireRole)([
     return {
         success_count: existingIds.length,
         fail_count: Math.max(0, item_ids.length - existingIds.length)
+    };
+}));
+function extractGalleryUrls(galleryJson, mainImageUrl) {
+    const fromGallery = Array.isArray(galleryJson) ? galleryJson.map((item)=>String((item === null || item === void 0 ? void 0 : item.url) || '').trim()).filter(Boolean) : [];
+    const main = String(mainImageUrl || '').trim();
+    return Array.from(new Set([
+        main,
+        ...fromGallery
+    ].filter(Boolean)));
+}
+function mapParameterJsonToFeatureAttributes(parameterJson) {
+    if (!Array.isArray(parameterJson)) return [];
+    const attrs = [];
+    for (const group of parameterJson){
+        const items = Array.isArray(group === null || group === void 0 ? void 0 : group.items) ? group.items : [];
+        for (const item of items){
+            const key = String((item === null || item === void 0 ? void 0 : item.key) || '').trim();
+            const value = String((item === null || item === void 0 ? void 0 : item.value) || '').trim();
+            if (key && value) attrs.push({
+                key,
+                value
+            });
+        }
+    }
+    return attrs;
+}
+function resolveReturnSourceUrl(product) {
+    var _product_tradeInfoJson;
+    const fromTrade = String(((_product_tradeInfoJson = product.tradeInfoJson) === null || _product_tradeInfoJson === void 0 ? void 0 : _product_tradeInfoJson.importSourceUrl) || '').trim();
+    if (fromTrade) return fromTrade.slice(0, 700);
+    const code = String(product.productCode || product.id).trim();
+    if (product.source === 'TABLE_IMPORT') return `table-import://${code}`.slice(0, 700);
+    if (product.source === 'IMPORT_1688') return `product-return-1688://${product.id}`.slice(0, 700);
+    return `table-import://return-${code}`.slice(0, 700);
+}
+function buildPendingFieldsFromProduct(product, userId) {
+    var _ref;
+    var _product_tradeInfoJson, _product_category;
+    const skus = Array.isArray(product.skus) ? product.skus : [];
+    const skuTable = skus.map((sku, index)=>{
+        const attributes = Array.isArray(sku.attributeJson) ? sku.attributeJson.map((attr)=>({
+                name: String((attr === null || attr === void 0 ? void 0 : attr.name) || '规格').trim() || '规格',
+                value: String((attr === null || attr === void 0 ? void 0 : attr.value) || '').trim() || '默认'
+            })).filter((attr)=>attr.value) : [
+            {
+                name: '规格',
+                value: '默认规格'
+            }
+        ];
+        const weightKg = toNumber(sku.weightKg);
+        const weightGrams = weightKg != null ? Math.round(weightKg * 1000) : toNumber(product.weightGram) != null ? Math.round(toNumber(product.weightGram)) : null;
+        return {
+            skuKey: String(sku.skuCode || `sku-${index + 1}`),
+            spec: formatSkuSpecText(attributes),
+            costPrice: toNumber(product.costPrice),
+            price: toNumber(sku.price),
+            stock: Math.max(0, Number(sku.stock) || 0),
+            weightGrams,
+            imageUrl: String(sku.imageUrl || '').trim() || null,
+            attributes
+        };
+    });
+    const prices = skuTable.map((row)=>row.price).filter((price)=>price != null && Number.isFinite(price));
+    const priceMin = prices.length > 0 ? Math.min(...prices) : toNumber(product.costPrice);
+    const priceMax = prices.length > 0 ? Math.max(...prices) : priceMin;
+    const totalStock = skuTable.reduce((sum, row)=>sum + (row.stock || 0), 0);
+    const galleryUrls = extractGalleryUrls(product.galleryJson, product.mainImageUrl);
+    const mainImageUrl = galleryUrls[0] || String(product.mainImageUrl || '').trim() || null;
+    const detailImages = galleryUrls.filter((url)=>url !== mainImageUrl);
+    const nameEn = (0, _resolveProductTitleEn.getCachedEnglishTitle)(null, product.translationsJson);
+    const nameEs = (0, _resolveProductTitleEn.getCachedSpanishTitle)(null, product.translationsJson);
+    const featureAttributes = mapParameterJsonToFeatureAttributes(product.parameterJson);
+    const minOrderQty = Math.max(1, Number((_ref = (_product_tradeInfoJson = product.tradeInfoJson) === null || _product_tradeInfoJson === void 0 ? void 0 : _product_tradeInfoJson.minOrderQty) !== null && _ref !== void 0 ? _ref : 1) || 1);
+    const sourceUrl = resolveReturnSourceUrl(product);
+    const productName = String(product.name || '').trim();
+    const usdMin = priceMin != null ? Number((priceMin / USD_EXCHANGE_RATE).toFixed(2)) : null;
+    const usdMax = priceMax != null ? Number((priceMax / USD_EXCHANGE_RATE).toFixed(2)) : null;
+    const colorValues = Array.from(new Set(skuTable.flatMap((row)=>row.attributes.filter((attr)=>/颜色|colour|color/i.test(attr.name)).map((attr)=>attr.value)).filter(Boolean)));
+    const sizeValues = Array.from(new Set(skuTable.flatMap((row)=>row.attributes.filter((attr)=>/规格|尺码|尺寸|size/i.test(attr.name)).map((attr)=>attr.value)).filter(Boolean)));
+    const sizesByColor = {};
+    for (const row of skuTable){
+        var _row_attributes_find, _row_attributes_find1;
+        const color = ((_row_attributes_find = row.attributes.find((attr)=>/颜色|colour|color/i.test(attr.name))) === null || _row_attributes_find === void 0 ? void 0 : _row_attributes_find.value) || '';
+        const size = ((_row_attributes_find1 = row.attributes.find((attr)=>/规格|尺码|尺寸|size/i.test(attr.name))) === null || _row_attributes_find1 === void 0 ? void 0 : _row_attributes_find1.value) || row.spec;
+        if (!color) continue;
+        if (!sizesByColor[color]) sizesByColor[color] = [];
+        if (size && !sizesByColor[color].includes(size)) sizesByColor[color].push(size);
+    }
+    const linkedCategoryIds = Array.from(new Set([
+        product.categoryId,
+        product.brandCategoryId,
+        ...(product.relationCategories || []).map((rel)=>rel.categoryId) || []
+    ].filter(Boolean)));
+    const previewDataJson = {
+        name: productName,
+        nameEn: nameEn || '',
+        nameEs: nameEs || '',
+        categoryId: product.categoryId || undefined,
+        matchedCategoryIds: linkedCategoryIds,
+        matchedCategoryNames: [],
+        price: priceMin !== null && priceMin !== void 0 ? priceMin : undefined,
+        mainImageUrl: mainImageUrl || undefined,
+        detailImages,
+        shortDescription: String(product.shortDescription || '').trim() || undefined,
+        featureAttributes,
+        skuTable,
+        colors: colorValues.map((label)=>{
+            const colorSku = skuTable.find((row)=>row.attributes.some((attr)=>/颜色|colour|color/i.test(attr.name) && attr.value === label && row.imageUrl));
+            return {
+                label,
+                imageUrl: (colorSku === null || colorSku === void 0 ? void 0 : colorSku.imageUrl) || null
+            };
+        }),
+        sizesByColor,
+        inboundIdentity: {
+            mode: product.source === 'TABLE_IMPORT' ? 'TABLE_PRODUCT_CODE_MERGED' : 'LINK_1688_INDEPENDENT',
+            excelProductCode: product.productCode || null,
+            sourceUrl,
+            returnedFromProductId: product.id
+        },
+        returnedFromProductId: product.id,
+        returnedProductCode: product.productCode || null
+    };
+    const specSummaryJson = [
+        ...colorValues.length ? [
+            {
+                name: '颜色',
+                values: colorValues
+            }
+        ] : [],
+        ...sizeValues.length ? [
+            {
+                name: '规格',
+                values: sizeValues
+            }
+        ] : []
+    ];
+    return {
+        operatorId: userId,
+        sourceUrl,
+        parsedName: productName.slice(0, 200) || null,
+        parsedMainImageUrl: mainImageUrl,
+        parsedPriceMin: priceMin,
+        parsedPriceMax: priceMax,
+        supplierName: product.supplierName || null,
+        mainImageUrl,
+        costPrice: toNumber(product.costPrice),
+        weightGrams: toNumber(product.weightGram) != null ? Math.round(toNumber(product.weightGram)) : null,
+        sourceCategoryName: ((_product_category = product.category) === null || _product_category === void 0 ? void 0 : _product_category.name) || product.brandName || null,
+        targetCategoryId: product.categoryId || null,
+        coefficient: toNumber(product.priceCoefficient),
+        goodsStatus: 'DRAFT',
+        minimumOrderQuantity: minOrderQty,
+        availableStock: totalStock,
+        cnyPriceMin: priceMin,
+        cnyPriceMax: priceMax,
+        usdPriceMin: usdMin,
+        usdPriceMax: usdMax,
+        productDetail: product.detailText || product.shortDescription || null,
+        skuSummaryText: skuTable.map((row)=>row.spec).join(' | ') || null,
+        fetchStatus: 'COMPLETED',
+        publishStatus: 'PENDING',
+        fetchStartedAt: new Date(),
+        fetchFinishedAt: new Date(),
+        publishStartedAt: null,
+        publishedAt: null,
+        isSelected: true,
+        isPublished: false,
+        importedProductId: null,
+        failureReason: null,
+        specSummaryJson: specSummaryJson.length > 0 ? specSummaryJson : undefined,
+        previewDataJson: previewDataJson
+    };
+}
+async function returnOneProductToPendingUpload(tx, productId, userId, sharedTaskId) {
+    const product = await tx.product.findUnique({
+        where: {
+            id: productId
+        },
+        include: {
+            category: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            },
+            skus: true,
+            relationCategories: {
+                select: {
+                    categoryId: true
+                }
+            }
+        }
+    });
+    if (!product) throw new Error('商品不存在');
+    if (normalizeGoodsStatus(product.goodsStatus) === 'DELETED') {
+        throw new Error('已删除商品无法退回待上传');
+    }
+    const pendingFields = buildPendingFieldsFromProduct(product, userId);
+    const existingItem = await tx.importtaskitem.findFirst({
+        where: {
+            importedProductId: productId
+        },
+        orderBy: [
+            {
+                updatedAt: 'desc'
+            },
+            {
+                createdAt: 'desc'
+            }
+        ]
+    });
+    let pendingItemId;
+    let taskId;
+    let createdNew = false;
+    if (existingItem) {
+        var _pendingFields_previewDataJson;
+        const updated = await tx.importtaskitem.update({
+            where: {
+                id: existingItem.id
+            },
+            data: {
+                ...pendingFields,
+                // Keep original source URL when present (1688 / table identity)
+                sourceUrl: existingItem.sourceUrl || pendingFields.sourceUrl,
+                previewDataJson: {
+                    ...typeof existingItem.previewDataJson === 'object' && existingItem.previewDataJson ? existingItem.previewDataJson : {},
+                    ...pendingFields.previewDataJson,
+                    inboundIdentity: {
+                        ...((_pendingFields_previewDataJson = pendingFields.previewDataJson) === null || _pendingFields_previewDataJson === void 0 ? void 0 : _pendingFields_previewDataJson.inboundIdentity) || {},
+                        sourceUrl: existingItem.sourceUrl || pendingFields.sourceUrl,
+                        returnedFromProductId: product.id
+                    }
+                }
+            }
+        });
+        pendingItemId = updated.id;
+        taskId = updated.importTaskId;
+    } else {
+        let taskIdToUse = sharedTaskId;
+        if (!taskIdToUse) {
+            const task = await tx.importtask.create({
+                data: {
+                    creatorId: userId,
+                    taskName: `退回待上传 ${new Date().toLocaleString('zh-CN')}`,
+                    status: 'COMPLETED',
+                    sourceLinkCount: 1,
+                    successCount: 1,
+                    failureCount: 0,
+                    progressPercent: 100,
+                    defaultStatus: 'DRAFT',
+                    defaultCategoryId: product.categoryId || null,
+                    queueConcurrency: 1,
+                    rateLimitMinDelaySec: 0,
+                    rateLimitMaxDelaySec: 0,
+                    startedAt: new Date(),
+                    finishedAt: new Date()
+                }
+            });
+            taskIdToUse = task.id;
+        } else {
+            await tx.importtask.update({
+                where: {
+                    id: taskIdToUse
+                },
+                data: {
+                    sourceLinkCount: {
+                        increment: 1
+                    },
+                    successCount: {
+                        increment: 1
+                    }
+                }
+            });
+        }
+        const created = await tx.importtaskitem.create({
+            data: {
+                importTaskId: taskIdToUse,
+                ...pendingFields
+            }
+        });
+        pendingItemId = created.id;
+        taskId = taskIdToUse;
+        createdNew = true;
+    }
+    // Mirror deleteProduct soft-remove so the SPU leaves Product List; republish creates a new product.
+    await tx.product.update({
+        where: {
+            id: productId
+        },
+        data: {
+            status: 'DRAFT',
+            goodsStatus: 'DELETED'
+        }
+    });
+    await tx.cartitem.updateMany({
+        where: {
+            productId
+        },
+        data: {
+            status: 'INVALID'
+        }
+    });
+    return {
+        pendingItemId,
+        taskId,
+        createdNew
+    };
+}
+const returnProductsToPendingUpload = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)));
+    if (productIds.length === 0) {
+        throw new Error('请先选择需要退回待上传的商品');
+    }
+    const { userId } = (0, _action_utils.getAuthContext)();
+    let success = 0;
+    let fail = 0;
+    const pendingItemIds = [];
+    let sharedTaskId = null;
+    for (const productId of productIds){
+        try {
+            const result = await _prisma.default.$transaction(async (tx)=>{
+                return returnOneProductToPendingUpload(tx, productId, userId, sharedTaskId);
+            });
+            if (result.createdNew && !sharedTaskId) sharedTaskId = result.taskId;
+            pendingItemIds.push(result.pendingItemId);
+            success += 1;
+        } catch  {
+            fail += 1;
+        }
+    }
+    return {
+        success_count: success,
+        fail_count: fail,
+        pending_item_ids: pendingItemIds
     };
 }));
 const deleteProduct = (0, _action_utils.requireRole)([
@@ -99422,35 +101210,51 @@ const sync1688ProductStatus = (0, _action_utils.requireRole)([
     const normal = [];
     const unknown = [];
     let skipped_count = 0;
-    for (const productId of productIds){
+    const SYNC_CONCURRENCY = 5;
+    const workItems = productIds.map((productId)=>{
         const product = byId.get(productId);
         if (!product) {
             skipped_count += 1;
-            continue;
+            return null;
         }
         const sourceUrl = String(product.sourceUrl || '').trim();
         const is1688Url = /1688\.com/i.test(sourceUrl) && /offer\/\d+/i.test(sourceUrl);
         if (!is1688Url) {
             skipped_count += 1;
-            continue;
+            return null;
         }
-        const live = await (0, _ImportFrom1688.check1688OfferLiveStatus)(sourceUrl);
-        const item = {
-            product_id: product.id,
-            product_name: product.name,
-            product_code: product.productCode,
-            source_url: sourceUrl,
-            supplier_name: product.supplierName,
-            current_status: product.status,
-            offer_status: live.status,
-            offer_name: live.offer_name,
-            reason: live.reason
+        return {
+            product,
+            sourceUrl
         };
-        if (live.status === 'DELISTED') delisted.push(item);
-        else if (live.status === 'OUT_OF_STOCK') out_of_stock.push(item);
-        else if (live.status === 'NORMAL') normal.push(item);
-        else unknown.push(item);
-    }
+    }).filter((row)=>!!row);
+    let cursor = 0;
+    const workers = Array.from({
+        length: Math.min(SYNC_CONCURRENCY, workItems.length || 1)
+    }, async ()=>{
+        while(true){
+            const index = cursor++;
+            if (index >= workItems.length) return;
+            const { product, sourceUrl } = workItems[index];
+            const live = await (0, _ImportFrom1688.check1688OfferLiveStatus)(sourceUrl);
+            const item = {
+                product_id: product.id,
+                product_name: product.name,
+                product_code: product.productCode,
+                source_url: sourceUrl,
+                supplier_name: product.supplierName,
+                current_status: product.status,
+                offer_status: live.status,
+                offer_name: live.offer_name,
+                reason: live.reason
+            };
+            if (live.status === 'DELISTED') delisted.push(item);
+            else if (live.status === 'OUT_OF_STOCK') out_of_stock.push(item);
+            else if (live.status === 'NORMAL') normal.push(item);
+            else unknown.push(item);
+        }
+    });
+    await Promise.all(workers);
     return {
         delisted,
         out_of_stock,
@@ -99504,6 +101308,162 @@ const batchAppendProductAdminNotes = (0, _action_utils.requireRole)([
     return {
         success_count: success,
         fail_count: fail
+    };
+}));
+function appendLiteralSuffixToCachedTitle(title, suffix) {
+    if ((0, _titleSuffix.titleAlreadyHasSuffix)(title, suffix)) return title;
+    return `${String(title || '').trimEnd()}${suffix}`;
+}
+const batchAppendProductTitleSuffix = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const ids = Array.from(new Set((input.ids || []).filter(Boolean)));
+    const suffix = (0, _titleSuffix.normalizeTitleSuffix)(input.suffix);
+    if (ids.length === 0) throw new Error('请先勾选商品');
+    if (!suffix) throw new Error('后缀不能为空');
+    let success = 0;
+    let skip = 0;
+    let fail = 0;
+    for (const productId of ids){
+        try {
+            const product = await _prisma.default.product.findUnique({
+                where: {
+                    id: productId
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    translationsJson: true
+                }
+            });
+            if (!product) {
+                fail += 1;
+                continue;
+            }
+            const nextName = (0, _titleSuffix.appendTitleSuffixIfMissing)(product.name, suffix);
+            if (!nextName) {
+                skip += 1;
+                continue;
+            }
+            const existingEn = (0, _resolveProductTitleEn.getCachedEnglishTitle)(null, product.translationsJson);
+            const existingEs = (0, _resolveProductTitleEn.getCachedSpanishTitle)(null, product.translationsJson);
+            const nextJson = (0, _resolveProductTitleEn.mergeProductTitleTranslations)(product.translationsJson, {
+                nameZh: nextName,
+                nameEn: existingEn ? appendLiteralSuffixToCachedTitle(existingEn, suffix) : null,
+                nameEs: existingEs ? appendLiteralSuffixToCachedTitle(existingEs, suffix) : null
+            });
+            await _prisma.default.product.update({
+                where: {
+                    id: productId
+                },
+                data: {
+                    name: nextName,
+                    translationsJson: nextJson
+                }
+            });
+            success += 1;
+        } catch  {
+            fail += 1;
+        }
+    }
+    return {
+        success_count: success,
+        skip_count: skip,
+        fail_count: fail
+    };
+}));
+const batchAppendPendingImportTitleSuffix = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const ids = Array.from(new Set((input.ids || []).filter(Boolean)));
+    const suffix = (0, _titleSuffix.normalizeTitleSuffix)(input.suffix);
+    if (ids.length === 0) throw new Error('请先勾选待上传商品');
+    if (!suffix) throw new Error('后缀不能为空');
+    let success = 0;
+    let skip = 0;
+    let fail = 0;
+    for (const itemId of ids){
+        try {
+            const item = await _prisma.default.importtaskitem.findUnique({
+                where: {
+                    id: itemId
+                },
+                select: {
+                    id: true,
+                    parsedName: true,
+                    isPublished: true,
+                    previewDataJson: true
+                }
+            });
+            if (!item || item.isPublished) {
+                fail += 1;
+                continue;
+            }
+            const currentName = String(item.parsedName || '').trim();
+            const nextName = (0, _titleSuffix.appendTitleSuffixIfMissing)(currentName, suffix);
+            if (!nextName) {
+                skip += 1;
+                continue;
+            }
+            const preview = item.previewDataJson || {};
+            const prevEn = typeof preview.nameEn === 'string' ? preview.nameEn : '';
+            const prevEs = typeof preview.nameEs === 'string' ? preview.nameEs : '';
+            await _prisma.default.importtaskitem.update({
+                where: {
+                    id: itemId
+                },
+                data: {
+                    parsedName: nextName,
+                    previewDataJson: {
+                        ...preview,
+                        name: nextName,
+                        ...prevEn ? {
+                            nameEn: appendLiteralSuffixToCachedTitle(prevEn, suffix)
+                        } : {},
+                        ...prevEs ? {
+                            nameEs: appendLiteralSuffixToCachedTitle(prevEs, suffix)
+                        } : {}
+                    }
+                }
+            });
+            success += 1;
+        } catch  {
+            fail += 1;
+        }
+    }
+    return {
+        success_count: success,
+        skip_count: skip,
+        fail_count: fail
+    };
+}));
+const updateProductStock = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const productId = String(input.product_id || '').trim();
+    const nextStock = Math.round(Number(input.stock));
+    if (!productId) throw new Error('商品 ID 不能为空');
+    if (!Number.isFinite(nextStock) || nextStock < 0) throw new Error('库存不能小于0');
+    const product = await _prisma.default.product.findUnique({
+        where: {
+            id: productId
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!product) throw new Error('商品不存在');
+    await _prisma.default.productsku.updateMany({
+        where: {
+            productId
+        },
+        data: {
+            stock: nextStock,
+            stockStatus: getStockStatus(nextStock)
+        }
+    });
+    return {
+        success: true
     };
 }));
 const reclassifyPublishedProductsBySecondaryMatch = (0, _action_utils.requireRole)([
@@ -99563,6 +101523,7 @@ const reclassifyPublishedProductsBySecondaryMatch = (0, _action_utils.requireRol
                     }
                 });
                 await replaceProductCategoryRelations(tx, product.id, linkedCategoryIds);
+                await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product.id);
             });
             matched += 1;
         } catch  {
@@ -99575,6 +101536,11 @@ const reclassifyPublishedProductsBySecondaryMatch = (0, _action_utils.requireRol
         failed,
         total: products.length
     };
+}));
+const autoClassifyPriceThresholdProducts = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    return (0, _priceThresholdAutoClassify.autoClassifyAllProductsByPriceThreshold)(_prisma.default);
 }));
 const batchTranslateProductTitlesToSpanish = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -100039,6 +102005,186 @@ const updateShippingChannelStatus = (0, _action_utils.requireRole)([
         },
         data: {
             isEnabled: !!input.channel_isEnabled
+        }
+    });
+    return {
+        success: true
+    };
+}));
+
+
+/***/ },
+
+/***/ 30126
+(__unused_webpack_module, exports, __webpack_require__) {
+
+'use server';
+"use strict";
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get createSuffixConfig () {
+        return createSuffixConfig;
+    },
+    get deleteSuffixConfig () {
+        return deleteSuffixConfig;
+    },
+    get listSuffixConfigs () {
+        return listSuffixConfigs;
+    },
+    get updateSuffixConfig () {
+        return updateSuffixConfig;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
+const _action_utils = __webpack_require__(79153);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+/** 首次访问且表为空时，把原下拉框的固定后缀落库，保证行为不回退。 */ const DEFAULT_SUFFIX_PRESETS = [
+    {
+        name: '[13USD]',
+        weight: 50
+    },
+    {
+        name: '[3USD]',
+        weight: 40
+    },
+    {
+        name: '[清仓]',
+        weight: 30
+    },
+    {
+        name: '[特价]',
+        weight: 20
+    },
+    {
+        name: '[新品]',
+        weight: 10
+    }
+];
+const normalizeSuffixName = (raw)=>String(raw !== null && raw !== void 0 ? raw : '').trim();
+const toItem = (row)=>({
+        id: row.id,
+        suffix_name: row.suffixName,
+        sort_weight: row.sortWeight
+    });
+const listSuffixConfigs = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    const count = await _prisma.default.suffixconfig.count();
+    if (count === 0) {
+        await _prisma.default.suffixconfig.createMany({
+            data: DEFAULT_SUFFIX_PRESETS.map((preset)=>({
+                    suffixName: preset.name,
+                    sortWeight: preset.weight
+                })),
+            skipDuplicates: true
+        });
+    }
+    const rows = await _prisma.default.suffixconfig.findMany({
+        orderBy: [
+            {
+                sortWeight: 'desc'
+            },
+            {
+                createdAt: 'asc'
+            }
+        ],
+        select: {
+            id: true,
+            suffixName: true,
+            sortWeight: true
+        }
+    });
+    return rows.map(toItem);
+}));
+const createSuffixConfig = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const suffixName = normalizeSuffixName(input === null || input === void 0 ? void 0 : input.suffix_name);
+    if (!suffixName) throw new Error('后缀内容不能为空');
+    if (suffixName.length > 120) throw new Error('后缀内容长度不能超过 120 个字符');
+    const exists = await _prisma.default.suffixconfig.findUnique({
+        where: {
+            suffixName
+        }
+    });
+    if (exists) throw new Error('该后缀已存在');
+    const created = await _prisma.default.suffixconfig.create({
+        data: {
+            suffixName
+        },
+        select: {
+            id: true,
+            suffixName: true,
+            sortWeight: true
+        }
+    });
+    return toItem(created);
+}));
+const updateSuffixConfig = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = String((input === null || input === void 0 ? void 0 : input.id) || '').trim();
+    if (!id) throw new Error('缺少后缀 ID');
+    const suffixName = normalizeSuffixName(input === null || input === void 0 ? void 0 : input.suffix_name);
+    if (!suffixName) throw new Error('后缀内容不能为空');
+    if (suffixName.length > 120) throw new Error('后缀内容长度不能超过 120 个字符');
+    const current = await _prisma.default.suffixconfig.findUnique({
+        where: {
+            id
+        }
+    });
+    if (!current) throw new Error('后缀不存在或已被删除');
+    const duplicate = await _prisma.default.suffixconfig.findUnique({
+        where: {
+            suffixName
+        }
+    });
+    if (duplicate && duplicate.id !== id) throw new Error('该后缀已存在');
+    const updated = await _prisma.default.suffixconfig.update({
+        where: {
+            id
+        },
+        data: {
+            suffixName
+        },
+        select: {
+            id: true,
+            suffixName: true,
+            sortWeight: true
+        }
+    });
+    return toItem(updated);
+}));
+const deleteSuffixConfig = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = String((input === null || input === void 0 ? void 0 : input.id) || '').trim();
+    if (!id) throw new Error('缺少后缀 ID');
+    const current = await _prisma.default.suffixconfig.findUnique({
+        where: {
+            id
+        }
+    });
+    if (!current) throw new Error('后缀不存在或已被删除');
+    await _prisma.default.suffixconfig.delete({
+        where: {
+            id
         }
     });
     return {
@@ -101019,6 +103165,349 @@ const CUSTOMER_TAG_OPTIONS = [
 
 /***/ },
 
+/***/ 77744
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/**
+ * Auto-bind price-threshold L2 categories onto products via product_category_relations.
+ * Never changes product.categoryId / brandCategoryId (primary shelf stays intact).
+ *
+ * Admin already created the L2 shelves — we only resolve them by name:
+ * - L1 Bags (包) + min sell USD <= 13 → existing L2 "below13 usd"
+ * - L1 Jewelry/饰品 + min sell USD <= 3 → existing L2 "below3 usd"
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get BELOW13_USD_CATEGORY_NAME () {
+        return BELOW13_USD_CATEGORY_NAME;
+    },
+    get BELOW3_USD_CATEGORY_NAME () {
+        return BELOW3_USD_CATEGORY_NAME;
+    },
+    get PRICE_THRESHOLD_RULES () {
+        return PRICE_THRESHOLD_RULES;
+    },
+    get autoClassifyAllProductsByPriceThreshold () {
+        return autoClassifyAllProductsByPriceThreshold;
+    },
+    get ensurePriceThresholdCategories () {
+        return ensurePriceThresholdCategories;
+    },
+    get productBelongsToL1 () {
+        return productBelongsToL1;
+    },
+    get resolvePriceThresholdCategories () {
+        return resolvePriceThresholdCategories;
+    },
+    get resolveProductMinUsdPrice () {
+        return resolveProductMinUsdPrice;
+    },
+    get syncProductPriceThresholdRelations () {
+        return syncProductPriceThresholdRelations;
+    }
+});
+const _exchangeRate = __webpack_require__(48511);
+const BELOW13_USD_CATEGORY_NAME = 'below13 usd';
+const BELOW3_USD_CATEGORY_NAME = 'below3 usd';
+const PRICE_THRESHOLD_RULES = [
+    {
+        key: 'bags_below13',
+        l1Aliases: [
+            'bags',
+            'bag',
+            '包',
+            '箱包',
+            '包包'
+        ],
+        l2NameAliases: [
+            'below13 usd',
+            'below13usd',
+            'below13-usd',
+            'below 13 usd'
+        ],
+        maxUsd: 13
+    },
+    {
+        key: 'jewelry_below3',
+        l1Aliases: [
+            'jewelry',
+            'jewellery',
+            '饰品',
+            '首饰',
+            'accessories',
+            'accessory',
+            '配件'
+        ],
+        l2NameAliases: [
+            'below3 usd',
+            'below3usd',
+            'below3-usd',
+            'below 3 usd'
+        ],
+        maxUsd: 3
+    }
+];
+function normalizeCatKey(value) {
+    return String(value || '').trim().toLowerCase().replace(/[\s/_-]+/g, '');
+}
+function matchesAlias(nameOrSlug, aliases) {
+    const key = normalizeCatKey(nameOrSlug);
+    if (!key) return false;
+    return aliases.some((alias)=>{
+        const a = normalizeCatKey(alias);
+        return !!a && key === a;
+    });
+}
+function toNumber(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof (value === null || value === void 0 ? void 0 : value.toNumber) === 'function') {
+        const n = value.toNumber();
+        return Number.isFinite(n) ? n : null;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+function resolveL1Id(categoryId, categoryMap) {
+    let current = categoryId ? categoryMap.get(categoryId) : null;
+    let guard = 0;
+    while(current && guard++ < 8){
+        if (current.level === 1 || !current.parentId) return current.id;
+        current = categoryMap.get(current.parentId) || null;
+    }
+    return null;
+}
+function productBelongsToL1(product, l1Id, categoryMap) {
+    const ids = [
+        product.categoryId,
+        ...product.relationCategoryIds || []
+    ].filter(Boolean);
+    for (const id of ids){
+        if (resolveL1Id(id, categoryMap) === l1Id) return true;
+    }
+    return false;
+}
+function resolveProductMinUsdPrice(product, usdExchangeRate) {
+    const skuPrices = (product.skus || []).map((sku)=>toNumber(sku.price)).filter((n)=>n !== null && n >= 0);
+    let minRmb = null;
+    if (skuPrices.length > 0) {
+        minRmb = Math.min(...skuPrices);
+    } else {
+        var _toNumber;
+        const cost = toNumber(product.costPrice);
+        const coeff = (_toNumber = toNumber(product.priceCoefficient)) !== null && _toNumber !== void 0 ? _toNumber : 2;
+        if (cost !== null && cost >= 0) minRmb = cost * coeff;
+    }
+    if (minRmb === null) return null;
+    return (0, _exchangeRate.toUsdFromCny)(minRmb, usdExchangeRate);
+}
+async function resolvePriceThresholdCategories(db) {
+    const l2Candidates = await db.category.findMany({
+        where: {
+            level: 2,
+            status: 'ACTIVE'
+        },
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+            parentId: true,
+            parent: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
+    });
+    const resolved = [];
+    for (const rule of PRICE_THRESHOLD_RULES){
+        var _child_parent;
+        const child = l2Candidates.find((cat)=>matchesAlias(cat.name, rule.l2NameAliases) || matchesAlias(cat.slug, rule.l2NameAliases));
+        if (!(child === null || child === void 0 ? void 0 : child.parentId)) continue;
+        resolved.push({
+            key: rule.key,
+            parentId: child.parentId,
+            parentName: ((_child_parent = child.parent) === null || _child_parent === void 0 ? void 0 : _child_parent.name) || '',
+            categoryId: child.id,
+            categoryName: child.name,
+            maxUsd: rule.maxUsd
+        });
+    }
+    return resolved;
+}
+const ensurePriceThresholdCategories = resolvePriceThresholdCategories;
+async function loadCategoryMap(db) {
+    const rows = await db.category.findMany({
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+            level: true,
+            parentId: true,
+            status: true
+        }
+    });
+    return new Map(rows.map((row)=>[
+            row.id,
+            row
+        ]));
+}
+async function syncProductPriceThresholdRelations(db, productId, options) {
+    var _ref, _ref1, _ref2;
+    const ensured = (_ref = options === null || options === void 0 ? void 0 : options.ensured) !== null && _ref !== void 0 ? _ref : await resolvePriceThresholdCategories(db);
+    const thresholdIds = ensured.map((item)=>item.categoryId);
+    const empty = {
+        productId,
+        minUsd: null,
+        addedCategoryIds: [],
+        removedCategoryIds: [],
+        matchedKeys: []
+    };
+    if (!thresholdIds.length) return empty;
+    const product = await db.product.findUnique({
+        where: {
+            id: productId
+        },
+        select: {
+            id: true,
+            categoryId: true,
+            costPrice: true,
+            priceCoefficient: true,
+            skus: {
+                select: {
+                    price: true
+                }
+            },
+            relationCategories: {
+                select: {
+                    categoryId: true
+                }
+            }
+        }
+    });
+    if (!product) return empty;
+    const categoryMap = (_ref1 = options === null || options === void 0 ? void 0 : options.categoryMap) !== null && _ref1 !== void 0 ? _ref1 : await loadCategoryMap(db);
+    const usdExchangeRate = (_ref2 = options === null || options === void 0 ? void 0 : options.usdExchangeRate) !== null && _ref2 !== void 0 ? _ref2 : await (0, _exchangeRate.getUsdExchangeRate)(db);
+    const minUsd = resolveProductMinUsdPrice(product, usdExchangeRate);
+    const relationCategoryIds = (product.relationCategories || []).map((rel)=>rel.categoryId);
+    const shouldHaveIds = [];
+    const matchedKeys = [];
+    if (minUsd !== null) {
+        for (const rule of ensured){
+            const belongs = productBelongsToL1({
+                categoryId: product.categoryId,
+                relationCategoryIds
+            }, rule.parentId, categoryMap);
+            if (belongs && minUsd <= rule.maxUsd) {
+                shouldHaveIds.push(rule.categoryId);
+                matchedKeys.push(rule.key);
+            }
+        }
+    }
+    const existingThreshold = relationCategoryIds.filter((id)=>thresholdIds.includes(id));
+    const toAdd = shouldHaveIds.filter((id)=>!existingThreshold.includes(id));
+    const toRemove = existingThreshold.filter((id)=>!shouldHaveIds.includes(id));
+    if (toRemove.length > 0) {
+        await db.product_category_relations.deleteMany({
+            where: {
+                productId,
+                categoryId: {
+                    in: toRemove
+                }
+            }
+        });
+    }
+    if (toAdd.length > 0) {
+        await db.product_category_relations.createMany({
+            data: toAdd.map((categoryId)=>({
+                    productId,
+                    categoryId
+                })),
+            skipDuplicates: true
+        });
+    }
+    return {
+        productId,
+        minUsd,
+        addedCategoryIds: toAdd,
+        removedCategoryIds: toRemove,
+        matchedKeys
+    };
+}
+async function autoClassifyAllProductsByPriceThreshold(db) {
+    const ensured = await resolvePriceThresholdCategories(db);
+    const missingTargets = PRICE_THRESHOLD_RULES.filter((rule)=>!ensured.some((item)=>item.key === rule.key)).map((rule)=>rule.l2NameAliases[0]);
+    const categoryMap = await loadCategoryMap(db);
+    const usdExchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(db);
+    const products = await db.product.findMany({
+        where: {
+            status: {
+                in: [
+                    'ACTIVE',
+                    'DRAFT',
+                    'INACTIVE'
+                ]
+            }
+        },
+        select: {
+            id: true
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    let bound = 0;
+    let unbound = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const product of products){
+        try {
+            const result = await syncProductPriceThresholdRelations(db, product.id, {
+                ensured,
+                categoryMap,
+                usdExchangeRate
+            });
+            if (result.addedCategoryIds.length > 0) bound += 1;
+            else if (result.removedCategoryIds.length > 0) unbound += 1;
+            else skipped += 1;
+        } catch  {
+            failed += 1;
+        }
+    }
+    return {
+        scanned: products.length,
+        bound,
+        unbound,
+        skipped,
+        failed,
+        resolvedCategories: ensured.map((item)=>({
+                key: item.key,
+                parent_name: item.parentName,
+                category_id: item.categoryId,
+                category_name: item.categoryName,
+                max_usd: item.maxUsd
+            })),
+        missing_targets: missingTargets
+    };
+}
+
+
+/***/ },
+
 /***/ 64205
 (__unused_webpack_module, exports, __webpack_require__) {
 
@@ -101208,6 +103697,31 @@ _export(exports, {
         return translateTextZhTo;
     }
 });
+/** 单次翻译请求最长等待时间，超时即放弃该 provider，避免卡住采集/上架流程。 */ const TRANSLATE_TIMEOUT_MS = 4000;
+/** 进程内翻译缓存：批量导入里大量重复标题/词直接命中，省掉外部 API 往返。 */ const TRANSLATION_CACHE_MAX = 5000;
+const translationCache = new Map();
+function readTranslationCache(key) {
+    return translationCache.get(key);
+}
+function writeTranslationCache(key, value) {
+    if (translationCache.size >= TRANSLATION_CACHE_MAX) {
+        const oldest = translationCache.keys().next().value;
+        if (oldest !== undefined) translationCache.delete(oldest);
+    }
+    translationCache.set(key, value);
+}
+/** fetch + 超时（AbortController）；超时/失败由各 provider 的 try-catch 统一转成 null。 */ async function fetchWithTimeout(input, init, timeoutMs = TRANSLATE_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), timeoutMs);
+    try {
+        return await fetch(input, {
+            ...init || {},
+            signal: controller.signal
+        });
+    } finally{
+        clearTimeout(timer);
+    }
+}
 function normalizeTarget(lang) {
     const value = String(lang || '').trim().toLowerCase();
     if (value.startsWith('es')) return 'ES';
@@ -101238,7 +103752,7 @@ async function translateWithDeepL(text, target, apiKey, source) {
         body.set('target_lang', target === 'ZH' ? 'ZH' : target);
         if (source === 'ZH') body.set('source_lang', 'ZH');
         if (source === 'EN') body.set('source_lang', 'EN');
-        const res = await fetch(deeplEndpoint(apiKey), {
+        const res = await fetchWithTimeout(deeplEndpoint(apiKey), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
@@ -101264,7 +103778,7 @@ async function translateWithGoogle(text, target, apiKey, source) {
         if (source === 'EN') url.searchParams.set('source', 'en');
         url.searchParams.set('target', targetLang);
         url.searchParams.set('format', 'text');
-        const res = await fetch(url.toString(), {
+        const res = await fetchWithTimeout(url.toString(), {
             method: 'POST'
         });
         if (!res.ok) return null;
@@ -101284,7 +103798,7 @@ async function translateWithGoogle(text, target, apiKey, source) {
         const url = new URL('https://api.mymemory.translated.net/get');
         url.searchParams.set('q', text.slice(0, 480));
         url.searchParams.set('langpair', `${src}|${tgt}`);
-        const res = await fetch(url.toString());
+        const res = await fetchWithTimeout(url.toString());
         if (!res.ok) return null;
         const data = await res.json();
         if (Number(data.responseStatus) !== 200) return null;
@@ -101309,22 +103823,620 @@ async function translateTextTo(text, targetLang = 'en', sourceLang) {
     if (target === 'EN' && source === 'EN' && !/[\u4e00-\u9fff]/.test(raw)) {
         return raw;
     }
+    // 命中进程内缓存直接返回，批量导入相同标题/词零额外请求
+    const cacheKey = `${source}::${target}::${raw}`;
+    const cached = readTranslationCache(cacheKey);
+    if (cached !== undefined) return cached;
     const deeplKey = String(process.env.DEEPL_API_KEY || '').trim();
     if (deeplKey) {
         const out = await translateWithDeepL(raw, target, deeplKey, source);
-        if (out) return out;
+        if (out) {
+            writeTranslationCache(cacheKey, out);
+            return out;
+        }
     }
     const googleKey = String(process.env.GOOGLE_TRANSLATE_API_KEY || '').trim();
     if (googleKey) {
         const out = await translateWithGoogle(raw, target, googleKey, source);
-        if (out) return out;
+        if (out) {
+            writeTranslationCache(cacheKey, out);
+            return out;
+        }
     }
     const free = await translateWithMyMemory(raw, target, source);
-    if (free) return free;
+    if (free) {
+        writeTranslationCache(cacheKey, free);
+        return free;
+    }
     return null;
 }
 async function translateTextZhTo(text, targetLang = 'en') {
     return translateTextTo(text, targetLang, 'zh');
+}
+
+
+/***/ },
+
+/***/ 10402
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * OneBound 1688 item_get integration.
+ *
+ * Credentials are server-only:
+ *   ONEBOUND_1688_KEY / ONEBOUND_1688_SECRET
+ * Aliases ONEBOUND_KEY / ONEBOUND_SECRET are accepted for compatibility.
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get fetchOneBound1688Preview () {
+        return fetchOneBound1688Preview;
+    },
+    get hasOneBound1688Configured () {
+        return hasOneBound1688Configured;
+    },
+    get mapOneBound1688Item () {
+        return mapOneBound1688Item;
+    }
+});
+const asRecord = (value)=>value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+const asArray = (value)=>Array.isArray(value) ? value : [];
+const cleanText = (value)=>typeof value === 'string' || typeof value === 'number' ? String(value).replace(/\s+/g, ' ').trim() : '';
+const numberOrNull = (value)=>{
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+};
+const normalizeImageUrl = (value)=>{
+    const raw = cleanText(value);
+    if (!raw) return '';
+    const url = raw.startsWith('//') ? `https:${raw}` : raw;
+    return /^https?:\/\//i.test(url) ? url : '';
+};
+const unique = (values)=>Array.from(new Set(values));
+const extractDescriptionImages = (item)=>{
+    const explicit = asArray(item.desc_img).map(normalizeImageUrl).filter(Boolean);
+    const html = typeof item.desc === 'string' ? item.desc : typeof item.desc_short === 'string' ? item.desc_short : '';
+    const embedded = Array.from(html.matchAll(/\bsrc\s*=\s*["']([^"']+)["']/gi), (match)=>normalizeImageUrl(match[1])).filter((url)=>Boolean(url) && !/(?:^|\.)o0b\.cn\/|onebound/i.test(url));
+    return unique([
+        ...explicit,
+        ...embedded
+    ]);
+};
+const extractOfferId = (sourceUrl)=>{
+    var _text_match, _text_match1;
+    const text = String(sourceUrl || '');
+    return ((_text_match = text.match(/offer\/(\d+)\.html/i)) === null || _text_match === void 0 ? void 0 : _text_match[1]) || ((_text_match1 = text.match(/[?&](?:offerId|offer_id|id)=(\d+)/i)) === null || _text_match1 === void 0 ? void 0 : _text_match1[1]) || (/^\d+$/.test(text.trim()) ? text.trim() : '');
+};
+const resolveCredentials = ()=>{
+    const key = cleanText(process.env.ONEBOUND_1688_KEY || process.env.ONEBOUND_KEY);
+    const secret = cleanText(process.env.ONEBOUND_1688_SECRET || process.env.ONEBOUND_SECRET);
+    const enabled = !/^(0|false|off|no)$/i.test(cleanText(process.env.ONEBOUND_1688_ENABLED || 'true'));
+    return {
+        key,
+        secret,
+        enabled
+    };
+};
+const hasOneBound1688Configured = ()=>{
+    const { key, secret, enabled } = resolveCredentials();
+    return enabled && Boolean(key && secret);
+};
+const parseAttributeLabel = (raw)=>{
+    const label = cleanText(raw);
+    if (!label) return null;
+    const index = label.indexOf(':');
+    if (index <= 0) return null;
+    const name = label.slice(0, index).trim();
+    const value = label.slice(index + 1).trim();
+    return name && value ? {
+        name,
+        value
+    } : null;
+};
+const parseSkuAttributes = (sku, propsList)=>{
+    const propertyKeys = cleanText(sku.properties).split(';').map((value)=>value.trim()).filter(Boolean);
+    const fromList = propertyKeys.map((key)=>parseAttributeLabel(propsList[key])).filter((value)=>Boolean(value));
+    if (fromList.length) return fromList;
+    return cleanText(sku.properties_name).split(';').map((part)=>{
+        var _pieces_;
+        const pieces = part.split(':');
+        if (pieces.length < 4) return null;
+        return {
+            name: ((_pieces_ = pieces[2]) === null || _pieces_ === void 0 ? void 0 : _pieces_.trim()) || '',
+            value: pieces.slice(3).join(':').trim()
+        };
+    }).filter((value)=>Boolean((value === null || value === void 0 ? void 0 : value.name) && (value === null || value === void 0 ? void 0 : value.value)));
+};
+const isColorName = (name)=>/颜色|色号|colour|color/i.test(name);
+const isSizeName = (name)=>/尺码|尺寸|大小|规格|size|length|width|长度|宽度/i.test(name);
+const imageForSku = (sku, propImages)=>{
+    const keys = cleanText(sku.properties).split(';').map((value)=>value.trim()).filter(Boolean);
+    for (const key of keys){
+        const url = normalizeImageUrl(propImages[key]);
+        if (url) return url;
+    }
+    return null;
+};
+const mapOneBound1688Item = (item)=>{
+    var _featureAttributes_find;
+    const name = cleanText(item.title).slice(0, 180) || null;
+    const mainImageUrl = normalizeImageUrl(item.pic_url) || null;
+    const itemImages = asArray(item.item_imgs).map((value)=>normalizeImageUrl(asRecord(value).url)).filter(Boolean);
+    const gallery = unique([
+        ...mainImageUrl ? [
+            mainImageUrl
+        ] : [],
+        ...itemImages
+    ]).slice(0, 12);
+    const descImages = extractDescriptionImages(item).slice(0, 60);
+    const productDetail = descImages.length ? descImages.map((url)=>`<img src="${url.replace(/"/g, '&quot;')}" alt="" loading="lazy" style="display:block;width:100%;height:auto" />`).join('') : null;
+    const propsList = asRecord(item.props_list);
+    const propImages = asRecord(item.props_img);
+    const skuRoot = asRecord(item.skus);
+    const rawSkus = asArray(skuRoot.sku).map(asRecord);
+    const skuTable = rawSkus.map((sku, index)=>{
+        const attributes = parseSkuAttributes(sku, propsList);
+        const cost = numberOrNull(sku.price);
+        return {
+            skuKey: cleanText(sku.sku_id || sku.spec_id || sku.properties) || `onebound-${index + 1}`,
+            spec: attributes.map((attribute)=>attribute.value).join(' / ') || '默认规格',
+            costPrice: cost,
+            price: cost,
+            stock: numberOrNull(sku.quantity),
+            imageUrl: imageForSku(sku, propImages),
+            attributes
+        };
+    });
+    const featureAttributes = asArray(item.props).map(asRecord).map((prop)=>({
+            key: cleanText(prop.name),
+            value: cleanText(prop.value)
+        })).filter((prop)=>prop.key && prop.value);
+    const summary = new Map();
+    for (const sku of skuTable){
+        for (const attribute of sku.attributes || []){
+            const values = summary.get(attribute.name) || [];
+            if (!values.includes(attribute.value)) values.push(attribute.value);
+            summary.set(attribute.name, values);
+        }
+    }
+    const specSummary = Array.from(summary, ([summaryName, values])=>({
+            name: summaryName,
+            values
+        }));
+    const colorsByLabel = new Map();
+    const sizesByColor = {};
+    for (const sku of skuTable){
+        var _find, _find1;
+        const color = (_find = (sku.attributes || []).find((attribute)=>isColorName(attribute.name))) === null || _find === void 0 ? void 0 : _find.value;
+        const size = (_find1 = (sku.attributes || []).find((attribute)=>isSizeName(attribute.name))) === null || _find1 === void 0 ? void 0 : _find1.value;
+        if (color && !colorsByLabel.has(color)) {
+            colorsByLabel.set(color, sku.imageUrl || null);
+        }
+        if (color && size) {
+            const sizes = sizesByColor[color] || [];
+            if (!sizes.includes(size)) sizes.push(size);
+            sizesByColor[color] = sizes;
+        }
+    }
+    const colors = Array.from(colorsByLabel, ([label, imageUrl])=>({
+            label,
+            imageUrl
+        }));
+    const skuPrices = skuTable.map((sku)=>sku.costPrice).filter((value)=>value !== null && value !== undefined);
+    const itemPrice = numberOrNull(item.price);
+    const priceMin = skuPrices.length ? Math.min(...skuPrices) : itemPrice;
+    const priceMax = skuPrices.length ? Math.max(...skuPrices) : itemPrice;
+    const seller = asRecord(item.seller_info);
+    const sourceCategory = ((_featureAttributes_find = featureAttributes.find((prop)=>/商品类型|品类|类目/.test(prop.key))) === null || _featureAttributes_find === void 0 ? void 0 : _featureAttributes_find.value) || null;
+    if (!(name || mainImageUrl || skuTable.length)) return null;
+    return {
+        name,
+        mainImageUrl: mainImageUrl || gallery[0] || null,
+        detailImages: gallery,
+        supplierName: cleanText(seller.shop_name || seller.title || item.nick) || null,
+        productDetail,
+        sourceCategoryName: sourceCategory,
+        priceMin,
+        priceMax,
+        featureAttributes,
+        skuTable,
+        colors,
+        sizesByColor,
+        specSummary
+    };
+};
+async function fetchOneBound1688Preview(sourceUrl) {
+    const { key, secret, enabled } = resolveCredentials();
+    if (!enabled) return {
+        kind: 'disabled',
+        reason: 'disabled by configuration'
+    };
+    if (!key || !secret) {
+        return {
+            kind: 'disabled',
+            reason: 'credentials not configured'
+        };
+    }
+    const offerId = extractOfferId(sourceUrl);
+    if (!offerId) return {
+        kind: 'failed',
+        reason: 'invalid 1688 offer id'
+    };
+    const baseUrl = cleanText(process.env.ONEBOUND_1688_BASE_URL) || 'https://api-gw.onebound.cn/1688/item_get/';
+    const endpoint = new URL(baseUrl);
+    endpoint.searchParams.set('key', key);
+    endpoint.searchParams.set('secret', secret);
+    endpoint.searchParams.set('num_iid', offerId);
+    endpoint.searchParams.set('lang', 'zh-CN');
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 25000);
+    try {
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json'
+            },
+            signal: controller.signal
+        });
+        const payload = await response.json();
+        const root = asRecord(payload);
+        const errorCode = cleanText(root.error_code);
+        if (!response.ok || errorCode && errorCode !== '0000') {
+            return {
+                kind: 'failed',
+                reason: cleanText(root.reason || root.error) || `OneBound HTTP ${response.status}`,
+                errorCode
+            };
+        }
+        const preview = mapOneBound1688Item(asRecord(root.item));
+        if (!preview) {
+            return {
+                kind: 'failed',
+                reason: 'OneBound returned no parseable product fields',
+                errorCode
+            };
+        }
+        console.warn(`[onebound1688] parsed offer=${offerId} gallery=${preview.detailImages.length} sku=${preview.skuTable.length}`);
+        return {
+            kind: 'parsed',
+            preview
+        };
+    } catch (error) {
+        return {
+            kind: 'failed',
+            reason: error instanceof Error && error.name === 'AbortError' ? 'OneBound request timed out' : error instanceof Error ? error.message : String(error)
+        };
+    } finally{
+        clearTimeout(timeout);
+    }
+}
+
+
+/***/ },
+
+/***/ 54314
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/**
+ * 1688 H5 MTop client — signed JSON fallback when HTML pages hit anti-bot punish.
+ * Sign: md5(token + "&" + t + "&" + appKey + "&" + data) where token is from `_m_h5_tk`.
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get bootstrap1688MtopCookies () {
+        return bootstrap1688MtopCookies;
+    },
+    get cookieMapToHeader () {
+        return cookieMapToHeader;
+    },
+    get extractMtopToken () {
+        return extractMtopToken;
+    },
+    get fetch1688OfferViaMtop () {
+        return fetch1688OfferViaMtop;
+    },
+    get normalize1688Cookie () {
+        return normalize1688Cookie;
+    },
+    get parseCookieMap () {
+        return parseCookieMap;
+    },
+    get signMtopRequest () {
+        return signMtopRequest;
+    }
+});
+const _crypto = __webpack_require__(76982);
+const MTOP_APP_KEY = '12574478';
+function normalize1688Cookie(raw) {
+    let text = String(raw || '').trim();
+    if (!text) return '';
+    text = text.replace(/^Cookie:\s*/i, '');
+    if (text.startsWith('"') && text.endsWith('"') || text.startsWith("'") && text.endsWith("'")) {
+        text = text.slice(1, -1).trim();
+    }
+    text = text.replace(/\r?\n+/g, '; ').replace(/;\s*;+/g, '; ').replace(/^;\s*|\s*;$/g, '').trim();
+    return text;
+}
+function parseCookieMap(cookieHeader) {
+    const map = {};
+    for (const part of normalize1688Cookie(cookieHeader).split(';')){
+        const idx = part.indexOf('=');
+        if (idx <= 0) continue;
+        const key = part.slice(0, idx).trim();
+        const value = part.slice(idx + 1).trim();
+        if (key) map[key] = value;
+    }
+    return map;
+}
+function cookieMapToHeader(map) {
+    return Object.entries(map).filter(([key, value])=>Boolean(key && value)).map(([key, value])=>`${key}=${value}`).join('; ');
+}
+function extractMtopToken(cookieHeader) {
+    const raw = parseCookieMap(cookieHeader)['_m_h5_tk'] || '';
+    if (!raw) return null;
+    const last = raw.lastIndexOf('_');
+    if (last <= 0) return raw;
+    return raw.slice(0, last);
+}
+const md5Hex = (value)=>(0, _crypto.createHash)('md5').update(value, 'utf8').digest('hex');
+function signMtopRequest(token, timestamp, dataJson) {
+    return md5Hex(`${token}&${timestamp}&${MTOP_APP_KEY}&${dataJson}`);
+}
+const mergeSetCookieHeaders = (cookieHeader, setCookies)=>{
+    const map = parseCookieMap(cookieHeader);
+    for (const line of setCookies){
+        const pair = String(line || '').split(';')[0] || '';
+        const idx = pair.indexOf('=');
+        if (idx <= 0) continue;
+        map[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+    }
+    return cookieMapToHeader(map);
+};
+const readSetCookies = (response)=>{
+    const headers = response.headers;
+    if (typeof headers.getSetCookie === 'function') {
+        try {
+            return headers.getSetCookie() || [];
+        } catch  {
+        // fall through
+        }
+    }
+    const single = response.headers.get('set-cookie');
+    return single ? [
+        single
+    ] : [];
+};
+const mtopBrowserHeaders = (cookieHeader)=>({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Accept: 'application/json,text/plain,*/*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.7',
+        Referer: 'https://detail.1688.com/',
+        Origin: 'https://detail.1688.com',
+        ...cookieHeader ? {
+            Cookie: cookieHeader
+        } : {}
+    });
+async function bootstrap1688MtopCookies(existingCookie) {
+    const base = normalize1688Cookie(existingCookie);
+    const t = String(Date.now());
+    const url = `https://h5api.m.1688.com/h5/mtop.relationrecommend.wirelessrecommend.recommend/2.0/` + `?jsv=2.5.1&appKey=${MTOP_APP_KEY}&t=${t}&sign=x` + `&api=mtop.relationrecommend.WirelessRecommend.recommend&v=2.0&type=json&dataType=json&data=%7B%7D`;
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 12000);
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal,
+            redirect: 'follow',
+            headers: mtopBrowserHeaders(base)
+        });
+        return mergeSetCookieHeaders(base, readSetCookies(response));
+    } catch  {
+        return base;
+    } finally{
+        clearTimeout(timer);
+    }
+}
+/**
+ * Only `mtop.alibaba.detail.subpage.getdetail` is still served by the gateway — as of
+ * 2026-08 the `mtop.1688.wireless.widget.offer.detail.get`, `mtop.china.detail.data.get`
+ * and `mtop.1688.trade.service.offerDetailService` names all answer
+ * FAIL_SYS_API_NOT_FOUNDED, and calling them only spends risk-control budget.
+ */ const buildOfferDetailCandidates = (offerId)=>[
+        {
+            api: 'mtop.alibaba.detail.subpage.getdetail',
+            version: '2.0',
+            data: {
+                offerId,
+                detail_v: '3.3.5'
+            }
+        }
+    ];
+/** RGV587_ERROR is Alibaba throttling, not a hard reject — spaced retries sometimes land. */ const RGV587_BACKOFF_MS = [
+    4000,
+    12000,
+    30000
+];
+const isMtopSuccess = (payload)=>{
+    const record = payload && typeof payload === 'object' ? payload : null;
+    if (!record) return false;
+    const ret = record.ret;
+    if (Array.isArray(ret)) {
+        return ret.some((item)=>typeof item === 'string' && /^SUCCESS/i.test(item));
+    }
+    if (typeof ret === 'string') return /^SUCCESS/i.test(ret);
+    return Boolean(record.data);
+};
+const mtopHasOfferSignal = (payload)=>{
+    const text = JSON.stringify(payload || {});
+    if (text.length < 80) return false;
+    return /"subject"|"offerTitle"|"skuProps"|"skuMap"|"imageList"|"offerId"|"mainImage"/i.test(text);
+};
+async function callSignedMtop(cookieHeader, candidate) {
+    let cookie = cookieHeader;
+    let token = extractMtopToken(cookie);
+    if (!token) {
+        cookie = await bootstrap1688MtopCookies(cookie);
+        token = extractMtopToken(cookie);
+    }
+    if (!token) return null;
+    const dataJson = JSON.stringify(candidate.data);
+    const t = String(Date.now());
+    const sign = signMtopRequest(token, t, dataJson);
+    const apiPath = candidate.api.toLowerCase();
+    const url = `https://h5api.m.1688.com/h5/${apiPath}/${candidate.version}/` + `?jsv=2.5.1&appKey=${MTOP_APP_KEY}&t=${t}&sign=${sign}` + `&api=${encodeURIComponent(candidate.api)}&v=${encodeURIComponent(candidate.version)}` + `&type=json&dataType=json&data=${encodeURIComponent(dataJson)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 15000);
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal,
+            redirect: 'follow',
+            headers: mtopBrowserHeaders(cookie)
+        });
+        cookie = mergeSetCookieHeaders(cookie, readSetCookies(response));
+        const text = await response.text();
+        if (!text || text.length < 20) return null;
+        let payload;
+        try {
+            payload = JSON.parse(text);
+        } catch  {
+            // Some mtop endpoints wrap as `mtopjsonpN(...)`
+            const matched = text.match(/^[^(]+\((\{[\s\S]*\})\);?\s*$/);
+            if (!(matched === null || matched === void 0 ? void 0 : matched[1])) return null;
+            payload = JSON.parse(matched[1]);
+        }
+        return {
+            payload,
+            cookieHeader: cookie
+        };
+    } catch (error) {
+        console.warn('[1688-mtop] call failed', candidate.api, error);
+        return null;
+    } finally{
+        clearTimeout(timer);
+    }
+}
+async function fetch1688OfferViaMtop(offerId, cookieRaw) {
+    const offer = String(offerId || '').trim();
+    if (!/^\d{6,}$/.test(offer)) {
+        return {
+            ok: false,
+            reason: 'invalid_offer_id'
+        };
+    }
+    let cookie = normalize1688Cookie(cookieRaw);
+    if (!cookie) {
+        return {
+            ok: false,
+            reason: 'no_cookie'
+        };
+    }
+    // Ensure we have a signing token even if operator only pasted login cookies.
+    if (!extractMtopToken(cookie)) {
+        cookie = await bootstrap1688MtopCookies(cookie);
+    }
+    if (!extractMtopToken(cookie)) {
+        return {
+            ok: false,
+            reason: 'no_mtop_token',
+            detail: 'Cookie 中缺少 _m_h5_tk，且自动签发失败'
+        };
+    }
+    let lastDetail = '';
+    for (const candidate of buildOfferDetailCandidates(offer)){
+        const result = await callSignedMtop(cookie, candidate);
+        if (!result) {
+            lastDetail = `${candidate.api}: network/parse error`;
+            continue;
+        }
+        cookie = result.cookieHeader;
+        const payload = result.payload;
+        const record = payload && typeof payload === 'object' ? payload : null;
+        const retText = Array.isArray(record === null || record === void 0 ? void 0 : record.ret) ? record.ret.join(',') : String((record === null || record === void 0 ? void 0 : record.ret) || '');
+        // Gateway rejects unknown names before signing, so a NOT_FOUNDED here means the
+        // API is retired — no point burning a token refresh on it.
+        if (/API_NOT_FOUNDED|API_LOCKED|FAIL_SYS_ILLEGAL_ACCESS/i.test(retText)) {
+            console.warn(`[1688-mtop] ${candidate.api} -> ${retText}`);
+            lastDetail = `${candidate.api}: ${retText}`;
+            continue;
+        }
+        if (/TOKEN_EMPTY|TOKEN_EXOIRED|TOKEN_EXPIRED|ILLEGAL_ACCESS|SESSION_EXPIRED/i.test(retText)) {
+            cookie = await bootstrap1688MtopCookies(cookie);
+            const retry = await callSignedMtop(cookie, candidate);
+            if (retry && isMtopSuccess(retry.payload) && mtopHasOfferSignal(retry.payload)) {
+                return {
+                    ok: true,
+                    data: retry.payload,
+                    api: candidate.api
+                };
+            }
+            lastDetail = `${candidate.api}: ${retText || 'token error'}`;
+            continue;
+        }
+        if (/RGV587_ERROR|SM::/i.test(retText)) {
+            let throttled = retText;
+            for (const waitMs of RGV587_BACKOFF_MS){
+                console.warn(`[1688-mtop] ${candidate.api} throttled (${throttled}) — retrying in ${waitMs}ms`);
+                await new Promise((resolve)=>setTimeout(resolve, waitMs));
+                cookie = await bootstrap1688MtopCookies(cookie);
+                const retry = await callSignedMtop(cookie, candidate);
+                if (!retry) {
+                    throttled = 'network/parse error';
+                    continue;
+                }
+                cookie = retry.cookieHeader;
+                if (mtopHasOfferSignal(retry.payload)) {
+                    return {
+                        ok: true,
+                        data: retry.payload,
+                        api: candidate.api
+                    };
+                }
+                const retryRecord = retry.payload && typeof retry.payload === 'object' ? retry.payload : null;
+                throttled = Array.isArray(retryRecord === null || retryRecord === void 0 ? void 0 : retryRecord.ret) ? retryRecord.ret.join(',') : String((retryRecord === null || retryRecord === void 0 ? void 0 : retryRecord.ret) || 'empty');
+                if (!/RGV587_ERROR|SM::/i.test(throttled)) break;
+            }
+            lastDetail = `${candidate.api}: ${throttled}`;
+            continue;
+        }
+        if (isMtopSuccess(payload) && mtopHasOfferSignal(payload)) {
+            return {
+                ok: true,
+                data: payload,
+                api: candidate.api
+            };
+        }
+        if (mtopHasOfferSignal(payload)) {
+            return {
+                ok: true,
+                data: payload,
+                api: candidate.api
+            };
+        }
+        console.warn(`[1688-mtop] ${candidate.api} -> ret=${retText || 'empty'}`);
+        lastDetail = `${candidate.api}: ${retText || 'empty'}`;
+    }
+    return {
+        ok: false,
+        reason: 'mtop_failed',
+        detail: lastDetail
+    };
 }
 
 
@@ -102152,6 +105264,142 @@ const fetchPinduoduoProductPreview = async (sourceUrl)=>{
     }
     return lastFailure;
 };
+
+
+/***/ },
+
+/***/ 40411
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get hashSecurePassword () {
+        return hashSecurePassword;
+    },
+    get validateAdminPassword () {
+        return validateAdminPassword;
+    },
+    get verifyStoredPassword () {
+        return verifyStoredPassword;
+    }
+});
+const _nodecrypto = __webpack_require__(77598);
+const SCRYPT_PREFIX = 'scrypt';
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const KEY_LENGTH = 64;
+const legacySha256 = (password)=>(0, _nodecrypto.createHash)('sha256').update(password).digest('hex');
+const hashSecurePassword = (password)=>{
+    const salt = (0, _nodecrypto.randomBytes)(16).toString('hex');
+    const derived = (0, _nodecrypto.scryptSync)(password, salt, KEY_LENGTH, {
+        N: SCRYPT_N,
+        r: SCRYPT_R,
+        p: SCRYPT_P,
+        maxmem: 64 * 1024 * 1024
+    });
+    return [
+        SCRYPT_PREFIX,
+        SCRYPT_N,
+        SCRYPT_R,
+        SCRYPT_P,
+        salt,
+        derived.toString('hex')
+    ].join('$');
+};
+const verifyStoredPassword = (password, storedHash)=>{
+    const parts = String(storedHash || '').split('$');
+    if (parts.length === 6 && parts[0] === SCRYPT_PREFIX) {
+        const [, nRaw, rRaw, pRaw, salt, expectedHex] = parts;
+        const n = Number(nRaw);
+        const r = Number(rRaw);
+        const p = Number(pRaw);
+        if (!(n > 1 && r > 0 && p > 0 && salt && /^[a-f0-9]+$/i.test(expectedHex))) {
+            return {
+                valid: false,
+                needsUpgrade: false
+            };
+        }
+        try {
+            const actual = (0, _nodecrypto.scryptSync)(password, salt, expectedHex.length / 2, {
+                N: n,
+                r,
+                p,
+                maxmem: 64 * 1024 * 1024
+            });
+            const expected = Buffer.from(expectedHex, 'hex');
+            return {
+                valid: actual.length === expected.length && (0, _nodecrypto.timingSafeEqual)(actual, expected),
+                needsUpgrade: false
+            };
+        } catch  {
+            return {
+                valid: false,
+                needsUpgrade: false
+            };
+        }
+    }
+    const legacy = legacySha256(password);
+    const expected = Buffer.from(String(storedHash || ''));
+    const actual = Buffer.from(legacy);
+    return {
+        valid: expected.length === actual.length && (0, _nodecrypto.timingSafeEqual)(expected, actual),
+        needsUpgrade: true
+    };
+};
+const validateAdminPassword = (password)=>{
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+        throw new Error('密码至少8个字符，且必须包含字母和数字');
+    }
+};
+
+
+/***/ },
+
+/***/ 93384
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get ADMIN_ONLY () {
+        return ADMIN_ONLY;
+    },
+    get STAFF_ROLES () {
+        return STAFF_ROLES;
+    },
+    get isBackendStaffRole () {
+        return isBackendStaffRole;
+    }
+});
+const _action_utilstype = __webpack_require__(66451);
+const ADMIN_ONLY = [
+    _action_utilstype.UserRole.ADMIN
+];
+const STAFF_ROLES = [
+    _action_utilstype.UserRole.ADMIN,
+    _action_utilstype.UserRole.SUB_ADMIN
+];
+const isBackendStaffRole = (role)=>STAFF_ROLES.some((candidate)=>candidate === String(role));
 
 
 /***/ },
@@ -104722,6 +107970,9 @@ _export(exports, {
     get getComingSoonDateCards () {
         return getComingSoonDateCards;
     },
+    get getComingSoonProductsByDate () {
+        return getComingSoonProductsByDate;
+    },
     get getDailyNewArrivalCalendar () {
         return getDailyNewArrivalCalendar;
     },
@@ -105428,9 +108679,41 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
                 gte: rangeStart
             }
         },
-        include: {
-            skus: true,
-            brandCategory: true,
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            mainImageUrl: true,
+            shortDescription: true,
+            status: true,
+            costPrice: true,
+            ratingAverage: true,
+            ratingCount: true,
+            sortWeight: true,
+            brandCategoryId: true,
+            tradeInfoJson: true,
+            createdAt: true,
+            translationsJson: true,
+            skus: {
+                select: {
+                    id: true,
+                    skuCode: true,
+                    price: true,
+                    originalPrice: true,
+                    stock: true,
+                    stockStatus: true,
+                    imageUrl: true
+                },
+                orderBy: {
+                    price: 'asc'
+                }
+            },
+            brandCategory: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            },
             category: {
                 select: {
                     name: true,
@@ -105469,7 +108752,8 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
         },
         orderBy: {
             createdAt: 'desc'
-        }
+        },
+        take: 200
     });
     const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
     const list = dbProducts.slice().sort((a, b)=>b.createdAt.getTime() - a.createdAt.getTime()).map((product)=>mapActiveProductToItem(product, exchangeRate, input.lang));
@@ -105478,10 +108762,44 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
         total: list.length
     };
 });
-const pad2 = (n)=>String(n).padStart(2, '0');
-const toDateKey = (d)=>`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-const toDateLabel = (d)=>`${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`;
-const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
+const comingTeaserSelect = {
+    id: true,
+    slug: true,
+    name: true,
+    mainImageUrl: true,
+    status: true,
+    publishedAt: true,
+    createdAt: true,
+    sortWeight: true,
+    translationsJson: true
+};
+const buildComingTeaserWhere = (teaserCategoryIds)=>teaserCategoryIds.length > 0 ? {
+        OR: [
+            {
+                status: {
+                    in: [
+                        'DRAFT',
+                        'PREORDER',
+                        'INACTIVE'
+                    ]
+                }
+            },
+            {
+                categoryId: {
+                    in: teaserCategoryIds
+                }
+            }
+        ]
+    } : {
+        status: {
+            in: [
+                'DRAFT',
+                'PREORDER',
+                'INACTIVE'
+            ]
+        }
+    };
+const loadComingTeaserCategoryIds = async ()=>{
     const teaserCategories = await _prisma.default.category.findMany({
         where: {
             status: 'ACTIVE',
@@ -105513,44 +108831,16 @@ const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
         },
         take: 50
     });
-    const teaserCategoryIds = teaserCategories.map((c)=>c.id);
-    const where = teaserCategoryIds.length > 0 ? {
-        OR: [
-            {
-                status: {
-                    in: [
-                        'DRAFT',
-                        'PREORDER',
-                        'INACTIVE'
-                    ]
-                }
-            },
-            {
-                categoryId: {
-                    in: teaserCategoryIds
-                }
-            }
-        ]
-    } : {
-        status: {
-            in: [
-                'DRAFT',
-                'PREORDER',
-                'INACTIVE'
-            ]
-        }
-    };
+    return teaserCategories.map((c)=>c.id);
+};
+/**
+ * Shared product source for Coming:
+ * DRAFT / PREORDER / INACTIVE, or teaser categories; soft ACTIVE fallback for demos.
+ */ const loadComingSoonProductRows = async (take = 500)=>{
+    const teaserCategoryIds = await loadComingTeaserCategoryIds();
     let products = await _prisma.default.product.findMany({
-        where,
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            mainImageUrl: true,
-            publishedAt: true,
-            createdAt: true,
-            sortWeight: true
-        },
+        where: buildComingTeaserWhere(teaserCategoryIds),
+        select: comingTeaserSelect,
         orderBy: [
             {
                 sortWeight: 'desc'
@@ -105559,9 +108849,8 @@ const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
                 createdAt: 'desc'
             }
         ],
-        take: 500
+        take
     });
-    // Soft fallback so local demos still show date structure
     if (products.length === 0) {
         products = await _prisma.default.product.findMany({
             where: {
@@ -105570,33 +108859,57 @@ const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
                     status: 'ACTIVE'
                 }
             },
-            select: {
-                id: true,
-                slug: true,
-                name: true,
-                mainImageUrl: true,
-                publishedAt: true,
-                createdAt: true,
-                sortWeight: true
-            },
+            select: comingTeaserSelect,
             orderBy: [
                 {
                     createdAt: 'desc'
                 }
             ],
-            take: 80
+            take: Math.min(80, take)
         });
     }
+    return products;
+};
+const mapComingSoonProductItem = (product, lang)=>({
+        product_id: product.id,
+        product_slug: product.slug || null,
+        product_name: (0, _productTranslation.resolveProductDisplayName)(product.name, product.translationsJson, lang),
+        main_image_url: product.mainImageUrl || '',
+        status: product.status || null
+    });
+/**
+ * Resolve Coming day key for a product:
+ * - Prefer product.name when it is YYYY-MM-DD (recommend-zone quick upload)
+ * - Else publishedAt ?? createdAt
+ */ const resolveComingDayFromProduct = (product)=>{
+    const name = String(product.name || '').trim();
+    if ((0, _dailyNewArrival.isDateKeyProductName)(name)) {
+        const range = (0, _dailyNewArrival.getDateKeyRange)(name);
+        if (range) {
+            return {
+                key: name,
+                label: (0, _dailyNewArrival.toDateLabel)(range.start),
+                anchorMs: range.start.getTime()
+            };
+        }
+    }
+    const anchor = product.publishedAt || product.createdAt;
+    return {
+        key: (0, _dailyNewArrival.toDateKey)(anchor),
+        label: (0, _dailyNewArrival.toDateLabel)(anchor),
+        anchorMs: anchor.getTime()
+    };
+};
+const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
+    const products = await loadComingSoonProductRows(500);
     const byDay = new Map();
     for (const product of products){
-        const anchor = product.publishedAt || product.createdAt;
-        const key = toDateKey(anchor);
-        const existing = byDay.get(key);
-        if (!existing) {
-            byDay.set(key, {
-                label: toDateLabel(anchor),
+        const day = resolveComingDayFromProduct(product);
+        if (!byDay.has(day.key)) {
+            byDay.set(day.key, {
+                label: day.label,
                 product,
-                anchorMs: anchor.getTime()
+                anchorMs: day.anchorMs
             });
         }
     }
@@ -105610,6 +108923,98 @@ const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
         }));
     return {
         cards
+    };
+});
+const getComingSoonProductsByDate = (0, _action_utils.withResult)(async (input)=>{
+    const range = (0, _dailyNewArrival.getDateKeyRange)(input.date_key);
+    if (!range) {
+        return {
+            date_key: String(input.date_key || ''),
+            date_label: '',
+            list: []
+        };
+    }
+    const date_key = (0, _dailyNewArrival.toDateKey)(range.start);
+    const date_label = (0, _dailyNewArrival.toDateLabel)(range.start);
+    const teaserCategoryIds = await loadComingTeaserCategoryIds();
+    // Date-scoped DB filter — name date key OR calendar day on publishedAt/createdAt
+    const dayWhere = {
+        OR: [
+            {
+                name: date_key
+            },
+            {
+                publishedAt: {
+                    gte: range.start,
+                    lt: range.end
+                }
+            },
+            {
+                AND: [
+                    {
+                        publishedAt: null
+                    },
+                    {
+                        createdAt: {
+                            gte: range.start,
+                            lt: range.end
+                        }
+                    }
+                ]
+            }
+        ]
+    };
+    let products = await _prisma.default.product.findMany({
+        where: {
+            AND: [
+                buildComingTeaserWhere(teaserCategoryIds),
+                dayWhere
+            ]
+        },
+        select: comingTeaserSelect,
+        orderBy: [
+            {
+                sortWeight: 'desc'
+            },
+            {
+                createdAt: 'desc'
+            }
+        ],
+        take: 120
+    });
+    if (products.length === 0) {
+        products = await _prisma.default.product.findMany({
+            where: {
+                AND: [
+                    {
+                        status: 'ACTIVE',
+                        category: {
+                            status: 'ACTIVE'
+                        }
+                    },
+                    dayWhere
+                ]
+            },
+            select: comingTeaserSelect,
+            orderBy: [
+                {
+                    createdAt: 'desc'
+                }
+            ],
+            take: 80
+        });
+    }
+    // Date-named products (recommend-zone upload) only belong to their name day,
+    // even if createdAt/publishedAt fall on another calendar day.
+    const list = products.filter((product)=>{
+        const name = String(product.name || '').trim();
+        if ((0, _dailyNewArrival.isDateKeyProductName)(name)) return name === date_key;
+        return true;
+    }).map((product)=>mapComingSoonProductItem(product, input.lang));
+    return {
+        date_key,
+        date_label,
+        list
     };
 });
 
@@ -105759,6 +109164,7 @@ const _action_utils = __webpack_require__(78851);
 const _productTranslation = __webpack_require__(17908);
 const _priceCoefficient = __webpack_require__(1282);
 const _exchangeRate = __webpack_require__(48511);
+const _productSearch = __webpack_require__(12597);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -106042,31 +109448,11 @@ const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, 
             }
         };
     }
-    const normalizedSearchKeyword = typeof searchKeyword === 'string' ? searchKeyword.trim() : '';
-    if (normalizedSearchKeyword) {
-        // MySQL 不支持 Prisma mode:'insensitive'；依赖库表 utf8mb4_unicode_ci 做大小写不敏感 LIKE
-        where.AND = [
-            ...Array.isArray(where.AND) ? where.AND : [],
-            {
-                OR: [
-                    {
-                        name: {
-                            contains: normalizedSearchKeyword
-                        }
-                    },
-                    {
-                        skus: {
-                            some: {
-                                skuCode: {
-                                    contains: normalizedSearchKeyword
-                                }
-                            }
-                        }
-                    }
-                ]
-            }
-        ];
-    }
+    // Search tokens are NOT applied in Prisma here on purpose:
+    // English storefront titles live in translationsJson, and MySQL LIKE on
+    // product.name alone misses "chanel bag" when the stored name is Chinese/CL.
+    // Token AND fuzzy matching runs in-memory after fetch (see getProductList).
+    void searchKeyword;
     return where;
 };
 const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
@@ -106444,7 +109830,9 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
     const page = input.page && input.page > 0 ? input.page : 1;
     const pageSize = input.page_size && input.page_size > 0 ? input.page_size : 24;
     const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
-    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
+    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
+        ttlMs: 60000
+    });
     const categoryContext = await resolveCategoryContext(input.category_id);
     const dbWhere = buildProductWhere(categoryContext, input.brand_category_id, input.keyword_id, input.keyword_group_id, input.search_keyword);
     if (input.min_rating !== undefined) {
@@ -106452,11 +109840,30 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
             gte: input.min_rating
         };
     }
+    const searchTokens = (0, _productSearch.tokenizeProductSearch)(input.search_keyword);
+    // Broader take when searching so translated English titles are not truncated away
+    // before the in-memory fuzzy filter runs.
+    const listTake = searchTokens.length > 0 ? 5000 : 2000;
     const dbProducts = await _prisma.default.product.findMany({
         where: dbWhere,
         include: {
-            skus: true,
-            brandCategory: true,
+            // 按创建顺序返回 SKU，保证列表卡片颜色缩略图与详情页顺序一致（避免 uuid 随机序）
+            skus: {
+                orderBy: [
+                    {
+                        createdAt: 'asc'
+                    },
+                    {
+                        skuCode: 'asc'
+                    }
+                ]
+            },
+            brandCategory: {
+                select: {
+                    name: true,
+                    brandKeywordsJson: true
+                }
+            },
             category: {
                 select: {
                     id: true,
@@ -106508,14 +109915,30 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
                 }
             }
         },
-        take: 2000
+        take: listTake
     });
-    const normalizedSearchKeyword = typeof input.search_keyword === 'string' ? input.search_keyword.trim().toLowerCase() : '';
     let items = dbProducts.filter((p)=>{
-        if (!normalizedSearchKeyword) return true;
-        const nameMatched = (p.name || '').toLowerCase().includes(normalizedSearchKeyword);
-        const skuMatched = p.skus.some((sku)=>(sku.skuCode || '').toLowerCase().includes(normalizedSearchKeyword));
-        return nameMatched || skuMatched;
+        var _p_brandCategory, _p_brandCategory1, _p_category, _p_category_parent, _p_category1;
+        if (!searchTokens.length) return true;
+        const translationTexts = (0, _productSearch.collectTranslationSearchTexts)(p.translationsJson);
+        const displayName = (0, _productTranslation.resolveProductDisplayName)(p.name, p.translationsJson, lang);
+        const brandKeywords = (0, _productSearch.collectBrandKeywordTexts)((_p_brandCategory = p.brandCategory) === null || _p_brandCategory === void 0 ? void 0 : _p_brandCategory.brandKeywordsJson);
+        const relatedCategoryNames = (p.relationCategories || []).map((rel)=>{
+            var _rel_category;
+            return (_rel_category = rel.category) === null || _rel_category === void 0 ? void 0 : _rel_category.name;
+        }).filter(Boolean);
+        return (0, _productSearch.productMatchesSearchTokens)(searchTokens, [
+            p.name,
+            displayName,
+            p.shortDescription,
+            (_p_brandCategory1 = p.brandCategory) === null || _p_brandCategory1 === void 0 ? void 0 : _p_brandCategory1.name,
+            (_p_category = p.category) === null || _p_category === void 0 ? void 0 : _p_category.name,
+            (_p_category1 = p.category) === null || _p_category1 === void 0 ? void 0 : (_p_category_parent = _p_category1.parent) === null || _p_category_parent === void 0 ? void 0 : _p_category_parent.name,
+            ...brandKeywords,
+            ...relatedCategoryNames,
+            ...translationTexts,
+            ...p.skus.map((sku)=>sku.skuCode)
+        ]);
     }).map((p)=>{
         var _ref;
         var _p_tradeInfoJson, _translated_shortDescription, _p_brandCategory;
@@ -106881,7 +110304,9 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
         throw new Error('缺少必要的商品标识');
     }
     const [exchangeRate, pricingConfig] = await Promise.all([
-        (0, _exchangeRate.getUsdExchangeRate)(_prisma.default),
+        (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
+            ttlMs: 60000
+        }),
         (0, _pricingPromotionConfig.loadPricingPromotionConfig)(_prisma.default)
     ]);
     const whereCondition = input.productId ? {
@@ -106922,7 +110347,17 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
                     }
                 }
             },
-            skus: true
+            // 按创建顺序返回，避免 uuid 主键导致的随机序（颜色/规格前台乱序根因之一）
+            skus: {
+                orderBy: [
+                    {
+                        createdAt: 'asc'
+                    },
+                    {
+                        skuCode: 'asc'
+                    }
+                ]
+            }
         }
     });
     if (!product) {
@@ -107008,7 +110443,6 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
             minOrderQty: null,
             price,
             originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
-            stock: sku.stock,
             stockStatus: sku.stockStatus,
             attributeJson: attrs,
             deliveryDays: sku.deliveryDays,
@@ -107099,7 +110533,9 @@ const getDecoratePreviewProduct = (0, _action_utils.withResult)(async ()=>{
 });
 const getRelatedProducts = (0, _action_utils.withResult)(async (input)=>{
     const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
-    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
+    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
+        ttlMs: 60000
+    });
     const products = await _prisma.default.product.findMany({
         where: {
             categoryId: input.categoryId,
@@ -107165,7 +110601,7 @@ const addToCart = (0, _action_utils.requireRole)([
         throw new Error('该商品当前不可购买');
     }
     if (input.quantity > sku.stock) {
-        throw new Error(`库存不足，当前仅剩 ${sku.stock} 件`);
+        throw new Error('库存不足，请减少购买数量');
     }
     // 2. 查找或创建用户购物车
     let cart = await _prisma.default.cart.findUnique({
@@ -107198,7 +110634,7 @@ const addToCart = (0, _action_utils.requireRole)([
     if (existingItem) {
         const newQuantity = existingItem.quantity + input.quantity;
         if (newQuantity > sku.stock) {
-            throw new Error(`加购后总量将超过可用库存，当前库存为 ${sku.stock} 件`);
+            throw new Error('加购后数量超过可用库存，请减少购买数量');
         }
         await _prisma.default.cartitem.update({
             where: {
@@ -107302,7 +110738,7 @@ const setCartSkuQuantity = (0, _action_utils.requireRole)([
         };
     }
     if (targetQty > sku.stock) {
-        throw new Error(`库存不足，当前仅剩 ${sku.stock} 件`);
+        throw new Error('库存不足，请减少购买数量');
     }
     if (existingItem) {
         await _prisma.default.cartitem.update({
@@ -107383,6 +110819,9 @@ _export(exports, {
     },
     get describeFloatCoordinates () {
         return describeFloatCoordinates;
+    },
+    get isMobileStorefrontViewport () {
+        return isMobileStorefrontViewport;
     },
     get migratePresetToFreeAnchors () {
         return migratePresetToFreeAnchors;
@@ -107571,19 +111010,33 @@ function clampFloatPointInViewport(left, top, size) {
         top: Math.min(maxTop, Math.max(0, Math.round(top)))
     };
 }
-function resolveFloatStyle(config) {
+function isMobileStorefrontViewport() {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+}
+function resolveFloatStyle(config, options) {
+    var _ref;
     const size = clampFloatSize(config.floatSize);
     const normalized = normalizeCustomerServiceConfig(config);
+    const forceMobileSafe = (_ref = options === null || options === void 0 ? void 0 : options.forceMobileSafe) !== null && _ref !== void 0 ? _ref : typeof window !== 'undefined' && isMobileStorefrontViewport();
     const style = {
         width: size,
         height: size,
-        zIndex: 60,
+        zIndex: forceMobileSafe ? 90 : 60,
         left: 'auto',
         right: 'auto',
         top: 'auto',
         bottom: 'auto',
         transform: 'none'
     };
+    if (forceMobileSafe) {
+        // Matches CSS: var(--mobile-nav-height) + 16px safe gap
+        style.right = 16;
+        style.bottom = 'calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 16px)';
+        style.left = 'auto';
+        style.top = 'auto';
+        return style;
+    }
     if (normalized.floatAnchorX === 'left') {
         style.left = normalized.floatLeft;
     } else {
@@ -107819,11 +111272,17 @@ _export(exports, {
     get buildLast6Months () {
         return buildLast6Months;
     },
+    get buildLastNDays () {
+        return buildLastNDays;
+    },
     get findDailyNewArrivalCategoryId () {
         return findDailyNewArrivalCategoryId;
     },
     get formatMonthLabel () {
         return formatMonthLabel;
+    },
+    get getDateKeyRange () {
+        return getDateKeyRange;
     },
     get getLast6MonthsRangeStart () {
         return getLast6MonthsRangeStart;
@@ -107834,8 +111293,20 @@ _export(exports, {
     get isDailyNewArrivalCategoryName () {
         return isDailyNewArrivalCategoryName;
     },
+    get isDateKeyProductName () {
+        return isDateKeyProductName;
+    },
     get parseMonthKey () {
         return parseMonthKey;
+    },
+    get toDateKey () {
+        return toDateKey;
+    },
+    get toDateKeyInTimeZone () {
+        return toDateKeyInTimeZone;
+    },
+    get toDateLabel () {
+        return toDateLabel;
     },
     get toMonthKey () {
         return toMonthKey;
@@ -107913,6 +111384,49 @@ const getLast6MonthsRangeStart = (referenceDate = new Date())=>{
     const months = buildLast6Months(referenceDate);
     const oldest = months[months.length - 1];
     return getMonthDateRange(oldest.year, oldest.month).start;
+};
+const pad2 = (n)=>String(n).padStart(2, '0');
+const toDateKey = (d)=>`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const toDateKeyInTimeZone = (date = new Date(), timeZone = 'Asia/Shanghai')=>new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(date);
+const isDateKeyProductName = (name)=>/^\d{4}-\d{2}-\d{2}$/.test(String(name || '').trim());
+const toDateLabel = (d)=>`${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`;
+const buildLastNDays = (count = 10, referenceDate = new Date())=>{
+    const days = [];
+    const safeCount = Math.max(1, Math.min(31, Math.floor(count) || 10));
+    const base = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate(), 12, 0, 0, 0);
+    for(let offset = 0; offset < safeCount; offset += 1){
+        const d = new Date(base);
+        d.setDate(base.getDate() - offset);
+        days.push({
+            date_key: toDateKey(d),
+            date_label: toDateLabel(d)
+        });
+    }
+    return days;
+};
+const getDateKeyRange = (dateKey)=>{
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || '').trim());
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+        return null;
+    }
+    const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+    return {
+        start,
+        end,
+        year,
+        month,
+        day
+    };
 };
 
 
@@ -108242,11 +111756,17 @@ _export(exports, {
     get isDirectImageSrc () {
         return isDirectImageSrc;
     },
+    get isSelfHostedUploadUrl () {
+        return isSelfHostedUploadUrl;
+    },
     get optimizeCatalogImageUrl () {
         return optimizeCatalogImageUrl;
     },
     get resolveCategoryCardImageUrl () {
         return resolveCategoryCardImageUrl;
+    },
+    get shouldBypassImageOptimizer () {
+        return shouldBypassImageOptimizer;
     }
 });
 const CATEGORY_CARD_PLACEHOLDER_URL = '/category-covers/placeholder.svg';
@@ -108257,6 +111777,28 @@ const isDirectImageSrc = (value)=>{
     try {
         const url = new URL(text);
         return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch  {
+        return false;
+    }
+};
+const isSelfHostedUploadUrl = (value)=>{
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (text.startsWith('/api/uploads/')) return true;
+    try {
+        return new URL(text).pathname.startsWith('/api/uploads/');
+    } catch  {
+        return false;
+    }
+};
+const shouldBypassImageOptimizer = (value)=>{
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (text.startsWith('/img-proxy/') || text.startsWith('data:') || text.startsWith('blob:') || isSelfHostedUploadUrl(text)) {
+        return true;
+    }
+    try {
+        return new URL(text).pathname.startsWith('/img-proxy/');
     } catch  {
         return false;
     }
@@ -108275,6 +111817,14 @@ const optimizeCatalogImageUrl = (value, width = 640)=>{
     }
     try {
         const url = new URL(text);
+        // Absolute same-origin img-proxy (nginx JSON rewrite) — treat like relative
+        if (url.pathname.startsWith('/img-proxy/')) {
+            const path = `${url.pathname}${url.search}`;
+            if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(url.pathname) && /\.(jpe?g|png|webp)$/i.test(url.pathname)) {
+                return `${url.pathname}_${width}x${width}q80.jpg${url.search}`;
+            }
+            return path;
+        }
         const host = url.hostname.toLowerCase();
         if (host.includes('images.unsplash.com')) {
             url.searchParams.set('auto', 'format');
@@ -109124,6 +112674,11 @@ const PRODUCT_KEYWORD_ORDER = [
     '象牙白',
     '香槟金',
     '玫瑰金',
+    '豆沙色',
+    '豆沙',
+    '裸色',
+    '焦糖色',
+    '焦糖',
     '黑白色',
     '黑白',
     '黑色',
@@ -109235,7 +112790,16 @@ const PRODUCT_KEYWORD_ORDER = [
     '印花',
     '刺绣',
     '外穿',
-    '增高'
+    '增高',
+    // packaging / spec add-ons (compound before shorter)
+    '礼品盒',
+    '飞机盒',
+    '礼盒',
+    '包装盒',
+    '现货',
+    '预售',
+    '均码',
+    '单码'
 ];
 const PRODUCT_KEYWORD_EN = {
     不锈钢: 'Stainless Steel',
@@ -109295,6 +112859,11 @@ const PRODUCT_KEYWORD_EN = {
     象牙白: 'Ivory',
     香槟金: 'Champagne Gold',
     玫瑰金: 'Rose Gold',
+    豆沙色: 'Bean Paste',
+    豆沙: 'Bean Paste',
+    裸色: 'Nude',
+    焦糖色: 'Caramel',
+    焦糖: 'Caramel',
     黑白色: 'Black & White',
     黑白: 'Black & White',
     黑色: 'Black',
@@ -109404,7 +112973,15 @@ const PRODUCT_KEYWORD_EN = {
     印花: 'Print',
     刺绣: 'Embroidery',
     外穿: 'Outdoor',
-    增高: 'Height Boost'
+    增高: 'Height Boost',
+    礼品盒: 'Gift Box',
+    飞机盒: 'Box',
+    礼盒: 'Gift Box',
+    包装盒: 'Packaging Box',
+    现货: 'In Stock',
+    预售: 'Pre-Order',
+    均码: 'One Size',
+    单码: 'One Size'
 };
 const PRODUCT_KEYWORD_ES = {
     不锈钢: 'Acero inoxidable',
@@ -109464,6 +113041,11 @@ const PRODUCT_KEYWORD_ES = {
     象牙白: 'Marfil',
     香槟金: 'Oro champán',
     玫瑰金: 'Oro rosa',
+    豆沙色: 'Rojo Frijol',
+    豆沙: 'Rojo Frijol',
+    裸色: 'Nude',
+    焦糖色: 'Caramelo',
+    焦糖: 'Caramelo',
     黑白色: 'Blanco y negro',
     黑白: 'Blanco y negro',
     黑色: 'Negro',
@@ -109573,7 +113155,15 @@ const PRODUCT_KEYWORD_ES = {
     印花: 'Estampado',
     刺绣: 'Bordado',
     外穿: 'Exterior',
-    增高: 'Aumenta altura'
+    增高: 'Aumenta altura',
+    礼品盒: 'Caja de regalo',
+    飞机盒: 'Caja',
+    礼盒: 'Caja de regalo',
+    包装盒: 'Caja de embalaje',
+    现货: 'En stock',
+    预售: 'Preventa',
+    均码: 'Talla única',
+    单码: 'Talla única'
 };
 const LATIN_EDGE = /[A-Za-z0-9]/;
 const CJK_EDGE = /[\u4e00-\u9fff]/;
@@ -109668,6 +113258,162 @@ function translateTitleKeywords(text, locale = 'en') {
         i = j;
     }
     return joinTranslatedPieces(pieces);
+}
+
+
+/***/ },
+
+/***/ 12597
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * Storefront product search tokenization + fuzzy match.
+ *
+ * Historical rule (Jul 2026): title / SKU **contains** match, case-insensitive
+ * (LIKE '%bags%'), not exact equality.
+ *
+ * Multi-word queries (e.g. "chanel bag") must not require the contiguous phrase —
+ * every token must appear somewhere in the searchable corpus (AND of contains).
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get collectBrandKeywordTexts () {
+        return collectBrandKeywordTexts;
+    },
+    get collectTranslationSearchTexts () {
+        return collectTranslationSearchTexts;
+    },
+    get productMatchesSearchTokens () {
+        return productMatchesSearchTokens;
+    },
+    get tokenizeProductSearch () {
+        return tokenizeProductSearch;
+    }
+});
+function tokenizeProductSearch(raw) {
+    const seen = new Set();
+    const tokens = [];
+    for (const part of String(raw || '').trim().toLowerCase().split(/[\s+/|,_，、.-]+/)){
+        const token = part.trim();
+        if (!token || seen.has(token)) continue;
+        seen.add(token);
+        tokens.push(token);
+    }
+    return tokens;
+}
+function collectTranslationSearchTexts(raw) {
+    if (!raw || typeof raw !== 'object') return [];
+    const out = [];
+    const root = raw;
+    for (const key of [
+        'title_en',
+        'titleEn',
+        'nameEn',
+        'title_es',
+        'titleEs'
+    ]){
+        const value = root[key];
+        if (typeof value === 'string' && value.trim()) out.push(value);
+    }
+    for (const value of Object.values(root)){
+        if (!value || typeof value !== 'object') continue;
+        const block = value;
+        for (const field of [
+            'name',
+            'shortDescription',
+            'detail',
+            'detailText'
+        ]){
+            const text = block[field];
+            if (typeof text === 'string' && text.trim()) out.push(text);
+        }
+    }
+    return out;
+}
+function collectBrandKeywordTexts(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw){
+        if (typeof item === 'string' && item.trim()) {
+            out.push(item);
+            continue;
+        }
+        if (item && typeof item === 'object' && 'keyword' in item) {
+            var _item_keyword;
+            const keyword = String((_item_keyword = item.keyword) !== null && _item_keyword !== void 0 ? _item_keyword : '').trim();
+            if (keyword) out.push(keyword);
+        }
+    }
+    return out;
+}
+function productMatchesSearchTokens(tokens, fields) {
+    if (!tokens.length) return true;
+    const corpus = fields.map((field)=>String(field || '').toLowerCase()).filter(Boolean).join('\n');
+    if (!corpus) return false;
+    return tokens.every((token)=>corpus.includes(token));
+}
+
+
+/***/ },
+
+/***/ 35196
+(__unused_webpack_module, exports) {
+
+"use strict";
+/** Default available stock when source stock is missing / not returned. */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get DEFAULT_AVAILABLE_STOCK () {
+        return DEFAULT_AVAILABLE_STOCK;
+    },
+    get DEFAULT_MIN_ORDER_QTY () {
+        return DEFAULT_MIN_ORDER_QTY;
+    },
+    get resolveInitialMinOrderQty () {
+        return resolveInitialMinOrderQty;
+    },
+    get resolveInitialStock () {
+        return resolveInitialStock;
+    }
+});
+const DEFAULT_AVAILABLE_STOCK = 1000;
+const DEFAULT_MIN_ORDER_QTY = 1;
+function resolveInitialStock(raw) {
+    if (raw === null || raw === undefined || raw === '') {
+        return DEFAULT_AVAILABLE_STOCK;
+    }
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+        return DEFAULT_AVAILABLE_STOCK;
+    }
+    return Math.round(n);
+}
+function resolveInitialMinOrderQty(raw) {
+    if (raw === null || raw === undefined || raw === '') {
+        return DEFAULT_MIN_ORDER_QTY;
+    }
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n) || n <= 0) {
+        return DEFAULT_MIN_ORDER_QTY;
+    }
+    return Math.max(DEFAULT_MIN_ORDER_QTY, Math.round(n));
 }
 
 
@@ -110415,6 +114161,55 @@ function summarizeCountryRule(mode, rule) {
     const parts = express.tiers.slice(0, 3).map((t)=>`≤${t.maxKg}kg ${formatShippingFeeCny(t.fee)}`);
     const more = express.tiers.length > 3 ? ` +${express.tiers.length - 3}` : '';
     return parts.join(' · ') + more;
+}
+
+
+/***/ },
+
+/***/ 73101
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * Append a title suffix only when the title does not already end with it.
+ * Used by product list + pending-import batch “批量加后缀”.
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get appendTitleSuffixIfMissing () {
+        return appendTitleSuffixIfMissing;
+    },
+    get normalizeTitleSuffix () {
+        return normalizeTitleSuffix;
+    },
+    get titleAlreadyHasSuffix () {
+        return titleAlreadyHasSuffix;
+    }
+});
+function normalizeTitleSuffix(raw) {
+    return String(raw || '').trim();
+}
+function titleAlreadyHasSuffix(title, suffix) {
+    const normalizedSuffix = normalizeTitleSuffix(suffix);
+    if (!normalizedSuffix) return true;
+    const current = String(title || '').trimEnd();
+    return current.endsWith(normalizedSuffix);
+}
+function appendTitleSuffixIfMissing(title, suffix) {
+    const normalizedSuffix = normalizeTitleSuffix(suffix);
+    if (!normalizedSuffix) return null;
+    const current = String(title || '').trim();
+    if (!current) return null;
+    if (current.endsWith(normalizedSuffix)) return null;
+    return `${current}${normalizedSuffix}`;
 }
 
 
