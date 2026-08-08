@@ -189,7 +189,7 @@ export default function MobileBrandView() {
           </div>
         ) : (
           <div className="mobile-product-grid mobile-product-grid--brand">
-            {products.map((item) => (
+            {products.map((item, index) => (
               <ProductListCard
                 key={item.product_id}
                 item={item}
@@ -200,6 +200,7 @@ export default function MobileBrandView() {
                   toast.message(t('product.addToCart', { defaultValue: 'Add to cart' }))
                   router.push('/cart/')
                 }}
+                priority={index < 6}
               />
             ))}
           </div>

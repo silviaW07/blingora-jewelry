@@ -361,7 +361,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 </div>
               ) : products.length > 0 ? (
                 <div className="storefront-product-grid mt-4 grid grid-cols-2 gap-2.5">
-                  {products.map((item) => (
+                  {products.map((item, index) => (
                     <ProductListCard
                       key={item.product_id}
                       item={item}
@@ -372,6 +372,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       controllerName={
                         isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'
                       }
+                      priority={index < 6}
                     />
                   ))}
                 </div>

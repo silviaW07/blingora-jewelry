@@ -18,6 +18,16 @@ import {
 } from '@/frontend/actions/ProductDetail'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 
+/**
+ * 数字感知的自然排序：让「颜色1、颜色2 … 颜色10」按数值升序而非字符串序，
+ * 同时对普通名称给出稳定的确定性顺序（替代 uuid 主键返回的随机序）。
+ */
+const naturalCompareLabels = (a: string, b: string): number =>
+  String(a ?? '').localeCompare(String(b ?? ''), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  })
+
 const isColorAttributeName = (name?: string | null) => {
   const normalized = String(name || '').trim().toLowerCase()
   return normalized === '颜色' || normalized === 'color' || normalized === 'colour'
@@ -264,9 +274,10 @@ export const useProductDetail = (): {
       const list = Array.from(values)
       return {
         name,
+        // 尺码维用尺码专用排序；颜色及其它维用数字感知自然排序，保证「颜色1…颜色10」有序展示
         values: isSizeAttributeName(name) && !isColorAttributeName(name)
           ? sortSizeLabels(list)
-          : list,
+          : [...list].sort(naturalCompareLabels),
       }
     })
   }, [product])

@@ -1014,7 +1014,8 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   const dbProducts = await prisma.product.findMany({
     where: dbWhere,
     include: {
-      skus: true,
+      // 按创建顺序返回 SKU，保证列表卡片颜色缩略图与详情页顺序一致（避免 uuid 随机序）
+      skus: { orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }] },
       brandCategory: {
         select: {
           name: true,

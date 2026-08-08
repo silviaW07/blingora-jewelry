@@ -1123,7 +1123,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                 </div>
               ) : products.length > 0 ? (
                 <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                  {products.map((item) => (
+                  {products.map((item, index) => (
                     <ProductListCard
                       key={item.product_id}
                       item={item}
@@ -1132,6 +1132,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       onAddToCart={handlers.handleAddToCart}
                       onAddToWishlist={handlers.handleAddToWishlist}
                       controllerName={isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'}
+                      priority={index < 10}
                     />
                   ))}
                 </div>

@@ -37,6 +37,8 @@ type ProductListCardProps = {
   onAddToWishlist?: (item: any, favorited?: boolean) => void
   className?: string
   controllerName?: string
+  /** 首屏（首排）卡片设为 true：主图 eager + 高 fetchPriority，改善移动端 LCP */
+  priority?: boolean
 }
 
 const formatPricePart = (price: number) => {
@@ -72,6 +74,7 @@ export const ProductListCard = ({
   onAddToWishlist,
   className,
   controllerName = '商品列表卡片',
+  priority = false,
 }: ProductListCardProps) => {
   const { t } = useTranslation()
   const canViewPrice = useCanViewStorePrice()
@@ -138,6 +141,7 @@ export const ProductListCard = ({
           className="transition duration-500 group-hover:scale-[1.03]"
           sizes="(max-width: 640px) 50vw, 25vw"
           imageWidth={400}
+          priority={priority}
         />
       </div>
 

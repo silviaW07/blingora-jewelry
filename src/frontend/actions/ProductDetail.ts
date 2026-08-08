@@ -395,7 +395,8 @@ export const getProductDetail = withResult(
             },
           },
         },
-        skus: true
+        // 按创建顺序返回，避免 uuid 主键导致的随机序（颜色/规格前台乱序根因之一）
+        skus: { orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }] }
       }
     })
 
