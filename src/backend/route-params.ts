@@ -66,6 +66,17 @@ export const AdminProfile = {
 };
 
 // ================================================================
+// B19 管理员账号管理 — 无入参
+// ================================================================
+export const AdminManagement = {
+  id: 'B19',
+  path: '/adminmanagement',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(AdminManagement.path),
+};
+
+// ================================================================
 // B04 商品管理 — 入参: name, categoryId, status, tab
 // ================================================================
 export const ProductManagement = {
@@ -370,6 +381,7 @@ export const BackendRoutes = {
   BannerManagement,
   HomeRecommendZoneManagement,
   ShippingChannelConfig,
+  AdminManagement,
 };
 
 export const NAVIGATION_MAP: Record<string, string[]> = {
@@ -398,6 +410,7 @@ export const PAGE_ID_MAP: Record<string, string> = {
   'B14': 'BannerManagement',
   'B15': 'HomeRecommendZoneManagement',
   'B16': 'ShippingChannelConfig',
+  'B19': 'AdminManagement',
 };
 
 /**
