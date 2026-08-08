@@ -83,7 +83,7 @@ export default function UserManagementView({ state, handlers }: Props) {
   return (
     <div className="min-h-screen bg-background font-body">
       <section className="w-full border-b bg-card">
-        <div className="container mx-auto px-8 py-6">
+        <div className="w-full max-w-none px-4 xl:px-6 py-6">
           <h1 className="flex items-center gap-2 text-2xl font-header font-bold tracking-tight text-foreground">
             <User className="h-6 w-6 text-primary" />
             客户管理
@@ -95,7 +95,7 @@ export default function UserManagementView({ state, handlers }: Props) {
       </section>
 
       <section className="w-full border-b bg-background">
-        <div className="container mx-auto flex flex-wrap items-center gap-3 px-8 py-4">
+        <div className="w-full max-w-none flex flex-wrap items-center gap-3 px-4 xl:px-6 py-4">
           <div className="min-w-[220px] max-w-sm flex-1">
             <Input
               className="h-9"
@@ -154,10 +154,10 @@ export default function UserManagementView({ state, handlers }: Props) {
       </section>
 
       <section className="w-full">
-        <div className="container mx-auto px-8 py-8">
+        <div className="w-full max-w-none px-4 xl:px-6 py-8">
           <Card className="overflow-hidden border-none shadow-sm">
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="w-full overflow-x-auto">
+              <Table className="w-full min-w-full table-auto">
                 <TableHeader className="bg-secondary/50">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-semibold text-xs uppercase">姓名</TableHead>
@@ -284,10 +284,11 @@ export default function UserManagementView({ state, handlers }: Props) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 text-destructive"
+                              className="h-8 text-destructive hover:bg-destructive hover:text-destructive-foreground"
                               onClick={() => handlers.handleRequestDelete(user)}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              删除
                             </Button>
                           </div>
                         </TableCell>
