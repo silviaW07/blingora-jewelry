@@ -42,6 +42,8 @@ const UPLOAD_DIR = readEnvKey('UPLOAD_DIR') || UPLOAD_DEFAULT
 const DATABASE_URL = readEnvKey('DATABASE_URL')
 const COOKIE_1688 = readEnvKey('COOKIE_1688') || readEnvKey('ALIBABA_COOKIE') || ''
 const COOKIE_PDD = readEnvKey('COOKIE_PDD') || readEnvKey('PDD_COOKIE') || ''
+const ONEBOUND_1688_KEY = readEnvKey('ONEBOUND_1688_KEY') || readEnvKey('ONEBOUND_KEY') || ''
+const ONEBOUND_1688_SECRET = readEnvKey('ONEBOUND_1688_SECRET') || readEnvKey('ONEBOUND_SECRET') || ''
 
 module.exports = {
   apps: [
@@ -89,6 +91,8 @@ module.exports = {
         ...(DATABASE_URL ? { DATABASE_URL } : {}),
         ...(COOKIE_1688 ? { COOKIE_1688 } : {}),
         ...(COOKIE_PDD ? { COOKIE_PDD } : {}),
+        ...(ONEBOUND_1688_KEY ? { ONEBOUND_1688_KEY } : {}),
+        ...(ONEBOUND_1688_SECRET ? { ONEBOUND_1688_SECRET } : {}),
         TS_NODE_PROJECT: path.join(ROOT, 'tsconfig.server.json'),
       },
     },

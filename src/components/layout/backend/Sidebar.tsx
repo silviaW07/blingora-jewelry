@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
 
@@ -13,73 +13,73 @@ const MENU_ITEMS = [{
   label: '后台登录',
   href: '/adminlogin',
   icon: LogIn,
-  role: 'GUEST'
-}, {
-  id: 'B02',
-  label: '后台注册',
-  href: '/adminregister',
-  icon: UserPlus,
-  role: 'GUEST'
+  roles: ['GUEST']
 }, {
   id: 'B03',
   label: '管理概览',
   href: '/dashboard',
   icon: LayoutDashboard,
-  role: 'ADMIN'
+  roles: ['ADMIN']
 }, {
   id: 'B18',
   label: '个人设置',
   href: '/adminprofile',
   icon: UserRound,
-  role: 'ADMIN'
+  roles: ['ADMIN', 'SUB_ADMIN']
 }, {
   id: 'B04',
   label: '商品管理',
   href: '/productmanagement',
   icon: Package,
-  role: 'ADMIN'
+  roles: ['ADMIN', 'SUB_ADMIN']
 }, {
   id: 'B06',
   label: '分类管理',
   href: '/categorymanagement',
   icon: Layers,
-  role: 'ADMIN'
+  roles: ['ADMIN']
 }, {
   id: 'B07',
   label: '客户管理',
   href: '/usermanagement',
   icon: Users,
-  role: 'ADMIN'
+  roles: ['ADMIN']
 }, {
   id: 'B08',
   label: '订单管理',
   href: '/ordermanagement',
   icon: ShoppingCart,
-  role: 'ADMIN'
+  roles: ['ADMIN', 'SUB_ADMIN']
 }, {
   id: 'B14',
   label: 'Banner轮播图管理',
   href: '/bannermanagement',
   icon: Images,
-  role: 'ADMIN'
+  roles: ['ADMIN']
 }, {
   id: 'B15',
   label: '首页推荐专区管理',
   href: '/homerecommendzonemanagement',
   icon: LayoutGrid,
-  role: 'ADMIN'
+  roles: ['ADMIN']
 }, {
   id: 'B16',
   label: '物流渠道配置',
   href: '/shippingchannelconfig',
   icon: Truck,
-  role: 'ADMIN'
+  roles: ['ADMIN']
 }, {
   id: 'B17',
   label: '促销活动管理',
   href: '/pricingpromotionmanagement',
   icon: BadgePercent,
-  role: 'ADMIN'
+  roles: ['ADMIN']
+}, {
+  id: 'B19',
+  label: '管理员账号',
+  href: '/adminmanagement',
+  icon: UserCog,
+  roles: ['ADMIN']
 }];
 
 /** 前台可视化装修可编辑页面入口（新开标签页并带 ?decorate=1） */
@@ -129,16 +129,17 @@ export default function Sidebar() {
   // 读取后台会话状态
   const {
     user_id,
+    role,
     username,
     avatarUrl,
     reset
   } = useAdminSession();
   const isLogin = !!user_id;
-  const currentRole = isLogin ? 'ADMIN' : 'GUEST';
+  const currentRole = isLogin ? (role || 'ADMIN') : 'GUEST';
   const avatarLetter = (username || 'A').slice(0, 1).toUpperCase();
 
   // 过滤当前角色可见的菜单
-  const displayMenus = MENU_ITEMS.filter(item => item.role === currentRole);
+  const displayMenus = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
 
   // 处理退出登录
   const handleLogout = () => {
@@ -173,7 +174,7 @@ export default function Sidebar() {
 
       {/* 中间导航菜单区 */}
       <nav className="flex-1 p-4 flex flex-col gap-1 overflow-y-auto">
-        {isLogin ? (
+        {isLogin && currentRole === 'ADMIN' ? (
           <div
             className={`mb-3 rounded-xl border border-[#93C5FD] bg-[linear-gradient(135deg,#DBEAFE,#EFF6FF)] p-2 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.85)] ${sidebarOpen ? '' : 'flex flex-col items-center'}`}
             data-controller-name="页面内容编辑面板入口"

@@ -29,7 +29,7 @@ export const PRODUCT_GOODS_STATUS_CONFIG: Record<string, { label: string; classN
   }
 }
 
-const numericFields = new Set<ProductInlineField>(['weight_gram', 'cost_price', 'price_coefficient'])
+const numericFields = new Set<ProductInlineField>(['weight_gram', 'cost_price', 'price_coefficient', 'min_order_qty'])
 
 interface ProductInlineEditableCellProps {
   productId: string

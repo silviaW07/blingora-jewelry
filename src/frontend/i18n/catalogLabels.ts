@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next'
+import { translateColorStyleText } from './productSpecTranslate'
 
 /** 类目/菜单文案别名 → i18n key */
 const CATEGORY_ALIASES: Record<string, string> = {
@@ -153,5 +154,25 @@ export function translateColorName(t: TFunction, raw?: string | null): string {
   }
 
   // 2) Basic aliases (black/white/coffee/khaki...).
-  return translateByAlias(t, COLOR_ALIASES, value)
+  const aliased = translateByAlias(t, COLOR_ALIASES, value)
+  if (aliased && aliased !== value) return aliased
+
+  // 3) Compound values (e.g. 豆沙色+礼盒 / 卡其色白+飞机盒): translate each known
+  //    CN token via the shared keyword dictionary + locale overrides, keep the
+  //    separators, and leave any unknown fragment as-is (never blank).
+  return translateColorStyleText(value, t)
+}
+
+/**
+ * Translate an arbitrary product attribute VALUE (size / spec / model label).
+ * Shares the same compound CN→locale keyword logic as color values, so web and
+ * mobile H5 render identical translations. Numeric sizes (35 / 均码 → One Size)
+ * pass through the dictionary; unknown fragments stay untouched.
+ */
+export function translateAttributeValue(t: TFunction, raw?: string | null): string {
+  const value = String(raw || '').trim()
+  if (!value) return ''
+  // Reuse the color-value path first (color.wordMap + aliases), then compounds.
+  const asColor = translateColorName(t, value)
+  return asColor || value
 }

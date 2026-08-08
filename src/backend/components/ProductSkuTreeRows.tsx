@@ -50,7 +50,7 @@ function ProductTreeRowsInner({
 }: ProductTreeRowsProps) {
   const expanded = state.expandedProductIds.includes(item.product_id)
   const skus = item.skus || []
-  const minOrderQty = (item as any).trade_info_json?.minOrderQty ?? item.min_order_qty
+  const minOrderQty = Math.max(1, Number((item as any).trade_info_json?.minOrderQty ?? item.min_order_qty ?? 1) || 1)
   const supplierName = item.supplier_name
   const goodsStatusConfig = item.goods_status
     ? goodsStatusConfigMap[item.goods_status as keyof typeof goodsStatusConfigMap]
@@ -258,7 +258,20 @@ function ProductTreeRowsInner({
           ${(item.usd_display_price_min?.toFixed(2) || '0.00')} ~ ${(item.usd_display_price_max?.toFixed(2) || '0.00')}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
-          {minOrderQty ? `${Number(minOrderQty).toLocaleString()} 件` : '--'}
+          <ProductInlineEditableCell
+            productId={item.product_id}
+            field="min_order_qty"
+            value={minOrderQty}
+            state={state}
+            handlers={handlers}
+            className="ml-auto block w-full text-right font-header font-medium text-slate-900"
+            inputClassName="ml-auto w-24 text-right"
+            placeholder="1"
+            renderDisplay={rawValue => {
+              const n = Math.max(1, Number(rawValue ?? 1) || 1)
+              return <span>{n.toLocaleString()} 件</span>
+            }}
+          />
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
           {state.productStockEditingId === item.product_id ? (

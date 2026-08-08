@@ -2,6 +2,7 @@
   "common": {
     "language": "语言",
     "search": "搜索",
+    "all": "全部",
     "cart": "购物车",
     "home": "首页",
     "login": "登录 / 注册",
@@ -312,6 +313,7 @@
     "defaultSpec": "默认规格",
     "sizeOptions": "尺码",
     "specOptions": "规格选项",
+    "noOptions": "暂无可用规格",
     "preview": "预览",
     "loginToViewPrice": "登录后查看价格",
     "signInForPrice": "登录查看价格",

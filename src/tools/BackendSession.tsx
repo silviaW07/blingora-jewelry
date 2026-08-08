@@ -6,11 +6,13 @@ import { createPersistStore } from './storeFactory';
 export class AdminSession{ 
     token: string;
     user_id: string;
+    role: 'ADMIN' | 'SUB_ADMIN' | '';
     username: string;
     avatarUrl: string;
     constructor() { 
         this.token='';
         this.user_id='';
+        this.role='';
         this.username='';
         this.avatarUrl='';
     }
@@ -19,6 +21,7 @@ export class AdminSession{
 export const useAdminSession = createPersistStore<AdminSession>('AdminSession', {
   token: '',
   user_id: '',
+  role: '',
   username: '',
   avatarUrl: '',
 });

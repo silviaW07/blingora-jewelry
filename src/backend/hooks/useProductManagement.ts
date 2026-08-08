@@ -126,6 +126,7 @@ type ProductInlineField =
   | 'weight_gram'
   | 'cost_price'
   | 'price_coefficient'
+  | 'min_order_qty'
 type BatchAdjustTargetField = 'price_coefficient' | 'weight_gram'
 type ProductListFilterStatus = ProductListStatusFilter | 'ALL'
 type ProductFormGoodsStatus = ActionGoodsStatus | 'ACTIVE'
@@ -197,12 +198,14 @@ const editableProductFields: ProductInlineField[] = [
   'goods_status',
   'weight_gram',
   'cost_price',
-  'price_coefficient'
+  'price_coefficient',
+  'min_order_qty'
 ]
 const numberProductFields = new Set<ProductInlineField>([
   'weight_gram',
   'cost_price',
-  'price_coefficient'
+  'price_coefficient',
+  'min_order_qty'
 ])
 const productGoodsStatusOptions: ActionGoodsStatus[] = ['ACTIVE', 'INACTIVE']
 
@@ -323,6 +326,8 @@ const getProductFieldValue = (item: ProductListItem, field: ProductInlineField):
       return item.cost_price
     case 'price_coefficient':
       return item.price_coefficient
+    case 'min_order_qty':
+      return Math.max(1, Number(item.min_order_qty ?? 1) || 1)
     default:
       return ''
   }
@@ -341,10 +346,13 @@ const buildProductFieldPayload = (field: ProductInlineField, rawValue: string) =
   if (numberProductFields.has(field)) {
     const parsed = Number(trimmed)
     if (!Number.isFinite(parsed)) throw new Error('请输入有效数字')
-    if ((field === 'weight_gram' || field === 'price_coefficient') && parsed <= 0) {
-      throw new Error(field === 'weight_gram' ? '重量必须大于0' : '价格系数必须大于0')
+    if ((field === 'weight_gram' || field === 'price_coefficient' || field === 'min_order_qty') && parsed <= 0) {
+      throw new Error(
+        field === 'weight_gram' ? '重量必须大于0' : field === 'min_order_qty' ? '起订量必须大于0' : '价格系数必须大于0'
+      )
     }
     if (field === 'cost_price' && parsed < 0) throw new Error('成本价不能小于0')
+    if (field === 'min_order_qty') return Math.max(1, Math.round(parsed))
     return parsed
   }
 
@@ -3125,6 +3133,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             if (field === 'supplier_name') return { ...item, supplier_name: String(payloadValue || '') || null }
             if (field === 'goods_status') return { ...item, goods_status: payloadValue as any }
             if (field === 'weight_gram') return { ...item, weight_gram: Number(payloadValue) }
+            if (field === 'min_order_qty') {
+              const nextQty = Math.max(1, Math.round(Number(payloadValue) || 1))
+              return {
+                ...item,
+                min_order_qty: nextQty,
+                trade_info_json: {
+                  ...((item as any).trade_info_json || {}),
+                  minOrderQty: nextQty,
+                },
+              }
+            }
             return item
           }),
         )
@@ -3177,6 +3196,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             if (field === 'supplier_name') return { ...item, supplier_name: String(payloadValue || '') || null }
             if (field === 'goods_status') return { ...item, goods_status: payloadValue as any }
             if (field === 'weight_gram') return { ...item, weight_gram: Number(payloadValue) }
+            if (field === 'min_order_qty') {
+              const nextQty = Math.max(1, Math.round(Number(payloadValue) || 1))
+              return {
+                ...item,
+                min_order_qty: nextQty,
+                trade_info_json: {
+                  ...((item as any).trade_info_json || {}),
+                  minOrderQty: nextQty,
+                },
+              }
+            }
             return item
           }),
         )

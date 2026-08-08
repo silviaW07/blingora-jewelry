@@ -2,6 +2,7 @@
   "common": {
     "language": "Language",
     "search": "Search",
+    "all": "All",
     "cart": "Cart",
     "home": "Home",
     "login": "Login / Register",
@@ -317,6 +318,7 @@
     "defaultSpec": "Default",
     "sizeOptions": "Size options",
     "specOptions": "Options",
+    "noOptions": "No options available",
     "preview": "Preview",
     "loginToViewPrice": "Login to view price",
     "signInForPrice": "Sign in for price",

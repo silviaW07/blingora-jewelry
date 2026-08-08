@@ -25,8 +25,10 @@ export interface AdminLoginOutput {
 // ===== Imports =====
 import prisma from '@/tools/prisma'
 import {
-  withResult, hashPassword, signToken
+  withResult, signToken
 } from '@/backend/action_utils'
+import { hashSecurePassword, verifyStoredPassword } from '@/backend/password-security'
+import { isBackendStaffRole } from '@/backend/roles'
 
 // ===== Actions =====
 
@@ -42,7 +44,16 @@ export const adminLogin = withResult(
     const user = await prisma.sysuser.findUnique({
       where: {
         account: sysuser_account
-      }
+      },
+      select: {
+        id: true,
+        account: true,
+        password: true,
+        username: true,
+        role: true,
+        status: true,
+        avatarUrl: true,
+      },
     })
 
     if (!user) {
@@ -50,13 +61,13 @@ export const adminLogin = withResult(
     }
 
     // 2. 验证密码
-    const hashedPassword = hashPassword(sysuser_password)
-    if (hashedPassword !== user.password) {
+    const passwordCheck = verifyStoredPassword(sysuser_password, user.password)
+    if (!passwordCheck.valid) {
       throw new Error('账号或密码错误')
     }
 
     // 3. 验证角色
-    if (user.role !== 'ADMIN') {
+    if (!isBackendStaffRole(user.role)) {
       throw new Error('此账号无后台访问权限')
     }
 
@@ -69,7 +80,10 @@ export const adminLogin = withResult(
     await prisma.sysuser.update({
       where: { id: user.id },
       data: {
-        lastLoginAt: new Date()
+        lastLoginAt: new Date(),
+        ...(passwordCheck.needsUpgrade
+          ? { password: hashSecurePassword(sysuser_password) }
+          : {}),
       }
     })
 

@@ -634,7 +634,12 @@ import {
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
-import { resolveInitialStock, DEFAULT_AVAILABLE_STOCK } from '@/shared/resolveInitialStock'
+import {
+  resolveInitialStock,
+  resolveInitialMinOrderQty,
+  DEFAULT_AVAILABLE_STOCK,
+  DEFAULT_MIN_ORDER_QTY,
+} from '@/shared/resolveInitialStock'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
   extractPinduoduoGoodsId,
@@ -647,6 +652,10 @@ import {
   fetch1688OfferViaMtop,
   normalize1688Cookie,
 } from '@/backend/parsers/1688MtopClient'
+import {
+  fetchOneBound1688Preview,
+  hasOneBound1688Configured,
+} from '@/backend/onebound1688'
 
 const buildImportSkuSegments = (sku: PendingImportSkuItem, index: number) => {
   const attrs = Array.isArray(sku.attributes) ? sku.attributes : []
@@ -1015,6 +1024,14 @@ const buildParameterJsonFromAttrs = (attrs: Array<{ key: string; value: string }
 const normalizeRemoteImageUrl = (raw?: string | null) => {
   const value = String(raw || '').trim()
   if (!value || /^data:/i.test(value)) return null
+  // Self-hosted uploads are stored as same-origin paths. Treat them as valid
+  // gallery images instead of dropping every image except the main-image fallback.
+  if (
+    /^\/api\/uploads\/[A-Za-z0-9._/-]+$/i.test(value) &&
+    !value.split('/').includes('..')
+  ) {
+    return value
+  }
   if (value.startsWith('//')) return `https:${value}`
   if (/^http:\/\//i.test(value)) return `https://${value.slice(7)}`
   if (/^https:\/\//i.test(value)) return value
@@ -3508,6 +3525,31 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     console.warn(`[fetch1688OfferPreview] captured HTML unparseable for ${sourceUrl}; falling back to fetch`)
   }
 
+  // Paid OneBound API is the primary source. Browser-captured HTML stays first
+  // (already available / free). When OneBound is configured but fails, do NOT
+  // fall back to Cookie/MTop — those retries only hit 1688 risk-control waits.
+  if (hasOneBound1688Configured()) {
+    const oneBound = await fetchOneBound1688Preview(sourceUrl)
+    if (oneBound.kind === 'parsed') {
+      return {
+        preview: oneBound.preview,
+        outcome: 'ok',
+        failureReason: null,
+      }
+    }
+    if (oneBound.kind === 'failed') {
+      const detail = [oneBound.errorCode, oneBound.reason].filter(Boolean).join(' ')
+      console.warn(`[onebound1688] fail-fast (no Cookie fallback): ${detail}`)
+      return {
+        preview: empty1688OfferPreview(),
+        outcome: 'failed',
+        failureReason: `OneBound 解析失败：${oneBound.reason || '未知错误'}${
+          oneBound.errorCode ? `（${oneBound.errorCode}）` : ''
+        }`,
+      }
+    }
+  }
+
   const cookieReady = has1688CookieConfigured()
 
   // Cookie 可用时优先 MTop（详情 HTML 在境外/机房 IP 上极易命中 punish 页）
@@ -4215,8 +4257,8 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   item_cnyPriceMax: toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax),
   item_usdPriceMin: toNumberOrNull(item.usdPriceMin),
   item_usdPriceMax: toNumberOrNull(item.usdPriceMax),
-  item_minimumOrderQuantity: item.minimumOrderQuantity ?? null,
-  item_availableStock: item.availableStock ?? null,
+  item_minimumOrderQuantity: resolveInitialMinOrderQty(item.minimumOrderQuantity),
+  item_availableStock: resolveInitialStock(item.availableStock),
   item_parsedName: item.parsedName || null,
   item_parsedMainImageUrl: item.parsedMainImageUrl || null,
   item_createdAt: item.createdAt,
@@ -4641,8 +4683,9 @@ const persistPinduoduoParsedItem = async (params: {
       cnyPriceMax: resolvedFinalPriceMax,
       usdPriceMin: resolvedUsdMin,
       usdPriceMax: resolvedUsdMax,
-      minimumOrderQuantity: 1,
-      availableStock: totalStock > 0 ? totalStock : strategyStock,
+      minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+      // B：OneBound/1688 真实库存优先，全 0 即缺货；缺省时回落 1000
+      availableStock: resolveInitialStock(totalStock),
       targetCategoryId,
       parsedPriceMin: rawPriceMin,
       parsedPriceMax: rawPriceMax,
@@ -4760,15 +4803,13 @@ const createProductRecord = async (tx: any, params: {
       galleryJson: galleryUrls.map((url, index) => ({ url, sort: index + 1 })),
       shortDescription: params.shortDescription,
       translationsJson: translationsJson as any,
-      tradeInfoJson: (params.minOrderQty || params.sourceUrl)
-        ? {
-            ...(params.minOrderQty ? { minOrderQty: params.minOrderQty } : {}),
-            ...(params.sourceUrl ? { importSourceUrl: params.sourceUrl } : {}),
-            ...(params.source === 'IMPORT_1688' && params.sourceUrl
-              ? { offerId: extract1688OfferId(params.sourceUrl) }
-              : {}),
-          }
-        : undefined,
+      tradeInfoJson: {
+        minOrderQty: resolveInitialMinOrderQty(params.minOrderQty),
+        ...(params.sourceUrl ? { importSourceUrl: params.sourceUrl } : {}),
+        ...(params.source === 'IMPORT_1688' && params.sourceUrl
+          ? { offerId: extract1688OfferId(params.sourceUrl) }
+          : {}),
+      },
       skus: {
         create: (() => {
           const usedSkuCodes = new Set<string>()
@@ -4793,6 +4834,7 @@ const createProductRecord = async (tx: any, params: {
             return {
               skuCode,
               imageUrl: sku.image_url || null,
+              minOrderQty: resolveInitialMinOrderQty(params.minOrderQty),
               price: skuPrice,
               stock: skuStock,
               stockStatus: skuStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
@@ -5768,8 +5810,9 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         targetCategoryId: categoryId,
         coefficient: matchedCoefficient,
         goodsStatus: 'DRAFT' as any,
-        minimumOrderQuantity: 1,
-        availableStock: row.skuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0),
+        minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+        // B：真实库存优先（全 0 即缺货），缺省回落 1000
+        availableStock: resolveInitialStock(row.skuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0)),
         cnyPriceMin: row.priceMin,
         cnyPriceMax: row.priceMax,
         usdPriceMin: usdMin,
@@ -6403,7 +6446,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               cnyPriceMax: resolvedFinalPriceMax,
               usdPriceMin: resolvedUsdMin,
               usdPriceMax: resolvedUsdMax,
-              minimumOrderQuantity: 1,
+              minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+              // B：真实库存优先（全 0 即缺货），缺省回落 1000
               availableStock: resolveInitialStock(totalStock),
               targetCategoryId,
               parsedPriceMin: rawPriceMin,
@@ -6646,11 +6690,14 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
         data.usdPriceMax = numericValue
         break
       case 'minimum_order_quantity':
-        if (numericValue === null || numericValue <= 0) throw new Error('起订量必须大于0')
-        data.minimumOrderQuantity = Math.round(numericValue)
+        data.minimumOrderQuantity = resolveInitialMinOrderQty(numericValue)
         break
       case 'available_stock':
-        if (numericValue === null || numericValue < 0) throw new Error('可用库存不能小于0')
+        if (numericValue === null || numericValue === undefined || !Number.isFinite(numericValue)) {
+          data.availableStock = DEFAULT_AVAILABLE_STOCK
+          break
+        }
+        if (numericValue < 0) throw new Error('可用库存不能小于0')
         data.availableStock = Math.round(numericValue)
         break
       case 'main_image_url':
@@ -6799,11 +6846,15 @@ export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
       if (numericValue <= 0) throw new Error('重量必须大于0')
       data.weightGrams = numericValue
     } else if (input.field === 'minimum_order_quantity') {
-      if (numericValue <= 0) throw new Error('起订量必须大于0')
-      data.minimumOrderQuantity = Math.round(numericValue)
+      data.minimumOrderQuantity = resolveInitialMinOrderQty(numericValue)
     } else if (input.field === 'available_stock') {
-      if (numericValue < 0) throw new Error('可用库存不能小于0')
-      data.availableStock = Math.round(numericValue)
+      if (numericValue === null || numericValue === undefined || Number.isNaN(numericValue)) {
+        data.availableStock = DEFAULT_AVAILABLE_STOCK
+      } else if (numericValue < 0) {
+        throw new Error('可用库存不能小于0')
+      } else {
+        data.availableStock = Math.round(numericValue)
+      }
     } else {
       throw new Error('暂不支持的批量待上传字段')
     }
@@ -7096,7 +7147,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             detailText: item.productDetail || null,
             parameterJson,
             priceCoefficient: null,
-            minOrderQty: item.minimumOrderQuantity ?? null,
+            minOrderQty: resolveInitialMinOrderQty(item.minimumOrderQuantity),
             skuSummaryText: item.skuSummaryText || null,
             skus: pendingSkus,
             linkedCategoryIds,
@@ -7460,7 +7511,9 @@ const applyReparsed1688PreviewToItem = async (params: {
       cnyPriceMax: resolvedFinalPriceMax,
       usdPriceMin: resolvedUsdMin,
       usdPriceMax: resolvedUsdMax,
-      availableStock: totalStock > 0 ? totalStock : strategyStock,
+      minimumOrderQuantity: resolveInitialMinOrderQty((item as any).minimumOrderQuantity),
+      // B：真实库存优先（全 0 即缺货），缺省回落 1000
+      availableStock: resolveInitialStock(totalStock),
       targetCategoryId,
       parsedPriceMin: rawPriceMin,
       parsedPriceMax: rawPriceMax,
@@ -7795,7 +7848,8 @@ export const retryImportTask = requireRole([UserRole.ADMIN])(
           cnyPriceMax: null,
           usdPriceMin: null,
           usdPriceMax: null,
-          minimumOrderQuantity: null,
+          minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+          // 重置为待解析：库存留空，真解析回填或使用时回落 1000
           availableStock: null,
           specSummaryJson: undefined,
           previewDataJson: undefined,

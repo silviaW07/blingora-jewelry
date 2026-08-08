@@ -21,8 +21,9 @@ export interface RegisterAdminOutput {
 // ===== Imports =====
 import prisma from '@/tools/prisma'
 import {
-  withResult, hashPassword
+  withResult
 } from '@/backend/action_utils'
+import { hashSecurePassword, validateAdminPassword } from '@/backend/password-security'
 
 // ===== Actions =====
 export const registerAdmin = withResult(
@@ -33,8 +34,15 @@ export const registerAdmin = withResult(
     }
 
     // 2. 基础校验：密码复杂度（至少8位，包含字母和数字）
-    if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/.test(input.password)) {
-      throw new Error('密码至少8个字符，且必须包含字母和数字')
+    validateAdminPassword(input.password)
+
+    // Public registration is bootstrap-only. Once a primary administrator
+    // exists, additional staff must be created from authenticated admin management.
+    const existingPrimaryAdmins = await prisma.sysuser.count({
+      where: { role: 'ADMIN' },
+    })
+    if (existingPrimaryAdmins > 0) {
+      throw new Error('系统已完成管理员初始化，请由主管理员在账号管理中新增子管理员')
     }
 
     // 3. 业务校验：账号唯一性
@@ -60,8 +68,7 @@ export const registerAdmin = withResult(
       data: {
         account: input.account,
         email: input.email,
-        password: hashPassword(input.password),
-        passwordPlain: String(input.password || '').slice(0, 255) || null,
+        password: hashSecurePassword(input.password),
         role: 'ADMIN',
         status: 'ACTIVE',
         username: input.account, // 注册时未提供 username，默认使用 account 填充必填项

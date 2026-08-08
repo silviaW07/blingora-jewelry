@@ -6,6 +6,7 @@
 // ===== 枚举定义 =====
 export enum UserRole {
   ADMIN = 'ADMIN',
+  SUB_ADMIN = 'SUB_ADMIN',
 }
 
 // ===== 类型定义 =====

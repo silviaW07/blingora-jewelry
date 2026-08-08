@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import { Dashboard, AdminRegister } from '@/backend/route-params';
+import { Dashboard, AdminRegister, ProductManagement } from '@/backend/route-params';
 import type { AdminLoginInput } from '@/backend/actions/AdminLogin';
 import { adminLogin } from '@/backend/actions/AdminLogin';
 import { useAdminSession } from '@/tools/BackendSession';
@@ -66,12 +66,17 @@ export const useAdminLogin = (): { state: AdminLoginState, handlers: AdminLoginH
       setSession({
         token: data.token,
         user_id: data.sysuser_id,
+        role: data.sysuser_role === 'SUB_ADMIN' ? 'SUB_ADMIN' : 'ADMIN',
         username: data.sysuser_username,
         avatarUrl: data.sysuser_avatarUrl || '',
       });
 
       toast.success('登录成功');
-      Dashboard.navigateTo(router);
+      if (data.sysuser_role === 'SUB_ADMIN') {
+        ProductManagement.navigateTo(router)
+      } else {
+        Dashboard.navigateTo(router)
+      }
     } catch (error: any) {
       toast.error(error.message || '登录失败，请重试');
     } finally {

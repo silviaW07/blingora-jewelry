@@ -70,6 +70,11 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '象牙白',
   '香槟金',
   '玫瑰金',
+  '豆沙色',
+  '豆沙',
+  '裸色',
+  '焦糖色',
+  '焦糖',
   '黑白色',
   '黑白',
   '黑色',
@@ -182,6 +187,15 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '刺绣',
   '外穿',
   '增高',
+  // packaging / spec add-ons (compound before shorter)
+  '礼品盒',
+  '飞机盒',
+  '礼盒',
+  '包装盒',
+  '现货',
+  '预售',
+  '均码',
+  '单码',
 ]
 
 export const PRODUCT_KEYWORD_EN: Record<string, string> = {
@@ -242,6 +256,11 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   象牙白: 'Ivory',
   香槟金: 'Champagne Gold',
   玫瑰金: 'Rose Gold',
+  豆沙色: 'Bean Paste',
+  豆沙: 'Bean Paste',
+  裸色: 'Nude',
+  焦糖色: 'Caramel',
+  焦糖: 'Caramel',
   黑白色: 'Black & White',
   黑白: 'Black & White',
   黑色: 'Black',
@@ -352,6 +371,14 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   刺绣: 'Embroidery',
   外穿: 'Outdoor',
   增高: 'Height Boost',
+  礼品盒: 'Gift Box',
+  飞机盒: 'Box',
+  礼盒: 'Gift Box',
+  包装盒: 'Packaging Box',
+  现货: 'In Stock',
+  预售: 'Pre-Order',
+  均码: 'One Size',
+  单码: 'One Size',
 }
 
 export const PRODUCT_KEYWORD_ES: Record<string, string> = {
@@ -412,6 +439,11 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   象牙白: 'Marfil',
   香槟金: 'Oro champán',
   玫瑰金: 'Oro rosa',
+  豆沙色: 'Rojo Frijol',
+  豆沙: 'Rojo Frijol',
+  裸色: 'Nude',
+  焦糖色: 'Caramelo',
+  焦糖: 'Caramelo',
   黑白色: 'Blanco y negro',
   黑白: 'Blanco y negro',
   黑色: 'Negro',
@@ -522,6 +554,14 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   刺绣: 'Bordado',
   外穿: 'Exterior',
   增高: 'Aumenta altura',
+  礼品盒: 'Caja de regalo',
+  飞机盒: 'Caja',
+  礼盒: 'Caja de regalo',
+  包装盒: 'Caja de embalaje',
+  现货: 'En stock',
+  预售: 'Preventa',
+  均码: 'Talla única',
+  单码: 'Talla única',
 }
 
 const LATIN_EDGE = /[A-Za-z0-9]/

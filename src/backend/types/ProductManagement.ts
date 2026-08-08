@@ -13,6 +13,7 @@ export type ProductInlineField =
   | 'weight_gram'
   | 'cost_price'
   | 'price_coefficient'
+  | 'min_order_qty'
 export type BatchAdjustTargetField = 'price_coefficient' | 'weight_gram'
 export type CartItemStatus = 'VALID' | 'INVALID'
 
@@ -641,7 +642,7 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
     cost_price: toNumber(product.costPrice),
     price_coefficient: toNumber(product.priceCoefficient),
     effective_price_coefficient: effectiveCoefficient,
-    min_order_qty: Number((product.tradeInfoJson as any)?.minOrderQty ?? 0) || null,
+    min_order_qty: Math.max(1, Number((product.tradeInfoJson as any)?.minOrderQty ?? 1) || 1),
     price_min: priceMin,
     price_max: priceMax,
     usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,
@@ -1003,7 +1004,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         cost_price: toNumber(p.costPrice),
         price_coefficient: toNumber(p.priceCoefficient),
         effective_price_coefficient: effectiveCoefficient,
-        min_order_qty: Number((p.tradeInfoJson as any)?.minOrderQty ?? 0) || null,
+        min_order_qty: Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 1) || 1),
         price_min: priceMin,
         price_max: priceMax,
         usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,

@@ -2,6 +2,7 @@
   "common": {
     "language": "Idioma",
     "search": "Buscar",
+    "all": "Todo",
     "cart": "Carrito",
     "home": "Inicio",
     "login": "Iniciar sesión / Registrarse",
@@ -312,6 +313,7 @@
     "defaultSpec": "Predeterminado",
     "sizeOptions": "Tallas",
     "specOptions": "Opciones",
+    "noOptions": "No hay opciones disponibles",
     "preview": "Vista previa",
     "loginToViewPrice": "Inicia sesión para ver el precio",
     "signInForPrice": "Inicia sesión para ver el precio",

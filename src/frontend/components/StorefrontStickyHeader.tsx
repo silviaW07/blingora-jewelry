@@ -558,6 +558,19 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
 
                         {hasChildren && isMobileExpanded ? (
                           <div className="grid grid-cols-1 gap-2 rounded-[24px] border border-[#e5dfd2] bg-white p-3 shadow-[0_18px_35px_-28px_rgba(17,17,17,0.28)] lg:hidden">
+                            <button
+                              key={`${category.category_id}-all`}
+                              type="button"
+                              className="flex w-full items-center justify-between rounded-[16px] px-3 py-2.5 text-left text-sm text-[#2b2b2b] transition-colors hover:bg-[#f5f1e8]"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                event.preventDefault()
+                                goHomeWithCategory(category.category_id, category.category_slug)
+                              }}
+                            >
+                              <span>{t('common.all')}</span>
+                              <ChevronRight className="size-4 opacity-60" />
+                            </button>
                             {activeChildren.map((child) => (
                               <button
                                 key={child.category_id}
@@ -613,6 +626,20 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                         >
                           <div className="rounded-[16px] border border-[#ebe7de] bg-white p-3 shadow-[0_16px_40px_-12px_rgba(17,17,17,0.28)]">
                             <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
+                              <button
+                                key={`${category.category_id}-all`}
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center justify-between rounded-[12px] px-3 py-2.5 text-left text-sm text-[#2b2b2b] transition-colors hover:bg-[#f5f1e8]"
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  goHomeWithCategory(category.category_id, category.category_slug)
+                                }}
+                              >
+                                <span>{t('common.all')}</span>
+                                <ChevronRight className="size-4 opacity-60" />
+                              </button>
                               {activeChildren.map((child) => (
                                 <button
                                   key={child.category_id}

@@ -21,6 +21,7 @@ import { RefreshCw, PlusCircle, LayoutGrid, ExternalLink, AlertCircle, Save, Tra
 import type { ImportTaskStatusType } from '@/backend/actions/ImportFrom1688';
 import { ProductManagement } from '@/backend/route-params';
 import EditableImg from '@/@base/EditableImg';
+import { PreviewableThumb } from '@/backend/components/ImageLightbox';
 import Link from 'next/link';
 import { TableImportPreviewTable } from '@/backend/components/TableImportPreviewTable';
 import { ImportFrom1688LinkImportPanel } from '@/backend/components/ImportFrom1688LinkImportPanel';
@@ -288,7 +289,10 @@ export const ImportFrom1688View = ({
                                   </TableRow> : state.imageUploadForm.items.map((item, index) => <TableRow key={item.rowId} data-api-unique-id='importfrom1688view-r9ca3a32191fa73d4-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
                                       <TableCell data-api-unique-id='importfrom1688view-r5c91680f732f6183-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
                                         <div className="flex items-center gap-3" data-api-unique-id='importfrom1688view-rfe6670e0a4ee8f80-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
-                                          <img src={item.imageUrl} alt={item.fileName} className="w-20 h-20 rounded-lg border object-cover bg-muted" data-api-unique-id='importfrom1688view-r79419089ef47156d-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1' />
+                                          <PreviewableThumb src={item.imageUrl} alt={item.fileName} className="block w-20 h-20 rounded-lg border overflow-hidden bg-muted">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={item.imageUrl} alt={item.fileName} className="w-full h-full object-cover" data-api-unique-id='importfrom1688view-r79419089ef47156d-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1' />
+                                          </PreviewableThumb>
                                           <div className="text-xs text-muted-foreground space-y-1" data-api-unique-id='importfrom1688view-r8f5e131a16058274-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
                                             <p data-api-unique-id='importfrom1688view-r6e250bf823a7a697-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>{item.sourceLabel}</p>
                                             <p data-api-unique-id='importfrom1688view-r306ef0f354d46f08-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>{item.fileSizeText}</p>
@@ -486,9 +490,13 @@ export const ImportFrom1688View = ({
                                         <Checkbox checked={state.selectedItemIds.includes(item.item_id)} onCheckedChange={c => handlers.handleToggleSelectItem(item.item_id, !!c)} disabled={item.item_fetchStatus !== 'COMPLETED' || item.item_isPublished} data-api-unique-id='importfrom1688view-r6c45bba89806693b-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1' />
                                       </TableCell>
                                       <TableCell data-api-unique-id='importfrom1688view-red1e65eba8152de9-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
-                                        <div className="w-12 h-12 rounded border overflow-hidden bg-muted" data-api-unique-id='importfrom1688view-r7aeffa8f925572a6-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
+                                        <PreviewableThumb
+                                          src={item.item_mainImageUrl || item.item_parsedMainImageUrl || ''}
+                                          alt={item.item_productName || item.item_parsedName || ''}
+                                          className="block w-12 h-12 rounded border overflow-hidden bg-muted"
+                                        >
                                           <EditableImg propKey={`img-${item.item_id}`} keywords={item.item_mainImageUrl || item.item_parsedMainImageUrl || 'placeholder'} className="w-full h-full object-cover" data-api-unique-id='importfrom1688view-rc4e622bc8289d4ab-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1' />
-                                        </div>
+                                        </PreviewableThumb>
                                       </TableCell>
                                       <TableCell className="max-w-[320px]" data-api-unique-id='importfrom1688view-r5d6b8978cffeb701-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
                                         <div className="flex flex-col gap-1" data-api-unique-id='importfrom1688view-re3ef618b9998a7c4-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' data-api-in-loop='1'>
@@ -554,15 +562,23 @@ export const ImportFrom1688View = ({
                                     <div className="space-y-1.5" data-api-unique-id='importfrom1688view-r5d65c366ed867631-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
                                       <label className="text-[11px] font-bold uppercase text-muted-foreground" data-api-unique-id='importfrom1688view-rebfe2d298478cf4f-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>商品图片</label>
                                       <div className="aspect-square w-full rounded-md border overflow-hidden bg-muted group relative" data-api-unique-id='importfrom1688view-r35383eef4e9a4e51-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
-                                        <EditableImg propKey="detail-preview" keywords={state.editForm.mainImageUrl || 'preview'} className="w-full h-full object-cover" needLargeImage description="商品主图预览" data-api-unique-id='importfrom1688view-rdcf6479ebde87ce6-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' />
+                                        <PreviewableThumb
+                                          src={state.editForm.mainImageUrl || ''}
+                                          alt={state.editForm.name || '商品主图预览'}
+                                          className="block h-full w-full"
+                                        >
+                                          <EditableImg propKey="detail-preview" keywords={state.editForm.mainImageUrl || 'preview'} className="w-full h-full object-cover" needLargeImage description="商品主图预览" data-api-unique-id='importfrom1688view-rdcf6479ebde87ce6-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' />
+                                        </PreviewableThumb>
                                       </div>
                                       <div className="flex flex-wrap gap-2">
                                         {(state.activeItemDetails.item_galleryUrls || []).map((url, imageIndex) => (
                                           <div key={`${url}-${imageIndex}`} className="relative h-14 w-14 overflow-hidden rounded border bg-muted">
-                                            <EditableImg propKey={`edit-gallery-${imageIndex}`} src={url} keywords={url} className="h-full w-full object-cover" />
+                                            <PreviewableThumb src={url} alt={`${state.editForm.name || '商品图片'} ${imageIndex + 1}`} className="block h-full w-full">
+                                              <EditableImg propKey={`edit-gallery-${imageIndex}`} src={url} keywords={url} className="h-full w-full object-cover" />
+                                            </PreviewableThumb>
                                             <button
                                               type="button"
-                                              className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center bg-black/70 text-[10px] text-white"
+                                              className="absolute right-0 top-0 z-10 flex h-4 w-4 items-center justify-center bg-black/70 text-[10px] text-white"
                                               onClick={() => handlers.handleRemovePendingImage(state.activeItemDetails!.item_id, imageIndex)}
                                             >
                                               ×

@@ -20,6 +20,17 @@ export default function BackendAuthGuard({ children }: { children: React.ReactNo
     '/homerecommendzonemanagement',
     '/shippingchannelconfig',
     '/pricingpromotionmanagement',
+    '/adminmanagement',
+  ];
+  const adminOnlyPaths = [
+    '/dashboard',
+    '/categorymanagement',
+    '/usermanagement',
+    '/bannermanagement',
+    '/homerecommendzonemanagement',
+    '/shippingchannelconfig',
+    '/pricingpromotionmanagement',
+    '/adminmanagement',
   ];
 
   useEffect(() => {
@@ -39,6 +50,13 @@ export default function BackendAuthGuard({ children }: { children: React.ReactNo
           return;
       }
       router.replace(`/adminlogin?redirect=${redirect}`);
+      return
+    }
+    if (
+      session.role === 'SUB_ADMIN' &&
+      adminOnlyPaths.some((path) => pathname.includes(path))
+    ) {
+      router.replace('/productmanagement')
     }
   }, [pathname, router, session]);
 

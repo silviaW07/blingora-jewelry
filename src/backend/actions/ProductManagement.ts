@@ -13,6 +13,7 @@ export type ProductInlineField =
   | 'weight_gram'
   | 'cost_price'
   | 'price_coefficient'
+  | 'min_order_qty'
 export type BatchAdjustTargetField = 'price_coefficient' | 'weight_gram'
 export type CartItemStatus = 'VALID' | 'INVALID'
 
@@ -637,7 +638,11 @@ import {
   normalizeTitleSuffix,
   titleAlreadyHasSuffix,
 } from '@/shared/titleSuffix'
-import { DEFAULT_AVAILABLE_STOCK } from '@/shared/resolveInitialStock'
+import {
+  DEFAULT_AVAILABLE_STOCK,
+  resolveInitialMinOrderQty,
+  resolveInitialStock,
+} from '@/shared/resolveInitialStock'
 
 export interface ReturnProductsToPendingUploadInput {
   product_ids: string[]
@@ -944,7 +949,9 @@ function mapProductSkusToListItems(product: {
     return {
       sku_id: sku.id,
       sku_code: sku.skuCode,
-      min_order_qty: null,
+      min_order_qty: sku.minOrderQty != null
+        ? Math.max(1, Number(sku.minOrderQty) || 1)
+        : null,
       price,
       original_price: originalPrice,
       stock: sku.stock,
@@ -1744,7 +1751,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         cost_price: toNumber(p.costPrice),
         price_coefficient: toNumber(p.priceCoefficient),
         effective_price_coefficient: effectiveCoefficient,
-        min_order_qty: Number((p.tradeInfoJson as any)?.minOrderQty ?? 0) || null,
+        min_order_qty: Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 1) || 1),
         price_min: priceMin,
         price_max: priceMax,
         usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,
@@ -1830,13 +1837,13 @@ export const getProductDetail = requireRole([UserRole.ADMIN])(
       selling_points_json: p.sellingPointsJson as any,
       detail_content_json: (p.detailContentJson as any) || buildDetailContent(p.detailText || undefined, null),
       parameter_json: p.parameterJson as any,
-      trade_info_json: p.tradeInfoJson as any,
+      trade_info_json: normalizeTradeInfo(p.tradeInfoJson as any),
       faq_json: p.faqJson as any,
       skus: p.skus.map(s => ({
         sku_id: s.id,
         sku_code: s.skuCode,
         image_url: s.imageUrl,
-        min_order_qty: null,
+        min_order_qty: s.minOrderQty != null ? Math.max(1, Number(s.minOrderQty) || 1) : null,
         price: toNumber(s.price) ?? 0,
         original_price: toNumber(s.originalPrice),
         stock: s.stock,
@@ -1901,14 +1908,15 @@ export const createProduct = requireRole([UserRole.ADMIN])(
             create: input.skus.map(s => {
               const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : s.price
               const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : (s.original_price || null)
+              const nextStock = resolveInitialStock(s.stock)
               return {
                 skuCode: s.sku_code || generateUniqueCode('SKU'),
                 imageUrl: s.image_url || null,
-                minOrderQty: s.min_order_qty ?? null,
+                minOrderQty: s.min_order_qty != null ? resolveInitialMinOrderQty(s.min_order_qty) : null,
                 price: nextPrice,
                 originalPrice: nextOriginalPrice,
-                stock: s.stock,
-                stockStatus: getStockStatus(s.stock),
+                stock: nextStock,
+                stockStatus: getStockStatus(nextStock),
                 attributeJson: (s.attribute_json as any) || [],
                 deliveryDays: s.delivery_days || null,
                 weightKg: s.weight_kg || null,
@@ -2333,6 +2341,28 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
         await applyProductCoefficient(tx, input.product_id, nextCoefficient)
         await syncCartItemsValidState(tx, input.product_id)
         await syncProductPriceThresholdRelations(tx, input.product_id)
+      })
+      return { success: true }
+    }
+
+    if (input.field === 'min_order_qty') {
+      const nextValue = Math.max(1, Math.round(Number(input.value)))
+      if (!Number.isFinite(nextValue) || nextValue <= 0) {
+        throw new Error('起订量必须大于0')
+      }
+      await prisma.$transaction(async tx => {
+        const current = await tx.product.findUnique({
+          where: { id: input.product_id },
+          select: { tradeInfoJson: true },
+        })
+        if (!current) throw new Error('商品不存在')
+        const nextTradeInfo = normalizeTradeInfo((current.tradeInfoJson as TradeInfo | null) || null)
+        nextTradeInfo.minOrderQty = nextValue
+        await tx.product.update({
+          where: { id: input.product_id },
+          data: { tradeInfoJson: nextTradeInfo as any },
+        })
+        await syncCartItemsValidState(tx, input.product_id)
       })
       return { success: true }
     }

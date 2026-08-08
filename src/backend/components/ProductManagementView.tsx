@@ -249,7 +249,7 @@ export const ProductManagementView = ({
       </section>
 
       <section className="w-full" data-controller-name="商品批量管控" data-api-unique-id='productmanagementview-rb03bc8a77bcd363e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-        <div className="container mx-auto px-8 py-6" data-api-unique-id='productmanagementview-rd2ea31f9da92c66c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <div className="w-full max-w-none px-4 xl:px-6 py-6" data-api-unique-id='productmanagementview-rd2ea31f9da92c66c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           <Card className="mb-6 border-primary/15 shadow-sm" data-controller-name="首页推荐关键词维护" data-api-unique-id='productmanagementview-r04a9fa5c77d23b6f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           </Card>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4" data-api-unique-id='productmanagementview-rdbf826b6f43eda19-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
@@ -381,8 +381,9 @@ export const ProductManagementView = ({
 
           {<>
           <div className={state.activeTab === 'products' ? undefined : 'hidden'} aria-hidden={state.activeTab !== 'products'}>
-              <Card className="border-none shadow-sm overflow-hidden" data-api-unique-id='productmanagementview-r1d17722794256fd4-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-            <Table className="min-w-[1720px]" data-api-unique-id='productmanagementview-r3c52188b538bb888-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+              <Card className="border-none shadow-sm overflow-hidden w-full" data-api-unique-id='productmanagementview-r1d17722794256fd4-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+            <div className="w-full overflow-x-auto">
+            <Table className="w-full min-w-full table-auto" data-api-unique-id='productmanagementview-r3c52188b538bb888-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <TableHeader className="bg-slate-50/50" data-api-unique-id='productmanagementview-r248581449befb05d-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <TableRow className="hover:bg-transparent" data-api-unique-id='productmanagementview-r8eb9a08272b26c35-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <TableHead className="w-[50px] pl-6" data-api-unique-id='productmanagementview-r2ecd6235231e55de-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><Checkbox checked={state.list.length > 0 && state.selectedIds.length === state.list.length} onCheckedChange={checked => handlers.handleSelectAll(!!checked)} data-api-unique-id='productmanagementview-r8d5110d455f34062-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' /></TableHead>
@@ -418,6 +419,7 @@ export const ProductManagementView = ({
                 ))}
               </TableBody>
             </Table>
+            </div>
               </Card>
 
               <div className="flex items-center justify-between mt-6 px-2" data-api-unique-id='productmanagementview-r90e32b8cc04d23f2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>

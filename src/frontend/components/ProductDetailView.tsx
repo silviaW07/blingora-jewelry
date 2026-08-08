@@ -26,7 +26,7 @@ import {
 } from '@/frontend/components/GuestPricePlaceholder';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { translateColorName } from '@/frontend/i18n/catalogLabels';
+import { translateColorName, translateAttributeValue } from '@/frontend/i18n/catalogLabels';
 import {
   translateProductSpecLabel,
   translateProductSpecValue,
@@ -285,7 +285,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const { sku, label: specLabel } = row
     const qty = skuQuantities[sku.id] || 0
     const priceParts = formatUsdParts(sku.price)
-    const modelLabel = specLabel || sku.variantLabel || sku.skuCode
+    const rawModelLabel = specLabel || sku.variantLabel || sku.skuCode
+    const modelLabel = translateAttributeValue(t, rawModelLabel) || rawModelLabel
     const canUseStepper = Boolean(isPurchasable)
 
     return (
@@ -451,13 +452,13 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </button>
                   </div>
 
-                  <div className="mt-3 flex gap-2 overflow-x-auto lg:hidden">
-                    {gallery.slice(0, 6).map((item, index) => (
+                  <div className="mt-2 grid grid-cols-4 gap-1.5 lg:hidden">
+                    {gallery.slice(0, 8).map((item, index) => (
                       <button
                         key={`m-${item.url}-${index}`}
                         type="button"
                         className={cn(
-                          'relative size-14 shrink-0 overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
+                          'relative aspect-square w-full overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
                           activeImage === item.url ? 'border-[#111111]' : 'border-transparent',
                         )}
                         onClick={() => item.url && setActiveImage(item.url)}
@@ -478,9 +479,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           </section>
 
           {/* ===== 购买区（小屏在图下，大屏右侧） ===== */}
-          <section className="product-detail-buy space-y-4" data-controller-name="详情右侧购买区">
+          <section className="product-detail-buy space-y-3" data-controller-name="详情右侧购买区">
             <div className="rounded-[4px] bg-white p-4 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-5">
-              <h1 className="text-[1.25rem] font-semibold leading-snug text-[#111111] sm:text-[1.375rem]">
+              <h1 className="product-detail-title text-[1.25rem] font-semibold leading-snug text-[#111111] sm:text-[1.375rem]">
                 {product.name}
               </h1>
 
@@ -501,29 +502,27 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 </span>
               </div>
 
-              <div className="mt-4 flex border-b border-[#ececec]">
-                <div className="relative px-4 py-2.5 text-sm font-semibold text-[#111] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[#111]">
-                  {t('common.wholesale')}
-                </div>
+              <div className="mt-3 text-xs font-medium uppercase tracking-wide text-[#999]">
+                {t('common.wholesale')}
               </div>
 
-              <div className="mt-4 space-y-4">
+              <div className="mt-2 space-y-3">
                   <div>
-                    <StorePrice className="text-[22px] font-bold leading-none sm:text-[28px]">
-                      <p className="text-[28px] font-bold leading-none text-[#111]">
+                    <StorePrice className="text-[22px] font-bold leading-none sm:text-[26px]">
+                      <p className="text-[22px] font-bold leading-none text-[#111] sm:text-[26px]">
                         {selectedSku
                           ? formatUsd(selectedSku.price)
                           : formatUsdRange(product.priceMin, product.priceMax)}
                       </p>
                     </StorePrice>
-                    <p className="mt-2 text-sm text-[#666]">
+                    <p className="mt-1 text-xs text-[#888]">
                       {t('common.minOrder')}: {displayedMinOrderQty}{' '}
                       {displayedMinOrderQty > 1 ? t('common.pieces') : t('common.piece')}
                     </p>
                   </div>
 
                   {useTwoLevelLayout ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <div
                         className={cn(
                           'rounded-[8px] p-1 transition',
@@ -584,14 +583,14 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       >
                         <div className="mb-2 flex items-center justify-between text-sm">
                           <span className="font-semibold text-[#111]">{specListTitle}</span>
-                          <span className="text-[#888]">{specListRows.length} options</span>
+                          <span className="text-[#888]">{specListRows.length} {t('common.options')}</span>
                         </div>
                         <div className="product-sku-list max-h-[420px] overflow-y-auto">
                           {specListRows.length > 0 ? (
                             specListRows.map((row) => renderSpecRow(row))
                           ) : (
                             <div className="px-2 py-8 text-center text-sm text-[#888]">
-                              暂无可用{specListTitle}
+                              {t('product.noOptions')}
                             </div>
                           )}
                         </div>
@@ -601,7 +600,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     <div className="rounded-[8px]">
                       <div className="mb-2 flex items-center justify-between text-sm">
                         <span className="font-semibold text-[#111]">{specListTitle}</span>
-                        <span className="text-[#888]">{specListRows.length} options</span>
+                        <span className="text-[#888]">{specListRows.length} {t('common.options')}</span>
                       </div>
                       <div className="product-sku-list max-h-[420px] overflow-y-auto">
                         {specListRows.map((row) => renderSpecRow(row))}
