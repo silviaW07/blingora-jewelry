@@ -36,7 +36,8 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
 
   if (!mounted || !open || !src) return null
 
-  const previewSrc = toProxiedImageUrl(src, { width: 1600, quality: 90 }) || src
+  // 大图优先用原图（去掉 alicdn 裁剪后缀），避免 _1600x1600 这类超大裁剪被 CDN 拒绝
+  const proxiedOriginal = toProxiedImageUrl(src, { width: 0 }) || src
 
   return createPortal(
     <div
@@ -55,16 +56,71 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
       >
         <X className="h-5 w-5" />
       </button>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={previewSrc}
+      <LightboxImage
+        proxiedOriginal={proxiedOriginal}
+        rawSrc={src}
         alt={alt || '预览大图'}
-        className="max-h-[90vh] max-w-[min(96vw,1200px)] object-contain shadow-2xl"
-        onClick={event => event.stopPropagation()}
-        draggable={false}
       />
     </div>,
     document.body,
+  )
+}
+
+/**
+ * 大图加载：代理原图失败 → 回退未代理原始 URL → 最终失败提示。
+ * referrerPolicy=no-referrer 规避 1688/alicdn 防盗链。
+ */
+function LightboxImage({
+  proxiedOriginal,
+  rawSrc,
+  alt,
+}: {
+  proxiedOriginal: string
+  rawSrc: string
+  alt: string
+}) {
+  // 尝试顺序：代理原图 → 未代理原始地址
+  const candidates = React.useMemo(() => {
+    const list = [proxiedOriginal, rawSrc].filter(Boolean)
+    return Array.from(new Set(list))
+  }, [proxiedOriginal, rawSrc])
+
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    setAttempt(0)
+  }, [proxiedOriginal, rawSrc])
+
+  if (attempt >= candidates.length) {
+    return (
+      <div
+        className="flex max-h-[90vh] max-w-[min(96vw,1200px)] flex-col items-center justify-center gap-2 rounded-lg bg-black/40 px-8 py-12 text-sm text-white/80"
+        onClick={event => event.stopPropagation()}
+      >
+        <span>图片加载失败</span>
+        <a
+          href={rawSrc}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-white/60 underline hover:text-white"
+        >
+          在新标签页打开原图
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      key={candidates[attempt]}
+      src={candidates[attempt]}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      className="max-h-[90vh] max-w-[min(96vw,1200px)] object-contain shadow-2xl"
+      onClick={event => event.stopPropagation()}
+      onError={() => setAttempt(prev => prev + 1)}
+      draggable={false}
+    />
   )
 }
 
