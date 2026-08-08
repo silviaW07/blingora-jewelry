@@ -182,6 +182,71 @@ export const ProductManagementView = ({
     : pendingParseActive
       ? '终止解析'
       : '解析';
+
+  // 共享的「商品列表 / 待上传区 / 上传Excel / 采集 / 新增」标签导航。
+  // 商品列表 tab 放在顶部工具条右侧；待上传区 tab 单独成行（第三排）。
+  const categoryNavTabs = (
+    <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-rcb55fbaf95eea81c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+      <Button variant={state.activeTab === 'products' ? 'default' : 'outline'} className="h-10 px-5" onClick={() => handlers.setActiveTab('products')} data-api-unique-id='productmanagementview-r6b7c6696ae97e829-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <Package className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-ra93ccb15e8dc857f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />商品列表
+      </Button>
+      <Button variant={state.activeTab === 'pending_imports' ? 'default' : 'outline'} className="h-10 px-5" onClick={() => handlers.setActiveTab('pending_imports')} data-api-unique-id='productmanagementview-rf97fb52fbb7ba786-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <Sparkles className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-ra3d684920e365dec-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />待上传区
+        {state.pendingImportQueueTotal > 0 && <Badge className="ml-2 bg-white/20 text-current border-0 px-2 py-0.5" data-api-unique-id='productmanagementview-r25a7d85fd9cdfdb0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportQueueTotal}</Badge>}
+      </Button>
+      <Button variant="outline" className="h-10 border-dashed border-slate-300 bg-slate-50/70" onClick={handlers.navigateToTableImport} data-api-unique-id='productmanagementview-r3219db1ba6c2046d-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <FileSpreadsheet className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r96b081cc490849c6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />上传 Excel/CSV 导入待上传
+      </Button>
+      <Button variant="outline" className="h-10 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-radd4b3c8cafd97dc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rba173deb9cf80df0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />1688 多链接采集
+      </Button>
+      <Button variant="outline" className="h-10 border-dashed border-rose-300 bg-rose-50/70 text-rose-700 hover:bg-rose-600 hover:text-white" onClick={() => handlers.setPinduoduoImportDialogOpen(true)} data-api-unique-id='productmanagementview-pinduoduo-collect-btn-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-pinduoduo-collect-icon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />拼多多多链接采集
+      </Button>
+      <Button className="h-10 bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all" onClick={handlers.handleOpenCreate} data-api-unique-id='productmanagementview-re974db461807473f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <Plus className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-re0a54b0747e57709-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />新增跨境商品
+      </Button>
+    </div>
+  );
+
+  // 待上传区第二排「操作功能区」：批量发布并上架 / 解析 / 批量删除 / 批量工具（改价·起订量·加后缀）
+  const pendingActionButtons = (
+    <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-rpendingactionrow-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+      <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing || pendingParseActive} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <ArrowUpCircle className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkpublishicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportPublishing ? '发布中...' : '批量发布并上架'}
+      </Button>
+      <Button
+        variant={pendingParseActive ? 'destructive' : 'outline'}
+        className={pendingParseActive ? 'h-9' : 'h-9 border-slate-200'}
+        disabled={state.pendingImportPublishing || state.pendingImportParseCancelling || (!pendingParseActive && !hasPendingSelected)}
+        onClick={() => void handlers.handlePendingImportParseButton()}
+        title={pendingParseActive ? (state.pendingImportParseStatusLabel || '点击终止当前解析') : '解析勾选的待上传商品'}
+        data-api-unique-id='productmanagementview-rpendingbulkreparse-s2030557363'
+        data-api-unique-page-name='src/backend/components/ProductManagementView'
+      >
+        {pendingParseActive
+          ? <Square className="w-4 h-4 mr-2 fill-current" />
+          : <RefreshCw className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />}
+        {pendingParseButtonLabel}
+      </Button>
+      {state.pendingImportParseStatusLabel ? (
+        <span className="text-xs text-sky-700 max-w-[280px] leading-snug">{state.pendingImportParseStatusLabel}</span>
+      ) : null}
+      <Button variant="outline" size="sm" className="h-9 border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={() => handlers.openConfirmDialog('PENDING_DELETE', state.pendingImportSelectedIds)} data-api-unique-id='productmanagementview-rpendingbulkdelete-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+        <Trash2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkdeleteicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量删除
+      </Button>
+      <SharedProductBatchUtilityButtons
+        selectedCount={state.pendingImportSelectedIds.length}
+        disabled={state.pendingImportPublishing}
+        titleSuffixLoading={state.titleSuffixRunning}
+        onOpenWeightPrice={() => handlers.openConfirmDialog('WEIGHT_PRICE', state.pendingImportSelectedIds)}
+        onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.pendingImportSelectedIds)}
+        onConfirmTitleSuffix={handlers.handleBatchAppendPendingTitleSuffix}
+      />
+      {activeSelectionCount > 0 && <span className="ml-2 text-sm text-muted-foreground font-medium" data-api-unique-id='productmanagementview-rpendingselcount-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary">{activeSelectionCount}</span> 项</span>}
+    </div>
+  );
+
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id='productmanagementview-r557b459a1eb090b6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
       <section className="w-full bg-white border-b" data-controller-name="商品检索与筛选" data-api-unique-id='productmanagementview-r04bd34ec02b335d2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
         <div className="container mx-auto px-8 py-6" data-api-unique-id='productmanagementview-rb1fe9b44bb50f022-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
@@ -252,41 +317,10 @@ export const ProductManagementView = ({
         <div className="w-full max-w-none px-4 xl:px-6 py-6" data-api-unique-id='productmanagementview-rd2ea31f9da92c66c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           <Card className="mb-6 border-primary/15 shadow-sm" data-controller-name="首页推荐关键词维护" data-api-unique-id='productmanagementview-r04a9fa5c77d23b6f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           </Card>
+          {!isPendingTab && (
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4" data-api-unique-id='productmanagementview-rdbf826b6f43eda19-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
             <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-r4ec6b7a2733f5aa5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-              {isPendingTab ? <>
-                <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing || pendingParseActive} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                  <ArrowUpCircle className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkpublishicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportPublishing ? '发布中...' : '批量发布并上架'}
-                </Button>
-                <Button
-                  variant={pendingParseActive ? 'destructive' : 'outline'}
-                  className={pendingParseActive ? 'h-9' : 'h-9 border-slate-200'}
-                  disabled={state.pendingImportPublishing || state.pendingImportParseCancelling || (!pendingParseActive && !hasPendingSelected)}
-                  onClick={() => void handlers.handlePendingImportParseButton()}
-                  title={pendingParseActive ? (state.pendingImportParseStatusLabel || '点击终止当前解析') : '解析勾选的待上传商品'}
-                  data-api-unique-id='productmanagementview-rpendingbulkreparse-s2030557363'
-                  data-api-unique-page-name='src/backend/components/ProductManagementView'
-                >
-                  {pendingParseActive
-                    ? <Square className="w-4 h-4 mr-2 fill-current" />
-                    : <RefreshCw className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />}
-                  {pendingParseButtonLabel}
-                </Button>
-                {state.pendingImportParseStatusLabel ? (
-                  <span className="text-xs text-sky-700 max-w-[280px] leading-snug">{state.pendingImportParseStatusLabel}</span>
-                ) : null}
-                <Button variant="outline" size="sm" className="h-9 border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={() => handlers.openConfirmDialog('PENDING_DELETE', state.pendingImportSelectedIds)} data-api-unique-id='productmanagementview-rpendingbulkdelete-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                  <Trash2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkdeleteicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量删除
-                </Button>
-                <SharedProductBatchUtilityButtons
-                  selectedCount={state.pendingImportSelectedIds.length}
-                  disabled={state.pendingImportPublishing}
-                  titleSuffixLoading={state.titleSuffixRunning}
-                  onOpenWeightPrice={() => handlers.openConfirmDialog('WEIGHT_PRICE', state.pendingImportSelectedIds)}
-                  onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.pendingImportSelectedIds)}
-                  onConfirmTitleSuffix={handlers.handleBatchAppendPendingTitleSuffix}
-                />
-              </> : <>
+              {<>
                 <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('ACTIVE', selectedProductIds)} data-api-unique-id='productmanagementview-r698d32f132f9413e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <ArrowUpCircle className="w-4 h-4 mr-2 text-emerald-600" data-api-unique-id='productmanagementview-r510343d934b6d95a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量上架
                 </Button>
@@ -346,28 +380,9 @@ export const ProductManagementView = ({
               </>}
               {activeSelectionCount > 0 && <span className="ml-2 text-sm text-muted-foreground font-medium animate-in fade-in-0 slide-in-from-left-2" data-api-unique-id='productmanagementview-reed35d2c1c1b7d04-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary" data-api-unique-id='productmanagementview-r16c87a4a657b76eb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{activeSelectionCount}</span> 项</span>}
             </div>
-            <div className="flex items-center gap-2" data-api-unique-id='productmanagementview-rcb55fbaf95eea81c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-              <Button variant={state.activeTab === 'products' ? 'default' : 'outline'} className="h-10 px-5" onClick={() => handlers.setActiveTab('products')} data-api-unique-id='productmanagementview-r6b7c6696ae97e829-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <Package className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-ra93ccb15e8dc857f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />商品列表
-              </Button>
-              <Button variant={state.activeTab === 'pending_imports' ? 'default' : 'outline'} className="h-10 px-5" onClick={() => handlers.setActiveTab('pending_imports')} data-api-unique-id='productmanagementview-rf97fb52fbb7ba786-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <Sparkles className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-ra3d684920e365dec-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />待上传区
-                {state.pendingImportQueueTotal > 0 && <Badge className="ml-2 bg-white/20 text-current border-0 px-2 py-0.5" data-api-unique-id='productmanagementview-r25a7d85fd9cdfdb0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportQueueTotal}</Badge>}
-              </Button>
-              <Button variant="outline" className="h-10 border-dashed border-slate-300 bg-slate-50/70" onClick={handlers.navigateToTableImport} data-api-unique-id='productmanagementview-r3219db1ba6c2046d-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <FileSpreadsheet className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r96b081cc490849c6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />上传 Excel/CSV 导入待上传
-              </Button>
-              <Button variant="outline" className="h-10 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-radd4b3c8cafd97dc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rba173deb9cf80df0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />1688 多链接采集
-              </Button>
-              <Button variant="outline" className="h-10 border-dashed border-rose-300 bg-rose-50/70 text-rose-700 hover:bg-rose-600 hover:text-white" onClick={() => handlers.setPinduoduoImportDialogOpen(true)} data-api-unique-id='productmanagementview-pinduoduo-collect-btn-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-pinduoduo-collect-icon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />拼多多多链接采集
-              </Button>
-              <Button className="h-10 bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all" onClick={handlers.handleOpenCreate} data-api-unique-id='productmanagementview-re974db461807473f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <Plus className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-re0a54b0747e57709-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />新增跨境商品
-              </Button>
-            </div>
+            {categoryNavTabs}
           </div>
+          )}
 
           {state.is1688NameSearch && <Alert className={`mb-4 ${showPublishedLandingNotice ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : showPendingLandingNotice ? 'border-sky-200 bg-sky-50 text-sky-900' : 'border-slate-200 bg-slate-50 text-slate-900'}`} data-api-unique-id='productmanagementview-r978079cc146d0d8e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <Sparkles className="h-4 w-4" data-api-unique-id='productmanagementview-r6b1dbe4c972f3645-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
@@ -586,6 +601,12 @@ export const ProductManagementView = ({
                     </div>}
                 </CardContent>
               </Card>
+
+              {/* 第二排：操作功能区（紧贴统计区下方） */}
+              {pendingActionButtons}
+
+              {/* 第三排：标签导航区（与商品列表页共享同一组导航按钮，保持视觉平行） */}
+              {categoryNavTabs}
 
               <Card className="border-none shadow-sm overflow-hidden" data-controller-name="待上传条目列表" data-api-unique-id='productmanagementview-r3adb9edc37c0cc17-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <CardContent className="p-0" data-api-unique-id='productmanagementview-rff81e6b750bd03f6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>

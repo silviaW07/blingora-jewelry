@@ -767,6 +767,26 @@ const generateStructuredSpuCode = async (tx: any, shortCode: string, now = new D
   return `${prefix}${String(maxSerial + 1).padStart(4, '0')}`
 }
 
+/**
+ * 判断是否为「商品 SPU 编号 / slug」唯一约束冲突。
+ * 并发批量发布时，多个独立事务可能读到同一个最大流水号并生成相同的
+ * productCode / slug（`product_slug_key` / `product_productCode_key`），
+ * 需要在上层用新流水号自动重试，而不是直接判发布失败。
+ */
+const isSpuCodeCollisionError = (error: any): boolean => {
+  if (!error) return false
+  const message = String(error?.message ?? '')
+  const target = error?.meta?.target
+  const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '')
+  if (error?.code === 'P2002') {
+    if (/slug|product_?code/i.test(targetText)) return true
+    if (/product_slug_key|product_productcode_key|slug|productcode/i.test(message)) return true
+    return false
+  }
+  // 兜底：部分 MySQL 适配器不填充 meta.target，只能靠报错文本识别。
+  return /Unique constraint failed on the constraint:\s*`?product_(slug|productCode)_key`?/i.test(message)
+}
+
 const normalizeText = (value: unknown) => String(value ?? '').trim()
 const normalizeCommaText = (value: unknown) => normalizeText(value).replace(/，/g, ',')
 const DEFAULT_GLOBAL_EXCHANGE_RATE = 6.5
@@ -6990,6 +7010,9 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
 
     const publishOne = async (itemId: string) => {
       let failureName = ''
+      const MAX_PUBLISH_ATTEMPTS = 5
+      let lastError: any = null
+      for (let attempt = 1; attempt <= MAX_PUBLISH_ATTEMPTS; attempt++) {
       try {
         await prisma.$transaction(async tx => {
           const item = await tx.importtaskitem.findUnique({
@@ -7193,17 +7216,26 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
         })
         return { ok: true as const }
       } catch (error: any) {
-        const reason = String(error?.message || '发布失败').trim() || '发布失败'
-        const name = failureName || itemId
-        await prisma.importtaskitem.update({
-          where: { id: itemId },
-          data: {
-            publishStatus: 'FAILED' as any,
-            failureReason: reason
-          }
-        }).catch(() => undefined)
-        return { ok: false as const, itemId, name, reason }
+        lastError = error
+        // 仅对「SPU 编号 / slug」唯一冲突自动重试：并发发布抢占了同一个流水号，
+        // 等待其它事务提交后用新号重试，避免把可发布商品误判为「发布失败」。
+        if (isSpuCodeCollisionError(error) && attempt < MAX_PUBLISH_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, 40 * attempt + Math.floor(Math.random() * 60)))
+          continue
+        }
+        break
       }
+      }
+      const reason = String(lastError?.message || '发布失败').trim() || '发布失败'
+      const name = failureName || itemId
+      await prisma.importtaskitem.update({
+        where: { id: itemId },
+        data: {
+          publishStatus: 'FAILED' as any,
+          failureReason: reason
+        }
+      }).catch(() => undefined)
+      return { ok: false as const, itemId, name, reason }
     }
 
     const itemIds = input.itemIds
