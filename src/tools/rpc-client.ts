@@ -75,6 +75,12 @@ const sanitizeRpcErrorMessage = (raw: unknown): string => {
   if (/Must call super constructor/i.test(message)) {
     return ERROR_MESSAGES.SERVER_ERROR;
   }
+  if (/该邮箱已被注册|数据库结构未同步/i.test(message)) {
+    return message;
+  }
+  if (/P2002|Unique constraint/i.test(message)) {
+    return '该邮箱已被注册，请更换邮箱或直接登录';
+  }
   // Prisma column/table schema drift → friendly message for storefront
   if (
     /Invalid `.*` invocation/i.test(message) ||

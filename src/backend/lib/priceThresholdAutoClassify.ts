@@ -1,12 +1,14 @@
 /**
- * Auto-bind price-threshold L2 categories onto products via product_category_relations.
+ * Auto-bind price-threshold categories onto products via product_category_relations.
  * Never changes product.categoryId / brandCategoryId (primary shelf stays intact).
  *
- * Admin already created the L2 shelves — we only resolve them by name:
- * - L1 Bags (包) + min sell USD <= 13 → existing L2 "below13 usd"
- * - L1 Jewelry/饰品 + min sell USD <= 3 → existing L2 "below3 usd"
+ * Rules:
+ * - Product under L1 Bags/包 + min sell USD <= 13 → relate tag "Below 13usd" (L1 or L2)
+ * - Product under L1 Jewelry/饰品 + min sell USD <= 3 → relate tag "Below 3 usd" (L1 or L2)
  */
+import { randomUUID } from 'crypto'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import { slugifyCategoryName } from '@/shared/categorySlug'
 
 export const BELOW13_USD_CATEGORY_NAME = 'below13 usd'
 export const BELOW3_USD_CATEGORY_NAME = 'below3 usd'
@@ -17,6 +19,8 @@ export interface PriceThresholdRule {
   key: PriceThresholdRuleKey
   /** Match ACTIVE L1 category name/slug (case-insensitive) */
   l1Aliases: string[]
+  /** Canonical L2 display name when auto-creating */
+  l2CanonicalName: string
   /** Exact-ish match against existing L2 category.name / slug */
   l2NameAliases: string[]
   maxUsd: number
@@ -26,13 +30,38 @@ export const PRICE_THRESHOLD_RULES: PriceThresholdRule[] = [
   {
     key: 'bags_below13',
     l1Aliases: ['bags', 'bag', '包', '箱包', '包包'],
-    l2NameAliases: ['below13 usd', 'below13usd', 'below13-usd', 'below 13 usd'],
+    l2CanonicalName: BELOW13_USD_CATEGORY_NAME,
+    l2NameAliases: [
+      'below13 usd',
+      'below13usd',
+      'below13-usd',
+      'below 13 usd',
+      'below 13usd',
+      'Below 13usd',
+      'below13',
+      '低于13美元',
+      '13美元以下',
+    ],
     maxUsd: 13,
   },
   {
     key: 'jewelry_below3',
     l1Aliases: ['jewelry', 'jewellery', '饰品', '首饰', 'accessories', 'accessory', '配件'],
-    l2NameAliases: ['below3 usd', 'below3usd', 'below3-usd', 'below 3 usd'],
+    l2CanonicalName: BELOW3_USD_CATEGORY_NAME,
+    l2NameAliases: [
+      'below3 usd',
+      'below3usd',
+      'below3-usd',
+      'below 3 usd',
+      'Below 3 usd',
+      'below3',
+      // 后台 slug 历史拼写 beloe-3-usd
+      'beloe3usd',
+      'beloe-3-usd',
+      'beloe 3 usd',
+      '低于3美元',
+      '3美元以下',
+    ],
     maxUsd: 3,
   },
 ]
@@ -44,6 +73,8 @@ export interface ResolvedPriceThresholdCategory {
   categoryId: string
   categoryName: string
   maxUsd: number
+  /** true when this run created the L2 shelf */
+  created?: boolean
 }
 
 /** @deprecated use ResolvedPriceThresholdCategory */
@@ -53,6 +84,8 @@ type DbLike = {
   category: {
     findMany: (args: any) => Promise<any[]>
     findFirst: (args: any) => Promise<any | null>
+    create: (args: any) => Promise<any>
+    update: (args: any) => Promise<any>
   }
   product: {
     findUnique: (args: any) => Promise<any | null>
@@ -157,20 +190,39 @@ export function resolveProductMinUsdPrice(
   return toUsdFromCny(minRmb, usdExchangeRate)
 }
 
+async function uniqueCategorySlug(db: DbLike, baseName: string): Promise<string> {
+  const base = slugifyCategoryName(baseName) || `cat-${randomUUID().slice(0, 8)}`
+  let slug = base.slice(0, 120)
+  let n = 0
+  while (n < 20) {
+    const hit = await db.category.findFirst({
+      where: { slug },
+      select: { id: true },
+    })
+    if (!hit) return slug
+    n += 1
+    const suffix = `-${n}`
+    slug = `${base.slice(0, Math.max(1, 120 - suffix.length))}${suffix}`
+  }
+  return `${base.slice(0, 100)}-${randomUUID().slice(0, 8)}`
+}
+
 /**
- * Look up existing L2 shelves by name only (no create).
- * Parent L1 = that L2's parentId (admin already placed them under 包 / 饰品).
+ * Resolve threshold tag categories by name (L1 or L2).
+ * Scope L1 = 包/Bags or 饰品/Jewelry (used to decide which products qualify).
+ * Tag category = "Below 13usd" / "Below 3 usd" (bound via relations; may itself be top-level).
  */
 export async function resolvePriceThresholdCategories(
   db: DbLike,
 ): Promise<ResolvedPriceThresholdCategory[]> {
-  const l2Candidates = (await db.category.findMany({
-    where: { level: 2, status: 'ACTIVE' },
+  const allCats = (await db.category.findMany({
     select: {
       id: true,
       name: true,
       slug: true,
+      level: true,
       parentId: true,
+      status: true,
       parent: { select: { id: true, name: true } },
     },
   })) as Array<
@@ -179,31 +231,98 @@ export async function resolvePriceThresholdCategories(
     }
   >
 
+  const l1Rows = allCats.filter(
+    (cat) => cat.level === 1 && (!cat.status || cat.status === 'ACTIVE'),
+  )
+  const l2Rows = allCats.filter((cat) => cat.level === 2)
+
   const resolved: ResolvedPriceThresholdCategory[] = []
 
   for (const rule of PRICE_THRESHOLD_RULES) {
-    const child = l2Candidates.find(
-      (cat) =>
-        // 仅按名称/别名匹配：归一化已包容大小写与空格/分隔符差异，不做拼写模糊
-        matchesAlias(cat.name, rule.l2NameAliases) ||
-        matchesAlias(cat.slug, rule.l2NameAliases),
-    )
-    if (!child?.parentId) continue
+    // Scope: products under 包 / 饰品 (never treat the Below* shelf itself as scope)
+    const scopeL1 =
+      l1Rows.find(
+        (cat) =>
+          !matchesAlias(cat.name, rule.l2NameAliases) &&
+          !matchesAlias(cat.slug, rule.l2NameAliases) &&
+          (matchesAlias(cat.name, rule.l1Aliases) || matchesAlias(cat.slug, rule.l1Aliases)),
+      ) || null
+
+    const nameMatches = (cat: CategoryNode) =>
+      matchesAlias(cat.name, rule.l2NameAliases) || matchesAlias(cat.slug, rule.l2NameAliases)
+
+    // 1) L2 under scope L1
+    // 2) Top-level (or any-level) category named Below* — your admin setup
+    // 3) Any L2 with that name if no scope L1
+    let tag: (typeof allCats)[number] | null =
+      (scopeL1 ? l2Rows.find((cat) => cat.parentId === scopeL1.id && nameMatches(cat)) : null) ||
+      allCats.find((cat) => nameMatches(cat)) ||
+      null
+
+    let created = false
+
+    if (tag && tag.status && tag.status !== 'ACTIVE') {
+      await db.category.update({
+        where: { id: tag.id },
+        data: { status: 'ACTIVE' },
+      })
+      tag = { ...tag, status: 'ACTIVE' }
+    }
+
+    // Only auto-create under scope L1 when nothing named Below* exists at all
+    if (!tag) {
+      if (!scopeL1) continue
+
+      const slug = await uniqueCategorySlug(db, rule.l2CanonicalName)
+      const createdRow = await db.category.create({
+        data: {
+          id: randomUUID(),
+          name: rule.l2CanonicalName,
+          slug,
+          parentId: scopeL1.id,
+          level: 2,
+          status: 'ACTIVE',
+          sortWeight: 0,
+          isBrandCategory: false,
+          path: `${scopeL1.name}/${rule.l2CanonicalName}`,
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          parentId: true,
+          status: true,
+          level: true,
+        },
+      })
+      tag = {
+        ...createdRow,
+        parent: { id: scopeL1.id, name: scopeL1.name },
+      }
+      l2Rows.push(tag)
+      allCats.push(tag)
+      created = true
+    }
+
+    // Products must belong to scope L1 (包/饰品). Tag may be a sibling top-level shelf.
+    const parentId = scopeL1?.id || (tag.level === 2 ? tag.parentId : null)
+    if (!parentId) continue
 
     resolved.push({
       key: rule.key,
-      parentId: child.parentId,
-      parentName: child.parent?.name || '',
-      categoryId: child.id,
-      categoryName: child.name,
+      parentId,
+      parentName: scopeL1?.name || tag.parent?.name || '',
+      categoryId: tag.id,
+      categoryName: tag.name,
       maxUsd: rule.maxUsd,
+      created,
     })
   }
 
   return resolved
 }
 
-/** @deprecated alias — categories must already exist in admin */
+/** @deprecated alias — now ensures (find or create) threshold L2 shelves */
 export const ensurePriceThresholdCategories = resolvePriceThresholdCategories
 
 async function loadCategoryMap(db: DbLike): Promise<Map<string, CategoryNode>> {
@@ -327,6 +446,7 @@ export interface AutoClassifyPriceThresholdSummary {
   unbound: number
   skipped: number
   failed: number
+  created_categories: string[]
   resolvedCategories: Array<{
     key: PriceThresholdRuleKey
     parent_name: string
@@ -342,10 +462,18 @@ export async function autoClassifyAllProductsByPriceThreshold(
   db: DbLike,
 ): Promise<AutoClassifyPriceThresholdSummary> {
   const ensured = await resolvePriceThresholdCategories(db)
+  const createdCategories = ensured
+    .filter((item) => item.created)
+    .map((item) => item.categoryName)
+
   const missingTargets = PRICE_THRESHOLD_RULES.filter(
     (rule) => !ensured.some((item) => item.key === rule.key),
-  ).map((rule) => rule.l2NameAliases[0])
+  ).map((rule) => {
+    const l1Hint = rule.l1Aliases.slice(0, 2).join('/')
+    return `${rule.l2CanonicalName}（需同时有一级「${l1Hint}」用于判定商品归属）`
+  })
 
+  // Reload map after possible creates so new L2 parents resolve correctly
   const categoryMap = await loadCategoryMap(db)
   const usdExchangeRate = await getUsdExchangeRate(db as any)
 
@@ -381,6 +509,7 @@ export async function autoClassifyAllProductsByPriceThreshold(
     unbound,
     skipped,
     failed,
+    created_categories: createdCategories,
     resolvedCategories: ensured.map((item) => ({
       key: item.key,
       parent_name: item.parentName,

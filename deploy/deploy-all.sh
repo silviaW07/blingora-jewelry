@@ -64,6 +64,16 @@ pnpm exec prisma generate
 if [[ "${SKIP_MIGRATE:-0}" != "1" ]]; then
   log "prisma migrate deploy"
   pnpm exec prisma migrate deploy
+  # Guard: register writes customerType; missing column → opaque storefront 500
+  log "verify sysuser.customerType column"
+  if ! pnpm exec prisma db execute --stdin <<'SQL'
+SELECT `customerType` FROM `sysuser` LIMIT 0;
+SQL
+  then
+    echo "ERROR: sysuser.customerType missing after migrate — register will fail." >&2
+    echo "  Fix: pnpm exec prisma migrate deploy" >&2
+    exit 1
+  fi
 else
   log "SKIP_MIGRATE=1 -> skipping prisma migrate deploy"
 fi

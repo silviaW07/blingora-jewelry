@@ -35,6 +35,13 @@ interface RegisterForm {
 const sanitizeAuthErrorMessage = (raw: unknown, fallback: string): string => {
   const message = String(raw || '').trim()
   if (!message) return fallback
+  // Keep business messages that register/login already mapped
+  if (/该邮箱已被注册|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户/i.test(message)) {
+    return message
+  }
+  if (/P2002|Unique constraint/i.test(message)) {
+    return '该邮箱已被注册，请更换邮箱或直接登录'
+  }
   if (
     /Invalid `.*` invocation/i.test(message) ||
     /does not exist in the current database/i.test(message) ||

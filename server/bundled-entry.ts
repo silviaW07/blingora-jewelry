@@ -128,16 +128,25 @@ router.post('/', async (req, res) => {
     }
     // 不要改这里的路径，代码里有强匹配的替换逻辑！end
     const msg = String(e?.message ?? 'Unknown error')
-    // Business validation (wrong password, disabled account, etc.) → 400 so storefront
-    // shows the real message instead of treating every 5xx as "Server is taking a break"
-    // and blindly retrying.
+    // Business validation (wrong password, disabled account, duplicate email, etc.) → 400
+    // so storefront shows the real message instead of a generic 5xx toast.
+    const looksLikeBusinessMsg =
+      /该邮箱已被注册|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户|请填写|密码不|注册失败/i.test(
+        msg,
+      )
     const looksLikeEngineOrSchema =
-      /Invalid `[\s\S]*` invocation/i.test(msg) ||
-      /does not exist in the current database/i.test(msg) ||
-      /passwordPlain/i.test(msg) ||
-      /\bprisma\b/i.test(msg) ||
-      /ECONNREFUSED|ENOTFOUND|P20\d{2}/i.test(msg)
-    if (!looksLikeEngineOrSchema && e instanceof Error && msg && msg !== 'Unknown error') {
+      !looksLikeBusinessMsg &&
+      (/Invalid `[\s\S]*` invocation/i.test(msg) ||
+        /does not exist in the current database/i.test(msg) ||
+        /passwordPlain/i.test(msg) ||
+        /\bprisma\b/i.test(msg) ||
+        /ECONNREFUSED|ENOTFOUND|P20\d{2}/i.test(msg))
+    if (
+      (looksLikeBusinessMsg || !looksLikeEngineOrSchema) &&
+      e instanceof Error &&
+      msg &&
+      msg !== 'Unknown error'
+    ) {
       res.status(400).json({ error: msg })
       return
     }
