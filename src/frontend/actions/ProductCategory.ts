@@ -1034,8 +1034,20 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   const dbProducts = await prisma.product.findMany({
     where: dbWhere,
     include: {
-      // 按创建顺序返回 SKU，保证列表卡片颜色缩略图与详情页顺序一致（避免 uuid 随机序）
-      skus: { orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }] },
+      // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个 SKU 拖回
+      // attributeJson / fontOptionsJson 等大字段（2000 商品×几十~几百 SKU 时序列化开销极大）。
+      // 按创建顺序返回，保证颜色缩略图与详情页顺序一致（避免 uuid 随机序）。
+      skus: {
+        select: {
+          id: true,
+          skuCode: true,
+          imageUrl: true,
+          price: true,
+          originalPrice: true,
+          stockStatus: true,
+        },
+        orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }],
+      },
       brandCategory: {
         select: {
           name: true,
