@@ -626,6 +626,7 @@ import {
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
 import { resolveProductWeightGrams } from '@/shared/categoryWeight'
+import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
 import { isPendingImportEffectivelyReady } from '@/backend/utils/pendingImportReadiness'
@@ -5002,12 +5003,22 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
       name: string
       brandKeywordsJson?: unknown
       parent?: { name?: string | null } | null
-    }) => ({
-      id: category.id,
-      name: String(category.name || '').trim(),
-      keywords: parseCategoryBrandKeywords(category.brandKeywordsJson),
-      parentName: category.parent?.name ? String(category.parent.name).trim() : null,
-    }))
+    }) => {
+      const name = String(category.name || '').trim()
+      // 并入中文同义词字典：让英文类目名（Bracelet/Necklace…）也能命中中文标题（手链/项链…）
+      const keywords = Array.from(
+        new Set([
+          ...parseCategoryBrandKeywords(category.brandKeywordsJson),
+          ...resolveCategorySynonyms(name),
+        ]),
+      )
+      return {
+        id: category.id,
+        name,
+        keywords,
+        parentName: category.parent?.name ? String(category.parent.name).trim() : null,
+      }
+    })
     .filter((category: AutoMatchedSecondaryCategory) => category.name)
 }
 
