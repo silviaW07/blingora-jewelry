@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, Package } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useHome } from '@/frontend/hooks/useHome'
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection'
@@ -13,6 +14,7 @@ type RecommendZonePageViewProps = {
 }
 
 export const RecommendZonePageView = ({ zoneId: zoneIdProp }: RecommendZonePageViewProps) => {
+  const { t } = useTranslation()
   const searchParams = useSearchParams()
   const zoneId = useMemo(() => {
     if (zoneIdProp) return zoneIdProp
@@ -42,7 +44,7 @@ export const RecommendZonePageView = ({ zoneId: zoneIdProp }: RecommendZonePageV
         {state.isLoadingRecommendZones ? (
           <div className="flex items-center justify-center gap-2 rounded-[32px] border border-[#f0dede] bg-white px-6 py-16 text-sm text-[#7a756c] shadow-[0_18px_45px_-36px_rgba(0,0,0,0.28)]">
             <Loader2 className="size-4 animate-spin" />
-            专区加载中...
+            {t('home.zoneLoading', { defaultValue: 'Loading section…' })}
           </div>
         ) : zone ? (
           <HomeRecommendZoneSection
@@ -50,14 +52,23 @@ export const RecommendZonePageView = ({ zoneId: zoneIdProp }: RecommendZonePageV
             handlers={handlers}
             headingAs="h1"
             className="w-full"
+            // View All：展示该专区全部挂载商品/类目，不受首页 PC 列×行截断
+            limitDisplay={false}
+            showViewAll={false}
           />
         ) : (
           <div className="rounded-[32px] border border-dashed border-[#f0dede] bg-white px-6 py-16 text-center shadow-[0_18px_45px_-36px_rgba(0,0,0,0.18)]">
             <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#f0ebe2] text-[#4a4137]">
               <Package className="size-6" />
             </div>
-            <h2 className="mt-4 text-2xl font-semibold text-[#40372f]">专区不存在或暂无内容</h2>
-            <p className="mt-2 text-sm text-[#8a8073]">请返回首页，从可展示的推荐专区重新进入。</p>
+            <h2 className="mt-4 text-2xl font-semibold text-[#40372f]">
+              {t('home.zoneNotFoundTitle', { defaultValue: 'Section not found' })}
+            </h2>
+            <p className="mt-2 text-sm text-[#8a8073]">
+              {t('home.zoneNotFoundHint', {
+                defaultValue: 'Return home and open a recommend section again.',
+              })}
+            </p>
           </div>
         )}
       </main>

@@ -35,6 +35,8 @@ type HomeRecommendZoneSectionProps = {
   headingAs?: 'h1' | 'h2'
   showViewAll?: boolean
   onViewAll?: (zoneId: string) => void
+  /** false = 展示专区全部明细（View All /zone 页）；默认 true 按 PC 列×行截断 */
+  limitDisplay?: boolean
   className?: string
   /** Mobile home: horizontal squircle icons + labels (PC layout unchanged). */
   variant?: 'default' | 'mobile-squircle'
@@ -111,8 +113,13 @@ const renderMobileSquircleContent = (
   zone: HomeRecommendZoneSectionType,
   handlers: ZoneHandlers,
   t: ReturnType<typeof useTranslation>['t'],
+  limitDisplay = true,
 ) => {
-  const limitedItems = limitRecommendZoneItems(zone, zone.items)
+  const limitedItems = limitDisplay
+    ? limitRecommendZoneItems(zone, zone.items)
+    : Array.isArray(zone.items)
+      ? zone.items
+      : []
   if (zone.zoneType === 'PRODUCT') {
     const productItems = limitedItems.filter(
       (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
@@ -222,8 +229,12 @@ const renderRecommendZoneContent = (
   zone: HomeRecommendZoneSectionType,
   handlers: ZoneHandlers,
   t: ReturnType<typeof useTranslation>['t'],
+  limitDisplay = true,
 ) => {
-  const limitedItems = limitRecommendZoneItems(zone, zone.items)
+  const sourceItems = Array.isArray(zone.items) ? zone.items : []
+  const limitedItems = limitDisplay
+    ? limitRecommendZoneItems(zone, sourceItems)
+    : sourceItems
   const productItems = limitedItems.filter(
     (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
   )
@@ -397,6 +408,7 @@ export const HomeRecommendZoneSection = ({
   headingAs = 'h2',
   showViewAll = false,
   onViewAll,
+  limitDisplay = true,
   className,
   variant = 'default',
 }: HomeRecommendZoneSectionProps) => {
@@ -452,8 +464,8 @@ export const HomeRecommendZoneSection = ({
         ) : null}
       </div>
       {isMobileSquircle
-        ? renderMobileSquircleContent(zone, handlers, t)
-        : renderRecommendZoneContent(zone, handlers, t)}
+        ? renderMobileSquircleContent(zone, handlers, t, limitDisplay)
+        : renderRecommendZoneContent(zone, handlers, t, limitDisplay)}
     </section>
   )
 }

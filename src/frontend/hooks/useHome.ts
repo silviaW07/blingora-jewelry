@@ -335,6 +335,23 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
 
   const handleNavigateRecommendZone = (zoneId: string) => {
     if (!zoneId?.trim()) return
+    const zone = recommendZones.find((item) => item.zoneId === zoneId)
+    // 类目专区且仅挂 1 个类目时：View All 直接进该类目商品列表
+    if (zone?.zoneType === 'CATEGORY') {
+      const categoryItems = (zone.items || []).filter(
+        (item): item is Extract<(typeof zone.items)[number], { entityType: 'CATEGORY' }> =>
+          item.entityType === 'CATEGORY',
+      )
+      if (categoryItems.length === 1) {
+        const only = categoryItems[0]
+        ProductCategory.navigateToCategory(router, {
+          categoryId: only.categoryId,
+          categorySlug: only.categorySlug || undefined,
+        })
+        return
+      }
+    }
+    // 商品专区 / 多类目专区：进 /zone 全量展示（不按首页列×行截断）
     RecommendZone.navigateTo(router, { zoneId })
   }
 
