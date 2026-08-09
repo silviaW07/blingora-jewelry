@@ -47,6 +47,28 @@ const FRONTEND_EXEC_MODE = FRONTEND_INSTANCES === 'max' || FRONTEND_INSTANCES > 
 
 const UPLOAD_DIR = readEnvKey('UPLOAD_DIR') || UPLOAD_DEFAULT
 const DATABASE_URL = readEnvKey('DATABASE_URL')
+
+// 给 Prisma 连接串补上连接池上限，避免高并发下耗尽 MySQL 连接。
+// 若 DATABASE_URL 里已显式写了 connection_limit / pool_timeout，则不覆盖。
+// 可用 DB_CONNECTION_LIMIT / DB_POOL_TIMEOUT 覆盖默认值（10 / 20s）。
+function withPoolParams(url) {
+  if (!url) return url
+  try {
+    const hasLimit = /[?&]connection_limit=/.test(url)
+    const hasTimeout = /[?&]pool_timeout=/.test(url)
+    if (hasLimit && hasTimeout) return url
+    const limit = (readEnvKey('DB_CONNECTION_LIMIT') || '10').trim()
+    const timeout = (readEnvKey('DB_POOL_TIMEOUT') || '20').trim()
+    const params = []
+    if (!hasLimit) params.push(`connection_limit=${limit}`)
+    if (!hasTimeout) params.push(`pool_timeout=${timeout}`)
+    if (params.length === 0) return url
+    return url + (url.includes('?') ? '&' : '?') + params.join('&')
+  } catch {
+    return url
+  }
+}
+const DATABASE_URL_POOLED = withPoolParams(DATABASE_URL)
 const COOKIE_1688 = readEnvKey('COOKIE_1688') || readEnvKey('ALIBABA_COOKIE') || ''
 const COOKIE_PDD = readEnvKey('COOKIE_PDD') || readEnvKey('PDD_COOKIE') || ''
 const ONEBOUND_1688_KEY = readEnvKey('ONEBOUND_1688_KEY') || readEnvKey('ONEBOUND_KEY') || ''
@@ -95,7 +117,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3100',
-        ...(DATABASE_URL ? { DATABASE_URL } : {}),
+        ...(DATABASE_URL_POOLED ? { DATABASE_URL: DATABASE_URL_POOLED } : {}),
         ...(COOKIE_1688 ? { COOKIE_1688 } : {}),
         ...(COOKIE_PDD ? { COOKIE_PDD } : {}),
         ...(ONEBOUND_1688_KEY ? { ONEBOUND_1688_KEY } : {}),
