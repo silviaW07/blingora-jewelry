@@ -65,14 +65,26 @@ if [[ "${SKIP_MIGRATE:-0}" != "1" ]]; then
   log "prisma migrate deploy"
   pnpm exec prisma migrate deploy
   # Guard: register writes customerType; missing column → opaque storefront 500
+  # prisma db execute requires --schema or --url (does not inherit package.json prisma key)
   log "verify sysuser.customerType column"
-  if ! pnpm exec prisma db execute --stdin <<'SQL'
+  if ! pnpm exec prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
 SELECT `customerType` FROM `sysuser` LIMIT 0;
 SQL
   then
-    echo "ERROR: sysuser.customerType missing after migrate — register will fail." >&2
-    echo "  Fix: pnpm exec prisma migrate deploy" >&2
-    exit 1
+    echo "WARN: customerType check failed — trying to add column if missing..." >&2
+    pnpm exec prisma db execute --schema prisma/schema.prisma --stdin <<'SQL' || true
+ALTER TABLE `sysuser` ADD COLUMN `customerType` VARCHAR(20) NOT NULL DEFAULT 'NEW';
+SQL
+    if ! pnpm exec prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
+SELECT `customerType` FROM `sysuser` LIMIT 0;
+SQL
+    then
+      echo "ERROR: sysuser.customerType still missing after migrate — register will fail." >&2
+      echo "  Fix: pnpm exec prisma migrate deploy" >&2
+      echo "  Or:  ALTER TABLE sysuser ADD COLUMN customerType VARCHAR(20) NOT NULL DEFAULT 'NEW';" >&2
+      exit 1
+    fi
+    echo "OK: customerType column is present"
   fi
 else
   log "SKIP_MIGRATE=1 -> skipping prisma migrate deploy"
