@@ -72,14 +72,12 @@ fi
 log "pnpm run build:server"
 pnpm run build:server
 
-# ---- 6. restart rpc (:3100) ---------------------------------------------
-if pm2 describe rpc >/dev/null 2>&1; then
-  log "pm2 restart rpc --update-env"
-  pm2 restart rpc --update-env
-else
-  log "rpc not registered -> pm2 start ecosystem --only rpc"
-  UPLOAD_DIR="$UPLOAD_DIR" pm2 start "$ROOT/deploy/ecosystem.config.cjs" --only rpc
-fi
+# ---- 6. (re)start rpc (:3100) via ecosystem -----------------------------
+# 用 startOrReload + ecosystem 文件：每次都重新计算 ecosystem 里的 env
+# （如 DATABASE_URL 连接池参数、FRONTEND_INSTANCES），否则 `restart --update-env`
+# 只会沿用旧 env，导致连接池/实例数改动不生效。
+log "pm2 startOrReload ecosystem --only rpc (re-reads env incl. DB pool params)"
+UPLOAD_DIR="$UPLOAD_DIR" pm2 startOrReload "$ROOT/deploy/ecosystem.config.cjs" --only rpc --update-env
 pm2 save >/dev/null 2>&1 || true
 
 # ---- 7. frontend rebuild + restart (:3000) ------------------------------
