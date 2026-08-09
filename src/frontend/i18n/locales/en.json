@@ -1,4 +1,11 @@
 {
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Previous page",
+    "next": "Next page",
+    "pageSize": "Items per page",
+    "perPage": "{{count}} / page"
+  },
   "common": {
     "language": "Language",
     "search": "Search",

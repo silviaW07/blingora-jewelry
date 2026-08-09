@@ -1,4 +1,11 @@
 {
+  "pagination": {
+    "label": "Paginación",
+    "previous": "Página anterior",
+    "next": "Página siguiente",
+    "pageSize": "Artículos por página",
+    "perPage": "{{count}} / página"
+  },
   "common": {
     "language": "Idioma",
     "search": "Buscar",

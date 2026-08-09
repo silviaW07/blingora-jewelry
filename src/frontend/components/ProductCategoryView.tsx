@@ -7,6 +7,7 @@ import EditableImg from '@/@base/EditableImg';
 import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Package } from 'lucide-react';
 import type { ProductCategoryState, ProductCategoryHandlers, ProductCategoryBannerItem, ProductCategoryKeywordItem } from '@/frontend/hooks/useProductCategory';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
+import { StorefrontPagination } from '@/frontend/components/StorefrontPagination';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +36,7 @@ export const ProductCategoryView = ({
     products,
     isSecondaryCategoryResults,
     totalCount,
+    totalPages,
     isLoadingProducts,
     isResolvingCategoryRoute,
     routeCategorySlug,
@@ -53,6 +55,14 @@ export const ProductCategoryView = ({
           t('product.allProducts'),
       );
   const selectedStockStatuses = queryState.stockStatus || [];
+  const handleGoToPage = (nextPage: number) => {
+    handlers.handleFilterChange('page', nextPage);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const handleChangePageSize = (nextSize: number) => {
+    handlers.handleFilterChange('pageSize', nextSize);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   // Prefer product listing shell as soon as we have any listing intent (incl. pending slug resolve)
   const showProductResults = Boolean(
     queryState.categoryId ||
@@ -207,6 +217,7 @@ export const ProductCategoryView = ({
                     <h3 className="mt-4 text-lg font-semibold text-[#111111]" data-api-unique-id='productcategoryview-rfe3d71fe117bd8be-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{queryState.searchKeyword ? t('product.emptySearchTitle') : t('product.emptyCategoryTitle')}</h3>
                     <p className="mt-2 text-sm text-[#7a756c]" data-api-unique-id='productcategoryview-rf2517b47779e392b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{queryState.searchKeyword ? t('product.emptySearchHint', { keyword: queryState.searchKeyword }) : t('product.emptyCategoryFilterHint')}</p>
                   </div>}
+                {products.length > 0 && totalPages > 1 ? <StorefrontPagination page={queryState.page} pageSize={queryState.pageSize} total={totalCount} totalPages={totalPages} onPageChange={handleGoToPage} onPageSizeChange={handleChangePageSize} /> : null}
               </div>
             </section>
         </div>

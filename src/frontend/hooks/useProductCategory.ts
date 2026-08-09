@@ -350,7 +350,7 @@ export const useProductCategory = (): {
       stockStatus: (routeParams.stockStatus ? routeParams.stockStatus.split(',').filter(Boolean) : []).filter((status): status is StockStatusEnum => status === 'IN_STOCK' || status === 'LOW_STOCK') as StockStatusEnum[],
       sortBy: (routeParams.sortBy as SortByEnum) || 'NEWEST',
       page: routeParams.page ? parseInt(routeParams.page) : 1,
-      pageSize: 24,
+      pageSize: 60,
       minPrice: routeParams.minPrice ? parseFloat(routeParams.minPrice) : undefined,
       maxPrice: routeParams.maxPrice ? parseFloat(routeParams.maxPrice) : undefined,
       hasDiscount: false,
