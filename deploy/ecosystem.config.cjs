@@ -38,6 +38,13 @@ function readEnvKey(key) {
   return ''
 }
 
+// 前端为无状态页面服务，可安全水平扩展。默认 1/fork（与原行为一致）；
+// 需要更高并发时设 FRONTEND_INSTANCES=2（或 'max'）后 `pm2 reload frontend`。
+// 注意：RPC 承载导入任务调度器/定时轮询，切勿开 cluster（多 worker 会重复处理 1688 任务）。
+const FRONTEND_INSTANCES_RAW = (readEnvKey('FRONTEND_INSTANCES') || '1').trim()
+const FRONTEND_INSTANCES = FRONTEND_INSTANCES_RAW === 'max' ? 'max' : Math.max(1, Number(FRONTEND_INSTANCES_RAW) || 1)
+const FRONTEND_EXEC_MODE = FRONTEND_INSTANCES === 'max' || FRONTEND_INSTANCES > 1 ? 'cluster' : 'fork'
+
 const UPLOAD_DIR = readEnvKey('UPLOAD_DIR') || UPLOAD_DEFAULT
 const DATABASE_URL = readEnvKey('DATABASE_URL')
 const COOKIE_1688 = readEnvKey('COOKIE_1688') || readEnvKey('ALIBABA_COOKIE') || ''
@@ -52,8 +59,8 @@ module.exports = {
       cwd: ROOT,
       script: path.join(ROOT, 'deploy', 'standalone-entry.cjs'),
       interpreter: 'node',
-      instances: 1,
-      exec_mode: 'fork',
+      instances: FRONTEND_INSTANCES,
+      exec_mode: FRONTEND_EXEC_MODE,
       autorestart: true,
       max_restarts: 30,
       min_uptime: '15s',

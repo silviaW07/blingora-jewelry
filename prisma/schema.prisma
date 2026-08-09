@@ -383,6 +383,11 @@ model product {
   @@index([goodsStatus])
   @@index([brandName])
   @@index([publishedAt])
+  // 前台列表快速路径：WHERE status=ACTIVE ORDER BY createdAt/sortWeight 的复合索引
+  @@index([status, createdAt])
+  @@index([status, sortWeight])
+  @@index([categoryId, createdAt])
+  @@index([brandCategoryId, createdAt])
 }
 
 model productsku {
