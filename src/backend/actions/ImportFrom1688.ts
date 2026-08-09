@@ -629,7 +629,7 @@ import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
-import { isPendingImportEffectivelyReady } from '@/backend/utils/pendingImportReadiness'
+import { isPendingImportEffectivelyReady, hasPendingImportCoreFields } from '@/backend/utils/pendingImportReadiness'
 import {
   buildProductTranslationsJson,
   resolveEnglishProductTitle,
@@ -7118,9 +7118,13 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             updatedAt: item.updatedAt,
             createdAt: item.createdAt,
           }
-          const effectivelyReady = isPendingImportEffectivelyReady(readinessSnapshot)
+          // 用户主动点「发布」是明确操作：只要核心字段齐全（真实标题+主图+价格>0）即放行，
+          // 不再要求「卡住≥5 分钟」——否则刚采集完成的完整商品会因未满 5 分钟被误拦。
+          // 兜底同时保留 isPendingImportEffectivelyReady（针对卡死抓取的自愈判断）。
+          const readyByCoreFields = hasPendingImportCoreFields(readinessSnapshot)
+          const effectivelyReady = readyByCoreFields || isPendingImportEffectivelyReady(readinessSnapshot)
           if (item.fetchStatus !== 'COMPLETED' && !effectivelyReady) {
-            throw new Error('仅可发布采集完成的商品')
+            throw new Error('仅可发布采集完成的商品：缺少标题/主图/有效价格，请先「解析」')
           }
 
           // 品牌归一：把卖家暗语（蔻C/蔻家/古驰/LV…）替换成标准品牌名，
