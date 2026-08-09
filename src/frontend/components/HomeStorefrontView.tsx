@@ -125,12 +125,15 @@ const resolveCategoryCardSrc = (imageUrl?: string | null) => {
   return text || CATEGORY_CARD_PLACEHOLDER;
 };
 
+import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
+
 const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: HomeHandlers) => {
-  // 全量渲染专区内商品/类目，不再按列数×行数截断
-  const productItems = zone.items.filter(
+  // 按后台「PC列数 × 行数」截断（例：4×12=48），避免内容明细 57 条全量铺开
+  const limitedItems = limitRecommendZoneItems(zone, zone.items)
+  const productItems = limitedItems.filter(
     (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
   );
-  const categoryItems = zone.items.filter(
+  const categoryItems = limitedItems.filter(
     (item): item is RecommendCategoryCard => item.entityType === 'CATEGORY',
   );
 

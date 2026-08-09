@@ -16,6 +16,7 @@ import type {
 } from '@/frontend/actions/Home'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
+import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -111,8 +112,9 @@ const renderMobileSquircleContent = (
   handlers: ZoneHandlers,
   t: ReturnType<typeof useTranslation>['t'],
 ) => {
+  const limitedItems = limitRecommendZoneItems(zone, zone.items)
   if (zone.zoneType === 'PRODUCT') {
-    const productItems = zone.items.filter(
+    const productItems = limitedItems.filter(
       (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
     )
     if (productItems.length === 0) {
@@ -158,7 +160,7 @@ const renderMobileSquircleContent = (
   }
 
   if (zone.zoneType === 'CATEGORY') {
-    const categoryItems = zone.items.filter(
+    const categoryItems = limitedItems.filter(
       (item): item is RecommendCategoryCard => item.entityType === 'CATEGORY',
     )
     if (categoryItems.length === 0) {
@@ -221,10 +223,11 @@ const renderRecommendZoneContent = (
   handlers: ZoneHandlers,
   t: ReturnType<typeof useTranslation>['t'],
 ) => {
-  const productItems = zone.items.filter(
+  const limitedItems = limitRecommendZoneItems(zone, zone.items)
+  const productItems = limitedItems.filter(
     (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
   )
-  const categoryItems = zone.items.filter(
+  const categoryItems = limitedItems.filter(
     (item): item is RecommendCategoryCard => item.entityType === 'CATEGORY',
   )
 

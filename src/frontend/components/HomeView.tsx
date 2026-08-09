@@ -17,6 +17,7 @@ import type {
   HomeRecommendProductCard,
   HomeRecommendZoneSection
 } from '@/frontend/actions/Home';
+import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay';
 
 interface Props {
   state: HomeState;
@@ -67,8 +68,9 @@ const renderRatingStars = (rating?: number | null) => {
 const getZoneGridClassName = (zone: HomeRecommendZoneSection) => cn('grid gap-4', zone.mobileCols === 1 ? 'grid-cols-1' : 'grid-cols-2', zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-3 xl:grid-cols-5' : 'md:grid-cols-3 xl:grid-cols-4');
 
 const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: HomeState, handlers: HomeHandlers) => {
-  const productItems = zone.items.filter((item): item is RecommendProductCard => item.entityType === 'PRODUCT');
-  const categoryItems = zone.items.filter((item): item is RecommendCategoryCard => item.entityType === 'CATEGORY');
+  const limitedItems = limitRecommendZoneItems(zone, zone.items);
+  const productItems = limitedItems.filter((item): item is RecommendProductCard => item.entityType === 'PRODUCT');
+  const categoryItems = limitedItems.filter((item): item is RecommendCategoryCard => item.entityType === 'CATEGORY');
 
   if (productItems.length === 0 && categoryItems.length === 0) {
     return <div className="rounded-[28px] border border-dashed border-[#ddd6c8] bg-white px-6 py-10 text-center text-sm text-[#8a8073]" data-api-unique-id='homeview-rzone-empty-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
