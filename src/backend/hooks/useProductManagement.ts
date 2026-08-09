@@ -40,6 +40,8 @@ import {
   sync1688ProductStatus,
   batchAppendProductAdminNotes,
   reclassifyPublishedProductsBySecondaryMatch,
+  calibratePendingImportItems,
+  applyCalibrateCategoryEdits,
   autoClassifyPriceThresholdProducts,
   batchTranslateProductTitlesToSpanish,
   batchAppendProductTitleSuffix,
@@ -59,7 +61,8 @@ import {
   type PendingImportItemFetchStatus,
   type PendingImportItemPublishStatus,
   type Sync1688StatusItem,
-  type CategoryProductPreviewItem
+  type CategoryProductPreviewItem,
+  type CalibrateResultItem,
 } from '@/backend/actions/ProductManagement'
 import type {
   ProductStatus,
@@ -627,6 +630,21 @@ export interface ProductManagementState {
   sync1688NoteDialogOpen: boolean
   sync1688NoteDraft: string
   reclassifyRunning: boolean
+  calibrateResultOpen: boolean
+  calibrateResultSaving: boolean
+  calibrateResultScope: 'product' | 'pending'
+  calibrateResultSummary: { matched: number; skipped: number; failed: number; total: number } | null
+  calibrateResultDrafts: Array<{
+    id: string
+    name: string
+    primaryCategoryId: string | null
+    linkedCategoryIds: string[]
+    brandNormalized: boolean
+    weightGrams: number | null
+    weightUpdated: boolean
+    status: CalibrateResultItem['status']
+    message?: string | null
+  }>
   priceThresholdClassifyRunning: boolean
   spanishTitleBackfillRunning: boolean
   titleSuffixRunning: boolean
@@ -763,6 +781,11 @@ export interface ProductManagementHandlers {
   submitSync1688Notes: () => Promise<void>
   deferSync1688Panel: () => void
   handleReclassifyPublishedProducts: () => Promise<void>
+  handleCalibratePendingImportItems: () => Promise<void>
+  setCalibrateResultOpen: (open: boolean) => void
+  toggleCalibrateResultCategory: (itemId: string, categoryId: string, checked: boolean) => void
+  setCalibrateResultPrimary: (itemId: string, categoryId: string) => void
+  saveCalibrateResultEdits: () => Promise<void>
   handleAutoClassifyPriceThresholdProducts: () => Promise<void>
   handleBatchTranslateTitlesToSpanish: () => Promise<void>
   handleBatchAppendTitleSuffix: (suffix: string) => Promise<void>
@@ -980,6 +1003,26 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [sync1688NoteDialogOpen, setSync1688NoteDialogOpen] = useState(false)
   const [sync1688NoteDraft, setSync1688NoteDraft] = useState('')
   const [reclassifyRunning, setReclassifyRunning] = useState(false)
+  const [calibrateResultOpen, setCalibrateResultOpen] = useState(false)
+  const [calibrateResultSaving, setCalibrateResultSaving] = useState(false)
+  const [calibrateResultScope, setCalibrateResultScope] = useState<'product' | 'pending'>('product')
+  const [calibrateResultSummary, setCalibrateResultSummary] = useState<{
+    matched: number
+    skipped: number
+    failed: number
+    total: number
+  } | null>(null)
+  const [calibrateResultDrafts, setCalibrateResultDrafts] = useState<Array<{
+    id: string
+    name: string
+    primaryCategoryId: string | null
+    linkedCategoryIds: string[]
+    brandNormalized: boolean
+    weightGrams: number | null
+    weightUpdated: boolean
+    status: CalibrateResultItem['status']
+    message?: string | null
+  }>>([])
   const [priceThresholdClassifyRunning, setPriceThresholdClassifyRunning] = useState(false)
   const [spanishTitleBackfillRunning, setSpanishTitleBackfillRunning] = useState(false)
   const [titleSuffixRunning, setTitleSuffixRunning] = useState(false)
@@ -2629,15 +2672,53 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setSync1688NoteDialogOpen(false)
   }
 
+  const openCalibrateResultDialog = (
+    scope: 'product' | 'pending',
+    result: {
+      matched: number
+      skipped: number
+      failed: number
+      total: number
+      items: CalibrateResultItem[]
+    },
+  ) => {
+    setCalibrateResultScope(scope)
+    setCalibrateResultSummary({
+      matched: result.matched,
+      skipped: result.skipped,
+      failed: result.failed,
+      total: result.total,
+    })
+    setCalibrateResultDrafts(
+      (result.items || []).map(item => ({
+        id: item.id,
+        name: item.name,
+        primaryCategoryId: item.primary_category_id,
+        linkedCategoryIds: Array.from(
+          new Set([
+            ...(item.primary_category_id ? [item.primary_category_id] : []),
+            ...((item.categories || []).map(c => c.category_id).filter(Boolean)),
+          ]),
+        ),
+        brandNormalized: item.brand_normalized,
+        weightGrams: item.weight_grams,
+        weightUpdated: item.weight_updated,
+        status: item.status,
+        message: item.message,
+      })),
+    )
+    setCalibrateResultOpen(true)
+  }
+
   const handleReclassifyPublishedProducts = async () => {
     if (reclassifyRunning) return
     const scopeIds = selectedProductIds
     if (scopeIds.length === 0) {
-      toast.error('请先勾选要重新归类的商品')
+      toast.error('请先勾选要校准的商品')
       return
     }
     const confirmed = window.confirm(
-      `将对已勾选的 ${scopeIds.length} 个商品，按二级分类名称/品牌关键词重新归类。是否继续？`,
+      `将对已勾选的 ${scopeIds.length} 个商品执行一键校准（品牌归一 + 保底重量 + 类目/系数），完成后可在弹窗中修改全部分类。是否继续？`,
     )
     if (!confirmed) return
 
@@ -2645,13 +2726,99 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     try {
       const result = await reclassifyPublishedProductsBySecondaryMatch({ product_ids: scopeIds })
       toast.success(
-        `重新归类完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
+        `一键校准完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
       )
+      openCalibrateResultDialog('product', result)
+      void ensureBindingMeta()
       await fetchList()
     } catch (err: any) {
-      toast.error(err?.message || '重新归类失败')
+      toast.error(err?.message || '一键校准失败')
     } finally {
       setReclassifyRunning(false)
+    }
+  }
+
+  const handleCalibratePendingImportItems = async () => {
+    if (reclassifyRunning) return
+    const scopeIds = pendingImportSelectedIds
+    if (scopeIds.length === 0) {
+      toast.error('请先勾选要校准的待上传商品')
+      return
+    }
+    const confirmed = window.confirm(
+      `将对已勾选的 ${scopeIds.length} 条待上传商品执行一键校准（品牌归一 + 保底重量 + 类目识别），完成后可在弹窗中修改全部分类。是否继续？`,
+    )
+    if (!confirmed) return
+
+    setReclassifyRunning(true)
+    try {
+      const result = await calibratePendingImportItems({ item_ids: scopeIds })
+      toast.success(
+        `一键校准完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
+      )
+      openCalibrateResultDialog('pending', result)
+      void ensureBindingMeta()
+      await refreshPendingImportQueue()
+    } catch (err: any) {
+      toast.error(err?.message || '一键校准失败')
+    } finally {
+      setReclassifyRunning(false)
+    }
+  }
+
+  const toggleCalibrateResultCategory = (itemId: string, categoryId: string, checked: boolean) => {
+    setCalibrateResultDrafts(prev =>
+      prev.map(item => {
+        if (item.id !== itemId) return item
+        const linked = checked
+          ? Array.from(new Set([...item.linkedCategoryIds, categoryId]))
+          : item.linkedCategoryIds.filter(id => id !== categoryId)
+        const primaryCategoryId =
+          !checked && item.primaryCategoryId === categoryId
+            ? linked[0] || null
+            : item.primaryCategoryId && linked.includes(item.primaryCategoryId)
+              ? item.primaryCategoryId
+              : linked[0] || null
+        return { ...item, linkedCategoryIds: linked, primaryCategoryId }
+      }),
+    )
+  }
+
+  const setCalibrateResultPrimary = (itemId: string, categoryId: string) => {
+    setCalibrateResultDrafts(prev =>
+      prev.map(item => {
+        if (item.id !== itemId) return item
+        const linked = item.linkedCategoryIds.includes(categoryId)
+          ? item.linkedCategoryIds
+          : [...item.linkedCategoryIds, categoryId]
+        return { ...item, linkedCategoryIds: linked, primaryCategoryId: categoryId }
+      }),
+    )
+  }
+
+  const saveCalibrateResultEdits = async () => {
+    if (calibrateResultSaving || calibrateResultDrafts.length === 0) return
+    setCalibrateResultSaving(true)
+    try {
+      const res = await applyCalibrateCategoryEdits({
+        scope: calibrateResultScope,
+        edits: calibrateResultDrafts.map(item => ({
+          id: item.id,
+          primary_category_id: item.primaryCategoryId,
+          linked_category_ids: item.linkedCategoryIds,
+        })),
+      })
+      toast.success(`类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}`)
+      setCalibrateResultOpen(false)
+      if (calibrateResultScope === 'pending') {
+        await refreshPendingImportQueue()
+      } else {
+        await fetchList()
+      }
+    } catch (err: any) {
+      toast.error(err?.message || '保存类目失败')
+    } finally {
+      setCalibrateResultSaving(false)
     }
   }
 
@@ -3673,6 +3840,11 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       sync1688NoteDialogOpen,
       sync1688NoteDraft,
       reclassifyRunning,
+      calibrateResultOpen,
+      calibrateResultSaving,
+      calibrateResultScope,
+      calibrateResultSummary,
+      calibrateResultDrafts,
       priceThresholdClassifyRunning,
       spanishTitleBackfillRunning,
       titleSuffixRunning,
@@ -3810,6 +3982,11 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       submitSync1688Notes,
       deferSync1688Panel,
       handleReclassifyPublishedProducts,
+      handleCalibratePendingImportItems,
+      setCalibrateResultOpen,
+      toggleCalibrateResultCategory,
+      setCalibrateResultPrimary,
+      saveCalibrateResultEdits,
       handleAutoClassifyPriceThresholdProducts,
       handleBatchTranslateTitlesToSpanish,
       handleBatchAppendTitleSuffix,

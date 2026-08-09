@@ -86,6 +86,10 @@ export const updateProductStock = (...args: Parameters<Actions["updateProductSto
   rpcCall<Awaited<ReturnType<Actions["updateProductStock"]>>>("src.backend.actions.ProductManagement.updateProductStock", ...args);
 export const reclassifyPublishedProductsBySecondaryMatch = (...args: Parameters<Actions["reclassifyPublishedProductsBySecondaryMatch"]>) => 
   rpcCall<Awaited<ReturnType<Actions["reclassifyPublishedProductsBySecondaryMatch"]>>>("src.backend.actions.ProductManagement.reclassifyPublishedProductsBySecondaryMatch", ...args);
+export const calibratePendingImportItems = (...args: Parameters<Actions["calibratePendingImportItems"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["calibratePendingImportItems"]>>>("src.backend.actions.ProductManagement.calibratePendingImportItems", ...args);
+export const applyCalibrateCategoryEdits = (...args: Parameters<Actions["applyCalibrateCategoryEdits"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["applyCalibrateCategoryEdits"]>>>("src.backend.actions.ProductManagement.applyCalibrateCategoryEdits", ...args);
 export const autoClassifyPriceThresholdProducts = (...args: Parameters<Actions["autoClassifyPriceThresholdProducts"]>) => 
   rpcCall<Awaited<ReturnType<Actions["autoClassifyPriceThresholdProducts"]>>>("src.backend.actions.ProductManagement.autoClassifyPriceThresholdProducts", ...args);
 export const batchTranslateProductTitlesToSpanish = (...args: Parameters<Actions["batchTranslateProductTitlesToSpanish"]>) => 

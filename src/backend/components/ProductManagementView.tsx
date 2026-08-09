@@ -12,6 +12,7 @@ import { ImportFrom1688CollectModal } from '@/backend/components/ImportFrom1688C
 import { ImportFromPinduoduoCollectModal } from '@/backend/components/ImportFromPinduoduoCollectModal'
 import { Sync1688StatusResultPanel } from '@/backend/components/Sync1688StatusResultPanel'
 import { SharedProductBatchUtilityButtons } from '@/backend/components/SharedProductBatchUtilityButtons'
+import CalibrateResultDialog from '@/backend/components/CalibrateResultDialog'
 import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus, PendingImportItemFetchStatus, PendingImportItemPublishStatus, PendingImportTaskStatus } from '@/backend/types/ProductManagement';
 const STATUS_CONFIG: Record<ProductStatus, {
   label: string;
@@ -243,6 +244,16 @@ export const ProductManagementView = ({
         onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.pendingImportSelectedIds)}
         onConfirmTitleSuffix={handlers.handleBatchAppendPendingTitleSuffix}
       />
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 border-sky-200 bg-sky-50/70 text-sky-800 hover:bg-sky-100"
+        disabled={!hasPendingSelected || state.reclassifyRunning || state.pendingImportPublishing || pendingParseActive}
+        onClick={() => void handlers.handleCalibratePendingImportItems()}
+      >
+        <Tags className={`w-4 h-4 mr-2 ${state.reclassifyRunning ? 'animate-pulse' : ''}`} />
+        {state.reclassifyRunning && state.activeTab === 'pending_imports' ? '校准中...' : '一键校准选中'}
+      </Button>
       {activeSelectionCount > 0 && <span className="ml-2 text-sm text-muted-foreground font-medium" data-api-unique-id='productmanagementview-rpendingselcount-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary">{activeSelectionCount}</span> 项</span>}
     </div>
   );
@@ -353,9 +364,9 @@ export const ProductManagementView = ({
                   <RefreshCw className={`w-4 h-4 mr-2 ${state.sync1688Syncing ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-rsync1688statusicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
                   {state.sync1688Syncing ? '1688 同步中...' : '1688 状态同步'}
                 </Button>
-                <Button variant="outline" size="sm" className="h-9 border-sky-200 bg-sky-50/70 text-sky-800 hover:bg-sky-100" disabled={state.reclassifyRunning} onClick={() => void handlers.handleReclassifyPublishedProducts()} data-api-unique-id='productmanagementview-rreclassify-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                <Button variant="outline" size="sm" className="h-9 border-sky-200 bg-sky-50/70 text-sky-800 hover:bg-sky-100" disabled={!hasProductSelected || state.reclassifyRunning} onClick={() => void handlers.handleReclassifyPublishedProducts()} data-api-unique-id='productmanagementview-rreclassify-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <Tags className={`w-4 h-4 mr-2 ${state.reclassifyRunning ? 'animate-pulse' : ''}`} data-api-unique-id='productmanagementview-rreclassifyicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
-                  {state.reclassifyRunning ? '归类中...' : '重新归类选中'}
+                  {state.reclassifyRunning && state.activeTab === 'products' ? '校准中...' : '一键校准选中'}
                 </Button>
                 <Button
                   variant="outline"
@@ -924,6 +935,19 @@ export const ProductManagementView = ({
         onNoteDraftChange={handlers.setSync1688NoteDraft}
         onSubmitNotes={() => void handlers.submitSync1688Notes()}
         onDefer={handlers.deferSync1688Panel}
+      />
+
+      <CalibrateResultDialog
+        open={state.calibrateResultOpen}
+        saving={state.calibrateResultSaving}
+        scope={state.calibrateResultScope}
+        summary={state.calibrateResultSummary}
+        drafts={state.calibrateResultDrafts}
+        categoryOptions={state.bindingCategoryOptions}
+        onOpenChange={handlers.setCalibrateResultOpen}
+        onToggleCategory={handlers.toggleCalibrateResultCategory}
+        onSetPrimary={handlers.setCalibrateResultPrimary}
+        onSave={() => void handlers.saveCalibrateResultEdits()}
       />
 
       <Dialog open={state.confirmDialogOpen} onOpenChange={handlers.setConfirmDialogOpen} data-api-unique-id='productmanagementview-r60d70f17ed8ac551-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>

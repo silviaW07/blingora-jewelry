@@ -607,6 +607,7 @@ import {
   buildCategoryMatchCorpus,
   resolveImportCategoryOwnership,
   expandLinkedCategoryIdsWithParents,
+  pickImportPricingTargetCategory,
   type CreateImportTaskInput,
   type CreateImportTaskOutput,
   type StartParseTaskInput,
@@ -619,6 +620,7 @@ import {
   type CancelPendingImportParseJobOutput,
   type UpdatePendingImportGalleryInput,
   type PendingImportParseJobStatus,
+  type PreviewDataJson,
 } from '@/backend/actions/ImportFrom1688'
 import {
   buildProductTranslationsJson,
@@ -633,6 +635,9 @@ import {
   syncProductPriceThresholdRelations,
   type AutoClassifyPriceThresholdSummary,
 } from '@/backend/lib/priceThresholdAutoClassify'
+import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
+import { applyBrandAliases } from '@/shared/brandTitleNormalize'
+import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import {
   appendTitleSuffixIfMissing,
   normalizeTitleSuffix,
@@ -657,11 +662,66 @@ export interface ReclassifyPublishedProductsInput {
   product_ids?: string[]
 }
 
+/** 一键校准结果里的单个类目标签（主类目 / 品牌货架 / 价格阈值 / 普通二级等） */
+export interface CalibrateCategoryTag {
+  category_id: string
+  category_name: string
+  /** primary=主类目 brand=品牌货架 linked=关联（含 below3 usd / normal quality 等） */
+  kind: 'primary' | 'brand' | 'linked'
+}
+
+export interface CalibrateResultItem {
+  id: string
+  scope: 'product' | 'pending'
+  name: string
+  name_before: string | null
+  brand_normalized: boolean
+  weight_grams: number | null
+  weight_updated: boolean
+  primary_category_id: string | null
+  primary_category_name: string | null
+  brand_category_id: string | null
+  brand_category_name: string | null
+  /** 校准后绑定的全部类目（含主类目、品牌、below3usd、normal quality 等），便于弹窗里直接改 */
+  categories: CalibrateCategoryTag[]
+  status: 'matched' | 'skipped' | 'failed'
+  message?: string | null
+}
+
 export interface ReclassifyPublishedProductsOutput {
   matched: number
   skipped: number
   failed: number
   total: number
+  items: CalibrateResultItem[]
+}
+
+export interface CalibratePendingImportItemsInput {
+  item_ids: string[]
+}
+
+export interface CalibratePendingImportItemsOutput {
+  matched: number
+  skipped: number
+  failed: number
+  total: number
+  items: CalibrateResultItem[]
+}
+
+export interface ApplyCalibrateCategoryEditsInput {
+  scope: 'product' | 'pending'
+  edits: Array<{
+    id: string
+    /** 主类目；pending 时写 targetCategoryId */
+    primary_category_id?: string | null
+    /** 完整关联类目 ID 列表（覆盖写） */
+    linked_category_ids: string[]
+  }>
+}
+
+export interface ApplyCalibrateCategoryEditsOutput {
+  success_count: number
+  fail_count: number
 }
 
 const USD_EXCHANGE_RATE = 6.5
@@ -3625,8 +3685,8 @@ export const updateProductStock = requireRole([UserRole.ADMIN])(
 )
 
 /**
- * 一键重新归类：扫描 ACTIVE + DRAFT 商品的标题与详情，按 ACTIVE 二级类目名/品牌关键词匹配。
- * 多命中时 Brand 下二级优先；主分类 categoryId 取命中第一项（Brand L2），并同步关联与 brandCategoryId。
+ * 一键校准选中（已上架/草稿商品）：品牌别名归一 + 保底重量 + 二级类目/品牌货架/价格阈值关联。
+ * 返回每条商品绑定的全部类目，供前端弹窗直接修改。
  */
 export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole.ADMIN])(
   withResult(async (
@@ -3635,7 +3695,10 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
     const scopedIds = Array.isArray(input?.product_ids)
       ? Array.from(new Set(input.product_ids.map(id => String(id || '').trim()).filter(Boolean)))
       : []
-    const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
+    const [secondaryCategories, brandRules] = await Promise.all([
+      loadAutoMatchSecondaryCategories(prisma),
+      loadBrandAliasRules(),
+    ])
     const products = await prisma.product.findMany({
       where: {
         status: { in: ['ACTIVE', 'DRAFT'] },
@@ -3648,6 +3711,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         shortDescription: true,
         categoryId: true,
         brandCategoryId: true,
+        weightGram: true,
         relationCategories: { select: { categoryId: true } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -3656,19 +3720,18 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
     let matched = 0
     let skipped = 0
     let failed = 0
+    const items: CalibrateResultItem[] = []
 
     for (const product of products) {
       try {
-        const corpusDetail = buildCategoryMatchCorpus(product.detailText, product.shortDescription)
-        const hits = matchSecondaryCategoriesByTitle(product.name, secondaryCategories, corpusDetail)
-        if (!hits.length) {
-          skipped += 1
-          continue
-        }
+        const nameBefore = String(product.name || '')
+        const normalizedName = applyBrandAliases(nameBefore, brandRules)
+        const brandNormalized = normalizedName !== nameBefore && normalizedName.trim().length > 0
+        const effectiveName = brandNormalized ? normalizedName : nameBefore
 
-        // 区分「真实二级类目」与「Brand 货架」：
-        //  - 主类目（定价用）只能是真实二级命中；Brand 货架仅作为品牌标签，不当主类目
-        //  - 若本次只命中 Brand 货架而无真实二级，则保留商品现有主类目，绝不用货架顶替（否则二级类目会消失且货架被误当定价类目显示系数）
+        const corpusDetail = buildCategoryMatchCorpus(product.detailText, product.shortDescription)
+        const hits = matchSecondaryCategoriesByTitle(effectiveName, secondaryCategories, corpusDetail)
+
         const isBrandShelfHit = (item: { parentName?: string | null }) =>
           String(item.parentName || '').trim().toLowerCase() === 'brand'
         const brandHit = hits.find(isBrandShelfHit) || null
@@ -3680,8 +3743,6 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         let primaryCategoryId = ownership?.primaryCategoryId || null
 
         if (!primaryCategoryId) {
-          // 无标题级真实二级命中：从「现有绑定」自愈——
-          // 恢复此前被错误归类用 Brand 货架顶替掉的真实二级类目（该真实二级仍保留在关联里）。
           const existingIds = [
             product.categoryId,
             ...((product.relationCategories || []).map(rel => rel.categoryId)),
@@ -3697,13 +3758,60 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
             const realCandidates = existingIds
               .filter(isRealPricingCategory)
               .map(id => existingMetaMap.get(id)!)
-              .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)) // 优先二级(L2) 而非一级
+              .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
             primaryCategoryId = realCandidates[0]?.id || product.categoryId || null
           }
         }
 
+        if (!primaryCategoryId && !hits.length && !brandNormalized) {
+          const existingWeight = toNumber(product.weightGram)
+          if (existingWeight != null && existingWeight > 0) {
+            skipped += 1
+            items.push({
+              id: product.id,
+              scope: 'product',
+              name: effectiveName,
+              name_before: brandNormalized ? nameBefore : null,
+              brand_normalized: false,
+              weight_grams: existingWeight,
+              weight_updated: false,
+              primary_category_id: product.categoryId || null,
+              primary_category_name: null,
+              brand_category_id: product.brandCategoryId || null,
+              brand_category_name: null,
+              categories: [],
+              status: 'skipped',
+              message: '未命中类目/品牌，且标题与重量无需校准',
+            })
+            continue
+          }
+        }
+
+        if (!primaryCategoryId) {
+          primaryCategoryId = product.categoryId || null
+        }
         if (!primaryCategoryId) {
           skipped += 1
+          items.push({
+            id: product.id,
+            scope: 'product',
+            name: effectiveName,
+            name_before: brandNormalized ? nameBefore : null,
+            brand_normalized: brandNormalized,
+            weight_grams: toNumber(product.weightGram),
+            weight_updated: false,
+            primary_category_id: null,
+            primary_category_name: null,
+            brand_category_id: brandHit?.id || product.brandCategoryId || null,
+            brand_category_name: brandHit?.name || null,
+            categories: hits.map(h => ({
+              category_id: h.id,
+              category_name: h.name,
+              kind: isBrandShelfHit(h) ? 'brand' as const : 'linked' as const,
+            })),
+            status: 'skipped',
+            message: '缺少可用主类目',
+          })
           continue
         }
 
@@ -3713,13 +3821,22 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           product.categoryId || '',
         ])
 
+        const hitNames = hits.map(h => h.name)
+        const existingWeight = toNumber(product.weightGram)
+        const resolvedWeight = resolveProductWeightGrams({
+          explicit: existingWeight != null && existingWeight > 0 ? existingWeight : null,
+          text: buildCategoryMatchCorpus(effectiveName, product.detailText, product.shortDescription),
+          categoryNames: hitNames,
+        })
+        const weightUpdated = !(existingWeight != null && existingWeight > 0) && resolvedWeight > 0
+
         await prisma.$transaction(async tx => {
           await tx.product.update({
             where: { id: product.id },
             data: {
-              // 主类目 = 真实二级（标题命中或自现有绑定自愈得到），确保二级类目始终可见、且定价类目落在真实二级上
+              ...(brandNormalized ? { name: effectiveName } : {}),
+              ...(weightUpdated ? { weightGram: resolvedWeight } : {}),
               categoryId: primaryCategoryId,
-              // 仅当命中 Brand 货架时才写品牌类目/关键词，无命中则不覆盖已有品牌
               brandCategoryId: brandHit ? brandHit.id : undefined,
               brandMatchKeyword: brandHit ? brandHit.name : undefined,
               autoBrandMatched: brandHit ? true : undefined,
@@ -3728,9 +3845,94 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           await replaceProductCategoryRelations(tx, product.id, linkedCategoryIds)
           await syncProductPriceThresholdRelations(tx, product.id)
         })
+
+        const after = await prisma.product.findUnique({
+          where: { id: product.id },
+          select: {
+            categoryId: true,
+            brandCategoryId: true,
+            weightGram: true,
+            category: { select: { id: true, name: true } },
+            brandCategory: { select: { id: true, name: true } },
+            relationCategories: {
+              select: {
+                categoryId: true,
+                category: { select: { id: true, name: true } },
+              },
+            },
+          },
+        })
+
+        const categories: CalibrateCategoryTag[] = []
+        const seen = new Set<string>()
+        const pushTag = (tag: CalibrateCategoryTag) => {
+          if (!tag.category_id || seen.has(tag.category_id)) return
+          seen.add(tag.category_id)
+          categories.push(tag)
+        }
+        if (after?.category) {
+          pushTag({
+            category_id: after.category.id,
+            category_name: after.category.name,
+            kind: 'primary',
+          })
+        }
+        if (after?.brandCategory) {
+          pushTag({
+            category_id: after.brandCategory.id,
+            category_name: after.brandCategory.name,
+            kind: 'brand',
+          })
+        }
+        for (const rel of after?.relationCategories || []) {
+          const cat = rel.category
+          if (!cat) continue
+          pushTag({
+            category_id: cat.id,
+            category_name: cat.name,
+            kind: after?.categoryId === cat.id
+              ? 'primary'
+              : after?.brandCategoryId === cat.id
+                ? 'brand'
+                : 'linked',
+          })
+        }
+
         matched += 1
-      } catch {
+        items.push({
+          id: product.id,
+          scope: 'product',
+          name: effectiveName,
+          name_before: brandNormalized ? nameBefore : null,
+          brand_normalized: brandNormalized,
+          weight_grams: toNumber(after?.weightGram) ?? resolvedWeight,
+          weight_updated: weightUpdated,
+          primary_category_id: after?.categoryId || primaryCategoryId,
+          primary_category_name: after?.category?.name || pricingHit?.name || null,
+          brand_category_id: after?.brandCategoryId || brandHit?.id || null,
+          brand_category_name: after?.brandCategory?.name || brandHit?.name || null,
+          categories,
+          status: 'matched',
+          message: null,
+        })
+      } catch (err: any) {
         failed += 1
+        items.push({
+          id: product.id,
+          scope: 'product',
+          name: product.name,
+          name_before: null,
+          brand_normalized: false,
+          weight_grams: toNumber(product.weightGram),
+          weight_updated: false,
+          primary_category_id: product.categoryId || null,
+          primary_category_name: null,
+          brand_category_id: product.brandCategoryId || null,
+          brand_category_name: null,
+          categories: [],
+          status: 'failed',
+          message: err?.message || '校准失败',
+        })
       }
     }
 
@@ -3739,8 +3941,308 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
       skipped,
       failed,
       total: products.length,
+      items,
     }
   })
+)
+
+/**
+ * 一键校准选中（待上传区）：品牌别名 + 保底重量 + 类目命中写入 preview/targetCategoryId。
+ * 不上架、不翻译——只为后续人工核对与发布做准备。
+ */
+export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
+  withResult(async (
+    input: CalibratePendingImportItemsInput,
+  ): Promise<CalibratePendingImportItemsOutput> => {
+    const itemIds = Array.from(
+      new Set((input?.item_ids || []).map(id => String(id || '').trim()).filter(Boolean)),
+    )
+    if (!itemIds.length) throw new Error('请先勾选要校准的待上传商品')
+
+    const [secondaryCategories, brandRules] = await Promise.all([
+      loadAutoMatchSecondaryCategories(prisma),
+      loadBrandAliasRules(),
+    ])
+
+    const rows = await prisma.importtaskitem.findMany({
+      where: { id: { in: itemIds }, isPublished: false },
+      select: {
+        id: true,
+        parsedName: true,
+        productDetail: true,
+        weightGrams: true,
+        targetCategoryId: true,
+        previewDataJson: true,
+      },
+    })
+
+    let matched = 0
+    let skipped = 0
+    let failed = 0
+    const items: CalibrateResultItem[] = []
+
+    for (const row of rows) {
+      try {
+        const preview = ((row.previewDataJson || {}) as PreviewDataJson) || {}
+        const nameBefore = String(row.parsedName || preview.name || '').trim()
+        if (!nameBefore) {
+          skipped += 1
+          items.push({
+            id: row.id,
+            scope: 'pending',
+            name: '',
+            name_before: null,
+            brand_normalized: false,
+            weight_grams: toNumber(row.weightGrams),
+            weight_updated: false,
+            primary_category_id: row.targetCategoryId || null,
+            primary_category_name: null,
+            brand_category_id: null,
+            brand_category_name: null,
+            categories: [],
+            status: 'skipped',
+            message: '标题为空，跳过',
+          })
+          continue
+        }
+
+        const normalizedName = applyBrandAliases(nameBefore, brandRules)
+        const brandNormalized = normalizedName !== nameBefore && normalizedName.trim().length > 0
+        const effectiveName = brandNormalized ? normalizedName : nameBefore
+
+        const detailCorpus = buildCategoryMatchCorpus(
+          row.productDetail,
+          preview.shortDescription,
+        )
+        const hits = matchSecondaryCategoriesByTitle(effectiveName, secondaryCategories, detailCorpus)
+        const isBrandShelfHit = (item: { parentName?: string | null }) =>
+          String(item.parentName || '').trim().toLowerCase() === 'brand'
+        const brandHit = hits.find(isBrandShelfHit) || null
+        const pricingTargetId = pickImportPricingTargetCategory(hits, row.targetCategoryId)
+        const pricingTarget = pricingTargetId
+          ? hits.find(h => h.id === pricingTargetId) || null
+          : null
+        const targetCategoryId =
+          pricingTargetId ||
+          hits.find(h => !isBrandShelfHit(h))?.id ||
+          row.targetCategoryId ||
+          null
+
+        const matchedIds = Array.from(new Set([
+          ...hits.map(h => h.id),
+          ...(targetCategoryId ? [targetCategoryId] : []),
+          ...(brandHit ? [brandHit.id] : []),
+        ].filter(Boolean)))
+        const matchedNames = Array.from(new Set([
+          ...hits.map(h => h.name),
+          ...(pricingTarget?.name ? [pricingTarget.name] : []),
+          ...(brandHit?.name ? [brandHit.name] : []),
+        ].filter(Boolean)))
+
+        const existingWeight = toNumber(row.weightGrams)
+        const skuTable = Array.isArray((preview as any).skuTable) ? ((preview as any).skuTable as any[]) : []
+        const skuWeights = skuTable
+          .map(sku => toNumber(sku?.weightGrams))
+          .filter((n): n is number => n != null && n > 0)
+        const explicitWeight =
+          existingWeight != null && existingWeight > 0
+            ? existingWeight
+            : skuWeights.length
+              ? Math.round(skuWeights.reduce((a, b) => a + b, 0) / skuWeights.length)
+              : null
+        const resolvedWeight = resolveProductWeightGrams({
+          explicit: explicitWeight,
+          text: buildCategoryMatchCorpus(effectiveName, row.productDetail, preview.shortDescription),
+          categoryNames: matchedNames,
+        })
+        const weightUpdated = !(explicitWeight != null && explicitWeight > 0)
+
+        if (!hits.length && !brandNormalized && !weightUpdated && !targetCategoryId) {
+          skipped += 1
+          items.push({
+            id: row.id,
+            scope: 'pending',
+            name: effectiveName,
+            name_before: null,
+            brand_normalized: false,
+            weight_grams: explicitWeight,
+            weight_updated: false,
+            primary_category_id: row.targetCategoryId || null,
+            primary_category_name: null,
+            brand_category_id: null,
+            brand_category_name: null,
+            categories: [],
+            status: 'skipped',
+            message: '未识别到可校准内容',
+          })
+          continue
+        }
+
+        const nextPreview: PreviewDataJson = {
+          ...preview,
+          name: effectiveName,
+          matchedCategoryIds: matchedIds,
+          matchedCategoryNames: matchedNames,
+          categoryId: targetCategoryId || preview.categoryId,
+        }
+
+        await prisma.importtaskitem.update({
+          where: { id: row.id },
+          data: {
+            parsedName: effectiveName,
+            targetCategoryId: targetCategoryId,
+            weightGrams: weightUpdated ? resolvedWeight : (existingWeight ?? resolvedWeight),
+            previewDataJson: nextPreview as any,
+          },
+        })
+
+        const categories: CalibrateCategoryTag[] = []
+        const seen = new Set<string>()
+        for (const hit of hits) {
+          if (seen.has(hit.id)) continue
+          seen.add(hit.id)
+          categories.push({
+            category_id: hit.id,
+            category_name: hit.name,
+            kind: hit.id === targetCategoryId
+              ? 'primary'
+              : isBrandShelfHit(hit)
+                ? 'brand'
+                : 'linked',
+          })
+        }
+        if (targetCategoryId && !seen.has(targetCategoryId)) {
+          const name =
+            matchedNames[matchedIds.indexOf(targetCategoryId)] ||
+            pricingTarget?.name ||
+            targetCategoryId
+          categories.unshift({
+            category_id: targetCategoryId,
+            category_name: name,
+            kind: 'primary',
+          })
+        }
+
+        matched += 1
+        items.push({
+          id: row.id,
+          scope: 'pending',
+          name: effectiveName,
+          name_before: brandNormalized ? nameBefore : null,
+          brand_normalized: brandNormalized,
+          weight_grams: weightUpdated ? resolvedWeight : (explicitWeight ?? resolvedWeight),
+          weight_updated: weightUpdated,
+          primary_category_id: targetCategoryId,
+          primary_category_name: pricingTarget?.name || categories.find(c => c.kind === 'primary')?.category_name || null,
+          brand_category_id: brandHit?.id || null,
+          brand_category_name: brandHit?.name || null,
+          categories,
+          status: 'matched',
+          message: null,
+        })
+      } catch (err: any) {
+        failed += 1
+        items.push({
+          id: row.id,
+          scope: 'pending',
+          name: String(row.parsedName || ''),
+          name_before: null,
+          brand_normalized: false,
+          weight_grams: toNumber(row.weightGrams),
+          weight_updated: false,
+          primary_category_id: row.targetCategoryId || null,
+          primary_category_name: null,
+          brand_category_id: null,
+          brand_category_name: null,
+          categories: [],
+          status: 'failed',
+          message: err?.message || '校准失败',
+        })
+      }
+    }
+
+    return {
+      matched,
+      skipped,
+      failed,
+      total: rows.length,
+      items,
+    }
+  }),
+)
+
+/**
+ * 校准结果弹窗保存：覆盖写关联类目（商品）或 matchedCategoryIds/targetCategoryId（待上传）。
+ */
+export const applyCalibrateCategoryEdits = requireRole([UserRole.ADMIN])(
+  withResult(async (
+    input: ApplyCalibrateCategoryEditsInput,
+  ): Promise<ApplyCalibrateCategoryEditsOutput> => {
+    const edits = Array.isArray(input?.edits) ? input.edits : []
+    if (!edits.length) throw new Error('没有可保存的类目修改')
+
+    let success_count = 0
+    let fail_count = 0
+
+    for (const edit of edits) {
+      const id = String(edit.id || '').trim()
+      if (!id) {
+        fail_count += 1
+        continue
+      }
+      try {
+        const linkedIds = Array.from(
+          new Set((edit.linked_category_ids || []).map(x => String(x || '').trim()).filter(Boolean)),
+        )
+        if (input.scope === 'product') {
+          const primaryId = String(edit.primary_category_id || linkedIds[0] || '').trim()
+          if (!primaryId) throw new Error('主类目不能为空')
+          const expanded = await expandLinkedCategoryIdsWithParents(prisma, linkedIds.length ? linkedIds : [primaryId])
+          await prisma.$transaction(async tx => {
+            await tx.product.update({
+              where: { id },
+              data: { categoryId: primaryId },
+            })
+            await replaceProductCategoryRelations(tx, id, expanded)
+            await syncProductPriceThresholdRelations(tx, id)
+          })
+        } else {
+          const item = await prisma.importtaskitem.findUnique({
+            where: { id },
+            select: { previewDataJson: true, isPublished: true },
+          })
+          if (!item || item.isPublished) throw new Error('待上传条目不存在或已发布')
+          const preview = ((item.previewDataJson || {}) as PreviewDataJson) || {}
+          const primaryId = String(edit.primary_category_id || linkedIds[0] || '').trim() || null
+          const catRows = linkedIds.length
+            ? await prisma.category.findMany({
+                where: { id: { in: linkedIds } },
+                select: { id: true, name: true },
+              })
+            : []
+          const nameById = new Map(catRows.map(c => [c.id, c.name]))
+          const nextNames = linkedIds.map(cid => nameById.get(cid) || cid)
+          await prisma.importtaskitem.update({
+            where: { id },
+            data: {
+              targetCategoryId: primaryId,
+              previewDataJson: {
+                ...preview,
+                categoryId: primaryId || preview.categoryId,
+                matchedCategoryIds: linkedIds,
+                matchedCategoryNames: nextNames,
+              } as any,
+            },
+          })
+        }
+        success_count += 1
+      } catch {
+        fail_count += 1
+      }
+    }
+
+    return { success_count, fail_count }
+  }),
 )
 
 /**
