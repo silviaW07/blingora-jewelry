@@ -214,6 +214,7 @@ model sysuser {
   countryName       String?            @db.VarChar(100)
   purchaseCount     Int                @default(0)
   adminNote         String?            @db.Text
+  customerType      String             @default("NEW") @db.VarChar(20) // 客户类型：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED，后台可行内下拉修改
   ringSizeUs        String?            @db.VarChar(20)
   ringSizeEu        String?            @db.VarChar(20)
   braceletSize      String?            @db.VarChar(20)
@@ -1243,4 +1244,17 @@ model suffixconfig {
 
   @@index([sortWeight])
   @@map("suffix_config")
+}
+
+/// 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD
+model brandalias {
+  id           String   @id @default(uuid()) @db.VarChar(36)
+  alias        String   @unique @db.VarChar(120)
+  standardName String   @map("standard_name") @db.VarChar(120)
+  sortWeight   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt @default(now())
+
+  @@index([sortWeight])
+  @@map("brand_alias")
 }

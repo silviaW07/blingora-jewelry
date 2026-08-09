@@ -625,6 +625,7 @@ import {
 } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
+import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
 import { isPendingImportEffectivelyReady } from '@/backend/utils/pendingImportReadiness'
@@ -633,6 +634,11 @@ import {
   resolveEnglishProductTitle,
   resolveSpanishProductTitle,
 } from '@/backend/lib/resolveProductTitleEn'
+import {
+  loadBrandAliasRules,
+  normalizeBrandTitleSync,
+} from '@/backend/lib/brandAlias'
+import { applyBrandAliases } from '@/shared/brandTitleNormalize'
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
 import {
   resolveInitialStock,
@@ -679,7 +685,7 @@ const resolveImportCategoryIdentifierMeta = async (tx: any, categoryId: string) 
   if (!shortCode) {
     throw new Error(`分类「${category.name}」未配置可用简码，请先完善 slug 后再发布 1688 商品`)
   }
-  return { categoryId: category.id, shortCode }
+  return { categoryId: category.id, shortCode, categoryName: category.name as string }
 }
 
 type ImportCategoryOwnership = {
@@ -1733,7 +1739,8 @@ const buildNeutralFallbackSkuRow = (params: {
   costPrice: params.costPrice,
   price: params.price,
   stock: params.stock,
-  weightGrams: 500,
+  // 默认规格行不写死 500，交由上层「提取/分类兜底」决定重量
+  weightGrams: null,
   imageUrl: null,
   attributes: [{ name: '规格', value: '默认规格' }],
 })
@@ -1801,7 +1808,8 @@ const expandSkuTableFromColors = (params: {
         costPrice: params.costPrice,
         price: params.price,
         stock: params.stock,
-        weightGrams: params.weightGrams ?? 500,
+        // 颜色展开的行不写死 500，交由上层「提取/分类兜底」决定，避免默认重量失效
+        weightGrams: params.weightGrams ?? null,
         imageUrl: color.imageUrl,
         attributes,
       })
@@ -4259,7 +4267,7 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   item_isPublished: Boolean(item.isPublished),
   item_importedProductId: item.importedProductId || null,
   item_failureReason: item.failureReason || null,
-  item_productName: item.productName || item.parsedName || null,
+  item_productName: normalizeBrandTitleSync(item.productName || item.parsedName || null) || null,
   item_supplierName: item.supplierName || null,
   item_mainImageUrl: mainImage,
   item_galleryUrls: galleryUrls,
@@ -4279,7 +4287,7 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   item_usdPriceMax: toNumberOrNull(item.usdPriceMax),
   item_minimumOrderQuantity: resolveInitialMinOrderQty(item.minimumOrderQuantity),
   item_availableStock: resolveInitialStock(item.availableStock),
-  item_parsedName: item.parsedName || null,
+  item_parsedName: normalizeBrandTitleSync(item.parsedName || null) || null,
   item_parsedMainImageUrl: item.parsedMainImageUrl || null,
   item_createdAt: item.createdAt,
   item_updatedAt: item.updatedAt || item.createdAt,
@@ -4378,6 +4386,9 @@ const loadPendingImportQueueSnapshot = async (opts?: {
     Math.max(1, Number(opts?.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE),
   )
   const skip = (page - 1) * pageSize
+
+  // 预热品牌别名缓存，使列表展示的 normalizeBrandTitleSync 用到 DB 最新映射
+  await loadBrandAliasRules()
 
   const [activeTask, fallbackTask, total, items] = await Promise.all([
     prisma.importtask.findFirst({
@@ -4575,6 +4586,12 @@ const persistPinduoduoParsedItem = async (params: {
     stock: strategyStock,
   })
 
+  // 重量自动识别：标题/详情正则提取 → 二级分类兜底 → 500g（运营可在待上传区双击覆盖）
+  const fallbackWeightGrams = resolveProductWeightGrams({
+    text: [productName, productDetail].filter(Boolean).join(' '),
+    categoryNames: matchedSecondaryCategoryNames || [],
+  })
+
   const skuTable: PreviewSkuTableRow[] = baseSkuRows.map((row, index) => {
     const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawPriceMin
     const nextCost = Math.max(0, roundCurrency(sourceCost))
@@ -4585,7 +4602,7 @@ const persistPinduoduoParsedItem = async (params: {
       costPrice: nextCost,
       price: nextPrice,
       stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
-      weightGrams: toNumberOrNull(row.weightGrams) ?? 500,
+      weightGrams: toNumberOrNull(row.weightGrams) ?? fallbackWeightGrams,
       imageUrl: normalizeText(row.imageUrl) || null,
       attributes:
         Array.isArray(row.attributes) && row.attributes.length > 0
@@ -4689,7 +4706,7 @@ const persistPinduoduoParsedItem = async (params: {
       mainImageUrl,
       parsedMainImageUrl: mainImageUrl,
       costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? costMin,
-      weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? 500,
+      weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? fallbackWeightGrams,
       sourceCategoryName: null,
       coefficient: resolvedCoefficient,
       goodsStatus: (task.defaultStatus || 'DRAFT') as any,
@@ -4763,6 +4780,18 @@ const createProductRecord = async (tx: any, params: {
   nameEs?: string | null
 }) => {
   const categoryMeta = await resolveImportCategoryIdentifierMeta(tx, params.categoryId)
+  // 重量自动识别：显式重量优先 → 标题/规格/详情正则提取 → 二级分类兜底 → 500g
+  const weightSourceText = [
+    params.name,
+    params.skuSummaryText,
+    params.detailText,
+    ...((params.skus || []).map(s => s.spec_text).filter(Boolean) as string[]),
+  ].filter(Boolean).join(' ')
+  const effectiveWeightGrams = resolveProductWeightGrams({
+    explicit: toNumberOrNull(params.weightGrams),
+    text: weightSourceText,
+    categoryNames: [categoryMeta.categoryName],
+  })
   // 每次调用都生成新的独立 SPU 编号，不做标题/图片/产品编号合并
   const productCode = await generateStructuredSpuCode(tx, categoryMeta.shortCode)
   const draftSkus = Array.isArray(params.skus) && params.skus.length > 0
@@ -4772,7 +4801,7 @@ const createProductRecord = async (tx: any, params: {
         spec_text: params.skuSummaryText || '默认规格',
         cost_price: params.costPrice ?? null,
         price: params.price,
-        weight_grams: params.weightGrams ?? null,
+        weight_grams: effectiveWeightGrams,
         stock: params.stock ?? DEFAULT_AVAILABLE_STOCK,
         image_url: null,
         attributes: params.skuSummaryText
@@ -4810,7 +4839,7 @@ const createProductRecord = async (tx: any, params: {
       brandCategoryId: params.brandCategoryId || null,
       brandMatchKeyword: params.brandMatchKeyword || null,
       autoBrandMatched: !!params.autoBrandMatched,
-      weightGram: params.weightGrams ?? null,
+      weightGram: effectiveWeightGrams,
       costPrice: params.costPrice ?? null,
       priceCoefficient: params.priceCoefficient ?? null,
       detailText: params.detailText || null,
@@ -4834,7 +4863,7 @@ const createProductRecord = async (tx: any, params: {
             const skuStock = resolveInitialStock(
               toNumberOrNull(sku.stock) ?? params.stock,
             )
-            const skuWeightGrams = toNumberOrNull(sku.weight_grams) ?? params.weightGrams
+            const skuWeightGrams = toNumberOrNull(sku.weight_grams) ?? effectiveWeightGrams
             const sizeLabel =
               sku.attributes?.find(attr => isSizeDimensionName(attr.name))?.value || null
             const materialLabel =
@@ -6325,6 +6354,11 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             price: finalPriceMin,
             stock: strategyStock,
           })
+          // 重量自动识别：标题/详情正则提取 → 二级分类兜底 → 500g（运营可在待上传区双击覆盖）
+          const fallbackWeightGrams = resolveProductWeightGrams({
+            text: [productName, productDetail, sourceCategoryName].filter(Boolean).join(' '),
+            categoryNames: [...(matchedSecondaryCategoryNames || []), sourceCategoryName],
+          })
           const skuTable: PreviewSkuTableRow[] = baseSkuRows.map(
             (row, index) => {
               // 源站价扣减后再乘类目系数；无独立价时回退到商品级源价
@@ -6337,7 +6371,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
                 costPrice: nextCost,
                 price: nextPrice,
                 stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
-                weightGrams: toNumberOrNull(row.weightGrams) ?? 500,
+                weightGrams: toNumberOrNull(row.weightGrams) ?? fallbackWeightGrams,
                 // 无独立色图时保持空，待运营在待上传区补填；禁止回填主图冒充色图
                 imageUrl: normalizeText(row.imageUrl) || null,
                 attributes:
@@ -6443,7 +6477,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               mainImageUrl,
               parsedMainImageUrl: mainImageUrl,
               costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? adjustedCostMin,
-              weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? 500,
+              weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? fallbackWeightGrams,
               sourceCategoryName,
               coefficient: resolvedCoefficient,
               goodsStatus: (taskSnapshot.defaultStatus || 'DRAFT') as any,
@@ -6985,10 +7019,11 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
     }
 
     // Hoist shared lookups once — previously reloaded inside every item transaction.
-    const [secondaryCategories, exchangeRate, categoryMap] = await Promise.all([
+    const [secondaryCategories, exchangeRate, categoryMap, brandRules] = await Promise.all([
       loadAutoMatchSecondaryCategories(prisma),
       getGlobalExchangeRate(prisma),
       loadImportPricingCategories(prisma),
+      loadBrandAliasRules(),
     ])
 
     let success = 0
@@ -7009,7 +7044,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           where: { id: itemId },
           select: { parsedName: true, previewDataJson: true },
         })
-        const preName = normalizeText(pre?.parsedName) || ''
+        const preName = applyBrandAliases(normalizeText(pre?.parsedName) || '', brandRules)
         const prePreview = (pre?.previewDataJson as PreviewDataJson | null) || {}
         preNameEn =
           String(prePreview.nameEn || '').trim() ||
@@ -7073,7 +7108,9 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             throw new Error('仅可发布采集完成的商品')
           }
 
-          const productName = item.parsedName || ''
+          // 品牌归一：把卖家暗语（蔻C/蔻家/古驰/LV…）替换成标准品牌名，
+          // 写入商品名与后续 EN/ES 翻译都基于归一化后的标题。
+          const productName = applyBrandAliases(item.parsedName || '', brandRules)
           const mainImageUrl = item.mainImageUrl || item.parsedMainImageUrl || ''
           const previewData = (item.previewDataJson as PreviewDataJson | null) || {}
           const detailForMatch = buildCategoryMatchCorpus(
@@ -7411,6 +7448,11 @@ const applyReparsed1688PreviewToItem = async (params: {
         weightGrams: toNumberOrNull(item.weightGrams),
       })
     : (currentPreview.skuTable as PreviewSkuTableRow[])
+  // 重量自动识别：沿用已存重量优先，缺省时标题/详情提取 → 二级分类兜底 → 500g
+  const fallbackWeightGrams = resolveProductWeightGrams({
+    text: [productName, productDetail, sourceCategoryName].filter(Boolean).join(' '),
+    categoryNames: [...(matchedSecondaryCategoryNames || []), sourceCategoryName],
+  })
   const skuTable: PreviewSkuTableRow[] = sourceSkuRows.map((row, index) => {
     const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawPriceMin
     const nextCost = Math.max(0, roundCurrency(sourceCost - costDeductionUsd))
@@ -7421,7 +7463,7 @@ const applyReparsed1688PreviewToItem = async (params: {
       costPrice: nextCost,
       price: nextPrice,
       stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
-      weightGrams: toNumberOrNull(row.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? 500,
+      weightGrams: toNumberOrNull(row.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? fallbackWeightGrams,
       imageUrl: normalizeText(row.imageUrl) || null,
       attributes:
         Array.isArray(row.attributes) && row.attributes.length > 0
@@ -7537,7 +7579,7 @@ const applyReparsed1688PreviewToItem = async (params: {
       mainImageUrl,
       parsedMainImageUrl: mainImageUrl,
       costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? adjustedCostMin,
-      weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? 500,
+      weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? fallbackWeightGrams,
       sourceCategoryName,
       coefficient: resolvedCoefficient,
       goodsStatus: (item.goodsStatus || item.importTask.defaultStatus || 'DRAFT') as any,

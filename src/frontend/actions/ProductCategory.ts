@@ -560,7 +560,27 @@ const buildProductWhere = (
   }
 
   if (brandCategoryId) {
-    where.brandCategoryId = brandCategoryId
+    // 品牌/货架分类：既包含以其为主品牌(brandCategoryId)的商品，
+    // 也包含通过后台「关联类目」绑定(product_category_relations)到该货架的商品，
+    // 否则运营在后台把商品关联到「high quality bag」等货架后，前台点进去会看不到。
+    const brandMatchOr = [
+      { brandCategoryId },
+      {
+        relationCategories: {
+          some: {
+            categoryId: brandCategoryId,
+            category: { status: 'ACTIVE' },
+          },
+        },
+      },
+    ]
+    if (where.OR) {
+      // 已有类目 OR 条件时，与品牌条件做 AND 组合，避免语义被覆盖
+      where.AND = [...(where.AND || []), { OR: where.OR }, { OR: brandMatchOr }]
+      delete where.OR
+    } else {
+      where.OR = brandMatchOr
+    }
   }
 
   if (keywordId) {

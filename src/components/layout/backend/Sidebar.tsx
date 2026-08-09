@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
 
@@ -80,6 +80,12 @@ const MENU_ITEMS = [{
   href: '/adminmanagement',
   icon: UserCog,
   roles: ['ADMIN']
+}, {
+  id: 'B20',
+  label: '品牌别名管理',
+  href: '/brandaliasmanagement',
+  icon: Tag,
+  roles: ['ADMIN', 'SUB_ADMIN']
 }];
 
 /** 前台可视化装修可编辑页面入口（新开标签页并带 ?decorate=1） */

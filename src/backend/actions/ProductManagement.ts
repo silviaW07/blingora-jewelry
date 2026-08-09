@@ -3634,6 +3634,8 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         detailText: true,
         shortDescription: true,
         categoryId: true,
+        brandCategoryId: true,
+        relationCategories: { select: { categoryId: true } },
       },
       orderBy: { updatedAt: 'desc' },
     })
@@ -3651,14 +3653,49 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           continue
         }
 
-        // hits 已按 Brand 父级优先排序；主分类必须落在命中的 Brand L2（若有）上
-        const brandHit = hits.find(
-          item => String(item.parentName || '').trim().toLowerCase() === 'brand',
-        )
-        const primaryHit = brandHit || hits[0]
-        const ownership = await resolveImportCategoryOwnership(prisma, primaryHit.id)
+        // 区分「真实二级类目」与「Brand 货架」：
+        //  - 主类目（定价用）只能是真实二级命中；Brand 货架仅作为品牌标签，不当主类目
+        //  - 若本次只命中 Brand 货架而无真实二级，则保留商品现有主类目，绝不用货架顶替（否则二级类目会消失且货架被误当定价类目显示系数）
+        const isBrandShelfHit = (item: { parentName?: string | null }) =>
+          String(item.parentName || '').trim().toLowerCase() === 'brand'
+        const brandHit = hits.find(isBrandShelfHit) || null
+        const pricingHit = hits.find(item => !isBrandShelfHit(item)) || null
+
+        const ownership = pricingHit
+          ? await resolveImportCategoryOwnership(prisma, pricingHit.id)
+          : null
+        let primaryCategoryId = ownership?.primaryCategoryId || null
+
+        if (!primaryCategoryId) {
+          // 无标题级真实二级命中：从「现有绑定」自愈——
+          // 恢复此前被错误归类用 Brand 货架顶替掉的真实二级类目（该真实二级仍保留在关联里）。
+          const existingIds = [
+            product.categoryId,
+            ...((product.relationCategories || []).map(rel => rel.categoryId)),
+          ].filter(Boolean) as string[]
+          const { categoryMap: existingMetaMap } = await getCategoryMetaMap(prisma, existingIds)
+          const isRealPricingCategory = (id: string | null | undefined) => {
+            const meta = id ? existingMetaMap.get(id) : null
+            return !!meta && !isBrandCategoryMeta(meta, existingMetaMap) && !isAggregatePricingCategoryName(meta.name)
+          }
+          if (isRealPricingCategory(product.categoryId)) {
+            primaryCategoryId = product.categoryId
+          } else {
+            const realCandidates = existingIds
+              .filter(isRealPricingCategory)
+              .map(id => existingMetaMap.get(id)!)
+              .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)) // 优先二级(L2) 而非一级
+            primaryCategoryId = realCandidates[0]?.id || product.categoryId || null
+          }
+        }
+
+        if (!primaryCategoryId) {
+          skipped += 1
+          continue
+        }
+
         const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(prisma, [
-          ...ownership.linkedCategoryIds,
+          ...(ownership?.linkedCategoryIds || [primaryCategoryId]),
           ...hits.map(item => item.id),
           product.categoryId || '',
         ])
@@ -3667,10 +3704,12 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           await tx.product.update({
             where: { id: product.id },
             data: {
-              categoryId: ownership.primaryCategoryId,
-              brandCategoryId: primaryHit.id,
-              brandMatchKeyword: primaryHit.name,
-              autoBrandMatched: true,
+              // 主类目 = 真实二级（标题命中或自现有绑定自愈得到），确保二级类目始终可见、且定价类目落在真实二级上
+              categoryId: primaryCategoryId,
+              // 仅当命中 Brand 货架时才写品牌类目/关键词，无命中则不覆盖已有品牌
+              brandCategoryId: brandHit ? brandHit.id : undefined,
+              brandMatchKeyword: brandHit ? brandHit.name : undefined,
+              autoBrandMatched: brandHit ? true : undefined,
             },
           })
           await replaceProductCategoryRelations(tx, product.id, linkedCategoryIds)

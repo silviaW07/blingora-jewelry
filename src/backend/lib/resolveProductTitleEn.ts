@@ -8,6 +8,7 @@ import {
   containsChinese,
   translateTitleKeywords,
 } from '@/shared/productKeywordDictionary'
+import { normalizeBrandTitle } from '@/backend/lib/brandAlias'
 
 /** Read cached Spanish title from side fields or translationsJson.es / title_es */
 export function getCachedSpanishTitle(
@@ -53,7 +54,8 @@ export async function resolveEnglishProductTitle(
   const existing = collapseRepeatedTitleWords(existingEn)
   if (existing && !containsChinese(existing)) return existing.slice(0, 200)
 
-  const zh = String(chineseName || '').trim()
+  // 品牌别名归一（蔻C→Coach 等）：翻译前先替换，保证 EN 品牌名正确
+  const zh = await normalizeBrandTitle(String(chineseName || '').trim())
   if (!zh) return existing.slice(0, 200)
 
   if (!containsChinese(zh)) return collapseRepeatedTitleWords(zh).slice(0, 200)
@@ -85,7 +87,8 @@ export async function resolveSpanishProductTitle(
   const cached = getCachedSpanishTitle(existingEs, translationsJson)
   if (cached) return cached
 
-  const zh = String(chineseName || '').trim()
+  // 品牌别名归一（蔻C→Coach 等）：翻译前先替换，保证 ES 品牌名正确
+  const zh = await normalizeBrandTitle(String(chineseName || '').trim())
   const en = getCachedEnglishTitle(englishFallback, translationsJson)
 
   if (zh && containsChinese(zh)) {

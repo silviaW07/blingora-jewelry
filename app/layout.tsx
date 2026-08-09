@@ -53,6 +53,14 @@ export default function RootLayout({
       <head>
         {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}
         <meta name="referrer" content="no-referrer" />
+        {/* Self-hosted Outfit (see app/(frontend)/theme-style.css @font-face) — no Google Fonts runtime */}
+        <link
+          rel="preload"
+          href="/fonts/outfit/outfit-var.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />

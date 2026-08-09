@@ -1,0 +1,3 @@
+-- 客户类型：后台客户管理列表行内下拉可改，默认“新客户(NEW)”
+-- 取值：NEW / UNCONVERTED / FIRST_ORDER / MULTI_ORDER / HIGH_RISK / CHURNED
+ALTER TABLE `sysuser` ADD COLUMN `customerType` VARCHAR(20) NOT NULL DEFAULT 'NEW';

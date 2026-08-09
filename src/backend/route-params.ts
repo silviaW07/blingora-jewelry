@@ -77,6 +77,17 @@ export const AdminManagement = {
 };
 
 // ================================================================
+// B20 品牌别名管理 — 无入参
+// ================================================================
+export const BrandAliasManagement = {
+  id: 'B20',
+  path: '/brandaliasmanagement',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(BrandAliasManagement.path),
+};
+
+// ================================================================
 // B04 商品管理 — 入参: name, categoryId, status, tab
 // ================================================================
 export const ProductManagement = {
@@ -382,6 +393,7 @@ export const BackendRoutes = {
   HomeRecommendZoneManagement,
   ShippingChannelConfig,
   AdminManagement,
+  BrandAliasManagement,
 };
 
 export const NAVIGATION_MAP: Record<string, string[]> = {
@@ -411,6 +423,7 @@ export const PAGE_ID_MAP: Record<string, string> = {
   'B15': 'HomeRecommendZoneManagement',
   'B16': 'ShippingChannelConfig',
   'B19': 'AdminManagement',
+  'B20': 'BrandAliasManagement',
 };
 
 /**

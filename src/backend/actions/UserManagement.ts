@@ -15,6 +15,7 @@ export type { CustomerTagCode } from '@/backend/lib/customerTags'
 export { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
 import type { CustomerTagCode } from '@/backend/lib/customerTags'
 import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
+import { DEFAULT_CUSTOMER_TYPE, isValidCustomerType } from '@/shared/customerType'
 
 export interface UserOrderSummary {
   total: number
@@ -65,6 +66,8 @@ export interface UserListItem {
   createdAt: string
   lastLoginAt: string | null
   adminNote: string | null
+  /** 客户类型枚举码：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED */
+  customerType: string
   customerTagCode: CustomerTagCode
   customerTagName: string | null
   cartItemCount: number
@@ -137,6 +140,12 @@ export interface UpdateUserCustomerTagInput {
   id: string
   /** 空字符串表示清除标签 */
   tagCode: CustomerTagCode
+}
+
+export interface UpdateUserCustomerTypeInput {
+  id: string
+  /** 客户类型枚举码，须为 CUSTOMER_TYPE_VALUES 之一 */
+  customerType: string
 }
 
 export interface ImpersonateCustomerInput {
@@ -425,6 +434,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
         createdAt: user.createdAt.toISOString(),
         lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
         adminNote: user.adminNote || null,
+        customerType: (user as any).customerType || DEFAULT_CUSTOMER_TYPE,
         customerTagCode: tag.customerTagCode,
         customerTagName: tag.customerTagName,
         cartItemCount: cart?._count?.items ?? 0,
@@ -623,6 +633,20 @@ export const updateUserAdminNote = requireRole([UserRole.ADMIN])(
       data: { adminNote: input.adminNote.trim() || null }
     })
     return { success: true }
+  })
+)
+
+export const updateUserCustomerType = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateUserCustomerTypeInput): Promise<{ success: boolean; customerType: string }> => {
+    const value = (input.customerType || '').trim()
+    if (!isValidCustomerType(value)) throw new Error('无效的客户类型')
+    const user = await prisma.sysuser.findUnique({ where: { id: input.id }, select: { id: true } })
+    if (!user) throw new Error('客户不存在')
+    await prisma.sysuser.update({
+      where: { id: input.id },
+      data: { customerType: value } as any,
+    })
+    return { success: true, customerType: value }
   })
 )
 

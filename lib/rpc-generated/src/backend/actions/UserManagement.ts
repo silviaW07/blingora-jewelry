@@ -8,6 +8,8 @@ export const getUserDetail = (...args: Parameters<Actions["getUserDetail"]>) =>
   rpcCall<Awaited<ReturnType<Actions["getUserDetail"]>>>("src.backend.actions.UserManagement.getUserDetail", ...args);
 export const updateUserAdminNote = (...args: Parameters<Actions["updateUserAdminNote"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateUserAdminNote"]>>>("src.backend.actions.UserManagement.updateUserAdminNote", ...args);
+export const updateUserCustomerType = (...args: Parameters<Actions["updateUserCustomerType"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateUserCustomerType"]>>>("src.backend.actions.UserManagement.updateUserCustomerType", ...args);
 export const updateUserCustomerTag = (...args: Parameters<Actions["updateUserCustomerTag"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateUserCustomerTag"]>>>("src.backend.actions.UserManagement.updateUserCustomerTag", ...args);
 export const impersonateCustomer = (...args: Parameters<Actions["impersonateCustomer"]>) => 

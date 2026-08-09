@@ -10,9 +10,11 @@ import {
   deleteUser,
   updateUserAdminNote,
   updateUserCustomerTag,
+  updateUserCustomerType,
   impersonateCustomer,
 } from '@/backend/actions/UserManagement'
 import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
+import { CUSTOMER_TYPE_OPTIONS, DEFAULT_CUSTOMER_TYPE, getCustomerTypeLabel } from '@/shared/customerType'
 import type {
   SysUserRole,
   SysUserStatus,
@@ -58,12 +60,14 @@ export interface UserManagementState {
   noteEditingValue: string
   noteSaving: boolean
   tagSavingId: string | null
+  customerTypeSavingId: string | null
   impersonatingId: string | null
   sortBy: UserListSortField
   sortOrder: SortDirection
   STATUS_LABELS: Record<SysUserStatus, string>
   ROLE_LABELS: Record<SysUserRole, string>
   CUSTOMER_TAG_OPTIONS: typeof CUSTOMER_TAG_OPTIONS
+  CUSTOMER_TYPE_OPTIONS: typeof CUSTOMER_TYPE_OPTIONS
   isDetailMode: boolean
 }
 
@@ -87,6 +91,7 @@ export interface UserManagementHandlers {
   cancelNoteEdit: () => void
   saveNoteEdit: () => Promise<void>
   handleCustomerTagChange: (userId: string, tagCode: CustomerTagCode) => Promise<void>
+  handleCustomerTypeChange: (userId: string, customerType: string) => Promise<void>
   handleImpersonate: (userId: string) => Promise<void>
   handleOpenOrder: (orderId: string) => void
   handleCopyOrderNo: (orderNo: string) => Promise<void>
@@ -127,6 +132,7 @@ export function useUserManagement(): {
   const [noteEditingValue, setNoteEditingValue] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [tagSavingId, setTagSavingId] = useState<string | null>(null)
+  const [customerTypeSavingId, setCustomerTypeSavingId] = useState<string | null>(null)
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null)
 
   const isComposingRef = useRef(false)
@@ -384,6 +390,35 @@ export function useUserManagement(): {
     }
   }
 
+  const handleCustomerTypeChange = async (userId: string, customerType: string) => {
+    const prevItem = list.find(item => item.id === userId)
+    const prevType = prevItem?.customerType || DEFAULT_CUSTOMER_TYPE
+    if (prevType === customerType) return
+
+    // 乐观更新：先切到新值
+    setList(current =>
+      current.map(item =>
+        item.id === userId ? { ...item, customerType } : item
+      )
+    )
+
+    setCustomerTypeSavingId(userId)
+    try {
+      await updateUserCustomerType({ id: userId, customerType })
+      toast.success(`客户类型已更新为「${getCustomerTypeLabel(customerType)}」`)
+    } catch (e: any) {
+      // 失败回滚到更改前的值
+      setList(current =>
+        current.map(item =>
+          item.id === userId ? { ...item, customerType: prevType } : item
+        )
+      )
+      toast.error(e.message || '客户类型保存失败，已恢复原值')
+    } finally {
+      setCustomerTypeSavingId(null)
+    }
+  }
+
   const handleImpersonate = async (userId: string) => {
     setImpersonatingId(userId)
     try {
@@ -451,12 +486,14 @@ export function useUserManagement(): {
       noteEditingValue,
       noteSaving,
       tagSavingId,
+      customerTypeSavingId,
       impersonatingId,
       sortBy,
       sortOrder,
       STATUS_LABELS,
       ROLE_LABELS,
       CUSTOMER_TAG_OPTIONS,
+      CUSTOMER_TYPE_OPTIONS,
       isDetailMode,
     },
     handlers: {
@@ -479,6 +516,7 @@ export function useUserManagement(): {
       cancelNoteEdit,
       saveNoteEdit,
       handleCustomerTagChange,
+      handleCustomerTypeChange,
       handleImpersonate,
       handleOpenOrder,
       handleCopyOrderNo,

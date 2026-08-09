@@ -168,6 +168,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                     <SortHead field="lastLoginAt" label="最近登录时间" />
                     <SortHead field="cartUsdTotal" label="购物车金额(美金)" />
                     <TableHead className="font-semibold text-xs uppercase">备注</TableHead>
+                    <TableHead className="font-semibold text-xs uppercase">客户类型</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">状态</TableHead>
                     <TableHead className="text-right font-semibold text-xs uppercase">操作</TableHead>
                   </TableRow>
@@ -175,7 +176,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                 <TableBody>
                   {state.loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-40 text-center text-muted-foreground">
+                      <TableCell colSpan={11} className="h-40 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <RefreshCcw className="h-6 w-6 animate-spin text-primary" />
                           数据加载中...
@@ -184,7 +185,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                     </TableRow>
                   ) : state.list.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-40 text-center text-muted-foreground">
+                      <TableCell colSpan={11} className="h-40 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <Search className="h-6 w-6 opacity-20" />
                           暂无符合条件的客户
@@ -244,6 +245,24 @@ export default function UserManagementView({ state, handlers }: Props) {
                               {user.adminNote || '双击添加备注'}
                             </span>
                           )}
+                        </TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <Select
+                            value={user.customerType || 'NEW'}
+                            disabled={state.customerTypeSavingId === user.id}
+                            onValueChange={(val) => handlers.handleCustomerTypeChange(user.id, val)}
+                          >
+                            <SelectTrigger className="h-8 w-[112px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {state.CUSTOMER_TYPE_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           <span className={user.status === 'ACTIVE' ? 'font-medium' : 'text-muted-foreground'}>
