@@ -553,12 +553,13 @@ export const removeInvalidCartItems = requireRole([UserRole.CUSTOMER])(
 )
 
 /**
- * 获取购物车辅助推荐商品列表（标题按 lang 解析，EN/ES 不返回中文名）
+ * 获取购物车辅助推荐商品列表（标题按 lang 解析；价格与列表/购物车一致：系数后 RMB → USD）
  */
 export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
   withResult(async (input?: GetRecommendedInput): Promise<GetRecommendedOutput> => {
     const lang = normalizeProductLang(input?.lang)
-    // 查找有效商品，权重排序
+    const exchangeRate = await getUsdExchangeRate(prisma)
+
     const products = await prisma.product.findMany({
       where: {
         status: 'ACTIVE',
@@ -570,9 +571,47 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
         mainImageUrl: true,
         ratingAverage: true,
         translationsJson: true,
+        costPrice: true,
+        category: {
+          select: {
+            name: true,
+            level: true,
+            priceCoefficient: true,
+            isBrandCategory: true,
+            parent: {
+              select: {
+                name: true,
+                priceCoefficient: true,
+                isBrandCategory: true,
+              },
+            },
+          },
+        },
+        relationCategories: {
+          select: {
+            category: {
+              select: {
+                name: true,
+                level: true,
+                priceCoefficient: true,
+                isBrandCategory: true,
+                parent: {
+                  select: {
+                    name: true,
+                    priceCoefficient: true,
+                    isBrandCategory: true,
+                  },
+                },
+              },
+            },
+          },
+          take: 12,
+        },
         skus: {
-          select: { price: true }
-        }
+          select: { price: true },
+          orderBy: { price: 'asc' },
+          take: 24,
+        },
       },
       orderBy: [
         { sortWeight: 'desc' },
@@ -581,19 +620,29 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
       take: 8
     })
 
-    const list: RecommendedProductData[] = products.map(p => {
-      // 获取最低SKU价格
-      let priceMin = 0
-      if (p.skus && p.skus.length > 0) {
-        priceMin = Math.min(...p.skus.map(s => s.price.toNumber()))
-      }
+    const list: RecommendedProductData[] = products.map((p) => {
+      const pricingCoeffs = pickFrontPricingCategoryCoeffs({
+        primary: p.category,
+        relations: (p.relationCategories || []).map((rel) => rel.category),
+      })
+      const skuPricesUsd = (p.skus || [])
+        .map((s) => {
+          const priceRmb = resolveFrontRmbSellingPrice({
+            skuPriceRmb: s.price.toNumber(),
+            costPrice: p.costPrice,
+            ...pricingCoeffs,
+          })
+          return toUsdFromCny(priceRmb, exchangeRate)
+        })
+        .filter((n) => Number.isFinite(n) && n >= 0)
+      const priceMin = skuPricesUsd.length > 0 ? Math.min(...skuPricesUsd) : 0
 
       return {
         productId: p.id,
         name: resolveProductDisplayName(p.name, p.translationsJson, lang),
         mainImageUrl: p.mainImageUrl,
         ratingAverage: p.ratingAverage,
-        priceMin
+        priceMin,
       }
     })
 
