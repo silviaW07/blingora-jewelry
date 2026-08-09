@@ -2631,14 +2631,19 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const handleReclassifyPublishedProducts = async () => {
     if (reclassifyRunning) return
+    const scopeIds = selectedProductIds
+    if (scopeIds.length === 0) {
+      toast.error('请先勾选要重新归类的商品')
+      return
+    }
     const confirmed = window.confirm(
-      '将扫描全部已上架商品的标题与详情，按二级分类名称/品牌关键词重新归类。是否继续？',
+      `将对已勾选的 ${scopeIds.length} 个商品，按二级分类名称/品牌关键词重新归类。是否继续？`,
     )
     if (!confirmed) return
 
     setReclassifyRunning(true)
     try {
-      const result = await reclassifyPublishedProductsBySecondaryMatch()
+      const result = await reclassifyPublishedProductsBySecondaryMatch({ product_ids: scopeIds })
       toast.success(
         `重新归类完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
       )

@@ -355,7 +355,7 @@ export const ProductManagementView = ({
                 </Button>
                 <Button variant="outline" size="sm" className="h-9 border-sky-200 bg-sky-50/70 text-sky-800 hover:bg-sky-100" disabled={state.reclassifyRunning} onClick={() => void handlers.handleReclassifyPublishedProducts()} data-api-unique-id='productmanagementview-rreclassify-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <Tags className={`w-4 h-4 mr-2 ${state.reclassifyRunning ? 'animate-pulse' : ''}`} data-api-unique-id='productmanagementview-rreclassifyicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
-                  {state.reclassifyRunning ? '归类中...' : '一键重新归类'}
+                  {state.reclassifyRunning ? '归类中...' : '重新归类选中'}
                 </Button>
                 <Button
                   variant="outline"

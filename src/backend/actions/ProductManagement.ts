@@ -652,6 +652,11 @@ export interface ReturnProductsToPendingUploadOutput extends BatchOperateOutput 
   pending_item_ids: string[]
 }
 
+export interface ReclassifyPublishedProductsInput {
+  /** 仅重新归类这些商品；为空/未传则扫描全部 ACTIVE+DRAFT */
+  product_ids?: string[]
+}
+
 export interface ReclassifyPublishedProductsOutput {
   matched: number
   skipped: number
@@ -3624,10 +3629,18 @@ export const updateProductStock = requireRole([UserRole.ADMIN])(
  * 多命中时 Brand 下二级优先；主分类 categoryId 取命中第一项（Brand L2），并同步关联与 brandCategoryId。
  */
 export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole.ADMIN])(
-  withResult(async (): Promise<ReclassifyPublishedProductsOutput> => {
+  withResult(async (
+    input: ReclassifyPublishedProductsInput = {},
+  ): Promise<ReclassifyPublishedProductsOutput> => {
+    const scopedIds = Array.isArray(input?.product_ids)
+      ? Array.from(new Set(input.product_ids.map(id => String(id || '').trim()).filter(Boolean)))
+      : []
     const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
     const products = await prisma.product.findMany({
-      where: { status: { in: ['ACTIVE', 'DRAFT'] } },
+      where: {
+        status: { in: ['ACTIVE', 'DRAFT'] },
+        ...(scopedIds.length > 0 ? { id: { in: scopedIds } } : {}),
+      },
       select: {
         id: true,
         name: true,
