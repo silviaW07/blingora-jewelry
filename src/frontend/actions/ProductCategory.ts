@@ -1004,6 +1004,130 @@ export const getCategorySideNavZones = withResult(async (input?: {
   }
 })
 
+// ===== 商品列表：结果短 TTL 缓存（进程内，键=归一化查询参数） =====
+const LIST_CACHE_TTL_MS = Number(process.env.PRODUCT_LIST_CACHE_TTL_MS || 45_000)
+const LIST_CACHE_MAX = 300
+const productListCache = new Map<string, { at: number; value: GetProductListOutput }>()
+
+function buildListCacheKey(input: GetProductListInput, lang: string): string {
+  return JSON.stringify({
+    c: input.category_id || '',
+    b: input.brand_category_id || '',
+    k: input.keyword_id || '',
+    kg: input.keyword_group_id || '',
+    s: input.search_keyword || '',
+    st: input.stock_status || null,
+    sort: input.sort_by || 'NEWEST',
+    min: input.min_price ?? null,
+    max: input.max_price ?? null,
+    disc: input.has_discount ? 1 : 0,
+    mr: input.min_rating ?? null,
+    p: input.page || 1,
+    ps: input.page_size || 24,
+    lang,
+  })
+}
+
+function getCachedList(key: string): GetProductListOutput | null {
+  const hit = productListCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > LIST_CACHE_TTL_MS) {
+    productListCache.delete(key)
+    return null
+  }
+  return hit.value
+}
+
+function setCachedList(key: string, value: GetProductListOutput): void {
+  if (productListCache.size >= LIST_CACHE_MAX) {
+    const oldestKey = productListCache.keys().next().value
+    if (oldestKey !== undefined) productListCache.delete(oldestKey)
+  }
+  productListCache.set(key, { at: Date.now(), value })
+}
+
+/** 将单个商品记录映射为前台列表卡片项（价格系数换算 / 库存 / 缩略图等）。 */
+function mapProductRecordToItem(
+  p: any,
+  lang: ReturnType<typeof normalizeProductLang>,
+  exchangeRate: number,
+): ProductItem {
+  const skus = p.skus
+  const skuCount = skus.length
+  const sortedSkus = [...skus].sort((a: any, b: any) => a.price.toNumber() - b.price.toNumber())
+  const defaultSku = sortedSkus.length > 0 ? sortedSkus[0] : null
+
+  let stockStatus: StockStatusEnum = 'OUT_OF_STOCK'
+  if (skus.some((s: any) => s.stockStatus === 'IN_STOCK')) {
+    stockStatus = 'IN_STOCK'
+  } else if (skus.some((s: any) => s.stockStatus === 'LOW_STOCK')) {
+    stockStatus = 'LOW_STOCK'
+  }
+
+  const pricingCoeffs = pickFrontPricingCategoryCoeffs({
+    primary: p.category,
+    relations: (p.relationCategories || []).map((rel: any) => rel.category),
+  })
+  const priceRmb = resolveFrontRmbSellingPrice({
+    skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
+    costPrice: p.costPrice,
+    ...pricingCoeffs,
+  })
+  const cost = toDecimalNumber(p.costPrice)
+  const originalPriceRmb =
+    cost !== null && cost > 0
+      ? Number((priceRmb * 1.1).toFixed(2))
+      : defaultSku?.originalPrice
+        ? defaultSku.originalPrice.toNumber()
+        : null
+  const priceNum = toUsdPrice(priceRmb, exchangeRate)
+  const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+  const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum
+  const usdPrices = skus
+    .map((sku: any) =>
+      toUsdPrice(
+        resolveFrontRmbSellingPrice({
+          skuPriceRmb: sku.price.toNumber(),
+          costPrice: p.costPrice,
+          ...pricingCoeffs,
+        }),
+        exchangeRate,
+      ),
+    )
+    .filter((value: number) => Number.isFinite(value) && value > 0)
+  const priceMax = usdPrices.length > 0 ? Math.max(...usdPrices) : null
+  const minOrderQuantity = Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
+  const translated = pickProductTranslation((p as { translationsJson?: unknown }).translationsJson, lang)
+
+  return {
+    product_id: p.id,
+    product_slug: p.slug,
+    product_name: resolveProductDisplayName(
+      p.name,
+      (p as { translationsJson?: unknown }).translationsJson,
+      lang,
+    ),
+    main_image_url: p.mainImageUrl,
+    short_description: translated?.shortDescription?.trim() || p.shortDescription,
+    rating_average: p.ratingAverage,
+    rating_count: p.ratingCount,
+    stock_status: stockStatus,
+    price: priceNum,
+    original_price: originalPriceNum,
+    has_discount: hasDiscount,
+    sku_count: skuCount,
+    first_sku_id: defaultSku ? defaultSku.id : '',
+    first_sku_price_rmb: priceRmb,
+    created_at_timestamp: p.createdAt.getTime(),
+    sort_weight: p.sortWeight,
+    brand_category_id: p.brandCategoryId,
+    brand_category_name: p.brandCategory?.name || null,
+    variant_thumbnails: collectVariantThumbnails(skus, p.mainImageUrl),
+    min_order_quantity: minOrderQuantity,
+    price_max: priceMax && priceMax > priceNum ? priceMax : null,
+  }
+}
+
 /**
  * 获取商品列表，支持多重条件筛选、排序和分页。
  */
@@ -1011,6 +1135,11 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   const page = input.page && input.page > 0 ? input.page : 1
   const pageSize = input.page_size && input.page_size > 0 ? input.page_size : 24
   const lang = normalizeProductLang(input.lang)
+
+  const cacheKey = buildListCacheKey(input, lang)
+  const cachedOutput = getCachedList(cacheKey)
+  if (cachedOutput) return cachedOutput
+
   const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
   const categoryContext = await resolveCategoryContext(input.category_id)
 
@@ -1031,80 +1160,120 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   // before the in-memory fuzzy filter runs.
   const listTake = searchTokens.length > 0 ? 5000 : 2000
 
-  const dbProducts = await prisma.product.findMany({
-    where: dbWhere,
-    include: {
-      // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个 SKU 拖回
-      // attributeJson / fontOptionsJson 等大字段（2000 商品×几十~几百 SKU 时序列化开销极大）。
-      // 按创建顺序返回，保证颜色缩略图与详情页顺序一致（避免 uuid 随机序）。
-      skus: {
-        select: {
-          id: true,
-          skuCode: true,
-          imageUrl: true,
-          price: true,
-          originalPrice: true,
-          stockStatus: true,
-        },
-        orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }],
+  // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个 SKU 拖回
+  // attributeJson / fontOptionsJson 等大字段（2000 商品×几十~几百 SKU 时序列化开销极大）。
+  // 按创建顺序返回，保证颜色缩略图与详情页顺序一致（避免 uuid 随机序）。
+  const listInclude = {
+    skus: {
+      select: {
+        id: true,
+        skuCode: true,
+        imageUrl: true,
+        price: true,
+        originalPrice: true,
+        stockStatus: true,
       },
-      brandCategory: {
-        select: {
-          name: true,
-          brandKeywordsJson: true,
-        },
+      orderBy: [{ createdAt: 'asc' as const }, { skuCode: 'asc' as const }],
+    },
+    brandCategory: {
+      select: {
+        name: true,
+        brandKeywordsJson: true,
       },
-      category: {
-        select: {
-          id: true,
-          name: true,
-          level: true,
-          priceCoefficient: true,
-          isBrandCategory: true,
-          parentId: true,
-          parent: {
-            select: {
-              name: true,
-              priceCoefficient: true,
-              isBrandCategory: true,
-            },
+    },
+    category: {
+      select: {
+        id: true,
+        name: true,
+        level: true,
+        priceCoefficient: true,
+        isBrandCategory: true,
+        parentId: true,
+        parent: {
+          select: {
+            name: true,
+            priceCoefficient: true,
+            isBrandCategory: true,
           },
         },
       },
-      relationCategories: {
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              level: true,
-              status: true,
-              parentId: true,
-              priceCoefficient: true,
-              isBrandCategory: true,
-              parent: {
-                select: {
-                  name: true,
-                  priceCoefficient: true,
-                  isBrandCategory: true,
-                },
+    },
+    relationCategories: {
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            level: true,
+            status: true,
+            parentId: true,
+            priceCoefficient: true,
+            isBrandCategory: true,
+            parent: {
+              select: {
+                name: true,
+                priceCoefficient: true,
+                isBrandCategory: true,
               },
             },
           },
         },
       },
-      relationKeywords: {
-        select: {
-          keywordId: true
-        }
-      },
-      keywordGroupLinks: {
-        select: {
-          keywordGroupId: true,
-          sortWeight: true
-        }
+    },
+    relationKeywords: {
+      select: {
+        keywordId: true
       }
     },
+    keywordGroupLinks: {
+      select: {
+        keywordGroupId: true,
+        sortWeight: true
+      }
+    }
+  }
+
+  // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
+  // 直接用 SQL orderBy + skip/take 分页 + count()，只回本页数据，避免一次拉 2000 条全量再 JS 过滤。
+  // 其余场景（搜索、价格排序、价格区间/折扣/库存筛选）仍走下方原逻辑，结果零回归。
+  const canPushdownPaginate =
+    searchTokens.length === 0 &&
+    input.min_price === undefined &&
+    input.max_price === undefined &&
+    !input.has_discount &&
+    !(input.stock_status && input.stock_status.length > 0) &&
+    (input.sort_by === undefined || input.sort_by === 'NEWEST' || input.sort_by === 'POPULARITY')
+
+  if (canPushdownPaginate) {
+    const orderBy =
+      input.sort_by === 'POPULARITY'
+        ? [{ sortWeight: 'desc' as const }, { ratingCount: 'desc' as const }, { id: 'desc' as const }]
+        : input.keyword_group_id
+          ? [{ sortWeight: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }]
+          : [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
+
+    const [total, pageRows] = await Promise.all([
+      prisma.product.count({ where: dbWhere }),
+      prisma.product.findMany({
+        where: dbWhere,
+        include: listInclude,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+
+    const fastOutput: GetProductListOutput = {
+      list: pageRows.map((p) => mapProductRecordToItem(p, lang, exchangeRate)),
+      total,
+    }
+    setCachedList(cacheKey, fastOutput)
+    return fastOutput
+  }
+
+  const dbProducts = await prisma.product.findMany({
+    where: dbWhere,
+    include: listInclude,
     take: listTake
   })
 
@@ -1138,83 +1307,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         ...p.skus.map((sku) => sku.skuCode),
       ])
     })
-    .map((p) => {
-    const skus = p.skus
-    const skuCount = skus.length
-    const sortedSkus = [...skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
-    const defaultSku = sortedSkus.length > 0 ? sortedSkus[0] : null
-
-    let stockStatus: StockStatusEnum = 'OUT_OF_STOCK'
-    if (skus.some(s => s.stockStatus === 'IN_STOCK')) {
-      stockStatus = 'IN_STOCK'
-    } else if (skus.some(s => s.stockStatus === 'LOW_STOCK')) {
-      stockStatus = 'LOW_STOCK'
-    }
-
-    const pricingCoeffs = pickFrontPricingCategoryCoeffs({
-      primary: p.category,
-      relations: (p.relationCategories || []).map((rel) => rel.category),
-    })
-    const priceRmb = resolveFrontRmbSellingPrice({
-      skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
-      costPrice: p.costPrice,
-      ...pricingCoeffs,
-    })
-    const cost = toDecimalNumber(p.costPrice)
-    const originalPriceRmb =
-      cost !== null && cost > 0
-        ? Number((priceRmb * 1.1).toFixed(2))
-        : defaultSku?.originalPrice
-          ? defaultSku.originalPrice.toNumber()
-          : null
-    const priceNum = toUsdPrice(priceRmb, exchangeRate)
-    const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
-    const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum
-    const usdPrices = skus
-      .map((sku) =>
-        toUsdPrice(
-          resolveFrontRmbSellingPrice({
-            skuPriceRmb: sku.price.toNumber(),
-            costPrice: p.costPrice,
-            ...pricingCoeffs,
-          }),
-          exchangeRate,
-        ),
-      )
-      .filter((value) => Number.isFinite(value) && value > 0)
-    const priceMax =
-      usdPrices.length > 0 ? Math.max(...usdPrices) : null
-    const minOrderQuantity = Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
-    const translated = pickProductTranslation((p as { translationsJson?: unknown }).translationsJson, lang)
-
-    return {
-      product_id: p.id,
-      product_slug: p.slug,
-      product_name: resolveProductDisplayName(
-        p.name,
-        (p as { translationsJson?: unknown }).translationsJson,
-        lang,
-      ),
-      main_image_url: p.mainImageUrl,
-      short_description: translated?.shortDescription?.trim() || p.shortDescription,
-      rating_average: p.ratingAverage,
-      rating_count: p.ratingCount,
-      stock_status: stockStatus,
-      price: priceNum,
-      original_price: originalPriceNum,
-      has_discount: hasDiscount,
-      sku_count: skuCount,
-      first_sku_id: defaultSku ? defaultSku.id : '',
-      first_sku_price_rmb: priceRmb,
-      created_at_timestamp: p.createdAt.getTime(),
-      sort_weight: p.sortWeight,
-      brand_category_id: p.brandCategoryId,
-      brand_category_name: p.brandCategory?.name || null,
-      variant_thumbnails: collectVariantThumbnails(skus, p.mainImageUrl),
-      min_order_quantity: minOrderQuantity,
-      price_max: priceMax && priceMax > priceNum ? priceMax : null,
-    }
-  })
+    .map((p) => mapProductRecordToItem(p, lang, exchangeRate))
 
   if (input.min_price !== undefined) {
     items = items.filter(i => i.price >= input.min_price!)
@@ -1254,10 +1347,12 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   const total = items.length
   const skip = (page - 1) * pageSize
 
-  return {
+  const output: GetProductListOutput = {
     list: items.slice(skip, skip + pageSize),
     total
   }
+  setCachedList(cacheKey, output)
+  return output
 })
 
 /**
