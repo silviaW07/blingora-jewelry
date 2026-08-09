@@ -258,7 +258,7 @@ function PendingImportTableRowsInner({
                 value={item.item_productName || item.item_parsedName || ''}
                 state={state}
                 handlers={handlers}
-                className="font-semibold text-slate-900 truncate max-w-[220px] text-left"
+                className="font-semibold text-slate-900 whitespace-normal break-words max-w-[220px] text-left"
                 inputClassName="max-w-[220px]"
                 placeholder="请输入商品名称"
               />
