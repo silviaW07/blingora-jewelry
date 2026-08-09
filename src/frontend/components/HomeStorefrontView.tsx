@@ -695,7 +695,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                     {isLoadingDailyNewArrivalCalendar ? (
                       <div className="flex items-center justify-center gap-2 py-4 text-sm text-[#7a756c]">
                         <Loader2 className="size-4 animate-spin" />
-                        月历加载中...
+                        Loading months...
                       </div>
                     ) : (
                       monthCards.map((month) => {
@@ -765,7 +765,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       {isLoadingDailyNewArrivalCalendar ? (
                         <div className="flex min-h-[88px] items-center justify-center gap-2 text-sm text-[#7a756c]">
                           <Loader2 className="size-4 animate-spin" />
-                          月历加载中...
+                          Loading months...
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">

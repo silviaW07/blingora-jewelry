@@ -1,5 +1,10 @@
 import type { TFunction } from 'i18next'
 import { translateColorStyleText } from './productSpecTranslate'
+import {
+  containsChinese,
+  stripChineseFromTitle,
+  translateTitleKeywords,
+} from '@/shared/productKeywordDictionary'
 
 /** 类目/菜单文案别名 → i18n key */
 const CATEGORY_ALIASES: Record<string, string> = {
@@ -115,10 +120,15 @@ function translateByAlias(t: TFunction, map: Record<string, string>, raw?: strin
 
 /** 左侧导航 / 分类菜单名称
  * 优先展示接口已按 lang 本地化的名称；仅对少数固定别名再套一层 i18n。
- * 无匹配时原样返回（后端已保证缺译回退中文，避免空白）。
+ * 无匹配且仍含中文时：关键词英化 / 剥离 CJK，避免店面露出中文。
  */
 export function translateCatalogLabel(t: TFunction, raw?: string | null): string {
-  return translateByAlias(t, CATEGORY_ALIASES, raw)
+  const viaAlias = translateByAlias(t, CATEGORY_ALIASES, raw)
+  if (!viaAlias) return ''
+  if (!containsChinese(viaAlias)) return viaAlias
+  const healed = translateTitleKeywords(viaAlias, 'en') || ''
+  const clean = stripChineseFromTitle(healed || viaAlias).replace(/\s+/g, ' ').trim()
+  return clean || 'Category'
 }
 
 /** 商品颜色规格名称 */

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -244,7 +244,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
     const month = Number(monthText)
     const request =
       Number.isInteger(year) && Number.isInteger(month)
-        ? getDailyNewArrivalProducts({ year, month, lang })
+        ? getDailyNewArrivalProducts({ year, month, lang, page: 1, page_size: 60 })
         : Promise.resolve({ list: [] as ProductItem[], total: 0 })
 
     request
@@ -255,7 +255,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       .catch((err: any) => {
         if (cancelled) return
         setDailyNewArrivalProducts([])
-        toast.error(err.message || '上新商品加载失败')
+        toast.error(err.message || 'Failed to load new arrivals')
       })
       .finally(() => {
         if (!cancelled) setIsLoadingDailyNewArrivalProducts(false)
@@ -317,7 +317,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
 
   const handleNavigateRecommendProduct = (productId: string) => {
     if (!productId?.trim()) {
-      toast.error('商品信息缺失，无法打开详情')
+      toast.error('Missing product info')
       return
     }
     ProductDetail.navigateToById(router, { productId })
@@ -340,7 +340,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
 
   const handleAddRecommendProductToCart = async (item: HomeRecommendProductCard) => {
     if (item.status === 'DRAFT' || !item.defaultSkuId) {
-      toast.error('该商品暂不可加购')
+      toast.error('This product cannot be added to cart')
       return
     }
 
@@ -358,13 +358,13 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       productId: item.productId,
       productSkuId: item.defaultSkuId,
     })
-    toast.success('已成功加入购物车')
+    toast.success('Added to cart')
   }
 
   const handleAddRecommendProductToWishlist = (_item: HomeRecommendProductCard, favorited?: boolean) => {
     // 收藏状态由 WishlistHeartButton + localStorage 管理；此处仅做反馈
     if (typeof favorited === 'boolean') {
-      toast.success(favorited ? `已收藏：${_item.productName}` : `已取消收藏：${_item.productName}`)
+      toast.success(favorited ? `Saved: ${_item.productName}` : `Removed: ${_item.productName}`)
     }
   }
 
@@ -383,7 +383,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       productId: item.productId,
       productSkuId: item.defaultSkuId,
     })
-    toast.success('已成功加入购物车')
+    toast.success('Added to cart')
   }
 
   return {

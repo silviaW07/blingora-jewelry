@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -105,16 +105,16 @@ const DEFAULT_PROMOTION_COLORS = {
 }
 
 const STOCK_STATUS_LABELS: Record<StockStatusEnum, string> = {
-  IN_STOCK: '现货',
-  LOW_STOCK: '备货中',
-  OUT_OF_STOCK: '暂不可购'
+  IN_STOCK: 'In stock',
+  LOW_STOCK: 'Low stock',
+  OUT_OF_STOCK: 'Out of stock'
 }
 
 const SORT_BY_LABELS: Record<SortByEnum, string> = {
-  NEWEST: '最新上架',
-  PRICE_ASC: '价格从低到高',
-  PRICE_DESC: '价格从高到低',
-  POPULARITY: '热度排序'
+  NEWEST: 'Newest',
+  PRICE_ASC: 'Price: low to high',
+  PRICE_DESC: 'Price: high to low',
+  POPULARITY: 'Popular'
 }
 
 const getCurrentLang = () => (typeof window !== 'undefined' ? getClientPreferredLang() : 'en')
@@ -563,7 +563,7 @@ export const useProductCategory = (): {
       .then((res) => {
         if (cancelled) return
         if (!res.categoryId) {
-          toast.error('未找到对应分类')
+          toast.error('Category not found')
           return
         }
         applyResolved(res.categoryId)
@@ -579,7 +579,7 @@ export const useProductCategory = (): {
         }
       })
       .catch((err: any) => {
-        if (!cancelled) toast.error(err?.message || '未找到对应分类')
+        if (!cancelled) toast.error(err?.message || 'Category not found')
       })
 
     return () => {
@@ -884,6 +884,8 @@ export const useProductCategory = (): {
 
       getDailyNewArrivalProducts({
         ...(hasMonth ? { year, month } : {}),
+        page: queryState.page,
+        page_size: queryState.pageSize,
         lang,
       })
         .then((res) => {
@@ -893,7 +895,7 @@ export const useProductCategory = (): {
         .catch((err: any) => {
           setProducts([])
           setTotalCount(0)
-          toast.error(err.message || '上新商品加载失败')
+          toast.error(err.message || 'Failed to load new arrivals')
         })
         .finally(() => setIsLoadingProducts(false))
       return
@@ -1154,7 +1156,7 @@ export const useProductCategory = (): {
   const handleLogout = useCallback(() => {
     useUserSession.getState().reset()
     setIsUserMenuOpen(false)
-    toast.success('已退出登录')
+    toast.success('Signed out')
   }, [])
 
   const handleNavigateBackHome = useCallback(() => {
@@ -1423,7 +1425,7 @@ export const useProductCategory = (): {
     }
 
     if (item.stock_status === 'OUT_OF_STOCK') {
-      toast.error('该商品暂不可购')
+      toast.error('This product is unavailable')
       return
     }
 
@@ -1433,7 +1435,7 @@ export const useProductCategory = (): {
         product_sku_id: item.first_sku_id,
         quantity: 1
       })
-      toast.success('已成功加入购物车')
+      toast.success('Added to cart')
     } catch (err: any) {
       toast.error(err.message)
     }
@@ -1442,10 +1444,10 @@ export const useProductCategory = (): {
   const handleAddToWishlist = useCallback((item: ProductCardItem, favorited?: boolean) => {
     // 收藏状态由 WishlistHeartButton + localStorage 管理；此处仅做反馈
     if (typeof favorited === 'boolean') {
-      toast.success(favorited ? `已收藏：${item.product_name}` : `已取消收藏：${item.product_name}`)
+      toast.success(favorited ? `Saved: ${item.product_name}` : `Removed: ${item.product_name}`)
       return
     }
-    toast.success(`已收藏：${item.product_name}`)
+    toast.success(`Saved: ${item.product_name}`)
   }, [])
 
   const handleNavigateToDetail = (productId: string) => {
@@ -1454,7 +1456,7 @@ export const useProductCategory = (): {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / queryState.pageSize))
 
-  const userDisplayName = username?.trim() || '我的账户'
+  const userDisplayName = username?.trim() || 'My account'
   const avatarText = userDisplayName.slice(0, 1).toUpperCase() || 'U'
   const isCustomerLoggedIn = Boolean(userSession.token?.trim())
 

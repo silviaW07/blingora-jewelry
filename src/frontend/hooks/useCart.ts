@@ -74,8 +74,8 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
 
   const CART_ITEM_STATUS_LABELS: Record<CartItemStatus, string> = {
-    VALID: '有效',
-    INVALID: '失效',
+    VALID: 'Valid',
+    INVALID: 'Unavailable',
   }
 
   const loadCartData = useCallback(async () => {
@@ -89,7 +89,8 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
 
   const loadRecommended = useCallback(async () => {
     try {
-      const { list } = await getRecommendedProducts()
+      const { getClientPreferredLang } = await import('@/frontend/i18n')
+      const { list } = await getRecommendedProducts({ lang: getClientPreferredLang() })
       setRecommended(list)
     } catch (e) {}
   }, [])
@@ -102,11 +103,15 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const onLocaleChanged = () => {
+    const reload = () => {
       void loadCartData()
+      void loadRecommended()
+    }
+    const onLocaleChanged = () => {
+      reload()
     }
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'app_preferred_locale') void loadCartData()
+      if (event.key === 'app_preferred_locale') reload()
     }
     window.addEventListener('app-locale-changed', onLocaleChanged as EventListener)
     window.addEventListener('storage', onStorage)
@@ -114,7 +119,7 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
       window.removeEventListener('app-locale-changed', onLocaleChanged as EventListener)
       window.removeEventListener('storage', onStorage)
     }
-  }, [loadCartData])
+  }, [loadCartData, loadRecommended])
 
   const handleUpdateQuantity = async (cartItemId: string, newQuantity: number) => {
     if (actionLoading) return
@@ -143,7 +148,7 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
     setActionLoading(true)
     try {
       await removeInvalidCartItems()
-      toast.success('失效商品清理完成')
+      toast.success('Unavailable items removed')
       await loadCartData()
     } finally {
       setActionLoading(false)
@@ -155,7 +160,7 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
     setActionLoading(true)
     try {
       await clearCart()
-      toast.success('购物车已清空')
+      toast.success('Cart cleared')
       await loadCartData()
       setIsClearConfirmOpen(false)
     } finally {
@@ -234,7 +239,7 @@ export function useQuantityControl(
       return
     }
     if (num > max) {
-      toast.error(`超出库存限制，当前最大可用 ${max}`)
+      toast.error(`Exceeds stock limit (max ${max})`)
       setVal(max.toString())
       onUpdate(max)
       return
@@ -285,7 +290,7 @@ export function useQuantityControl(
       setVal(newVal.toString())
       onUpdate(newVal)
     } else {
-      toast.error(`库存不足，最多添加 ${max} 个`)
+      toast.error(`Not enough stock (max ${max})`)
     }
   }
 

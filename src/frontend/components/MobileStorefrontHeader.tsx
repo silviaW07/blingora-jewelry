@@ -204,7 +204,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
                 >
                   <span>{option.label}</span>
                   <span className="text-[10px] font-bold opacity-70">
-                    {option.code === 'zh' ? '中' : option.code.toUpperCase()}
+                    {option.code.toUpperCase()}
                   </span>
                 </button>
               ))}

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductDetail, Cart, CustomerLogin } from '@/frontend/route-params'
@@ -150,10 +150,10 @@ export const useProductDetail = (): {
           }
 
           setProduct(null)
-          setError('当前没有可用于可视化编辑的商品，请先创建并上架或保存草稿商品')
+          setError('No product available for visual editing. Publish or save a draft product first.')
         } catch (err: any) {
           setProduct(null)
-          setError(err?.message || '无法初始化可视化编辑商品')
+          setError(err?.message || 'Failed to initialize product editor')
         } finally {
           setLoading(false)
         }
@@ -162,7 +162,7 @@ export const useProductDetail = (): {
 
       setLoading(false)
       setProduct(null)
-      setError('缺少必要的商品标识，请从首页或商品列表重新进入')
+      setError('Missing product id. Open this page from home or the product list.')
       return
     }
 
@@ -190,7 +190,7 @@ export const useProductDetail = (): {
           setRelatedProducts([])
         })
     } catch (err: any) {
-      setError(err.message || '获取商品详情失败')
+      setError(err.message || 'Failed to load product')
       setLoading(false)
     }
   }, [isDecorateMode, productId, router, searchParams, slug])
@@ -341,7 +341,7 @@ export const useProductDetail = (): {
   )
 
   const redirectToLogin = useCallback(() => {
-    toast.info('请先登录即可加入购物车')
+    toast.info('Please sign in to add to cart')
     let returnPath = ProductDetail.path
     if (productId) returnPath += `?productId=${productId}`
     else if (slug) returnPath += `?slug=${slug}`
@@ -437,7 +437,7 @@ export const useProductDetail = (): {
     if (product?.status !== 'ACTIVE') return
 
     if (colorAttribute && !String(manualColorValue || '').trim()) {
-      toast.error('请先选择颜色')
+      toast.error('Please select a color')
       triggerSelectionHighlight({ color: true, size: false })
       return
     }
@@ -460,7 +460,7 @@ export const useProductDetail = (): {
     const cap = skuQtyCap(selectedSku)
     if (type === 'inc') {
       if (quantity < cap) setQuantity(prev => prev + 1)
-      else toast.warning('已达可购数量上限')
+      else toast.warning('Maximum quantity reached')
     } else {
       if (quantity > 1) setQuantity(prev => prev - 1)
     }
@@ -484,7 +484,7 @@ export const useProductDetail = (): {
 
     // 有颜色规格时必须先选颜色
     if (colorAttribute && !String(manualColorValue || '').trim()) {
-      toast.error('请先选择颜色')
+      toast.error('Please select a color')
       triggerSelectionHighlight({ color: true, size: false })
       return
     }
@@ -501,7 +501,7 @@ export const useProductDetail = (): {
 
     // 数量为 0 时点 - 保持 0；点 + 从 0→1 即选中该尺码
     if (next === current) {
-      if (type === 'inc' && current >= cap) toast.warning('已达可购数量上限')
+      if (type === 'inc' && current >= cap) toast.warning('Maximum quantity reached')
       return
     }
 
@@ -547,13 +547,13 @@ export const useProductDetail = (): {
     }
 
     if (colorAttribute && !String(manualColorValue || '').trim()) {
-      toast.error('请先选择颜色')
+      toast.error('Please select a color')
       triggerSelectionHighlight({ color: true, size: false })
       return
     }
 
     if (sizeAttribute && totalSelectedQty <= 0 && !manualSizeSkuId) {
-      toast.error('请先通过加减号选择尺码数量')
+      toast.error('Please set size quantities first')
       triggerSelectionHighlight({ color: false, size: true })
       return
     }
@@ -568,7 +568,7 @@ export const useProductDetail = (): {
     if (lines.length === 0 && selectedSku) {
       const qty = skuQtyCap(selectedSku) > 0 ? 1 : 0
       if (qty <= 0) {
-        toast.error('该规格暂无库存')
+        toast.error('This option is out of stock')
         return
       }
       lines = [[selectedSku.id, qty]]
@@ -577,7 +577,7 @@ export const useProductDetail = (): {
     }
 
     if (lines.length === 0) {
-      toast.error('请先选择尺码')
+      toast.error('Please select a size')
       if (sizeAttribute) {
         triggerSelectionHighlight({ color: false, size: true })
       }
@@ -589,9 +589,9 @@ export const useProductDetail = (): {
       for (const [skuId, qty] of lines) {
         await addToCart({ productSkuId: skuId, quantity: qty })
       }
-      toast.success('已加入购物车')
+      toast.success('Added to cart')
     } catch (err: any) {
-      toast.error(err?.message || '加入购物车失败')
+      toast.error(err?.message || 'Failed to add to cart')
     } finally {
       setSubmitting(false)
     }

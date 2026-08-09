@@ -15,12 +15,10 @@ import {
   buildLast6Months,
   formatMonthLabel,
   getDateKeyRange,
-  getLast6MonthsRangeStart,
   getMonthDateRange,
   isDateKeyProductName,
   toDateKey,
   toDateLabel,
-  toMonthKey,
 } from '@/frontend/utils/dailyNewArrival'
 import { normalizeProductLang, pickProductTranslation, resolveCategoryDisplayName, resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 import {
@@ -533,7 +531,7 @@ export const getHomeRecommendZones = async (input?: {
       // 激活专区即使暂无有效明细也保留，保证绿灯专区数量与前台区块一致
       return {
         zoneId: zone.id,
-        title: zone.title,
+        title: resolveCategoryDisplayName(null, zone.title, lang),
         zoneType: zone.zoneType,
         pcCols: normalizePcCols(zone.pcCols),
         mobileCols: normalizeMobileCols(zone.mobileCols),
@@ -693,15 +691,40 @@ export interface GetDailyNewArrivalCalendarOutput {
 }
 
 export interface GetDailyNewArrivalProductsInput {
-  /** 可选：指定年月则只返回该月；不传则返回最近 6 个月（含当月）全部上新 */
+  /** 可选：指定年月则只返回该月；不传则默认当月（避免一次扫 6 个月） */
   year?: number
   month?: number
   lang?: string
+  page?: number
+  page_size?: number
 }
 
 export interface GetDailyNewArrivalProductsOutput {
   list: ProductItem[]
   total: number
+}
+
+const DAILY_NEW_CACHE_TTL_MS = Number(process.env.DAILY_NEW_CACHE_TTL_MS || 45_000)
+type DailyNewCacheEntry<T> = { expiresAt: number; value: T }
+const dailyNewCalendarCache = new Map<string, DailyNewCacheEntry<GetDailyNewArrivalCalendarOutput>>()
+const dailyNewProductsCache = new Map<string, DailyNewCacheEntry<GetDailyNewArrivalProductsOutput>>()
+
+function readDailyNewCache<T>(map: Map<string, DailyNewCacheEntry<T>>, key: string): T | null {
+  const hit = map.get(key)
+  if (!hit) return null
+  if (hit.expiresAt <= Date.now()) {
+    map.delete(key)
+    return null
+  }
+  return hit.value
+}
+
+function writeDailyNewCache<T>(
+  map: Map<string, DailyNewCacheEntry<T>>,
+  key: string,
+  value: T,
+) {
+  map.set(key, { value, expiresAt: Date.now() + DAILY_NEW_CACHE_TTL_MS })
 }
 
 const mapActiveProductToItem = (
@@ -853,55 +876,46 @@ const activeListedProductWhere = {
 
 /**
  * 读取已上架商品，按 createdAt 归入最近 6 个月（New 月历）。
- * 故意不查 publishedAt：线上 Prisma client / 列不同步时会整页 500。
+ * 用 6 次 count（走 status+createdAt 索引），禁止把窗口内全部行拉进内存。
  */
 export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyNewArrivalCalendarOutput> => {
-  const months = buildLast6Months()
-  const rangeStart = getLast6MonthsRangeStart()
-  const monthKeys = new Set(months.map((item) => item.monthKey))
-  const countMap = new Map(months.map((item) => [item.monthKey, 0]))
+  const cacheKey = 'calendar:v2'
+  const cached = readDailyNewCache(dailyNewCalendarCache, cacheKey)
+  if (cached) return cached
 
-  const [totalActiveProducts, productsInRange] = await Promise.all([
-    prisma.product.count({
-      where: activeListedProductWhere,
-    }),
-    prisma.product.findMany({
-      where: {
-        ...activeListedProductWhere,
-        createdAt: { gte: rangeStart },
-      },
-      select: {
-        createdAt: true,
-      },
+  const months = buildLast6Months()
+  const [totalActiveProducts, ...monthCounts] = await Promise.all([
+    prisma.product.count({ where: activeListedProductWhere }),
+    ...months.map(async (item) => {
+      const { start, end } = getMonthDateRange(item.year, item.month)
+      const productCount = await prisma.product.count({
+        where: {
+          ...activeListedProductWhere,
+          createdAt: { gte: start, lt: end },
+        },
+      })
+      return productCount
     }),
   ])
 
-  productsInRange.forEach((product) => {
-    const anchor = product.createdAt
-    const monthKey = toMonthKey(anchor.getFullYear(), anchor.getMonth() + 1)
-    if (!monthKeys.has(monthKey)) {
-      return
-    }
-
-    countMap.set(monthKey, (countMap.get(monthKey) || 0) + 1)
-  })
-
-  return {
-    months: months.map((item) => ({
+  const result: GetDailyNewArrivalCalendarOutput = {
+    months: months.map((item, index) => ({
       year: item.year,
       month: item.month,
       monthKey: item.monthKey,
       label: formatMonthLabel(item.year, item.month),
-      productCount: countMap.get(item.monthKey) || 0,
+      productCount: monthCounts[index] || 0,
     })),
     totalActiveProducts,
   }
+  writeDailyNewCache(dailyNewCalendarCache, cacheKey, result)
+  return result
 })
 
 /**
- * 上新商品列表：按 createdAt 时间窗筛选，倒序。
+ * 上新商品列表：按 createdAt 时间窗筛选，倒序 + 分页。
  * - 传 year+month：该月
- * - 不传：最近 6 个月（含当月）
+ * - 不传：默认当月（与点导航 New 行为一致，避免扫 6 个月）
  */
 export const getDailyNewArrivalProducts = withResult(async (
   input: GetDailyNewArrivalProductsInput = {},
@@ -912,109 +926,111 @@ export const getDailyNewArrivalProducts = withResult(async (
     Number(input.month) >= 1 &&
     Number(input.month) <= 12
 
-  let rangeStart: Date
-  let rangeEnd: Date | undefined
+  const now = new Date()
+  const year = hasMonth ? Number(input.year) : now.getFullYear()
+  const month = hasMonth ? Number(input.month) : now.getMonth() + 1
+  const { start: rangeStart, end: rangeEnd } = getMonthDateRange(year, month)
 
-  if (hasMonth) {
-    const year = Number(input.year)
-    const month = Number(input.month)
-    const range = getMonthDateRange(year, month)
-    rangeStart = range.start
-    rangeEnd = range.end
-  } else {
-    rangeStart = getLast6MonthsRangeStart()
-    rangeEnd = undefined
+  const page = Math.max(1, Number(input.page) || 1)
+  const pageSize = Math.min(60, Math.max(1, Number(input.page_size) || 60))
+  const skip = (page - 1) * pageSize
+  const lang = normalizeProductLang(input.lang)
+  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}`
+  const cached = readDailyNewCache(dailyNewProductsCache, cacheKey)
+  if (cached) return cached
+
+  const where = {
+    ...activeListedProductWhere,
+    createdAt: { gte: rangeStart, lt: rangeEnd },
   }
 
-  const dbProducts = await prisma.product.findMany({
-    where: {
-      ...activeListedProductWhere,
-      createdAt: rangeEnd
-        ? { gte: rangeStart, lt: rangeEnd }
-        : { gte: rangeStart },
-    },
-    select: {
-      id: true,
-      slug: true,
-      name: true,
-      mainImageUrl: true,
-      shortDescription: true,
-      status: true,
-      costPrice: true,
-      ratingAverage: true,
-      ratingCount: true,
-      sortWeight: true,
-      brandCategoryId: true,
-      tradeInfoJson: true,
-      createdAt: true,
-      translationsJson: true,
-      skus: {
-        select: {
-          id: true,
-          skuCode: true,
-          price: true,
-          originalPrice: true,
-          stock: true,
-          stockStatus: true,
-          imageUrl: true,
-        },
-        orderBy: { price: 'asc' },
-      },
-      brandCategory: {
-        select: { id: true, name: true },
-      },
-      category: {
-        select: {
-          name: true,
-          level: true,
-          priceCoefficient: true,
-          isBrandCategory: true,
-          parentId: true,
-          parent: {
-            select: {
-              name: true,
-              priceCoefficient: true,
-              isBrandCategory: true,
-            },
+  const [total, dbProducts, exchangeRate] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        mainImageUrl: true,
+        shortDescription: true,
+        status: true,
+        costPrice: true,
+        ratingAverage: true,
+        ratingCount: true,
+        sortWeight: true,
+        brandCategoryId: true,
+        tradeInfoJson: true,
+        createdAt: true,
+        translationsJson: true,
+        skus: {
+          select: {
+            id: true,
+            skuCode: true,
+            price: true,
+            originalPrice: true,
+            stock: true,
+            stockStatus: true,
+            imageUrl: true,
           },
+          orderBy: { price: 'asc' },
+          take: 24,
         },
-      },
-      relationCategories: {
-        select: {
-          category: {
-            select: {
-              name: true,
-              level: true,
-              priceCoefficient: true,
-              isBrandCategory: true,
-              parent: {
-                select: {
-                  name: true,
-                  priceCoefficient: true,
-                  isBrandCategory: true,
-                },
+        brandCategory: {
+          select: { id: true, name: true },
+        },
+        category: {
+          select: {
+            name: true,
+            level: true,
+            priceCoefficient: true,
+            isBrandCategory: true,
+            parentId: true,
+            parent: {
+              select: {
+                name: true,
+                priceCoefficient: true,
+                isBrandCategory: true,
               },
             },
           },
         },
+        relationCategories: {
+          select: {
+            category: {
+              select: {
+                name: true,
+                level: true,
+                priceCoefficient: true,
+                isBrandCategory: true,
+                parent: {
+                  select: {
+                    name: true,
+                    priceCoefficient: true,
+                    isBrandCategory: true,
+                  },
+                },
+              },
+            },
+          },
+          take: 12,
+        },
       },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    take: 200,
-  })
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip,
+      take: pageSize,
+    }),
+    getUsdExchangeRate(prisma),
+  ])
 
-  const exchangeRate = await getUsdExchangeRate(prisma)
-  const list = dbProducts
-    .slice()
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .map((product) => mapActiveProductToItem(product, exchangeRate, input.lang))
-
-  return {
-    list,
-    total: list.length,
+  const result: GetDailyNewArrivalProductsOutput = {
+    list: dbProducts.map((product) => mapActiveProductToItem(product, exchangeRate, lang)),
+    total,
   }
+  writeDailyNewCache(dailyNewProductsCache, cacheKey, result)
+  return result
 })
 
 // ===== Coming 新品预告（未上架 / 预告按日） =====
@@ -1173,6 +1189,10 @@ const resolveComingDayFromProduct = (product: ComingSoonProductRow) => {
   }
 }
 
+export interface GetComingSoonDateCardsInput {
+  lang?: string
+}
+
 /**
  * Coming 页日期卡片（legacy 摘要）：
  * - 来源：未上架/预告类商品（DRAFT / PREORDER / INACTIVE），或类目名含 预告|Coming|未上架
@@ -1181,7 +1201,8 @@ const resolveComingDayFromProduct = (product: ComingSoonProductRow) => {
  * - 卡片：每日一张，预览图取该日第一条商品主图；不返回数量文案
  */
 export const getComingSoonDateCards = withResult(
-  async (): Promise<GetComingSoonDateCardsOutput> => {
+  async (input?: GetComingSoonDateCardsInput): Promise<GetComingSoonDateCardsOutput> => {
+    const lang = normalizeProductLang(input?.lang)
     const products = await loadComingSoonProductRows(500)
 
     const byDay = new Map<
@@ -1212,7 +1233,11 @@ export const getComingSoonDateCards = withResult(
         preview_image_url: row.product.mainImageUrl || null,
         preview_product_id: row.product.id,
         preview_product_slug: row.product.slug || null,
-        preview_product_name: row.product.name || '',
+        preview_product_name: resolveProductDisplayName(
+          row.product.name || '',
+          row.product.translationsJson,
+          lang,
+        ),
       }))
 
     return { cards }

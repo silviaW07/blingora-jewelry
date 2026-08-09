@@ -7,11 +7,13 @@ import {
   translateTitleKeywords,
 } from '@/shared/productKeywordDictionary'
 
-export function normalizeProductLang(raw?: string | null): 'en' | 'zh' | 'es' {
+/**
+ * Storefront only serves en/es. Historical `zh` preference maps to English
+ * so product APIs never return Chinese titles.
+ */
+export function normalizeProductLang(raw?: string | null): 'en' | 'es' {
   const value = String(raw || '').trim().toLowerCase()
-  if (value.startsWith('zh')) return 'zh'
   if (value.startsWith('es')) return 'es'
-  if (value.startsWith('en')) return 'en'
   return 'en'
 }
 
@@ -43,9 +45,8 @@ export function pickProductTranslation(
   if (!raw || typeof raw !== 'object') return null
   const map = raw as Record<string, ProductTranslationBlock>
   const code = normalizeProductLang(lang)
-  // Keep soft fallback for shortDescription / detail consumers;
-  // product titles should use resolveProductDisplayName instead.
-  return map[code] || map[lang || ''] || map.en || map.zh || null
+  // Soft fallback for shortDescription / detail: prefer locale → en only (never zh).
+  return map[code] || map[lang || ''] || map.en || null
 }
 
 function asCleanLatinTitle(raw: string | null | undefined): string {
@@ -82,11 +83,8 @@ function pickEnglishTitle(translationsJson: unknown, fallback: string): string {
 }
 
 /**
- * Storefront product title by locale:
- * - zh → Chinese `name` (DB)
- * - en/es → clean Latin title only (never 中英 / 中西 mixed)
- *
- * Prefer exact locale → keyword heal → (ES) English → strip leftover CJK.
+ * Storefront product title by locale (en/es only):
+ * clean Latin title — never returns Chinese / mixed CJK titles.
  */
 export function resolveProductDisplayName(
   name: string,
@@ -95,7 +93,6 @@ export function resolveProductDisplayName(
 ): string {
   const fallback = String(name || '').trim()
   const code = normalizeProductLang(lang)
-  if (code === 'zh') return fallback
 
   const exact = pickExactProductTranslation(translationsJson, code)
   const fromLang = String(exact?.name || '').trim()
@@ -109,24 +106,22 @@ export function resolveProductDisplayName(
       const cleanEs = healLatinTitle(sideEs, 'es')
       if (cleanEs) return cleanEs
     }
-    if (code === 'en') {
-      const sideEn = String(root.title_en ?? root.titleEn ?? root.nameEn ?? '').trim()
-      const cleanEn = healLatinTitle(sideEn, 'en')
-      if (cleanEn) return cleanEn
-    }
+    const sideEn = String(root.title_en ?? root.titleEn ?? root.nameEn ?? '').trim()
+    const cleanEn = healLatinTitle(sideEn, 'en')
+    if (cleanEn) return cleanEn
   }
 
   const fromFallback = healLatinTitle(fallback, code)
   if (fromFallback) return fromFallback
 
-  // ES without a clean Spanish title → show English rather than Chinese mix
   if (code === 'es') {
     const en = pickEnglishTitle(translationsJson, fallback)
     if (en) return en
   }
 
   const stripped = stripChineseFromTitle(fromLang || fallback)
-  return stripped || 'Product'
+  const cleanStripped = asCleanLatinTitle(stripped)
+  return cleanStripped || 'Product'
 }
 
 function pickCategoryLocaleName(block: unknown): string {
@@ -138,11 +133,8 @@ function pickCategoryLocaleName(block: unknown): string {
 
 function pickCategorySideField(
   root: Record<string, unknown>,
-  code: 'en' | 'zh' | 'es',
+  code: 'en' | 'es',
 ): string {
-  if (code === 'zh') {
-    return String(root.title_zh ?? root.titleZh ?? root.nameZh ?? '').trim()
-  }
   if (code === 'es') {
     return String(root.title_es ?? root.titleEs ?? root.nameEs ?? '').trim()
   }
@@ -150,8 +142,8 @@ function pickCategorySideField(
 }
 
 /**
- * 分类展示名：优先当前语言 translationsJson.name/title → title_en 等旁路字段 → 中文 → 数据库 name。
- * 避免缺译时空白。
+ * Category display name for storefront: locale → en side fields → keyword-heal DB name.
+ * Never falls back to Chinese translations for en/es.
  */
 export function resolveCategoryDisplayName(
   translationsJson: unknown,
@@ -159,19 +151,28 @@ export function resolveCategoryDisplayName(
   lang?: string | null,
 ): string {
   const fallback = String(fallbackName || '').trim()
-  if (!translationsJson || typeof translationsJson !== 'object') {
-    return fallback
-  }
-
-  const root = translationsJson as Record<string, unknown>
   const code = normalizeProductLang(lang)
-  const fromLang = pickCategoryLocaleName(root[code]) || pickCategorySideField(root, code)
-  if (fromLang) return fromLang
+  const root =
+    translationsJson && typeof translationsJson === 'object'
+      ? (translationsJson as Record<string, unknown>)
+      : null
 
-  if (code !== 'zh') {
-    const fromZh = pickCategoryLocaleName(root.zh) || pickCategorySideField(root, 'zh')
-    if (fromZh) return fromZh
+  if (root) {
+    const fromLang = pickCategoryLocaleName(root[code]) || pickCategorySideField(root, code)
+    const cleanLang = healLatinTitle(fromLang, code)
+    if (cleanLang) return cleanLang
+
+    if (code === 'es') {
+      const fromEn =
+        pickCategoryLocaleName(root.en) || pickCategorySideField(root, 'en')
+      const cleanEn = healLatinTitle(fromEn, 'en')
+      if (cleanEn) return cleanEn
+    }
   }
 
-  return fallback
+  const healedFallback = healLatinTitle(fallback, code)
+  if (healedFallback) return healedFallback
+
+  const stripped = asCleanLatinTitle(stripChineseFromTitle(fallback))
+  return stripped || 'Category'
 }

@@ -43,9 +43,9 @@ import {
   UserRole
 } from '@/frontend/action_utils'
 
-const EMAIL_TAKEN_MSG = '该邮箱已被注册，请更换邮箱或直接登录'
+const EMAIL_TAKEN_MSG = 'This email is already registered. Please sign in or use another email.'
 const SCHEMA_LAG_MSG =
-  '数据库结构未同步（缺少客户字段）。请在服务器执行：pnpm exec prisma migrate deploy && bash deploy/deploy-all.sh'
+  'Database schema is out of date. Please run prisma migrate deploy on the server.'
 
 /** account 列 VarChar(50)；邮箱可更长，超长时用稳定短账号，email 仍存完整值 */
 function buildAccountFromEmail(email: string): string {
@@ -72,7 +72,7 @@ function mapRegisterError(err: unknown): Error {
   if (raw && !/Invalid `[\s\S]*` invocation/i.test(raw) && !/\bprisma\b/i.test(raw)) {
     return new Error(raw)
   }
-  return new Error('注册失败，请稍后重试。若反复出现请查看 pm2 logs rpc --lines 80')
+  return new Error('Registration failed. Please try again later.')
 }
 
 // ===== Actions =====

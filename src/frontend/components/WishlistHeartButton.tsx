@@ -70,8 +70,8 @@ export const WishlistHeartButton = ({
       aria-label={
         ariaLabel ||
         (favorited
-          ? `取消收藏${productName ? `：${productName}` : ''}`
-          : `加入心愿单${productName ? `：${productName}` : ''}`)
+          ? `Remove from wishlist${productName ? `: ${productName}` : ''}`
+          : `Add to wishlist${productName ? `: ${productName}` : ''}`)
       }
       aria-pressed={favorited}
       onClick={handleClick}

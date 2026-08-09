@@ -1,12 +1,10 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
-import zh from './locales/zh.json'
 import es from './locales/es.json'
 
 export const APP_LOCALES = [
   { code: 'en', label: 'English' },
-  { code: 'zh', label: '中文' },
   { code: 'es', label: 'Español' },
 ] as const
 
@@ -17,12 +15,14 @@ export const DEFAULT_LOCALE: AppLocaleCode = 'en'
 
 export const LOCALE_STORAGE_KEY = 'app_preferred_locale'
 
-/** 统一语言码：zh-CN / zh_CN → zh */
+/**
+ * 统一语言码。店面仅 en / es；历史 zh 偏好映射为 en，避免中文 UI/商品名泄漏。
+ */
 export function normalizeLocale(raw?: string | null): AppLocaleCode {
   const value = String(raw || '').trim().toLowerCase()
-  if (value.startsWith('zh')) return 'zh'
   if (value.startsWith('es')) return 'es'
   if (value.startsWith('en')) return 'en'
+  // zh / unknown → English (cross-border storefront)
   return DEFAULT_LOCALE
 }
 
@@ -94,7 +94,7 @@ export function persistLocale(code: AppLocaleCode) {
   try {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, code)
     document.cookie = `${LOCALE_STORAGE_KEY}=${encodeURIComponent(code)}; path=/; max-age=31536000; samesite=lax`
-    document.documentElement.setAttribute('lang', code === 'zh' ? 'zh-CN' : code)
+    document.documentElement.setAttribute('lang', code)
   } catch {
     // ignore
   }
@@ -108,7 +108,6 @@ export function getClientPreferredLang(): AppLocaleCode {
 
 const resources = {
   en: { translation: en },
-  zh: { translation: zh },
   es: { translation: es },
 }
 
@@ -130,7 +129,7 @@ export function initAppI18n(initialLocale?: string) {
     resources,
     lng,
     fallbackLng: DEFAULT_LOCALE,
-    supportedLngs: ['en', 'zh', 'es'],
+    supportedLngs: ['en', 'es'],
     // 禁用浏览器语言探测，避免 Accept-Language / navigator 覆盖默认英文
     load: 'languageOnly',
     nonExplicitSupportedLngs: true,

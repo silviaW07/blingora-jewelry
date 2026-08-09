@@ -120,7 +120,7 @@ const renderMobileSquircleContent = (
     if (productItems.length === 0) {
       return (
         <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
-          {t('home.emptyProductZone', { defaultValue: '当前商品专区暂无可展示内容' })}
+          {t('home.emptyProductZone', { defaultValue: 'No products in this section yet' })}
         </div>
       )
     }
@@ -166,7 +166,7 @@ const renderMobileSquircleContent = (
     if (categoryItems.length === 0) {
       return (
         <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
-          {t('home.emptyCategoryZone', { defaultValue: '当前类目专区暂无可展示内容' })}
+          {t('home.emptyCategoryZone', { defaultValue: 'No categories in this section yet' })}
         </div>
       )
     }
@@ -213,7 +213,7 @@ const renderMobileSquircleContent = (
 
   return (
     <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
-      {t('home.emptyZone', { defaultValue: '当前专区暂无可展示内容' })}
+      {t('home.emptyZone', { defaultValue: 'Nothing to show in this section yet' })}
     </div>
   )
 }
@@ -235,7 +235,7 @@ const renderRecommendZoneContent = (
     if (productItems.length === 0) {
       return (
         <div className="rounded-none border-b border-[#ececec] bg-transparent px-2 py-10 text-center text-sm text-[#8a8073]">
-          当前商品专区暂无可展示内容
+          {t('home.emptyProductZone', { defaultValue: 'No products in this section yet' })}
         </div>
       )
     }
@@ -316,7 +316,7 @@ const renderRecommendZoneContent = (
                     >
                       <ShoppingCart className="mr-2 size-4" />
                       <DecorateText propKey="home_add_to_cart_label" as="span">
-                        加入购物车
+                        {t('product.addToCart', { defaultValue: 'Add to cart' })}
                       </DecorateText>
                     </Button>
                   )}
@@ -333,7 +333,7 @@ const renderRecommendZoneContent = (
     if (categoryItems.length === 0) {
       return (
         <div className="rounded-none border-b border-[#ececec] bg-transparent px-2 py-3 text-center text-sm text-[#8a8073]">
-          当前类目专区暂无可展示内容
+          {t('home.emptyCategoryZone', { defaultValue: 'No categories in this section yet' })}
         </div>
       )
     }
@@ -386,7 +386,7 @@ const renderRecommendZoneContent = (
 
   return (
     <div className="rounded-none border-b border-[#ececec] bg-transparent px-2 py-10 text-center text-sm text-[#8a8073]">
-      当前专区暂无可展示内容
+      {t('home.emptyZone', { defaultValue: 'Nothing to show in this section yet' })}
     </div>
   )
 }

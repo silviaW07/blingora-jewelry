@@ -79,6 +79,11 @@ export interface RemoveCartItemInput {
   cartItemId: string
 }
 
+export interface GetRecommendedInput {
+  /** 语言码：en / es（店面不展示中文） */
+  lang?: string
+}
+
 export interface GetRecommendedOutput {
   list: RecommendedProductData[]
 }
@@ -274,16 +279,16 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
 
       if (pStatus !== 'ACTIVE' || cStatus !== 'ACTIVE') {
         isValid = false
-        invalidReason = '商品或分类已失效'
+        invalidReason = 'Product or category unavailable'
       } else if (stock < item.quantity) {
         isValid = false
-        invalidReason = '库存不足'
+        invalidReason = 'Insufficient stock'
       } else if (item.quantity < effectiveSkuMinOrderQty) {
         isValid = false
-        invalidReason = `当前规格起订量为 ${effectiveSkuMinOrderQty}`
+        invalidReason = `Minimum order quantity is ${effectiveSkuMinOrderQty}`
       } else if (totalProductQty < productMinOrderQty) {
         isValid = false
-        invalidReason = `该商品混批起订量为 ${productMinOrderQty}`
+        invalidReason = `Mixed MOQ for this product is ${productMinOrderQty}`
       }
 
       const expectedStatus: CartItemStatus = isValid ? 'VALID' : 'INVALID'
@@ -548,10 +553,11 @@ export const removeInvalidCartItems = requireRole([UserRole.CUSTOMER])(
 )
 
 /**
- * 获取购物车辅助推荐商品列表
+ * 获取购物车辅助推荐商品列表（标题按 lang 解析，EN/ES 不返回中文名）
  */
 export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
-  withResult(async (): Promise<GetRecommendedOutput> => {
+  withResult(async (input?: GetRecommendedInput): Promise<GetRecommendedOutput> => {
+    const lang = normalizeProductLang(input?.lang)
     // 查找有效商品，权重排序
     const products = await prisma.product.findMany({
       where: {
@@ -563,6 +569,7 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
         name: true,
         mainImageUrl: true,
         ratingAverage: true,
+        translationsJson: true,
         skus: {
           select: { price: true }
         }
@@ -583,7 +590,7 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
 
       return {
         productId: p.id,
-        name: p.name,
+        name: resolveProductDisplayName(p.name, p.translationsJson, lang),
         mainImageUrl: p.mainImageUrl,
         ratingAverage: p.ratingAverage,
         priceMin

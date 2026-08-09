@@ -36,11 +36,15 @@ const sanitizeAuthErrorMessage = (raw: unknown, fallback: string): string => {
   const message = String(raw || '').trim()
   if (!message) return fallback
   // Keep business messages that register/login already mapped
-  if (/该邮箱已被注册|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户/i.test(message)) {
-    return message
+  if (/该邮箱已被注册|Email already|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户/i.test(message)) {
+    return message.replace(/该邮箱已被注册[^。]*/u, 'This email is already registered. Please sign in or use another email.')
+      .replace(/数据库结构未同步[^。]*/u, 'Database schema is out of date. Please contact support.')
+      .replace(/账号或密码错误/u, 'Incorrect account or password')
+      .replace(/账户状态受限[^。]*/u, 'Account restricted. Please contact support.')
+      .replace(/该账号非前台客户账号[^。]*/u, 'This account cannot sign in on the storefront.')
   }
   if (/P2002|Unique constraint/i.test(message)) {
-    return '该邮箱已被注册，请更换邮箱或直接登录'
+    return 'This email is already registered. Please sign in or use another email.'
   }
   if (
     /Invalid `.*` invocation/i.test(message) ||

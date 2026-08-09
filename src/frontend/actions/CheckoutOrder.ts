@@ -20,6 +20,7 @@ import {
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
+import { resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 
 const COUNTRY_CODE_MAP: Record<string, string> = {
   'United States': 'US',
@@ -511,6 +512,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
             weightGram: true,
             tradeInfoJson: true,
             costPrice: true,
+            translationsJson: true,
             category: {
               select: {
                 status: true,
@@ -563,10 +565,14 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
         throw new Error('商品信息已变更，请刷新购物车后重试')
       }
       if (sku.product.status !== 'ACTIVE' || sku.product.category?.status !== 'ACTIVE') {
-        throw new Error(`商品「${sku.product.name}」已失效，无法下单`)
+        throw new Error(
+          `Product “${resolveProductDisplayName(sku.product.name, (sku.product as any).translationsJson, 'en')}” is unavailable`,
+        )
       }
       if (sku.stock < quantity) {
-        throw new Error(`商品「${sku.product.name}」库存不足`)
+        throw new Error(
+          `Insufficient stock for “${resolveProductDisplayName(sku.product.name, (sku.product as any).translationsJson, 'en')}”`,
+        )
       }
 
       const pricingCoeffs = pickFrontPricingCategoryCoeffs({
@@ -605,7 +611,11 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       lineRows.push({
         productId: sku.product.id,
         productSkuId: sku.id,
-        productName: sku.product.name,
+        productName: resolveProductDisplayName(
+          sku.product.name,
+          (sku.product as { translationsJson?: unknown }).translationsJson,
+          'en',
+        ),
         skuCode: sku.skuCode,
         quantity,
         unitPrice: unitPriceUsd,
