@@ -48,6 +48,10 @@ export interface HomeRecommendProductCard {
   ratingCount: number
   skuCount: number
   defaultSkuId: string | null
+  /** DB 原始商品名（Coming 快速发图为 YYYY-MM-DD，用于按日归组） */
+  rawProductName?: string | null
+  /** 创建时间戳，原始名非日期时用于归日 */
+  createdAtTimestamp?: number | null
 }
 
 export interface HomeRecommendCategoryCard {
@@ -370,6 +374,10 @@ export const getHomeRecommendZones = async (input?: {
         ratingCount: product.ratingCount,
         skuCount: product.skus.length,
         defaultSkuId: defaultSku.id,
+        rawProductName: product.name || null,
+        createdAtTimestamp: product.createdAt
+          ? new Date(product.createdAt).getTime()
+          : null,
       }
     }
 
@@ -468,6 +476,10 @@ export const getHomeRecommendZones = async (input?: {
             ratingCount: product.ratingCount,
             skuCount: product.skus.length,
             defaultSkuId: defaultSku?.id || null,
+            rawProductName: product.name || null,
+            createdAtTimestamp: product.createdAt
+              ? new Date(product.createdAt).getTime()
+              : null,
           })
 
           return acc

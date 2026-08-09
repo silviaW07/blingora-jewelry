@@ -44,6 +44,10 @@ export interface HomeRecommendProductCard {
   ratingCount: number
   skuCount: number
   defaultSkuId: string | null
+  /** DB product.name — Coming date tabs use YYYY-MM-DD quick-upload names */
+  rawProductName?: string | null
+  /** Epoch ms for Asia/Shanghai date grouping when name is not a date key */
+  createdAtTimestamp?: number | null
 }
 
 export interface HomeRecommendCategoryCard {
