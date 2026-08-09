@@ -77,7 +77,7 @@ export function OptimizedProductImage({
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={`${displaySrc}-${attempt}`}
+          key={attempt}
           src={displaySrc}
           alt={alt}
           className={cn('absolute inset-0 h-full w-full object-cover', className)}
@@ -93,7 +93,7 @@ export function OptimizedProductImage({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        key={`${displaySrc}-${attempt}`}
+        key={attempt}
         src={displaySrc}
         alt={alt}
         width={width || imageWidth}
@@ -111,7 +111,7 @@ export function OptimizedProductImage({
   if (fill) {
     return (
       <Image
-        key={`${displaySrc}-${attempt}`}
+        key={attempt}
         src={displaySrc}
         alt={alt}
         fill
@@ -126,7 +126,7 @@ export function OptimizedProductImage({
 
   return (
     <Image
-      key={`${displaySrc}-${attempt}`}
+      key={attempt}
       src={displaySrc}
       alt={alt}
       width={width || imageWidth}

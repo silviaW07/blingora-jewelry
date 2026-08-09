@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
+import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -219,6 +220,32 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       })
       .filter((item): item is { value: string; sku: typeof product.skus[number]; imageUrl: string } => Boolean(item))
   }, [product, colorAttributeGroup])
+
+  // 预热主图尺寸(960)，让点击颜色后左侧大图秒出（缩略图只有 200 宽、URL 不同不会命中）
+  const preheatMainImage = useCallback((url?: string | null) => {
+    if (typeof window === 'undefined' || !url) return;
+    const proxied = toProxiedImageUrl(url, { width: 960 });
+    if (!proxied) return;
+    const img = new window.Image();
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.src = proxied;
+  }, []);
+
+  // 空闲时预热前若干个颜色的大图，覆盖用户最可能点击的前排色块
+  useEffect(() => {
+    if (typeof window === 'undefined' || colorSwatches.length === 0) return;
+    const urls = colorSwatches.slice(0, 8).map((s) => s.imageUrl).filter(Boolean);
+    if (urls.length === 0) return;
+    const run = () => urls.forEach((u) => preheatMainImage(u));
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const cancel = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    const id = ric ? ric(run) : (setTimeout(run, 400) as unknown as number);
+    return () => {
+      if (ric && cancel) cancel(id);
+      else clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
+    };
+  }, [colorSwatches, preheatMainImage]);
 
   const specListTitle = sizeAttributeGroup
     ? t('product.sizeOptions')
@@ -552,6 +579,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                   isSelected && 'is-selected',
                                   !isPurchasable && 'is-disabled',
                                 )}
+                                onMouseEnter={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
+                                onTouchStart={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
                                 onClick={() => handleColorSelect(swatch.value, swatch.imageUrl)}
                               >
                                 <span className="product-color-swatch-label" aria-hidden={!isSelected}>

@@ -299,10 +299,10 @@
     padding: 0.5rem;
   }
 
-  /* 规格选项（Color / Tallas）区域上下内边距收紧 */
+  /* 规格选项（Color / Tallas）区域：单行横向滚动，保留标签浮层空间 */
   .product-detail-page .product-color-swatch-list {
-    padding-top: 1rem;
-    padding-bottom: 0.15rem;
+    padding-top: 1.6rem;
+    padding-bottom: 0.35rem;
   }
 
   .product-detail-page .product-detail-buy-actions {
@@ -398,12 +398,30 @@
 /* 商品详情：颜色缩略图（上方标签 + 框内仅图片） */
 .product-color-swatch-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   column-gap: 1rem;
-  row-gap: 10px;
-  overflow-x: visible;
-  padding-top: 1.25rem;
-  padding-bottom: 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-top: 1.75rem;
+  padding-bottom: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d3c7 transparent;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.product-color-swatch-list::-webkit-scrollbar {
+  height: 6px;
+}
+
+.product-color-swatch-list::-webkit-scrollbar-thumb {
+  background: #d9d3c7;
+  border-radius: 9999px;
+}
+
+.product-color-swatch-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .product-color-swatch {
