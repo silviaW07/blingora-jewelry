@@ -51,7 +51,7 @@
     "profile": "Profile",
     "account": "Account",
     "accountCenter": "Account Center",
-    "wishlist": "Wishlist",
+    "wishlist": "Love",
     "siteNav": "Site navigation",
     "siteNavDesc": "Quick access to popular pages and your account.",
     "currentLanguage": "Current language {{label}}",
@@ -65,6 +65,19 @@
     "bags": "Bags",
     "cosmetics": "Cosmetics",
     "shoes": "Shoes"
+  },
+  "wishlist": {
+    "description": "Products you loved — tap a heart on any product card to save it here.",
+    "loading": "Loading your Love list…",
+    "empty": "No loved products yet",
+    "emptyHint": "Tap the heart on a product card to save it here.",
+    "browse": "Browse products",
+    "count": "{{count}} items",
+    "loadFailed": "Failed to load wishlist",
+    "unavailable": "This product is currently unavailable",
+    "addToCartFailed": "Failed to add to cart",
+    "addedItem": "Saved: {{name}}",
+    "removedItem": "Removed: {{name}}"
   },
   "mobile": {
     "promoEyebrow": "New arrivals",

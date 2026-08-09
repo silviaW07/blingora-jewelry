@@ -340,6 +340,15 @@ export const AccountAddresses = {
   navigateTo: (router: AppRouterInstance) => router.push('/account/addresses/'),
 }
 
+/** F15 心愿单 / Love — 本地收藏商品列表 */
+export const Wishlist = {
+  id: 'F15',
+  path: '/wishlist',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push('/wishlist/'),
+}
+
 export const AccountCenter = {
   id: 'F07',
   path: '/account',
@@ -349,6 +358,7 @@ export const AccountCenter = {
   navigateToOrders: (router: AppRouterInstance) => router.push('/account/orders/'),
   navigateToAddresses: (router: AppRouterInstance) => router.push('/account/addresses/'),
   navigateToProfile: (router: AppRouterInstance) => router.push('/account/profile/'),
+  navigateToWishlist: (router: AppRouterInstance) => router.push('/wishlist/'),
 }
 
 // ================================================================
@@ -431,6 +441,7 @@ export const FrontendRoutes = {
   AccountOrderDetail,
   AccountOrderPay,
   AccountAddresses,
+  Wishlist,
   RecommendZone,
   ShippingInfo,
   PaymentInfo,
@@ -445,16 +456,17 @@ export const NAVIGATION_MAP: Record<string, string[]> = {
   'F04': ['F02'],
   'F05': ['F01', 'F06'],
   'F06': ['F05'],
-  'F07': ['F08', 'F09'],
+  'F07': ['F08', 'F09', 'F15'],
   'F08': ['F07', 'F08D', 'F08P'],
   'F08D': ['F08'],
   'F08P': ['F08'],
-  'F09': ['F07'],
+  'F09': ['F07', 'F15'],
   'F10': ['F03', 'F04', 'F05'],
   'F11': ['F01'],
   'F12': ['F01'],
   'F13': ['F01'],
   'F14': ['F01'],
+  'F15': ['F01', 'F03'],
 };
 
 export const PAGE_ID_MAP: Record<string, string> = {
@@ -474,6 +486,7 @@ export const PAGE_ID_MAP: Record<string, string> = {
   'F12': 'PaymentInfo',
   'F13': 'BuyerShowInfo',
   'F14': 'WhyChooseUsInfo',
+  'F15': 'Wishlist',
 };
 
 /**

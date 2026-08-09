@@ -51,7 +51,7 @@
     "profile": "Perfil",
     "account": "Cuenta",
     "accountCenter": "Centro de cuenta",
-    "wishlist": "Lista de deseos",
+    "wishlist": "Love",
     "siteNav": "Navegación del sitio",
     "siteNavDesc": "Acceso rápido a páginas populares y tu cuenta.",
     "currentLanguage": "Idioma actual {{label}}",
@@ -65,6 +65,19 @@
     "bags": "Bolsos",
     "cosmetics": "Cosméticos",
     "shoes": "Zapatos"
+  },
+  "wishlist": {
+    "description": "Los productos que te gustan — toca el corazón en una tarjeta para guardarlos aquí.",
+    "loading": "Cargando tu lista Love…",
+    "empty": "Aún no hay productos favoritos",
+    "emptyHint": "Toca el corazón en una tarjeta de producto para guardarlo aquí.",
+    "browse": "Ver productos",
+    "count": "{{count}} artículos",
+    "loadFailed": "No se pudo cargar la lista de deseos",
+    "unavailable": "Este producto no está disponible",
+    "addToCartFailed": "No se pudo añadir al carrito",
+    "addedItem": "Guardado: {{name}}",
+    "removedItem": "Eliminado: {{name}}"
   },
   "mobile": {
     "promoEyebrow": "Novedades",

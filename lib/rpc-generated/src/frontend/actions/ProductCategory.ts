@@ -22,3 +22,5 @@ export const getProductList = (...args: Parameters<Actions["getProductList"]>) =
   rpcCall<Awaited<ReturnType<Actions["getProductList"]>>>("src.frontend.actions.ProductCategory.getProductList", ...args);
 export const addToCart = (...args: Parameters<Actions["addToCart"]>) => 
   rpcCall<Awaited<ReturnType<Actions["addToCart"]>>>("src.frontend.actions.ProductCategory.addToCart", ...args);
+export const getWishlistProducts = (...args: Parameters<Actions["getWishlistProducts"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getWishlistProducts"]>>>("src.frontend.actions.ProductCategory.getWishlistProducts", ...args);

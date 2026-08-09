@@ -1436,3 +1436,98 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     return { success: true }
   })
 )
+
+export interface GetWishlistProductsInput {
+  product_ids: string[]
+  lang?: string
+}
+
+export interface GetWishlistProductsOutput {
+  list: ProductItem[]
+}
+
+/**
+ * 按本地心愿单 ID 批量取商品卡片（保持传入顺序；已下架/不存在的跳过）。
+ */
+export const getWishlistProducts = withResult(async (
+  input: GetWishlistProductsInput,
+): Promise<GetWishlistProductsOutput> => {
+  const ids = Array.from(
+    new Set((input.product_ids || []).map(id => String(id || '').trim()).filter(Boolean)),
+  ).slice(0, 200)
+  if (!ids.length) return { list: [] }
+
+  const lang = normalizeProductLang(input.lang)
+  const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
+
+  const rows = await prisma.product.findMany({
+    where: {
+      id: { in: ids },
+      status: 'ACTIVE',
+      category: { status: 'ACTIVE' },
+    },
+    include: {
+      skus: {
+        select: {
+          id: true,
+          skuCode: true,
+          imageUrl: true,
+          price: true,
+          originalPrice: true,
+          stockStatus: true,
+        },
+        orderBy: [{ createdAt: 'asc' as const }, { skuCode: 'asc' as const }],
+      },
+      brandCategory: {
+        select: { name: true, brandKeywordsJson: true },
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          level: true,
+          priceCoefficient: true,
+          isBrandCategory: true,
+          parentId: true,
+          parent: {
+            select: {
+              name: true,
+              priceCoefficient: true,
+              isBrandCategory: true,
+            },
+          },
+        },
+      },
+      relationCategories: {
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+              status: true,
+              parentId: true,
+              priceCoefficient: true,
+              isBrandCategory: true,
+              parent: {
+                select: {
+                  name: true,
+                  priceCoefficient: true,
+                  isBrandCategory: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  const byId = new Map(rows.map(row => [row.id, row]))
+  const list = ids
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .map(row => mapProductRecordToItem(row, lang, exchangeRate))
+
+  return { list }
+})

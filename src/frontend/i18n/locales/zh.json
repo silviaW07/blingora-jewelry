@@ -66,6 +66,19 @@
     "cosmetics": "化妆品",
     "shoes": "鞋子"
   },
+  "wishlist": {
+    "description": "你点过爱心的商品都在这里。",
+    "loading": "心愿单加载中…",
+    "empty": "还没有收藏商品",
+    "emptyHint": "在商品卡片上点爱心即可加入心愿单。",
+    "browse": "去逛逛",
+    "count": "共 {{count}} 件",
+    "loadFailed": "心愿单加载失败",
+    "unavailable": "该商品暂不可购",
+    "addToCartFailed": "加入购物车失败",
+    "addedItem": "已收藏：{{name}}",
+    "removedItem": "已取消收藏：{{name}}"
+  },
   "mobile": {
     "promoEyebrow": "上新推荐",
     "categoriesPromo": "按分类选购 — 批发现货直达",

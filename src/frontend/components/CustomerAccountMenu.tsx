@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   ChevronDown,
+  Heart,
   LogOut,
   MapPin,
   Package,
@@ -17,6 +18,7 @@ import {
   AccountAddresses,
   AccountOrders,
   AccountProfile,
+  Wishlist,
 } from '@/frontend/route-params'
 import { useTranslation } from 'react-i18next'
 
@@ -101,6 +103,12 @@ export function CustomerAccountMenu({
     router.push(path)
   }
 
+  /** 心愿单存在浏览器本地，未登录也可查看点过爱心的商品 */
+  const goWishlist = () => {
+    setOpen(false)
+    router.push(Wishlist.path)
+  }
+
   const handleLogout = () => {
     session.reset()
     setOpen(false)
@@ -183,6 +191,15 @@ export function CustomerAccountMenu({
           >
             <Package className="size-4 text-[#6f6558]" />
             {t('nav.myOrders')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-3 rounded-[16px] px-4 py-3 text-left text-sm font-medium text-[#232323] transition hover:bg-white"
+            onClick={goWishlist}
+          >
+            <Heart className="size-4 text-[#6f6558]" />
+            {t('nav.wishlist')}
           </button>
           <button
             type="button"

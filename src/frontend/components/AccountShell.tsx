@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, MapPin, Package, Settings, UserCircle2 } from 'lucide-react'
+import { ChevronLeft, Heart, MapPin, Package, Settings, UserCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
@@ -13,6 +13,7 @@ import {
   AccountAddresses,
   AccountOrders,
   AccountProfile,
+  Wishlist,
 } from '@/frontend/route-params'
 
 const withSlash = (path: string) => (path.endsWith('/') ? path : `${path}/`)
@@ -48,6 +49,12 @@ export function AccountShell({
       path: AccountOrders.path,
       label: t('nav.myOrders'),
       icon: Package,
+    },
+    {
+      href: withSlash(Wishlist.path),
+      path: Wishlist.path,
+      label: t('nav.wishlist'),
+      icon: Heart,
     },
     {
       href: withSlash(AccountAddresses.path),
