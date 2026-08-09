@@ -1,18 +1,7 @@
 'use client'
 
-import { Badge } from '@/backend/components/ui/badge'
-import { Button } from '@/backend/components/ui/button'
-import { Checkbox } from '@/backend/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/backend/components/ui/dialog'
-import type { CalibrateResultItem } from '@/backend/actions/ProductManagement'
-import type { SelectOption } from '@/backend/actions/ProductManagement'
+import { Badge, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/backend/components/ui'
+import type { CalibrateResultItem, SelectOption } from '@/backend/actions/ProductManagement'
 import { Tags, X } from 'lucide-react'
 
 export type CalibrateDraftItem = {
