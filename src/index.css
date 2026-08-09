@@ -299,8 +299,9 @@
     padding: 0.5rem;
   }
 
-  /* 规格选项（Color / Tallas）区域：单行横向滚动，保留标签浮层空间 */
+  /* 规格选项（Color / Tallas）区域：换行网格，约 5 行后纵向滚动 */
   .product-detail-page .product-color-swatch-list {
+    max-height: 28rem;
     padding-top: 1.6rem;
     padding-bottom: 0.35rem;
   }
@@ -398,20 +399,23 @@
 /* 商品详情：颜色缩略图（上方标签 + 框内仅图片） */
 .product-color-swatch-list {
   display: flex;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+  flex-wrap: wrap;
   column-gap: 1rem;
-  overflow-x: auto;
-  overflow-y: hidden;
+  row-gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* 约 5~6 行高度，超出纵向滚动 */
+  max-height: 34rem;
   padding-top: 1.75rem;
   padding-bottom: 0.5rem;
   scrollbar-width: thin;
   scrollbar-color: #d9d3c7 transparent;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
+  overscroll-behavior-y: contain;
 }
 
 .product-color-swatch-list::-webkit-scrollbar {
+  width: 6px;
   height: 6px;
 }
 
