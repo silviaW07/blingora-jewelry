@@ -4929,6 +4929,9 @@ export const normalizeCategoryMatchText = (value?: string | null) =>
 /**
  * 大小写不敏感；去空格后做包含匹配。
  * 极短词（≤2）要求左右非字母数字邻居，避免 LV 误伤 SALVATION。
+ * 注意：该边界规则仅对「纯 ASCII 短词」(LV/CK 等) 生效；中文短词（如「耳钉/戒指」）
+ * 直接按包含匹配——否则「耳钉 high quality jewelry」去空格后变「耳钉HIGH…」，
+ * 「耳钉」右邻字母 H 会被误判为不匹配（中文品类词 + 英文后缀的标题全被漏掉）。
  */
 export const containsCategoryMatchToken = (text: string, token: string) => {
   const normalizedText = normalizeCategoryMatchText(text)
@@ -4936,7 +4939,8 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
   if (!normalizedText || !normalizedToken) return false
   if (!normalizedText.includes(normalizedToken)) return false
 
-  if (normalizedToken.length <= 2) {
+  const isAsciiShortToken = /^[A-Z0-9]+$/.test(normalizedToken)
+  if (normalizedToken.length <= 2 && isAsciiShortToken) {
     let from = 0
     while (from < normalizedText.length) {
       const idx = normalizedText.indexOf(normalizedToken, from)
