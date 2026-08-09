@@ -90,25 +90,6 @@ function matchesAlias(nameOrSlug: string | null | undefined, aliases: string[]):
   })
 }
 
-/**
- * 容错匹配价格阈值货架名：兼容拼写/空格差异（如 "Beloe 3 usd" 拼错的 Beloe、"Below 13usd" 无空格）。
- * 归一化后需满足：含 usd + 形如 below/beloe（bel 开头）+ 对应数字。
- *  - below13：含 "13"
- *  - below3： 含 "3" 且不含 "13"（避免 13usd 误判为 3usd）
- */
-function matchesThresholdShelf(
-  ruleKey: PriceThresholdRuleKey,
-  nameOrSlug: string | null | undefined,
-): boolean {
-  const k = normalizeCatKey(nameOrSlug)
-  if (!k || !k.includes('usd')) return false
-  const looksBelow = k.startsWith('bel') || k.includes('below') || k.includes('beloe')
-  if (!looksBelow) return false
-  if (ruleKey === 'bags_below13') return k.includes('13')
-  // jewelry_below3
-  return k.includes('3') && !k.includes('13')
-}
-
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
@@ -203,11 +184,9 @@ export async function resolvePriceThresholdCategories(
   for (const rule of PRICE_THRESHOLD_RULES) {
     const child = l2Candidates.find(
       (cat) =>
-        // 先精确别名，再容错模糊（兼容拼写/空格差异）
+        // 仅按名称/别名匹配：归一化已包容大小写与空格/分隔符差异，不做拼写模糊
         matchesAlias(cat.name, rule.l2NameAliases) ||
-        matchesAlias(cat.slug, rule.l2NameAliases) ||
-        matchesThresholdShelf(rule.key, cat.name) ||
-        matchesThresholdShelf(rule.key, cat.slug),
+        matchesAlias(cat.slug, rule.l2NameAliases),
     )
     if (!child?.parentId) continue
 
