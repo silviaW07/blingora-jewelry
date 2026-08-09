@@ -79,13 +79,21 @@ export const registerCustomer = withResult(
           account: generatedAccount,
           email: normalizedEmail,
           password: hashPassword(input.sysuser_password),
-          passwordPlain: String(input.sysuser_password || '').slice(0, 255) || null,
+          // passwordPlain 需要 DB 列；库未迁移时写入会导致注册整体失败，故省略
           role: UserRole.CUSTOMER,
           status: 'ACTIVE' as UserStatus,
           username,
           phone: normalizedPhone || null,
           lastLoginAt: new Date(),
-        }
+        },
+        select: {
+          id: true,
+          account: true,
+          email: true,
+          username: true,
+          preferredLocale: true,
+          role: true,
+        },
       })
 
       await tx.cart.create({
