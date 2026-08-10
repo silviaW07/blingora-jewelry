@@ -940,7 +940,14 @@ export const ProductManagementView = ({
         scope={state.calibrateResultScope}
         summary={state.calibrateResultSummary}
         drafts={state.calibrateResultDrafts}
-        categoryOptions={state.bindingCategoryOptions}
+        categoryOptions={
+          (state.hierarchicalCategoryOptions || []).length
+            ? (state.hierarchicalCategoryOptions || []).map(c => ({
+                value: c.category_id,
+                label: c.category_name,
+              }))
+            : state.bindingCategoryOptions
+        }
         onOpenChange={handlers.setCalibrateResultOpen}
         onToggleCategory={handlers.toggleCalibrateResultCategory}
         onSetPrimary={handlers.setCalibrateResultPrimary}

@@ -637,7 +637,12 @@ import {
 } from '@/backend/lib/priceThresholdAutoClassify'
 import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
-import { resolveProductWeightGrams } from '@/shared/categoryWeight'
+import {
+  extractWeightGramsFromText,
+  isLikelyFallbackWeightGrams,
+  resolveCategoryDefaultWeightGramsFromNames,
+  resolveProductWeightGrams,
+} from '@/shared/categoryWeight'
 import {
   appendTitleSuffixIfMissing,
   normalizeTitleSuffix,
@@ -3733,10 +3738,32 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         const corpusDetail = buildCategoryMatchCorpus(product.detailText, product.shortDescription)
         const hits = matchSecondaryCategoriesByTitle(effectiveName, secondaryCategories, corpusDetail)
 
-        const isBrandShelfHit = (item: { parentName?: string | null }) =>
-          String(item.parentName || '').trim().toLowerCase() === 'brand'
+        const isBrandShelfHit = (item: {
+          parentName?: string | null
+          isBrandCategory?: boolean
+        }) =>
+          Boolean(item.isBrandCategory) ||
+          ['brand', 'brands', '品牌'].includes(String(item.parentName || '').trim().toLowerCase())
         const brandHit = hits.find(isBrandShelfHit) || null
-        const pricingHit = hits.find(item => !isBrandShelfHit(item)) || null
+        // 主类目：只认非 Brand 的真实二级；优先更长/更具体命中（jewelry set > necklace）
+        const pricingHits = hits
+          .filter(item => !isBrandShelfHit(item))
+          .slice()
+          .sort(
+            (a, b) =>
+              b.name.length - a.name.length ||
+              a.name.localeCompare(b.name, 'zh-CN'),
+          )
+        const pricingHitId = pickImportPricingTargetCategory(
+          pricingHits.length ? pricingHits : hits,
+          null,
+        )
+        const pricingHit =
+          (pricingHitId
+            ? pricingHits.find(h => h.id === pricingHitId) || hits.find(h => h.id === pricingHitId)
+            : null) ||
+          pricingHits[0] ||
+          null
 
         const ownership = pricingHit
           ? await resolveImportCategoryOwnership(prisma, pricingHit.id)
@@ -3753,20 +3780,26 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
             const meta = id ? existingMetaMap.get(id) : null
             return !!meta && !isBrandCategoryMeta(meta, existingMetaMap) && !isAggregatePricingCategoryName(meta.name)
           }
+          // Prefer existing L2 over L1（饰品/Bags… 等一级不能当校准主类目）
           if (isRealPricingCategory(product.categoryId)) {
-            primaryCategoryId = product.categoryId
-          } else {
+            const meta = existingMetaMap.get(product.categoryId!)
+            if (meta && Number(meta.level) === 2) {
+              primaryCategoryId = product.categoryId
+            }
+          }
+          if (!primaryCategoryId) {
             const realCandidates = existingIds
               .filter(isRealPricingCategory)
               .map(id => existingMetaMap.get(id)!)
-              .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))
-            primaryCategoryId = realCandidates[0]?.id || product.categoryId || null
+              .filter(meta => Number(meta.level) === 2)
+              .sort((a, b) => String(b.name || '').length - String(a.name || '').length)
+            primaryCategoryId = realCandidates[0]?.id || null
           }
         }
 
         if (!primaryCategoryId && !hits.length && !brandNormalized) {
           const existingWeight = toNumber(product.weightGram)
-          if (existingWeight != null && existingWeight > 0) {
+          if (existingWeight != null && existingWeight > 0 && !isLikelyFallbackWeightGrams(existingWeight)) {
             skipped += 1
             items.push({
               id: product.id,
@@ -3789,7 +3822,15 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         }
 
         if (!primaryCategoryId) {
-          primaryCategoryId = product.categoryId || null
+          // 不要回退到一级（如「饰品」）：仅当现有主类目本身是二级时才沿用
+          const fallbackIds = [product.categoryId].filter(Boolean) as string[]
+          if (fallbackIds.length) {
+            const { categoryMap: fbMap } = await getCategoryMetaMap(prisma, fallbackIds)
+            const fb = product.categoryId ? fbMap.get(product.categoryId) : null
+            if (fb && Number(fb.level) === 2 && !isBrandCategoryMeta(fb, fbMap)) {
+              primaryCategoryId = product.categoryId
+            }
+          }
         }
         if (!primaryCategoryId) {
           skipped += 1
@@ -3822,14 +3863,27 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           product.categoryId || '',
         ])
 
-        const hitNames = hits.map(h => h.name)
+        const hitNames = [
+          pricingHit?.name,
+          ...pricingHits.map(h => h.name),
+          ...hits.map(h => h.name),
+        ]
         const existingWeight = toNumber(product.weightGram)
+        const textCorpus = buildCategoryMatchCorpus(effectiveName, product.detailText, product.shortDescription)
+        const fromTextWeight = extractWeightGramsFromText(textCorpus)
+        // 一键校准：标题有重量用标题；否则按命中类目重算。历史 500g 兜底不当作“已人工确认”
+        const keepExistingWeight =
+          existingWeight != null &&
+          existingWeight > 0 &&
+          !fromTextWeight &&
+          !isLikelyFallbackWeightGrams(existingWeight) &&
+          resolveCategoryDefaultWeightGramsFromNames(hitNames) == null
         const resolvedWeight = resolveProductWeightGrams({
-          explicit: existingWeight != null && existingWeight > 0 ? existingWeight : null,
-          text: buildCategoryMatchCorpus(effectiveName, product.detailText, product.shortDescription),
+          explicit: keepExistingWeight ? existingWeight : fromTextWeight,
+          text: textCorpus,
           categoryNames: hitNames,
         })
-        const weightUpdated = !(existingWeight != null && existingWeight > 0) && resolvedWeight > 0
+        const weightUpdated = existingWeight == null || Math.round(existingWeight) !== resolvedWeight
 
         await prisma.$transaction(async tx => {
           await tx.product.update({
@@ -4016,18 +4070,39 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           preview.shortDescription,
         )
         const hits = matchSecondaryCategoriesByTitle(effectiveName, secondaryCategories, detailCorpus)
-        const isBrandShelfHit = (item: { parentName?: string | null }) =>
-          String(item.parentName || '').trim().toLowerCase() === 'brand'
+        const isBrandShelfHit = (item: {
+          parentName?: string | null
+          isBrandCategory?: boolean
+        }) =>
+          Boolean(item.isBrandCategory) ||
+          ['brand', 'brands', '品牌'].includes(String(item.parentName || '').trim().toLowerCase())
         const brandHit = hits.find(isBrandShelfHit) || null
-        const pricingTargetId = pickImportPricingTargetCategory(hits, row.targetCategoryId)
+        const pricingHits = hits
+          .filter(item => !isBrandShelfHit(item))
+          .slice()
+          .sort(
+            (a, b) =>
+              b.name.length - a.name.length ||
+              a.name.localeCompare(b.name, 'zh-CN'),
+          )
+        const pricingTargetId = pickImportPricingTargetCategory(
+          pricingHits.length ? pricingHits : hits,
+          row.targetCategoryId,
+        )
         const pricingTarget = pricingTargetId
-          ? hits.find(h => h.id === pricingTargetId) || null
-          : null
-        const targetCategoryId =
+          ? hits.find(h => h.id === pricingTargetId) || pricingHits.find(h => h.id === pricingTargetId) || null
+          : pricingHits[0] || null
+        let targetCategoryId =
+          pricingTarget?.id ||
           pricingTargetId ||
-          hits.find(h => !isBrandShelfHit(h))?.id ||
-          row.targetCategoryId ||
           null
+        // 待上传：禁止把一级类目（饰品等）继续当目标主类；无二级命中时才保留原 target（且须为二级）
+        if (!targetCategoryId && row.targetCategoryId) {
+          const ownershipFallback = await resolveImportCategoryOwnership(prisma, row.targetCategoryId).catch(() => null)
+          if (ownershipFallback?.isSecondary) {
+            targetCategoryId = ownershipFallback.primaryCategoryId
+          }
+        }
 
         const matchedIds = Array.from(new Set([
           ...hits.map(h => h.id),
@@ -4035,8 +4110,9 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           ...(brandHit ? [brandHit.id] : []),
         ].filter(Boolean)))
         const matchedNames = Array.from(new Set([
-          ...hits.map(h => h.name),
           ...(pricingTarget?.name ? [pricingTarget.name] : []),
+          ...pricingHits.map(h => h.name),
+          ...hits.map(h => h.name),
           ...(brandHit?.name ? [brandHit.name] : []),
         ].filter(Boolean)))
 
@@ -4045,18 +4121,25 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
         const skuWeights = skuTable
           .map(sku => toNumber(sku?.weightGrams))
           .filter((n): n is number => n != null && n > 0)
-        const explicitWeight =
-          existingWeight != null && existingWeight > 0
-            ? existingWeight
-            : skuWeights.length
-              ? Math.round(skuWeights.reduce((a, b) => a + b, 0) / skuWeights.length)
-              : null
+        const textCorpus = buildCategoryMatchCorpus(effectiveName, row.productDetail, preview.shortDescription)
+        const fromTextWeight = extractWeightGramsFromText(textCorpus)
+        const avgSkuWeight = skuWeights.length
+          ? Math.round(skuWeights.reduce((a, b) => a + b, 0) / skuWeights.length)
+          : null
+        const keepExistingWeight =
+          existingWeight != null &&
+          existingWeight > 0 &&
+          !fromTextWeight &&
+          !isLikelyFallbackWeightGrams(existingWeight) &&
+          resolveCategoryDefaultWeightGramsFromNames(matchedNames) == null
         const resolvedWeight = resolveProductWeightGrams({
-          explicit: explicitWeight,
-          text: buildCategoryMatchCorpus(effectiveName, row.productDetail, preview.shortDescription),
+          explicit: keepExistingWeight
+            ? existingWeight
+            : fromTextWeight || (avgSkuWeight && !isLikelyFallbackWeightGrams(avgSkuWeight) ? avgSkuWeight : null),
+          text: textCorpus,
           categoryNames: matchedNames,
         })
-        const weightUpdated = !(explicitWeight != null && explicitWeight > 0)
+        const weightUpdated = existingWeight == null || Math.round(existingWeight) !== resolvedWeight
 
         if (!hits.length && !brandNormalized && !weightUpdated && !targetCategoryId) {
           skipped += 1
@@ -4066,7 +4149,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
             name: effectiveName,
             name_before: null,
             brand_normalized: false,
-            weight_grams: explicitWeight,
+            weight_grams: existingWeight,
             weight_updated: false,
             primary_category_id: row.targetCategoryId || null,
             primary_category_name: null,
@@ -4085,6 +4168,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           matchedCategoryIds: matchedIds,
           matchedCategoryNames: matchedNames,
           categoryId: targetCategoryId || preview.categoryId,
+          categoryCalibrated: true,
         }
 
         await prisma.importtaskitem.update({
@@ -4092,7 +4176,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           data: {
             parsedName: effectiveName,
             targetCategoryId: targetCategoryId,
-            weightGrams: weightUpdated ? resolvedWeight : (existingWeight ?? resolvedWeight),
+            weightGrams: resolvedWeight,
             previewDataJson: nextPreview as any,
           },
         })
@@ -4131,7 +4215,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           name: effectiveName,
           name_before: brandNormalized ? nameBefore : null,
           brand_normalized: brandNormalized,
-          weight_grams: weightUpdated ? resolvedWeight : (explicitWeight ?? resolvedWeight),
+          weight_grams: resolvedWeight,
           weight_updated: weightUpdated,
           primary_category_id: targetCategoryId,
           primary_category_name: pricingTarget?.name || categories.find(c => c.kind === 'primary')?.category_name || null,
@@ -4232,6 +4316,7 @@ export const applyCalibrateCategoryEdits = requireRole([UserRole.ADMIN])(
                 categoryId: primaryId || preview.categoryId,
                 matchedCategoryIds: linkedIds,
                 matchedCategoryNames: nextNames,
+                categoryCalibrated: true,
               } as any,
             },
           })

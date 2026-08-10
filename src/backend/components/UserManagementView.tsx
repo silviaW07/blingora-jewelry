@@ -90,6 +90,9 @@ export default function UserManagementView({ state, handlers }: Props) {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             共检索到 <span className="font-semibold text-foreground">{state.total}</span> 名客户/用户
+            {state.urlParams.customerType
+              ? `（类型：${state.CUSTOMER_TYPE_OPTIONS.find(o => o.value === state.urlParams.customerType)?.label || state.urlParams.customerType}）`
+              : ''}
           </p>
         </div>
       </section>
@@ -128,6 +131,24 @@ export default function UserManagementView({ state, handlers }: Props) {
                 <SelectItem value="ALL">全部角色</SelectItem>
                 <SelectItem value="CUSTOMER">{state.ROLE_LABELS.CUSTOMER}</SelectItem>
                 <SelectItem value="ADMIN">{state.ROLE_LABELS.ADMIN}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[160px]">
+            <Select
+              value={state.urlParams.customerType || 'ALL'}
+              onValueChange={val => handlers.handleSelectChange('customerType', val)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="客户类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部类型</SelectItem>
+                {state.CUSTOMER_TYPE_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

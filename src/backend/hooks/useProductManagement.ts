@@ -2759,7 +2759,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       return
     }
     const confirmed = window.confirm(
-      `将对已勾选的 ${scopeIds.length} 条待上传商品执行一键校准（品牌归一 + 保底重量 + 类目识别），完成后可在弹窗中修改全部分类。是否继续？`,
+      `将对已勾选的 ${scopeIds.length} 条待上传商品执行一键校准（品牌归一 + 保底重量 + 类目识别）。校准结果会写回待上传区，保存后可人工核对；上架时只翻译标题，不再改类目。是否继续？`,
     )
     if (!confirmed) return
 
@@ -2821,9 +2821,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           linked_category_ids: item.linkedCategoryIds,
         })),
       })
-      toast.success(`类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}`)
+      toast.success(
+        calibrateResultScope === 'pending'
+          ? `类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}。待上传区已刷新，可核对后点「上架」（仅翻译标题）。`
+          : `类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}`,
+      )
       setCalibrateResultOpen(false)
       if (calibrateResultScope === 'pending') {
+        setActiveTab('pending_imports')
         await refreshPendingImportQueue()
       } else {
         await fetchList()

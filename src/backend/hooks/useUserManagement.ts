@@ -51,6 +51,7 @@ export interface UserManagementState {
   loading: boolean
   list: UserListItem[]
   total: number
+  typeCounts: Record<string, number>
   detailLoading: boolean
   detailData: UserDetail | null
   deleteDialogOpen: boolean
@@ -75,7 +76,8 @@ export interface UserManagementHandlers {
   handleTextChange: <K extends keyof FilterFields>(field: K, value: FilterFields[K]) => void
   handleCompositionStart: () => void
   handleCompositionEnd: <K extends keyof FilterFields>(field: K) => void
-  handleSelectChange: (key: 'role' | 'status', val: string) => void
+  handleSelectChange: (key: 'role' | 'status' | 'customerType', val: string) => void
+  handleCustomerTypeFilter: (customerType: string) => void
   handleResetFilters: () => void
   handlePageChange: (newPage: number) => void
   handlePageSizeChange: (newPageSize: number) => void
@@ -120,6 +122,7 @@ export function useUserManagement(): {
   const [loading, setLoading] = useState(false)
   const [list, setList] = useState<UserListItem[]>([])
   const [total, setTotal] = useState(0)
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({})
 
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailData, setDetailData] = useState<UserDetail | null>(null)
@@ -156,6 +159,7 @@ export function useUserManagement(): {
         email: urlParams.email,
         role: urlParams.role === 'ALL' ? '' : ((urlParams.role as SysUserRole | '') || 'CUSTOMER'),
         status: urlParams.status as SysUserStatus | '',
+        customerType: urlParams.customerType || '',
         sortBy,
         sortOrder,
         page,
@@ -163,6 +167,7 @@ export function useUserManagement(): {
       })
       setList(result.list)
       setTotal(result.total)
+      setTypeCounts(result.type_counts || {})
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -201,6 +206,7 @@ export function useUserManagement(): {
       email: urlParams.email,
       role: urlParams.role || 'CUSTOMER',
       status: urlParams.status,
+      customerType: urlParams.customerType || '',
       sortBy: urlParams.sortBy || 'createdAt',
       sortOrder: urlParams.sortOrder || 'desc',
       ...next,
@@ -226,12 +232,20 @@ export function useUserManagement(): {
     setPage(1)
   }
 
-  const handleSelectChange = (key: 'role' | 'status', val: string) => {
+  const handleSelectChange = (key: 'role' | 'status' | 'customerType', val: string) => {
     if (key === 'status') {
       pushFilters({ status: val === 'ALL' ? '' : val })
+    } else if (key === 'customerType') {
+      pushFilters({ customerType: val === 'ALL' ? '' : val })
     } else {
       pushFilters({ role: val })
     }
+    setPage(1)
+  }
+
+  const handleCustomerTypeFilter = (customerType: string) => {
+    const next = customerType === (urlParams.customerType || '') ? '' : customerType
+    pushFilters({ customerType: next })
     setPage(1)
   }
 
@@ -243,6 +257,7 @@ export function useUserManagement(): {
       email: '',
       role: 'CUSTOMER',
       status: '',
+      customerType: '',
       sortBy: 'createdAt',
       sortOrder: 'desc',
       userId: '',
@@ -477,6 +492,7 @@ export function useUserManagement(): {
       loading,
       list,
       total,
+      typeCounts,
       detailLoading,
       detailData,
       deleteDialogOpen,
@@ -501,6 +517,7 @@ export function useUserManagement(): {
       handleCompositionStart,
       handleCompositionEnd,
       handleSelectChange,
+      handleCustomerTypeFilter,
       handleResetFilters,
       handlePageChange,
       handlePageSizeChange,

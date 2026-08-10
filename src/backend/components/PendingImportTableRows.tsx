@@ -79,8 +79,18 @@ function PendingImportTableRowsInner({
 }: PendingImportTableRowsProps) {
   const expanded = state.expandedPendingImportIds.includes(item.item_id)
   const pendingSkus = item.item_skus || []
-  const targetCategoryOption = state.categoryOptions.find(option => option.category_id === item.item_targetCategoryId)
-  const targetCategoryName = targetCategoryOption?.category_name
+  const targetCategoryOption =
+    state.hierarchicalCategoryOptions?.find(option => option.category_id === item.item_targetCategoryId) ||
+    state.categoryOptions.find(option => option.category_id === item.item_targetCategoryId)
+  const targetCategoryName =
+    targetCategoryOption?.category_name?.replace(/^[　└\s]+/, '') ||
+    item.item_matchedCategoryNames?.[0] ||
+    null
+  const linkedCategoryLabels = (item.item_matchedCategoryNames || [])
+    .map(name => String(name || '').trim())
+    .filter(Boolean)
+    .filter(name => name !== targetCategoryName)
+    .slice(0, 6)
   const isReparsing = !!state.reparsingItemIds[item.item_id]
   const nowMs = state.pendingImportNowMs
   const readinessSnapshot = snapshotFromPendingImportQueueItem(item)
@@ -346,6 +356,19 @@ function PendingImportTableRowsInner({
                 表：{item.item_sourceCategoryName}
               </div>
             ) : null}
+            {linkedCategoryLabels.length ? (
+              <div className="flex flex-wrap gap-1 max-w-[180px]">
+                {linkedCategoryLabels.map(label => (
+                  <span
+                    key={label}
+                    className="inline-flex max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600"
+                    title={label}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <div className="text-[11px] text-slate-500">
               <PendingImportEditableCell
                 itemId={item.item_id}
@@ -522,8 +545,8 @@ function PendingImportTableRowsInner({
                   ? '正在重新解析，请稍候'
                   : canPublish
                     ? (effectivelyReady
-                      ? '采集进度已超时但核心字段齐全，可发布并上架到商品管理'
-                      : '发布并上架到商品管理')
+                      ? '采集进度已超时但核心字段齐全，可发布（已校准则只翻译标题）'
+                      : '发布并上架（已校准类目/重量会保留，只翻译标题）')
                     : '当前条目暂不可发布'
               }
               onClick={() => void handlers.publishPendingImportItem(item.item_id)}

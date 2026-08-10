@@ -21,7 +21,7 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Anklet', 'Anklets', '脚链'], synonyms: ['脚链', '脚镯', '脚踝链'] },
   { names: ['Brooch', 'Brooches', '胸针'], synonyms: ['胸针', '胸花', '别针'] },
   { names: ['Pendant', 'Pendants', '吊坠'], synonyms: ['吊坠', '挂坠', '坠子'] },
-  { names: ['Jewelry Set', 'Jewellery Set', 'jewelry set', '珠宝套装', '首饰套装'], synonyms: ['珠宝套装', '首饰套装', '套装', '三件套', '四件套', '二件套', '五件套', '套链'] },
+  { names: ['Jewelry Set', 'Jewellery Set', 'jewelry set', '珠宝套装', '首饰套装'], synonyms: ['珠宝套装', '首饰套装', '套装', '三件套', '四件套', '二件套', '五件套', '套链', 'earrings set', 'earring set', 'necklace set', 'necklace earrings set'] },
   { names: ['Hair Clip', 'Hairpin', '发夹'], synonyms: ['发夹', '发卡', '发簪', '抓夹'] },
   { names: ['Hair Rope', 'Hair Tie', '发绳'], synonyms: ['发绳', '发圈', '皮筋', '头绳'] },
   { names: ['Hair Band', 'Headband', '发带'], synonyms: ['发带', '发箍', '头箍', '头带'] },

@@ -211,7 +211,7 @@ export const CategoryManagement = {
 };
 
 // ================================================================
-// B07 客户管理 — 入参: account, email, role, status, userId, sortBy, sortOrder
+// B07 客户管理 — 入参: account, email, role, status, customerType, userId, sortBy, sortOrder
 // ================================================================
 export const UserManagement = {
   id: 'B07',
@@ -237,6 +237,11 @@ export const UserManagement = {
       source_column: 'status',
       description: '状态筛选，映射自 sysuser.status (ACTIVE/DISABLED)',
     },
+    customerType: {
+      source_table: 'sysuser',
+      source_column: 'customerType',
+      description: '客户类型筛选：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED',
+    },
     userId: {
       source_table: 'sysuser',
       source_column: 'id',
@@ -261,6 +266,7 @@ export const UserManagement = {
         email: string
         role: string
         status: string
+        customerType: string
         userId: string
         sortBy: string
         sortOrder: string
@@ -273,6 +279,7 @@ export const UserManagement = {
         email: sp.get('email') || '',
         role: sp.get('role') || '',
         status: sp.get('status') || '',
+        customerType: sp.get('customerType') || '',
         userId: sp.get('userId') || '',
         sortBy: sp.get('sortBy') || 'createdAt',
         sortOrder: sp.get('sortOrder') || 'desc',
@@ -289,6 +296,7 @@ export const UserManagement = {
       email?: string
       role?: string
       status?: string
+      customerType?: string
       userId?: string
       sortBy?: string
       sortOrder?: string

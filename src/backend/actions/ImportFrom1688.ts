@@ -44,6 +44,11 @@ export interface PreviewDataJson {
   categoryId?: string
   matchedCategoryIds?: string[]
   matchedCategoryNames?: string[]
+  /**
+   * 一键校准（或校准结果弹窗保存）已写入类目/重量。
+   * 上架时应信任这些结果，不再按标题重新扫类目覆盖。
+   */
+  categoryCalibrated?: boolean
   price?: number
   mainImageUrl?: string
   detailImages?: string[]
@@ -6820,9 +6825,18 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
       case 'source_category_name':
         data.sourceCategoryName = String(rawValue || '') || null
         break
-      case 'target_category_id':
-        data.targetCategoryId = String(rawValue || '') || null
+      case 'target_category_id': {
+        const nextId = String(rawValue || '') || null
+        data.targetCategoryId = nextId
+        const catPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+        data.previewDataJson = {
+          ...catPreview,
+          categoryId: nextId || catPreview.categoryId,
+          // 人工改主类目也视为已确认，上架时不再重扫覆盖
+          ...(nextId ? { categoryCalibrated: true } : {}),
+        } as any
         break
+      }
       case 'coefficient':
         if (numericValue === null || numericValue <= 0) throw new Error('价格系数必须大于0')
         data.coefficient = numericValue
@@ -7242,49 +7256,79 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           const productName = applyBrandAliases(item.parsedName || '', brandRules)
           const mainImageUrl = item.mainImageUrl || item.parsedMainImageUrl || ''
           const previewData = (item.previewDataJson as PreviewDataJson | null) || {}
-          const detailForMatch = buildCategoryMatchCorpus(
-            item.productDetail,
-            previewData.shortDescription,
-          )
-          const rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(
-            productName,
-            secondaryCategories,
-            detailForMatch,
-          )
           const previewMatchedIds = Array.from(
             new Set((previewData.matchedCategoryIds || []).filter(Boolean)),
           )
-          const brandHits = rematchedSecondaryCategories.filter(isBrandParentSecondaryCategory)
-          const pricingFromRematch = pickImportPricingTargetCategory(
-            rematchedSecondaryCategories,
-            null,
-          )
           const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
-          // 主类目只认真实一/二级商品类目；Brand 货架永远只能进关联 / brandCategoryId
-          const selectedCategoryId =
-            pickFirstNonBrandCategoryId(
-              [
-                item.targetCategoryId,
-                item.importTask.defaultCategoryId,
-                pricingFromRematch,
+          // 已一键校准（或弹窗保存过类目）：上架信任 target + matched，不再按标题重扫覆盖
+          const trustCalibratedCategories =
+            previewData.categoryCalibrated === true ||
+            (Boolean(String(item.targetCategoryId || '').trim()) && previewMatchedIds.length > 0)
+
+          let rematchedSecondaryCategories = [] as typeof secondaryCategories
+          let pricingFromRematch: string | null = null
+          let autoMatchedCategoryIds: string[] = []
+          let brandCategoryId: string | null = null
+          let brandMatchKeyword: string | null = null
+          let selectedCategoryId = ''
+
+          if (trustCalibratedCategories) {
+            autoMatchedCategoryIds = previewMatchedIds
+            const calibratedBrand =
+              autoMatchedCategoryIds
+                .map(id => secondaryById.get(id))
+                .find(cat => cat && isBrandParentSecondaryCategory(cat)) || null
+            brandCategoryId = calibratedBrand?.id || null
+            brandMatchKeyword = calibratedBrand?.name || null
+            selectedCategoryId =
+              pickFirstNonBrandCategoryId(
+                [
+                  item.targetCategoryId,
+                  previewData.categoryId,
+                  item.importTask.defaultCategoryId,
+                  ...autoMatchedCategoryIds,
+                ],
+                categoryMap,
+                secondaryById,
+              ) || ''
+          } else {
+            const detailForMatch = buildCategoryMatchCorpus(
+              item.productDetail,
+              previewData.shortDescription,
+            )
+            rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(
+              productName,
+              secondaryCategories,
+              detailForMatch,
+            )
+            const brandHits = rematchedSecondaryCategories.filter(isBrandParentSecondaryCategory)
+            pricingFromRematch = pickImportPricingTargetCategory(
+              rematchedSecondaryCategories,
+              null,
+            )
+            autoMatchedCategoryIds = Array.from(
+              new Set([
                 ...rematchedSecondaryCategories.map(category => category.id),
-              ],
-              categoryMap,
-              secondaryById,
-            ) || ''
+                ...previewMatchedIds,
+              ]),
+            )
+            brandCategoryId = brandHits[0]?.id || null
+            brandMatchKeyword = brandHits[0]?.name || null
+            selectedCategoryId =
+              pickFirstNonBrandCategoryId(
+                [
+                  item.targetCategoryId,
+                  item.importTask.defaultCategoryId,
+                  pricingFromRematch,
+                  ...rematchedSecondaryCategories.map(category => category.id),
+                ],
+                categoryMap,
+                secondaryById,
+              ) || ''
+          }
           if (!selectedCategoryId) {
             throw new Error('请选择手提包等真实一/二级类目（品牌货架不能作为主类目）')
           }
-
-          // 发布时重新扫描标题+详情；若预览已有多标签则合并去重
-          const autoMatchedCategoryIds = Array.from(
-            new Set([
-              ...rematchedSecondaryCategories.map(category => category.id),
-              ...previewMatchedIds,
-            ]),
-          )
-          const brandCategoryId = brandHits[0]?.id || null
-          const brandMatchKeyword = brandHits[0]?.name || null
 
           const ownership = await resolveImportCategoryOwnership(tx, selectedCategoryId)
           // 双保险：ownership 之后若仍落到 Brand，拒绝写入
@@ -7292,7 +7336,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目')
           }
           const categoryId = ownership.primaryCategoryId
-          // 主分类 + 自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
+          // 主分类 + 校准/自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
           const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
             ...ownership.linkedCategoryIds,
             ...autoMatchedCategoryIds,

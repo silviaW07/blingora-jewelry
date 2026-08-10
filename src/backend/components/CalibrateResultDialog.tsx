@@ -63,7 +63,7 @@ export default function CalibrateResultDialog({
               一键校准结果 · {scope === 'pending' ? '待上传' : '商品列表'}
             </DialogTitle>
             <DialogDescription className="text-slate-500 pt-1 leading-relaxed">
-              已完成品牌归一、保底重量与类目/系数识别。下方列出每条商品绑定的全部分类（含 below3 usd、normal quality 等），可勾选增删后保存。
+              已完成品牌归一、保底重量与类目识别。保存后会写回列表供核对；待上传条目上架时只翻译标题，不再覆盖已校准类目。
             </DialogDescription>
           </DialogHeader>
 

@@ -4,59 +4,127 @@
  * 策略（优先级从高到低）：
  *  1) 数据源已显式给出重量（表格/OneBound）→ 直接采用；
  *  2) 从标题/规格/详情文本正则提取（如 “500g / 0.5kg / 250克 / 1斤”）；
- *  3) 按商品「二级分类」兜底默认重量（下表）；
+ *  3) 按商品「二级分类」兜底默认重量（下表，含中英文类目名）；
  *  4) 最终兜底 500g。
  *
  * 单位：克(g)。运营在「待上传区」仍可双击逐条覆盖。
- * 组合类目（发夹&发绳 / 拖鞋&凉鞋 / 裤子&裙子）已拆分为独立分类并赋同一重量。
- * 带 * 的为估值，同样作为默认使用。
  */
+import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
+
 export const CATEGORY_DEFAULT_WEIGHT_GRAMS: Record<string, number> = {
-  // 珠宝
+  // 珠宝 / Jewelry（中英都要能命中：后台类目多为 Necklace/earrings）
   '耳环': 20,
+  '耳钉': 20,
+  '耳饰': 20,
+  earring: 20,
+  earrings: 20,
+  earing: 20,
   '项链': 40,
+  necklace: 40,
+  necklaces: 40,
   '手链': 30,
+  bracelet: 30,
+  bracelets: 30,
+  '手镯': 30,
+  bangle: 30,
+  bangles: 30,
   '戒指': 15,
+  ring: 15,
+  rings: 15,
+  '脚链': 20,
+  anklet: 20,
+  anklets: 20,
+  '胸针': 25,
+  brooch: 25,
+  brooches: 25,
+  '吊坠': 25,
+  pendant: 25,
+  pendants: 25,
   // 发饰 / 珠宝套装
   '发夹': 20,
   '发绳': 20,
   '发带': 80,
   '珠宝套装': 80,
+  '首饰套装': 80,
+  'jewelry set': 80,
+  'jewellery set': 80,
+  jewelryset: 80,
+  jewelleryset: 80,
+  'earrings set': 80,
+  'earring set': 80,
+  'necklace set': 80,
   // 鞋靴
   '平底鞋': 1500,
+  flats: 1500,
   '拖鞋': 1200,
+  slippers: 1200,
   '凉鞋': 1200,
+  sandals: 1200,
   '运动鞋': 2500,
+  sneakers: 2500,
   '靴子': 2800,
+  boots: 2800,
   // 美妆 / 香氛
   '口红': 60,
+  lipstick: 60,
   '香水': 650,
+  perfume: 650,
   '香水套装': 1200,
+  'perfume set': 1200,
   // 配件
   '皮带': 250,
+  belt: 250,
+  belts: 250,
   '眼镜': 80,
+  glasses: 80,
+  sunglasses: 80,
   '手表': 180,
+  watch: 180,
+  watches: 180,
   '手机壳': 60,
+  'phone case': 60,
+  phonecase: 60,
   '钥匙扣': 120,
+  keychain: 120,
   '表带': 40,
+  'watch band': 40,
   // 服饰 / 服饰配件
   '帽子': 450,
+  hat: 450,
+  hats: 450,
   '围巾': 650,
+  scarf: 650,
   '手套': 120,
+  gloves: 120,
   '上衣': 450,
+  top: 450,
+  tops: 450,
   '裤子': 650,
+  pants: 650,
   '裙子': 650,
+  skirt: 650,
+  dress: 650,
   // 内衣 / 运动
   '内衣': 100,
+  underwear: 100,
   '袜子': 150,
+  socks: 150,
   '泳衣': 150,
+  swimwear: 150,
   '瑜伽服': 500,
+  yoga: 500,
   '套装': 850,
   // 箱包
   '手提包': 700,
+  handbag: 700,
+  handbags: 700,
+  tote: 700,
   '背包': 1500,
+  backpack: 1500,
   '钱包': 350,
+  wallet: 350,
   '化妆包': 650,
+  'cosmetic bag': 650,
 }
 
 /** 无法识别且无分类兜底时的最终默认重量（克） */
@@ -65,10 +133,25 @@ export const FINAL_FALLBACK_WEIGHT_GRAMS = 500
 const WEIGHT_MIN_GRAMS = 1
 const WEIGHT_MAX_GRAMS = 200000 // 200kg 上限，过滤明显异常数值
 
+const normalizeWeightKey = (value: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+
 /** 分类键按长度降序，includes 兜底时优先命中更长（更具体）的类目名，如“珠宝套装”优先于“套装” */
 const CATEGORY_KEYS_BY_LENGTH_DESC = Object.keys(CATEGORY_DEFAULT_WEIGHT_GRAMS).sort(
   (a, b) => b.length - a.length,
 )
+
+const CATEGORY_WEIGHT_BY_NORMALIZED = (() => {
+  const map = new Map<string, number>()
+  for (const [key, grams] of Object.entries(CATEGORY_DEFAULT_WEIGHT_GRAMS)) {
+    map.set(normalizeWeightKey(key), grams)
+    map.set(normalizeWeightKey(key).replace(/\s+/g, ''), grams)
+  }
+  return map
+})()
 
 function clampGrams(value: number): number | null {
   if (!Number.isFinite(value)) return null
@@ -109,15 +192,34 @@ export function extractWeightGramsFromText(text?: string | null): number | null 
   return null
 }
 
-/** 单个二级分类名 → 默认重量；先精确匹配，再按最长包含匹配（兼容“男士皮带/时尚耳环”等带修饰名） */
+/** 单个二级分类名 → 默认重量；精确 / 大小写不敏感 / 包含 / 同义词 */
 export function resolveCategoryDefaultWeightGrams(categoryName?: string | null): number | null {
   if (!categoryName) return null
   const name = String(categoryName).trim()
   if (!name) return null
+
   if (CATEGORY_DEFAULT_WEIGHT_GRAMS[name] != null) return CATEGORY_DEFAULT_WEIGHT_GRAMS[name]
+
+  const normalized = normalizeWeightKey(name)
+  const compact = normalized.replace(/\s+/g, '')
+  const byNormalized = CATEGORY_WEIGHT_BY_NORMALIZED.get(normalized) ?? CATEGORY_WEIGHT_BY_NORMALIZED.get(compact)
+  if (byNormalized != null) return byNormalized
+
   for (const key of CATEGORY_KEYS_BY_LENGTH_DESC) {
-    if (name.includes(key)) return CATEGORY_DEFAULT_WEIGHT_GRAMS[key]
+    const keyNorm = normalizeWeightKey(key)
+    if (name.includes(key) || normalized.includes(keyNorm) || compact.includes(keyNorm.replace(/\s+/g, ''))) {
+      return CATEGORY_DEFAULT_WEIGHT_GRAMS[key]
+    }
   }
+
+  // Necklace → 同义词含「项链」→ 走中文重量表
+  for (const syn of resolveCategorySynonyms(name)) {
+    const synGrams =
+      CATEGORY_DEFAULT_WEIGHT_GRAMS[syn] ??
+      CATEGORY_WEIGHT_BY_NORMALIZED.get(normalizeWeightKey(syn))
+    if (synGrams != null) return synGrams
+  }
+
   return null
 }
 
@@ -126,7 +228,12 @@ export function resolveCategoryDefaultWeightGramsFromNames(
   names?: Array<string | null | undefined> | null,
 ): number | null {
   if (!names || names.length === 0) return null
-  for (const n of names) {
+  // 更具体的类目名优先（jewelry set > necklace）
+  const ordered = [...names]
+    .map(n => String(n || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  for (const n of ordered) {
     const grams = resolveCategoryDefaultWeightGrams(n)
     if (grams != null) return grams
   }
@@ -135,7 +242,7 @@ export function resolveCategoryDefaultWeightGramsFromNames(
 
 /**
  * 综合解析商品重量（克）。返回值必定有效（最终兜底 500）。
- * @param explicit    数据源显式重量（优先级最高）
+ * @param explicit    数据源显式重量（优先级最高）；一键校准时请勿把「历史 500 兜底」当 explicit
  * @param text        标题/规格/详情等可提取文本
  * @param categoryNames 候选二级分类名（用于兜底）
  */
@@ -157,4 +264,9 @@ export function resolveProductWeightGrams(input: {
   if (fromCategory != null) return fromCategory
 
   return FINAL_FALLBACK_WEIGHT_GRAMS
+}
+
+/** 是否像「未能识别时的 500g 兜底」——一键校准遇到时应允许按类目重算 */
+export function isLikelyFallbackWeightGrams(value?: number | null): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && Math.round(value) === FINAL_FALLBACK_WEIGHT_GRAMS
 }

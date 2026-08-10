@@ -15,7 +15,7 @@ export type { CustomerTagCode } from '@/backend/lib/customerTags'
 export { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
 import type { CustomerTagCode } from '@/backend/lib/customerTags'
 import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
-import { DEFAULT_CUSTOMER_TYPE, isValidCustomerType } from '@/shared/customerType'
+import { DEFAULT_CUSTOMER_TYPE, isValidCustomerType, normalizeCustomerType, CUSTOMER_TYPE_OPTIONS } from '@/shared/customerType'
 
 export interface UserOrderSummary {
   total: number
@@ -105,6 +105,8 @@ export interface GetUserListInput {
   keyword?: string
   role?: SysUserRole | ''
   status?: SysUserStatus | ''
+  /** 客户类型：NEW/UNCONVERTED/...；空=全部 */
+  customerType?: string
   sortBy?: UserListSortField
   sortOrder?: SortDirection
   page?: number
@@ -114,6 +116,8 @@ export interface GetUserListInput {
 export interface GetUserListOutput {
   list: UserListItem[]
   total: number
+  /** 在当前其他筛选条件下，各客户类型人数（不受 customerType 筛选影响，便于看分布） */
+  type_counts: Record<string, number>
 }
 
 export interface GetUserDetailInput {
@@ -323,11 +327,12 @@ export const getUserList = requireRole([UserRole.ADMIN])(
     const skip = (page - 1) * pageSize
     const sortBy = input.sortBy || 'createdAt'
     const sortOrder = input.sortOrder === 'asc' ? 'asc' : 'desc'
+    const customerTypeFilter = isValidCustomerType(input.customerType) ? String(input.customerType) : ''
 
-    const where: any = {}
+    const baseWhere: any = {}
     const keyword = input.keyword?.trim()
     if (keyword) {
-      where.OR = [
+      baseWhere.OR = [
         { account: { contains: keyword } },
         { email: { contains: keyword } },
         { username: { contains: keyword } },
@@ -335,16 +340,21 @@ export const getUserList = requireRole([UserRole.ADMIN])(
       ]
     }
     if (input.account?.trim()) {
-      where.account = { contains: input.account.trim() }
+      baseWhere.account = { contains: input.account.trim() }
     }
     if (input.email?.trim()) {
-      where.email = { contains: input.email.trim() }
+      baseWhere.email = { contains: input.email.trim() }
     }
     if (input.role) {
-      where.role = input.role.toUpperCase()
+      baseWhere.role = input.role.toUpperCase()
     }
     if (input.status) {
-      where.status = input.status.toUpperCase()
+      baseWhere.status = input.status.toUpperCase()
+    }
+
+    const where: any = {
+      ...baseWhere,
+      ...(customerTypeFilter ? { customerType: customerTypeFilter } : {}),
     }
 
     const include = {
@@ -375,7 +385,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
     } as const
 
     const needsInMemorySort = sortBy === 'cartUsdTotal'
-    const [total, users] = await Promise.all([
+    const [total, users, typeGroups] = await Promise.all([
       prisma.sysuser.count({ where }),
       prisma.sysuser.findMany({
         where,
@@ -389,8 +399,22 @@ export const getUserList = requireRole([UserRole.ADMIN])(
                 : { createdAt: sortOrder }
             }),
         include
-      })
+      }),
+      prisma.sysuser.groupBy({
+        by: ['customerType'],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
     ])
+
+    const type_counts: Record<string, number> = {}
+    for (const opt of CUSTOMER_TYPE_OPTIONS) {
+      type_counts[opt.value] = 0
+    }
+    for (const group of typeGroups) {
+      const key = normalizeCustomerType(group.customerType)
+      type_counts[key] = (type_counts[key] || 0) + Number(group._count?._all || 0)
+    }
 
     const emails = Array.from(new Set(users.map(user => user.email.trim().toLowerCase()).filter(Boolean)))
     const emailOrders = emails.length
@@ -452,7 +476,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
       list = list.slice(skip, skip + pageSize)
     }
 
-    return { list, total }
+    return { list, total, type_counts }
   })
 )
 
