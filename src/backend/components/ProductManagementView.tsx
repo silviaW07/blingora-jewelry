@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages, Square } from 'lucide-react';
 import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Checkbox, Sheet, SheetContent, SheetHeader, SheetTitle, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Textarea, Badge, Card, CardContent, Separator, Alert, AlertTitle, AlertDescription, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/backend/components/ui';
 import EditableImg from '@/@base/EditableImg';
@@ -13,7 +13,38 @@ import { ImportFromPinduoduoCollectModal } from '@/backend/components/ImportFrom
 import { Sync1688StatusResultPanel } from '@/backend/components/Sync1688StatusResultPanel'
 import { SharedProductBatchUtilityButtons } from '@/backend/components/SharedProductBatchUtilityButtons'
 import CalibrateResultDialog from '@/backend/components/CalibrateResultDialog'
-import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus, PendingImportItemFetchStatus, PendingImportItemPublishStatus, PendingImportTaskStatus } from '@/backend/types/ProductManagement';
+import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus, PendingImportItemFetchStatus, PendingImportItemPublishStatus } from '@/backend/types/ProductManagement';
+
+/** Compact page list with ellipsis for pending-upload / product list pagers. */
+function buildVisiblePageItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
+  const total = Math.max(1, Math.floor(totalPages) || 1)
+  const current = Math.min(Math.max(1, Math.floor(currentPage) || 1), total)
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const selected = new Set<number>([1, total])
+  for (let p = current - 1; p <= current + 1; p += 1) {
+    if (p >= 1 && p <= total) selected.add(p)
+  }
+  if (current <= 3) {
+    selected.add(2)
+    selected.add(3)
+    selected.add(4)
+  }
+  if (current >= total - 2) {
+    selected.add(total - 1)
+    selected.add(total - 2)
+    selected.add(total - 3)
+  }
+  const sorted = [...selected].sort((a, b) => a - b)
+  const items: Array<number | 'ellipsis'> = []
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) items.push('ellipsis')
+    items.push(sorted[i])
+  }
+  return items
+}
+
 const STATUS_CONFIG: Record<ProductStatus, {
   label: string;
   variant: 'default' | 'secondary' | 'outline' | 'destructive';
@@ -71,39 +102,6 @@ const SOURCE_CONFIG: Record<ProductSource, {
   TABLE_IMPORT: {
     label: '表格导入',
     icon: <TableProperties className="w-3 h-3 mr-1" data-api-unique-id='productmanagementview-r384a26ae0a044ab2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
-  }
-};
-const PENDING_TASK_STATUS_CONFIG: Record<PendingImportTaskStatus, {
-  label: string;
-  className: string;
-}> = {
-  PENDING: {
-    label: '待执行',
-    className: 'bg-slate-100 text-slate-700 border-slate-200'
-  },
-  RUNNING: {
-    label: '采集中',
-    className: 'bg-sky-50 text-sky-700 border-sky-200'
-  },
-  COMPLETED: {
-    label: '已完成',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200'
-  },
-  PARTIAL_SUCCESS: {
-    label: '部分成功',
-    className: 'bg-amber-50 text-amber-700 border-amber-200'
-  },
-  FAILED: {
-    label: '失败',
-    className: 'bg-rose-50 text-rose-700 border-rose-200'
-  },
-  RATE_LIMITED: {
-    label: '限流中',
-    className: 'bg-orange-50 text-orange-700 border-orange-200'
-  },
-  RETRY_PENDING: {
-    label: '待重试',
-    className: 'bg-violet-50 text-violet-700 border-violet-200'
   }
 };
 const PENDING_FETCH_STATUS_CONFIG: Record<PendingImportItemFetchStatus, {
@@ -171,8 +169,6 @@ export const ProductManagementView = ({
   const hasProductSelected = selectedProductIds.length > 0;
   const hasPendingSelected = state.pendingImportSelectedIds.length > 0;
   const pendingQueueAllSelected = state.pendingImportQueue.length > 0 && state.pendingImportSelectedIds.length === state.pendingImportQueue.length;
-  const pendingTaskStatusConfig = state.pendingImportActiveTask ? PENDING_TASK_STATUS_CONFIG[state.pendingImportActiveTask.task_status] : null;
-  const pendingTaskNeedsRetry = state.pendingImportActiveTask && ['FAILED', 'RATE_LIMITED', 'RETRY_PENDING'].includes(state.pendingImportActiveTask.task_status);
   const showPendingLandingNotice = state.shouldShowPendingImportLanding;
   const showPublishedLandingNotice = state.shouldShowPublishedDraftLanding;
   const isPendingTab = state.activeTab === 'pending_imports';
@@ -183,6 +179,18 @@ export const ProductManagementView = ({
     : pendingParseActive
       ? '终止解析'
       : '解析';
+  const pendingPageItems = useMemo(
+    () => buildVisiblePageItems(state.pendingImportPage, state.pendingImportTotalPages),
+    [state.pendingImportPage, state.pendingImportTotalPages],
+  );
+  const productPageItems = useMemo(
+    () =>
+      buildVisiblePageItems(
+        state.currentPage,
+        Math.max(1, Math.ceil((state.total || 0) / Math.max(1, state.pageSize || 1))),
+      ),
+    [state.currentPage, state.total, state.pageSize],
+  );
 
   // 共享的「商品列表 / 待上传区 / 上传Excel / 采集 / 新增」标签导航。
   // 商品列表 tab 放在顶部工具条右侧；待上传区 tab 单独成行（第三排）。
@@ -450,9 +458,37 @@ export const ProductManagementView = ({
 
               <div className="flex items-center justify-between mt-6 px-2" data-api-unique-id='productmanagementview-r90e32b8cc04d23f2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <div className="text-sm text-slate-500" data-api-unique-id='productmanagementview-r2863deb6f2f2e772-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>显示第 <span className="font-bold text-slate-700" data-api-unique-id='productmanagementview-re150b9a0b49b2f66-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.total === 0 ? 0 : (state.currentPage - 1) * state.pageSize + 1}</span> 到 <span className="font-bold text-slate-700" data-api-unique-id='productmanagementview-r34b5db4c2f20b681-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'> {Math.min(state.currentPage * state.pageSize, state.total)}</span> 条，共 <span className="font-bold text-slate-700" data-api-unique-id='productmanagementview-r4549ff34125fe7f1-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.total}</span> 条商品记录</div>
-                <div className="flex items-center gap-2" data-api-unique-id='productmanagementview-r39264338d35ea619-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                <div className="flex items-center gap-2 flex-wrap justify-end" data-api-unique-id='productmanagementview-r39264338d35ea619-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                  <span className="text-xs text-slate-500 mr-1 tabular-nums">
+                    第 {state.currentPage} / {Math.max(1, Math.ceil((state.total || 0) / Math.max(1, state.pageSize || 1)))} 页
+                  </span>
                   <Button variant="outline" size="sm" className="h-9 px-4" disabled={state.currentPage <= 1 || state.loading} onClick={() => handlers.setCurrentPage(state.currentPage - 1)} data-api-unique-id='productmanagementview-r043a8e9c280c19c7-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>上一页</Button>
-                  <div className="flex items-center justify-center min-w-[40px] h-9 bg-primary/5 text-primary font-bold rounded-md border border-primary/10" data-api-unique-id='productmanagementview-ra55857dfa67aae8a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.currentPage}</div>
+                  {productPageItems.map((item, index) =>
+                    item === 'ellipsis' ? (
+                      <span
+                        key={`product-ellipsis-${index}`}
+                        className="inline-flex h-9 min-w-[28px] items-center justify-center text-slate-400"
+                        aria-hidden
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <Button
+                        key={`product-page-${item}`}
+                        type="button"
+                        variant={item === state.currentPage ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-9 min-w-[40px] px-3 tabular-nums"
+                        disabled={state.loading}
+                        aria-current={item === state.currentPage ? 'page' : undefined}
+                        onClick={() => handlers.setCurrentPage(item)}
+                        data-api-unique-id={`productmanagementview-rproduct-page-${item}-s2030557363`}
+                        data-api-unique-page-name='src/backend/components/ProductManagementView'
+                      >
+                        {item}
+                      </Button>
+                    ),
+                  )}
                   <Button variant="outline" size="sm" className="h-9 px-4" disabled={state.currentPage * state.pageSize >= state.total || state.loading} onClick={() => handlers.setCurrentPage(state.currentPage + 1)} data-api-unique-id='productmanagementview-r3e35d9c400f049dc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>下一页</Button>
                 </div>
               </div>
@@ -473,125 +509,55 @@ export const ProductManagementView = ({
                   </AlertDescription>
                 </Alert>}
 
-              <Card className="border-primary/10 shadow-sm overflow-hidden" data-controller-name="1688采集任务头" data-api-unique-id='productmanagementview-r2de9471194d05392-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <CardContent className="p-4 space-y-3" data-api-unique-id='productmanagementview-r386095967bd4b83f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                  {state.pendingImportParseJob?.busy ? (
-                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-bold uppercase tracking-wider text-sky-700">当前解析进度</div>
-                          <div className="mt-1 text-base font-semibold text-sky-950">
-                            {state.pendingImportParseStatusLabel || '正在解析…'}
-                          </div>
-                          {state.pendingImportParseJob.label ? (
-                            <div className="mt-1 text-xs text-sky-700/80 font-mono">{state.pendingImportParseJob.label}</div>
-                          ) : null}
-                        </div>
-                        <Button
-                          variant="destructive"
-                          className="h-10"
-                          disabled={state.pendingImportParseCancelling}
-                          onClick={() => void handlers.cancelPendingImportParse()}
-                        >
-                          <Square className="w-4 h-4 mr-2 fill-current" />
-                          {state.pendingImportParseCancelling ? '终止中…' : '终止解析'}
-                        </Button>
+              {/* 仅在真正有进行中的解析作业时展示进度；卡住的「导入任务」统计条已移除 */}
+              {state.pendingImportParseJob?.busy ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3" data-controller-name="当前解析进度">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-sky-700">当前解析进度</div>
+                      <div className="mt-1 text-base font-semibold text-sky-950">
+                        {state.pendingImportParseStatusLabel || '正在解析…'}
                       </div>
-                      {state.pendingImportParseJob.total > 0 ? (
-                        <>
-                          <div className="flex items-end justify-between gap-3">
-                            <div className="text-3xl font-header font-bold text-sky-900">
-                              {Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100))}%
-                            </div>
-                            <span className="text-xs text-sky-700">
-                              已完成 {state.pendingImportParseJob.done} / {state.pendingImportParseJob.total}
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-sky-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-sky-600 transition-all"
-                              style={{
-                                width: `${Math.max(0, Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100)))}%`,
-                              }}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-sm text-sky-800">后台正在处理，进度会每几秒自动刷新。若长时间无变化可点「终止解析」后重试。</p>
-                      )}
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap items-start justify-between gap-4" data-api-unique-id='productmanagementview-r63bbb93f19ce6661-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                    <div className="space-y-2" data-api-unique-id='productmanagementview-r77e8586743ac3f02-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                      <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-rb5b0868c746cbb7f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <Badge variant="outline" className={pendingTaskStatusConfig?.className || 'bg-slate-100 text-slate-700 border-slate-200'} data-api-unique-id='productmanagementview-r7a258ae9a556e006-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{pendingTaskStatusConfig?.label || '暂无任务'}</Badge>
-                        <span className="text-lg font-header font-bold text-slate-900" data-api-unique-id='productmanagementview-r66804f41c04825e8-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask?.task_taskName || '暂无进行中的 1688 采集任务'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-r9a7728f5e417ad3a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                      <Button variant="outline" className="h-10 border-slate-200" disabled={state.pendingImportRefreshing || state.pendingImportQueueLoading} onClick={() => handlers.refreshPendingImportQueue()} data-api-unique-id='productmanagementview-r229f655f659cc41f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <RotateCcw className={`w-4 h-4 mr-2 ${state.pendingImportRefreshing || state.pendingImportQueueLoading ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-r87fece432f878dec-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />刷新队列
-                      </Button>
-                      {pendingParseActive ? (
-                        <Button
-                          variant="destructive"
-                          className="h-10"
-                          disabled={state.pendingImportParseCancelling}
-                          onClick={() => void handlers.cancelPendingImportParse()}
-                        >
-                          <Square className="w-4 h-4 mr-2 fill-current" />
-                          {state.pendingImportParseCancelling ? '终止中…' : '终止解析'}
-                        </Button>
+                      {state.pendingImportParseJob.label ? (
+                        <div className="mt-1 text-xs text-sky-700/80 font-mono">{state.pendingImportParseJob.label}</div>
                       ) : null}
-                      {pendingTaskNeedsRetry && <Button variant="outline" className="h-10 border-amber-200 text-amber-700 hover:bg-amber-50" disabled={state.pendingImportRefreshing || pendingParseActive} onClick={handlers.retryPendingImportActiveTask} data-api-unique-id='productmanagementview-r97745bd15744d9cb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <RotateCcw className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r0f2549fa27ce998f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />重试任务
-                        </Button>}
                     </div>
+                    <Button
+                      variant="destructive"
+                      className="h-10"
+                      disabled={state.pendingImportParseCancelling}
+                      onClick={() => void handlers.cancelPendingImportParse()}
+                    >
+                      <Square className="w-4 h-4 mr-2 fill-current" />
+                      {state.pendingImportParseCancelling ? '终止中…' : '终止解析'}
+                    </Button>
                   </div>
-
-                  {state.pendingImportActiveTask ? <>
-                      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4" data-api-unique-id='productmanagementview-r32f50b560661bcc3-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-api-unique-id='productmanagementview-r38c4e73f773d7787-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="text-xs font-bold uppercase tracking-wider text-slate-500" data-api-unique-id='productmanagementview-r2b4e0ddfcbe9d086-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>进度</div>
-                          <div className="mt-3 flex items-end justify-between gap-3" data-api-unique-id='productmanagementview-r96977252d7168dab-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                            <div className="text-3xl font-header font-bold text-slate-900" data-api-unique-id='productmanagementview-reb463f89e0d43432-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask.task_progressPercent}%</div>
-                            <span className="text-xs text-slate-500" data-api-unique-id='productmanagementview-r6d335c51fd3320e5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask.task_sourceLinkCount} 条链接</span>
-                          </div>
-                          <div className="mt-3 h-2 w-full rounded-full bg-slate-200 overflow-hidden" data-api-unique-id='productmanagementview-r257ed40bacadf301-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><div className="h-full rounded-full bg-primary transition-all" style={{
-                        width: `${Math.max(0, Math.min(100, state.pendingImportActiveTask.task_progressPercent))}%`
-                      }} data-api-unique-id='productmanagementview-r32757b1e93b1af62-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' /></div>
+                  {state.pendingImportParseJob.total > 0 ? (
+                    <>
+                      <div className="flex items-end justify-between gap-3">
+                        <div className="text-3xl font-header font-bold text-sky-900">
+                          {Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100))}%
                         </div>
-                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4" data-api-unique-id='productmanagementview-r4c070124cb413f64-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="text-xs font-bold uppercase tracking-wider text-emerald-700" data-api-unique-id='productmanagementview-r307cbefc7558d2ac-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>采集成功</div>
-                          <div className="mt-3 text-3xl font-header font-bold text-emerald-700" data-api-unique-id='productmanagementview-rea34d969906b3b33-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask.task_successCount}</div>
-                          <div className="text-xs text-emerald-600 mt-2" data-api-unique-id='productmanagementview-r494aa01f98a92219-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已自动进入待上传区的成功条目</div>
-                        </div>
-                        <div className="rounded-xl border border-rose-100 bg-rose-50 p-4" data-api-unique-id='productmanagementview-r0ff5446a9fc568f6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="text-xs font-bold uppercase tracking-wider text-rose-700" data-api-unique-id='productmanagementview-rf4e065f45c3919c6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>采集失败</div>
-                          <div className="mt-3 text-3xl font-header font-bold text-rose-700" data-api-unique-id='productmanagementview-r176ed36910aff147-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask.task_failureCount}</div>
-                          <div className="text-xs text-rose-600 mt-2" data-api-unique-id='productmanagementview-rfd3651b6f2b4d85d-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>失败项可在任务重试后继续抓取</div>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-white p-4" data-api-unique-id='productmanagementview-rea62cfee1e0f0b03-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                          <div className="text-xs font-bold uppercase tracking-wider text-slate-500" data-api-unique-id='productmanagementview-reae5ef40121837bc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>默认入库策略</div>
-                          <div className="mt-3 space-y-2 text-sm text-slate-700" data-api-unique-id='productmanagementview-r4703c37e806b6ecc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                            <div className="flex items-center justify-between gap-3" data-api-unique-id='productmanagementview-r11a24737234dc5b0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><span data-api-unique-id='productmanagementview-r2c079ebbbc68c73c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>默认状态</span><Badge variant="outline" data-api-unique-id='productmanagementview-r83855182d66dfea4-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{STATUS_CONFIG[state.pendingImportActiveTask.task_defaultStatus].label}</Badge></div>
-                            <div className="flex items-center justify-between gap-3" data-api-unique-id='productmanagementview-rf01185b17abda3c2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><span data-api-unique-id='productmanagementview-rdd78c971ccc95ef5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>默认分类</span><span className="font-medium" data-api-unique-id='productmanagementview-r2f465738f02e10ac-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.categoryOptions.find(option => option.category_id === state.pendingImportActiveTask?.task_defaultCategoryId)?.category_name || state.pendingImportActiveTask.task_defaultCategoryId || '未配置'}</span></div>
-                          </div>
-                        </div>
+                        <span className="text-xs text-sky-700">
+                          已完成 {state.pendingImportParseJob.done} / {state.pendingImportParseJob.total}
+                        </span>
                       </div>
-                    </> : <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-6 flex items-center justify-between gap-4" data-api-unique-id='productmanagementview-rcf7b6282dab05ada-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                      <div data-api-unique-id='productmanagementview-r80d2edd211bc97f7-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <div className="font-semibold text-slate-900" data-api-unique-id='productmanagementview-r6f8d3d1050310f52-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>当前没有进行中的采集任务</div>
-                        <p className="text-sm text-slate-500 mt-1" data-api-unique-id='productmanagementview-r141c5a61cbb3e0cc-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>请点击顶部「1688 多链接采集」新建采集任务，成功后条目会自动汇入待上传区进行逐项校对。</p>
+                      <div className="h-2 w-full rounded-full bg-sky-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-sky-600 transition-all"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100)))}%`,
+                          }}
+                        />
                       </div>
-                      <Button className="h-10 bg-primary text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-r4f5643b49fc3e47c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        <Link2 className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-r4511b8bfea6597ba-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />前往导入工作台
-                      </Button>
-                    </div>}
-                </CardContent>
-              </Card>
+                    </>
+                  ) : (
+                    <p className="text-sm text-sky-800">后台正在处理，进度会每几秒自动刷新。若长时间无变化可点「终止解析」后重试。</p>
+                  )}
+                </div>
+              ) : null}
 
-              {/* 第二排：操作功能区（紧贴统计区下方） */}
+              {/* 第二排：操作功能区 */}
               {pendingActionButtons}
 
               {/* 第三排：标签导航区（与商品列表页共享同一组导航按钮，保持视觉平行） */}
@@ -606,6 +572,9 @@ export const ProductManagementView = ({
                     </div>
                     <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-ra39dddcb912be772-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                       {hasPendingSelected && <span className="text-sm text-muted-foreground font-medium" data-api-unique-id='productmanagementview-r2829f14a93306ee9-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary" data-api-unique-id='productmanagementview-rb402189cfe941d97-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportSelectedIds.length}</span> 项</span>}
+                      <Button variant="outline" className="h-10 border-slate-200" disabled={state.pendingImportRefreshing || state.pendingImportQueueLoading} onClick={() => handlers.refreshPendingImportQueue()} data-api-unique-id='productmanagementview-r229f655f659cc41f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                        <RotateCcw className={`w-4 h-4 mr-2 ${state.pendingImportRefreshing || state.pendingImportQueueLoading ? 'animate-spin' : ''}`} data-api-unique-id='productmanagementview-r87fece432f878dec-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />刷新队列
+                      </Button>
                       <Button className="h-10 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-r21dd9eb44fdc6480-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                         <ArrowUpCircle className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-ra4cb692981cf2dd5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportPublishing ? '发布中...' : '一键发布并上架'}
                       </Button>
@@ -668,9 +637,37 @@ export const ProductManagementView = ({
                       <div className="text-sm text-slate-500" data-api-unique-id='productmanagementview-rpending-pager-text-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                         显示第 <span className="font-bold text-slate-700">{state.pendingImportQueueTotal === 0 ? 0 : (state.pendingImportPage - 1) * state.pendingImportPageSize + 1}</span> 到 <span className="font-bold text-slate-700">{Math.min(state.pendingImportPage * state.pendingImportPageSize, state.pendingImportQueueTotal)}</span> 条，共 <span className="font-bold text-slate-700">{state.pendingImportQueueTotal}</span> 条待上传条目（每页 {state.pendingImportPageSize} 条）
                       </div>
-                      <div className="flex items-center gap-2" data-api-unique-id='productmanagementview-rpending-pager-btns-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                      <div className="flex items-center gap-2 flex-wrap justify-end" data-api-unique-id='productmanagementview-rpending-pager-btns-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                        <span className="text-xs text-slate-500 mr-1 tabular-nums">
+                          第 {state.pendingImportPage} / {state.pendingImportTotalPages} 页
+                        </span>
                         <Button variant="outline" size="sm" className="h-9 px-4" disabled={state.pendingImportPage <= 1 || state.pendingImportQueueLoading} onClick={() => handlers.setPendingImportPage(state.pendingImportPage - 1)} data-api-unique-id='productmanagementview-rpending-prev-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>上一页</Button>
-                        <div className="flex items-center justify-center min-w-[40px] h-9 bg-primary/5 text-primary font-bold rounded-md border border-primary/10" data-api-unique-id='productmanagementview-rpending-page-num-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportPage}</div>
+                        {pendingPageItems.map((item, index) =>
+                          item === 'ellipsis' ? (
+                            <span
+                              key={`pending-ellipsis-${index}`}
+                              className="inline-flex h-9 min-w-[28px] items-center justify-center text-slate-400"
+                              aria-hidden
+                            >
+                              …
+                            </span>
+                          ) : (
+                            <Button
+                              key={`pending-page-${item}`}
+                              type="button"
+                              variant={item === state.pendingImportPage ? 'default' : 'outline'}
+                              size="sm"
+                              className="h-9 min-w-[40px] px-3 tabular-nums"
+                              disabled={state.pendingImportQueueLoading}
+                              aria-current={item === state.pendingImportPage ? 'page' : undefined}
+                              onClick={() => handlers.setPendingImportPage(item)}
+                              data-api-unique-id={`productmanagementview-rpending-page-${item}-s2030557363`}
+                              data-api-unique-page-name='src/backend/components/ProductManagementView'
+                            >
+                              {item}
+                            </Button>
+                          ),
+                        )}
                         <Button variant="outline" size="sm" className="h-9 px-4" disabled={state.pendingImportPage >= state.pendingImportTotalPages || state.pendingImportQueueLoading} onClick={() => handlers.setPendingImportPage(state.pendingImportPage + 1)} data-api-unique-id='productmanagementview-rpending-next-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>下一页</Button>
                       </div>
                     </div>

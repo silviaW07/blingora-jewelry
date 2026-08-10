@@ -5502,6 +5502,26 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
 
     const snapshot = await loadPendingImportQueueSnapshot({ page, page_size: pageSize })
 
+    // Self-heal stale in-memory mutex when DB has no RUNNING work (e.g. crash / multi-worker drift).
+    if (parseJobBusy) {
+      try {
+        const [runningTasks, runningItems] = await Promise.all([
+          prisma.importtask.count({ where: { status: 'RUNNING' as any } }),
+          prisma.importtaskitem.count({
+            where: { fetchStatus: 'RUNNING' as any, isPublished: false },
+          }),
+        ])
+        if (runningTasks === 0 && runningItems === 0) {
+          parseJobBusy = false
+          parseJobLabel = null
+          parseJobCancelRequested = false
+          parseJobProgress = null
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to self-heal parse job mutex', error)
+      }
+    }
+
     return {
       activeTask: snapshot.activeTask,
       list: snapshot.items,

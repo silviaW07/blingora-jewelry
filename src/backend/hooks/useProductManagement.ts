@@ -220,7 +220,7 @@ const defaultPendingImportTaskForm = (): PendingImportTaskForm => ({
   stockStrategyStock: '1'
 })
 
-const pollingTaskStatuses: PendingImportTaskStatus[] = ['PENDING', 'RUNNING', 'RETRY_PENDING', 'RATE_LIMITED']
+const pollingTaskStatuses: PendingImportTaskStatus[] = ['PENDING', 'RUNNING', 'RATE_LIMITED']
 
 const normalizePendingImportTextField = (value: PendingImportFieldValue) => String(value ?? '').trim()
 
@@ -941,7 +941,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportActiveTask, setPendingImportActiveTask] = useState<PendingImportQueueTaskSummary | null>(null)
   const pendingImportCollectRunning = Boolean(
     pendingImportActiveTask &&
-      ['PENDING', 'RUNNING', 'RATE_LIMITED'].includes(pendingImportActiveTask.task_status),
+      // PENDING alone is often a stuck queue entry — don't lock the whole pending tab.
+      ['RUNNING', 'RATE_LIMITED'].includes(pendingImportActiveTask.task_status),
   )
   const pendingImportParseActive =
     pendingImportReparsing || pendingImportCollectRunning || Boolean(pendingImportParseJob?.busy)
@@ -1248,6 +1249,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const pendingImportPageRef = useRef(pendingImportPage)
   pendingImportPageRef.current = pendingImportPage
+  const pendingImportFetchGenRef = useRef(0)
 
   // Prefer refs so refresh callback identity stays stable (avoids remount-driven re-fetch).
   const pendingImportQueueLengthRef = useRef(0)
@@ -1259,6 +1261,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number }) => {
     const silent = options?.silent ?? false
     const page = Math.max(1, options?.page ?? pendingImportPageRef.current)
+    const fetchGen = ++pendingImportFetchGenRef.current
     if (silent) {
       setPendingImportRefreshing(true)
     } else {
@@ -1274,10 +1277,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         } as any,
         { __rpcTimeoutMs: 90_000 },
       )
+      // Ignore stale responses so poll/refresh cannot overwrite a newer page change.
+      if (fetchGen !== pendingImportFetchGenRef.current) return
       applyPendingImportQueueResult(result)
       pendingImportLastFetchedAtRef.current = Date.now()
       setPendingImportQueueError(null)
     } catch (err: any) {
+      if (fetchGen !== pendingImportFetchGenRef.current) return
       const raw = String(err?.message || '')
       const isTimeout = /请求超时/.test(raw)
       const message = /Failed to fetch|无法连接|NetworkError|fetch failed/i.test(raw)
@@ -1302,6 +1308,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       }
       setPendingImportQueueError(message)
     } finally {
+      if (fetchGen !== pendingImportFetchGenRef.current) return
       if (silent) {
         setPendingImportRefreshing(false)
       } else {
@@ -1311,7 +1318,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }, [applyPendingImportQueueResult, pendingImportPageSize])
 
   const handleSetPendingImportPage = (page: number) => {
-    const next = Math.max(1, Math.min(page, Math.max(1, Math.ceil(pendingImportQueueTotal / pendingImportPageSize))))
+    const totalPages = Math.max(1, Math.ceil(pendingImportQueueTotal / pendingImportPageSize))
+    const next = Math.max(1, Math.min(page, totalPages))
+    if (next === pendingImportPageRef.current && pendingImportQueue.length > 0) {
+      // Same page already loaded — still allow forced refresh via other controls.
+      return
+    }
+    pendingImportPageRef.current = next
     setPendingImportPage(next)
     void refreshPendingImportQueue({ silent: true, page: next })
   }
