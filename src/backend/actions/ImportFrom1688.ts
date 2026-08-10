@@ -707,24 +707,38 @@ export const resolveImportCategoryOwnership = async (
 ): Promise<ImportCategoryOwnership> => {
   const category = await tx.category.findUnique({
     where: { id: categoryId },
-    select: { id: true, level: true, parentId: true, status: true }
+    select: {
+      id: true,
+      level: true,
+      parentId: true,
+      status: true,
+      isBrandCategory: true,
+      parent: { select: { id: true, status: true, name: true, isBrandCategory: true } },
+    },
   })
   if (!category || category.status !== 'ACTIVE') {
     throw new Error('目标分类不存在或已停用')
   }
+  const parentName = String(category.parent?.name || '').trim().toLowerCase()
+  if (
+    category.isBrandCategory ||
+    category.parent?.isBrandCategory ||
+    parentName === 'brand' ||
+    parentName === 'brands' ||
+    parentName === '品牌'
+  ) {
+    throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目')
+  }
 
   const isSecondary = Number(category.level) === 2 && !!category.parentId
   if (isSecondary) {
-    const parent = await tx.category.findUnique({
-      where: { id: category.parentId },
-      select: { id: true, status: true }
-    })
+    const parent = category.parent
     if (parent?.status === 'ACTIVE') {
-  return {
+      return {
         primaryCategoryId: category.id,
         linkedCategoryIds: [parent.id, category.id],
         isSecondary: true,
-        parentCategoryId: parent.id
+        parentCategoryId: parent.id,
       }
     }
   }
@@ -733,7 +747,7 @@ export const resolveImportCategoryOwnership = async (
     primaryCategoryId: category.id,
     linkedCategoryIds: [category.id],
     isSecondary: false,
-    parentCategoryId: null
+    parentCategoryId: null,
   }
 }
 
@@ -804,6 +818,7 @@ type ImportPricingCategoryMeta = {
   name: string
   parentId: string | null
   priceCoefficient: unknown
+  isBrandCategory?: boolean | null
 }
 
 const loadImportPricingCategories = async (db: typeof prisma) => {
@@ -813,10 +828,14 @@ const loadImportPricingCategories = async (db: typeof prisma) => {
       name: true,
       parentId: true,
       priceCoefficient: true,
+      isBrandCategory: true,
     },
   })
   return new Map<string, ImportPricingCategoryMeta>(categories.map((category) => [category.id, category]))
 }
+
+const isBrandShelfParentName = (name?: string | null) =>
+  ['brand', 'brands', '品牌'].includes(String(name || '').trim().toLowerCase())
 
 const resolveImportCategoryCoefficient = (
   categoryMap: Map<string, ImportPricingCategoryMeta>,
@@ -826,8 +845,9 @@ const resolveImportCategoryCoefficient = (
   const parent = current?.parentId ? categoryMap.get(current.parentId) || null : null
   // Brand shelf L2 must not drive import pricing — fall through to default via nulls.
   const currentIsBrandChild =
-    parent && String(parent.name || '').trim().toLowerCase() === 'brand'
-  const parentIsBrandShelf = parent && String(parent.name || '').trim().toLowerCase() === 'brand'
+    Boolean(current?.isBrandCategory) ||
+    Boolean(parent?.isBrandCategory) ||
+    isBrandShelfParentName(parent?.name)
 
   const own =
     current &&
@@ -837,7 +857,8 @@ const resolveImportCategoryCoefficient = (
       : null
   const parentCoefficient =
     parent &&
-    !parentIsBrandShelf &&
+    !parent.isBrandCategory &&
+    !isBrandShelfParentName(parent.name) &&
     !isAggregatePricingCategoryName(parent.name)
       ? toNumberOrNull(parent.priceCoefficient)
       : null
@@ -4781,6 +4802,20 @@ const createProductRecord = async (tx: any, params: {
   nameEs?: string | null
 }) => {
   const categoryMeta = await resolveImportCategoryIdentifierMeta(tx, params.categoryId)
+  const brandGuard = await tx.category.findUnique({
+    where: { id: params.categoryId },
+    select: {
+      isBrandCategory: true,
+      parent: { select: { name: true, isBrandCategory: true } },
+    },
+  })
+  if (
+    brandGuard?.isBrandCategory ||
+    brandGuard?.parent?.isBrandCategory ||
+    isBrandShelfParentName(brandGuard?.parent?.name)
+  ) {
+    throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目')
+  }
   // 重量自动识别：显式重量优先 → 标题/规格/详情正则提取 → 二级分类兜底 → 500g
   const weightSourceText = [
     params.name,
@@ -5033,8 +5068,43 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
 
 const isBrandParentSecondaryCategory = (category: AutoMatchedSecondaryCategory) => {
   if (category.isBrandCategory) return true
-  const parent = String(category.parentName || '').trim().toLowerCase()
-  return parent === 'brand' || parent === 'brands' || parent === '品牌'
+  return isBrandShelfParentName(category.parentName)
+}
+
+/** Brand 货架（自身或父级）永远不能当主类目 / 定价类目 */
+const isBrandShelfCategoryId = (
+  categoryId: string | null | undefined,
+  categoryMap: Map<string, ImportPricingCategoryMeta>,
+  secondaryById?: Map<string, AutoMatchedSecondaryCategory>,
+): boolean => {
+  const id = String(categoryId || '').trim()
+  if (!id) return false
+  const fromAuto = secondaryById?.get(id)
+  if (fromAuto && isBrandParentSecondaryCategory(fromAuto)) return true
+  const meta = categoryMap.get(id)
+  if (!meta) return false
+  if (meta.isBrandCategory) return true
+  const parent = meta.parentId ? categoryMap.get(meta.parentId) : null
+  if (parent?.isBrandCategory) return true
+  return isBrandShelfParentName(parent?.name)
+}
+
+/**
+ * 从候选里挑主类目：只接受真实一/二级商品类目，跳过全部 Brand 货架。
+ * 顺序即优先级（运营手选 > 任务默认 > 自动命中的 Handbag 等）。
+ */
+const pickFirstNonBrandCategoryId = (
+  candidates: Array<string | null | undefined>,
+  categoryMap: Map<string, ImportPricingCategoryMeta>,
+  secondaryById?: Map<string, AutoMatchedSecondaryCategory>,
+): string | null => {
+  for (const raw of candidates) {
+    const id = String(raw || '').trim()
+    if (!id) continue
+    if (isBrandShelfCategoryId(id, categoryMap, secondaryById)) continue
+    return id
+  }
+  return null
 }
 
 /**
@@ -5080,7 +5150,13 @@ export function pickImportPricingTargetCategory(
   fallbackId?: string | null,
 ): string | null {
   const pricingHit = matched.find(category => !isBrandParentSecondaryCategory(category))
-  return pricingHit?.id || fallbackId || null
+  if (pricingHit?.id) return pricingHit.id
+  const fallback = String(fallbackId || '').trim()
+  if (!fallback) return null
+  // 若 fallback 本身就是 Brand 命中，直接丢弃
+  const fallbackAsHit = matched.find(category => category.id === fallback)
+  if (fallbackAsHit && isBrandParentSecondaryCategory(fallbackAsHit)) return null
+  return fallback
 }
 
 /**
@@ -6345,9 +6421,15 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
           const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
           // Pricing target = real L1/L2 only; Brand hits stay in matched* for shelf linking.
-          const targetCategoryId = pickImportPricingTargetCategory(
-            matchedSecondaryCategories,
-            taskSnapshot.defaultCategoryId,
+          const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
+          const targetCategoryId = pickFirstNonBrandCategoryId(
+            [
+              pickImportPricingTargetCategory(matchedSecondaryCategories, null),
+              taskSnapshot.defaultCategoryId,
+              ...matchedSecondaryCategoryIds,
+            ],
+            categoryMap,
+            secondaryById,
           )
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
           const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd))
@@ -7177,13 +7259,22 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             rematchedSecondaryCategories,
             null,
           )
-          // 运营在待上传区/任务里选的目标类目优先，禁止被 Brand 货架自动命中盖掉（否则 Handbag 会丢、只剩 Kurt Geiger）
+          const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
+          // 主类目只认真实一/二级商品类目；Brand 货架永远只能进关联 / brandCategoryId
           const selectedCategoryId =
-            item.targetCategoryId ||
-            item.importTask.defaultCategoryId ||
-            pricingFromRematch ||
-            ''
-          if (!selectedCategoryId) throw new Error('请选择目标分类')
+            pickFirstNonBrandCategoryId(
+              [
+                item.targetCategoryId,
+                item.importTask.defaultCategoryId,
+                pricingFromRematch,
+                ...rematchedSecondaryCategories.map(category => category.id),
+              ],
+              categoryMap,
+              secondaryById,
+            ) || ''
+          if (!selectedCategoryId) {
+            throw new Error('请选择手提包等真实一/二级类目（品牌货架不能作为主类目）')
+          }
 
           // 发布时重新扫描标题+详情；若预览已有多标签则合并去重
           const autoMatchedCategoryIds = Array.from(
@@ -7196,6 +7287,10 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           const brandMatchKeyword = brandHits[0]?.name || null
 
           const ownership = await resolveImportCategoryOwnership(tx, selectedCategoryId)
+          // 双保险：ownership 之后若仍落到 Brand，拒绝写入
+          if (isBrandShelfCategoryId(ownership.primaryCategoryId, categoryMap, secondaryById)) {
+            throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目')
+          }
           const categoryId = ownership.primaryCategoryId
           // 主分类 + 自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
           const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
@@ -7431,12 +7526,18 @@ const applyReparsed1688PreviewToItem = async (params: {
   )
   const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
   const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
-  // 重新解析：定价目标只用商品二级类目；Brand 命中不覆盖售价系数
-  const targetCategoryId =
-    pickImportPricingTargetCategory(matchedSecondaryCategories, null) ||
-    item.targetCategoryId ||
-    item.importTask.defaultCategoryId ||
-    null
+  const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
+  // 重新解析：主类目只用真实一/二级；Brand 命中不覆盖售价系数 / 主类目
+  const targetCategoryId = pickFirstNonBrandCategoryId(
+    [
+      pickImportPricingTargetCategory(matchedSecondaryCategories, null),
+      item.targetCategoryId,
+      item.importTask.defaultCategoryId,
+      ...matchedSecondaryCategoryIds,
+    ],
+    categoryMap,
+    secondaryById,
+  )
   const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
 
   const rawPriceMin = fetched.priceMin ?? toNumberOrNull(item.costPrice) ?? 50
