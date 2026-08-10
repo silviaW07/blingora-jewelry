@@ -4918,6 +4918,8 @@ export type AutoMatchedSecondaryCategory = {
   keywords: string[]
   /** 一级父类名称；parent 为 Brand 时仅作货架标签，不参与售价系数 */
   parentName?: string | null
+  /** DB isBrandCategory — Brand 货架 L2，不得当作主类目/定价类目 */
+  isBrandCategory?: boolean
 }
 
 export const normalizeCategoryMatchText = (value?: string | null) =>
@@ -4993,7 +4995,8 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
       id: true,
       name: true,
       brandKeywordsJson: true,
-      parent: { select: { name: true } },
+      isBrandCategory: true,
+      parent: { select: { name: true, isBrandCategory: true } },
     },
     orderBy: [
       { sortWeight: 'desc' },
@@ -5006,7 +5009,8 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
       id: string
       name: string
       brandKeywordsJson?: unknown
-      parent?: { name?: string | null } | null
+      isBrandCategory?: boolean | null
+      parent?: { name?: string | null; isBrandCategory?: boolean | null } | null
     }) => {
       const name = String(category.name || '').trim()
       // 并入中文同义词字典：让英文类目名（Bracelet/Necklace…）也能命中中文标题（手链/项链…）
@@ -5021,13 +5025,17 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
         name,
         keywords,
         parentName: category.parent?.name ? String(category.parent.name).trim() : null,
+        isBrandCategory: Boolean(category.isBrandCategory || category.parent?.isBrandCategory),
       }
     })
     .filter((category: AutoMatchedSecondaryCategory) => category.name)
 }
 
-const isBrandParentSecondaryCategory = (category: AutoMatchedSecondaryCategory) =>
-  String(category.parentName || '').trim().toLowerCase() === 'brand'
+const isBrandParentSecondaryCategory = (category: AutoMatchedSecondaryCategory) => {
+  if (category.isBrandCategory) return true
+  const parent = String(category.parentName || '').trim().toLowerCase()
+  return parent === 'brand' || parent === 'brands' || parent === '品牌'
+}
 
 /**
  * 按标题/详情是否包含二级类目名或其品牌关键词进行匹配（大小写不敏感）。
@@ -7164,6 +7172,19 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           const previewMatchedIds = Array.from(
             new Set((previewData.matchedCategoryIds || []).filter(Boolean)),
           )
+          const brandHits = rematchedSecondaryCategories.filter(isBrandParentSecondaryCategory)
+          const pricingFromRematch = pickImportPricingTargetCategory(
+            rematchedSecondaryCategories,
+            null,
+          )
+          // 运营在待上传区/任务里选的目标类目优先，禁止被 Brand 货架自动命中盖掉（否则 Handbag 会丢、只剩 Kurt Geiger）
+          const selectedCategoryId =
+            item.targetCategoryId ||
+            item.importTask.defaultCategoryId ||
+            pricingFromRematch ||
+            ''
+          if (!selectedCategoryId) throw new Error('请选择目标分类')
+
           // 发布时重新扫描标题+详情；若预览已有多标签则合并去重
           const autoMatchedCategoryIds = Array.from(
             new Set([
@@ -7171,14 +7192,8 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
               ...previewMatchedIds,
             ]),
           )
-          const autoMatchedCategoryNames = rematchedSecondaryCategories.map(category => category.name)
-          // 发布时标题/详情重新命中的 L2 优先作为主分类（修复：旧 targetCategoryId 覆盖导致 Brand 下商品数为 0）
-          const selectedCategoryId =
-            autoMatchedCategoryIds[0] ||
-            item.targetCategoryId ||
-            item.importTask.defaultCategoryId ||
-            ''
-          if (!selectedCategoryId) throw new Error('请选择目标分类')
+          const brandCategoryId = brandHits[0]?.id || null
+          const brandMatchKeyword = brandHits[0]?.name || null
 
           const ownership = await resolveImportCategoryOwnership(tx, selectedCategoryId)
           const categoryId = ownership.primaryCategoryId
@@ -7187,6 +7202,9 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             ...ownership.linkedCategoryIds,
             ...autoMatchedCategoryIds,
             item.targetCategoryId || '',
+            item.importTask.defaultCategoryId || '',
+            pricingFromRematch || '',
+            brandCategoryId || '',
           ])
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId)
           const baseCostPrice = toNumberOrNull(item.costPrice)
@@ -7262,9 +7280,9 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             skuSummaryText: item.skuSummaryText || null,
             skus: pendingSkus,
             linkedCategoryIds,
-            brandCategoryId: autoMatchedCategoryIds[0] || null,
-            brandMatchKeyword: autoMatchedCategoryNames[0] || null,
-            autoBrandMatched: autoMatchedCategoryIds.length > 0
+            brandCategoryId,
+            brandMatchKeyword,
+            autoBrandMatched: Boolean(brandCategoryId),
           })
 
           await tx.importtaskitem.update({
@@ -7284,7 +7302,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
                 ...(previewData || {}),
                 categoryId,
                 matchedCategoryIds: autoMatchedCategoryIds,
-                matchedCategoryNames: autoMatchedCategoryNames,
+                matchedCategoryNames: rematchedSecondaryCategories.map(category => category.name),
                 price: priceSummary.cnyMin ?? (previewData.price || undefined),
                 skuTable: pendingSkus.map((sku) => ({
                   skuKey: sku.sku_key,
