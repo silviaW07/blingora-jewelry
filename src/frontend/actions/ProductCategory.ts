@@ -523,6 +523,12 @@ const buildProductWhere = (
         in: context.categoryIdsForQuery
       }
     })
+    // 品牌字段命中（Brand 货架商品常写在 brandCategoryId，而主类目是 Handbag）
+    orConditions.push({
+      brandCategoryId: {
+        in: context.categoryIdsForQuery
+      }
+    })
     // product_category_relations to L1 or any expanded L2
     orConditions.push({
       relationCategories: {
@@ -560,11 +566,13 @@ const buildProductWhere = (
   }
 
   if (brandCategoryId) {
-    // 品牌/货架分类：既包含以其为主品牌(brandCategoryId)的商品，
-    // 也包含通过后台「关联类目」绑定(product_category_relations)到该货架的商品，
-    // 否则运营在后台把商品关联到「high quality bag」等货架后，前台点进去会看不到。
+    // 品牌货架三路命中（去重靠 OR）：
+    // 1) brandCategoryId 主品牌字段
+    // 2) 主类目 categoryId（历史误把品牌当主类目的商品）
+    // 3) product_category_relations 关联绑定
     const brandMatchOr = [
       { brandCategoryId },
+      { categoryId: brandCategoryId },
       {
         relationCategories: {
           some: {
@@ -620,10 +628,6 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
       status: 'ACTIVE'
     },
     include: {
-      products: {
-        where: { status: 'ACTIVE' },
-        select: { id: true }
-      },
       navConfig: true
     },
     orderBy: [
@@ -635,6 +639,51 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
   const mainCategories = categories.filter(cat => cat.level === 1 && !cat.isBrandCategory && cat.navConfig?.isVisible !== false)
   const childCategories = categories.filter(cat => cat.level === 2 && !cat.isBrandCategory)
   const brandCategories = categories.filter(cat => cat.isBrandCategory)
+  const brandIds = brandCategories.map(brand => brand.id)
+
+  // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
+  const brandProductCount = new Map<string, number>()
+  if (brandIds.length > 0) {
+    const linkedProducts = await prisma.product.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { categoryId: { in: brandIds } },
+          { brandCategoryId: { in: brandIds } },
+          {
+            relationCategories: {
+              some: {
+                categoryId: { in: brandIds },
+                category: { status: 'ACTIVE' },
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        categoryId: true,
+        brandCategoryId: true,
+        relationCategories: {
+          where: { categoryId: { in: brandIds } },
+          select: { categoryId: true },
+        },
+      },
+    })
+    for (const product of linkedProducts) {
+      const hitIds = new Set<string>()
+      if (product.categoryId && brandIds.includes(product.categoryId)) hitIds.add(product.categoryId)
+      if (product.brandCategoryId && brandIds.includes(product.brandCategoryId)) {
+        hitIds.add(product.brandCategoryId)
+      }
+      for (const rel of product.relationCategories) {
+        if (brandIds.includes(rel.categoryId)) hitIds.add(rel.categoryId)
+      }
+      for (const brandId of hitIds) {
+        brandProductCount.set(brandId, (brandProductCount.get(brandId) || 0) + 1)
+      }
+    }
+  }
 
   return {
     list: mainCategories.map(cat => {
@@ -663,7 +712,7 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
             category_id: brand.id,
             category_name: resolveCategoryDisplayName(brand.translationsJson, brand.name, lang),
             category_slug: brand.slug,
-            product_count: brand.products.length,
+            product_count: brandProductCount.get(brand.id) || 0,
             image_url: brand.imageUrl || brand.iconUrl || null,
           }))
           .sort((a, b) => b.product_count - a.product_count || a.category_name.localeCompare(b.category_name, 'zh-CN'))

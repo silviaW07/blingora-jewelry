@@ -1713,8 +1713,9 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       andConditions.push({
         OR: [
           { categoryId: { in: categoryIds } },
-          { relationCategories: { some: { categoryId: { in: categoryIds } } } }
-        ]
+          { brandCategoryId: { in: categoryIds } },
+          { relationCategories: { some: { categoryId: { in: categoryIds } } } },
+        ],
       })
     }
     if (andConditions.length > 0) {
