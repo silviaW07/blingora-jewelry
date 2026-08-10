@@ -19,6 +19,11 @@ import {
 } from '@/frontend/i18n/productTranslation'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import {
+  formatMinOrderQtyMessage,
+  resolveEffectiveSkuMinOrderQty,
+  resolveProductMinOrderQty,
+} from '@/shared/minOrderQty'
 
 // ===== Enums =====
 /** 商品状态：草稿(DRAFT) | 上架(ACTIVE) | 下架(INACTIVE) */
@@ -191,6 +196,11 @@ export interface GetDecoratePreviewProductOutput {
 export interface AddToCartInput {
   productSkuId: string
   quantity: number
+  /**
+   * 同一次详情页多规格加购中、其余行合计数量。
+   * 用于混批起订量校验：siblings + quantity + sameRequestSiblingQty >= productMoq
+   */
+  sameRequestSiblingQty?: number
 }
 
 export interface AddToCartOutput {
@@ -433,6 +443,8 @@ export const getProductDetail = withResult(
         ? descriptionParamsFromParams
         : parseDescriptionParamsFromText(product.detailText)
 
+    const productMinOrderQty = resolveProductMinOrderQty(tradeInfoJson)
+
     const pricingCoeffs = pickFrontPricingCategoryCoeffs({
       primary: product.category,
       relations: (product.relationCategories || []).map((rel) => rel.category),
@@ -471,7 +483,10 @@ export const getProductDetail = withResult(
         id: sku.id,
         skuCode: sku.skuCode,
         imageUrl: sku.imageUrl,
-        minOrderQty: null,
+        minOrderQty:
+          sku.minOrderQty != null && Number(sku.minOrderQty) > 0
+            ? Math.max(1, Math.round(Number(sku.minOrderQty)))
+            : null,
         price,
         originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
         stockStatus: sku.stockStatus as StockStatus,
@@ -487,7 +502,7 @@ export const getProductDetail = withResult(
     const prices = skus.map((sku) => sku.price).filter((p) => p > 0)
     const priceMin = prices.length ? Math.min(...prices) : 0
     const priceMax = prices.length ? Math.max(...prices) : 0
-    const minOrderQty = Number(tradeInfoJson?.minOrderQty || 0) || 1
+    const minOrderQty = productMinOrderQty
     const lang = normalizeProductLang(input.lang)
     const translated = pickProductTranslation((product as { translationsJson?: unknown }).translationsJson, lang)
 
@@ -649,6 +664,21 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
       throw new Error('库存不足，请减少购买数量')
     }
 
+    const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)
+    const siblingSkuCount = await prisma.productsku.count({
+      where: { productId: sku.productId },
+    })
+    const supportsMixedBatch = siblingSkuCount > 1
+    const skuMinOrderQty = resolveEffectiveSkuMinOrderQty(
+      productMinOrderQty,
+      sku.minOrderQty,
+      { supportsMixedBatch },
+    )
+    if (input.quantity < skuMinOrderQty) {
+      throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
+    }
+    const sameRequestSiblingQty = Math.max(0, Math.floor(Number(input.sameRequestSiblingQty) || 0))
+
     // 2. 查找或创建用户购物车
     let cart = await prisma.cart.findUnique({
       where: { accountId: userId }
@@ -677,6 +707,22 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
       if (newQuantity > sku.stock) {
         throw new Error('加购后数量超过可用库存，请减少购买数量')
       }
+      if (newQuantity < skuMinOrderQty) {
+        throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
+      }
+      const siblingQty = await prisma.cartitem.aggregate({
+        where: {
+          cartId: cart.id,
+          productId: sku.productId,
+          id: { not: existingItem.id },
+        },
+        _sum: { quantity: true },
+      })
+      const totalProductQty =
+        (siblingQty._sum.quantity ?? 0) + newQuantity + sameRequestSiblingQty
+      if (totalProductQty < productMinOrderQty) {
+        throw new Error(formatMinOrderQtyMessage(productMinOrderQty))
+      }
       await prisma.cartitem.update({
         where: { id: existingItem.id },
         data: {
@@ -685,6 +731,18 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
         }
       })
     } else {
+      const siblingQty = await prisma.cartitem.aggregate({
+        where: {
+          cartId: cart.id,
+          productId: sku.productId,
+        },
+        _sum: { quantity: true },
+      })
+      const totalProductQty =
+        (siblingQty._sum.quantity ?? 0) + input.quantity + sameRequestSiblingQty
+      if (totalProductQty < productMinOrderQty) {
+        throw new Error(formatMinOrderQtyMessage(productMinOrderQty))
+      }
       await prisma.cartitem.create({
         data: {
           cart: { connect: { id: cart.id } },
@@ -756,6 +814,33 @@ export const setCartSkuQuantity = requireRole([UserRole.CUSTOMER])(
 
     if (targetQty > sku.stock) {
       throw new Error('库存不足，请减少购买数量')
+    }
+
+    const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)
+    const siblingSkuCount = await prisma.productsku.count({
+      where: { productId: sku.productId },
+    })
+    const supportsMixedBatch = siblingSkuCount > 1
+    const skuMinOrderQty = resolveEffectiveSkuMinOrderQty(
+      productMinOrderQty,
+      sku.minOrderQty,
+      { supportsMixedBatch },
+    )
+    if (targetQty < skuMinOrderQty) {
+      throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
+    }
+
+    const siblingQty = await prisma.cartitem.aggregate({
+      where: {
+        cartId: cart.id,
+        productId: sku.productId,
+        ...(existingItem ? { id: { not: existingItem.id } } : {}),
+      },
+      _sum: { quantity: true },
+    })
+    const totalProductQty = (siblingQty._sum.quantity ?? 0) + targetQty
+    if (totalProductQty < productMinOrderQty) {
+      throw new Error(formatMinOrderQtyMessage(productMinOrderQty))
     }
 
     if (existingItem) {

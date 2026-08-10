@@ -459,7 +459,7 @@ export interface InlineUpdatePendingImportItemFieldInput {
   value: string | number
 }
 
-export type PendingImportSkuEditableField = 'cost_price' | 'price' | 'weight_grams' | 'stock' | 'spec_text' | 'image_url'
+export type PendingImportSkuEditableField = 'cost_price' | 'price' | 'weight_grams' | 'stock' | 'spec_text' | 'image_url' | 'minimum_order_quantity'
 
 export interface InlineUpdatePendingImportSkuFieldInput {
   itemId: string
@@ -1999,6 +1999,8 @@ export interface Fetched1688OfferPreview {
   sourceCategoryName: string | null
   priceMin: number | null
   priceMax: number | null
+  /** 1688 起订量（beginAmount 等）；缺省由调用方回落 DEFAULT_MIN_ORDER_QTY */
+  minOrderQty: number | null
   featureAttributes: Array<{ key: string; value: string }>
   /** 解析出的 SKU 行；无可靠规格时为空，由调用方回退默认 SKU */
   skuTable: PreviewSkuTableRow[]
@@ -2025,6 +2027,7 @@ const empty1688OfferPreview = (): Fetched1688OfferPreview => ({
   sourceCategoryName: null,
   priceMin: null,
   priceMax: null,
+  minOrderQty: null,
   featureAttributes: [],
   skuTable: [],
   colors: [],
@@ -2163,6 +2166,7 @@ const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688Offe
     sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
     priceMin,
     priceMax,
+    minOrderQty: extract1688MinOrderQtyFromHtml(html),
     featureAttributes,
     skuTable: multiSpec.skuTable,
     colors: multiSpec.colors,
@@ -3490,6 +3494,7 @@ const fetch1688OfferPreviewOnce = async (
             sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
             priceMin,
             priceMax,
+            minOrderQty: extract1688MinOrderQtyFromHtml(html),
             featureAttributes,
             skuTable: multiSpec.skuTable,
             colors: multiSpec.colors,
@@ -3750,6 +3755,37 @@ const pickJsonNumberField = (html: string, key: string): number | null => {
   if (!matched?.[1]) return null
   const num = Number(matched[1])
   return Number.isFinite(num) ? num : null
+}
+
+/** 从 1688 详情 HTML/mtop JSON 提取起订量（beginAmount / 混批 / 文案） */
+const extract1688MinOrderQtyFromHtml = (html: string): number | null => {
+  if (!html) return null
+  const candidates = [
+    pickJsonNumberField(html, 'beginAmount'),
+    pickJsonNumberField(html, 'mixAmount'),
+    pickJsonNumberField(html, 'startAmount'),
+    pickJsonNumberField(html, 'minOrderQuantity'),
+    pickJsonNumberField(html, 'minOrderQty'),
+    pickJsonNumberField(html, 'minBuyCount'),
+  ]
+  for (const n of candidates) {
+    if (n != null && n > 0) return Math.max(1, Math.round(n))
+  }
+  // 价格梯度里常见 "begin": 10
+  const begins = Array.from(html.matchAll(/"begin"\s*:\s*(\d+)/gi))
+    .map(m => Number(m[1]))
+    .filter(n => Number.isFinite(n) && n > 0)
+  if (begins.length) return Math.max(1, Math.round(Math.min(...begins)))
+
+  const textMatch =
+    html.match(/(?:起订量|起批量|起批|起订)[：:\s]*(\d+)\s*件?/i) ||
+    html.match(/(\d+)\s*件起批/i) ||
+    html.match(/≥\s*(\d+)\s*件/i)
+  if (textMatch?.[1]) {
+    const n = Number(textMatch[1])
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.round(n))
+  }
+  return null
 }
 
 const classify1688OfferHtml = (html: string): Check1688OfferLiveStatusResult => {
@@ -4307,6 +4343,15 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   item_coefficient: toNumberOrNull(item.coefficient),
   item_goodsStatus: (item.goodsStatus as ProductStatusType) || ((task?.defaultStatus as ProductStatusType) || 'DRAFT'),
   item_productDetail: listDetail || null,
+  item_featureAttributes: Array.isArray(preview.featureAttributes)
+    ? preview.featureAttributes
+        .map(attr => ({
+          key: String(attr?.key || '').trim(),
+          value: String(attr?.value || '').trim(),
+        }))
+        .filter(attr => attr.key && attr.value)
+        .slice(0, 40)
+    : [],
   item_skuSummaryText: item.skuSummaryText || null,
   item_cnyPriceMin: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
   item_cnyPriceMax: toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax),
@@ -6617,7 +6662,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               cnyPriceMax: resolvedFinalPriceMax,
               usdPriceMin: resolvedUsdMin,
               usdPriceMax: resolvedUsdMax,
-              minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+              minimumOrderQuantity: resolveInitialMinOrderQty(fetched.minOrderQty),
               // B：真实库存优先（全 0 即缺货），缺省回落 1000
               availableStock: resolveInitialStock(totalStock),
               targetCategoryId,
@@ -7095,6 +7140,14 @@ export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
       next.stock = Math.round(numericValue)
     } else if (input.field === 'image_url') {
       next.image_url = String(input.value || '').trim() || null
+    } else if (input.field === 'minimum_order_quantity') {
+      // 1688 起订量通常是整单级；在 SKU 行双击编辑时写回父条目
+      const qty = resolveInitialMinOrderQty(input.value)
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: { minimumOrderQuantity: qty },
+      })
+      return
     } else {
       throw new Error('暂不支持的 SKU 字段')
     }
@@ -7791,7 +7844,9 @@ const applyReparsed1688PreviewToItem = async (params: {
       cnyPriceMax: resolvedFinalPriceMax,
       usdPriceMin: resolvedUsdMin,
       usdPriceMax: resolvedUsdMax,
-      minimumOrderQuantity: resolveInitialMinOrderQty((item as any).minimumOrderQuantity),
+      minimumOrderQuantity: resolveInitialMinOrderQty(
+        fetched.minOrderQty ?? (item as any).minimumOrderQuantity,
+      ),
       // B：真实库存优先（全 0 即缺货），缺省回落 1000
       availableStock: resolveInitialStock(totalStock),
       targetCategoryId,

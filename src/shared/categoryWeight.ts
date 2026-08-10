@@ -242,7 +242,7 @@ export function resolveCategoryDefaultWeightGramsFromNames(
 
 /**
  * 综合解析商品重量（克）。返回值必定有效（最终兜底 500）。
- * @param explicit    数据源显式重量（优先级最高）；一键校准时请勿把「历史 500 兜底」当 explicit
+ * @param explicit    数据源显式重量（优先级最高）；一键校准时请勿把「历史 500 / 1g 脏数据」当 explicit
  * @param text        标题/规格/详情等可提取文本
  * @param categoryNames 候选二级分类名（用于兜底）
  */
@@ -251,16 +251,28 @@ export function resolveProductWeightGrams(input: {
   text?: string | null
   categoryNames?: Array<string | null | undefined> | null
 }): number {
+  const fromCategory = resolveCategoryDefaultWeightGramsFromNames(input.categoryNames)
+
+  const trustOrNull = (value: number | null): number | null => {
+    if (value == null) return null
+    if (!isLikelyUnreliableWeightGrams(value)) return value
+    // 有更合理的类目默认时，丢弃 1g / 500 等不可信值
+    if (fromCategory != null && fromCategory > value) return null
+    // 无类目时：1g 仍不可信（常为金重文案/0.001kg），继续往下兜底
+    if (Math.round(value) <= 1) return null
+    return value
+  }
+
   const explicit =
     typeof input.explicit === 'number' && Number.isFinite(input.explicit) && input.explicit > 0
       ? Math.round(input.explicit)
       : null
-  if (explicit != null) return explicit
+  const trustedExplicit = trustOrNull(explicit)
+  if (trustedExplicit != null) return trustedExplicit
 
-  const fromText = extractWeightGramsFromText(input.text)
-  if (fromText != null) return fromText
+  const trustedText = trustOrNull(extractWeightGramsFromText(input.text))
+  if (trustedText != null) return trustedText
 
-  const fromCategory = resolveCategoryDefaultWeightGramsFromNames(input.categoryNames)
   if (fromCategory != null) return fromCategory
 
   return FINAL_FALLBACK_WEIGHT_GRAMS
@@ -269,4 +281,14 @@ export function resolveProductWeightGrams(input: {
 /** 是否像「未能识别时的 500g 兜底」——一键校准遇到时应允许按类目重算 */
 export function isLikelyFallbackWeightGrams(value?: number | null): boolean {
   return typeof value === 'number' && Number.isFinite(value) && Math.round(value) === FINAL_FALLBACK_WEIGHT_GRAMS
+}
+
+/**
+ * 疑似误识别/脏重量：500g 兜底，或钳位下限 1g。
+ * 1g 常见来源：详情「约1克」金重文案、0.001kg、表格脏数据；不应盖住类目默认（如项链 40g）。
+ */
+export function isLikelyUnreliableWeightGrams(value?: number | null): boolean {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return false
+  const g = Math.round(value)
+  return g <= 1 || g === FINAL_FALLBACK_WEIGHT_GRAMS
 }

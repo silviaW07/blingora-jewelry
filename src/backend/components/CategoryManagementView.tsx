@@ -78,7 +78,9 @@ export const CategoryManagementView = ({
   state,
   handlers
 }: Props) => {
-  const allCurrentPageSelected = state.list.length > 0 && state.list.every(item => state.selectedCategoryIds.includes(item.category_id));
+  const displayList = state.filteredList;
+  const isNameFiltering = Boolean(state.nameFilterInput.trim());
+  const allCurrentPageSelected = displayList.length > 0 && displayList.every(item => state.selectedCategoryIds.includes(item.category_id));
   /* Extracted array: _items */
   const _items = [50, 100, 200];
   return <div className="min-h-screen bg-background font-body" data-api-unique-id='categorymanagementview-rd7999e89a992169f-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
@@ -247,22 +249,33 @@ export const CategoryManagementView = ({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-900">层级筛选</p>
-                <p className="text-xs text-muted-foreground mt-1">选择后，下方表格只展示对应层级的分类。</p>
+                <p className="text-xs text-muted-foreground mt-1">选择层级或输入名称/slug 模糊搜索，下方表格实时过滤（仅当前页）。</p>
               </div>
-              <div className="w-full sm:w-[240px]">
-                <Select
-                  value={state.levelFilter}
-                  onValueChange={value => handlers.handleLevelChange(value as 'ALL' | '1' | '2')}
-                >
-                  <SelectTrigger className="h-10 border-slate-200 bg-white focus:ring-primary">
-                    <SelectValue placeholder="选择层级" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">全部</SelectItem>
-                    <SelectItem value="1">一级分类</SelectItem>
-                    <SelectItem value="2">二级分类</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <div className="relative w-full sm:w-[280px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={state.nameFilterInput}
+                    onChange={e => handlers.setNameFilterInput(e.target.value)}
+                    placeholder="输入分类名称模糊搜索..."
+                    className="h-10 border-slate-200 bg-white pl-9 focus-visible:ring-primary"
+                  />
+                </div>
+                <div className="w-full sm:w-[160px]">
+                  <Select
+                    value={state.levelFilter}
+                    onValueChange={value => handlers.handleLevelChange(value as 'ALL' | '1' | '2')}
+                  >
+                    <SelectTrigger className="h-10 border-slate-200 bg-white focus:ring-primary">
+                      <SelectValue placeholder="选择层级" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">全部</SelectItem>
+                      <SelectItem value="1">一级分类</SelectItem>
+                      <SelectItem value="2">二级分类</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </Card>
@@ -295,16 +308,18 @@ export const CategoryManagementView = ({
                         数据载入中...
                       </div>
                     </TableCell>
-                  </TableRow> : state.list.length === 0 ? <TableRow data-api-unique-id='categorymanagementview-rd1efcfc116a3b6f9-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
+                  </TableRow> : displayList.length === 0 ? <TableRow data-api-unique-id='categorymanagementview-rd1efcfc116a3b6f9-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                     <TableCell colSpan={12} className="h-64 text-center text-muted-foreground" data-api-unique-id='categorymanagementview-rf7a21656813795e3-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                       <div className="flex flex-col items-center justify-center gap-2" data-api-unique-id='categorymanagementview-r42cb93047700b134-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                         <Package className="w-12 h-12 opacity-20" data-api-unique-id='categorymanagementview-r40c81e09773c2a30-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' />
-                        暂无符合条件的分类数据
+                        {isNameFiltering && state.list.length > 0
+                          ? '无匹配分类，请调整搜索词'
+                          : '暂无符合条件的分类数据'}
                       </div>
                     </TableCell>
-                  </TableRow> : state.list.map((item, index) => <TableRow
+                  </TableRow> : displayList.map((item, index) => <TableRow
                     key={item.category_id}
-                    draggable={item.level === 1}
+                    draggable={item.level === 1 && !isNameFiltering}
                     onDragStart={() => handlers.onLevel1DragStart(index)}
                     onDragEnter={() => handlers.onLevel1DragEnter(index)}
                     onDragEnd={() => { void handlers.onLevel1DragEnd(); }}

@@ -248,6 +248,9 @@ export interface CategoryManagementState {
   activeKeyword: string;
   status: 'ALL' | CategoryStatus;
   levelFilter: 'ALL' | '1' | '2';
+  /** 表格区前端名称/slug 模糊过滤（不触发后端查询） */
+  nameFilterInput: string;
+  filteredList: CategoryItem[];
   categoryId: string | null;
   inlineNameEditingId: string | null;
   inlineNameValue: string;
@@ -316,6 +319,7 @@ export interface CategoryManagementHandlers {
   handleSearch: () => void;
   handleTabChange: (value: 'ALL' | CategoryStatus) => void;
   handleLevelChange: (value: 'ALL' | '1' | '2') => void;
+  setNameFilterInput: (value: string) => void;
   openCreateDrawer: (level?: CategoryLevel, parentId?: string | null) => void;
   closeDrawer: () => void;
   handleFormChange: <K extends keyof FormFields>(field: K, value: FormFields[K]) => void;
@@ -593,6 +597,7 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
   const [activeKeyword, setActiveKeyword] = useState(searchParams.get('keyword') || '');
   const [status, setStatus] = useState<'ALL' | CategoryStatus>((searchParams.get('status') as 'ALL' | CategoryStatus) || 'ALL');
   const [levelFilter, setLevelFilter] = useState<'ALL' | '1' | '2'>((searchParams.get('level') as 'ALL' | '1' | '2') || 'ALL');
+  const [nameFilterInput, setNameFilterInput] = useState('');
   const [categoryId] = useState<string | null>(searchParams.get('category_id'));
   const [inlineNameEditingId, setInlineNameEditingId] = useState<string | null>(null);
   const [inlineNameValue, setInlineNameValue] = useState('');
@@ -765,6 +770,17 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
       return flattenKeywordNodes(group.keywords).some(item => item.keyword.toLowerCase().includes(keyword));
     });
   }, [keywordGroups, keywordSearchInput]);
+
+  /** 层级筛选区：当前页表格的前端名称/slug 模糊过滤 */
+  const filteredList = useMemo(() => {
+    const query = nameFilterInput.trim().toLowerCase();
+    if (!query) return list;
+    return list.filter(item => {
+      const name = String(item.category_name || '').trim().toLowerCase();
+      const slug = String(item.category_slug || '').trim().toLowerCase();
+      return name.includes(query) || slug.includes(query);
+    });
+  }, [list, nameFilterInput]);
 
   const openCreateDrawer = (level: CategoryLevel = 1, parentId: string | null = null) => {
     setEditingId(null);
@@ -1290,7 +1306,7 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
   };
 
   const toggleSelectAllCurrentPage = (checked: boolean) => {
-    setSelectedCategoryIds(checked ? list.map(item => item.category_id) : []);
+    setSelectedCategoryIds(checked ? filteredList.map(item => item.category_id) : []);
   };
 
   const handleBatchDelete = async () => {
@@ -1793,6 +1809,8 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     activeKeyword,
     status,
     levelFilter,
+    nameFilterInput,
+    filteredList,
     categoryId,
     inlineNameEditingId,
     inlineNameValue,
@@ -1861,6 +1879,7 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     handleSearch,
     handleTabChange,
     handleLevelChange,
+    setNameFilterInput,
     openCreateDrawer,
     closeDrawer,
     handleFormChange,

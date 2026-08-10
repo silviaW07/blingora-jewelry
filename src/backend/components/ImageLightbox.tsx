@@ -152,19 +152,23 @@ export function PreviewableThumb({
 
   return (
     <>
-      <button
-        type="button"
-        className={className || 'block h-full w-full'}
-        title={title}
-        onClick={event => {
-          event.stopPropagation()
-          event.preventDefault()
-          setOpen(true)
-          onPreviewOpen?.()
-        }}
-      >
-        {children}
-      </button>
+      <div className={`relative ${className || 'block h-full w-full'}`}>
+        <div className="pointer-events-none h-full w-full [&>*]:h-full [&>*]:w-full">
+          {children}
+        </div>
+        <button
+          type="button"
+          className="absolute inset-0 z-[1] cursor-zoom-in bg-transparent"
+          title={title}
+          aria-label={title}
+          onClick={event => {
+            event.stopPropagation()
+            event.preventDefault()
+            setOpen(true)
+            onPreviewOpen?.()
+          }}
+        />
+      </div>
       <ImageLightbox
         src={safeSrc}
         alt={alt}

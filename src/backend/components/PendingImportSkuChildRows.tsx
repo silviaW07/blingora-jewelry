@@ -15,6 +15,8 @@ interface PendingImportSkuChildRowsProps {
   expanded: boolean
   state: ProductManagementState
   handlers: ProductManagementHandlers
+  /** 父级起订量（1688 beginAmount）；SKU 行双击编辑会写回父条目 */
+  minOrderQty?: number | null
   /** 单色商品：跳过颜色层，直接展开规格行 */
   flatSpecMode?: boolean
 }
@@ -103,6 +105,7 @@ function SpecDetailRows({
   colorHint,
   state,
   handlers,
+  minOrderQty,
   indentClassName = 'pl-10',
 }: {
   itemId: string
@@ -110,8 +113,10 @@ function SpecDetailRows({
   colorHint?: string
   state: ProductManagementState
   handlers: ProductManagementHandlers
+  minOrderQty?: number | null
   indentClassName?: string
 }) {
+  const displayMoq = Math.max(1, Number(minOrderQty ?? 1) || 1)
   return (
     <>
       {skus.map(sku => {
@@ -182,7 +187,23 @@ function SpecDetailRows({
             <TableCell className="py-2.5 text-right font-medium text-slate-900">
               {sku.price != null ? `US$ ${(Number(sku.price) / 6.5).toFixed(2)}` : '--'}
             </TableCell>
-            <TableCell className="py-2.5 text-right text-slate-400">--</TableCell>
+            <TableCell className="py-2.5 text-right">
+              <PendingImportSkuEditableCell
+                itemId={itemId}
+                skuKey={sku.sku_key}
+                field="minimum_order_quantity"
+                value={displayMoq}
+                state={state}
+                handlers={handlers}
+                className="ml-auto inline-flex text-right font-medium text-slate-900"
+                inputClassName="ml-auto w-24 text-right"
+                placeholder="起订量"
+                renderDisplay={raw =>
+                  raw != null && raw !== ''
+                    ? <span>{Number(raw).toLocaleString()} 件</span>
+                    : <span>--</span>}
+              />
+            </TableCell>
             <TableCell className="py-2.5 text-right">
               <PendingImportSkuEditableCell
                 itemId={itemId}
@@ -285,9 +306,11 @@ export function PendingImportSkuChildRows({
   expanded,
   state,
   handlers,
+  minOrderQty,
   flatSpecMode = false,
 }: PendingImportSkuChildRowsProps) {
   const [expandedColors, setExpandedColors] = useState<string[]>([])
+  const displayMoq = Math.max(1, Number(minOrderQty ?? 1) || 1)
 
   const colorGroups = useMemo(() => buildColorGroups(skus), [skus])
 
@@ -302,6 +325,7 @@ export function PendingImportSkuChildRows({
         colorHint={onlyColor && onlyColor !== '默认颜色' ? onlyColor : undefined}
         state={state}
         handlers={handlers}
+        minOrderQty={displayMoq}
         indentClassName="pl-8"
       />
     )
@@ -459,7 +483,23 @@ export function PendingImportSkuChildRows({
                 {formatUsdRange(group.priceMin, group.priceMax)}
               </TableCell>
 
-              <TableCell className="py-3 text-right text-slate-400">--</TableCell>
+              <TableCell className="py-3 text-right">
+                <PendingImportSkuEditableCell
+                  itemId={itemId}
+                  skuKey={leader.sku_key}
+                  field="minimum_order_quantity"
+                  value={displayMoq}
+                  state={state}
+                  handlers={handlers}
+                  className="ml-auto inline-flex text-right font-medium text-slate-900"
+                  inputClassName="ml-auto w-24 text-right"
+                  placeholder="起订量"
+                  renderDisplay={raw =>
+                    raw != null && raw !== ''
+                      ? <span>{Number(raw).toLocaleString()} 件</span>
+                      : <span>--</span>}
+                />
+              </TableCell>
 
               <TableCell className="py-3 text-right">
                 {group.pricesUniform && stockUniform ? (
@@ -495,6 +535,7 @@ export function PendingImportSkuChildRows({
                 colorHint={group.color}
                 state={state}
                 handlers={handlers}
+                minOrderQty={displayMoq}
               />
             ) : null}
           </React.Fragment>

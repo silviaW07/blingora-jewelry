@@ -9,6 +9,8 @@ export type CalibrateDraftItem = {
   name: string
   primaryCategoryId: string | null
   linkedCategoryIds: string[]
+  /** id → 名称，用于 options 未加载时也能显示一级/二级中文名 */
+  categoryNames?: Record<string, string>
   brandNormalized: boolean
   weightGrams: number | null
   weightUpdated: boolean
@@ -47,8 +49,10 @@ export default function CalibrateResultDialog({
   onSetPrimary,
   onSave,
 }: Props) {
-  const labelOf = (id: string) =>
-    categoryOptions.find(o => o.value === id)?.label?.replace(/^[　└\s]+/, '') || id
+  const labelOf = (id: string, item?: CalibrateDraftItem) =>
+    item?.categoryNames?.[id] ||
+    categoryOptions.find(o => o.value === id)?.label?.replace(/^[　└\s]+/, '') ||
+    id
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,7 +125,7 @@ export default function CalibrateResultDialog({
                     </div>
                     {item.primaryCategoryId ? (
                       <Badge className="bg-sky-600 text-white shrink-0">
-                        主：{labelOf(item.primaryCategoryId)}
+                        主：{labelOf(item.primaryCategoryId, item)}
                       </Badge>
                     ) : null}
                   </div>
@@ -146,7 +150,7 @@ export default function CalibrateResultDialog({
                             onClick={() => onSetPrimary(item.id, cid)}
                           >
                             {isPrimary ? <span className="font-bold">主</span> : null}
-                            <span>{labelOf(cid)}</span>
+                            <span>{labelOf(cid, item)}</span>
                             <X
                               className="w-3 h-3 opacity-60 hover:opacity-100"
                               onClick={e => {
@@ -161,9 +165,9 @@ export default function CalibrateResultDialog({
                   </div>
 
                   {/* 全量类目勾选：方便补 below3 usd / normal quality 等 */}
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-3 max-h-40 overflow-y-auto space-y-1.5">
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-3 max-h-72 overflow-y-auto space-y-1.5">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                      全部可选类目（勾选即加入）
+                      全部可选类目（含一级，勾选即加入；可滚动查看）
                     </div>
                     {categoryOptions.length === 0 ? (
                       <span className="text-xs text-slate-400">类目列表加载中…</span>

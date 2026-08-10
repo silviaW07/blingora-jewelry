@@ -639,6 +639,7 @@ export interface ProductManagementState {
     name: string
     primaryCategoryId: string | null
     linkedCategoryIds: string[]
+    categoryNames?: Record<string, string>
     brandNormalized: boolean
     weightGrams: number | null
     weightUpdated: boolean
@@ -1018,6 +1019,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     name: string
     primaryCategoryId: string | null
     linkedCategoryIds: string[]
+    categoryNames?: Record<string, string>
     brandNormalized: boolean
     weightGrams: number | null
     weightUpdated: boolean
@@ -2363,6 +2365,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       productSkuEditingCell.field === 'cost_price' ? String(sku.cost_price ?? '') :
       productSkuEditingCell.field === 'price' ? String(sku.price ?? '') :
       productSkuEditingCell.field === 'weight_gram' ? String(sku.weight_gram ?? '') :
+      productSkuEditingCell.field === 'min_order_qty' ? String(sku.min_order_qty ?? '') :
       String(sku.stock ?? '')
 
     if (productSkuEditingValue.trim() === String(original).trim()) {
@@ -2399,6 +2402,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
                 return { ...sku, weight_gram: grams, weight_kg: Number((grams / 1000).toFixed(3)) }
               }
               if (field === 'spec_text') return { ...sku, spec_text: String(value) }
+              if (field === 'min_order_qty') return { ...sku, min_order_qty: Number(value) }
               return sku
             })
             const total_stock = skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0)
@@ -2439,7 +2443,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       pendingImportSkuEditingCell.field === 'cost_price' ? String(sku.cost_price ?? '') :
       pendingImportSkuEditingCell.field === 'price' ? String(sku.price ?? '') :
       pendingImportSkuEditingCell.field === 'weight_grams' ? String(sku.weight_grams ?? '') :
-      String(sku.stock ?? '')
+      pendingImportSkuEditingCell.field === 'minimum_order_quantity'
+        ? String(item?.item_minimumOrderQuantity ?? '')
+      : String(sku.stock ?? '')
 
     if (pendingImportSkuEditingValue.trim() === String(original).trim()) {
       cancelPendingImportSkuInlineEdit()
@@ -2456,11 +2462,23 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         field: pendingImportSkuEditingCell.field,
         value
       })
-      toast.success('待上传 SKU 已更新')
+      toast.success(
+        pendingImportSkuEditingCell.field === 'minimum_order_quantity'
+          ? '起订量已更新'
+          : '待上传 SKU 已更新',
+      )
       const { itemId, skuKey, field } = pendingImportSkuEditingCell
       cancelPendingImportSkuInlineEdit()
       if (field === 'cost_price') {
         await refreshPendingImportQueue({ silent: true })
+      } else if (field === 'minimum_order_quantity') {
+        setPendingImportQueue((prev) =>
+          prev.map((row) =>
+            row.item_id === itemId
+              ? { ...row, item_minimumOrderQuantity: Number(value) }
+              : row,
+          ),
+        )
       } else {
         setPendingImportQueue((prev) =>
           prev.map((item) => {
@@ -2505,6 +2523,34 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const value = pendingImportSkuEditingCell.field === 'spec_text' ? raw : Number(raw)
     if (pendingImportSkuEditingCell.field !== 'spec_text' && !Number.isFinite(value as number)) {
       toast.error('请输入有效数字')
+      return
+    }
+
+    // 起订量是整单级：颜色组同步时只写一次父条目
+    if (pendingImportSkuEditingCell.field === 'minimum_order_quantity') {
+      setPendingImportSkuSaving(true)
+      try {
+        await inlineUpdatePendingImportSkuField({
+          item_id: pendingImportSkuEditingCell.itemId,
+          sku_key: pendingImportSkuEditingCell.skuKey,
+          field: 'minimum_order_quantity',
+          value,
+        })
+        toast.success('起订量已更新')
+        const itemId = pendingImportSkuEditingCell.itemId
+        cancelPendingImportSkuInlineEdit()
+        setPendingImportQueue((prev) =>
+          prev.map((row) =>
+            row.item_id === itemId
+              ? { ...row, item_minimumOrderQuantity: Number(value) }
+              : row,
+          ),
+        )
+      } catch (err: any) {
+        toast.error(err.message || '保存起订量失败')
+      } finally {
+        setPendingImportSkuSaving(false)
+      }
       return
     }
 
@@ -2703,22 +2749,34 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       total: result.total,
     })
     setCalibrateResultDrafts(
-      (result.items || []).map(item => ({
-        id: item.id,
-        name: item.name,
-        primaryCategoryId: item.primary_category_id,
-        linkedCategoryIds: Array.from(
-          new Set([
-            ...(item.primary_category_id ? [item.primary_category_id] : []),
-            ...((item.categories || []).map(c => c.category_id).filter(Boolean)),
-          ]),
-        ),
-        brandNormalized: item.brand_normalized,
-        weightGrams: item.weight_grams,
-        weightUpdated: item.weight_updated,
-        status: item.status,
-        message: item.message,
-      })),
+      (result.items || []).map(item => {
+        const categoryNames: Record<string, string> = {}
+        for (const cat of item.categories || []) {
+          if (cat.category_id && cat.category_name) {
+            categoryNames[cat.category_id] = cat.category_name
+          }
+        }
+        if (item.primary_category_id && item.primary_category_name) {
+          categoryNames[item.primary_category_id] = item.primary_category_name
+        }
+        return {
+          id: item.id,
+          name: item.name,
+          primaryCategoryId: item.primary_category_id,
+          linkedCategoryIds: Array.from(
+            new Set([
+              ...(item.primary_category_id ? [item.primary_category_id] : []),
+              ...((item.categories || []).map(c => c.category_id).filter(Boolean)),
+            ]),
+          ),
+          categoryNames,
+          brandNormalized: item.brand_normalized,
+          weightGrams: item.weight_grams,
+          weightUpdated: item.weight_updated,
+          status: item.status,
+          message: item.message,
+        }
+      }),
     )
     setCalibrateResultOpen(true)
   }
@@ -2741,8 +2799,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       toast.success(
         `一键校准完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
       )
+      await Promise.all([fetchCategoryOptions(), fetchBindingMeta()])
       openCalibrateResultDialog('product', result)
-      void ensureBindingMeta()
       await fetchList()
     } catch (err: any) {
       toast.error(err?.message || '一键校准失败')
@@ -2769,8 +2827,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       toast.success(
         `一键校准完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
       )
+      await Promise.all([fetchCategoryOptions(), fetchBindingMeta()])
       openCalibrateResultDialog('pending', result)
-      void ensureBindingMeta()
       await refreshPendingImportQueue()
     } catch (err: any) {
       toast.error(err?.message || '一键校准失败')

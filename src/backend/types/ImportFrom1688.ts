@@ -218,7 +218,10 @@ export interface PendingImportItemRecord {
   item_coefficient: number | null
   item_goodsStatus: string | null
   item_productDetail: string | null
+  /** 1688 参数属性（材质/Material 等） */
+  item_featureAttributes?: Array<{ key: string; value: string }>
   item_skuSummaryText: string | null
+  item_galleryUrls?: string[]
   item_cnyPriceMin: number | null
   item_cnyPriceMax: number | null
   item_usdPriceMin: number | null

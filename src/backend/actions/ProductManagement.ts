@@ -117,6 +117,8 @@ export interface ProductListItem {
   price_coefficient: number | null
   effective_price_coefficient: number | null
   min_order_qty: number | null
+  /** 列表主图：点击缩略图看大图 */
+  main_image_url: string | null
   price_min: number
   price_max: number
   usd_display_price_min: number
@@ -287,9 +289,13 @@ export interface PendingImportQueueItem {
   item_weightGrams: number | null
   item_sourceCategoryName: string | null
   item_targetCategoryId: string | null
+  item_matchedCategoryIds?: string[]
+  item_matchedCategoryNames?: string[]
   item_coefficient: number | null
   item_goodsStatus: ProductStatus | null
   item_productDetail: string | null
+  /** 1688 参数属性（含材质 Material 等），来自 previewDataJson.featureAttributes */
+  item_featureAttributes?: Array<{ key: string; value: string }>
   item_skuSummaryText: string | null
   item_cnyPriceMin: number | null
   item_cnyPriceMax: number | null
@@ -338,6 +344,7 @@ const PRODUCT_LIST_QUERY_SELECT = {
   weightGram: true,
   costPrice: true,
   priceCoefficient: true,
+  mainImageUrl: true,
   tradeInfoJson: true,
   status: true,
   createdAt: true,
@@ -376,6 +383,7 @@ type PublishedImportMatchDbRecord = {
   weightGram: any
   costPrice: any
   priceCoefficient: any
+  mainImageUrl?: string | null
   status: string
   createdAt: Date
   updatedAt: Date
@@ -416,7 +424,7 @@ export interface InlineUpdateProductFieldInput {
   value: string | number
 }
 
-export type ProductSkuInlineField = 'cost_price' | 'price' | 'weight_gram' | 'stock' | 'spec_text'
+export type ProductSkuInlineField = 'cost_price' | 'price' | 'weight_gram' | 'stock' | 'spec_text' | 'min_order_qty'
 
 export interface InlineUpdateProductSkuFieldInput {
   product_id: string
@@ -639,7 +647,7 @@ import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
 import {
   extractWeightGramsFromText,
-  isLikelyFallbackWeightGrams,
+  isLikelyUnreliableWeightGrams,
   resolveCategoryDefaultWeightGramsFromNames,
   resolveProductWeightGrams,
 } from '@/shared/categoryWeight'
@@ -976,6 +984,7 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
     price_coefficient: toNumber(product.priceCoefficient),
     effective_price_coefficient: effectiveCoefficient,
     min_order_qty: Math.max(1, Number((product.tradeInfoJson as any)?.minOrderQty ?? 0) || 1),
+    main_image_url: String(product.mainImageUrl || '').trim() || null,
     price_min: priceMin,
     price_max: priceMax,
     usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,
@@ -1060,23 +1069,45 @@ function normalizeStringArray(values: unknown): string[] {
 async function buildProductBindingMeta(): Promise<ProductBindingMetaOutput> {
   const [categories, keywords] = await Promise.all([
     prisma.category.findMany({
-      where: { status: 'ACTIVE' },
       orderBy: [{ level: 'asc' }, { sortWeight: 'desc' }, { name: 'asc' }],
-      select: { id: true, name: true, parentId: true, level: true }
+      select: { id: true, name: true, parentId: true, level: true, status: true },
     }),
     prisma.keyworditem.findMany({
       where: { isActive: true },
       orderBy: [{ sortWeight: 'desc' }, { keyword: 'asc' }],
-      select: { id: true, keyword: true, group: { select: { name: true } } }
-    })
+      select: { id: true, keyword: true, group: { select: { name: true } } },
+    }),
   ])
 
+  // ACTIVE 类目 + 祖先节点（祖先停用也保留，保证一级类目能展示）
+  const byId = new Map(categories.map(c => [c.id, c]))
+  const include = new Map<string, (typeof categories)[number]>()
+  for (const cat of categories) {
+    if (String(cat.status || '').toUpperCase() !== 'ACTIVE') continue
+    include.set(cat.id, cat)
+    let parentId = cat.parentId
+    let guard = 0
+    while (parentId && byId.has(parentId) && guard < 8) {
+      const parent = byId.get(parentId)!
+      if (!include.has(parent.id)) include.set(parent.id, parent)
+      parentId = parent.parentId
+      guard += 1
+    }
+  }
+
   return {
-    category_options: buildHierarchicalCategorySelectOptions(categories),
+    category_options: buildHierarchicalCategorySelectOptions(
+      Array.from(include.values()).map(c => ({
+        id: c.id,
+        name: c.name,
+        parentId: c.parentId,
+        level: c.level,
+      })),
+    ),
     keyword_options: keywords.map(keyword => ({
       value: keyword.id,
-      label: keyword.group?.name ? `${keyword.group.name} / ${keyword.keyword}` : keyword.keyword
-    }))
+      label: keyword.group?.name ? `${keyword.group.name} / ${keyword.keyword}` : keyword.keyword,
+    })),
   }
 }
 
@@ -1607,16 +1638,31 @@ export const getCategoryOptions = requireRole([UserRole.ADMIN])(
   withResult(async (): Promise<CategoryOption[]> => {
     const categories = await prisma.category.findMany({
       orderBy: [{ level: 'asc' }, { sortWeight: 'desc' }, { name: 'asc' }],
-      select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true }
+      select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true, status: true },
     })
-    return categories.map(c => ({
+    // 启用中的类目 + 其祖先（即使祖先停用也要露出，避免 Sock 等二级悬空看不到一级）
+    const byId = new Map(categories.map(c => [c.id, c]))
+    const include = new Map<string, (typeof categories)[number]>()
+    for (const cat of categories) {
+      if (String(cat.status || '').toUpperCase() !== 'ACTIVE') continue
+      include.set(cat.id, cat)
+      let parentId = cat.parentId
+      let guard = 0
+      while (parentId && byId.has(parentId) && guard < 8) {
+        const parent = byId.get(parentId)!
+        if (!include.has(parent.id)) include.set(parent.id, parent)
+        parentId = parent.parentId
+        guard += 1
+      }
+    }
+    return Array.from(include.values()).map(c => ({
       category_id: c.id,
       category_name: c.name,
       parent_id: c.parentId,
       level: c.level,
-      price_coefficient: toNumber(c.priceCoefficient)
+      price_coefficient: toNumber(c.priceCoefficient),
     }))
-  })
+  }),
 )
 
 /** 检测中文被 MySQL gbk 连接写成问号的脏数据 */
@@ -1823,6 +1869,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         price_coefficient: toNumber(p.priceCoefficient),
         effective_price_coefficient: effectiveCoefficient,
         min_order_qty: Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 1) || 1),
+        main_image_url: String(p.mainImageUrl || '').trim() || null,
         price_min: priceMin,
         price_max: priceMax,
         usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,
@@ -2507,6 +2554,21 @@ export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
       await prisma.productsku.update({
         where: { id: sku.id },
         data: { attributeJson: attributeJson as any }
+      })
+      return { success: true }
+    }
+
+    if (input.field === 'min_order_qty') {
+      const nextValue = Math.max(1, Math.round(Number(input.value)))
+      if (!Number.isFinite(nextValue) || nextValue <= 0) {
+        throw new Error('起订量必须大于0')
+      }
+      await prisma.$transaction(async tx => {
+        await tx.productsku.update({
+          where: { id: sku.id },
+          data: { minOrderQty: nextValue },
+        })
+        await syncCartItemsValidState(tx, input.product_id)
       })
       return { success: true }
     }
@@ -3799,7 +3861,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
 
         if (!primaryCategoryId && !hits.length && !brandNormalized) {
           const existingWeight = toNumber(product.weightGram)
-          if (existingWeight != null && existingWeight > 0 && !isLikelyFallbackWeightGrams(existingWeight)) {
+          if (existingWeight != null && existingWeight > 0 && !isLikelyUnreliableWeightGrams(existingWeight)) {
             skipped += 1
             items.push({
               id: product.id,
@@ -3876,7 +3938,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           existingWeight != null &&
           existingWeight > 0 &&
           !fromTextWeight &&
-          !isLikelyFallbackWeightGrams(existingWeight) &&
+          !isLikelyUnreliableWeightGrams(existingWeight) &&
           resolveCategoryDefaultWeightGramsFromNames(hitNames) == null
         const resolvedWeight = resolveProductWeightGrams({
           explicit: keepExistingWeight ? existingWeight : fromTextWeight,
@@ -4104,16 +4166,26 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           }
         }
 
-        const matchedIds = Array.from(new Set([
+        const matchedIdsRaw = Array.from(new Set([
           ...hits.map(h => h.id),
           ...(targetCategoryId ? [targetCategoryId] : []),
           ...(brandHit ? [brandHit.id] : []),
         ].filter(Boolean)))
+        // 挂上一级父类，弹窗/待上传里能看到「服饰 → Sock」这类一级
+        const matchedIds = await expandLinkedCategoryIdsWithParents(prisma, matchedIdsRaw)
+        const parentOnlyIds = matchedIds.filter(id => !matchedIdsRaw.includes(id))
+        const parentRows = parentOnlyIds.length
+          ? await prisma.category.findMany({
+              where: { id: { in: parentOnlyIds } },
+              select: { id: true, name: true },
+            })
+          : []
         const matchedNames = Array.from(new Set([
           ...(pricingTarget?.name ? [pricingTarget.name] : []),
           ...pricingHits.map(h => h.name),
           ...hits.map(h => h.name),
           ...(brandHit?.name ? [brandHit.name] : []),
+          ...parentRows.map(r => r.name),
         ].filter(Boolean)))
 
         const existingWeight = toNumber(row.weightGrams)
@@ -4130,12 +4202,12 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           existingWeight != null &&
           existingWeight > 0 &&
           !fromTextWeight &&
-          !isLikelyFallbackWeightGrams(existingWeight) &&
+          !isLikelyUnreliableWeightGrams(existingWeight) &&
           resolveCategoryDefaultWeightGramsFromNames(matchedNames) == null
         const resolvedWeight = resolveProductWeightGrams({
           explicit: keepExistingWeight
             ? existingWeight
-            : fromTextWeight || (avgSkuWeight && !isLikelyFallbackWeightGrams(avgSkuWeight) ? avgSkuWeight : null),
+            : fromTextWeight || (avgSkuWeight && !isLikelyUnreliableWeightGrams(avgSkuWeight) ? avgSkuWeight : null),
           text: textCorpus,
           categoryNames: matchedNames,
         })
@@ -4194,6 +4266,15 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
               : isBrandShelfHit(hit)
                 ? 'brand'
                 : 'linked',
+          })
+        }
+        for (const parent of parentRows) {
+          if (seen.has(parent.id)) continue
+          seen.add(parent.id)
+          categories.push({
+            category_id: parent.id,
+            category_name: parent.name,
+            kind: 'linked',
           })
         }
         if (targetCategoryId && !seen.has(targetCategoryId)) {

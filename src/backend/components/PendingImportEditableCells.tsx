@@ -171,7 +171,7 @@ export function PendingImportEditableCell({
 interface PendingImportSkuEditableCellProps {
   itemId: string
   skuKey: string
-  field: 'price' | 'cost_price' | 'weight_grams' | 'stock' | 'spec_text'
+  field: 'price' | 'cost_price' | 'weight_grams' | 'stock' | 'spec_text' | 'minimum_order_quantity'
   value: string | number | null | undefined
   state: ProductManagementState
   handlers: ProductManagementHandlers

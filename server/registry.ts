@@ -22,10 +22,11 @@ import * as mod_19 from '../src/backend/actions/HomeRecommendZoneManagement';
 import * as mod_20 from '../src/backend/actions/homeRecommendZoneCache';
 import * as mod_21 from '../src/backend/actions/Dashboard';
 import * as mod_22 from '../src/backend/actions/CategoryManagement';
-import * as mod_23 from '../src/backend/actions/BannerManagement';
-import * as mod_24 from '../src/backend/actions/AdminRegister';
-import * as mod_25 from '../src/backend/actions/AdminManagement';
-import * as mod_26 from '../src/backend/actions/AdminLogin';
+import * as mod_23 from '../src/backend/actions/BrandAlias';
+import * as mod_24 from '../src/backend/actions/BannerManagement';
+import * as mod_25 from '../src/backend/actions/AdminRegister';
+import * as mod_26 from '../src/backend/actions/AdminManagement';
+import * as mod_27 from '../src/backend/actions/AdminLogin';
 
 export const registry: Record<string, any> = {
   'src.frontend.actions.ProductDetail': mod_0,
@@ -51,8 +52,9 @@ export const registry: Record<string, any> = {
   'src.backend.actions.homeRecommendZoneCache': mod_20,
   'src.backend.actions.Dashboard': mod_21,
   'src.backend.actions.CategoryManagement': mod_22,
-  'src.backend.actions.BannerManagement': mod_23,
-  'src.backend.actions.AdminRegister': mod_24,
-  'src.backend.actions.AdminManagement': mod_25,
-  'src.backend.actions.AdminLogin': mod_26,
+  'src.backend.actions.BrandAlias': mod_23,
+  'src.backend.actions.BannerManagement': mod_24,
+  'src.backend.actions.AdminRegister': mod_25,
+  'src.backend.actions.AdminManagement': mod_26,
+  'src.backend.actions.AdminLogin': mod_27,
 };

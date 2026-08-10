@@ -79,7 +79,7 @@ function ProductTreeRowsInner({
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded border border-slate-100 overflow-hidden flex-shrink-0 bg-slate-50">
+            <div className="w-12 h-12 rounded border border-slate-100 overflow-hidden flex-shrink-0 bg-slate-50 cursor-zoom-in">
               {item.main_image_url ? (
                 <PreviewableThumb
                   src={item.main_image_url}
@@ -92,6 +92,7 @@ function ProductTreeRowsInner({
                     src={item.main_image_url}
                     keywords={item.main_image_url}
                     description={item.product_name}
+                    disableKeywordSearch
                   />
                 </PreviewableThumb>
               ) : (
@@ -379,7 +380,7 @@ function ProductTreeRowsInner({
                 />
               </div>
             </TableCell>
-            <TableCell colSpan={4} className="text-xs text-slate-400">子级 SKU（双击可编辑成本/售价/重量/库存/规格）</TableCell>
+            <TableCell colSpan={4} className="text-xs text-slate-400">子级 SKU（双击可编辑成本/售价/重量/起订量/库存/规格）</TableCell>
             <TableCell className="text-right">
               <SkuTreeEditableCell
                 editing={isEditing('weight_gram')}
@@ -408,9 +409,7 @@ function ProductTreeRowsInner({
                 onCancel={handlers.cancelProductSkuInlineEdit}
               />
             </TableCell>
-            <TableCell className="text-right text-slate-500">
-              {effectiveSkuMinOrderQty ? `${Number(effectiveSkuMinOrderQty).toLocaleString()} 件` : '--'}
-            </TableCell>
+            <TableCell className="text-right text-slate-500">--</TableCell>
             <TableCell className="text-right">
               <SkuTreeEditableCell
                 editing={isEditing('price')}
@@ -428,7 +427,31 @@ function ProductTreeRowsInner({
             <TableCell className="text-right text-slate-500">
               ${sku.usd_display_price != null ? sku.usd_display_price.toFixed(2) : '--'}
             </TableCell>
-            <TableCell className="text-right text-slate-400">--</TableCell>
+            <TableCell className="text-right">
+              <SkuTreeEditableCell
+                editing={isEditing('min_order_qty')}
+                value={state.productSkuEditingValue}
+                display={
+                  <span className="font-medium text-slate-900">
+                    {Number(effectiveSkuMinOrderQty).toLocaleString()} 件
+                  </span>
+                }
+                saving={state.productSkuSaving}
+                inputType="number"
+                className="h-8 w-24 ml-auto text-right"
+                onStartEdit={() =>
+                  handlers.startProductSkuInlineEdit(
+                    item.product_id,
+                    sku.sku_id,
+                    'min_order_qty',
+                    effectiveSkuMinOrderQty,
+                  )
+                }
+                onChange={handlers.changeProductSkuEditingValue}
+                onSubmit={handlers.submitProductSkuInlineEdit}
+                onCancel={handlers.cancelProductSkuInlineEdit}
+              />
+            </TableCell>
             <TableCell className="text-right">
               <SkuTreeEditableCell
                 editing={isEditing('stock')}

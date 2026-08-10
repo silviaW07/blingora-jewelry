@@ -16,6 +16,14 @@ import {
   getRelatedProducts,
   addToCart,
 } from '@/frontend/actions/ProductDetail'
+import {
+  clampSelectedQuantityToMoq,
+  formatMinOrderQtyMessage,
+  formatMixedBatchShortfallMessage,
+  nextQuantityAfterDecrement,
+  nextQuantityAfterIncrement,
+  resolveSkuMinOrderQty,
+} from '@/shared/minOrderQty'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 
 /**
@@ -80,6 +88,10 @@ export interface ProductDetailState {
   isColorSelected: boolean;
   isSizeSelected: boolean;
   selectionHighlight: SelectionHighlight;
+  /** 商品级混批起订量 */
+  productMinOrderQty: number;
+  /** 是否支持多规格混批（SKU 数 > 1） */
+  supportsMixedBatch: boolean;
 }
 
 export interface ProductDetailHandlers {
@@ -87,6 +99,8 @@ export interface ProductDetailHandlers {
   handleSizeSelect: (sku: ProductSkuData) => void;
   handleQuantityChange: (type: 'inc' | 'dec') => void;
   handleSkuQuantityChange: (skuId: string, type: 'inc' | 'dec' | 'set', value?: number) => void | Promise<void>;
+  getSkuLineQuantity: (skuId: string) => number;
+  resolveLineMinOrderQty: (sku: ProductSkuData) => number;
   handleAddToCart: () => Promise<void>;
   handleRelatedClick: (id: string) => void;
   setActiveImage: (url: string) => void;
@@ -324,6 +338,39 @@ export const useProductDetail = (): {
   const STOREFRONT_QTY_CAP = 9999
   const skuQtyCap = (sku: { stockStatus: string } | null | undefined) =>
     sku && sku.stockStatus !== 'OUT_OF_STOCK' ? STOREFRONT_QTY_CAP : 0
+
+  const productMinOrderQty = product?.minOrderQty ?? 1
+  /** 多 SKU 时可跨色/跨规格混批凑起订量 */
+  const supportsMixedBatch = (product?.skus.length ?? 0) > 1
+
+  const resolveLineMinOrderQty = useCallback(
+    (sku: ProductSkuData) =>
+      resolveSkuMinOrderQty({
+        productMinOrderQty,
+        skuMinOrderQty: sku.minOrderQty,
+        supportsMixedBatch,
+      }),
+    [productMinOrderQty, supportsMixedBatch],
+  )
+
+  const meetsMinOrderRules = useMemo(() => {
+    if (!product) return false
+    const activeLines = Object.entries(skuQuantities).filter(([, qty]) => qty > 0)
+    if (activeLines.length === 0) return false
+    for (const [skuId, qty] of activeLines) {
+      const sku = product.skus.find(item => item.id === skuId)
+      if (!sku) continue
+      const moq = resolveSkuMinOrderQty({
+        productMinOrderQty,
+        skuMinOrderQty: sku.minOrderQty,
+        supportsMixedBatch,
+      })
+      if (qty < moq) return false
+    }
+    const total = activeLines.reduce((sum, [, qty]) => sum + qty, 0)
+    return total >= productMinOrderQty
+  }, [product, skuQuantities, productMinOrderQty, supportsMixedBatch])
+
   const totalSelectedQty = useMemo(
     () => Object.values(skuQuantities).reduce((sum, qty) => sum + (qty || 0), 0),
     [skuQuantities],
@@ -334,7 +381,10 @@ export const useProductDetail = (): {
   /** 尺码通过加减号选中：有数量即视为已选规格 */
   const isSizeSelected = !sizeAttribute || totalSelectedQty > 0 || Boolean(manualSizeSkuId)
 
-  /** 颜色已选，且至少有一个规格数量 > 0 */
+  /**
+   * 颜色已选且至少有数量时即可点击加购；
+   * 未达起订量时在点击时弹出明确提示（便于展示「还差 X 件」）。
+   */
   const canAddToCart = useMemo(
     () => isPurchasable && isColorSelected && totalSelectedQty > 0,
     [isPurchasable, isColorSelected, totalSelectedQty],
@@ -394,15 +444,22 @@ export const useProductDetail = (): {
         attrs[colorAttribute.name] = colorValue
       }
       setSelectedAttributes(attrs)
-      setQuantity(1)
-      // 选中尺码后默认数量为 1（仅本地，不直接加购）
-      const nextQty = Math.max(1, skuQuantitiesRef.current[sku.id] || 0)
-      const capped = Math.min(skuQtyCap(sku), nextQty) || 1
-      skuQuantitiesRef.current = { [sku.id]: capped }
-      setSkuQuantities({ [sku.id]: capped })
+
+      const moq = resolveSkuMinOrderQty({
+        productMinOrderQty,
+        skuMinOrderQty: sku.minOrderQty,
+        supportsMixedBatch,
+      })
+      const existing = skuQuantitiesRef.current[sku.id] || 0
+      const nextQty = clampSelectedQuantityToMoq(existing > 0 ? existing : moq, moq)
+      const capped = Math.min(skuQtyCap(sku), nextQty) || moq
+      setQuantity(capped)
+      const merged = { ...skuQuantitiesRef.current, [sku.id]: capped }
+      skuQuantitiesRef.current = merged
+      setSkuQuantities(merged)
       setSelectionHighlight({ color: false, size: false })
     },
-    [colorAttribute],
+    [colorAttribute, productMinOrderQty, supportsMixedBatch],
   )
 
   const handleColorSelect = (value: string, imageUrl?: string | null) => {
@@ -412,10 +469,8 @@ export const useProductDetail = (): {
     setManualSizeSkuId(null)
     setSelectedSku(null)
     setSelectedAttributes({ [colorAttribute.name]: value })
-    setQuantity(1)
-    setSkuQuantities({})
-    skuQuantitiesRef.current = {}
     setSelectionHighlight({ color: false, size: false })
+    // 混批：切换颜色时保留其他颜色已选数量
 
     const matchedSkus = product.skus.filter((sku) =>
       sku.attributeJson?.some((attr) => attr.name === colorAttribute.name && attr.value === value),
@@ -429,8 +484,23 @@ export const useProductDetail = (): {
 
     // 无尺码规格时：选中颜色即锁定对应 SKU
     if (!sizeAttribute && primary) {
-      applySizeSelection(primary, value)
+      const existing = skuQuantitiesRef.current[primary.id] || 0
+      if (existing > 0 || !supportsMixedBatch) {
+        applySizeSelection(primary, value)
+      } else {
+        setManualSizeSkuId(primary.id)
+        setSelectedSku(primary)
+        const attrs: Record<string, string> = { [colorAttribute.name]: value }
+        primary.attributeJson?.forEach((attr) => {
+          if (attr.name && attr.value) attrs[attr.name] = attr.value
+        })
+        setSelectedAttributes(attrs)
+        setQuantity(0)
+      }
+      return
     }
+
+    setQuantity(0)
   }
 
   const handleSizeSelect = (sku: ProductSkuData) => {
@@ -477,6 +547,33 @@ export const useProductDetail = (): {
     [colorAttribute, manualColorValue, resolveSkuForColorAndSize],
   )
 
+  const getSkuLineQuantity = useCallback(
+    (skuId: string) => {
+      const sourceSku = product?.skus.find(item => item.id === skuId)
+      if (!sourceSku) return 0
+      const resolved = resolveRowSku(sourceSku)
+      return skuQuantitiesRef.current[resolved.sku.id] ?? skuQuantities[resolved.sku.id] ?? 0
+    },
+    [product, skuQuantities, resolveRowSku],
+  )
+
+  const syncSkuSelection = useCallback(
+    (sku: ProductSkuData, colorValue?: string | null) => {
+      setManualSizeSkuId(sku.id)
+      setSelectedSku(sku)
+      const attrs: Record<string, string> = {}
+      sku.attributeJson?.forEach((attr) => {
+        if (attr.name && attr.value) attrs[attr.name] = attr.value
+      })
+      if (colorValue && colorAttribute) {
+        attrs[colorAttribute.name] = colorValue
+      }
+      setSelectedAttributes(attrs)
+      setSelectionHighlight({ color: false, size: false })
+    },
+    [colorAttribute],
+  )
+
   const handleSkuQuantityChange = async (skuId: string, type: 'inc' | 'dec' | 'set', value?: number) => {
     if (!product || product.status !== 'ACTIVE') return
     const sourceSku = product.skus.find((item) => item.id === skuId)
@@ -492,48 +589,61 @@ export const useProductDetail = (): {
     const resolved = resolveRowSku(sourceSku)
     const sku = resolved.sku
     const current = skuQuantitiesRef.current[sku.id] ?? skuQuantities[sku.id] ?? 0
+    const moq = resolveSkuMinOrderQty({
+      productMinOrderQty,
+      skuMinOrderQty: sku.minOrderQty,
+      supportsMixedBatch,
+    })
+    const cap = skuQtyCap(sku)
 
     let next = current
-    const cap = skuQtyCap(sku)
-    if (type === 'inc') next = Math.min(cap, current + 1)
-    else if (type === 'dec') next = Math.max(0, current - 1)
-    else next = Math.max(0, Math.min(cap, Number(value) || 0))
+    if (type === 'inc') {
+      next = nextQuantityAfterIncrement(current, moq, cap)
+    } else if (type === 'dec') {
+      next = nextQuantityAfterDecrement(current, moq, {
+        // 混批可清零取消该行；单规格锁在起订量
+        allowClear: supportsMixedBatch,
+      })
+    } else {
+      const raw = Math.min(cap, Number(value) || 0)
+      if (raw > 0 && raw < moq) {
+        toast.error(formatMinOrderQtyMessage(moq))
+        next = clampSelectedQuantityToMoq(raw, moq)
+      } else {
+        next = raw <= 0 ? 0 : clampSelectedQuantityToMoq(raw, moq)
+      }
+    }
 
-    // 数量为 0 时点 - 保持 0；点 + 从 0→1 即选中该尺码
     if (next === current) {
       if (type === 'inc' && current >= cap) toast.warning('Maximum quantity reached')
       return
     }
 
-    // 加减号即选中：点 + 选中该尺码；点 - 减到 0 时取消该行
     if (next > 0) {
-      const prevQtys = { ...skuQuantitiesRef.current }
-      applySizeSelection(sku, resolved.colorValue)
-      // applySizeSelection 会重置数量表，合并回其他规格的数量
-      const merged = { ...prevQtys, [sku.id]: next }
+      syncSkuSelection(sku, resolved.colorValue)
+      const merged = { ...skuQuantitiesRef.current, [sku.id]: next }
       skuQuantitiesRef.current = merged
       setSkuQuantities(merged)
       setQuantity(next)
-    } else {
-      skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [sku.id]: 0 }
-      setSkuQuantities((prev) => ({ ...prev, [sku.id]: 0 }))
-      if (manualSizeSkuId === sku.id || selectedSku?.id === sku.id) {
-        const remaining = Object.entries(skuQuantitiesRef.current).find(
-          ([id, qty]) => id !== sku.id && qty > 0,
-        )
-        if (remaining) {
-          const remainSku = product.skus.find((item) => item.id === remaining[0])
-          if (remainSku) {
-            const prevQtys = { ...skuQuantitiesRef.current }
-            applySizeSelection(remainSku, resolved.colorValue)
-            skuQuantitiesRef.current = prevQtys
-            setSkuQuantities(prevQtys)
-          }
-        } else {
-          setManualSizeSkuId(null)
-          setSelectedSku(null)
-          setQuantity(1)
+      return
+    }
+
+    skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [sku.id]: 0 }
+    setSkuQuantities((prev) => ({ ...prev, [sku.id]: 0 }))
+    if (manualSizeSkuId === sku.id || selectedSku?.id === sku.id) {
+      const remaining = Object.entries(skuQuantitiesRef.current).find(
+        ([id, qty]) => id !== sku.id && qty > 0,
+      )
+      if (remaining) {
+        const remainSku = product.skus.find((item) => item.id === remaining[0])
+        if (remainSku) {
+          syncSkuSelection(remainSku, resolved.colorValue)
+          setQuantity(remaining[1])
         }
+      } else {
+        setManualSizeSkuId(null)
+        setSelectedSku(null)
+        setQuantity(moq)
       }
     }
   }
@@ -558,22 +668,23 @@ export const useProductDetail = (): {
       return
     }
 
-    if (!canAddToCart) {
-      return
-    }
-
     let lines = Object.entries(skuQuantitiesRef.current).filter(([, qty]) => qty > 0)
 
-    // 已选中颜色+尺码但数量为 0 时，默认加购 1 件
+    // 已选中颜色+尺码但数量为 0 时，默认加购起订量（单规格保底）
     if (lines.length === 0 && selectedSku) {
-      const qty = skuQtyCap(selectedSku) > 0 ? 1 : 0
+      const moq = resolveSkuMinOrderQty({
+        productMinOrderQty,
+        skuMinOrderQty: selectedSku.minOrderQty,
+        supportsMixedBatch,
+      })
+      const qty = skuQtyCap(selectedSku) >= moq ? moq : 0
       if (qty <= 0) {
         toast.error('This option is out of stock')
         return
       }
       lines = [[selectedSku.id, qty]]
-      skuQuantitiesRef.current = { [selectedSku.id]: qty }
-      setSkuQuantities({ [selectedSku.id]: qty })
+      skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [selectedSku.id]: qty }
+      setSkuQuantities({ ...skuQuantitiesRef.current })
     }
 
     if (lines.length === 0) {
@@ -584,10 +695,58 @@ export const useProductDetail = (): {
       return
     }
 
+    // 单规格：加购数量保底 Math.max(qty, moq)
+    if (!supportsMixedBatch) {
+      lines = lines.map(([skuId, qty]) => {
+        const sku = product?.skus.find(item => item.id === skuId)
+        const moq = resolveSkuMinOrderQty({
+          productMinOrderQty,
+          skuMinOrderQty: sku?.minOrderQty,
+          supportsMixedBatch: false,
+        })
+        return [skuId, Math.max(qty, moq)] as [string, number]
+      })
+      const nextMap = { ...skuQuantitiesRef.current }
+      for (const [skuId, qty] of lines) nextMap[skuId] = qty
+      skuQuantitiesRef.current = nextMap
+      setSkuQuantities(nextMap)
+    }
+
+    for (const [skuId, qty] of lines) {
+      const sku = product?.skus.find(item => item.id === skuId)
+      const moq = resolveSkuMinOrderQty({
+        productMinOrderQty,
+        skuMinOrderQty: sku?.minOrderQty,
+        supportsMixedBatch,
+      })
+      if (qty < moq) {
+        toast.error(formatMinOrderQtyMessage(moq))
+        return
+      }
+    }
+
+    const batchTotal = lines.reduce((sum, [, qty]) => sum + qty, 0)
+    if (batchTotal < productMinOrderQty) {
+      toast.error(
+        supportsMixedBatch
+          ? formatMixedBatchShortfallMessage(productMinOrderQty, batchTotal)
+          : formatMinOrderQtyMessage(productMinOrderQty),
+      )
+      return
+    }
+
     try {
       setSubmitting(true)
-      for (const [skuId, qty] of lines) {
-        await addToCart({ productSkuId: skuId, quantity: qty })
+      for (let i = 0; i < lines.length; i += 1) {
+        const [skuId, qty] = lines[i]
+        const sameRequestSiblingQty = lines
+          .filter((_, idx) => idx !== i)
+          .reduce((sum, [, q]) => sum + q, 0)
+        await addToCart({
+          productSkuId: skuId,
+          quantity: qty,
+          sameRequestSiblingQty,
+        })
       }
       toast.success('Added to cart')
     } catch (err: any) {
@@ -629,12 +788,16 @@ export const useProductDetail = (): {
       isColorSelected,
       isSizeSelected,
       selectionHighlight,
+      productMinOrderQty,
+      supportsMixedBatch,
     },
     handlers: {
       handleColorSelect,
       handleSizeSelect,
       handleQuantityChange,
       handleSkuQuantityChange,
+      getSkuLineQuantity,
+      resolveLineMinOrderQty,
       handleAddToCart,
       handleRelatedClick,
       setActiveImage,

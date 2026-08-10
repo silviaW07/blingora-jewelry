@@ -154,21 +154,31 @@ export const ProductListCard = ({
           {item.product_name}
         </h3>
 
-        <p className="truncate text-xs leading-4 text-[#8b8477]">
-          {isDraft ? t('product.preview') : formatMinOrder(item.min_order_quantity)}
-        </p>
+        {isDraft ? (
+          <p className="truncate text-xs leading-4 text-[#8b8477]">{t('product.preview')}</p>
+        ) : null}
 
         {isDraft ? (
           <div className="h-5" aria-hidden="true" />
         ) : canViewPrice ? (
-          <div className="min-h-5">
+          <div className="min-h-5 space-y-1">
             <p className="truncate text-base font-bold leading-5 text-[#111111]">
               {formatListPrice(item.price, item.price_max)}
             </p>
+            {typeof item.min_order_quantity === 'number' && item.min_order_quantity > 0 ? (
+              <p className="truncate text-xs font-semibold leading-4 text-[#ff0000]">
+                {formatMinOrder(item.min_order_quantity)}
+              </p>
+            ) : null}
           </div>
         ) : (
-          <div className="min-h-5">
+          <div className="min-h-5 space-y-1">
             <GuestPlaceholder compact className="truncate" />
+            {typeof item.min_order_quantity === 'number' && item.min_order_quantity > 0 ? (
+              <p className="truncate text-xs font-semibold leading-4 text-[#ff0000]">
+                {formatMinOrder(item.min_order_quantity)}
+              </p>
+            ) : null}
           </div>
         )}
 

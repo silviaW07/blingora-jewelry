@@ -9,11 +9,11 @@
 export const PRODUCT_SPEC_WHITELIST_GROUPS: readonly (readonly string[])[] = [
   ['品牌', 'Brand'],
   ['材质', 'Material', '材料', '面料', 'Fabric'],
-  ['颜色', 'Color', 'Colour'],
+  // 颜色已从 C 端规格参数白名单移除：SKU/色图已表达颜色，属性里常是超长色值列表
   ['尺码', '尺寸', 'Size', 'Sizing'],
   ['重量', 'Weight'],
   ['风格', '款式', 'Style'],
-  ['适用季节', '季节', 'Season'],
+  ['适用季节', 'Season'],
   ['功能', 'Function'],
   ['鞋底工艺'],
 ] as const
@@ -21,14 +21,22 @@ export const PRODUCT_SPEC_WHITELIST_GROUPS: readonly (readonly string[])[] = [
 /**
  * Exact-match blacklist for Description / 规格参数 field names.
  * After trim (+ case-insensitive normalize), the field name must equal an
- * entry exactly — substring/contains is NOT used (e.g. 品牌 is blocked,
- * 品牌色 is not).
+ * entry exactly — substring/contains is NOT used for most entries.
+ *
+ * Also blocked by compact-key equality (去空格/标点)，避免「上市年份/季节」漏网。
  */
 export const PRODUCT_SPEC_BLACKLIST: readonly string[] = [
   '品牌',
   '有可授权的自有品牌',
   '上市年份季节',
+  '上市年份/季节',
+  '上市年份',
   '上市时间',
+  '年份',
+  '颜色',
+  'Color',
+  'Colour',
+  '颜色分类',
 ] as const
 
 /** Normalize attribute keys for case-insensitive / trim matching. */
@@ -39,7 +47,13 @@ export function normalizeSpecFieldKey(key: string | null | undefined): string {
     .replace(/\s+/g, ' ')
 }
 
+/** 去空格与常见分隔符，用于黑名单宽松精确匹配（上市年份/季节 ≡ 上市年份季节） */
+export function compactSpecFieldKey(key: string | null | undefined): string {
+  return normalizeSpecFieldKey(key).replace(/[\s/／·\-_|｜,，.。:：;；]/g, '')
+}
+
 let cachedBlacklistSet: Set<string> | null = null
+let cachedBlacklistCompactSet: Set<string> | null = null
 
 function getBlacklistSet(): Set<string> {
   if (cachedBlacklistSet) return cachedBlacklistSet
@@ -49,11 +63,24 @@ function getBlacklistSet(): Set<string> {
   return cachedBlacklistSet
 }
 
-/** True when the field name exactly matches a blacklist entry (after normalize). */
+function getBlacklistCompactSet(): Set<string> {
+  if (cachedBlacklistCompactSet) return cachedBlacklistCompactSet
+  cachedBlacklistCompactSet = new Set(
+    PRODUCT_SPEC_BLACKLIST.map((name) => compactSpecFieldKey(name)).filter(Boolean),
+  )
+  return cachedBlacklistCompactSet
+}
+
+/** True when the field name matches a blacklist entry (normalize 或 compact). */
 export function isBlacklistedSpecFieldKey(key: string | null | undefined): boolean {
   const normalized = normalizeSpecFieldKey(key)
   if (!normalized) return false
-  return getBlacklistSet().has(normalized)
+  if (getBlacklistSet().has(normalized)) return true
+  const compact = compactSpecFieldKey(key)
+  if (compact && getBlacklistCompactSet().has(compact)) return true
+  // 含「上市年份」的字段一律屏蔽（避免被「季节」白名单 contains 放行）
+  if (compact.includes('上市年份') || compact.includes('上市时间')) return true
+  return false
 }
 
 type WhitelistToken = {

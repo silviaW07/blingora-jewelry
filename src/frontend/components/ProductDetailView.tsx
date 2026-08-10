@@ -163,7 +163,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     product,
     relatedProducts,
     selectedSku,
-    skuQuantities,
     activeImage,
     submitting,
     sortedGallery,
@@ -174,13 +173,19 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     manualColorValue,
     canAddToCart,
     selectionHighlight,
+    productMinOrderQty,
+    supportsMixedBatch,
   } = state;
+  const isColorSelected =
+    !colorAttribute || Boolean(String(manualColorValue || '').trim())
   const {
     handleSkuQuantityChange,
     handleColorSelect,
     handleAddToCart,
     handleRelatedClick,
     setActiveImage,
+    getSkuLineQuantity,
+    resolveLineMinOrderQty,
   } = handlers;
 
   const gallery = useMemo(() => {
@@ -250,7 +255,22 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   const specListTitle = sizeAttributeGroup
     ? t('product.sizeOptions')
     : t('product.specOptions')
-  const displayedMinOrderQty = selectedSku?.minOrderQty ?? product?.minOrderQty ?? 1
+  const productMoq = productMinOrderQty || product?.minOrderQty || 1
+  const displayedMinOrderQty = productMoq
+
+  const renderMoqLabel = (qty: number, className?: string) => {
+    const unit = qty > 1 ? t('common.pieces') : t('common.piece')
+    return (
+      <p
+        className={cn(
+          'mt-1 text-sm font-semibold text-[#ff0000]',
+          className,
+        )}
+      >
+        {t('common.minOrder')}: {qty} {unit}
+      </p>
+    )
+  }
 
   /** Unique size/spec rows: always visible; resolve SKU by selected color when available. */
   const specListRows = useMemo(() => {
@@ -310,11 +330,14 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
   const renderSpecRow = (row: { key: string; label: string; sku: ProductSkuData }) => {
     const { sku, label: specLabel } = row
-    const qty = skuQuantities[sku.id] || 0
+    const qty = getSkuLineQuantity(sku.id)
+    const lineMoq = resolveLineMinOrderQty(sku)
     const priceParts = formatUsdParts(sku.price)
     const rawModelLabel = specLabel || sku.variantLabel || sku.skuCode
     const modelLabel = translateAttributeValue(t, rawModelLabel) || rawModelLabel
-    const canUseStepper = Boolean(isPurchasable)
+    const canUseStepper = Boolean(isPurchasable) && isColorSelected
+    // 单规格：数量锁在起订量，减号在下限时禁用；混批：可减到 0 取消该行
+    const canDecrease = supportsMixedBatch ? qty > 0 : qty > lineMoq
 
     return (
       <div key={row.key} className="product-sku-row">
@@ -338,8 +361,18 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           <button
             type="button"
             className="product-sku-stepper-btn"
-            disabled={!canUseStepper || qty <= 0}
+            disabled={!canUseStepper || !canDecrease}
             aria-label="减少数量"
+            title={
+              !isColorSelected
+                ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' })
+                : !supportsMixedBatch && qty > 0 && qty <= lineMoq
+                  ? t('product.moqFloorHint', {
+                      defaultValue: 'Quantity cannot be lower than MOQ',
+                      qty: lineMoq,
+                    })
+                  : undefined
+            }
             onClick={() => void handleSkuQuantityChange(sku.id, 'dec')}
           >
             <Minus className="size-3.5" />
@@ -350,6 +383,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             className="product-sku-stepper-btn"
             disabled={!canUseStepper || qty >= 9999 || sku.stockStatus === 'OUT_OF_STOCK'}
             aria-label="增加数量并选中尺码"
+            title={!isColorSelected ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' }) : undefined}
             onClick={() => void handleSkuQuantityChange(sku.id, 'inc')}
           >
             <Plus className="size-3.5" />
@@ -542,10 +576,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           : formatUsdRange(product.priceMin, product.priceMax)}
                       </p>
                     </StorePrice>
-                    <p className="mt-1 text-xs text-[#888]">
-                      {t('common.minOrder')}: {displayedMinOrderQty}{' '}
-                      {displayedMinOrderQty > 1 ? t('common.pieces') : t('common.piece')}
-                    </p>
+                    <div className="mt-1">{renderMoqLabel(displayedMinOrderQty)}</div>
                   </div>
 
                   {useTwoLevelLayout ? (
@@ -614,6 +645,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           <span className="font-semibold text-[#111]">{specListTitle}</span>
                           <span className="text-[#888]">{specListRows.length} {t('common.options')}</span>
                         </div>
+                        {!isColorSelected ? (
+                          <p className="mb-2 text-xs text-rose-600">
+                            {t('product.selectColorFirst', { defaultValue: 'Please select a color first' })}
+                          </p>
+                        ) : null}
                         <div className="product-sku-list max-h-[420px] overflow-y-auto">
                           {specListRows.length > 0 ? (
                             specListRows.map((row) => renderSpecRow(row))
@@ -700,7 +736,33 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </div>
                   ) : null}
 
-                  <div className="product-detail-buy-actions">
+                  <div className="product-detail-buy-actions space-y-2">
+                    {productMoq > 1 ? (
+                      <div
+                        className={cn(
+                          'flex items-center justify-between rounded-[2px] border px-3 py-2 text-sm',
+                          totalSelectedQty >= productMoq
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                            : 'border-red-200 bg-red-50 text-[#ff0000]',
+                        )}
+                      >
+                        <span className="font-semibold">
+                          {t('product.moqProgress', {
+                            selected: totalSelectedQty,
+                            moq: productMoq,
+                            defaultValue: `已选：${totalSelectedQty} / ${productMoq} 件`,
+                          })}
+                        </span>
+                        {totalSelectedQty > 0 && totalSelectedQty < productMoq ? (
+                          <span className="text-xs font-medium">
+                            {t('product.moqNeedMore', {
+                              count: productMoq - totalSelectedQty,
+                              defaultValue: `还需 ${productMoq - totalSelectedQty} 件`,
+                            })}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <Button
                       type="button"
                       className={cn(

@@ -1,9 +1,14 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { ArrowUpCircle, ImagePlus, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
 import { PreviewableThumb } from '@/backend/components/ImageLightbox'
+import {
+  PendingImport1688DetailDialog,
+  PendingImport1688DetailTrigger,
+  resolveMaterialLabel,
+} from '@/backend/components/PendingImport1688DetailDialog'
 import { Badge, Button, Checkbox, TableCell, TableRow } from '@/backend/components/ui'
 import { PendingImportSkuChildRows } from '@/backend/components/PendingImportSkuChildRows'
 import {
@@ -77,6 +82,7 @@ function PendingImportTableRowsInner({
   publishStatusConfig,
   sourceConfig,
 }: PendingImportTableRowsProps) {
+  const [detailOpen, setDetailOpen] = useState(false)
   const expanded = state.expandedPendingImportIds.includes(item.item_id)
   const pendingSkus = item.item_skus || []
   const targetCategoryOption =
@@ -125,6 +131,13 @@ function PendingImportTableRowsInner({
   const canExpandChildren = isSingleColor ? !pricesUniform && pendingSkus.length > 1 : pendingSkus.length > 0
   const externalCode = extractExternalProductCode(item)
   const brand = extractBrand(item)
+  const materialHint = useMemo(
+    () => resolveMaterialLabel(item.item_featureAttributes, item.item_productDetail),
+    [item.item_featureAttributes, item.item_productDetail],
+  )
+  const canOpenSourceDetail =
+    !isTableImport &&
+    Boolean(item.item_productDetail || item.item_featureAttributes?.length || item.item_sourceUrl)
 
   const skuPrices = skuPricesList
   const cnyMin = skuPrices.length ? Math.min(...skuPrices) : item.item_cnyPriceMin
@@ -294,6 +307,12 @@ function PendingImportTableRowsInner({
                   ? ` · ${skuCount} 规格`
                   : ` · ${colorCount} 色 · ${skuCount} SKU`}
               </span>
+              {canOpenSourceDetail ? (
+                <PendingImport1688DetailTrigger
+                  material={materialHint}
+                  onClick={() => setDetailOpen(true)}
+                />
+              ) : null}
               {isSingleColor ? (
                 <span className="text-[11px] text-slate-500 mt-0.5">
                   {pricesUniform
@@ -563,7 +582,17 @@ function PendingImportTableRowsInner({
         expanded={expanded && canExpandChildren}
         state={state}
         handlers={handlers}
+        minOrderQty={item.item_minimumOrderQuantity}
         flatSpecMode={isSingleColor}
+      />
+
+      <PendingImport1688DetailDialog
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        productName={item.item_productName || item.item_parsedName}
+        sourceUrl={item.item_sourceUrl}
+        productDetail={item.item_productDetail}
+        featureAttributes={item.item_featureAttributes}
       />
     </>
   )
