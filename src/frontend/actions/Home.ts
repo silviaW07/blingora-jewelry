@@ -201,19 +201,24 @@ export const getHomeRecommendZones = async (input?: {
   // 类目卡封面策略：
   // 1) 优先用「最新商品主图」(coverImageByCategoryId)，让首页类目卡更鲜活
   // 2) cover 不存在时再回退到后台配置的 category.imageUrl / bannerImageUrl / iconUrl
+  // 注意：不能用「全局最新 N 条」再分配——热门类目会占满 take，冷门类目永久占位图。
   const categoryIdsNeedingCover = freshCategories.map((category) => category.id)
   const coverImageByCategoryId = new Map<string, string>()
   if (categoryIdsNeedingCover.length > 0) {
+    const needed = new Set(categoryIdsNeedingCover)
     const coverProducts = await prisma.product.findMany({
       where: {
         status: 'ACTIVE',
+        mainImageUrl: { not: '' },
         OR: [
           { categoryId: { in: categoryIdsNeedingCover } },
+          { brandCategoryId: { in: categoryIdsNeedingCover } },
           { relationCategories: { some: { categoryId: { in: categoryIdsNeedingCover } } } },
         ],
       },
       select: {
         categoryId: true,
+        brandCategoryId: true,
         mainImageUrl: true,
         relationCategories: {
           where: { categoryId: { in: categoryIdsNeedingCover } },
@@ -221,20 +226,52 @@ export const getHomeRecommendZones = async (input?: {
         },
       },
       orderBy: { updatedAt: 'desc' },
-      take: Math.min(400, categoryIdsNeedingCover.length * 8),
+      take: Math.max(1200, categoryIdsNeedingCover.length * 50),
     })
 
+    const assignCover = (categoryId: string | null | undefined, imageUrl: string) => {
+      const id = String(categoryId || '').trim()
+      if (!id || !needed.has(id) || coverImageByCategoryId.has(id)) return
+      coverImageByCategoryId.set(id, imageUrl)
+      needed.delete(id)
+    }
+
     for (const product of coverProducts) {
+      if (needed.size === 0) break
       const imageUrl = optimizeCatalogImageUrl(product.mainImageUrl, 640)
       if (!imageUrl) continue
-      if (product.categoryId && !coverImageByCategoryId.has(product.categoryId)) {
-        coverImageByCategoryId.set(product.categoryId, imageUrl)
-      }
+      assignCover(product.categoryId, imageUrl)
+      assignCover(product.brandCategoryId, imageUrl)
       for (const relation of product.relationCategories) {
-        if (!coverImageByCategoryId.has(relation.categoryId)) {
-          coverImageByCategoryId.set(relation.categoryId, imageUrl)
-        }
+        assignCover(relation.categoryId, imageUrl)
       }
+    }
+
+    // 第二轮：仍缺封面的类目各自查最新一条（保证 Below 3usd / Stainless steel 等标签类目也能出图）
+    const missingIds = Array.from(needed)
+    if (missingIds.length > 0) {
+      await Promise.all(
+        missingIds.map(async (categoryId) => {
+          const product = await prisma.product.findFirst({
+            where: {
+              status: 'ACTIVE',
+              mainImageUrl: { not: '' },
+              OR: [
+                { categoryId },
+                { brandCategoryId: categoryId },
+                { relationCategories: { some: { categoryId } } },
+              ],
+            },
+            orderBy: { updatedAt: 'desc' },
+            select: { mainImageUrl: true },
+          })
+          const imageUrl = optimizeCatalogImageUrl(product?.mainImageUrl, 640)
+          if (imageUrl) {
+            coverImageByCategoryId.set(categoryId, imageUrl)
+            needed.delete(categoryId)
+          }
+        }),
+      )
     }
   }
 
@@ -292,8 +329,10 @@ export const getHomeRecommendZones = async (input?: {
     const latestCandidates = await prisma.product.findMany({
       where: {
         status: 'ACTIVE',
+        mainImageUrl: { not: '' },
         OR: [
           { categoryId: { in: categoryZoneCategoryIds } },
+          { brandCategoryId: { in: categoryZoneCategoryIds } },
           { relationCategories: { some: { categoryId: { in: categoryZoneCategoryIds } } } },
         ],
         skus: { some: {} },
@@ -306,6 +345,7 @@ export const getHomeRecommendZones = async (input?: {
         shortDescription: true,
         status: true,
         categoryId: true,
+        brandCategoryId: true,
         costPrice: true,
         ratingAverage: true,
         ratingCount: true,
@@ -356,7 +396,7 @@ export const getHomeRecommendZones = async (input?: {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: Math.min(500, categoryZoneCategoryIds.length * maxLatestPerCategory * 4),
+      take: Math.max(800, categoryZoneCategoryIds.length * maxLatestPerCategory * 8),
     })
 
     const mapLatestProductCard = (
@@ -459,6 +499,9 @@ export const getHomeRecommendZones = async (input?: {
       const linkedCategoryIds = new Set<string>()
       if (product.categoryId && categoryZoneCategoryIds.includes(product.categoryId)) {
         linkedCategoryIds.add(product.categoryId)
+      }
+      if (product.brandCategoryId && categoryZoneCategoryIds.includes(product.brandCategoryId)) {
+        linkedCategoryIds.add(product.brandCategoryId)
       }
       for (const relation of product.relationCategories) {
         if (categoryZoneCategoryIds.includes(relation.categoryId)) {
@@ -653,7 +696,9 @@ export const getHomeRecommendZones = async (input?: {
             category.imageUrl,
             category.bannerImageUrl,
             (category as any).iconUrl,
-            coverImageByCategoryId.get(category.id) || null,
+            coverImageByCategoryId.get(category.id) ||
+              (latestProductsByCategoryId.get(category.id) || [])[0]?.imageUrl ||
+              null,
           ),
           description: category.description,
           productCount: productCountByCategoryId.get(category.id) ?? category._count.products,
