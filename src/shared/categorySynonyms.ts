@@ -103,7 +103,7 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
       '挎包',
     ],
   },
-  { names: ['Clutch', '手拿包'], synonyms: ['手拿包', '晚宴包', '手抓包'] },,
+  { names: ['Clutch', '手拿包'], synonyms: ['手拿包', '晚宴包', '手抓包'] },
 
   // —— 鞋 / Shoes ——
   { names: ['Flats', 'Flat Shoes', '平底鞋'], synonyms: ['平底鞋', '单鞋', '豆豆鞋', '芭蕾鞋'] },
