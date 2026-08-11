@@ -5001,6 +5001,8 @@ export type AutoMatchedSecondaryCategory = {
   name: string
   /** 分类管理「品牌关键词」；可命中关联，但不作为导入定价目标类目 */
   keywords: string[]
+  /** 1=一级大类（Bags/Jewelry…），2=二级；匹配时优先二级做主类目 */
+  level?: number | null
   /** 一级父类名称；parent 为 Brand 时仅作货架标签，不参与售价系数 */
   parentName?: string | null
   /** DB isBrandCategory — Brand 货架 L2，不得当作主类目/定价类目 */
@@ -5092,14 +5094,20 @@ export const buildCategoryMatchCorpus = (...parts: Array<string | null | undefin
     .join('\n')
 
 export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMatchedSecondaryCategory[]> {
+  // 同时加载 ACTIVE 一级（Bags/Jewelry…）与二级：
+  // 标题「手提斜挎包」若只命中一级 Bags，也能勾上一级，不再只剩 Brand。
   const categories = await tx.category.findMany({
     where: {
       status: 'ACTIVE',
-      level: 2
+      OR: [
+        { level: 2 },
+        { level: 1, isBrandCategory: false },
+      ],
     },
     select: {
       id: true,
       name: true,
+      level: true,
       brandKeywordsJson: true,
       isBrandCategory: true,
       parent: { select: { name: true, isBrandCategory: true } },
@@ -5114,23 +5122,27 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
     .map((category: {
       id: string
       name: string
+      level?: number | null
       brandKeywordsJson?: unknown
       isBrandCategory?: boolean | null
       parent?: { name?: string | null; isBrandCategory?: boolean | null } | null
     }) => {
       const name = String(category.name || '').trim()
-      // 并入中文同义词字典：让英文类目名（Bracelet/Necklace…）也能命中中文标题（手链/项链…）
+      const parentName = category.parent?.name ? String(category.parent.name).trim() : null
+      // 英文类目（Handbag）+ 父级 Bags 同义词（含「手提斜挎包」复合词）一并参与匹配
       const keywords = Array.from(
         new Set([
           ...parseCategoryBrandKeywords(category.brandKeywordsJson),
           ...resolveCategorySynonyms(name),
+          ...resolveCategorySynonyms(parentName),
         ]),
       )
       return {
         id: category.id,
         name,
         keywords,
-        parentName: category.parent?.name ? String(category.parent.name).trim() : null,
+        level: category.level ?? null,
+        parentName,
         isBrandCategory: Boolean(category.isBrandCategory || category.parent?.isBrandCategory),
       }
     })
@@ -5275,6 +5287,8 @@ export function matchSecondaryCategoriesByTitle(
     (a, b) =>
       // Prefer real L1→L2 product categories over Brand shelf L2s for import targeting.
       Number(isBrandParentSecondaryCategory(a.category)) - Number(isBrandParentSecondaryCategory(b.category)) ||
+      // Prefer L2 Handbag over L1 Bags when both match the same title.
+      (b.category.level || 0) - (a.category.level || 0) ||
       b.bestTokenLength - a.bestTokenLength ||
       a.category.name.localeCompare(b.category.name, 'zh-CN'),
   )
@@ -5286,7 +5300,11 @@ export function pickImportPricingTargetCategory(
   matched: AutoMatchedSecondaryCategory[],
   fallbackId?: string | null,
 ): string | null {
-  const pricingHit = matched.find(category => !isBrandParentSecondaryCategory(category))
+  const nonBrand = matched.filter(category => !isBrandParentSecondaryCategory(category))
+  const pricingHit =
+    nonBrand.find(category => (category.level || 2) >= 2) ||
+    nonBrand[0] ||
+    null
   if (pricingHit?.id) return pricingHit.id
   const fallback = String(fallbackId || '').trim()
   if (!fallback) return null
