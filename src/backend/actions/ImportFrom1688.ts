@@ -629,6 +629,7 @@ import {
   UserRole
 } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
+import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
 import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
@@ -5297,10 +5298,11 @@ const isUsableCategoryMatchToken = (token: string, options?: { allowGeneric?: bo
 /**
  * 按标题/详情是否包含二级类目名或其品牌关键词进行匹配（大小写不敏感）。
  * 多命中时：真实一级/二级商品类目优先于 Brand 货架；同档再按「最长命中词」降序。
- * 主分类（定价用）应取第一项非 Brand 命中，见 pickImportPricingTargetCategory。
+ * 主分类（定价用）应取第一项非 Brand / 非材质筛选命中，见 pickImportPricingTargetCategory。
  *
  * 品类收敛规则（避免 wallet/化妆包/Handbag 一堆乱绑）：
  * - 商品二级类目默认只看标题，不用详情（详情常写「可放钱包/化妆包」）
+ * - 材质/品质筛选类目（Stainless steel、high quality…）不参与品类打分，避免压过「项链」
  * - 同一一级下多个二级近分 → 只保留该一级
  * - 不同一级下仍残留多个二级 → 只保留全局最长命中的那一个（及其一级由 expand 补上）
  * - Brand 货架仍只保留最佳品牌命中
@@ -5332,9 +5334,21 @@ export function matchSecondaryCategoriesByTitle(
     return { category, bestTokenLength }
   }
 
+  const isAttrCategory = (category: AutoMatchedSecondaryCategory) =>
+    isAttributeOrFilterCategory({ name: category.name, parentName: category.parentName })
+
   const productScored = categories
-    .filter((category) => !isBrandParentSecondaryCategory(category))
+    .filter((category) => !isBrandParentSecondaryCategory(category) && !isAttrCategory(category))
     .map((category) => scoreCategory(category, titleCorpus, { allowGeneric: (category.level || 0) === 1 }))
+    .filter(
+      (item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } =>
+        Boolean(item),
+    )
+
+  // 材质/品质类目仍可挂关联标签，但不参与「最长命中」抢主类目
+  const attrScored = categories
+    .filter((category) => !isBrandParentSecondaryCategory(category) && isAttrCategory(category))
+    .map((category) => scoreCategory(category, titleCorpus, { allowGeneric: false }))
     .filter(
       (item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } =>
         Boolean(item),
@@ -5367,7 +5381,7 @@ export function matchSecondaryCategoriesByTitle(
     }
   }
   for (const category of categories) {
-    if ((category.level || 0) === 1 && !isBrandParentSecondaryCategory(category)) {
+    if ((category.level || 0) === 1 && !isBrandParentSecondaryCategory(category) && !isAttrCategory(category)) {
       const key = normalizeCategoryMatchText(category.name)
       if (!l1ByName.has(key)) l1ByName.set(key, category)
     }
@@ -5437,25 +5451,46 @@ export function matchSecondaryCategoriesByTitle(
   const bestBrand = brandScored[0]?.category
   if (bestBrand) refinedProduct.push(bestBrand)
 
+  // 材质/品质：仅作关联标签挂上，不抢主类目
+  for (const item of attrScored) {
+    if (!refinedProduct.some((c) => c.id === item.category.id)) {
+      refinedProduct.push(item.category)
+    }
+  }
+
   return refinedProduct
 }
 
-/** Import pricing / 待上传目标分类：只用商品二级类目，不用 Brand 货架。 */
+/** Import pricing / 待上传目标分类：优先真实二级，其次一级；不用 Brand / 材质筛选。 */
 export function pickImportPricingTargetCategory(
   matched: AutoMatchedSecondaryCategory[],
   fallbackId?: string | null,
 ): string | null {
-  const nonBrand = matched.filter(category => !isBrandParentSecondaryCategory(category))
+  const productType = matched.filter((category) =>
+    isProductTypeCategory({
+      name: category.name,
+      parentName: category.parentName,
+      isBrandCategory: category.isBrandCategory,
+      level: category.level,
+    }),
+  )
   const pricingHit =
-    nonBrand.find(category => (category.level || 2) >= 2) ||
-    nonBrand[0] ||
+    productType.find((category) => (category.level || 2) >= 2) ||
+    productType.find((category) => (category.level || 0) === 1) ||
     null
   if (pricingHit?.id) return pricingHit.id
   const fallback = String(fallbackId || '').trim()
   if (!fallback) return null
-  // 若 fallback 本身就是 Brand 命中，直接丢弃
-  const fallbackAsHit = matched.find(category => category.id === fallback)
-  if (fallbackAsHit && isBrandParentSecondaryCategory(fallbackAsHit)) return null
+  // 若 fallback 本身就是 Brand / 材质命中，直接丢弃
+  const fallbackAsHit = matched.find((category) => category.id === fallback)
+  if (fallbackAsHit && !isProductTypeCategory({
+    name: fallbackAsHit.name,
+    parentName: fallbackAsHit.parentName,
+    isBrandCategory: fallbackAsHit.isBrandCategory,
+    level: fallbackAsHit.level,
+  })) {
+    return null
+  }
   return fallback
 }
 

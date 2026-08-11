@@ -13,6 +13,11 @@
 
 const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   // —— 饰品 / Jewelry ——
+  // L1 兜底：标题只有「项链」且二级缺失/被材质挤掉时，仍能落到 Jewelry
+  {
+    names: ['Jewelry', 'Jewellery', '饰品', '首饰'],
+    synonyms: ['饰品', '首饰', '珠宝', '项链', '颈链', '手链', '戒指', '耳环', '耳钉', '耳饰', '手镯', '脚链', '吊坠', 'jewelry'],
+  },
   { names: ['Necklace', 'Necklaces', '项链'], synonyms: ['项链', '颈链', '项圈', '锁骨链', '毛衣链', '吊坠项链', 'choker'] },
   { names: ['Earring', 'Earrings', 'Earing', '耳环', '耳饰'], synonyms: ['耳环', '耳钉', '耳饰', '耳坠', '耳夹', '耳线', '耳扣', '耳圈'] },
   { names: ['Bracelet', 'Bracelets', '手链'], synonyms: ['手链', '手串', '手绳', '串珠手链'] },

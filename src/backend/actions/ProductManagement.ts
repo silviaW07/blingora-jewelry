@@ -594,6 +594,7 @@ export interface ProductBindingMetaOutput {
 import prisma from '@/tools/prisma'
 import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
+import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
 import { DEFAULT_PRICE_COEFFICIENT, resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
@@ -3833,12 +3834,21 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           pickBestBrandCategoryFromTitle(effectiveName, secondaryCategories, corpusDetail) ||
           hits.find(isBrandShelfHit) ||
           null
-        // 主类目：只认非 Brand 的真实二级；优先更长/更具体命中（jewelry set > necklace）
+        // 主类目：真实品类二级优先，其次一级；材质/Brand 不当主类目
         const pricingHits = hits
-          .filter(item => !isBrandShelfHit(item))
+          .filter(
+            (item) =>
+              isProductTypeCategory({
+                name: item.name,
+                parentName: item.parentName,
+                isBrandCategory: item.isBrandCategory,
+                level: item.level,
+              }),
+          )
           .slice()
           .sort(
             (a, b) =>
+              (b.level || 0) - (a.level || 0) ||
               b.name.length - a.name.length ||
               a.name.localeCompare(b.name, 'zh-CN'),
           )
@@ -3854,9 +3864,18 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           null
 
         const ownership = pricingHit
-          ? await resolveImportCategoryOwnership(prisma, pricingHit.id)
+          ? await resolveImportCategoryOwnership(prisma, pricingHit.id).catch(() => null)
           : null
-        let primaryCategoryId = ownership?.primaryCategoryId || null
+        let primaryCategoryId =
+          ownership?.primaryCategoryId &&
+          isProductTypeCategory({
+            name: pricingHit?.name,
+            parentName: pricingHit?.parentName,
+            isBrandCategory: pricingHit?.isBrandCategory,
+            level: pricingHit?.level,
+          })
+            ? ownership.primaryCategoryId
+            : pricingHit?.id || null
 
         if (!primaryCategoryId) {
           const existingIds = [
@@ -3864,24 +3883,43 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
             ...((product.relationCategories || []).map(rel => rel.categoryId)),
           ].filter(Boolean) as string[]
           const { categoryMap: existingMetaMap } = await getCategoryMetaMap(prisma, existingIds)
-          const isRealPricingCategory = (id: string | null | undefined) => {
+          const isUsablePrimary = (id: string | null | undefined) => {
             const meta = id ? existingMetaMap.get(id) : null
-            return !!meta && !isBrandCategoryMeta(meta, existingMetaMap) && !isAggregatePricingCategoryName(meta.name)
+            if (!meta) return false
+            if (isBrandCategoryMeta(meta, existingMetaMap)) return false
+            if (isAggregatePricingCategoryName(meta.name)) return false
+            if (
+              isAttributeOrFilterCategory({
+                name: meta.name,
+                parentName: meta.parentId ? existingMetaMap.get(meta.parentId)?.name : null,
+              })
+            ) {
+              return false
+            }
+            return true
           }
-          // Prefer existing L2 over L1（饰品/Bags… 等一级不能当校准主类目）
-          if (isRealPricingCategory(product.categoryId)) {
+          // 优先已有二级，其次已有一级（没二级时一级也能提交）
+          if (isUsablePrimary(product.categoryId)) {
             const meta = existingMetaMap.get(product.categoryId!)
             if (meta && Number(meta.level) === 2) {
               primaryCategoryId = product.categoryId
             }
           }
           if (!primaryCategoryId) {
-            const realCandidates = existingIds
-              .filter(isRealPricingCategory)
+            const l2 = existingIds
+              .filter(isUsablePrimary)
               .map(id => existingMetaMap.get(id)!)
               .filter(meta => Number(meta.level) === 2)
               .sort((a, b) => String(b.name || '').length - String(a.name || '').length)
-            primaryCategoryId = realCandidates[0]?.id || null
+            primaryCategoryId = l2[0]?.id || null
+          }
+          if (!primaryCategoryId) {
+            const l1 = existingIds
+              .filter(isUsablePrimary)
+              .map(id => existingMetaMap.get(id)!)
+              .filter(meta => Number(meta.level) === 1)
+              .sort((a, b) => String(b.name || '').length - String(a.name || '').length)
+            primaryCategoryId = l1[0]?.id || null
           }
         }
 
@@ -3909,13 +3947,21 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           }
         }
 
+        // 标题没命中品类时：沿用现有主类目（二级优先，一级也可）
         if (!primaryCategoryId) {
-          // 不要回退到一级（如「饰品」）：仅当现有主类目本身是二级时才沿用
           const fallbackIds = [product.categoryId].filter(Boolean) as string[]
           if (fallbackIds.length) {
             const { categoryMap: fbMap } = await getCategoryMetaMap(prisma, fallbackIds)
             const fb = product.categoryId ? fbMap.get(product.categoryId) : null
-            if (fb && Number(fb.level) === 2 && !isBrandCategoryMeta(fb, fbMap)) {
+            if (
+              fb &&
+              !isBrandCategoryMeta(fb, fbMap) &&
+              !isAggregatePricingCategoryName(fb.name) &&
+              !isAttributeOrFilterCategory({
+                name: fb.name,
+                parentName: fb.parentId ? fbMap.get(fb.parentId)?.name : null,
+              })
+            ) {
               primaryCategoryId = product.categoryId
             }
           }
@@ -4196,32 +4242,53 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           hits.find(isBrandShelfHit) ||
           null
         const pricingHits = hits
-          .filter(item => !isBrandShelfHit(item))
+          .filter((item) =>
+            isProductTypeCategory({
+              name: item.name,
+              parentName: item.parentName,
+              isBrandCategory: item.isBrandCategory,
+              level: item.level,
+            }),
+          )
           .slice()
           .sort(
             (a, b) =>
+              (b.level || 0) - (a.level || 0) ||
               b.name.length - a.name.length ||
               a.name.localeCompare(b.name, 'zh-CN'),
           )
         const pricingTargetId = pickImportPricingTargetCategory(
           pricingHits.length ? pricingHits : hits,
-          row.targetCategoryId,
+          null,
         )
         const pricingTarget = pricingTargetId
           ? hits.find(h => h.id === pricingTargetId) || pricingHits.find(h => h.id === pricingTargetId) || null
           : pricingHits[0] || null
-        // 表格/人工已指定主类目时保留；校准只补品牌/重量/缺失关联，不用标题重扫覆盖
-        let targetCategoryId = existingTargetId
-        if (!targetCategoryId) {
-          targetCategoryId =
-            pricingTarget?.id ||
-            pricingTargetId ||
-            null
-          if (!targetCategoryId && row.targetCategoryId) {
-            const ownershipFallback = await resolveImportCategoryOwnership(prisma, row.targetCategoryId).catch(() => null)
-            if (ownershipFallback?.isSecondary) {
-              targetCategoryId = ownershipFallback.primaryCategoryId
-            }
+        // 标题识别到真实品类时覆盖材质主类目；无标题命中时保留人工/表格目标
+        const existingHit = existingTargetId
+          ? hits.find((h) => h.id === existingTargetId) || null
+          : null
+        let targetCategoryId: string | null = null
+        if (pricingTarget?.id) {
+          targetCategoryId = pricingTarget.id
+        } else if (
+          existingTargetId &&
+          (!existingHit ||
+            isProductTypeCategory({
+              name: existingHit.name,
+              parentName: existingHit.parentName,
+              isBrandCategory: existingHit.isBrandCategory,
+              level: existingHit.level,
+            }))
+        ) {
+          targetCategoryId = existingTargetId
+        }
+        if (!targetCategoryId && row.targetCategoryId) {
+          const ownershipFallback = await resolveImportCategoryOwnership(prisma, row.targetCategoryId).catch(
+            () => null,
+          )
+          if (ownershipFallback?.primaryCategoryId) {
+            targetCategoryId = ownershipFallback.primaryCategoryId
           }
         }
 
