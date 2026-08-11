@@ -120,22 +120,6 @@ const MobileSquircleStrip = ({
   )
 }
 
-const renderMobileSquircleContent = (
-  zone: HomeRecommendZoneSectionType,
-  handlers: ZoneHandlers,
-  t: ReturnType<typeof useTranslation>['t'],
-  limitDisplay = true,
-) => {
-  const limitedItems = limitDisplay
-    ? limitRecommendZoneItems(zone, zone.items)
-    : Array.isArray(zone.items)
-      ? zone.items
-      : []
-  if (zone.zoneType === 'PRODUCT') {
-    const productItems = limitedItems.filter(
-      (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
-    )
-
 type RecommendZoneProductCardProps = {
   item: RecommendProductCard
   index: number
@@ -283,6 +267,22 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
     </article>
   )
 }
+
+const renderMobileSquircleContent = (
+  zone: HomeRecommendZoneSectionType,
+  handlers: ZoneHandlers,
+  t: ReturnType<typeof useTranslation>['t'],
+  limitDisplay = true,
+) => {
+  const limitedItems = limitDisplay
+    ? limitRecommendZoneItems(zone, zone.items)
+    : Array.isArray(zone.items)
+      ? zone.items
+      : []
+  if (zone.zoneType === 'PRODUCT') {
+    const productItems = limitedItems.filter(
+      (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
+    )
     if (productItems.length === 0) {
       return (
         <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
