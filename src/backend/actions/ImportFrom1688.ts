@@ -5129,12 +5129,11 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
     }) => {
       const name = String(category.name || '').trim()
       const parentName = category.parent?.name ? String(category.parent.name).trim() : null
-      // 英文类目（Handbag）+ 父级 Bags 同义词（含「手提斜挎包」复合词）一并参与匹配
+      // 只用本类目同义词，不要继承父级 Bags 词——否则 Handbag/Backpack/wallet 会同时命中「包」
       const keywords = Array.from(
         new Set([
           ...parseCategoryBrandKeywords(category.brandKeywordsJson),
           ...resolveCategorySynonyms(name),
-          ...resolveCategorySynonyms(parentName),
         ]),
       )
       return {
@@ -5260,6 +5259,11 @@ const pickFirstNonBrandCategoryId = (
  * 按标题/详情是否包含二级类目名或其品牌关键词进行匹配（大小写不敏感）。
  * 多命中时：真实一级/二级商品类目优先于 Brand 货架；同档再按「最长命中词」降序。
  * 主分类（定价用）应取第一项非 Brand 命中，见 pickImportPricingTargetCategory。
+ *
+ * 品类收敛规则（避免「包」相关二级全勾）：
+ * - 同一一级下多个二级同分/近分 → 判不准，只保留该一级
+ * - 能明确胜出的二级 → 只保留该二级（一级由 expandLinkedCategoryIdsWithParents 补上）
+ * - Brand 货架仍只保留最佳品牌命中
  */
 export function matchSecondaryCategoriesByTitle(
   title: string,
@@ -5285,14 +5289,72 @@ export function matchSecondaryCategoriesByTitle(
 
   scored.sort(
     (a, b) =>
-      // Prefer real L1→L2 product categories over Brand shelf L2s for import targeting.
       Number(isBrandParentSecondaryCategory(a.category)) - Number(isBrandParentSecondaryCategory(b.category)) ||
-      // Prefer L2 Handbag over L1 Bags when both match the same title.
       (b.category.level || 0) - (a.category.level || 0) ||
       b.bestTokenLength - a.bestTokenLength ||
       a.category.name.localeCompare(b.category.name, 'zh-CN'),
   )
-  return scored.map(item => item.category)
+
+  const brandScored = scored.filter((item) => isBrandParentSecondaryCategory(item.category))
+  const productScored = scored.filter((item) => !isBrandParentSecondaryCategory(item.category))
+
+  const l1ByName = new Map<string, AutoMatchedSecondaryCategory>()
+  for (const item of productScored) {
+    if ((item.category.level || 0) === 1) {
+      l1ByName.set(normalizeCategoryMatchText(item.category.name), item.category)
+    }
+  }
+  // Also index L1s from full catalog so sibling-ambiguous groups can fall back to parent
+  for (const category of categories) {
+    if ((category.level || 0) === 1 && !isBrandParentSecondaryCategory(category)) {
+      const key = normalizeCategoryMatchText(category.name)
+      if (!l1ByName.has(key)) l1ByName.set(key, category)
+    }
+  }
+
+  const l2Scored = productScored.filter((item) => (item.category.level || 2) >= 2)
+  const refinedProduct: AutoMatchedSecondaryCategory[] = []
+  const groups = new Map<string, typeof l2Scored>()
+  for (const item of l2Scored) {
+    const parentKey = normalizeCategoryMatchText(item.category.parentName) || `self:${item.category.id}`
+    const bucket = groups.get(parentKey) || []
+    bucket.push(item)
+    groups.set(parentKey, bucket)
+  }
+
+  if (groups.size > 0) {
+    for (const [parentKey, group] of groups) {
+      group.sort(
+        (a, b) =>
+          b.bestTokenLength - a.bestTokenLength ||
+          a.category.name.localeCompare(b.category.name, 'zh-CN'),
+      )
+      const best = group[0]
+      // 同分或只差 1 个字符长度的并列二级 → 视为无法判定，只挂一级
+      const ambiguous = group.filter(
+        (item) =>
+          item.category.id !== best.category.id &&
+          item.bestTokenLength >= Math.max(1, best.bestTokenLength - 1),
+      )
+      if (ambiguous.length > 0 || group.length > 1 && group[1].bestTokenLength === best.bestTokenLength) {
+        const l1 = l1ByName.get(parentKey)
+        if (l1) refinedProduct.push(l1)
+        continue
+      }
+      refinedProduct.push(best.category)
+    }
+  } else {
+    // 没有二级命中：保留一级命中（Bags 等），方便运营手选二级
+    for (const item of productScored) {
+      if ((item.category.level || 0) === 1) refinedProduct.push(item.category)
+    }
+  }
+
+  // Brand：只保留最佳一个真实品牌
+  const bestBrand = brandScored[0]?.category
+  if (bestBrand) refinedProduct.push(bestBrand)
+
+  return refinedProduct
 }
 
 /** Import pricing / 待上传目标分类：只用商品二级类目，不用 Brand 货架。 */
