@@ -34,9 +34,10 @@ type ColorGroup = {
   pricesUniform: boolean
 }
 
-const getAttributeValue = (sku: PendingImportSkuDraftItem, name: string) =>
-  sku.attributes?.find(attr => attr.name === name)?.value?.trim() || ''
-
+const getAttributeValue = (sku: PendingImportSkuDraftItem, name: string) => {
+  const attrs = Array.isArray(sku?.attributes) ? sku.attributes : []
+  return attrs.find(attr => attr.name === name)?.value?.trim() || ''
+}
 const getSpecLabel = (sku: PendingImportSkuDraftItem) =>
   getAttributeValue(sku, '规格') ||
   getAttributeValue(sku, '尺码') ||

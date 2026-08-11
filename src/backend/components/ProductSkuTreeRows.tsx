@@ -122,8 +122,8 @@ function ProductTreeRowsInner({
         </TableCell>
         <TableCell>
           <div className="flex items-center text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded-sm w-fit">
-            {sourceConfig[item.source].icon}
-            {sourceConfig[item.source].label}
+            {(sourceConfig[item.source] || sourceConfig.MANUAL).icon}
+            {(sourceConfig[item.source] || sourceConfig.MANUAL).label}
           </div>
         </TableCell>
         <TableCell>
@@ -253,7 +253,7 @@ function ProductTreeRowsInner({
           })()}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
-          ￥{item.price_min.toLocaleString()} ~ {item.price_max.toLocaleString()}
+          ￥{Number(item.price_min ?? 0).toLocaleString()} ~ {Number(item.price_max ?? 0).toLocaleString()}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
           ${(item.usd_display_price_min?.toFixed(2) || '0.00')} ~ ${(item.usd_display_price_max?.toFixed(2) || '0.00')}
@@ -302,13 +302,13 @@ function ProductTreeRowsInner({
               title="点击编辑可用库存"
               onClick={() => handlers.startProductStockEdit(item.product_id, item.total_stock)}
             >
-              {item.total_stock.toLocaleString()}
+              {Number(item.total_stock ?? 0).toLocaleString()}
             </button>
           )}
         </TableCell>
         <TableCell className="text-center">
-          <Badge variant={statusConfig[item.status].variant} className="rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-            {statusConfig[item.status].label}
+          <Badge variant={(statusConfig[item.status] || statusConfig.DRAFT).variant} className="rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+            {(statusConfig[item.status] || statusConfig.DRAFT).label}
           </Badge>
         </TableCell>
         <TableCell className="text-xs text-slate-500 whitespace-nowrap">

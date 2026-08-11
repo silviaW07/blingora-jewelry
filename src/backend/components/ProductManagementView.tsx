@@ -64,8 +64,22 @@ const STATUS_CONFIG: Record<ProductStatus, {
     label: '已下架',
     variant: 'outline',
     color: 'bg-amber-50 text-amber-700 border-amber-200'
+  },
+  OUT_OF_STOCK: {
+    label: '缺货',
+    variant: 'destructive',
+    color: 'bg-rose-50 text-rose-700 border-rose-200'
+  },
+  PREORDER: {
+    label: '预售',
+    variant: 'secondary',
+    color: 'bg-violet-50 text-violet-700 border-violet-200'
   }
-};
+} as Record<string, {
+  label: string;
+  variant: 'default' | 'secondary' | 'outline' | 'destructive';
+  color: string;
+}>;
 const GOODS_STATUS_CONFIG: Record<ManagementGoodsStatus, {
   label: string;
   className: string;
@@ -624,8 +638,8 @@ export const ProductManagementView = ({
                       </TableHeader>
                       <TableBody data-api-unique-id='productmanagementview-r55de4cba683d38e3-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                         {state.pendingImportQueueLoading && state.pendingImportQueue.length === 0 ? <TableRow data-api-unique-id='productmanagementview-rabde92a7bf1c85b2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><TableCell colSpan={17} className="h-52 text-center" data-api-unique-id='productmanagementview-rfa7f2d0d383b3f18-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><div className="flex flex-col items-center justify-center gap-3" data-api-unique-id='productmanagementview-rb9bdaaffa4ae51a9-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" data-api-unique-id='productmanagementview-rd9af88e226b5f15f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' /><p className="text-sm text-slate-500" data-api-unique-id='productmanagementview-r05dfce6dcee92df1-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>正在拉取待上传条目...</p></div></TableCell></TableRow> : state.pendingImportQueue.length === 0 ? <TableRow data-api-unique-id='productmanagementview-r1f392d0b7dc01512-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><TableCell colSpan={17} className="h-52 text-center" data-api-unique-id='productmanagementview-r96eaf3f7bfa13387-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><div className="flex flex-col items-center justify-center gap-4 py-8" data-api-unique-id='productmanagementview-r16a90b615e4fe597-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><Sparkles className="w-12 h-12 text-slate-200" data-api-unique-id='productmanagementview-r8d8d5114b9fc2a8a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' /><div data-api-unique-id='productmanagementview-re768b1619e0183b7-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><div className="font-semibold text-slate-900" data-api-unique-id='productmanagementview-rdfeb29d90778d882-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>当前待上传区为空</div><p className="text-sm text-slate-500 mt-1" data-api-unique-id='productmanagementview-r66173ec0f6d26fc4-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.pendingImportActiveTask ? '当前采集任务的待上传条目已处理完成，可继续新建任务或查看正式商品列表。' : '先发起 1688 多链接采集任务，采集成功后条目会自动出现在这里。'}</p></div><div className="flex items-center gap-2" data-api-unique-id='productmanagementview-rb19e02dd7829dbc4-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'><Button variant="outline" onClick={() => handlers.setActiveTab('products')} data-api-unique-id='productmanagementview-rd21abd638ef3b220-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>返回商品列表</Button><Button className="bg-primary text-primary-foreground" onClick={() => handlers.setPendingImportDialogOpen(true)} data-api-unique-id='productmanagementview-r2dda823a37a9234b-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>前往导入工作台</Button></div></div></TableCell></TableRow> : state.pendingImportPagedQueue.map(item => {
-                      const fetchStatusConfig = PENDING_FETCH_STATUS_CONFIG[item.item_fetchStatus];
-                      const publishStatusConfig = PENDING_PUBLISH_STATUS_CONFIG[item.item_publishStatus];
+                      const fetchStatusConfig = PENDING_FETCH_STATUS_CONFIG[item.item_fetchStatus] || PENDING_FETCH_STATUS_CONFIG.PENDING;
+                      const publishStatusConfig = PENDING_PUBLISH_STATUS_CONFIG[item.item_publishStatus] || PENDING_PUBLISH_STATUS_CONFIG.PENDING;
                       return <PendingImportTableRows key={item.item_id} item={item} state={state} handlers={handlers} fetchStatusConfig={fetchStatusConfig} publishStatusConfig={publishStatusConfig} sourceConfig={SOURCE_CONFIG} />;
                     })}
                       </TableBody>

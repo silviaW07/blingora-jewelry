@@ -111,13 +111,15 @@ function PendingImportTableRowsInner({
   const sourceBadgeLabel = isTableImport ? source.label : isPinduoduoImport ? '拼多多导入' : source.label
   const sourceLabel = isTableImport ? '表格导入' : isPinduoduoImport ? '拼多多' : '1688'
   const skuCount = pendingSkus.length || 1
+  const skuAttrs = (sku: (typeof pendingSkus)[number]) =>
+    Array.isArray(sku?.attributes) ? sku.attributes : []
   const colorValues = Array.from(new Set(
-    pendingSkus.map(sku => sku.attributes?.find(attr => attr.name === '颜色')?.value?.trim() || '默认颜色'),
+    pendingSkus.map(sku => skuAttrs(sku).find(attr => attr.name === '颜色')?.value?.trim() || '默认颜色'),
   ))
   const colorCount = colorValues.length
   const isSingleColor = colorCount <= 1
   const specLabels = pendingSkus.map(sku =>
-    sku.attributes?.find(attr => attr.name === '规格' || attr.name === '尺码' || attr.name === '尺寸')?.value?.trim()
+    skuAttrs(sku).find(attr => attr.name === '规格' || attr.name === '尺码' || attr.name === '尺寸')?.value?.trim()
     || sku.spec_text
     || '默认规格',
   )

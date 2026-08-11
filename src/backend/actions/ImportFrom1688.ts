@@ -4121,7 +4121,12 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
         stock: resolveInitialStock(row.stock ?? item.availableStock),
         image_url: normalizeText(row.imageUrl) || null,
-        attributes: row.attributes || [],
+        attributes: Array.isArray(row.attributes)
+          ? row.attributes.map(attr => ({
+              name: normalizeText(attr?.name) || '规格',
+              value: normalizeText(attr?.value) || '默认',
+            }))
+          : parseSpecAttributes(row.spec || ''),
       }))
     }
     const fallback = buildNeutralFallbackSkuRow({

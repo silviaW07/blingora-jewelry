@@ -121,7 +121,7 @@ export function snapshotFromPendingImportQueueItem(item: {
     mainImageUrl: item.item_mainImageUrl || item.item_parsedMainImageUrl,
     galleryUrls: item.item_galleryUrls,
     prices: [
-      ...(item.item_skus || []).map(sku => sku.price),
+      ...(item.item_skus || []).map(sku => sku?.price),
       item.item_cnyPriceMin,
       item.item_cnyPriceMax,
       item.item_costPrice,
