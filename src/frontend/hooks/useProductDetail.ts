@@ -41,6 +41,13 @@ const isColorAttributeName = (name?: string | null) => {
   return normalized === '颜色' || normalized === 'color' || normalized === 'colour'
 }
 
+/** 1688 常把无尺码 SKU 写成「默认/Default」——不当作真实规格维 */
+const isPlaceholderSpecValue = (value?: string | null) =>
+  /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
+
+const hasRealSpecValues = (values: string[]) =>
+  values.some((value) => Boolean(String(value || '').trim()) && !isPlaceholderSpecValue(value))
+
 const isSizeAttributeName = (name?: string | null) => {
   const normalized = String(name || '').trim().toLowerCase()
   return (
@@ -303,11 +310,18 @@ export const useProductDetail = (): {
 
   const sizeAttribute = useMemo(() => {
     const named = availableAttributes.find(
-      (group) => isSizeAttributeName(group.name) && !isColorAttributeName(group.name),
+      (group) =>
+        isSizeAttributeName(group.name) &&
+        !isColorAttributeName(group.name) &&
+        hasRealSpecValues(group.values),
     )
     if (named) return named
-    // 回退：第一个非颜色规格维，避免尺码行无法建立 selectedSize
-    return availableAttributes.find((group) => !isColorAttributeName(group.name)) || null
+    // 回退：第一个「有真实取值」的非颜色规格维；全是 Default/默认 则视为仅颜色商品
+    return (
+      availableAttributes.find(
+        (group) => !isColorAttributeName(group.name) && hasRealSpecValues(group.values),
+      ) || null
+    )
   }, [availableAttributes])
 
   const requiresColorAndSize = Boolean(colorAttribute && sizeAttribute)

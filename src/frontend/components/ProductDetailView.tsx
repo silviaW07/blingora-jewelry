@@ -272,12 +272,36 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     )
   }
 
-  /** Unique size/spec rows: always visible; resolve SKU by selected color when available. */
+  /** Unique size/spec rows: resolve SKU by selected color when available. */
   const specListRows = useMemo(() => {
     if (!product) return [] as Array<{ key: string; label: string; sku: ProductSkuData }>
 
     const sizeName = sizeAttributeGroup?.name
     const colorName = colorAttributeGroup?.name
+    const defaultLabel = t('product.defaultSpec')
+    const isPlaceholderSpec = (value?: string | null) =>
+      /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
+
+    // 仅颜色、尚未选色：不要把每个颜色 SKU 都列成「Default」
+    if (colorName && !manualColorValue && !sizeName) {
+      return []
+    }
+
+    // 仅颜色且已选色：Options 只保留当前颜色对应的一行（用颜色名，而不是一堆 Default）
+    if (colorName && manualColorValue && !sizeName) {
+      const matched =
+        product.skus.find((sku) => getSkuAttributeValue(sku, colorName) === manualColorValue) || null
+      if (!matched) return []
+      return [
+        {
+          key: matched.id,
+          label: manualColorValue,
+          sku: matched,
+          orderLabel: manualColorValue,
+        },
+      ]
+    }
+
     const labelCounts = new Map<string, number>()
     const byKey = new Map<
       string,
@@ -287,18 +311,17 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
         sku: ProductSkuData
       }
     >()
-    const defaultLabel = t('product.defaultSpec')
 
     const computeLabelForSku = (sku: ProductSkuData): string => {
-      const label =
-        (sizeName && getSkuAttributeValue(sku, sizeName)) ||
-        getSpecDisplayLabel(sku, {
-          sizeAttributeName: sizeName,
-          colorAttributeName: colorName,
-          currentColorValue: manualColorValue || undefined,
-          defaultLabel,
-        })
-      return label
+      const fromSize = sizeName ? getSkuAttributeValue(sku, sizeName) : ''
+      if (fromSize && !isPlaceholderSpec(fromSize)) return fromSize
+      const label = getSpecDisplayLabel(sku, {
+        sizeAttributeName: sizeName,
+        colorAttributeName: colorName,
+        currentColorValue: manualColorValue || undefined,
+        defaultLabel,
+      })
+      return isPlaceholderSpec(label) ? defaultLabel : label
     }
 
     for (const sku of product.skus) {
@@ -317,7 +340,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       labelCounts.clear()
       for (const sku of product.skus) {
         const label = getSkuAttributeValue(sku, sizeName)
-        if (!label) continue
+        if (!label || isPlaceholderSpec(label)) continue
         labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
       }
     }
@@ -328,18 +351,19 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
         if (colorVal !== manualColorValue) continue
       }
 
-      const orderLabel = !manualColorValue && colorName && sizeName
-        ? getSkuAttributeValue(sku, sizeName) || ''
-        : computeLabelForSku(sku)
+      const orderLabel =
+        !manualColorValue && colorName && sizeName
+          ? getSkuAttributeValue(sku, sizeName) || ''
+          : computeLabelForSku(sku)
 
-      if (!orderLabel) continue
+      if (!orderLabel || (sizeName && isPlaceholderSpec(orderLabel) && !manualColorValue)) continue
 
       const isDuplicateLabel = (labelCounts.get(orderLabel) || 0) > 1
       const dedupeKey = isDuplicateLabel ? `${orderLabel}__${sku.id}` : orderLabel
       const displayLabel = isDuplicateLabel ? `${orderLabel} (${formatUsd(sku.price)})` : orderLabel
 
-      // If label is unique, we still keep the first representative SKU for that label.
-      // If label is duplicated, dedupeKey includes sku.id => each SKU remains visible.
+      // If label is unique, keep the first representative SKU for that label.
+      // If duplicated, dedupeKey includes sku.id => each real SKU remains visible.
       if (!byKey.has(dedupeKey)) {
         byKey.set(dedupeKey, { orderLabel, displayLabel, sku })
       }
