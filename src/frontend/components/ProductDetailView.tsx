@@ -282,24 +282,24 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const isPlaceholderSpec = (value?: string | null) =>
       /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
 
-    // 仅颜色、尚未选色：不要把每个颜色 SKU 都列成「Default」
-    if (colorName && !manualColorValue && !sizeName) {
-      return []
-    }
-
-    // 仅颜色且已选色：Options 只保留当前颜色对应的一行（用颜色名，而不是一堆 Default）
-    if (colorName && manualColorValue && !sizeName) {
-      const matched =
-        product.skus.find((sku) => getSkuAttributeValue(sku, colorName) === manualColorValue) || null
-      if (!matched) return []
-      return [
-        {
-          key: matched.id,
-          label: manualColorValue,
-          sku: matched,
-          orderLabel: manualColorValue,
-        },
-      ]
+    // 仅颜色商品：每个颜色 SKU 单独一行，展示各自售价（不再合成一条 Default / 单行）
+    if (colorName && !sizeName) {
+      const rows: Array<{ key: string; label: string; sku: ProductSkuData; orderLabel: string }> = []
+      for (const sku of product.skus) {
+        const colorVal = getSkuAttributeValue(sku, colorName)
+        if (!colorVal) continue
+        if (manualColorValue && colorVal !== manualColorValue) {
+          // 已选色时仍保留全部颜色价差可见：不过滤；若需只看当前色可再收窄
+        }
+        rows.push({
+          key: sku.id,
+          label: colorVal,
+          sku,
+          orderLabel: colorVal,
+        })
+      }
+      // 去重同色多 SKU：同色保留更贵/更新的一条会误伤；按 sku.id 已天然分开
+      return rows.sort((a, b) => compareSizeLabels(a.orderLabel, b.orderLabel))
     }
 
     const labelCounts = new Map<string, number>()
@@ -379,6 +379,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       .sort((a, b) => compareSizeLabels(a.orderLabel, b.orderLabel))
   }, [product, colorAttributeGroup, sizeAttributeGroup, manualColorValue, t])
 
+  const isColorOnlyProduct = Boolean(colorAttributeGroup) && !sizeAttributeGroup
   const renderSpecRow = (row: { key: string; label: string; sku: ProductSkuData }) => {
     const { sku, label: specLabel } = row
     const qty = getSkuLineQuantity(sku.id)
@@ -386,7 +387,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const priceParts = formatUsdParts(sku.price)
     const rawModelLabel = specLabel || sku.variantLabel || sku.skuCode
     const modelLabel = translateAttributeValue(t, rawModelLabel) || rawModelLabel
-    const canUseStepper = Boolean(isPurchasable) && isColorSelected
+    // 仅颜色：每一行就是一种颜色，可直接改数量
+    const canUseStepper = Boolean(isPurchasable) && (isColorSelected || isColorOnlyProduct)
     // 单规格：数量锁在起订量，减号在下限时禁用；混批：可减到 0 取消该行
     const canDecrease = supportsMixedBatch ? qty > 0 : qty > lineMoq
 
@@ -696,7 +698,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           <span className="font-semibold text-[#111]">{specListTitle}</span>
                           <span className="text-[#888]">{specListRows.length} {t('common.options')}</span>
                         </div>
-                        {!isColorSelected ? (
+                        {!isColorSelected && !isColorOnlyProduct ? (
                           <p className="mb-2 text-xs text-rose-600">
                             {t('product.selectColorFirst', { defaultValue: 'Please select a color first' })}
                           </p>

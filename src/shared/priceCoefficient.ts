@@ -118,10 +118,12 @@ export function pickFrontPricingCategoryCoeffs(input: {
 }
 
 /**
- * Front selling RMB: cost × category hierarchy coefficient when cost is available;
- * otherwise keep the stored SKU selling price.
+ * Front selling RMB.
+ * Prefer each SKU's stored selling price (admin / import per-variant RMB).
+ * Only when SKU price is missing/zero, fall back to cost × category coefficient.
  *
- * Coefficient source: L2 → L1 → DEFAULT 2.00. Brand / aggregate names are ignored.
+ * Previously always using cost×coeff when cost existed flattened every variant to the
+ * same USD on the storefront, even when admin SKU rows had different prices.
  */
 export function resolveFrontRmbSellingPrice(options: {
   skuPriceRmb: number
@@ -146,6 +148,14 @@ export function resolveFrontRmbSellingPrice(options: {
       isBrandCategory: options.parentIsBrandCategory,
     })
 
+  const skuPrice =
+    typeof options.skuPriceRmb === 'number' && Number.isFinite(options.skuPriceRmb)
+      ? options.skuPriceRmb
+      : 0
+  if (skuPrice > 0) {
+    return Number(skuPrice.toFixed(2))
+  }
+
   const cost = toDecimalNumber(options.costPrice)
   const coefficient = resolveCategoryPriceCoefficient(
     ownBlocked ? null : toDecimalNumber(options.ownCoefficient),
@@ -154,5 +164,5 @@ export function resolveFrontRmbSellingPrice(options: {
   if (cost !== null && cost > 0) {
     return Number((cost * coefficient).toFixed(2))
   }
-  return options.skuPriceRmb
+  return 0
 }
