@@ -38,7 +38,18 @@ export interface HomeRecommendProductCard {
   shortDescription: string | null
   /** ACTIVE=可售商品；DRAFT=快速发图展示商品（无价格/规格） */
   status: 'ACTIVE' | 'DRAFT' | string
+  /** 展示使用：min（兼容旧逻辑） */
   price: number | null
+  /** 多 SKU 价格范围（USD） */
+  priceMin: number | null
+  priceMax: number | null
+  /** 规格/颜色等“可选项”列表（用于首页直接切换价格） */
+  skuOptions: Array<{
+    skuId: string
+    label: string
+    price: number | null
+    originalPrice: number | null
+  }>
   originalPrice: number | null
   ratingAverage: number
   ratingCount: number
@@ -146,6 +157,7 @@ export const getHomeRecommendZones = async (input?: {
           parentId: true,
           imageUrl: true,
           bannerImageUrl: true,
+          iconUrl: true,
           description: true,
           translationsJson: true,
           parent: {
@@ -519,6 +531,7 @@ export const getHomeRecommendZones = async (input?: {
           imageUrl: resolveCategoryCardImageUrl(
             category.imageUrl,
             category.bannerImageUrl,
+            (category as any).iconUrl,
             coverImageByCategoryId.get(category.id) || null,
           ),
           description: category.description,

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { ChevronRight, ShoppingCart, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ type ZoneHandlers = Pick<
   | 'handleNavigateRecommendProduct'
   | 'handleNavigateRecommendCategory'
   | 'handleAddRecommendProductToCart'
+  | 'handleAddRecommendProductSkuToCart'
   | 'handleAddRecommendProductToWishlist'
 >
 
@@ -45,6 +46,16 @@ type HomeRecommendZoneSectionProps = {
 const formatPrice = (price?: number | null) => {
   if (typeof price !== 'number' || Number.isNaN(price)) return 'US$ --'
   return `US$ ${price.toFixed(2)}`
+}
+
+const formatPriceRange = (min?: number | null, max?: number | null) => {
+  const minOk = typeof min === 'number' && !Number.isNaN(min)
+  const maxOk = typeof max === 'number' && !Number.isNaN(max)
+  if (!minOk && !maxOk) return 'US$ --'
+  if (minOk && maxOk && Math.abs((max as number) - (min as number)) > 0.009) {
+    return `US$ ${(min as number).toFixed(2)} - ${(max as number).toFixed(2)}`
+  }
+  return formatPrice(minOk ? (min as number) : (max as number))
 }
 
 const renderRatingStars = (rating?: number | null) => {
@@ -124,6 +135,154 @@ const renderMobileSquircleContent = (
     const productItems = limitedItems.filter(
       (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
     )
+
+type RecommendZoneProductCardProps = {
+  item: RecommendProductCard
+  index: number
+  handlers: ZoneHandlers
+  t: ReturnType<typeof useTranslation>['t']
+}
+
+const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZoneProductCardProps) => {
+  const isDraft = item.status === 'DRAFT'
+  const [selectedSkuId, setSelectedSkuId] = useState<string>(() => {
+    return (
+      (item.defaultSkuId || '') ||
+      (item.skuOptions?.[0]?.skuId || '') ||
+      ''
+    )
+  })
+
+  const selectedOption =
+    item.skuOptions?.find((opt) => opt.skuId === selectedSkuId) ||
+    item.skuOptions?.[0] ||
+    null
+
+  const showOptions = !isDraft && item.skuOptions && item.skuOptions.length > 1
+
+  const priceToShow = selectedOption?.price ?? item.price
+  const originalPriceToShow = selectedOption?.originalPrice ?? item.originalPrice
+
+  return (
+    <article
+      key={item.itemId}
+      className="home-product-card group flex h-full flex-col overflow-hidden p-0 transition"
+      data-controller-name="首页推荐专区商品卡片"
+    >
+      <button
+        type="button"
+        className="home-product-card-media relative block w-full shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+        onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+      >
+        <EditableImg
+          propKey={`home-recommend-product-${item.productId}`}
+          src={item.imageUrl || undefined}
+          alt={item.productName}
+          keywords={item.imageUrl || undefined}
+          disableKeywordSearch
+          fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+          loading="lazy"
+          orientation="square"
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+          style={{ aspectRatio: '1 / 1' }}
+        />
+      </button>
+
+      <div className="flex flex-1 flex-col gap-2 px-2.5 pb-2.5 pt-2 sm:px-3 sm:pb-3">
+        <button
+          type="button"
+          className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
+          onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+          data-api-bind-info={`productItems-${index}-productName`}
+          data-api-map-var-name="item"
+        >
+          <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
+            {item.productName}
+          </DecorateText>
+        </button>
+
+        {!isDraft ? (
+          <div className="flex items-center gap-3 text-sm text-[#7a756c]">
+            <div className="flex items-center gap-1">{renderRatingStars(item.ratingAverage)}</div>
+            <span>{item.ratingAverage.toFixed(1)} / 5</span>
+            <span>({item.ratingCount})</span>
+          </div>
+        ) : null}
+
+        {showOptions ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {item.skuOptions.map((opt) => {
+              const isActive = opt.skuId === selectedSkuId
+              return (
+                <button
+                  key={opt.skuId}
+                  type="button"
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition ${
+                    isActive
+                      ? 'border-[#111111] bg-[#111111] text-white'
+                      : 'border-[#ebe7de] bg-white text-[#111111] hover:border-[#111111]'
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedSkuId(opt.skuId)
+                  }}
+                  title={opt.label}
+                >
+                  <span className="truncate max-w-[90px]">{opt.label}</span>
+                  <span className="shrink-0">
+                    {typeof opt.price === 'number' ? `US$ ${opt.price.toFixed(2)}` : 'US$ --'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <div className="mt-auto flex items-end justify-between gap-3 pt-1">
+          {isDraft ? (
+            <div className="min-h-[40px] flex-1" aria-hidden="true" />
+          ) : (
+            <div>
+              <StorePrice className="text-2xl font-bold">
+                <p className="text-2xl font-bold text-[#111111]">{formatPrice(priceToShow)}</p>
+                {originalPriceToShow ? (
+                  <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(originalPriceToShow)}</p>
+                ) : null}
+              </StorePrice>
+            </div>
+          )}
+
+          {isDraft ? (
+            <WishlistHeartButton
+              productId={item.productId}
+              productName={item.productName}
+              className="size-10 rounded-full"
+              size={20}
+              onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
+            />
+          ) : (
+            <Button
+              type="button"
+              className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
+              onClick={() => {
+                if (showOptions && selectedSkuId) {
+                  void handlers.handleAddRecommendProductSkuToCart(item, selectedSkuId)
+                } else {
+                  void handlers.handleAddRecommendProductToCart(item)
+                }
+              }}
+            >
+              <ShoppingCart className="mr-2 size-4" />
+              <DecorateText propKey="home_add_to_cart_label" as="span">
+                {t('product.addToCart', { defaultValue: 'Add to cart' })}
+              </DecorateText>
+            </Button>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
     if (productItems.length === 0) {
       return (
         <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
@@ -253,89 +412,15 @@ const renderRecommendZoneContent = (
 
     return (
       <div className={getZoneGridClassName(zone)} data-controller-name="首页推荐专区商品网格">
-        {productItems.map((item, index) => {
-          const isDraft = item.status === 'DRAFT'
-          return (
-            <article
-              key={item.itemId}
-              className="home-product-card group flex h-full flex-col overflow-hidden p-0 transition"
-              data-controller-name="首页推荐专区商品卡片"
-            >
-              <button
-                type="button"
-                className="home-product-card-media relative block w-full shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-                onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-              >
-                <EditableImg
-                  propKey={`home-recommend-product-${item.productId}`}
-                  src={item.imageUrl || undefined}
-                  alt={item.productName}
-                  keywords={item.imageUrl || undefined}
-                  disableKeywordSearch
-                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                  loading="lazy"
-                  orientation="square"
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                  style={{ aspectRatio: '1 / 1' }}
-                />
-              </button>
-              <div className="flex flex-1 flex-col gap-2 px-2.5 pb-2.5 pt-2 sm:px-3 sm:pb-3">
-                <button
-                  type="button"
-                  className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
-                  onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-                  data-api-bind-info={`productItems-${index}-productName`}
-                  data-api-map-var-name="item"
-                >
-                  <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-                    {item.productName}
-                  </DecorateText>
-                </button>
-                {!isDraft ? (
-                  <div className="flex items-center gap-3 text-sm text-[#7a756c]">
-                    <div className="flex items-center gap-1">{renderRatingStars(item.ratingAverage)}</div>
-                    <span>{item.ratingAverage.toFixed(1)} / 5</span>
-                    <span>({item.ratingCount})</span>
-                  </div>
-                ) : null}
-                <div className="mt-auto flex items-end justify-between gap-3 pt-1">
-                  {isDraft ? (
-                    <div className="min-h-[40px] flex-1" aria-hidden="true" />
-                  ) : (
-                    <div>
-                      <StorePrice className="text-2xl font-bold">
-                        <p className="text-2xl font-bold text-[#111111]">{formatPrice(item.price)}</p>
-                        {item.originalPrice ? (
-                          <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(item.originalPrice)}</p>
-                        ) : null}
-                      </StorePrice>
-                    </div>
-                  )}
-                  {isDraft ? (
-                    <WishlistHeartButton
-                      productId={item.productId}
-                      productName={item.productName}
-                      className="size-10 rounded-full"
-                      size={20}
-                      onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
-                    />
-                  ) : (
-                    <Button
-                      type="button"
-                      className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
-                      onClick={() => handlers.handleAddRecommendProductToCart(item)}
-                    >
-                      <ShoppingCart className="mr-2 size-4" />
-                      <DecorateText propKey="home_add_to_cart_label" as="span">
-                        {t('product.addToCart', { defaultValue: 'Add to cart' })}
-                      </DecorateText>
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </article>
-          )
-        })}
+        {productItems.map((item, index) => (
+          <RecommendZoneProductCard
+            key={item.itemId}
+            item={item}
+            index={index}
+            handlers={handlers}
+            t={t}
+          />
+        ))}
       </div>
     )
   }

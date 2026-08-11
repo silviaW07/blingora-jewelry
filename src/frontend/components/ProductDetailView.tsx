@@ -278,15 +278,18 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
     const sizeName = sizeAttributeGroup?.name
     const colorName = colorAttributeGroup?.name
-    const byLabel = new Map<string, ProductSkuData>()
+    const labelCounts = new Map<string, number>()
+    const byKey = new Map<
+      string,
+      {
+        orderLabel: string
+        displayLabel: string
+        sku: ProductSkuData
+      }
+    >()
     const defaultLabel = t('product.defaultSpec')
 
-    for (const sku of product.skus) {
-      if (manualColorValue && colorName) {
-        const colorVal = getSkuAttributeValue(sku, colorName)
-        if (colorVal !== manualColorValue) continue
-      }
-
+    const computeLabelForSku = (sku: ProductSkuData): string => {
       const label =
         (sizeName && getSkuAttributeValue(sku, sizeName)) ||
         getSpecDisplayLabel(sku, {
@@ -295,37 +298,61 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           currentColorValue: manualColorValue || undefined,
           defaultLabel,
         })
+      return label
+    }
 
-      if (!label) continue
-
+    for (const sku of product.skus) {
       if (manualColorValue && colorName) {
-        byLabel.set(label, sku)
-        continue
+        const colorVal = getSkuAttributeValue(sku, colorName)
+        if (colorVal !== manualColorValue) continue
       }
-
-      // No color yet: keep one representative SKU per unique size/spec across all colors
-      if (!byLabel.has(label)) {
-        byLabel.set(label, sku)
-      }
+      const label = computeLabelForSku(sku)
+      if (!label) continue
+      labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
     }
 
     // When no color selected but color+size exist, still list every unique size across the product
     if (!manualColorValue && colorName && sizeName) {
-      byLabel.clear()
+      byKey.clear()
+      labelCounts.clear()
       for (const sku of product.skus) {
         const label = getSkuAttributeValue(sku, sizeName)
-        if (!label || byLabel.has(label)) continue
-        byLabel.set(label, sku)
+        if (!label) continue
+        labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
       }
     }
 
-    return Array.from(byLabel.entries())
-      .map(([label, sku]) => ({
-        key: label,
-        label,
-        sku,
+    for (const sku of product.skus) {
+      if (manualColorValue && colorName) {
+        const colorVal = getSkuAttributeValue(sku, colorName)
+        if (colorVal !== manualColorValue) continue
+      }
+
+      const orderLabel = !manualColorValue && colorName && sizeName
+        ? getSkuAttributeValue(sku, sizeName) || ''
+        : computeLabelForSku(sku)
+
+      if (!orderLabel) continue
+
+      const isDuplicateLabel = (labelCounts.get(orderLabel) || 0) > 1
+      const dedupeKey = isDuplicateLabel ? `${orderLabel}__${sku.id}` : orderLabel
+      const displayLabel = isDuplicateLabel ? `${orderLabel} (${formatUsd(sku.price)})` : orderLabel
+
+      // If label is unique, we still keep the first representative SKU for that label.
+      // If label is duplicated, dedupeKey includes sku.id => each SKU remains visible.
+      if (!byKey.has(dedupeKey)) {
+        byKey.set(dedupeKey, { orderLabel, displayLabel, sku })
+      }
+    }
+
+    return Array.from(byKey.entries())
+      .map(([key, v]) => ({
+        key,
+        label: v.displayLabel,
+        sku: v.sku,
+        orderLabel: v.orderLabel,
       }))
-      .sort((a, b) => compareSizeLabels(a.label, b.label))
+      .sort((a, b) => compareSizeLabels(a.orderLabel, b.orderLabel))
   }, [product, colorAttributeGroup, sizeAttributeGroup, manualColorValue, t])
 
   const renderSpecRow = (row: { key: string; label: string; sku: ProductSkuData }) => {

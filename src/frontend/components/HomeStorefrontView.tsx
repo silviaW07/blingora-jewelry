@@ -92,6 +92,16 @@ const formatPrice = (price?: number | null) => {
   return `US$ ${price.toFixed(2)}`;
 };
 
+const formatPriceRange = (min?: number | null, max?: number | null) => {
+  const minOk = typeof min === 'number' && !Number.isNaN(min)
+  const maxOk = typeof max === 'number' && !Number.isNaN(max)
+  if (!minOk && !maxOk) return 'US$ --'
+  if (minOk && maxOk && Math.abs((max as number) - (min as number)) > 0.009) {
+    return `US$ ${(min as number).toFixed(2)} - ${(max as number).toFixed(2)}`
+  }
+  return formatPrice(minOk ? (min as number) : (max as number))
+}
+
 const renderRatingStars = (rating?: number | null) => {
   const safeRating = typeof rating === 'number' && !Number.isNaN(rating) ? Math.max(0, Math.min(5, rating)) : 0;
   const fullStars = Math.round(safeRating);
@@ -127,6 +137,153 @@ const resolveCategoryCardSrc = (imageUrl?: string | null) => {
 
 import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
 
+type DesktopRecommendZoneProductCardProps = {
+  item: HomeRecommendProductCard
+  index: number
+  handlers: HomeHandlers
+  showOptions: boolean
+  selectedSkuId: string
+  selectedOption: HomeRecommendProductCard['skuOptions'][number] | null
+}
+
+const DesktopRecommendZoneProductCard = ({
+  item,
+  index,
+  handlers,
+  showOptions,
+  selectedSkuId,
+  selectedOption,
+}: DesktopRecommendZoneProductCardProps) => {
+  const isDraft = item.status === 'DRAFT'
+  const [currentSkuId, setCurrentSkuId] = useState<string>(selectedSkuId)
+
+  const currentOption =
+    item.skuOptions?.find((opt) => opt.skuId === currentSkuId) || selectedOption
+
+  const priceToShow = currentOption?.price ?? item.priceMin ?? item.price
+  const originalPriceToShow = currentOption?.originalPrice ?? item.originalPrice
+
+  return (
+    <article
+      className="group overflow-hidden rounded-[32px] border border-[#ece7dc] bg-white p-4 shadow-[0_18px_42px_-30px_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:border-[#111111]"
+      data-controller-name="首页推荐专区商品卡片"
+      key={item.itemId}
+    >
+      <button
+        type="button"
+        className="block w-full overflow-hidden rounded-[24px] bg-[#f7f4ee] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+        onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+      >
+        <EditableImg
+          propKey={`home-recommend-product-${item.productId}`}
+          src={item.imageUrl || undefined}
+          alt={item.productName}
+          keywords={item.imageUrl || undefined}
+          disableKeywordSearch
+          fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+          loading="lazy"
+          className="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+        />
+      </button>
+
+      <div className="mt-5 space-y-4">
+        <button
+          type="button"
+          className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
+          onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+          data-api-bind-info={`productItems-${index}-productName`}
+          data-api-map-var-name="item"
+        >
+          <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
+            {item.productName}
+          </DecorateText>
+        </button>
+
+        {!isDraft ? (
+          <div className="flex items-center gap-3 text-sm text-[#7a756c]">
+            <div className="flex items-center gap-1">{renderRatingStars(item.ratingAverage)}</div>
+            <span>{item.ratingAverage.toFixed(1)} / 5</span>
+            <span>({item.ratingCount})</span>
+          </div>
+        ) : null}
+
+        <div className="flex items-end justify-between gap-3">
+          {isDraft ? (
+            <div className="min-h-[40px] flex-1" aria-hidden="true" />
+          ) : (
+            <div>
+              {showOptions ? (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {item.skuOptions.map((opt) => {
+                    const active = opt.skuId === currentSkuId
+                    return (
+                      <button
+                        key={opt.skuId}
+                        type="button"
+                        className={`rounded-full border px-3 py-1 text-xs transition ${
+                          active
+                            ? 'border-[#111111] bg-[#111111] text-white'
+                            : 'border-[#ebe7de] bg-white text-[#111111] hover:border-[#111111]'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCurrentSkuId(opt.skuId)
+                        }}
+                        title={opt.label}
+                      >
+                        <span className="truncate max-w-[80px] block">{opt.label}</span>
+                        <span className="block text-[10px] font-semibold opacity-90">
+                          {typeof opt.price === 'number' ? `US$ ${opt.price.toFixed(2)}` : 'US$ --'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+
+              <StorePrice className="text-2xl font-bold">
+                <p className="text-2xl font-bold text-[#111111]">{formatPrice(priceToShow)}</p>
+                {originalPriceToShow ? (
+                  <p className="mt-1 text-sm text-[#8b8477] line-through">
+                    {formatPrice(originalPriceToShow)}
+                  </p>
+                ) : null}
+              </StorePrice>
+            </div>
+          )}
+
+          {isDraft ? (
+            <WishlistHeartButton
+              productId={item.productId}
+              productName={item.productName}
+              className="size-10 rounded-full"
+              size={20}
+              onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
+            />
+          ) : (
+            <Button
+              type="button"
+              className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
+              onClick={() => {
+                if (showOptions && currentSkuId) {
+                  void handlers.handleAddRecommendProductSkuToCart(item, currentSkuId)
+                  return
+                }
+                void handlers.handleAddRecommendProductToCart(item)
+              }}
+            >
+              <ShoppingCart className="mr-2 size-4" />
+              <DecorateText propKey="home_add_to_cart_label" as="span">
+                加入购物车
+              </DecorateText>
+            </Button>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
 const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: HomeHandlers) => {
   // 按后台「PC列数 × 行数」截断（例：4×12=48），避免内容明细 57 条全量铺开
   const limitedItems = limitRecommendZoneItems(zone, zone.items)
@@ -150,83 +307,19 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
       <div className={getZoneGridClassName(zone)} data-controller-name="首页推荐专区商品网格">
         {productItems.map((item, index) => {
           const isDraft = item.status === 'DRAFT'
+          const showOptions = !isDraft && item.skuOptions && item.skuOptions.length > 1
+          const selectedSkuId = item.defaultSkuId || item.skuOptions?.[0]?.skuId || ''
+          const selectedOption = item.skuOptions?.find((opt) => opt.skuId === selectedSkuId) || item.skuOptions?.[0] || null
           return (
-          <article
-            key={item.itemId}
-            className="group overflow-hidden rounded-[32px] border border-[#ece7dc] bg-white p-4 shadow-[0_18px_42px_-30px_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:border-[#111111]"
-            data-controller-name="首页推荐专区商品卡片"
-          >
-            <button
-              type="button"
-              className="block w-full overflow-hidden rounded-[24px] bg-[#f7f4ee] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-              onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-            >
-              <EditableImg
-                propKey={`home-recommend-product-${item.productId}`}
-                src={item.imageUrl || undefined}
-                alt={item.productName}
-                keywords={item.imageUrl || undefined}
-                disableKeywordSearch
-                fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                loading="lazy"
-                className="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-              />
-            </button>
-            <div className="mt-5 space-y-4">
-              <button
-                type="button"
-                className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
-                onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-                data-api-bind-info={`productItems-${index}-productName`}
-                data-api-map-var-name="item"
-              >
-                <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-                  {item.productName}
-                </DecorateText>
-              </button>
-              {!isDraft ? (
-                <div className="flex items-center gap-3 text-sm text-[#7a756c]">
-                  <div className="flex items-center gap-1">{renderRatingStars(item.ratingAverage)}</div>
-                  <span>{item.ratingAverage.toFixed(1)} / 5</span>
-                  <span>({item.ratingCount})</span>
-                </div>
-              ) : null}
-              <div className="flex items-end justify-between gap-3">
-                {isDraft ? (
-                  <div className="min-h-[40px] flex-1" aria-hidden="true" />
-                ) : (
-                  <div>
-                    <StorePrice className="text-2xl font-bold">
-                      <p className="text-2xl font-bold text-[#111111]">{formatPrice(item.price)}</p>
-                      {item.originalPrice ? (
-                        <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(item.originalPrice)}</p>
-                      ) : null}
-                    </StorePrice>
-                  </div>
-                )}
-                {isDraft ? (
-                  <WishlistHeartButton
-                    productId={item.productId}
-                    productName={item.productName}
-                    className="size-10 rounded-full"
-                    size={20}
-                    onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
-                  />
-                ) : (
-                  <Button
-                    type="button"
-                    className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
-                    onClick={() => handlers.handleAddRecommendProductToCart(item)}
-                  >
-                    <ShoppingCart className="mr-2 size-4" />
-                    <DecorateText propKey="home_add_to_cart_label" as="span">
-                      加入购物车
-                    </DecorateText>
-                  </Button>
-                )}
-              </div>
-            </div>
-          </article>
+            <DesktopRecommendZoneProductCard
+              key={item.itemId}
+              item={item}
+              index={index}
+              handlers={handlers}
+              selectedSkuId={selectedSkuId}
+              selectedOption={selectedOption}
+              showOptions={showOptions}
+            />
           )
         })}
       </div>

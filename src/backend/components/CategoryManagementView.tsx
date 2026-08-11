@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Info, Plus, Search, Package, Layers, Edit3, Trash2, ImageIcon, GalleryHorizontal, ChevronRight, ListTree, ChevronDown, Tags, Sparkles, Link2, FolderSync, ArrowRightLeft, FolderTree, CheckSquare, Megaphone, Flame, GripVertical } from 'lucide-react';
+import { Info, Plus, Search, Package, Layers, Edit3, Trash2, ImageIcon, GalleryHorizontal, ChevronRight, ListTree, ChevronDown, Tags, Sparkles, Link2, FolderSync, ArrowRightLeft, FolderTree, CheckSquare, Megaphone, Flame, GripVertical, Minus } from 'lucide-react';
 import EditableImg from '@/@base/EditableImg';
 import { type CategoryManagementState, type CategoryManagementHandlers, useCategoryManagement, LEVEL_LABELS, GROUP_TYPE_LABELS } from '@/backend/hooks/useCategoryManagement';
 import { canEditCategoryPriceCoefficient } from '@/shared/categoryPricing';
@@ -78,9 +78,10 @@ export const CategoryManagementView = ({
   state,
   handlers
 }: Props) => {
-  const displayList = state.filteredList;
+  const categoryDisplayRows = state.categoryDisplayRows;
   const isNameFiltering = Boolean(state.nameFilterInput.trim());
-  const allCurrentPageSelected = displayList.length > 0 && displayList.every(item => state.selectedCategoryIds.includes(item.category_id));
+  const tableColSpan = 12;
+  const allCurrentPageSelected = categoryDisplayRows.length > 0 && categoryDisplayRows.every(row => state.selectedCategoryIds.includes(row.item.category_id));
   /* Extracted array: _items */
   const _items = [50, 100, 200];
   return <div className="min-h-screen bg-background font-body" data-api-unique-id='categorymanagementview-rd7999e89a992169f-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
@@ -284,7 +285,7 @@ export const CategoryManagementView = ({
             <Table data-api-unique-id='categorymanagementview-rdc4a23b084c1f0ab-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
               <TableHeader className="bg-slate-50" data-api-unique-id='categorymanagementview-ra4460994da9b43b8-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                 <TableRow className="hover:bg-transparent border-slate-200" data-api-unique-id='categorymanagementview-r0d16ac1ee4bc87c5-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
-                  <TableHead className="w-[58px] font-bold text-slate-700 h-12" data-api-unique-id='categorymanagementview-r6231c74e6987f21e-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
+                  <TableHead className={`${state.useCategoryTreeView ? 'w-[88px]' : 'w-[58px]'} font-bold text-slate-700 h-12 pl-4`} data-api-unique-id='categorymanagementview-r6231c74e6987f21e-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                     <Checkbox checked={allCurrentPageSelected} onCheckedChange={checked => handlers.toggleSelectAllCurrentPage(Boolean(checked))} data-api-unique-id='categorymanagementview-r46242f4d72332105-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' />
                   </TableHead>
                   <TableHead className="w-9 px-0 font-bold text-slate-700 h-12" title="一级分类拖拽排序" />
@@ -308,7 +309,7 @@ export const CategoryManagementView = ({
                         数据载入中...
                       </div>
                     </TableCell>
-                  </TableRow> : displayList.length === 0 ? <TableRow data-api-unique-id='categorymanagementview-rd1efcfc116a3b6f9-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
+                  </TableRow> : categoryDisplayRows.length === 0 ? <TableRow data-api-unique-id='categorymanagementview-rd1efcfc116a3b6f9-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                     <TableCell colSpan={12} className="h-64 text-center text-muted-foreground" data-api-unique-id='categorymanagementview-rf7a21656813795e3-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                       <div className="flex flex-col items-center justify-center gap-2" data-api-unique-id='categorymanagementview-r42cb93047700b134-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                         <Package className="w-12 h-12 opacity-20" data-api-unique-id='categorymanagementview-r40c81e09773c2a30-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' />
@@ -317,25 +318,49 @@ export const CategoryManagementView = ({
                           : '暂无符合条件的分类数据'}
                       </div>
                     </TableCell>
-                  </TableRow> : displayList.map((item, index) => <TableRow
-                    key={item.category_id}
-                    draggable={item.level === 1 && !isNameFiltering}
-                    onDragStart={() => handlers.onLevel1DragStart(index)}
-                    onDragEnter={() => handlers.onLevel1DragEnter(index)}
+                  </TableRow> : categoryDisplayRows.map(row => {
+                    const { item, rowKind } = row;
+                    const isLevel1 = rowKind === 'level1';
+                    const isChildRow = rowKind === 'level2-child';
+                    const isExpanded = state.expandedCategoryIds.includes(item.category_id);
+                    const canExpand = state.useCategoryTreeView && isLevel1 && item.child_count > 0;
+                    const canDrag = isLevel1 && !isNameFiltering;
+
+                    return <TableRow
+                    key={isChildRow ? `${row.parentCategoryId}-${item.category_id}` : item.category_id}
+                    draggable={canDrag}
+                    onDragStart={() => handlers.onLevel1DragStart(item.category_id)}
+                    onDragEnter={() => handlers.onLevel1DragEnter(item.category_id)}
                     onDragEnd={() => { void handlers.onLevel1DragEnd(); }}
                     onDragOver={e => {
-                      if (item.level === 1) e.preventDefault();
+                      if (canDrag) e.preventDefault();
                     }}
-                    className={`hover:bg-slate-50/50 transition-colors border-slate-100 ${item.level === 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    className={`hover:bg-slate-50/50 transition-colors border-slate-100 ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''} ${isChildRow ? 'bg-slate-50/80' : ''}`}
                     data-api-unique-id='categorymanagementview-r81787edcfc26e030-s2437821645'
                     data-api-unique-page-name='src/backend/components/CategoryManagementView'
                     data-api-in-loop='1'
                   >
-                      <TableCell data-api-unique-id='categorymanagementview-r2deed9701c82c412-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
-                        <Checkbox checked={state.selectedCategoryIds.includes(item.category_id)} onCheckedChange={checked => handlers.toggleCategorySelection(item.category_id, Boolean(checked))} data-api-unique-id='categorymanagementview-rd9325ea7b4037a28-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1' />
+                      <TableCell className="pl-4" data-api-unique-id='categorymanagementview-r2deed9701c82c412-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
+                        <div className="flex items-center gap-1">
+                          {canExpand ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-slate-600"
+                              onClick={() => handlers.toggleCategoryExpanded(item.category_id)}
+                              title={isExpanded ? '折叠子分类' : '展开子分类'}
+                            >
+                              {isExpanded ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                            </Button>
+                          ) : isChildRow ? (
+                            <span className="inline-block h-7 w-7 shrink-0" />
+                          ) : null}
+                          <Checkbox checked={state.selectedCategoryIds.includes(item.category_id)} onCheckedChange={checked => handlers.toggleCategorySelection(item.category_id, Boolean(checked))} data-api-unique-id='categorymanagementview-rd9325ea7b4037a28-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1' />
+                        </div>
                       </TableCell>
                       <TableCell className="w-9 px-1">
-                        {item.level === 1 ? (
+                        {canDrag ? (
                           <div
                             className="mx-auto flex h-8 w-8 items-center justify-center rounded-md border border-pink-300 bg-pink-50 text-pink-600 shadow-sm"
                             title="拖拽调整一级分类顺序"
@@ -348,12 +373,59 @@ export const CategoryManagementView = ({
                         )}
                       </TableCell>
                       <TableCell data-api-unique-id='categorymanagementview-r7932a0fb94e889d2-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
-                        <div className="w-16 h-16 rounded-md overflow-hidden border border-slate-200 bg-slate-50" data-api-unique-id='categorymanagementview-ra6bb3b37ecb48281-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
-                          <EditableImg propKey={`cat-img-${item.category_id}`} keywords={item.image_url || item.category_name} className="w-full h-full object-cover" data-api-unique-id='categorymanagementview-re1c77af1ae64e29a-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1' />
+                        <div
+                          className="relative w-16 h-16 rounded-md overflow-hidden border border-slate-200 bg-slate-50"
+                          data-api-unique-id='categorymanagementview-ra6bb3b37ecb48281-s2437821645'
+                          data-api-unique-page-name='src/backend/components/CategoryManagementView'
+                          data-api-in-loop='1'
+                          onDragOver={e => {
+                            const hasFiles = e.dataTransfer?.files && e.dataTransfer.files.length > 0;
+                            if (!hasFiles) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={e => {
+                            const file = e.dataTransfer?.files?.[0];
+                            if (!file) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handlers.uploadCategoryMainImageFile(item, file);
+                          }}
+                        >
+                          <EditableImg
+                            propKey={`cat-img-${item.category_id}`}
+                            keywords={item.image_url || item.category_name}
+                            className="w-full h-full object-cover"
+                            data-api-unique-id='categorymanagementview-re1c77af1ae64e29a-s2437821645'
+                            data-api-unique-page-name='src/backend/components/CategoryManagementView'
+                            data-api-in-loop='1'
+                          />
+
+                          {/* 本地上传：点击/选择文件 */}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            data-api-unique-id='categorymanagementview-cat-main-image-upload-input'
+                            data-api-unique-page-name='src/backend/components/CategoryManagementView'
+                            data-api-in-loop='1'
+                            onChange={e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              void handlers.uploadCategoryMainImageFile(item, file);
+                              e.currentTarget.value = '';
+                            }}
+                          />
+
+                          {state.uploadingMainImageCategoryId === item.category_id ? (
+                            <div className="absolute inset-0 bg-black/40 z-10 flex items-center justify-center">
+                              <span className="text-sm font-medium text-white">上传中...</span>
+                            </div>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell data-api-unique-id='categorymanagementview-r241e5afd5c55efc1-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
-                        <div className="flex flex-col gap-1" data-api-unique-id='categorymanagementview-r3a4bc8fe1a89be5e-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
+                        <div className={`flex flex-col gap-1 ${isChildRow ? 'pl-6 border-l-2 border-slate-200' : ''}`} data-api-unique-id='categorymanagementview-r3a4bc8fe1a89be5e-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
                           <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='categorymanagementview-r0d4d2d04e2cde9a4-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
                             {state.inlineNameEditingId === item.category_id ? (
                               <Input
@@ -478,7 +550,8 @@ export const CategoryManagementView = ({
                           </Button>
                         </div>
                       </TableCell>
-                    </TableRow>)}
+                    </TableRow>;
+                  })}
               </TableBody>
             </Table>
           </Card>
@@ -615,11 +688,49 @@ export const CategoryManagementView = ({
                     {state.formData.category_kind === 'BRAND' ? <p className="text-[11px] text-muted-foreground" data-api-unique-id='categorymanagementview-rf7cee372e50a141d-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>品牌类目不启用目录 Banner 图配置。</p> : null}
                   </div>
                   <div className="grid grid-cols-2 gap-4" data-api-unique-id='categorymanagementview-r9edcb41a27f97e47-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
-                    <div className="relative aspect-video rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center" data-api-unique-id='categorymanagementview-r4ac860b9b965bb48-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
+                    <div
+                      className="relative aspect-video rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center"
+                      data-api-unique-id='categorymanagementview-r4ac860b9b965bb48-s2437821645'
+                      data-api-unique-page-name='src/backend/components/CategoryManagementView'
+                      onDragOver={e => {
+                        const hasFiles = e.dataTransfer?.files && e.dataTransfer.files.length > 0;
+                        if (!hasFiles) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={e => {
+                        const file = e.dataTransfer?.files?.[0];
+                        if (!file) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void handlers.uploadFormMainImageFile(file);
+                      }}
+                    >
                       {state.formData.image_url ? <EditableImg propKey="category-drawer-preview" keywords={state.formData.image_url} className="w-full h-full object-contain" needLargeImage description={state.formData.category_name} data-api-unique-id='categorymanagementview-r22acb7a7809a8b70-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' /> : <div className="flex flex-col items-center gap-2 text-muted-foreground opacity-50" data-api-unique-id='categorymanagementview-rb3e51ab889593a60-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                           <Layers className="w-10 h-10" data-api-unique-id='categorymanagementview-r2eb814c28da7afbb-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' />
                           <span className="text-sm" data-api-unique-id='categorymanagementview-r09e2e244c2d3e4ea-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>主图预览</span>
                         </div>}
+
+                      {/* 本地上传：点击/选择文件 */}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        data-api-unique-id='categorymanagementview-cat-main-image-upload-input'
+                        data-api-unique-page-name='src/backend/components/CategoryManagementView'
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          void handlers.uploadFormMainImageFile(file);
+                          e.currentTarget.value = '';
+                        }}
+                      />
+
+                      {state.isUploadingFormMainImage ? (
+                        <div className="absolute inset-0 bg-white/70 z-10 flex items-center justify-center">
+                          <span className="text-sm font-medium text-primary">上传中...</span>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="relative aspect-video rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center" data-api-unique-id='categorymanagementview-rb68fe752bec57332-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>
                       {state.formData.banner_image_url ? <EditableImg propKey="category-banner-preview" keywords={state.formData.banner_image_url} className="w-full h-full object-contain" needLargeImage description={`${state.formData.category_name} banner`} data-api-unique-id='categorymanagementview-r4f02d51f77c9ebe5-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' /> : <div className="flex flex-col items-center gap-2 text-muted-foreground opacity-50" data-api-unique-id='categorymanagementview-r623abff70090ee27-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>

@@ -27,7 +27,51 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Hair Band', 'Headband', '发带'], synonyms: ['发带', '发箍', '头箍', '头带'] },
 
   // —— 包 / Bags ——
-  { names: ['Handbag', 'Handbags', 'Tote', '手提包'], synonyms: ['手提包', '手袋', '托特包', '手拎包', '手拿包', '托特'] },
+    {
+      names: ['Handbag', 'Handbags', 'Tote', '手提包'],
+      // 包名同义词 + OCR 常见误识别（拴/拎、挎/提等）
+      synonyms: [
+        '手提包',
+        '手袋',
+        '托特包',
+        '手拎包',
+        '手拴挎包',
+        '拴挎包',
+        '手拴包',
+        '手拿包',
+        // 水桶包/桶包（标题 OCR 常见写法）
+        '水桶包',
+        '桶包',
+        '水桶袋',
+        '手提水桶包',
+        '手提桶包',
+        '水桶箱包',
+        '托特',
+      ],
+    },
+  {
+    names: ['Bags', 'Bag', '包'],
+    // 二级类目如果直接叫 Bags/Bag，而标题是中文包类词（手提包/水桶袋/桶包…），需要同义词兜底
+    synonyms: [
+      '手提包',
+      '手袋',
+      '托特包',
+      '手拎包',
+      '手拴挎包',
+      '拴挎包',
+      '手拴包',
+      '手拿包',
+      '水桶包',
+      '桶包',
+      '水桶袋',
+      '手提水桶包',
+      '手提桶包',
+      '水桶箱包',
+      '托特',
+      'bag',
+      'bags',
+    ],
+  },
   { names: ['Backpack', 'Backpacks', '双肩包', '背包'], synonyms: ['双肩包', '背包', '书包', '旅行背包'] },
   { names: ['Wallet', 'Wallets', '钱包'], synonyms: ['钱包', '钱夹', '卡包', '卡夹', '零钱包', '长款钱包'] },
   { names: ['Cosmetic Bag', 'Makeup Bag', '化妆包'], synonyms: ['化妆包', '洗漱包', '收纳包'] },

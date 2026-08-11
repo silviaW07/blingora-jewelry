@@ -467,13 +467,25 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     return ','
   }
   const delimiter = detectDelimiter(lines)
-  // 无表头约定 9 列（不含 SKU）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+  // 无表头约定列（不含 SKU）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量、图片、详情
+  // 有命名表头时不做「价格列逗号合并」，避免把「图片」等额外列拼进价格。
   const expectedColumnCount = 9
   const priceColumnIndex = 1
 
+  const peekHeaderAliases = {
+    productCode: ['产品编号', '编号', 'product_code', 'product code'],
+    productPrice: ['产品价格', '售价', '价格', 'price'],
+    productName: ['名称', '产品名称', '商品名称', 'name'],
+  }
+  const rawHeaderCells = lines[0].split(delimiter).map(value => value.trim().toLowerCase())
+  const namedHeaderHits = Object.values(peekHeaderAliases).filter(aliases =>
+    rawHeaderCells.some(cell => aliases.includes(cell)),
+  ).length
+  const looksNamedHeader = namedHeaderHits >= 2
+
   const splitLine = (line: string) => {
     const rawParts = line.split(delimiter).map(value => value.trim())
-    if (delimiter !== ',' || rawParts.length <= expectedColumnCount) {
+    if (looksNamedHeader || delimiter !== ',' || rawParts.length <= expectedColumnCount) {
       return rawParts
     }
 
@@ -490,7 +502,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   }
 
   const headerCells = splitLine(lines[0]).map(value => value.toLowerCase())
-  // SKU 不在映射字段中；9 列：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量
+  // SKU 不在映射字段中；命名表头可含图片/详情等扩展列
   const headerAliases: Record<string, string[]> = {
     productCode: ['产品编号', '编号', 'product_code', 'product code'],
     productPrice: ['产品价格', '售价', '价格', 'price'],
@@ -501,6 +513,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     color: ['颜色', 'color'],
     spec: ['规格', '尺码', '尺寸', 'size', 'spec'],
     weight: ['重量', '重量(g)', 'weight'],
+    imageUrl: ['图片', '主图', 'image', 'image_url', 'image url'],
     detail: ['详情', '描述', '商品详情', 'detail', 'description'],
   }
   const indexMap: Record<string, number> = {}
@@ -521,7 +534,8 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     color: 6,
     spec: 7,
     weight: 8,
-    detail: 9,
+    imageUrl: 9,
+    detail: 10,
   }
 
   const rows = dataLines.map((line, index) => {
@@ -536,6 +550,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     const color = pick('color')
     const spec = pick('spec')
     const productPriceText = preserveProductPriceRaw(pick('productPrice'))
+    const imageUrl = pick('imageUrl').trim()
 
     return {
       rowId: `row-${index + 1}`,
@@ -554,7 +569,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
       specs: splitOptions(spec),
       weight: pick('weight'),
       costPrice: null,
-      imageUrl: '',
+      imageUrl,
       detail: pick('detail'),
     }
   }).filter(row => row.productName || row.productCode)

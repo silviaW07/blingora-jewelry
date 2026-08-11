@@ -132,6 +132,7 @@ const EditableImg = ({
     const [imageSrc, setImageSrc] = useState<string | null | undefined>(src);
     const [imageAlt, setImageAlt] = useState<string | null | undefined>(alt);
     const [loadingState, setLoadingState] = useState<boolean>(false);
+    const [hasError, setHasError] = useState<boolean>(false);
     const [isFromKeywordSearch, setIsFromKeywordSearch] = useState<boolean>(false); // 新增状态
     const projectId = useMemo(() => extractProjectId(), []);
     const { getPatch } = useDecorateMode();
@@ -140,6 +141,7 @@ const EditableImg = ({
 
     useEffect(() => {
         setImageSrc(src);
+        setHasError(false);
         setIsFromKeywordSearch(false); // 来自 src prop 时,标记为非关键词搜索
     }, [src]);
 
@@ -151,24 +153,28 @@ const EditableImg = ({
     useEffect(() => {
         if (overrideSrc) {
             setImageSrc(overrideSrc);
+            setHasError(false);
             setIsFromKeywordSearch(false);
             setLoadingState(false);
             return;
         }
         if (src) {
             setImageSrc(src);
+            setHasError(false);
             setIsFromKeywordSearch(false);
             setLoadingState(false);
             return;
         }
         if (!keywords) {
             setImageSrc(fallbackSrc || null);
+            setHasError(false);
             setLoadingState(false);
             return;
         }
         // 检查 keywords 是否为可直接使用的图片地址（含相对路径）
         if (isDirectImageSrc(keywords)) {
             setImageSrc(keywords);
+            setHasError(false);
             setIsFromKeywordSearch(false);
             setLoadingState(false);
             return;
@@ -176,6 +182,7 @@ const EditableImg = ({
 
         if (disableKeywordSearch) {
             setImageSrc(fallbackSrc || null);
+            setHasError(false);
             setIsFromKeywordSearch(false);
             setLoadingState(false);
             return;
@@ -211,15 +218,18 @@ const EditableImg = ({
                     if (safeUrl) {
                         imageCache.set(cacheKey, safeUrl);
                         setImageSrc(safeUrl);
+                        setHasError(false);
                         setIsFromKeywordSearch(true);
                     } else {
                         setImageSrc(fallbackSrc || null);
+                        setHasError(false);
                     }
                     setLoadingState(false);
                 }
             }).catch((err) => {
                 if (!cancelled && err?.name !== 'AbortError') {
                     setImageSrc(fallbackSrc || null);
+                    setHasError(false);
                     setLoadingState(false);
                 }
             }).finally(() => {
@@ -276,6 +286,13 @@ const EditableImg = ({
                         alt={imageAlt ?? ''}
                         className={className}
                         data-api-exclude-tracking={isFromKeywordSearch ? "true" : undefined}
+                onError={() => {
+                    // If the provided URL can't be loaded (domain/404/proxy failure),
+                    // fall back so the card doesn't render as empty.
+                    setHasError(true)
+                    setLoadingState(false)
+                    setImageSrc(fallbackSrc || null)
+                }}
                     />
                 )
             })()}

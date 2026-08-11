@@ -357,7 +357,7 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
           entityId: item.category.id,
           name: item.category.name,
           codeOrSku: item.category.slug || '-',
-          imageUrl: item.category.imageUrl,
+          imageUrl: item.category.imageUrl || item.category.iconUrl || null,
           status: item.category.status,
           sortWeight: item.sortWeight
         }
@@ -367,7 +367,7 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
           entityId: item.category.id,
           name: item.category.name,
           codeOrSku: item.category.slug || '-',
-          imageUrl: item.category.imageUrl,
+          imageUrl: item.category.imageUrl || item.category.iconUrl || null,
           status: item.category.status,
           sortWeight: item.sortWeight,
           level: item.category.level,

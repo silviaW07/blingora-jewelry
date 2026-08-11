@@ -13,6 +13,8 @@ export const DEFAULT_BRAND_ALIASES: BrandAliasRule[] = [
   { alias: '蔻家', standard: 'Coach' },
   { alias: '古驰', standard: 'Gucci' },
   { alias: 'LV', standard: 'Louis Vuitton' },
+  { alias: '香奈儿', standard: 'Chanel' },
+  { alias: '小香', standard: 'Chanel' },
 ]
 
 const CACHE_TTL_MS = 60_000

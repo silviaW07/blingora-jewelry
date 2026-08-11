@@ -336,6 +336,22 @@ const getProductFieldValue = (item: ProductListItem, field: ProductInlineField):
   }
 }
 
+/** SPU 重量变更后，强制覆盖列表项内全部子 SKU 重量（表格即时刷新） */
+const applySpuWeightToProductListItem = (item: ProductListItem, weightGram: number): ProductListItem => {
+  const grams = Math.round(Number(weightGram))
+  if (!Number.isFinite(grams) || grams <= 0) return item
+  const weightKg = Number((grams / 1000).toFixed(3))
+  return {
+    ...item,
+    weight_gram: grams,
+    skus: (item.skus || []).map((sku) => ({
+      ...sku,
+      weight_gram: grams,
+      weight_kg: weightKg,
+    })),
+  }
+}
+
 const formatProductComparableValue = (value: string | number | null, field: ProductInlineField) => {
   if (numberProductFields.has(field)) {
     const parsed = Number(String(value ?? '').trim())
@@ -1527,6 +1543,18 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       syncFormCategoryMeta(String(value || ''), formData.price_coefficient ?? null)
       return
     }
+    // SPU 重量变更：立即强制覆盖表单内全部 SKU 重量，失焦/保存前表格即可见
+    if (field === 'weight_gram') {
+      const grams = Number(value)
+      const weightKg =
+        Number.isFinite(grams) && grams > 0 ? Number((grams / 1000).toFixed(3)) : null
+      setFormData((prev) => ({
+        ...prev,
+        weight_gram: value as ProductFormData['weight_gram'],
+        skus: (prev.skus || []).map((sku) => ({ ...sku, weight_kg: weightKg })),
+      }))
+      return
+    }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -1970,7 +1998,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
             if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
             if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
-            if (field === 'weight_grams') return { ...item, item_weightGrams: Number(payloadValue) }
+            if (field === 'weight_grams') {
+              const grams = Number(payloadValue)
+              return {
+                ...item,
+                item_weightGrams: grams,
+                item_skus: (item.item_skus || []).map((sku) => ({
+                  ...sku,
+                  weight_grams: grams,
+                })),
+              }
+            }
             if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
             if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
             if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
@@ -2035,7 +2073,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
             if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
             if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
-            if (field === 'weight_grams') return { ...item, item_weightGrams: Number(payloadValue) }
+            if (field === 'weight_grams') {
+              const grams = Number(payloadValue)
+              return {
+                ...item,
+                item_weightGrams: grams,
+                item_skus: (item.item_skus || []).map((sku) => ({
+                  ...sku,
+                  weight_grams: grams,
+                })),
+              }
+            }
             if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
             if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
             if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
@@ -3071,7 +3119,11 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           weight_kg: formData.weight_gram ? Number((formData.weight_gram / 1000).toFixed(3)) : null,
           usd_display_price: null,
           usd_display_original_price: null
-        }]).map(sku => ({ ...sku, weight_kg: formData.weight_gram ? Number((formData.weight_gram / 1000).toFixed(3)) : sku.weight_kg || null })),
+        }]).map(sku => ({
+          ...sku,
+          // 保存时强制全部 SKU 与 SPU 重量一致（不保留 SKU 原重量）
+          weight_kg: formData.weight_gram ? Number((formData.weight_gram / 1000).toFixed(3)) : null,
+        })),
         submit_action: action as 'DRAFT' | 'ACTIVE'
       }
       if (drawerMode === 'create') {
@@ -3273,7 +3325,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           } else if (mode === 'weight_gram' && res.success_count > 0) {
             setList(prev => prev.map(item =>
               targetProductIds.includes(item.product_id)
-                ? { ...item, weight_gram: nextValue }
+                ? applySpuWeightToProductListItem(item, nextValue)
                 : item,
             ))
           }
@@ -3383,7 +3435,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             if (field === 'product_name') return { ...item, product_name: String(payloadValue || '') }
             if (field === 'supplier_name') return { ...item, supplier_name: String(payloadValue || '') || null }
             if (field === 'goods_status') return { ...item, goods_status: payloadValue as any }
-            if (field === 'weight_gram') return { ...item, weight_gram: Number(payloadValue) }
+            if (field === 'weight_gram') return applySpuWeightToProductListItem(item, Number(payloadValue))
             if (field === 'min_order_qty') {
               const nextQty = Math.max(1, Math.round(Number(payloadValue) || 1))
               return {
@@ -3446,7 +3498,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             if (field === 'product_name') return { ...item, product_name: String(payloadValue || '') }
             if (field === 'supplier_name') return { ...item, supplier_name: String(payloadValue || '') || null }
             if (field === 'goods_status') return { ...item, goods_status: payloadValue as any }
-            if (field === 'weight_gram') return { ...item, weight_gram: Number(payloadValue) }
+            if (field === 'weight_gram') return applySpuWeightToProductListItem(item, Number(payloadValue))
             if (field === 'min_order_qty') {
               const nextQty = Math.max(1, Math.round(Number(payloadValue) || 1))
               return {

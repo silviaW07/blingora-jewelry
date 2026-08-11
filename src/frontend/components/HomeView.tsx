@@ -57,6 +57,16 @@ const formatPrice = (price?: number | null) => {
   return `US$ ${price.toFixed(2)}`;
 };
 
+const formatPriceRange = (min?: number | null, max?: number | null) => {
+  const minOk = typeof min === 'number' && !Number.isNaN(min)
+  const maxOk = typeof max === 'number' && !Number.isNaN(max)
+  if (!minOk && !maxOk) return 'US$ --'
+  if (minOk && maxOk && Math.abs((max as number) - (min as number)) > 0.009) {
+    return `US$ ${(min as number).toFixed(2)} - ${(max as number).toFixed(2)}`
+  }
+  return formatPrice(minOk ? (min as number) : (max as number))
+}
+
 const renderRatingStars = (rating?: number | null) => {
   const safeRating = typeof rating === 'number' && !Number.isNaN(rating) ? Math.max(0, Math.min(5, rating)) : 0;
   const fullStars = Math.round(safeRating);
@@ -103,7 +113,9 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                     <div className="min-h-[40px] flex-1" aria-hidden="true" />
                   ) : (
                     <div data-api-unique-id='homeview-rzone-product-price-wrap-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
-                      <p className="text-2xl font-bold text-[#111111]" data-api-unique-id='homeview-rzone-product-price-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>{formatPrice(item.price)}</p>
+                      <p className="text-2xl font-bold text-[#111111]" data-api-unique-id='homeview-rzone-product-price-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
+                        {formatPriceRange(item.priceMin, item.priceMax)}
+                      </p>
                       {item.originalPrice ? <p className="mt-1 text-sm text-[#8b8477] line-through" data-api-unique-id='homeview-rzone-product-original-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>{formatPrice(item.originalPrice)}</p> : null}
                     </div>
                   )}

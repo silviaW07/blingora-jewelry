@@ -5013,6 +5013,24 @@ export const normalizeCategoryMatchText = (value?: string | null) =>
     .toUpperCase()
     .replace(/\s+/g, '')
 
+/** 「无品牌」兜底货架：不得与真实品牌（Chanel/LV…）抢标题命中，也不应在已命中品牌时残留为标签 */
+export const isNoBrandCatchAllCategoryName = (name?: string | null) => {
+  const n = normalizeCategoryMatchText(name)
+  if (!n) return false
+  return (
+    n === 'NOBRAND' ||
+    n === 'NOBRANDS' ||
+    n === 'UNBRANDED' ||
+    n === 'OTHER' ||
+    n === 'OTHERS' ||
+    n === 'OTHERBRAND' ||
+    n === 'OTHERBRANDS' ||
+    n === '无品牌' ||
+    n === '其他品牌' ||
+    n === '其它品牌'
+  )
+}
+
 /**
  * 大小写不敏感；去空格后做包含匹配。
  * 极短词（≤2）要求左右非字母数字邻居，避免 LV 误伤 SALVATION。
@@ -5026,8 +5044,11 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
   if (!normalizedText || !normalizedToken) return false
   if (!normalizedText.includes(normalizedToken)) return false
 
-  const isAsciiShortToken = /^[A-Z0-9]+$/.test(normalizedToken)
-  if (normalizedToken.length <= 2 && isAsciiShortToken) {
+  // 纯 ASCII 品牌词（Chanel/Gucci/LV…）：要求左右非字母数字邻居。
+  // 标题常见「Chanel【钛钢】」「Chanel钛钢」「chanel 欧美」——品牌后直接接中文/符号仍算命中；
+  // 但要避免短词误伤（LV⊂SALVATION）以及长词嵌在英文单词内部。
+  const isAsciiToken = /^[A-Z0-9]+$/.test(normalizedToken)
+  if (isAsciiToken) {
     let from = 0
     while (from < normalizedText.length) {
       const idx = normalizedText.indexOf(normalizedToken, from)
@@ -5117,8 +5138,74 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
 }
 
 const isBrandParentSecondaryCategory = (category: AutoMatchedSecondaryCategory) => {
+  if (isNoBrandCatchAllCategoryName(category.name)) return false
   if (category.isBrandCategory) return true
   return isBrandShelfParentName(category.parentName)
+}
+
+/**
+ * 从标题/详情里挑最佳 Brand 货架 L2（Chanel/LV…）。
+ * 专门扫品牌货架，避免被 Necklace 等品类命中挤掉；并排除 No Brand 兜底。
+ */
+export function pickBestBrandCategoryFromTitle(
+  title: string,
+  categories: AutoMatchedSecondaryCategory[],
+  detailText?: string | null,
+): AutoMatchedSecondaryCategory | null {
+  const corpus = buildCategoryMatchCorpus(title, detailText)
+  if (!corpus) return null
+
+  const scored = categories
+    .filter((category) => isBrandParentSecondaryCategory(category))
+    .map((category) => {
+      const tokens = [category.name, ...category.keywords]
+        .map((token) => String(token || '').trim())
+        .filter(Boolean)
+      const matchedTokens = tokens.filter((token) => containsCategoryMatchToken(corpus, token))
+      if (!matchedTokens.length) return null
+      const bestTokenLength = Math.max(
+        ...matchedTokens.map((token) => normalizeCategoryMatchText(token).length),
+      )
+      return { category, bestTokenLength }
+    })
+    .filter(
+      (item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } =>
+        Boolean(item),
+    )
+
+  scored.sort(
+    (a, b) =>
+      b.bestTokenLength - a.bestTokenLength ||
+      a.category.name.localeCompare(b.category.name, 'zh-CN'),
+  )
+  return scored[0]?.category || null
+}
+
+/** 已命中真实品牌时，从关联类目里剔除 No Brand 兜底，避免列表标签误显示 */
+export async function pruneNoBrandCatchAllLinks(
+  tx: any,
+  linkedCategoryIds: string[],
+  options?: { keepWhenNoRealBrand?: boolean; hasRealBrand?: boolean },
+): Promise<string[]> {
+  const ids = Array.from(new Set((linkedCategoryIds || []).filter(Boolean)))
+  if (!ids.length) return []
+  const hasRealBrand = options?.hasRealBrand === true
+  if (!hasRealBrand && options?.keepWhenNoRealBrand !== false) {
+    // 无真实品牌时允许保留 No Brand
+    return ids
+  }
+  if (!hasRealBrand) return ids
+
+  const rows = await tx.category.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  })
+  const drop = new Set(
+    rows.filter((row: { name?: string | null }) => isNoBrandCatchAllCategoryName(row.name)).map(
+      (row: { id: string }) => row.id,
+    ),
+  )
+  return ids.filter((id) => !drop.has(id))
 }
 
 /** Brand 货架（自身或父级）永远不能当主类目 / 定价类目 */
@@ -5224,6 +5311,10 @@ const categoryNameFuzzyMatch = (dbName: string, token: string) => {
   const b = normalizeCategoryMatchText(token)
   if (!a || !b) return false
   if (a === b) return true
+  // No Brand ↔ Brand：禁止 includes 互相误伤（NOBRAND 包含 BRAND）
+  if (isNoBrandCatchAllCategoryName(dbName) || isNoBrandCatchAllCategoryName(token)) {
+    return false
+  }
   // Bag ↔ Bags, Handbag ↔ Handbags
   if (a.endsWith('S') && a.slice(0, -1) === b) return true
   if (b.endsWith('S') && b.slice(0, -1) === a) return true
@@ -5791,7 +5882,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
 )
 
 /**
- * 表格导入确认：写入待上传队列（图片稍后在待上传区上传）
+ * 表格导入确认：写入待上传队列（Excel「图片」列会写入主图/图集；无图时仍可稍后在待上传区补传）
  */
 export const createProductsFromTable = requireRole([UserRole.ADMIN])(
   withResult(async (input: CreateProductsFromTableInput): Promise<CreateProductsFromTableOutput> => {
@@ -5865,6 +5956,29 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         spuRows
           .map(row => (Number(row.weight) > 0 ? Math.round(Number(row.weight)) : null))
           .find(value => value != null) ?? null
+      const galleryUrls = dedupe(
+        spuRows.flatMap(row => {
+          const raw = normalizeText(row.imageUrl)
+          if (!raw) return []
+          return raw.split(/[,，|]/).map(part => part.trim()).filter(Boolean)
+        }),
+      )
+      const imageByColor = new Map<string, string>()
+      for (const row of spuRows) {
+        const raw = normalizeText(row.imageUrl)
+        if (!raw) continue
+        const firstUrl = raw.split(/[,，|]/).map(part => part.trim()).filter(Boolean)[0]
+        if (!firstUrl) continue
+        const rowColors = row.colors?.length ? row.colors : splitCommaList(row.color)
+        if (rowColors.length === 0) {
+          if (!imageByColor.has('')) imageByColor.set('', firstUrl)
+          continue
+        }
+        for (const color of rowColors) {
+          const key = normalizeText(color)
+          if (key && !imageByColor.has(key)) imageByColor.set(key, firstUrl)
+        }
+      }
       // SKU 编码一律由产品编号（SPU 合并键）生成，不使用表格 skuCode（常被误填为价格）
       const colorList = colors.length > 0 ? colors : [null]
       const specList = specs.length > 0 ? specs : [null]
@@ -5877,6 +5991,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           if (color) attributes.push({ name: '颜色', value: color })
           if (spec) attributes.push({ name: '规格', value: spec })
           const mappedPrice = spec ? (priceBySpec.get(normalizeText(spec)) ?? scalarPrice) : scalarPrice
+          const colorKey = color ? normalizeText(color) : ''
           skuTable.push({
             skuKey: buildSkuIdentifier(productCode, spec, color, index),
             spec: attributes.map(attr => attr.value).join('/') || '默认规格',
@@ -5884,7 +5999,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
             price: mappedPrice,
             stock: 1,
             weightGrams,
-            imageUrl: '',
+            imageUrl: (colorKey && imageByColor.get(colorKey)) || imageByColor.get('') || galleryUrls[0] || '',
             attributes: attributes.length > 0 ? attributes : [{ name: '规格', value: '默认规格' }],
           })
           index += 1
@@ -5912,6 +6027,8 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         colors,
         specs,
         weightGrams,
+        galleryUrls,
+        mainImageUrl: galleryUrls[0] || '',
         skuTable,
         specSummary: [
           ...(colors.length ? [{ name: '颜色', values: colors }] : []),
@@ -5954,9 +6071,6 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
               // 品牌不得参与类目自动命中语料
             ].filter(Boolean).join('\n') || null,
           )
-      const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map(category => category.id)
-      const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map(category => category.name)
-
       const categoryId =
         normalizeText(row.categoryId) ||
         pathResolved.targetCategoryId ||
@@ -5966,6 +6080,28 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           : null) ||
         input.defaultCategoryId ||
         null
+
+      // 表格「类目」列解析结果写入 matched*，供待上传/校准弹窗默认勾选（不只写 targetCategoryId）
+      const tableResolvedCategoryIds = categoryCell
+        ? Array.from(
+            new Set(
+              [pathResolved.primaryId, pathResolved.secondaryId, categoryId].filter(
+                (id): id is string => Boolean(id),
+              ),
+            ),
+          )
+        : []
+      const matchedSecondaryCategoryIds = tableResolvedCategoryIds.length
+        ? tableResolvedCategoryIds
+        : autoMatchedSecondaryCategories.map(category => category.id)
+      const matchedSecondaryCategoryNames = matchedSecondaryCategoryIds
+        .map(id => categories.find(item => item.id === id)?.name || null)
+        .filter((name): name is string => Boolean(name))
+      if (!matchedSecondaryCategoryNames.length) {
+        matchedSecondaryCategoryNames.push(
+          ...autoMatchedSecondaryCategories.map(category => category.name),
+        )
+      }
 
       const productDetailText = [
         normalizeText(row.detail),
@@ -6008,16 +6144,18 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
       const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null
       const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null
       const zhName = normalizeText(row.productName)
+      const mainImageUrl = normalizeText(row.mainImageUrl) || row.galleryUrls?.[0] || null
+      const detailImages = (row.galleryUrls || []).filter(url => url && url !== mainImageUrl)
 
       return {
         operatorId: userId,
         sourceUrl: `table-import://${productCode}`,
         parsedName: zhName,
-        parsedMainImageUrl: null,
+        parsedMainImageUrl: mainImageUrl,
         parsedPriceMin: row.priceMin,
         parsedPriceMax: row.priceMax,
         supplierName: normalizeText(row.supplierName) || null,
-        mainImageUrl: null,
+        mainImageUrl,
         costPrice: row.priceMin,
         weightGrams: row.weightGrams,
         sourceCategoryName,
@@ -6058,8 +6196,8 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           matchedCategoryIds: matchedSecondaryCategoryIds,
           matchedCategoryNames: matchedSecondaryCategoryNames,
           price: row.priceMin ?? undefined,
-          mainImageUrl: undefined,
-          detailImages: [],
+          mainImageUrl: mainImageUrl || undefined,
+          detailImages,
           shortDescription: normalizeText(row.brand) || undefined,
           importSortIndex: index,
           inboundIdentity: {
@@ -6893,6 +7031,27 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
       case 'weight_grams':
         if (numericValue === null || numericValue <= 0) throw new Error('重量必须大于0')
         data.weightGrams = numericValue
+        {
+          // SPU 重量变更：强制覆盖 preview.skuTable 内全部 SKU 重量
+          const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+          const nextDrafts = resolvePendingSkuDrafts(item).map((sku) => ({
+            ...sku,
+            weight_grams: numericValue,
+          }))
+          data.previewDataJson = {
+            ...currentPreview,
+            skuTable: nextDrafts.map((sku) => ({
+              skuKey: sku.sku_key,
+              spec: sku.spec_text,
+              costPrice: sku.cost_price,
+              price: sku.price,
+              stock: sku.stock,
+              weightGrams: numericValue,
+              imageUrl: sku.image_url || undefined,
+              attributes: sku.attributes,
+            })),
+          } as any
+        }
         break
       case 'cost_price':
         if (numericValue === null || numericValue < 0) throw new Error('成本价不能小于0')
@@ -7331,8 +7490,16 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
               autoMatchedCategoryIds
                 .map(id => secondaryById.get(id))
                 .find(cat => cat && isBrandParentSecondaryCategory(cat)) || null
-            brandCategoryId = calibratedBrand?.id || null
-            brandMatchKeyword = calibratedBrand?.name || null
+            // 校准结果若只有 No Brand / 未带品牌，再按标题补一次真实品牌
+            const titleBrand =
+              calibratedBrand ||
+              pickBestBrandCategoryFromTitle(
+                productName,
+                secondaryCategories,
+                buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription),
+              )
+            brandCategoryId = titleBrand?.id || null
+            brandMatchKeyword = titleBrand?.name || null
             selectedCategoryId =
               pickFirstNonBrandCategoryId(
                 [
@@ -7354,7 +7521,11 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
               secondaryCategories,
               detailForMatch,
             )
-            const brandHits = rematchedSecondaryCategories.filter(isBrandParentSecondaryCategory)
+            const brandHit = pickBestBrandCategoryFromTitle(
+              productName,
+              secondaryCategories,
+              detailForMatch,
+            )
             pricingFromRematch = pickImportPricingTargetCategory(
               rematchedSecondaryCategories,
               null,
@@ -7365,8 +7536,8 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
                 ...previewMatchedIds,
               ]),
             )
-            brandCategoryId = brandHits[0]?.id || null
-            brandMatchKeyword = brandHits[0]?.name || null
+            brandCategoryId = brandHit?.id || null
+            brandMatchKeyword = brandHit?.name || null
             selectedCategoryId =
               pickFirstNonBrandCategoryId(
                 [
@@ -7390,7 +7561,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           }
           const categoryId = ownership.primaryCategoryId
           // 主分类 + 校准/自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
-          const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
+          let linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
             ...ownership.linkedCategoryIds,
             ...autoMatchedCategoryIds,
             item.targetCategoryId || '',
@@ -7398,6 +7569,10 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             pricingFromRematch || '',
             brandCategoryId || '',
           ])
+          // 标题已命中真实品牌时，去掉 No Brand 兜底关联，避免列表显示「No Brand」
+          linkedCategoryIds = await pruneNoBrandCatchAllLinks(tx, linkedCategoryIds, {
+            hasRealBrand: Boolean(brandCategoryId),
+          })
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId)
           const baseCostPrice = toNumberOrNull(item.costPrice)
           const pendingSkus = recalculatePendingSkuPrices(

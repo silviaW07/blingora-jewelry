@@ -115,12 +115,16 @@ export const optimizeCatalogImageUrl = (
 export const resolveCategoryCardImageUrl = (
   imageUrl?: string | null,
   bannerImageUrl?: string | null,
+  iconUrl?: string | null,
   productImageUrl?: string | null,
 ): string => {
   return (
+    // 首页类目卡片：优先最新商品封面（productImageUrl）
+    // 没有则回退到后台配置（分类主图/ Banner / iconUrl）
+    optimizeCatalogImageUrl(productImageUrl, 640) ||
     optimizeCatalogImageUrl(imageUrl, 640) ||
     optimizeCatalogImageUrl(bannerImageUrl, 640) ||
-    optimizeCatalogImageUrl(productImageUrl, 640) ||
+    optimizeCatalogImageUrl(iconUrl, 640) ||
     CATEGORY_CARD_PLACEHOLDER_URL
   )
 }

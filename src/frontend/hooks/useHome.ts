@@ -64,6 +64,8 @@ export interface HomeHandlers extends BaseHomeHandlers {
   handleNavigateRecommendCategory: (categoryId: string, categorySlug?: string | null) => void
   handleNavigateRecommendZone: (zoneId: string) => void
   handleAddRecommendProductToCart: (item: HomeRecommendProductCard) => Promise<void>
+  /** 当首页需要“可选项逐个显示/可切换”时，用于直接加购指定 SKU */
+  handleAddRecommendProductSkuToCart: (item: HomeRecommendProductCard, productSkuId: string) => Promise<void>
   handleAddRecommendProductToWishlist: (item: HomeRecommendProductCard, favorited?: boolean) => void
   handleAddLinkedCategoryProductToCart: (item: HomeLinkedCategoryProduct) => Promise<void>
   handleSelectDailyNewArrivalMonth: (monthKey: string) => void
@@ -378,6 +380,29 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
     toast.success('Added to cart')
   }
 
+  const handleAddRecommendProductSkuToCart = async (item: HomeRecommendProductCard, productSkuId: string) => {
+    if (item.status === 'DRAFT') {
+      toast.error('This product cannot be added to cart')
+      return
+    }
+
+    if (!productSkuId?.trim()) {
+      toast.error('Please select an option')
+      return
+    }
+
+    if (!userSession.token?.trim()) {
+      openAuthModal('login')
+      return
+    }
+
+    await addCartItem({
+      productId: item.productId,
+      productSkuId: productSkuId.trim(),
+    })
+    toast.success('Added to cart')
+  }
+
   const handleAddRecommendProductToWishlist = (_item: HomeRecommendProductCard, favorited?: boolean) => {
     // 收藏状态由 WishlistHeartButton + localStorage 管理；此处仅做反馈
     if (typeof favorited === 'boolean') {
@@ -426,6 +451,7 @@ export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
       handleNavigateRecommendCategory,
       handleNavigateRecommendZone,
       handleAddRecommendProductToCart,
+      handleAddRecommendProductSkuToCart,
       handleAddRecommendProductToWishlist,
       handleAddLinkedCategoryProductToCart,
       handleSelectDailyNewArrivalMonth,

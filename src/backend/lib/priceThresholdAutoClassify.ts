@@ -7,7 +7,8 @@
  * - Product under L1 Jewelry/饰品 + min sell USD <= 3 → relate tag "Below 3 usd" (L1 or L2)
  */
 import { randomUUID } from 'crypto'
-import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+// NOTE: price-threshold rules work in USD, but some earlier implementations treated DB price as CNY.
+// Store/consume values consistently as USD to avoid double-conversion (e.g. US$4.xx -> US$0.xx).
 import { slugifyCategoryName } from '@/shared/categorySlug'
 
 export const BELOW13_USD_CATEGORY_NAME = 'below13 usd'
@@ -173,21 +174,23 @@ export function resolveProductMinUsdPrice(
     costPrice?: unknown
     priceCoefficient?: unknown
   },
-  usdExchangeRate: number,
 ): number | null {
   const skuPrices = (product.skus || [])
     .map((sku) => toNumber(sku.price))
     .filter((n): n is number => n !== null && n >= 0)
-  let minRmb: number | null = null
+  let minUsd: number | null = null
   if (skuPrices.length > 0) {
-    minRmb = Math.min(...skuPrices)
+    // productsku.price is expected to already be USD.
+    minUsd = Math.min(...skuPrices)
   } else {
     const cost = toNumber(product.costPrice)
     const coeff = toNumber(product.priceCoefficient) ?? 2
-    if (cost !== null && cost >= 0) minRmb = cost * coeff
+    // Fallback when SKU prices are missing:
+    // product.costPrice is also treated as USD in this system.
+    if (cost !== null && cost >= 0) minUsd = cost * coeff
   }
-  if (minRmb === null) return null
-  return toUsdFromCny(minRmb, usdExchangeRate)
+  if (minUsd === null) return null
+  return minUsd
 }
 
 async function uniqueCategorySlug(db: DbLike, baseName: string): Promise<string> {
@@ -299,10 +302,12 @@ export async function resolvePriceThresholdCategories(
         ...createdRow,
         parent: { id: scopeL1.id, name: scopeL1.name },
       }
-      l2Rows.push(tag)
-      allCats.push(tag)
+      l2Rows.push(tag!)
+      allCats.push(tag!)
       created = true
     }
+
+    if (!tag) continue
 
     // Products must belong to scope L1 (包/饰品). Tag may be a sibling top-level shelf.
     const parentId = scopeL1?.id || (tag.level === 2 ? tag.parentId : null)
@@ -354,7 +359,6 @@ export async function syncProductPriceThresholdRelations(
   db: DbLike,
   productId: string,
   options?: {
-    usdExchangeRate?: number
     ensured?: ResolvedPriceThresholdCategory[]
     categoryMap?: Map<string, CategoryNode>
   },
@@ -384,9 +388,7 @@ export async function syncProductPriceThresholdRelations(
   if (!product) return empty
 
   const categoryMap = options?.categoryMap ?? (await loadCategoryMap(db))
-  const usdExchangeRate =
-    options?.usdExchangeRate ?? (await getUsdExchangeRate(db as any))
-  const minUsd = resolveProductMinUsdPrice(product, usdExchangeRate)
+  const minUsd = resolveProductMinUsdPrice(product)
   const relationCategoryIds = (product.relationCategories || []).map(
     (rel: { categoryId: string }) => rel.categoryId,
   )
@@ -475,7 +477,6 @@ export async function autoClassifyAllProductsByPriceThreshold(
 
   // Reload map after possible creates so new L2 parents resolve correctly
   const categoryMap = await loadCategoryMap(db)
-  const usdExchangeRate = await getUsdExchangeRate(db as any)
 
   const products = await db.product.findMany({
     where: { status: { in: ['ACTIVE', 'DRAFT', 'INACTIVE'] } },
@@ -493,7 +494,6 @@ export async function autoClassifyAllProductsByPriceThreshold(
       const result = await syncProductPriceThresholdRelations(db, product.id, {
         ensured,
         categoryMap,
-        usdExchangeRate,
       })
       if (result.addedCategoryIds.length > 0) bound += 1
       else if (result.removedCategoryIds.length > 0) unbound += 1

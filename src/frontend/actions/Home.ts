@@ -42,7 +42,18 @@ export interface HomeRecommendProductCard {
   shortDescription: string | null
   /** ACTIVE=可售商品；DRAFT=快速发图展示商品（无价格/规格） */
   status: 'ACTIVE' | 'DRAFT' | string
+  /** 展示使用：min（兼容旧逻辑） */
   price: number | null
+  /** 多 SKU 价格范围（USD） */
+  priceMin: number | null
+  priceMax: number | null
+  /** 规格/颜色等“可选项”列表（用于首页直接切换价格） */
+  skuOptions: Array<{
+    skuId: string
+    label: string
+    price: number | null
+    originalPrice: number | null
+  }>
   originalPrice: number | null
   ratingAverage: number
   ratingCount: number
@@ -100,6 +111,25 @@ const toUsdPrice = (rmbPrice: number | null | undefined, exchangeRate: number): 
   return toUsdFromCny(rmbPrice, exchangeRate)
 }
 
+const buildSkuOptionLabel = (sku: any, index: number): string => {
+  // Prefer existing label-like fields. Keep it simple: only need a short, stable display string on home cards.
+  const sizeLabel = typeof sku?.sizeLabel === 'string' ? sku.sizeLabel.trim() : ''
+  if (sizeLabel) return sizeLabel
+
+  const skuCode = typeof sku?.skuCode === 'string' ? sku.skuCode.trim() : ''
+  if (skuCode) return skuCode
+
+  const attrs = Array.isArray(sku?.attributeJson) ? sku.attributeJson : null
+  if (attrs && attrs.length > 0) {
+    const values = attrs
+      .map((a: any) => (a && typeof a.value === 'string' ? a.value.trim() : ''))
+      .filter(Boolean)
+    if (values.length) return values.join(' / ')
+  }
+
+  return `Option ${index + 1}`
+}
+
 const normalizePcCols = (value: number): 3 | 4 | 5 => {
   if (value === 3 || value === 5) {
     return value
@@ -149,6 +179,7 @@ export const getHomeRecommendZones = async (input?: {
           parentId: true,
           imageUrl: true,
           bannerImageUrl: true,
+          iconUrl: true,
           description: true,
           translationsJson: true,
           parent: {
@@ -167,10 +198,10 @@ export const getHomeRecommendZones = async (input?: {
     : []
   const freshCategoryMap = new Map(freshCategories.map((category) => [category.id, category]))
 
-  // 类目卡封面：无 imageUrl 时回退到该类目下商品主图，避免前端关键词搜图长时间转圈
-  const categoryIdsNeedingCover = freshCategories
-    .filter((category) => !String(category.imageUrl || '').trim() && !String(category.bannerImageUrl || '').trim())
-    .map((category) => category.id)
+  // 类目卡封面策略：
+  // 1) 优先用「最新商品主图」(coverImageByCategoryId)，让首页类目卡更鲜活
+  // 2) cover 不存在时再回退到后台配置的 category.imageUrl / bannerImageUrl / iconUrl
+  const categoryIdsNeedingCover = freshCategories.map((category) => category.id)
   const coverImageByCategoryId = new Map<string, string>()
   if (categoryIdsNeedingCover.length > 0) {
     const coverProducts = await prisma.product.findMany({
@@ -196,7 +227,7 @@ export const getHomeRecommendZones = async (input?: {
     for (const product of coverProducts) {
       const imageUrl = optimizeCatalogImageUrl(product.mainImageUrl, 640)
       if (!imageUrl) continue
-      if (product.categoryId && categoryIdsNeedingCover.includes(product.categoryId) && !coverImageByCategoryId.has(product.categoryId)) {
+      if (product.categoryId && !coverImageByCategoryId.has(product.categoryId)) {
         coverImageByCategoryId.set(product.categoryId, imageUrl)
       }
       for (const relation of product.relationCategories) {
@@ -340,12 +371,52 @@ export const getHomeRecommendZones = async (input?: {
         primary: product.category,
         relations: (product.relationCategories || []).map((rel) => rel.category),
       })
-      const priceRmb = resolveFrontRmbSellingPrice({
+      const skuSellingRmbPrices = product.skus
+        .map((sku) =>
+          resolveFrontRmbSellingPrice({
+            skuPriceRmb: sku.price.toNumber(),
+            costPrice: product.costPrice,
+            ...pricingCoeffs,
+          }),
+        )
+        .filter((n) => Number.isFinite(n) && n > 0)
+
+      const priceMinRmb = skuSellingRmbPrices.length ? Math.min(...skuSellingRmbPrices) : null
+      const priceMaxRmb = skuSellingRmbPrices.length ? Math.max(...skuSellingRmbPrices) : null
+
+      const priceMinUsd = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null
+      const priceMaxUsd = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null
+
+      const priceRmb = priceMinRmb !== null ? priceMinRmb : resolveFrontRmbSellingPrice({
         skuPriceRmb: defaultSku.price.toNumber(),
         costPrice: product.costPrice,
         ...pricingCoeffs,
       })
+
       const cost = toDecimalNumber(product.costPrice)
+      const skuOptions = sortedSkus
+        .map((sku, index) => {
+          const priceRmb = resolveFrontRmbSellingPrice({
+            skuPriceRmb: sku.price.toNumber(),
+            costPrice: product.costPrice,
+            ...pricingCoeffs,
+          })
+          const priceUsd = priceRmb > 0 ? toUsdPrice(priceRmb, exchangeRate) : null
+          const originalPriceRmb =
+            cost !== null && cost > 0
+              ? Number((priceRmb * 1.1).toFixed(2))
+              : sku.originalPrice
+                ? sku.originalPrice.toNumber()
+                : null
+          return {
+            skuId: sku.id,
+            label: buildSkuOptionLabel(sku, index),
+            price: priceUsd,
+            originalPrice: originalPriceRmb !== null && originalPriceRmb > 0 ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
+          }
+        })
+        .filter((opt) => opt.skuId && opt.price !== null)
+
       const originalPriceRmb =
         cost !== null && cost > 0
           ? Number((priceRmb * 1.1).toFixed(2))
@@ -368,7 +439,10 @@ export const getHomeRecommendZones = async (input?: {
         imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 720),
         shortDescription: product.shortDescription,
         status: product.status,
-        price: toUsdPrice(priceRmb, exchangeRate),
+        price: priceMinUsd,
+        priceMin: priceMinUsd,
+        priceMax: priceMaxUsd,
+        skuOptions,
         originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
         ratingAverage: product.ratingAverage,
         ratingCount: product.ratingCount,
@@ -436,14 +510,58 @@ export const getHomeRecommendZones = async (input?: {
               }).relationCategories || []
             ).map((rel) => rel.category),
           })
-          const priceRmb = defaultSku
-            ? resolveFrontRmbSellingPrice({
-                skuPriceRmb: defaultSku.price.toNumber(),
+          const skuSellingRmbPrices = product.skus
+            .map((sku) =>
+              resolveFrontRmbSellingPrice({
+                skuPriceRmb: sku.price.toNumber(),
+                costPrice: product.costPrice,
+                ...pricingCoeffs,
+              }),
+            )
+            .filter((n) => Number.isFinite(n) && n > 0)
+
+          const priceMinRmb = skuSellingRmbPrices.length ? Math.min(...skuSellingRmbPrices) : null
+          const priceMaxRmb = skuSellingRmbPrices.length ? Math.max(...skuSellingRmbPrices) : null
+
+          const priceMin = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null
+          const priceMax = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null
+
+          const priceRmb = priceMinRmb !== null
+            ? priceMinRmb
+            : defaultSku
+              ? resolveFrontRmbSellingPrice({
+                  skuPriceRmb: defaultSku.price.toNumber(),
+                  costPrice: product.costPrice,
+                  ...pricingCoeffs,
+                })
+              : null
+
+          const cost = toDecimalNumber(product.costPrice)
+          const skuOptions = sortedSkus
+            .map((sku, index) => {
+              const skuPriceRmb = resolveFrontRmbSellingPrice({
+                skuPriceRmb: sku.price.toNumber(),
                 costPrice: product.costPrice,
                 ...pricingCoeffs,
               })
-            : null
-          const cost = toDecimalNumber(product.costPrice)
+              const priceUsd = skuPriceRmb > 0 ? toUsdPrice(skuPriceRmb, exchangeRate) : null
+              const originalPriceRmb =
+                cost !== null && cost > 0
+                  ? Number((skuPriceRmb * 1.1).toFixed(2))
+                  : sku.originalPrice
+                    ? sku.originalPrice.toNumber()
+                    : null
+              return {
+                skuId: sku.id,
+                label: buildSkuOptionLabel(sku, index),
+                price: priceUsd,
+                originalPrice:
+                  originalPriceRmb !== null && originalPriceRmb > 0
+                    ? toUsdPrice(originalPriceRmb, exchangeRate)
+                    : null,
+              }
+            })
+            .filter((opt) => opt.skuId && opt.price !== null)
           const originalPriceRmb =
             priceRmb === null
               ? null
@@ -452,7 +570,8 @@ export const getHomeRecommendZones = async (input?: {
                 : defaultSku?.originalPrice
                   ? defaultSku.originalPrice.toNumber()
                   : null
-          const price = priceRmb !== null ? toUsdPrice(priceRmb, exchangeRate) : null
+
+          const price = priceMin
           const originalPrice = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
           const translatedName = resolveProductDisplayName(
             product.name,
@@ -471,6 +590,9 @@ export const getHomeRecommendZones = async (input?: {
             shortDescription: product.shortDescription,
             status: product.status,
             price,
+            priceMin,
+            priceMax,
+            skuOptions,
             originalPrice,
             ratingAverage: product.ratingAverage,
             ratingCount: product.ratingCount,
@@ -530,6 +652,7 @@ export const getHomeRecommendZones = async (input?: {
           imageUrl: resolveCategoryCardImageUrl(
             category.imageUrl,
             category.bannerImageUrl,
+            (category as any).iconUrl,
             coverImageByCategoryId.get(category.id) || null,
           ),
           description: category.description,

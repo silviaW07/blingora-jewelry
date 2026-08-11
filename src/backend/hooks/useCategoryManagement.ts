@@ -55,6 +55,7 @@ import {
 } from '@/backend/actions/CategoryManagement';
 import { toast } from 'sonner';
 import { canEditCategoryPriceCoefficient } from '@/shared/categoryPricing';
+import { upload_image_file } from '@/tools/tools';
 
 export const STATUS_LABELS: Record<CategoryStatus, string> = {
   ACTIVE: '激活',
@@ -65,6 +66,76 @@ export const LEVEL_LABELS: Record<CategoryLevel, string> = {
   1: '一级分类',
   2: '二级分类',
 };
+
+export type CategoryDisplayRowKind = 'level1' | 'level2-child' | 'level2-standalone';
+
+export interface CategoryDisplayRow {
+  item: CategoryItem;
+  rowKind: CategoryDisplayRowKind;
+  parentCategoryId?: string;
+}
+
+function sortCategoryItems(items: CategoryItem[]): CategoryItem[] {
+  return [...items].sort((a, b) => {
+    if (b.sort_weight !== a.sort_weight) return b.sort_weight - a.sort_weight;
+    return b.created_at.localeCompare(a.created_at);
+  });
+}
+
+export function buildCategoryDisplayRows(
+  list: CategoryItem[],
+  expandedCategoryIds: string[],
+  useTreeView: boolean,
+): CategoryDisplayRow[] {
+  if (!useTreeView) {
+    return list.map(item => ({
+      item,
+      rowKind: item.level === 1 ? 'level1' : 'level2-standalone',
+    }));
+  }
+
+  const level1Ids = new Set(
+    list.filter(item => item.level === 1).map(item => item.category_id),
+  );
+  const childrenByParent = new Map<string, CategoryItem[]>();
+
+  for (const item of list) {
+    if (item.level === 2 && item.parent_id && level1Ids.has(item.parent_id)) {
+      const siblings = childrenByParent.get(item.parent_id) ?? [];
+      siblings.push(item);
+      childrenByParent.set(item.parent_id, siblings);
+    }
+  }
+
+  for (const children of childrenByParent.values()) {
+    sortCategoryItems(children);
+  }
+
+  const rows: CategoryDisplayRow[] = [];
+  const level1Items = sortCategoryItems(list.filter(item => item.level === 1));
+
+  for (const l1 of level1Items) {
+    rows.push({ item: l1, rowKind: 'level1' });
+    const children = childrenByParent.get(l1.category_id) ?? [];
+    if (expandedCategoryIds.includes(l1.category_id) && children.length > 0) {
+      for (const child of children) {
+        rows.push({
+          item: child,
+          rowKind: 'level2-child',
+          parentCategoryId: l1.category_id,
+        });
+      }
+    }
+  }
+
+  for (const item of list) {
+    if (item.level === 2 && (!item.parent_id || !level1Ids.has(item.parent_id))) {
+      rows.push({ item, rowKind: 'level2-standalone' });
+    }
+  }
+
+  return rows;
+}
 
 export const GROUP_TYPE_LABELS: Record<KeywordGroupType, string> = {
   BRAND: '品牌类',
@@ -241,6 +312,10 @@ export interface CategoryManagementState {
   list: CategoryItem[];
   total: number;
   isLoading: boolean;
+  /** 分类主图上传中：用于在表格单元格展示遮罩 */
+  uploadingMainImageCategoryId: string | null;
+  /** 分类详情抽屉里主图上传中：用于在预览区域展示遮罩 */
+  isUploadingFormMainImage: boolean;
   page: number;
   pageSize: number;
   totalPages: number;
@@ -251,6 +326,9 @@ export interface CategoryManagementState {
   /** 表格区前端名称/slug 模糊过滤（不触发后端查询） */
   nameFilterInput: string;
   filteredList: CategoryItem[];
+  useCategoryTreeView: boolean;
+  expandedCategoryIds: string[];
+  categoryDisplayRows: CategoryDisplayRow[];
   categoryId: string | null;
   inlineNameEditingId: string | null;
   inlineNameValue: string;
@@ -333,12 +411,17 @@ export interface CategoryManagementHandlers {
   handleInlineWeightBlur: (item: CategoryItem) => Promise<void>;
   handleInlineCoefficientChange: (categoryId: string, value: string) => void;
   handleInlineCoefficientBlur: (item: CategoryItem) => Promise<void>;
-  onLevel1DragStart: (index: number) => void;
-  onLevel1DragEnter: (index: number) => void;
+  onLevel1DragStart: (categoryId: string) => void;
+  onLevel1DragEnter: (categoryId: string) => void;
   onLevel1DragEnd: () => Promise<void>;
+  toggleCategoryExpanded: (categoryId: string) => void;
   setDeleteItem: (item: CategoryItem | null) => void;
   confirmDelete: () => Promise<void>;
   navigateToDetail: (categoryId: string) => void;
+  /** 分类主图拖拽/本地上传（更新 category.image_url） */
+  uploadCategoryMainImageFile: (item: CategoryItem, file: File) => Promise<void>;
+  /** 分类详情抽屉里：拖拽/本地上传主图（更新 formData.image_url） */
+  uploadFormMainImageFile: (file: File) => Promise<void>;
   openPosterDrawer: (item: CategoryItem) => void;
   closePosterDrawer: () => void;
   addPosterItem: () => void;
@@ -657,9 +740,12 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
   const [isApplyingKeywords, setIsApplyingKeywords] = useState(false);
   const [keywordSearchInput, setKeywordSearchInput] = useState('');
   const [batchFeedback, setBatchFeedback] = useState<BatchActionFeedback | null>(null);
-  const level1DragFromIndex = useRef<number | null>(null);
-  const level1DragOverIndex = useRef<number | null>(null);
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
+  const level1DragFromId = useRef<string | null>(null);
+  const level1DragOverId = useRef<string | null>(null);
   const isSavingLevel1Sort = useRef(false);
+  const [uploadingMainImageCategoryId, setUploadingMainImageCategoryId] = useState<string | null>(null);
+  const [isUploadingFormMainImage, setIsUploadingFormMainImage] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -781,6 +867,15 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
       return name.includes(query) || slug.includes(query);
     });
   }, [list, nameFilterInput]);
+
+  const useCategoryTreeView = levelFilter === 'ALL'
+    && !nameFilterInput.trim()
+    && !activeKeyword.trim();
+
+  const categoryDisplayRows = useMemo(
+    () => buildCategoryDisplayRows(filteredList, expandedCategoryIds, useCategoryTreeView),
+    [filteredList, expandedCategoryIds, useCategoryTreeView],
+  );
 
   const openCreateDrawer = (level: CategoryLevel = 1, parentId: string | null = null) => {
     setEditingId(null);
@@ -1013,35 +1108,35 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     }
   };
 
-  const onLevel1DragStart = (index: number) => {
-    const item = list[index];
+  const onLevel1DragStart = (categoryId: string) => {
+    const item = list.find(entry => entry.category_id === categoryId);
     if (!item || item.level !== 1) return;
-    level1DragFromIndex.current = index;
+    level1DragFromId.current = categoryId;
   };
 
-  const onLevel1DragEnter = (index: number) => {
-    const item = list[index];
+  const onLevel1DragEnter = (categoryId: string) => {
+    const item = list.find(entry => entry.category_id === categoryId);
     if (!item || item.level !== 1) return;
-    level1DragOverIndex.current = index;
+    level1DragOverId.current = categoryId;
   };
 
   const onLevel1DragEnd = async () => {
-    const fromIndex = level1DragFromIndex.current;
-    const toIndex = level1DragOverIndex.current;
-    level1DragFromIndex.current = null;
-    level1DragOverIndex.current = null;
+    const fromId = level1DragFromId.current;
+    const toId = level1DragOverId.current;
+    level1DragFromId.current = null;
+    level1DragOverId.current = null;
 
     if (
-      fromIndex === null ||
-      toIndex === null ||
-      fromIndex === toIndex ||
+      fromId === null ||
+      toId === null ||
+      fromId === toId ||
       isSavingLevel1Sort.current
     ) {
       return;
     }
 
-    const fromItem = list[fromIndex];
-    const toItem = list[toIndex];
+    const fromItem = list.find(entry => entry.category_id === fromId);
+    const toItem = list.find(entry => entry.category_id === toId);
     if (!fromItem || !toItem || fromItem.level !== 1 || toItem.level !== 1) return;
 
     const level1Items = list.filter(item => item.level === 1);
@@ -1306,7 +1401,60 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
   };
 
   const toggleSelectAllCurrentPage = (checked: boolean) => {
-    setSelectedCategoryIds(checked ? filteredList.map(item => item.category_id) : []);
+    setSelectedCategoryIds(checked ? categoryDisplayRows.map(row => row.item.category_id) : []);
+  };
+
+  const toggleCategoryExpanded = (categoryId: string) => {
+    setExpandedCategoryIds(prev => (
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    ));
+  };
+
+  const uploadCategoryMainImageFile = async (item: CategoryItem, file: File) => {
+    if (!item?.category_id) return;
+    setUploadingMainImageCategoryId(item.category_id);
+    try {
+      const uploadedUrl = await upload_image_file(file);
+
+      await updateCategory({
+        category_id: item.category_id,
+        category_name: item.category_name,
+        category_slug: item.category_slug || null,
+        parent_id: item.parent_id,
+        level: item.level,
+        image_url: uploadedUrl,
+        banner_image_url: item.category_kind === 'BRAND' ? null : (item.banner_image_url || null),
+        description: item.description || null,
+        sort_weight: item.sort_weight,
+        status: item.status,
+        category_kind: item.category_kind,
+        brand_keywords: item.brand_keywords || [],
+        price_coefficient: item.price_coefficient ?? null,
+        category_display_config: item.category_display_config,
+      } as UpdateCategoryInput);
+
+      toast.success('分类主图已更新');
+      await loadData(page, activeKeyword, status, levelFilter);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUploadingMainImageCategoryId(null);
+    }
+  };
+
+  const uploadFormMainImageFile = async (file: File) => {
+    setIsUploadingFormMainImage(true);
+    try {
+      const uploadedUrl = await upload_image_file(file);
+      handleFormChange('image_url', uploadedUrl);
+      toast.success('主图已上传');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsUploadingFormMainImage(false);
+    }
   };
 
   const handleBatchDelete = async () => {
@@ -1802,6 +1950,8 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     list,
     total,
     isLoading,
+    uploadingMainImageCategoryId,
+    isUploadingFormMainImage,
     page,
     pageSize,
     totalPages,
@@ -1811,6 +1961,9 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     levelFilter,
     nameFilterInput,
     filteredList,
+    useCategoryTreeView,
+    expandedCategoryIds,
+    categoryDisplayRows,
     categoryId,
     inlineNameEditingId,
     inlineNameValue,
@@ -1896,6 +2049,9 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     onLevel1DragStart,
     onLevel1DragEnter,
     onLevel1DragEnd,
+    toggleCategoryExpanded,
+    uploadCategoryMainImageFile,
+    uploadFormMainImageFile,
     setDeleteItem,
     confirmDelete,
     navigateToDetail,

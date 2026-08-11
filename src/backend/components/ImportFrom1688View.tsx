@@ -170,7 +170,7 @@ export const ImportFrom1688View = ({
                     <ClipboardPaste className="w-4 h-4 text-primary" data-api-unique-id='importfrom1688view-rd37286c632c0fb06-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' />
                     表格导入商品
                   </CardTitle>
-                  <CardDescription data-api-unique-id='importfrom1688view-r7bbf29ec6efe974f-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>固定 9 列（不含 SKU 映射）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量。Excel 无 SKU 列可直接导入；系统按产品编号合并 SPU，并自动生成 SKU。预览不含图片列；确认后进入待上传区再上传多图。颜色/规格可用逗号分隔。</CardDescription>
+                  <CardDescription data-api-unique-id='importfrom1688view-r7bbf29ec6efe974f-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>固定列（不含 SKU 映射）：产品编号、产品价格、名称、品牌、供应商、类目、颜色、规格、重量；可选「图片 / 详情」。Excel 无 SKU 列可直接导入；系统按产品编号合并 SPU，并自动生成 SKU。有「图片」列时会写入待上传主图/图集；否则可在待上传区补传。颜色/规格可用逗号分隔。</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6" data-api-unique-id='importfrom1688view-r1e23403c172d8136-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4" data-controller-name="表格导入来源入口" data-api-unique-id='importfrom1688view-r92f4322b74036c38-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
@@ -212,7 +212,7 @@ export const ImportFrom1688View = ({
                   <Alert data-api-unique-id='importfrom1688view-r2995a2db820c0b94-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
                     <Info className="w-4 h-4" data-api-unique-id='importfrom1688view-r944b95ccbf798dbf-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View' />
                     <AlertTitle data-api-unique-id='importfrom1688view-r238a6420e84e1348-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>导入说明</AlertTitle>
-                    <AlertDescription data-api-unique-id='importfrom1688view-r45cfcbcfde6bbd3d-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>Excel/CSV 会按工作表解析。图片请在「确认创建商品」后，到待上传条目列表中点击「上传/编辑图片」。</AlertDescription>
+                    <AlertDescription data-api-unique-id='importfrom1688view-r45cfcbcfde6bbd3d-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>Excel/CSV 会按工作表解析。「图片」列会写入待上传主图；没有图片列时，可在待上传列表点「上传/编辑图片」补传。</AlertDescription>
                   </Alert>
 
                   <div className="flex flex-wrap gap-3" data-api-unique-id='importfrom1688view-r0dd97b4b5539551e-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>
