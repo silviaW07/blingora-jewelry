@@ -593,32 +593,14 @@ export const useProductDetail = (): {
     const sourceSku = product.skus.find((item) => item.id === skuId)
     if (!sourceSku) return
 
-    // 有颜色+尺码时必须先选颜色；仅颜色商品点某一行即可带上该颜色
-    let colorValue = manualColorValue
-    if (colorAttribute && !String(colorValue || '').trim()) {
-      if (!sizeAttribute) {
-        const fromSku =
-          sourceSku.attributeJson?.find((attr) => attr.name === colorAttribute.name)?.value || null
-        if (fromSku) {
-          colorValue = fromSku
-          setManualColorValue(fromSku)
-          if (sourceSku.imageUrl) setActiveImage(sourceSku.imageUrl)
-        }
-      }
-      if (!String(colorValue || '').trim()) {
-        toast.error('Please select a color')
-        triggerSelectionHighlight({ color: true, size: false })
-        return
-      }
+    // 有颜色规格时必须先选颜色
+    if (colorAttribute && !String(manualColorValue || '').trim()) {
+      toast.error('Please select a color')
+      triggerSelectionHighlight({ color: true, size: false })
+      return
     }
 
-    const resolved =
-      colorValue && colorAttribute
-        ? (() => {
-            const matched = resolveSkuForColorAndSize(sourceSku, colorValue)
-            return { sku: matched, colorValue }
-          })()
-        : { sku: sourceSku, colorValue }
+    const resolved = resolveRowSku(sourceSku)
     const sku = resolved.sku
     const current = skuQuantitiesRef.current[sku.id] ?? skuQuantities[sku.id] ?? 0
     const moq = resolveSkuMinOrderQty({
