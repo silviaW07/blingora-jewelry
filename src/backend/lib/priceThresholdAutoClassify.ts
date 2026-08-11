@@ -7,8 +7,11 @@
  * - Product under L1 Jewelry/饰品 + min sell USD <= 3 → relate tag "Below 3 usd" (L1 or L2)
  */
 import { randomUUID } from 'crypto'
-// NOTE: price-threshold rules work in USD, but some earlier implementations treated DB price as CNY.
-// Store/consume values consistently as USD to avoid double-conversion (e.g. US$4.xx -> US$0.xx).
+import {
+  DEFAULT_USD_EXCHANGE_RATE,
+  getUsdExchangeRate,
+  toUsdFromCny,
+} from '@/shared/exchangeRate'
 import { slugifyCategoryName } from '@/shared/categorySlug'
 
 export const BELOW13_USD_CATEGORY_NAME = 'below13 usd'
@@ -168,29 +171,32 @@ export function productBelongsToL1(
   return false
 }
 
+/**
+ * Min USD for threshold rules (still compared as USD ≤13 / ≤3 — not CNY thresholds).
+ * Catalog SKU/cost amounts are stored in CNY; convert once (same as admin USD column)
+ * then compare. Do not treat raw CNY as USD.
+ */
 export function resolveProductMinUsdPrice(
   product: {
     skus?: Array<{ price?: unknown }>
     costPrice?: unknown
     priceCoefficient?: unknown
   },
+  usdExchangeRate: number = DEFAULT_USD_EXCHANGE_RATE,
 ): number | null {
   const skuPrices = (product.skus || [])
     .map((sku) => toNumber(sku.price))
     .filter((n): n is number => n !== null && n >= 0)
-  let minUsd: number | null = null
+  let minCny: number | null = null
   if (skuPrices.length > 0) {
-    // productsku.price is expected to already be USD.
-    minUsd = Math.min(...skuPrices)
+    minCny = Math.min(...skuPrices)
   } else {
     const cost = toNumber(product.costPrice)
     const coeff = toNumber(product.priceCoefficient) ?? 2
-    // Fallback when SKU prices are missing:
-    // product.costPrice is also treated as USD in this system.
-    if (cost !== null && cost >= 0) minUsd = cost * coeff
+    if (cost !== null && cost >= 0) minCny = cost * coeff
   }
-  if (minUsd === null) return null
-  return minUsd
+  if (minCny === null) return null
+  return toUsdFromCny(minCny, usdExchangeRate)
 }
 
 async function uniqueCategorySlug(db: DbLike, baseName: string): Promise<string> {
@@ -388,7 +394,13 @@ export async function syncProductPriceThresholdRelations(
   if (!product) return empty
 
   const categoryMap = options?.categoryMap ?? (await loadCategoryMap(db))
-  const minUsd = resolveProductMinUsdPrice(product)
+  let usdExchangeRate = DEFAULT_USD_EXCHANGE_RATE
+  try {
+    usdExchangeRate = await getUsdExchangeRate(db as any, { ttlMs: 60_000 })
+  } catch {
+    usdExchangeRate = DEFAULT_USD_EXCHANGE_RATE
+  }
+  const minUsd = resolveProductMinUsdPrice(product, usdExchangeRate)
   const relationCategoryIds = (product.relationCategories || []).map(
     (rel: { categoryId: string }) => rel.categoryId,
   )
