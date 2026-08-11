@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { RefreshCw, PlusCircle, LayoutGrid, ExternalLink, AlertCircle, Save, Trash2, ChevronLeft, ChevronRight, Info, Link2, TableProperties, PencilLine, ClipboardPaste, Upload, ImagePlus, FileSpreadsheet, WandSparkles } from 'lucide-react';
+import { RefreshCw, PlusCircle, LayoutGrid, ExternalLink, AlertCircle, Save, Trash2, ChevronLeft, ChevronRight, Info, Link2, TableProperties, PencilLine, ClipboardPaste, Upload, ImagePlus, FileSpreadsheet, WandSparkles, Eraser } from 'lucide-react';
 import type { ImportTaskStatusType } from '@/backend/actions/ImportFrom1688';
 import { ProductManagement } from '@/backend/route-params';
 import EditableImg from '@/@base/EditableImg';
@@ -571,11 +571,23 @@ export const ImportFrom1688View = ({
                                         </PreviewableThumb>
                                       </div>
                                       <div className="flex flex-wrap gap-2">
-                                        {(state.activeItemDetails.item_galleryUrls || []).map((url, imageIndex) => (
-                                          <div key={`${url}-${imageIndex}`} className="relative h-14 w-14 overflow-hidden rounded border bg-muted">
-                                            <PreviewableThumb src={url} alt={`${state.editForm.name || '商品图片'} ${imageIndex + 1}`} className="block h-full w-full">
-                                              <EditableImg propKey={`edit-gallery-${imageIndex}`} src={url} keywords={url} className="h-full w-full object-cover" />
-                                            </PreviewableThumb>
+                                        {(state.activeItemDetails.item_galleryUrls || []).map((url, imageIndex) => {
+                                          const isCurrent = (state.editForm.mainImageUrl || '') === url
+                                          return (
+                                          <div
+                                            key={`${url}-${imageIndex}`}
+                                            className={`relative h-14 w-14 overflow-hidden rounded border bg-muted ${isCurrent ? 'ring-2 ring-primary' : ''}`}
+                                          >
+                                            <button
+                                              type="button"
+                                              className="block h-full w-full"
+                                              title="设为当前主图"
+                                              onClick={() => handlers.handleSetCurrentPendingImage(state.activeItemDetails!.item_id, imageIndex)}
+                                            >
+                                              <PreviewableThumb src={url} alt={`${state.editForm.name || '商品图片'} ${imageIndex + 1}`} className="block h-full w-full pointer-events-none">
+                                                <EditableImg propKey={`edit-gallery-${imageIndex}`} src={url} keywords={url} className="h-full w-full object-cover" />
+                                              </PreviewableThumb>
+                                            </button>
                                             <button
                                               type="button"
                                               className="absolute right-0 top-0 z-10 flex h-4 w-4 items-center justify-center bg-black/70 text-[10px] text-white"
@@ -584,15 +596,17 @@ export const ImportFrom1688View = ({
                                               ×
                                             </button>
                                           </div>
-                                        ))}
+                                          )
+                                        })}
                                       </div>
+                                      <div className="flex flex-wrap gap-2">
                                       <label className="inline-flex">
                                         <Button
                                           type="button"
                                           variant="outline"
                                           size="sm"
                                           className="h-9 border-dashed"
-                                          disabled={state.pendingImageUploadingId === state.activeItemDetails.item_id}
+                                          disabled={state.pendingImageUploadingId === state.activeItemDetails.item_id || state.pendingWatermarkProcessingId === state.activeItemDetails.item_id}
                                           onClick={() => document.getElementById(`import1688-upload-${state.activeItemDetails!.item_id}`)?.click()}
                                         >
                                           <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
@@ -607,7 +621,26 @@ export const ImportFrom1688View = ({
                                           onChange={e => handlers.handleUploadPendingImages(state.activeItemDetails!.item_id, e)}
                                         />
                                       </label>
-                                      <p className="text-[11px] text-muted-foreground">支持一次选择多张；缩略图右上角 × 可删除单张。</p>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9"
+                                        disabled={
+                                          !state.editForm.mainImageUrl ||
+                                          state.pendingWatermarkProcessingId === state.activeItemDetails.item_id ||
+                                          state.pendingImageUploadingId === state.activeItemDetails.item_id ||
+                                          !!state.activeItemDetails.item_isPublished
+                                        }
+                                        onClick={() => handlers.handleProcessCurrentImageWatermark(state.activeItemDetails!.item_id)}
+                                      >
+                                        <Eraser className="mr-1.5 h-3.5 w-3.5" />
+                                        {state.pendingWatermarkProcessingId === state.activeItemDetails.item_id
+                                          ? '处理中...'
+                                          : '处理当前图'}
+                                      </Button>
+                                      </div>
+                                      <p className="text-[11px] text-muted-foreground">支持一次选择多张；缩略图可点选为当前主图；「处理当前图」会对右下角等区域做马赛克遮盖水印（无法无损去水印）。</p>
                                     </div>
 
                                     <div className="space-y-1.5" data-api-unique-id='importfrom1688view-r8414079f4c7d7655-s2347312783' data-api-unique-page-name='src/backend/components/ImportFrom1688View'>

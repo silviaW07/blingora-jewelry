@@ -173,6 +173,8 @@ export interface ImportFrom1688State {
   manualForm: ManualFormFields
   isSubmittingManual: boolean
   pendingImageUploadingId: string | null
+  /** 正在对主图做水印马赛克的待上传项 id */
+  pendingWatermarkProcessingId: string | null
   feedbackDialog: FeedbackDialogState
 }
 
@@ -207,6 +209,10 @@ export interface ImportFrom1688Handlers {
   handleCreateManualProduct: () => Promise<void>
   handleUploadPendingImages: (itemId: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   handleRemovePendingImage: (itemId: string, imageIndex: number) => Promise<void>
+  /** 对当前主图角区马赛克（覆盖 1688 水印），写回自建图床并更新图库 */
+  handleProcessCurrentImageWatermark: (itemId: string) => Promise<void>
+  /** 将图库缩略图设为当前主图（便于「处理当前图」） */
+  handleSetCurrentPendingImage: (itemId: string, imageIndex: number) => void
   dismissFeedbackDialog: () => void
 }
 
@@ -666,6 +672,7 @@ export const useImportFrom1688 = (
   const [manualForm, setManualForm] = useState<ManualFormFields>(emptyManualForm)
   const [isSubmittingManual, setIsSubmittingManual] = useState(false)
   const [pendingImageUploadingId, setPendingImageUploadingId] = useState<string | null>(null)
+  const [pendingWatermarkProcessingId, setPendingWatermarkProcessingId] = useState<string | null>(null)
 
   const [currentTask, setCurrentTask] = useState<PendingImportQueueTaskSummary | null>(null)
   const [currentItems, setCurrentItems] = useState<PendingImportItemRecord[]>([])
@@ -1292,6 +1299,61 @@ export const useImportFrom1688 = (
     }
   }
 
+  const handleSetCurrentPendingImage = (itemId: string, imageIndex: number) => {
+    const item = currentItems.find(row => row.item_id === itemId)
+    const gallery = item?.item_galleryUrls?.length
+      ? item.item_galleryUrls
+      : (item?.item_mainImageUrl || item?.item_parsedMainImageUrl
+        ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
+        : [])
+    const url = gallery[imageIndex]
+    if (!url) return
+    setEditForm(prev => ({ ...prev, mainImageUrl: url }))
+  }
+
+  const handleProcessCurrentImageWatermark = async (itemId: string) => {
+    const sourceUrl = String(editForm.mainImageUrl || '').trim()
+    if (!sourceUrl) {
+      toast.error('当前没有可处理的主图')
+      return
+    }
+    setPendingWatermarkProcessingId(itemId)
+    try {
+      const res = await fetch('/api/process-watermark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: sourceUrl }),
+      })
+      const payload = (await res.json().catch(() => null)) as {
+        code?: number
+        message?: string
+        data?: { url?: string; image_url?: string }
+      } | null
+      if (!res.ok || !payload || payload.code !== 200) {
+        throw new Error(payload?.message || `处理失败（HTTP ${res.status}）`)
+      }
+      const newUrl = String(payload.data?.url || payload.data?.image_url || '').trim()
+      if (!newUrl) throw new Error('处理成功但未返回新图地址')
+
+      const item = currentItems.find(row => row.item_id === itemId)
+      const current = [...(item?.item_galleryUrls?.length
+        ? item.item_galleryUrls
+        : (item?.item_mainImageUrl || item?.item_parsedMainImageUrl
+          ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
+          : []))]
+      const replaced = current.map((url) => (url === sourceUrl ? newUrl : url))
+      const galleryUrls = replaced.includes(newUrl) ? replaced : [newUrl, ...replaced]
+      await updatePendingImportGallery({ itemId, galleryUrls, mainImageUrl: newUrl })
+      setEditForm(prev => ({ ...prev, mainImageUrl: newUrl }))
+      await loadDetail(taskId, { silent: true })
+      toast.success('已对当前图角区做马赛克并写回')
+    } catch (error) {
+      toast.error((error as Error).message || '处理当前图失败')
+    } finally {
+      setPendingWatermarkProcessingId(null)
+    }
+  }
+
   const handleToggleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedItemIds(currentItems.filter(i => i.item_fetchStatus === 'COMPLETED' && !i.item_isPublished).map(i => i.item_id))
@@ -1507,6 +1569,7 @@ export const useImportFrom1688 = (
       manualForm,
       isSubmittingManual,
       pendingImageUploadingId,
+      pendingWatermarkProcessingId,
       feedbackDialog
     },
     handlers: {
@@ -1540,6 +1603,8 @@ export const useImportFrom1688 = (
       handleCreateManualProduct,
       handleUploadPendingImages,
       handleRemovePendingImage,
+      handleProcessCurrentImageWatermark,
+      handleSetCurrentPendingImage,
       dismissFeedbackDialog
     }
   }

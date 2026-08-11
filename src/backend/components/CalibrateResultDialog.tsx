@@ -1,8 +1,9 @@
 'use client'
 
+import { useMemo, useState, useEffect } from 'react'
 import { Badge, Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/backend/components/ui'
 import type { CalibrateResultItem, SelectOption } from '@/backend/actions/ProductManagement'
-import { Tags, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Tags, X } from 'lucide-react'
 
 export type CalibrateDraftItem = {
   id: string
@@ -31,10 +32,187 @@ type Props = {
   onSave: () => void
 }
 
+type CategoryTreeNode = {
+  option: SelectOption
+  children: CategoryTreeNode[]
+}
+
+function plainLabel(label: string) {
+  return String(label || '').replace(/^[　└\s]+/, '')
+}
+
+function buildCategoryTree(options: SelectOption[]): CategoryTreeNode[] {
+  const nodes = new Map<string, CategoryTreeNode>()
+  const list = Array.isArray(options) ? options : []
+  for (const option of list) {
+    nodes.set(option.value, { option, children: [] })
+  }
+
+  const roots: CategoryTreeNode[] = []
+  for (const option of list) {
+    const node = nodes.get(option.value)!
+    const parentId = option.parent_id || null
+    if (parentId && nodes.has(parentId)) {
+      nodes.get(parentId)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  return roots
+}
+
+function collectExpandDefaults(
+  tree: CategoryTreeNode[],
+  linkedIds: string[],
+): Set<string> {
+  const linked = new Set(linkedIds)
+  const expanded = new Set<string>()
+  for (const root of tree) {
+    const childHit = root.children.some((c) => linked.has(c.option.value))
+    if (childHit || linked.has(root.option.value) || root.children.length <= 6) {
+      expanded.add(root.option.value)
+    }
+  }
+  // Always expand at least first level-1 with children so UI isn't empty-looking
+  if (expanded.size === 0) {
+    const firstWithKids = tree.find((n) => n.children.length > 0)
+    if (firstWithKids) expanded.add(firstWithKids.option.value)
+  }
+  return expanded
+}
+
 function kindLabel(kind: string) {
   if (kind === 'primary') return '主'
   if (kind === 'brand') return '品牌'
   return '关联'
+}
+
+function CategoryPickTree({
+  itemId,
+  linkedCategoryIds,
+  primaryCategoryId,
+  categoryOptions,
+  onToggleCategory,
+}: {
+  itemId: string
+  linkedCategoryIds: string[]
+  primaryCategoryId: string | null
+  categoryOptions: SelectOption[]
+  onToggleCategory: (itemId: string, categoryId: string, checked: boolean) => void
+}) {
+  const tree = useMemo(() => buildCategoryTree(categoryOptions), [categoryOptions])
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() =>
+    collectExpandDefaults(tree, linkedCategoryIds),
+  )
+
+  useEffect(() => {
+    setExpandedIds(collectExpandDefaults(tree, linkedCategoryIds))
+    // Reset fold state when options or this draft's links change meaningfully
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-seed when tree identity / draft id set changes
+  }, [tree, itemId])
+
+  const toggleExpand = (categoryId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(categoryId)) next.delete(categoryId)
+      else next.add(categoryId)
+      return next
+    })
+  }
+
+  const expandAll = () => {
+    setExpandedIds(new Set(tree.filter((n) => n.children.length > 0).map((n) => n.option.value)))
+  }
+
+  const collapseAll = () => setExpandedIds(new Set())
+
+  if (categoryOptions.length === 0) {
+    return <span className="text-xs text-slate-400">类目列表加载中…</span>
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          全部可选类目（一级可折叠；勾选即加入）
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button
+            type="button"
+            className="text-[10px] text-sky-700 hover:underline"
+            onClick={expandAll}
+          >
+            全部展开
+          </button>
+          <span className="text-[10px] text-slate-300">|</span>
+          <button
+            type="button"
+            className="text-[10px] text-sky-700 hover:underline"
+            onClick={collapseAll}
+          >
+            全部折叠
+          </button>
+        </div>
+      </div>
+      {tree.map((node) => {
+        const hasChildren = node.children.length > 0
+        const expanded = expandedIds.has(node.option.value)
+        const checked = linkedCategoryIds.includes(node.option.value)
+        return (
+          <div key={node.option.value} className="space-y-0.5">
+            <div className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/80">
+              {hasChildren ? (
+                <button
+                  type="button"
+                  className="inline-flex size-5 items-center justify-center rounded text-slate-500 hover:bg-slate-200/80"
+                  title={expanded ? '折叠二级类目' : '展开二级类目'}
+                  onClick={() => toggleExpand(node.option.value)}
+                >
+                  {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                </button>
+              ) : (
+                <span className="inline-block size-5" />
+              )}
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-xs text-slate-800">
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(v) => onToggleCategory(itemId, node.option.value, !!v)}
+                />
+                <span className="truncate font-medium">{plainLabel(node.option.label)}</span>
+                {hasChildren ? (
+                  <span className="shrink-0 text-[10px] text-slate-400">({node.children.length})</span>
+                ) : null}
+                {checked && primaryCategoryId === node.option.value ? (
+                  <span className="text-[10px] font-semibold text-sky-600">{kindLabel('primary')}</span>
+                ) : null}
+              </label>
+            </div>
+            {hasChildren && expanded
+              ? node.children.map((child) => {
+                  const childChecked = linkedCategoryIds.includes(child.option.value)
+                  return (
+                    <label
+                      key={child.option.value}
+                      className="ml-6 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-slate-700 hover:bg-white/80"
+                    >
+                      <span className="w-3 text-slate-300">└</span>
+                      <Checkbox
+                        checked={childChecked}
+                        onCheckedChange={(v) => onToggleCategory(itemId, child.option.value, !!v)}
+                      />
+                      <span className="truncate">{plainLabel(child.option.label)}</span>
+                      {childChecked && primaryCategoryId === child.option.value ? (
+                        <span className="text-[10px] font-semibold text-sky-600">{kindLabel('primary')}</span>
+                      ) : null}
+                    </label>
+                  )
+                })
+              : null}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export default function CalibrateResultDialog({
@@ -51,7 +229,7 @@ export default function CalibrateResultDialog({
 }: Props) {
   const labelOf = (id: string, item?: CalibrateDraftItem) =>
     item?.categoryNames?.[id] ||
-    categoryOptions.find(o => o.value === id)?.label?.replace(/^[　└\s]+/, '') ||
+    categoryOptions.find((o) => o.value === id)?.label?.replace(/^[　└\s]+/, '') ||
     id
 
   return (
@@ -90,7 +268,7 @@ export default function CalibrateResultDialog({
             {drafts.length === 0 ? (
               <p className="text-sm text-slate-500 py-8 text-center">暂无校准结果</p>
             ) : (
-              drafts.map(item => (
+              drafts.map((item) => (
                 <div
                   key={item.id}
                   className="rounded-xl border border-slate-200 bg-white p-4 space-y-3"
@@ -130,12 +308,11 @@ export default function CalibrateResultDialog({
                     ) : null}
                   </div>
 
-                  {/* 已选类目芯片：点击 × 移除；点击芯片设为主类目 */}
                   <div className="flex flex-wrap gap-1.5">
                     {item.linkedCategoryIds.length === 0 ? (
                       <span className="text-xs text-slate-400">尚未绑定类目</span>
                     ) : (
-                      item.linkedCategoryIds.map(cid => {
+                      item.linkedCategoryIds.map((cid) => {
                         const isPrimary = cid === item.primaryCategoryId
                         return (
                           <button
@@ -153,7 +330,7 @@ export default function CalibrateResultDialog({
                             <span>{labelOf(cid, item)}</span>
                             <X
                               className="w-3 h-3 opacity-60 hover:opacity-100"
-                              onClick={e => {
+                              onClick={(e) => {
                                 e.stopPropagation()
                                 onToggleCategory(item.id, cid, false)
                               }}
@@ -164,40 +341,21 @@ export default function CalibrateResultDialog({
                     )}
                   </div>
 
-                  {/* 全量类目勾选：方便补 below3 usd / normal quality 等 */}
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-3 max-h-72 overflow-y-auto space-y-1.5">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                      全部可选类目（含一级，勾选即加入；可滚动查看）
-                    </div>
-                    {categoryOptions.length === 0 ? (
-                      <span className="text-xs text-slate-400">类目列表加载中…</span>
-                    ) : (
-                      categoryOptions.map(opt => {
-                        const checked = item.linkedCategoryIds.includes(opt.value)
-                        return (
-                          <label
-                            key={opt.value}
-                            className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer hover:bg-white/80 rounded px-1 py-0.5"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={v => onToggleCategory(item.id, opt.value, !!v)}
-                            />
-                            <span className="truncate">{opt.label}</span>
-                            {checked && item.primaryCategoryId === opt.value ? (
-                              <span className="text-[10px] text-sky-600 font-semibold">{kindLabel('primary')}</span>
-                            ) : null}
-                          </label>
-                        )
-                      })
-                    )}
+                  <div className="max-h-72 space-y-1.5 overflow-y-auto rounded-lg border border-dashed border-slate-200 bg-slate-50/70 p-3">
+                    <CategoryPickTree
+                      itemId={item.id}
+                      linkedCategoryIds={item.linkedCategoryIds}
+                      primaryCategoryId={item.primaryCategoryId}
+                      categoryOptions={categoryOptions}
+                      onToggleCategory={onToggleCategory}
+                    />
                   </div>
                 </div>
               ))
             )}
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t border-slate-100">
+          <DialogFooter className="flex-col gap-2 border-t border-slate-100 pt-2 sm:flex-row">
             <Button variant="ghost" className="flex-1 h-11" onClick={() => onOpenChange(false)} disabled={saving}>
               关闭
             </Button>
