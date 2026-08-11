@@ -3,6 +3,7 @@
 import React from 'react'
 import { DecorateFrame } from './DecorateFrame'
 import { useDecorateMode } from './DecorateContext'
+import { containsChinese } from '@/shared/productKeywordDictionary'
 
 type DecorateTextProps = {
   propKey: string
@@ -19,6 +20,26 @@ function normalizeHref(href?: string) {
   return value.length > 0 ? value : undefined
 }
 
+/**
+ * 店面仅 en/es：装修里若写了中文文案，正式态忽略，回退到 children（i18n/接口英文），
+ * 避免出现「View All」是英文、专区标题却是「流行饰品」。
+ * 装修编辑态仍显示原文，方便改回英文。
+ */
+function resolveDisplayText(
+  patchText: string | undefined,
+  children: React.ReactNode,
+  isDecorateMode: boolean,
+): React.ReactNode {
+  const hasPatch = typeof patchText === 'string' && patchText.length > 0
+  if (!hasPatch) {
+    return typeof children === 'string' || typeof children === 'number' ? String(children) : children
+  }
+  if (!isDecorateMode && containsChinese(patchText)) {
+    return typeof children === 'string' || typeof children === 'number' ? String(children) : children
+  }
+  return patchText
+}
+
 /** 静态文案可装修包装：装修模式可改字、样式与超链接，发布后本地持久化 */
 export function DecorateText({
   propKey,
@@ -32,12 +53,11 @@ export function DecorateText({
   const patch = getPatch(propKey)
   const isHidden = patch?.hidden === true
   const href = normalizeHref(patch?.href) || normalizeHref(defaultHref)
-  const text =
-    typeof patch?.text === 'string' && patch.text.length > 0
-      ? patch.text
-      : typeof children === 'string' || typeof children === 'number'
-        ? String(children)
-        : children
+  const text = resolveDisplayText(
+    typeof patch?.text === 'string' ? patch.text : undefined,
+    children,
+    isDecorateMode,
+  )
 
   const Tag = as as React.ElementType
   const mergedStyle: React.CSSProperties = {

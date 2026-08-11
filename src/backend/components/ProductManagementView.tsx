@@ -232,9 +232,9 @@ export const ProductManagementView = ({
     </div>
   );
 
-  // 待上传区第二排「操作功能区」：批量发布并上架 / 解析 / 批量删除 / 批量工具（改价·起订量·加后缀）
+  // 待上传批量操作：与商品列表共用顶部工具条位置，按 Tab 切换
   const pendingActionButtons = (
-    <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-rpendingactionrow-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+    <>
       <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" disabled={!hasPendingSelected || state.pendingImportPublishing || pendingParseActive} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
         <ArrowUpCircle className="w-4 h-4 mr-2" data-api-unique-id='productmanagementview-rpendingbulkpublishicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />{state.pendingImportPublishing ? '发布中...' : '批量发布并上架'}
       </Button>
@@ -277,7 +277,7 @@ export const ProductManagementView = ({
         {state.reclassifyRunning && state.activeTab === 'pending_imports' ? '校准中...' : '一键校准选中'}
       </Button>
       {activeSelectionCount > 0 && <span className="ml-2 text-sm text-muted-foreground font-medium" data-api-unique-id='productmanagementview-rpendingselcount-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary">{activeSelectionCount}</span> 项</span>}
-    </div>
+    </>
   );
 
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id='productmanagementview-r557b459a1eb090b6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
@@ -350,10 +350,12 @@ export const ProductManagementView = ({
         <div className="w-full max-w-none px-4 xl:px-6 py-6" data-api-unique-id='productmanagementview-rd2ea31f9da92c66c-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           <Card className="mb-6 border-primary/15 shadow-sm" data-controller-name="首页推荐关键词维护" data-api-unique-id='productmanagementview-r04a9fa5c77d23b6f-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           </Card>
-          {!isPendingTab && (
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4" data-api-unique-id='productmanagementview-rdbf826b6f43eda19-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
             <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-r4ec6b7a2733f5aa5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-              {<>
+              {isPendingTab ? (
+                pendingActionButtons
+              ) : (
+                <>
                 <Button variant="outline" size="sm" className="h-9 border-slate-200" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('ACTIVE', selectedProductIds)} data-api-unique-id='productmanagementview-r698d32f132f9413e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                   <ArrowUpCircle className="w-4 h-4 mr-2 text-emerald-600" data-api-unique-id='productmanagementview-r510343d934b6d95a-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量上架
                 </Button>
@@ -410,12 +412,12 @@ export const ProductManagementView = ({
                   <Languages className={`w-4 h-4 mr-2 ${state.spanishTitleBackfillRunning ? 'animate-pulse' : ''}`} />
                   {state.spanishTitleBackfillRunning ? '西语翻译中...' : '批量翻译西语标题'}
                 </Button>
-              </>}
-              {activeSelectionCount > 0 && <span className="ml-2 text-sm text-muted-foreground font-medium animate-in fade-in-0 slide-in-from-left-2" data-api-unique-id='productmanagementview-reed35d2c1c1b7d04-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary" data-api-unique-id='productmanagementview-r16c87a4a657b76eb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{activeSelectionCount}</span> 项</span>}
+                {activeSelectionCount > 0 && <span className="ml-2 text-sm text-muted-foreground font-medium animate-in fade-in-0 slide-in-from-left-2" data-api-unique-id='productmanagementview-reed35d2c1c1b7d04-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>已选择 <span className="text-primary" data-api-unique-id='productmanagementview-r16c87a4a657b76eb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{activeSelectionCount}</span> 项</span>}
+                </>
+              )}
             </div>
             {categoryNavTabs}
           </div>
-          )}
 
           {state.is1688NameSearch && <Alert className={`mb-4 ${showPublishedLandingNotice ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : showPendingLandingNotice ? 'border-sky-200 bg-sky-50 text-sky-900' : 'border-slate-200 bg-slate-50 text-slate-900'}`} data-api-unique-id='productmanagementview-r978079cc146d0d8e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <Sparkles className="h-4 w-4" data-api-unique-id='productmanagementview-r6b1dbe4c972f3645-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
@@ -570,12 +572,6 @@ export const ProductManagementView = ({
                   )}
                 </div>
               ) : null}
-
-              {/* 第二排：操作功能区 */}
-              {pendingActionButtons}
-
-              {/* 第三排：标签导航区（与商品列表页共享同一组导航按钮，保持视觉平行） */}
-              {categoryNavTabs}
 
               <Card className="border-none shadow-sm overflow-hidden" data-controller-name="待上传条目列表" data-api-unique-id='productmanagementview-r3adb9edc37c0cc17-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <CardContent className="p-0" data-api-unique-id='productmanagementview-rff81e6b750bd03f6-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
