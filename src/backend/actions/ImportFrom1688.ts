@@ -5137,7 +5137,10 @@ export async function loadAutoMatchSecondaryCategories(tx: any): Promise<AutoMat
       // 只用本类目同义词，不要继承父级 Bags 词——否则 Handbag/Backpack/wallet 会同时命中「包」
       const keywords = Array.from(
         new Set([
-          ...parseCategoryBrandKeywords(category.brandKeywordsJson),
+          ...parseCategoryBrandKeywords(category.brandKeywordsJson).filter((token) => {
+            const n = normalizeCategoryMatchText(token)
+            return n.length >= 2 && !['包', '袋', 'BAG', 'BAGS', '收纳', '收纳包', '卡包', '卡夹'].includes(n)
+          }),
           ...resolveCategorySynonyms(name),
         ]),
       )
@@ -5261,47 +5264,101 @@ const pickFirstNonBrandCategoryId = (
 }
 
 /**
+ * 过泛词：不能单独用来判定二级类目（详情里随处可见「包/收纳」）。
+ * 一级 Bags 仍可通过更长同义词命中。
+ */
+const GENERIC_CATEGORY_MATCH_TOKENS = new Set(
+  [
+    '包',
+    '袋',
+    '鞋',
+    '饰',
+    'bag',
+    'bags',
+    'set',
+    '套装',
+    '收纳',
+    '收纳包',
+    '卡包',
+    '卡夹',
+    '包挂',
+    '挂饰',
+  ].map((token) => normalizeCategoryMatchText(token)),
+)
+
+const isUsableCategoryMatchToken = (token: string, options?: { allowGeneric?: boolean }) => {
+  const normalized = normalizeCategoryMatchText(token)
+  if (!normalized) return false
+  if (normalized.length < 2) return false
+  if (!options?.allowGeneric && GENERIC_CATEGORY_MATCH_TOKENS.has(normalized)) return false
+  return true
+}
+
+/**
  * 按标题/详情是否包含二级类目名或其品牌关键词进行匹配（大小写不敏感）。
  * 多命中时：真实一级/二级商品类目优先于 Brand 货架；同档再按「最长命中词」降序。
  * 主分类（定价用）应取第一项非 Brand 命中，见 pickImportPricingTargetCategory。
  *
- * 品类收敛规则（避免「包」相关二级全勾）：
- * - 同一一级下多个二级同分/近分 → 判不准，只保留该一级
- * - 能明确胜出的二级 → 只保留该二级（一级由 expandLinkedCategoryIdsWithParents 补上）
+ * 品类收敛规则（避免 wallet/化妆包/Handbag 一堆乱绑）：
+ * - 商品二级类目默认只看标题，不用详情（详情常写「可放钱包/化妆包」）
+ * - 同一一级下多个二级近分 → 只保留该一级
+ * - 不同一级下仍残留多个二级 → 只保留全局最长命中的那一个（及其一级由 expand 补上）
  * - Brand 货架仍只保留最佳品牌命中
  */
 export function matchSecondaryCategoriesByTitle(
   title: string,
   categories: AutoMatchedSecondaryCategory[],
-  detailText?: string | null
+  detailText?: string | null,
 ): AutoMatchedSecondaryCategory[] {
-  const corpus = buildCategoryMatchCorpus(title, detailText)
-  if (!corpus) return []
+  const titleCorpus = buildCategoryMatchCorpus(title)
+  const brandCorpus = buildCategoryMatchCorpus(title, detailText)
+  if (!titleCorpus && !brandCorpus) return []
 
-  const scored = categories
-    .map(category => {
-      const tokens = [category.name, ...category.keywords]
-        .map(token => String(token || '').trim())
-        .filter(Boolean)
-      const matchedTokens = tokens.filter(token => containsCategoryMatchToken(corpus, token))
-      if (!matchedTokens.length) return null
-      const bestTokenLength = Math.max(
-        ...matchedTokens.map(token => normalizeCategoryMatchText(token).length),
-      )
-      return { category, bestTokenLength }
-    })
-    .filter((item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } => Boolean(item))
+  const scoreCategory = (
+    category: AutoMatchedSecondaryCategory,
+    corpus: string,
+    options?: { allowGeneric?: boolean },
+  ) => {
+    if (!corpus) return null
+    const allowGeneric = options?.allowGeneric || (category.level || 0) === 1
+    const tokens = [category.name, ...category.keywords]
+      .map((token) => String(token || '').trim())
+      .filter((token) => isUsableCategoryMatchToken(token, { allowGeneric }))
+    const matchedTokens = tokens.filter((token) => containsCategoryMatchToken(corpus, token))
+    if (!matchedTokens.length) return null
+    const bestTokenLength = Math.max(
+      ...matchedTokens.map((token) => normalizeCategoryMatchText(token).length),
+    )
+    return { category, bestTokenLength }
+  }
 
-  scored.sort(
+  const productScored = categories
+    .filter((category) => !isBrandParentSecondaryCategory(category))
+    .map((category) => scoreCategory(category, titleCorpus, { allowGeneric: (category.level || 0) === 1 }))
+    .filter(
+      (item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } =>
+        Boolean(item),
+    )
+
+  const brandScored = categories
+    .filter((category) => isBrandParentSecondaryCategory(category))
+    .map((category) => scoreCategory(category, brandCorpus, { allowGeneric: false }))
+    .filter(
+      (item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } =>
+        Boolean(item),
+    )
+
+  productScored.sort(
     (a, b) =>
-      Number(isBrandParentSecondaryCategory(a.category)) - Number(isBrandParentSecondaryCategory(b.category)) ||
       (b.category.level || 0) - (a.category.level || 0) ||
       b.bestTokenLength - a.bestTokenLength ||
       a.category.name.localeCompare(b.category.name, 'zh-CN'),
   )
-
-  const brandScored = scored.filter((item) => isBrandParentSecondaryCategory(item.category))
-  const productScored = scored.filter((item) => !isBrandParentSecondaryCategory(item.category))
+  brandScored.sort(
+    (a, b) =>
+      b.bestTokenLength - a.bestTokenLength ||
+      a.category.name.localeCompare(b.category.name, 'zh-CN'),
+  )
 
   const l1ByName = new Map<string, AutoMatchedSecondaryCategory>()
   for (const item of productScored) {
@@ -5309,7 +5366,6 @@ export function matchSecondaryCategoriesByTitle(
       l1ByName.set(normalizeCategoryMatchText(item.category.name), item.category)
     }
   }
-  // Also index L1s from full catalog so sibling-ambiguous groups can fall back to parent
   for (const category of categories) {
     if ((category.level || 0) === 1 && !isBrandParentSecondaryCategory(category)) {
       const key = normalizeCategoryMatchText(category.name)
@@ -5319,6 +5375,7 @@ export function matchSecondaryCategoriesByTitle(
 
   const l2Scored = productScored.filter((item) => (item.category.level || 2) >= 2)
   const refinedProduct: AutoMatchedSecondaryCategory[] = []
+  const refinedL2WithScore: Array<{ category: AutoMatchedSecondaryCategory; bestTokenLength: number }> = []
   const groups = new Map<string, typeof l2Scored>()
   for (const item of l2Scored) {
     const parentKey = normalizeCategoryMatchText(item.category.parentName) || `self:${item.category.id}`
@@ -5335,27 +5392,48 @@ export function matchSecondaryCategoriesByTitle(
           a.category.name.localeCompare(b.category.name, 'zh-CN'),
       )
       const best = group[0]
-      // 同分或只差 1 个字符长度的并列二级 → 视为无法判定，只挂一级
       const ambiguous = group.filter(
         (item) =>
           item.category.id !== best.category.id &&
           item.bestTokenLength >= Math.max(1, best.bestTokenLength - 1),
       )
-      if (ambiguous.length > 0 || group.length > 1 && group[1].bestTokenLength === best.bestTokenLength) {
+      if (ambiguous.length > 0 || (group.length > 1 && group[1].bestTokenLength === best.bestTokenLength)) {
         const l1 = l1ByName.get(parentKey)
         if (l1) refinedProduct.push(l1)
         continue
       }
-      refinedProduct.push(best.category)
+      refinedL2WithScore.push(best)
+    }
+
+    // 跨一级仍可能同时留下 wallet + Handbag：只留全局最长命中的一个二级
+    if (refinedL2WithScore.length > 1) {
+      refinedL2WithScore.sort(
+        (a, b) =>
+          b.bestTokenLength - a.bestTokenLength ||
+          a.category.name.localeCompare(b.category.name, 'zh-CN'),
+      )
+      const winner = refinedL2WithScore[0]
+      const nearTies = refinedL2WithScore.filter(
+        (item) =>
+          item.category.id !== winner.category.id &&
+          item.bestTokenLength >= Math.max(1, winner.bestTokenLength - 1),
+      )
+      if (nearTies.length > 0) {
+        const parentKey = normalizeCategoryMatchText(winner.category.parentName)
+        const l1 = parentKey ? l1ByName.get(parentKey) : null
+        if (l1) refinedProduct.push(l1)
+      } else {
+        refinedProduct.push(winner.category)
+      }
+    } else if (refinedL2WithScore.length === 1) {
+      refinedProduct.push(refinedL2WithScore[0].category)
     }
   } else {
-    // 没有二级命中：保留一级命中（Bags 等），方便运营手选二级
     for (const item of productScored) {
       if ((item.category.level || 0) === 1) refinedProduct.push(item.category)
     }
   }
 
-  // Brand：只保留最佳一个真实品牌
   const bestBrand = brandScored[0]?.category
   if (bestBrand) refinedProduct.push(bestBrand)
 

@@ -3949,7 +3949,8 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           ...(ownership?.linkedCategoryIds || [primaryCategoryId]),
           ...hits.map(item => item.id),
           ...(brandHit ? [brandHit.id] : []),
-          product.categoryId || '',
+          // 一键校准以本次标题命中为准，不再把旧主类目硬塞回来（否则 wallet/Handbag 旧脏数据清不掉）
+          primaryCategoryId || '',
         ])
         const linkedCategoryIds = await pruneNoBrandCatchAllLinks(prisma, linkedCategoryIdsRaw, {
           hasRealBrand: Boolean(brandHit),
@@ -4167,7 +4168,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
         const preservedCategoryIds = Array.from(
           new Set(
             [
-              ...(preview.matchedCategoryIds || []),
+              // 仅保留表格导入路径 / 当前主类目；不要保留旧的 matchedCategoryIds（常含误绑 wallet/化妆包）
               existingTargetId,
               previewTablePath?.primaryId,
               previewTablePath?.secondaryId,
@@ -4254,7 +4255,6 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
             : Promise.resolve([]),
         ])
         const matchedNames = Array.from(new Set([
-          ...(preview.matchedCategoryNames || []),
           ...preservedRows.map(r => r.name),
           ...(pricingTarget?.name ? [pricingTarget.name] : []),
           ...pricingHits.map(h => h.name),

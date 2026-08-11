@@ -29,47 +29,38 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   // —— 包 / Bags ——
   // Handbag / Crossbody：只用高信号词；泛词「包包/箱包」只挂在一级 Bags，避免所有二级一起命中
   {
-    names: ['Handbag', 'Handbags', 'Tote', '手提包'],
-    synonyms: [
-      '手提包',
-      '手提斜挎包',
-      '手袋',
-      '托特包',
-      '手拎包',
-      '手拿包',
-      '托特',
-      'tote',
-      'handbag',
-      'handbags',
-    ],
-  },
-  {
     names: ['Bags', 'Bag', '包'],
     synonyms: [
       '手提包',
       '手提斜挎包',
+      '单肩斜挎包',
+      '单肩腋下包',
       '斜挎包',
+      '单肩包',
+      '腋下包',
       '挎包',
       '手袋',
       '包包',
       '箱包',
       '女包',
       '包袋',
-      'bag',
       'bags',
     ],
   },
   { names: ['Backpack', 'Backpacks', '双肩包', '背包'], synonyms: ['双肩包', '背包', '书包', '旅行背包', 'backpack'] },
-  { names: ['Wallet', 'Wallets', '钱包'], synonyms: ['钱包', '钱夹', '卡包', '卡夹', '零钱包', '长款钱包', 'wallet'] },
+  { names: ['Wallet', 'Wallets', '钱包'], synonyms: ['钱包', '钱夹', '零钱包', '长款钱包', 'wallet'] },
   {
     names: ['Cosmetic Bag', 'Makeup Bag', '化妆包', 'coesmetic bag', 'cosmetic bag'],
-    synonyms: ['化妆包', '洗漱包', '收纳包', 'cosmetic bag', 'makeup bag'],
+    // 不用「收纳包」：详情文案常写收纳，会误绑到斜挎/单肩包
+    synonyms: ['化妆包', '洗漱包', 'cosmetic bag', 'makeup bag', 'coesmetic bag'],
   },
   {
     names: ['Crossbody Bag', 'Shoulder Bag', '斜挎包', '单肩包'],
     synonyms: [
       '斜挎包',
       '手提斜挎包',
+      '单肩斜挎包',
+      '单肩腋下包',
       '斜背包',
       '单肩包',
       '邮差包',
@@ -79,6 +70,11 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
       'crossbody',
       'shoulder bag',
     ],
+  },
+  {
+    // Handbag：不要用「手提斜挎包」（与斜挎类抢分）；手拿包留给 Clutch
+    names: ['Handbag', 'Handbags', 'Tote', '手提包'],
+    synonyms: ['手提包', '手袋', '托特包', '手拎包', '托特', 'tote', 'handbag', 'handbags'],
   },
   { names: ['Clutch', '手拿包'], synonyms: ['手拿包', '晚宴包', '手抓包', 'clutch'] },
 
