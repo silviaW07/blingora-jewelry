@@ -6443,7 +6443,8 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
             spec: attributes.map(attr => attr.value).join('/') || '默认规格',
             costPrice: mappedPrice,
             price: mappedPrice,
-            stock: 1,
+            // 表格无库存列：每 SKU 默认 1000（勿写 1，否则可用库存=SKU 个数）
+            stock: DEFAULT_AVAILABLE_STOCK,
             weightGrams,
             imageUrl: (colorKey && imageByColor.get(colorKey)) || imageByColor.get('') || galleryUrls[0] || '',
             attributes: attributes.length > 0 ? attributes : [{ name: '规格', value: '默认规格' }],
@@ -6634,7 +6635,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         coefficient: matchedCoefficient,
         goodsStatus: 'DRAFT' as any,
         minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
-        // B：真实库存优先（全 0 即缺货），缺省回落 1000
+        // 表格无库存列：每 SKU 已默认 1000，此处汇总供待上传区展示
         availableStock: resolveInitialStock(pricedSkuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0)),
         cnyPriceMin: sellMin,
         cnyPriceMax: sellMax,

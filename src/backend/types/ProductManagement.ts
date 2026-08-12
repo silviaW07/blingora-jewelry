@@ -450,6 +450,7 @@ import prisma from '@/tools/prisma'
 import { withResult, UserRole, requireRole } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { DEFAULT_PRICE_COEFFICIENT, resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
+import { DEFAULT_AVAILABLE_STOCK } from '@/shared/resolveInitialStock'
 import {
   createImportTask as createPendingImportTask,
   startParseTask as startPendingImportParseTask,
@@ -880,7 +881,7 @@ function buildDraftSku(row: BatchImportDraftRow): SkuItem {
     image_url: row.main_image_url || '',
     price,
     original_price: originalPrice,
-    stock: 1,
+    stock: DEFAULT_AVAILABLE_STOCK,
     attribute_json: [],
     weight_kg: row.weight_gram ? Number((row.weight_gram / 1000).toFixed(3)) : null,
     usd_display_price: toUsdDisplayPrice(price),
