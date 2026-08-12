@@ -416,7 +416,7 @@ export const HomeRecommendZoneManagementView = ({
                           </TableRow>
                         </TableHeader>
                         <TableBody data-api-unique-id="homerecommendzonemanagementview-r971356630b494bfd-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                          {state.drawerItems.map((item, index) => <TableRow key={`${item.entityId}-${index}`} draggable onDragStart={() => handlers.onDrawerItemDragStart(index)} onDragEnter={() => handlers.onDrawerItemDragEnter(index)} onDragEnd={() => { void handlers.onDrawerItemDragEnd(); }} onDragOver={e => e.preventDefault()} className="group h-12 cursor-grab active:cursor-grabbing" data-api-unique-id="homerecommendzonemanagementview-r287fd8a1a11e0b6c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" data-api-in-loop="1">
+                          {state.drawerItems.map((item, index) => <TableRow key={item.entityId} draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; handlers.onDrawerItemDragStart(index) }} onDragEnter={() => handlers.onDrawerItemDragEnter(index)} onDragEnd={() => { void handlers.onDrawerItemDragEnd(); }} onDragOver={e => e.preventDefault()} className="group h-12 cursor-grab active:cursor-grabbing" data-api-unique-id="homerecommendzonemanagementview-r287fd8a1a11e0b6c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" data-api-in-loop="1">
                               {state.drawerFormData.zoneType === 'PRODUCT' ? (
                                 <TableCell className="w-[40px]">
                                   {item.status === 'DRAFT' ? (

@@ -53,7 +53,7 @@ export type HomeRecommendZoneCachedRecord = Awaited<
     orderBy: [{ createdAt: 'asc' }]
     include: {
       items: {
-        orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }]
+        orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }]
         include: {
           product: {
             include: typeof productPricingInclude
@@ -112,7 +112,7 @@ export async function readHomeRecommendZonesWithCache(): Promise<HomeRecommendZo
       items: {
         orderBy: [
           { sortWeight: 'desc' },
-          { createdAt: 'asc' },
+          { createdAt: 'desc' },
         ],
         include: {
           product: {

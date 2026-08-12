@@ -316,7 +316,7 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
         items: {
           orderBy: [
             { sortWeight: 'desc' },
-            { createdAt: 'asc' }
+            { createdAt: 'desc' },
           ],
           include: {
             product: true,
@@ -603,7 +603,7 @@ export const duplicateRecommendZone = requireRole([UserRole.ADMIN])(
       include: {
         boundCollection: true,
         items: {
-          orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],
+          orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }],
         }
       }
     })
@@ -745,20 +745,27 @@ export const batchUpdateZoneItemSortWeight = requireRole([UserRole.ADMIN])(
     })
     if (!zone) throw new Error('该推荐专区不存在')
 
-    await prisma.$transaction(
-      updates.map(u => {
+    await prisma.$transaction(async (tx) => {
+      for (const u of updates) {
+        const weight = Number(u.sortWeight)
         if (zone.zoneType === 'PRODUCT') {
-          return prisma.homeRecommendZoneItem.updateMany({
+          await tx.homeRecommendZoneItem.updateMany({
             where: { zoneId, productId: u.entityId },
-            data: { sortWeight: Number(u.sortWeight) },
+            data: { sortWeight: weight },
+          })
+          // Coming / 列表同序：商品自身 sortWeight 与专区明细对齐
+          await tx.product.update({
+            where: { id: u.entityId },
+            data: { sortWeight: weight },
+          })
+        } else {
+          await tx.homeRecommendZoneItem.updateMany({
+            where: { zoneId, categoryId: u.entityId },
+            data: { sortWeight: weight },
           })
         }
-        return prisma.homeRecommendZoneItem.updateMany({
-          where: { zoneId, categoryId: u.entityId },
-          data: { sortWeight: Number(u.sortWeight) },
-        })
-      }),
-    )
+      }
+    })
 
     invalidateHomeRecommendZoneCache()
   })
@@ -965,6 +972,8 @@ export const createDraftDisplayProducts = requireRole([UserRole.ADMIN])(
             productCode: ids.productCode,
             source: 'MANUAL',
             status: 'DRAFT',
+            // 与专区明细同权：越新越大，前台 Coming / 专区同序
+            sortWeight: maxSort + (images.length - index) * 10,
             mainImageUrl: image.url,
             galleryJson: [{ url: image.url, sort: 1 }],
             shortDescription: '快速发图展示商品',

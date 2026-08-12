@@ -176,6 +176,9 @@ export const useHomeRecommendZoneManagement = (): {
   const dragOverItemIndex = useRef<number | null>(null)
   const drawerDragItemIndex = useRef<number | null>(null)
   const drawerDragOverItemIndex = useRef<number | null>(null)
+  const drawerDragDirty = useRef(false)
+  const drawerItemsRef = useRef(drawerItems)
+  drawerItemsRef.current = drawerItems
 
   // --- 列表逻辑 ---
   const fetchList = useCallback(async () => {
@@ -210,7 +213,15 @@ export const useHomeRecommendZoneManagement = (): {
         isActive: data.isActive,
         collectionName: data.collectionName,
       })
-      setDrawerItems(data.items)
+      // 权重高优先；同权时最新上新在最上
+      const sortedItems = [...data.items].sort((a, b) => {
+        const weightDiff = (b.sortWeight || 0) - (a.sortWeight || 0)
+        if (weightDiff !== 0) return weightDiff
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return bTime - aTime
+      })
+      setDrawerItems(sortedItems)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '获取详情失败')
       setDrawerOpen(false)
@@ -479,24 +490,36 @@ export const useHomeRecommendZoneManagement = (): {
     },
     onDrawerItemDragStart: (index) => {
       drawerDragItemIndex.current = index
+      drawerDragOverItemIndex.current = index
+      drawerDragDirty.current = false
     },
     onDrawerItemDragEnter: (index) => {
+      const fromIndex = drawerDragItemIndex.current
       drawerDragOverItemIndex.current = index
+      if (fromIndex === null || fromIndex === index) return
+      // 拖入时立刻换位，列表马上跟着动（松手才落库）
+      setDrawerItems((prev) => {
+        if (fromIndex < 0 || fromIndex >= prev.length || index < 0 || index >= prev.length) {
+          return prev
+        }
+        const next = [...prev]
+        const [moved] = next.splice(fromIndex, 1)
+        next.splice(index, 0, moved)
+        drawerDragItemIndex.current = index
+        drawerDragDirty.current = true
+        return next
+      })
     },
     onDrawerItemDragEnd: async () => {
-      const fromIndex = drawerDragItemIndex.current
-      const toIndex = drawerDragOverItemIndex.current
+      const dirty = drawerDragDirty.current
       drawerDragItemIndex.current = null
       drawerDragOverItemIndex.current = null
+      drawerDragDirty.current = false
+      if (!dirty) return
 
-      if (fromIndex === null || toIndex === null || fromIndex === toIndex) return
-
-      const newItems = [...drawerItems]
-      const [draggedItem] = newItems.splice(fromIndex, 1)
-      newItems.splice(toIndex, 0, draggedItem)
-
-      const baseSortWeight = Math.max(newItems.length * 10, 10)
-      const orderedItems = newItems.map((item, index) => ({
+      const current = drawerItemsRef.current
+      const baseSortWeight = Math.max(current.length * 10, 10)
+      const orderedItems = current.map((item, index) => ({
         ...item,
         sortWeight: baseSortWeight - index * 10,
       }))
