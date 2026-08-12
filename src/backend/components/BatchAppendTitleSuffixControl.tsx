@@ -214,11 +214,11 @@ export function BatchAppendTitleSuffixControl({
       <Button
         variant="outline"
         size="sm"
-        className="h-9 border-slate-200"
+        className="h-9 border-slate-200 shrink-0 min-w-[7.5rem]"
         disabled={disabled || loading || selectedCount <= 0}
         onClick={() => setOpen(true)}
       >
-        <TextCursorInput className="w-4 h-4 mr-2 text-slate-600" />
+        <TextCursorInput className="w-4 h-4 mr-2 shrink-0 text-slate-600" />
         批量加后缀
       </Button>
 

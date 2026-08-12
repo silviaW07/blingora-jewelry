@@ -4316,6 +4316,90 @@ const summarizePendingSkuPrices = (
   }
 }
 
+/** 售价仍等于成本、但系数>1：表格导入历史 bug，打开队列时补乘系数 */
+const isPendingSellPriceStuckAtCost = (
+  drafts: PendingImportSkuItem[],
+  itemCost: number | null,
+  coefficient: number,
+) => {
+  if (!(coefficient > 1.0001)) return false
+  const samples = drafts.length
+    ? drafts.map((sku) => ({
+        cost: toNumberOrNull(sku.cost_price) ?? itemCost,
+        price: toNumberOrNull(sku.price),
+      }))
+    : [{ cost: itemCost, price: itemCost }]
+  const comparable = samples.filter(
+    (row) => row.cost !== null && row.cost > 0 && row.price !== null && row.price > 0,
+  )
+  if (!comparable.length) return false
+  return comparable.every((row) => Math.abs((row.price as number) - (row.cost as number)) < 0.02)
+}
+
+const repairPendingImportPricesMissingCoefficient = async (limit = 80) => {
+  const items = await prisma.importtaskitem.findMany({
+    where: {
+      isPublished: false,
+      fetchStatus: 'COMPLETED' as any,
+      coefficient: { gt: 1 },
+    },
+    select: {
+      id: true,
+      costPrice: true,
+      coefficient: true,
+      cnyPriceMin: true,
+      cnyPriceMax: true,
+      previewDataJson: true,
+      skuSummaryText: true,
+      availableStock: true,
+      weightGrams: true,
+      parsedPriceMin: true,
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: Math.max(1, Math.min(200, limit)),
+  })
+  if (!items.length) return 0
+
+  const exchangeRate = await getGlobalExchangeRate(prisma)
+  let updated = 0
+  for (const item of items) {
+    const coefficient = toNumberOrNull(item.coefficient)
+    if (coefficient === null || !(coefficient > 1.0001)) continue
+    const drafts = resolvePendingSkuDrafts(item)
+    const itemCost = toNumberOrNull(item.costPrice)
+    if (!isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) continue
+
+    const nextDrafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient)
+    const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
+    const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+    await prisma.importtaskitem.update({
+      where: { id: item.id },
+      data: {
+        cnyPriceMin: priceSummary.cnyMin,
+        cnyPriceMax: priceSummary.cnyMax,
+        usdPriceMin: priceSummary.usdMin,
+        usdPriceMax: priceSummary.usdMax,
+        previewDataJson: {
+          ...currentPreview,
+          price: priceSummary.cnyMin ?? currentPreview.price,
+          skuTable: nextDrafts.map((sku) => ({
+            skuKey: sku.sku_key,
+            spec: sku.spec_text,
+            costPrice: sku.cost_price,
+            price: sku.price,
+            stock: sku.stock,
+            weightGrams: sku.weight_grams,
+            imageUrl: sku.image_url || undefined,
+            attributes: sku.attributes,
+          })),
+        } as any,
+      },
+    })
+    updated += 1
+  }
+  return updated
+}
+
 const buildPendingItemStructure = (item: any, task?: any): PendingImportItemRecord => {
   const preview = (item.previewDataJson as unknown as PreviewDataJson) || {}
   const mainImage = item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null
@@ -5857,6 +5941,18 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
     }
 
+    // 系数已写入但售价仍=成本：每次打开队列都尝试修复（不限维护间隔）
+    try {
+      const repairedPriceCount = await repairPendingImportPricesMissingCoefficient(200)
+      if (repairedPriceCount > 0) {
+        console.info(
+          `[getPendingImportQueue] repaired ${repairedPriceCount} pending items with sell price stuck at cost`,
+        )
+      }
+    } catch (error) {
+      console.error('[getPendingImportQueue] failed to repair pending sell prices', error)
+    }
+
     const dueMaintenance =
       !skipMaintenance &&
       Date.now() - lastPendingQueueMaintenanceAt >= PENDING_QUEUE_MAINTENANCE_INTERVAL_MS
@@ -6339,11 +6435,36 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         null
 
       const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`
-      const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null
-      const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null
       const zhName = normalizeText(row.productName)
       const mainImageUrl = normalizeText(row.mainImageUrl) || row.galleryUrls?.[0] || null
       const detailImages = (row.galleryUrls || []).filter(url => url && url !== mainImageUrl)
+
+      // 表格价=成本；售价必须乘类目系数（此前只写了 coefficient，区间仍停在成本价）
+      const pricedSkuTable = row.skuTable.map((sku) => {
+        const cost = toNumberOrNull(sku.costPrice) ?? toNumberOrNull(sku.price)
+        return {
+          ...sku,
+          costPrice: cost,
+          price: cost !== null ? roundCurrency(cost * matchedCoefficient) : sku.price,
+        }
+      })
+      const sellPrices = pricedSkuTable
+        .map((sku) => toNumberOrNull(sku.price))
+        .filter((value): value is number => value !== null)
+      const sellMin =
+        sellPrices.length > 0
+          ? Math.min(...sellPrices)
+          : row.priceMin != null
+            ? roundCurrency(Number(row.priceMin) * matchedCoefficient)
+            : null
+      const sellMax =
+        sellPrices.length > 0
+          ? Math.max(...sellPrices)
+          : row.priceMax != null
+            ? roundCurrency(Number(row.priceMax) * matchedCoefficient)
+            : sellMin
+      const usdMin = sellMin != null ? roundCurrency(sellMin / 6.5) : null
+      const usdMax = sellMax != null ? roundCurrency(sellMax / 6.5) : null
 
       return {
         operatorId: userId,
@@ -6362,13 +6483,13 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         goodsStatus: 'DRAFT' as any,
         minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
         // B：真实库存优先（全 0 即缺货），缺省回落 1000
-        availableStock: resolveInitialStock(row.skuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0)),
-        cnyPriceMin: row.priceMin,
-        cnyPriceMax: row.priceMax,
+        availableStock: resolveInitialStock(pricedSkuTable.reduce((sum, sku) => sum + (sku.stock || 0), 0)),
+        cnyPriceMin: sellMin,
+        cnyPriceMax: sellMax,
         usdPriceMin: usdMin,
         usdPriceMax: usdMax,
         productDetail: productDetailText,
-        skuSummaryText: row.skuTable.map(sku => sku.spec).join(' | '),
+        skuSummaryText: pricedSkuTable.map(sku => sku.spec).join(' | '),
         fetchStatus: 'COMPLETED' as any,
         publishStatus: 'PENDING' as any,
         isSelected: true,
@@ -6393,7 +6514,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           brand: normalizeText(row.brand) || undefined,
           matchedCategoryIds: matchedSecondaryCategoryIds,
           matchedCategoryNames: matchedSecondaryCategoryNames,
-          price: row.priceMin ?? undefined,
+          price: sellMin ?? undefined,
           mainImageUrl: mainImageUrl || undefined,
           detailImages,
           shortDescription: normalizeText(row.brand) || undefined,
@@ -6408,7 +6529,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
             ...(normalizeText(row.productCode) ? [{ key: '产品编号', value: normalizeText(row.productCode) }] : []),
             ...(sourceCategoryName ? [{ key: '类目', value: sourceCategoryName }] : []),
           ],
-          skuTable: row.skuTable,
+          skuTable: pricedSkuTable,
         } as any,
       }
     })

@@ -34,21 +34,21 @@ export function SharedProductBatchUtilityButtons({
       <Button
         variant="outline"
         size="sm"
-        className="h-9 border-slate-200"
+        className="h-9 border-slate-200 shrink-0 min-w-[9rem]"
         disabled={noSelection}
         onClick={onOpenWeightPrice}
       >
-        <DollarSign className="w-4 h-4 mr-2 text-sky-600" />
+        <DollarSign className="w-4 h-4 mr-2 shrink-0 text-sky-600" />
         批量修改价格重量
       </Button>
       <Button
         variant="outline"
         size="sm"
-        className="h-9 border-slate-200"
+        className="h-9 border-slate-200 shrink-0 min-w-[8.5rem]"
         disabled={noSelection}
         onClick={onOpenMinOrderQty}
       >
-        <Coins className="w-4 h-4 mr-2 text-violet-600" />
+        <Coins className="w-4 h-4 mr-2 shrink-0 text-violet-600" />
         批量设置起订量
       </Button>
       <BatchAppendTitleSuffixControl

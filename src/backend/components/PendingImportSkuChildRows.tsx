@@ -246,7 +246,7 @@ function ColorImageUploader({
   handlers: ProductManagementHandlers
 }) {
   const uploadKey = `${itemId}:${skuKey}`
-  const isUploading = state.pendingImportSkuImageUploadingKey === uploadKey
+  const isUploading = state.pendingImportSkuImageUploadingKeys.includes(uploadKey)
 
   return (
     <div className="flex flex-col gap-1.5 flex-shrink-0">
@@ -280,14 +280,13 @@ function ColorImageUploader({
         variant="ghost"
         size="sm"
         className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/5"
-        disabled={isUploading}
         onClick={() => {
           const input = document.getElementById(`pending-sku-add-${uploadKey}`) as HTMLInputElement | null
           input?.click()
         }}
       >
         <ImagePlus className="mr-1 h-3 w-3" />
-        {isUploading ? '上传中...' : imageUrl ? '替换代表图' : '上传代表图'}
+        {isUploading ? '后台上传中…' : imageUrl ? '替换代表图' : '上传代表图'}
       </Button>
       <input
         id={`pending-sku-add-${uploadKey}`}

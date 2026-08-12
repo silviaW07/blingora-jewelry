@@ -1251,6 +1251,7 @@ export const useImportFrom1688 = (
     const files = Array.from(event.target.files || [])
     event.target.value = ''
     if (!files.length) return
+    // Do not block further uploads: keep selecting while previous batch is in flight.
     setPendingImageUploadingId(itemId)
     try {
       const uploaded = await upload_project_files(files, {
@@ -1273,7 +1274,7 @@ export const useImportFrom1688 = (
     } catch (error) {
       toast.error((error as Error).message || '图片上传失败')
     } finally {
-      setPendingImageUploadingId(null)
+      setPendingImageUploadingId(prev => (prev === itemId ? null : prev))
     }
   }
 

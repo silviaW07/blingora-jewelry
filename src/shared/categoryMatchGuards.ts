@@ -50,6 +50,11 @@ const ATTRIBUTE_EXACT_NAMES = new Set(
     'normal quality',
     'low quality',
     'premium quality',
+    'below13usd',
+    'below3usd',
+    'below13',
+    'below3',
+    'beloe3usd',
     '高质量',
     '普通品质',
     '低质量',
@@ -57,7 +62,7 @@ const ATTRIBUTE_EXACT_NAMES = new Set(
 )
 
 const ATTRIBUTE_NAME_RE =
-  /^(high|normal|low|premium)?quality|高质量|普通品质|低质量|不锈钢|钛钢|stainless|titaniumsteel|^alloy$|^合金$|锌合金|goldplated|rosegold|sterling/
+  /^(high|normal|low|premium)?quality|高质量|普通品质|低质量|不锈钢|钛钢|stainless|titaniumsteel|^alloy$|^合金$|锌合金|goldplated|rosegold|sterling|below\d+usd|below\d+|beloe\d+usd/
 
 /**
  * True for material / quality / filter categories that must not be 主类目.
@@ -67,6 +72,8 @@ export function isAttributeOrFilterCategoryName(name?: string | null): boolean {
   if (!raw) return false
   const key = compact(raw)
   if (!key) return false
+  // L1 shelf itself: Material / Quality must never be 主类目
+  if (ATTRIBUTE_PARENT_NAMES.has(key)) return true
   if (ATTRIBUTE_EXACT_NAMES.has(key)) return true
   if (ATTRIBUTE_NAME_RE.test(key)) return true
   // "Stainless steel xxx" style

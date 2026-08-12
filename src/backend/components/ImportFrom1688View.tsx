@@ -606,11 +606,11 @@ export const ImportFrom1688View = ({
                                           variant="outline"
                                           size="sm"
                                           className="h-9 border-dashed"
-                                          disabled={state.pendingImageUploadingId === state.activeItemDetails.item_id || state.pendingWatermarkProcessingId === state.activeItemDetails.item_id}
+                                          disabled={state.pendingWatermarkProcessingId === state.activeItemDetails.item_id}
                                           onClick={() => document.getElementById(`import1688-upload-${state.activeItemDetails!.item_id}`)?.click()}
                                         >
                                           <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
-                                          {state.pendingImageUploadingId === state.activeItemDetails.item_id ? '上传中...' : '上传/编辑图片'}
+                                          {state.pendingImageUploadingId === state.activeItemDetails.item_id ? '继续上传（后台上传中）' : '上传/编辑图片'}
                                         </Button>
                                         <input
                                           id={`import1688-upload-${state.activeItemDetails.item_id}`}

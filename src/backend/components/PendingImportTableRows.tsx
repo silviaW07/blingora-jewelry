@@ -254,14 +254,13 @@ function PendingImportTableRowsInner({
                   variant="outline"
                   size="sm"
                   className="h-8 border-dashed"
-                  disabled={state.pendingImportImageUploadingId === item.item_id}
                   onClick={() => {
                     const input = document.getElementById(`pending-add-${item.item_id}`) as HTMLInputElement | null
                     input?.click()
                   }}
                 >
                   <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
-                  {state.pendingImportImageUploadingId === item.item_id ? '上传中...' : '上传/编辑图片'}
+                  {state.pendingImportImageUploadingIds.includes(item.item_id) ? '继续上传（后台上传中）' : '上传/编辑图片'}
                 </Button>
                 <input
                   id={`pending-add-${item.item_id}`}

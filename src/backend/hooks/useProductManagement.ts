@@ -43,6 +43,7 @@ import {
   calibratePendingImportItems,
   applyCalibrateCategoryEdits,
   autoClassifyPriceThresholdProducts,
+  backfillAllTitleFilterCategories,
   batchTranslateProductTitlesToSpanish,
   batchAppendProductTitleSuffix,
   batchAppendPendingImportTitleSuffix,
@@ -573,8 +574,10 @@ export interface ProductManagementState {
   batchImportFileName: string
   batchImportParsing: boolean
   batchImportImageUploadingKey: string | null
-  pendingImportImageUploadingId: string | null
-  pendingImportSkuImageUploadingKey: string | null
+  /** Item ids currently uploading gallery images in background (may overlap). */
+  pendingImportImageUploadingIds: string[]
+  /** `${itemId}:${skuKey}` keys with in-flight color-image uploads. */
+  pendingImportSkuImageUploadingKeys: string[]
   mainImageUploading: boolean
   galleryUploadingIndex: number | null
   featuredKeywords: string[]
@@ -663,6 +666,7 @@ export interface ProductManagementState {
     message?: string | null
   }>
   priceThresholdClassifyRunning: boolean
+  titleFilterBackfillRunning: boolean
   spanishTitleBackfillRunning: boolean
   titleSuffixRunning: boolean
   productStockEditingId: string | null
@@ -804,6 +808,7 @@ export interface ProductManagementHandlers {
   setCalibrateResultPrimary: (itemId: string, categoryId: string) => void
   saveCalibrateResultEdits: () => Promise<void>
   handleAutoClassifyPriceThresholdProducts: () => Promise<void>
+  handleBackfillAllTitleFilterCategories: () => Promise<void>
   handleBatchTranslateTitlesToSpanish: () => Promise<void>
   handleBatchAppendTitleSuffix: (suffix: string) => Promise<void>
   handleBatchAppendPendingTitleSuffix: (suffix: string) => Promise<void>
@@ -930,9 +935,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const selectedProductIds = selectedIds.filter((id) => !isSkuSelectionId(id))
   const selectedSkuIds = selectedIds.filter(isSkuSelectionId).map(fromSkuSelectionId)
-  const [pendingImportImageUploadingId, setPendingImportImageUploadingId] = useState<string | null>(null)
-  const [pendingImportSkuImageUploadingKey, setPendingImportSkuImageUploadingKey] = useState<string | null>(null)
+  const [pendingImportImageUploadingIds, setPendingImportImageUploadingIds] = useState<string[]>([])
+  const [pendingImportSkuImageUploadingKeys, setPendingImportSkuImageUploadingKeys] = useState<string[]>([])
   const [mainImageUploading, setMainImageUploading] = useState(false)
+  const pendingImportImageInflightRef = useRef<Map<string, number>>(new Map())
+  const pendingImportSkuImageInflightRef = useRef<Map<string, number>>(new Map())
+  const pendingImportQueueRef = useRef<PendingImportQueueItem[]>([])
+  const pendingImportGalleryPersistableRef = useRef<Map<string, string[]>>(new Map())
+  const pendingImportGalleryPersistChainRef = useRef<Map<string, Promise<void>>>(new Map())
   const [galleryUploadingIndex, setGalleryUploadingIndex] = useState<number | null>(null)
   const [featuredKeywords, setFeaturedKeywords] = useState<string[]>([])
   const [featuredKeywordInput, setFeaturedKeywordInput] = useState('')
@@ -1043,6 +1053,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     message?: string | null
   }>>([])
   const [priceThresholdClassifyRunning, setPriceThresholdClassifyRunning] = useState(false)
+  const [titleFilterBackfillRunning, setTitleFilterBackfillRunning] = useState(false)
   const [spanishTitleBackfillRunning, setSpanishTitleBackfillRunning] = useState(false)
   const [titleSuffixRunning, setTitleSuffixRunning] = useState(false)
   const [productStockEditingId, setProductStockEditingId] = useState<string | null>(null)
@@ -1275,6 +1286,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const pendingImportLastFetchedAtRef = useRef(0)
   pendingImportQueueLengthRef.current = pendingImportQueue.length
   pendingImportQueueErrorRef.current = pendingImportQueueError
+  pendingImportQueueRef.current = pendingImportQueue
 
   const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number }) => {
     const silent = options?.silent ?? false
@@ -2946,6 +2958,27 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const handleBackfillAllTitleFilterCategories = async () => {
+    if (titleFilterBackfillRunning) return
+    const confirmed = window.confirm(
+      '将扫描全部商品 + 待上传区：按标题后缀自动补挂 high quality / normal quality / stainless steel / below13usd / below3usd 等关联类目（不改主类目）。无需勾选、无需分页。是否继续？',
+    )
+    if (!confirmed) return
+
+    setTitleFilterBackfillRunning(true)
+    try {
+      const result = await backfillAllTitleFilterCategories()
+      toast.success(
+        `全库补关联完成：商品 ${result.products_updated}/${result.products_scanned} 条新增 ${result.relations_added} 个标签；待上传更新 ${result.pending_updated}/${result.pending_scanned} 条`,
+      )
+      await Promise.all([fetchList(), refreshPendingImportQueue()])
+    } catch (err: any) {
+      toast.error(err?.message || '全库补关联失败')
+    } finally {
+      setTitleFilterBackfillRunning(false)
+    }
+  }
+
   const handleAutoClassifyPriceThresholdProducts = async () => {
     if (priceThresholdClassifyRunning) return
     const confirmed = window.confirm(
@@ -3362,10 +3395,71 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         }
       } else if (confirmAction === 'BIND_CATEGORIES') {
         if (!batchBindCategoryIds.length) throw new Error('请至少选择一个关联类目')
+        const pendingTargetIds = confirmTargetIds.filter((id) =>
+          pendingImportQueue.some((item) => item.item_id === id),
+        )
+        const usePendingScope =
+          activeTab === 'pending_imports' ||
+          (pendingTargetIds.length > 0 && targetProductIds.length === 0)
+
+        if (usePendingScope) {
+          if (!pendingTargetIds.length) throw new Error('请先勾选待上传商品')
+          const edits = pendingTargetIds.map((itemId) => {
+            const item = pendingImportQueue.find((row) => row.item_id === itemId)
+            const existing = Array.isArray(item?.item_matchedCategoryIds)
+              ? item!.item_matchedCategoryIds.filter(Boolean)
+              : []
+            const linked = Array.from(new Set([...existing, ...batchBindCategoryIds]))
+            return {
+              id: itemId,
+              primary_category_id: item?.item_targetCategoryId || linked[0] || null,
+              linked_category_ids: linked,
+            }
+          })
+          const res = await applyCalibrateCategoryEdits({ scope: 'pending', edits })
+          toast.success(`待上传关联类目已批量追加，成功: ${res.success_count}，失败: ${res.fail_count}`)
+          setPendingImportSelectedIds([])
+          setConfirmDialogOpen(false)
+          await refreshPendingImportQueue({ silent: true })
+          return
+        }
+
         const res = await batchBindProductCategories({ product_ids: targetProductIds, linked_category_ids: batchBindCategoryIds })
         toast.success(`关联类目已批量追加绑定，成功: ${res.success_count}，失败: ${res.fail_count}`)
       } else if (confirmAction === 'UNBIND_CATEGORIES') {
         if (!batchUnbindCategoryIds.length) throw new Error('请至少选择一个要移除的类目')
+        const pendingTargetIds = confirmTargetIds.filter((id) =>
+          pendingImportQueue.some((item) => item.item_id === id),
+        )
+        const usePendingScope =
+          activeTab === 'pending_imports' ||
+          (pendingTargetIds.length > 0 && targetProductIds.length === 0)
+
+        if (usePendingScope) {
+          if (!pendingTargetIds.length) throw new Error('请先勾选待上传商品')
+          const removeSet = new Set(batchUnbindCategoryIds)
+          const edits = pendingTargetIds.map((itemId) => {
+            const item = pendingImportQueue.find((row) => row.item_id === itemId)
+            const primaryId = item?.item_targetCategoryId || null
+            const existing = Array.isArray(item?.item_matchedCategoryIds)
+              ? item!.item_matchedCategoryIds.filter(Boolean)
+              : []
+            // 主类目不删，与商品列表批量移除行为一致
+            const linked = existing.filter((id) => id === primaryId || !removeSet.has(id))
+            return {
+              id: itemId,
+              primary_category_id: primaryId || linked[0] || null,
+              linked_category_ids: linked,
+            }
+          })
+          const res = await applyCalibrateCategoryEdits({ scope: 'pending', edits })
+          toast.success(`待上传关联类目已批量移除，成功: ${res.success_count}，失败: ${res.fail_count}`)
+          setPendingImportSelectedIds([])
+          setConfirmDialogOpen(false)
+          await refreshPendingImportQueue({ silent: true })
+          return
+        }
+
         const res = await batchUnbindProductCategories({ product_ids: targetProductIds, linked_category_ids: batchUnbindCategoryIds })
         toast.success(`关联类目已批量移除，成功: ${res.success_count}，失败: ${res.fail_count}`)
       } else if (confirmAction === 'BIND_KEYWORDS') {
@@ -3646,61 +3740,155 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     syncBatchImportGallery(rowIndex, current)
   }
 
-  const persistPendingImportGallery = async (itemId: string, galleryUrls: string[]) => {
-    const unique = Array.from(new Set(galleryUrls.map(url => String(url || '').trim()).filter(Boolean)))
-    if (unique.length === 0) {
-      throw new Error('至少保留一张主图：可先点「上传/编辑图片」加新图，再删旧图')
+  const readPendingGalleryUrls = (item?: PendingImportQueueItem | null): string[] => {
+    if (!item) return []
+    if (item.item_galleryUrls?.length) return [...item.item_galleryUrls]
+    const main = item.item_mainImageUrl || item.item_parsedMainImageUrl
+    return main ? [main] : []
+  }
+
+  const bumpPendingImportImageInflight = (itemId: string, delta: number) => {
+    const map = pendingImportImageInflightRef.current
+    const next = Math.max(0, (map.get(itemId) || 0) + delta)
+    if (next === 0) map.delete(itemId)
+    else map.set(itemId, next)
+    setPendingImportImageUploadingIds(Array.from(map.keys()))
+  }
+
+  const bumpPendingImportSkuImageInflight = (uploadKey: string, delta: number) => {
+    const map = pendingImportSkuImageInflightRef.current
+    const next = Math.max(0, (map.get(uploadKey) || 0) + delta)
+    if (next === 0) map.delete(uploadKey)
+    else map.set(uploadKey, next)
+    setPendingImportSkuImageUploadingKeys(Array.from(map.keys()))
+  }
+
+  const enqueuePersistPendingImportGallery = (
+    itemId: string,
+    urls: string[],
+    mode: 'merge' | 'replace' = 'replace',
+  ) => {
+    const unique = Array.from(new Set(urls.map(url => String(url || '').trim()).filter(Boolean)))
+      .filter(url => !url.startsWith('blob:'))
+    if (!unique.length) {
+      return Promise.reject(new Error('至少保留一张主图：可先点「上传/编辑图片」加新图，再删旧图'))
     }
-    await updatePendingImportGallery({
-      itemId,
-      galleryUrls: unique,
-      mainImageUrl: unique[0]
-    })
-    setPendingImportQueue(prev => prev.map(item => {
-      if (item.item_id !== itemId) return item
-      return {
-        ...item,
-        item_mainImageUrl: unique[0],
-        item_parsedMainImageUrl: unique[0],
-        item_galleryUrls: unique
-      }
-    }))
+    const fromQueue = readPendingGalleryUrls(
+      pendingImportQueueRef.current.find(item => item.item_id === itemId),
+    ).filter(url => !url.startsWith('blob:'))
+    const next =
+      mode === 'merge'
+        ? Array.from(new Set([
+            ...(pendingImportGalleryPersistableRef.current.get(itemId) || []),
+            ...fromQueue,
+            ...unique,
+          ]))
+        : unique
+    pendingImportGalleryPersistableRef.current.set(itemId, next)
+
+    const previous = pendingImportGalleryPersistChainRef.current.get(itemId) || Promise.resolve()
+    const job = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const latest = pendingImportGalleryPersistableRef.current.get(itemId) || next
+        if (!latest.length) throw new Error('至少保留一张主图：可先点「上传/编辑图片」加新图，再删旧图')
+        await updatePendingImportGallery({
+          itemId,
+          galleryUrls: latest,
+          mainImageUrl: latest[0],
+        })
+        setPendingImportQueue(prev => prev.map(item => {
+          if (item.item_id !== itemId) return item
+          const keepBlobs = (item.item_galleryUrls || []).filter(url => url.startsWith('blob:'))
+          const nextGallery = [...latest, ...keepBlobs.filter(blob => !latest.includes(blob))]
+          return {
+            ...item,
+            item_mainImageUrl: latest[0],
+            item_parsedMainImageUrl: latest[0],
+            item_galleryUrls: nextGallery,
+          }
+        }))
+      })
+    pendingImportGalleryPersistChainRef.current.set(itemId, job)
+    return job
+  }
+
+  const persistPendingImportGallery = async (itemId: string, galleryUrls: string[]) => {
+    await enqueuePersistPendingImportGallery(itemId, galleryUrls, 'replace')
   }
 
   const uploadPendingImportImages = async (itemId: string, event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
     event.target.value = ''
     if (files.length === 0) return
-    const itemBeforeUpload = pendingImportQueue.find(row => row.item_id === itemId)
-    const current = itemBeforeUpload?.item_galleryUrls?.length
-      ? itemBeforeUpload.item_galleryUrls
-      : (itemBeforeUpload?.item_mainImageUrl || itemBeforeUpload?.item_parsedMainImageUrl
-          ? [itemBeforeUpload.item_mainImageUrl || itemBeforeUpload.item_parsedMainImageUrl!]
-          : [])
+
+    const itemBeforeUpload =
+      pendingImportQueueRef.current.find(row => row.item_id === itemId) ||
+      pendingImportQueue.find(row => row.item_id === itemId)
+    const current = readPendingGalleryUrls(itemBeforeUpload)
     const previewUrls = files.map(file => URL.createObjectURL(file))
 
-    // Optimistic local thumbnails: selected files appear immediately while the
-    // compressed batch is crossing the network.
+    // Optimistic local thumbnails so operator can keep selecting more images.
     setPendingImportQueue(prev => prev.map(item =>
       item.item_id === itemId
-        ? { ...item, item_galleryUrls: [...current, ...previewUrls] }
+        ? { ...item, item_galleryUrls: [...readPendingGalleryUrls(item), ...previewUrls] }
         : item,
     ))
-    setPendingImportImageUploadingId(itemId)
+    bumpPendingImportImageInflight(itemId, 1)
+
     try {
       const uploaded = await uploadImagesToProject(files)
-      await persistPendingImportGallery(itemId, [...current, ...uploaded])
+      let nextGallery: string[] = []
+      setPendingImportQueue(prev => prev.map(item => {
+        if (item.item_id !== itemId) return item
+        let gallery = readPendingGalleryUrls(item)
+        previewUrls.forEach((blob, index) => {
+          const real = uploaded[index]
+          const idx = gallery.indexOf(blob)
+          if (idx >= 0) {
+            if (real) gallery[idx] = real
+            else gallery.splice(idx, 1)
+          } else if (real) {
+            gallery.push(real)
+          }
+        })
+        // Drop any leftover blobs from this batch (failed slots).
+        gallery = gallery.filter(url => !previewUrls.includes(url))
+        nextGallery = gallery
+        const main = gallery.find(url => !url.startsWith('blob:')) || gallery[0] || null
+        return {
+          ...item,
+          item_galleryUrls: gallery,
+          item_mainImageUrl: main,
+          item_parsedMainImageUrl: main,
+        }
+      }))
+
+      const persistable = nextGallery.filter(url => !url.startsWith('blob:'))
+      if (persistable.length === 0) {
+        throw new Error('图片上传失败：没有成功写入的图片')
+      }
+      await enqueuePersistPendingImportGallery(itemId, persistable, 'merge')
       toast.success(`已上传 ${uploaded.length} 张图片`)
     } catch (err: any) {
-      setPendingImportQueue(prev => prev.map(item =>
-        item.item_id === itemId
-          ? { ...item, item_galleryUrls: current }
-          : item,
-      ))
+      setPendingImportQueue(prev => prev.map(item => {
+        if (item.item_id !== itemId) return item
+        const gallery = readPendingGalleryUrls(item).filter(url => !previewUrls.includes(url))
+        const main = gallery.find(url => !url.startsWith('blob:')) || gallery[0] || current[0] || null
+        return {
+          ...item,
+          item_galleryUrls: gallery.length ? gallery : current,
+          item_mainImageUrl: main,
+          item_parsedMainImageUrl: main,
+        }
+      }))
       toast.error(err.message || '图片上传失败')
     } finally {
-      previewUrls.forEach(url => URL.revokeObjectURL(url))
-      setPendingImportImageUploadingId(null)
+      bumpPendingImportImageInflight(itemId, -1)
+      // Defer revoke so React can swap blob thumbnails to remote URLs first.
+      window.setTimeout(() => {
+        previewUrls.forEach(url => URL.revokeObjectURL(url))
+      }, 1500)
     }
   }
 
@@ -3708,28 +3896,28 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    setPendingImportImageUploadingId(itemId)
+    bumpPendingImportImageInflight(itemId, 1)
     try {
       const fileUrl = await uploadImageToProject(file)
-      const item = pendingImportQueue.find(row => row.item_id === itemId)
-      const current = [...(item?.item_galleryUrls?.length
-        ? item.item_galleryUrls
-        : (item?.item_mainImageUrl || item?.item_parsedMainImageUrl ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!] : []))]
+      const item =
+        pendingImportQueueRef.current.find(row => row.item_id === itemId) ||
+        pendingImportQueue.find(row => row.item_id === itemId)
+      const current = readPendingGalleryUrls(item)
       current[imageIndex] = fileUrl
       await persistPendingImportGallery(itemId, current)
       toast.success('图片已替换')
     } catch (err: any) {
       toast.error(err.message || '图片替换失败')
     } finally {
-      setPendingImportImageUploadingId(null)
+      bumpPendingImportImageInflight(itemId, -1)
     }
   }
 
   const removePendingImportImage = async (itemId: string, imageIndex: number) => {
-    const item = pendingImportQueue.find(row => row.item_id === itemId)
-    const current = [...(item?.item_galleryUrls?.length
-      ? item.item_galleryUrls
-      : (item?.item_mainImageUrl || item?.item_parsedMainImageUrl ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!] : []))]
+    const item =
+      pendingImportQueueRef.current.find(row => row.item_id === itemId) ||
+      pendingImportQueue.find(row => row.item_id === itemId)
+    const current = readPendingGalleryUrls(item)
     current.splice(imageIndex, 1)
     try {
       await persistPendingImportGallery(itemId, current)
@@ -3766,7 +3954,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     event.target.value = ''
     if (!file) return
     const uploadKey = `${itemId}:${skuKey}`
-    setPendingImportSkuImageUploadingKey(uploadKey)
+    bumpPendingImportSkuImageInflight(uploadKey, 1)
     try {
       const fileUrl = await uploadImageToProject(file)
       await persistPendingImportSkuImage(itemId, skuKey, fileUrl)
@@ -3774,7 +3962,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     } catch (err: any) {
       toast.error(err.message || '颜色图上传失败')
     } finally {
-      setPendingImportSkuImageUploadingKey(null)
+      bumpPendingImportSkuImageInflight(uploadKey, -1)
     }
   }
 
@@ -3784,14 +3972,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const removePendingImportSkuImage = async (itemId: string, skuKey: string) => {
     const uploadKey = `${itemId}:${skuKey}`
-    setPendingImportSkuImageUploadingKey(uploadKey)
+    bumpPendingImportSkuImageInflight(uploadKey, 1)
     try {
       await persistPendingImportSkuImage(itemId, skuKey, null)
       toast.success('颜色图已删除')
     } catch (err: any) {
       toast.error(err.message || '颜色图删除失败')
     } finally {
-      setPendingImportSkuImageUploadingKey(null)
+      bumpPendingImportSkuImageInflight(uploadKey, -1)
     }
   }
 
@@ -3911,8 +4099,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       batchImportFileName,
       batchImportParsing,
       batchImportImageUploadingKey,
-      pendingImportImageUploadingId,
-      pendingImportSkuImageUploadingKey,
+      pendingImportImageUploadingIds,
+      pendingImportSkuImageUploadingKeys,
       mainImageUploading,
       galleryUploadingIndex,
       featuredKeywords,
@@ -3977,6 +4165,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       calibrateResultSummary,
       calibrateResultDrafts,
       priceThresholdClassifyRunning,
+      titleFilterBackfillRunning,
       spanishTitleBackfillRunning,
       titleSuffixRunning,
       productStockEditingId,
@@ -4119,6 +4308,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       setCalibrateResultPrimary,
       saveCalibrateResultEdits,
       handleAutoClassifyPriceThresholdProducts,
+      handleBackfillAllTitleFilterCategories,
       handleBatchTranslateTitlesToSpanish,
       handleBatchAppendTitleSuffix,
       handleBatchAppendPendingTitleSuffix,

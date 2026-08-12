@@ -127,6 +127,19 @@ function matchesAlias(nameOrSlug: string | null | undefined, aliases: string[]):
   })
 }
 
+/** 标题含 below13 / below3 等后缀时，即使售价高于阈值也保留关联标签 */
+export function titleClaimsPriceThresholdTag(
+  title: string | null | undefined,
+  rule: Pick<PriceThresholdRule, 'l2NameAliases'>,
+): boolean {
+  const corpus = normalizeCatKey(title)
+  if (!corpus) return false
+  return rule.l2NameAliases.some((alias) => {
+    const token = normalizeCatKey(alias)
+    return token.length >= 4 && corpus.includes(token)
+  })
+}
+
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
@@ -384,6 +397,7 @@ export async function syncProductPriceThresholdRelations(
     where: { id: productId },
     select: {
       id: true,
+      name: true,
       categoryId: true,
       costPrice: true,
       priceCoefficient: true,
@@ -407,17 +421,19 @@ export async function syncProductPriceThresholdRelations(
 
   const shouldHaveIds: string[] = []
   const matchedKeys: PriceThresholdRuleKey[] = []
-  if (minUsd !== null) {
-    for (const rule of ensured) {
-      const belongs = productBelongsToL1(
-        { categoryId: product.categoryId, relationCategoryIds },
-        rule.parentId,
-        categoryMap,
-      )
-      if (belongs && minUsd <= rule.maxUsd) {
-        shouldHaveIds.push(rule.categoryId)
-        matchedKeys.push(rule.key)
-      }
+  const titleCorpus = String(product.name || '')
+
+  for (const rule of ensured) {
+    const belongs = productBelongsToL1(
+      { categoryId: product.categoryId, relationCategoryIds },
+      rule.parentId,
+      categoryMap,
+    )
+    const titleClaim = titleClaimsPriceThresholdTag(titleCorpus, rule)
+    const priceClaim = minUsd !== null && belongs && minUsd <= rule.maxUsd
+    if (priceClaim || (titleClaim && belongs)) {
+      shouldHaveIds.push(rule.categoryId)
+      matchedKeys.push(rule.key)
     }
   }
 
@@ -425,7 +441,15 @@ export async function syncProductPriceThresholdRelations(
     thresholdIds.includes(id),
   )
   const toAdd = shouldHaveIds.filter((id) => !existingThreshold.includes(id))
-  const toRemove = existingThreshold.filter((id: string) => !shouldHaveIds.includes(id))
+  const toRemove = existingThreshold.filter((id: string) => {
+    if (!shouldHaveIds.includes(id)) {
+      // 标题显式写了 below13/below3 后缀时，不因售价超标而摘掉标签
+      const rule = ensured.find((item) => item.categoryId === id)
+      if (rule && titleClaimsPriceThresholdTag(titleCorpus, rule)) return false
+      return true
+    }
+    return false
+  })
 
   if (toRemove.length > 0) {
     await db.product_category_relations.deleteMany({

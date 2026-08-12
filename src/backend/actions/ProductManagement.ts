@@ -647,6 +647,10 @@ import {
   syncProductPriceThresholdRelations,
   type AutoClassifyPriceThresholdSummary,
 } from '@/backend/lib/priceThresholdAutoClassify'
+import {
+  runBulkTitleFilterCategoryBackfill,
+  type BulkTitleFilterBackfillSummary,
+} from '@/backend/lib/bulkTitleCategoryBackfill'
 import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
 import {
@@ -3852,10 +3856,8 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
               b.name.length - a.name.length ||
               a.name.localeCompare(b.name, 'zh-CN'),
           )
-        const pricingHitId = pickImportPricingTargetCategory(
-          pricingHits.length ? pricingHits : hits,
-          null,
-        )
+        // 禁止回退到含 Material/Stainless steel 的全量 hits，否则会误主成 Material
+        const pricingHitId = pickImportPricingTargetCategory(pricingHits, null)
         const pricingHit =
           (pricingHitId
             ? pricingHits.find(h => h.id === pricingHitId) || hits.find(h => h.id === pricingHitId)
@@ -4257,37 +4259,46 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
               b.name.length - a.name.length ||
               a.name.localeCompare(b.name, 'zh-CN'),
           )
-        const pricingTargetId = pickImportPricingTargetCategory(
-          pricingHits.length ? pricingHits : hits,
-          null,
-        )
+        // 禁止回退到含 Material/Stainless steel 的全量 hits
+        const pricingTargetId = pickImportPricingTargetCategory(pricingHits, null)
         const pricingTarget = pricingTargetId
           ? hits.find(h => h.id === pricingTargetId) || pricingHits.find(h => h.id === pricingTargetId) || null
           : pricingHits[0] || null
-        // 标题识别到真实品类时覆盖材质主类目；无标题命中时保留人工/表格目标
-        const existingHit = existingTargetId
-          ? hits.find((h) => h.id === existingTargetId) || null
+        // 标题识别到真实品类时覆盖材质主类目；无标题命中时仅保留「真实品类」人工/表格目标
+        const existingMeta = existingTargetId
+          ? secondaryCategories.find((c) => c.id === existingTargetId) || null
           : null
+        const existingIsProductType = existingMeta
+          ? isProductTypeCategory({
+              name: existingMeta.name,
+              parentName: existingMeta.parentName,
+              isBrandCategory: existingMeta.isBrandCategory,
+              level: existingMeta.level,
+            })
+          : false
         let targetCategoryId: string | null = null
         if (pricingTarget?.id) {
           targetCategoryId = pricingTarget.id
-        } else if (
-          existingTargetId &&
-          (!existingHit ||
-            isProductTypeCategory({
-              name: existingHit.name,
-              parentName: existingHit.parentName,
-              isBrandCategory: existingHit.isBrandCategory,
-              level: existingHit.level,
-            }))
-        ) {
+        } else if (existingTargetId && existingIsProductType) {
           targetCategoryId = existingTargetId
         }
         if (!targetCategoryId && row.targetCategoryId) {
           const ownershipFallback = await resolveImportCategoryOwnership(prisma, row.targetCategoryId).catch(
             () => null,
           )
-          if (ownershipFallback?.primaryCategoryId) {
+          const fallbackMeta = ownershipFallback?.primaryCategoryId
+            ? secondaryCategories.find((c) => c.id === ownershipFallback.primaryCategoryId) || null
+            : null
+          if (
+            ownershipFallback?.primaryCategoryId &&
+            fallbackMeta &&
+            isProductTypeCategory({
+              name: fallbackMeta.name,
+              parentName: fallbackMeta.parentName,
+              isBrandCategory: fallbackMeta.isBrandCategory,
+              level: fallbackMeta.level,
+            })
+          ) {
             targetCategoryId = ownershipFallback.primaryCategoryId
           }
         }
@@ -4580,6 +4591,13 @@ export const applyCalibrateCategoryEdits = requireRole([UserRole.ADMIN])(
 export const autoClassifyPriceThresholdProducts = requireRole([UserRole.ADMIN])(
   withResult(async (): Promise<AutoClassifyPriceThresholdSummary> => {
     return autoClassifyAllProductsByPriceThreshold(prisma)
+  }),
+)
+
+/** 全库按标题后缀补挂 high quality / stainless steel / below13usd 等关联标签（不改主类目） */
+export const backfillAllTitleFilterCategories = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<BulkTitleFilterBackfillSummary> => {
+    return runBulkTitleFilterCategoryBackfill()
   }),
 )
 

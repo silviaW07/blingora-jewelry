@@ -26,10 +26,43 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Anklet', 'Anklets', '脚链'], synonyms: ['脚链', '脚镯', '脚踝链'] },
   { names: ['Brooch', 'Brooches', '胸针'], synonyms: ['胸针', '胸花', '别针'] },
   { names: ['Pendant', 'Pendants', '吊坠'], synonyms: ['吊坠', '挂坠', '坠子'] },
-  { names: ['Jewelry Set', 'Jewellery Set', 'jewelry set', '珠宝套装', '首饰套装'], synonyms: ['珠宝套装', '首饰套装', '套装', '三件套', '四件套', '二件套', '五件套', '套链', 'earrings set', 'earring set', 'necklace set', 'necklace earrings set'] },
-  { names: ['Hair Clip', 'Hairpin', '发夹'], synonyms: ['发夹', '发卡', '发簪', '抓夹'] },
-  { names: ['Hair Rope', 'Hair Tie', '发绳'], synonyms: ['发绳', '发圈', '皮筋', '头绳'] },
-  { names: ['Hair Band', 'Headband', '发带'], synonyms: ['发带', '发箍', '头箍', '头带'] },
+  {
+    // DB 常见小写 jewelry set；「套装」过泛会被匹配器屏蔽，只用高信号复合词
+    names: ['Jewelry Set', 'Jewellery Set', 'jewelry set', '珠宝套装', '首饰套装', '饰品套装'],
+    synonyms: [
+      '饰品套装',
+      '套装饰品',
+      '珠宝套装',
+      '首饰套装',
+      '饰品三件套',
+      '首饰三件套',
+      '三件套',
+      '四件套',
+      '二件套',
+      '五件套',
+      '套链',
+      '项链耳环套装',
+      '耳环项链套装',
+      '项链耳钉套装',
+      '耳钉项链套装',
+      '项链手链套装',
+      'earrings set',
+      'earring set',
+      'necklace set',
+      'necklace earrings set',
+      'jewelry set',
+    ],
+  },
+  {
+    // DB 合并货架名：Hair Clips & Hair Ties
+    names: ['Hair Clip', 'Hairpin', '发夹', 'Hair Clips', 'Hair Clips & Hair Ties'],
+    synonyms: ['发夹', '发卡', '发簪', '抓夹'],
+  },
+  {
+    names: ['Hair Rope', 'Hair Tie', 'Hair Ties', '发绳', 'Hair Clips & Hair Ties'],
+    synonyms: ['发绳', '发圈', '皮筋', '头绳'],
+  },
+  { names: ['Hair Band', 'Headband', '发带', 'hairband'], synonyms: ['发带', '发箍', '头箍', '头带'] },
 
   // —— 包 / Bags ——
   // Handbag / Crossbody：只用高信号词；泛词「包包/箱包」只挂在一级 Bags，避免所有二级一起命中
@@ -84,10 +117,57 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Clutch', '手拿包'], synonyms: ['手拿包', '晚宴包', '手抓包', 'clutch'] },
 
   // —— 鞋 / Shoes ——
+  // L1 兜底：裸「鞋」过泛被屏蔽；用具体鞋型词挂一级，避免无二级同义词时整单跳过
+  {
+    names: ['Shoes', 'Shoe', '鞋'],
+    synonyms: [
+      '拖鞋',
+      '凉拖',
+      '凉拖鞋',
+      '沙滩拖鞋',
+      '人字拖',
+      '凉鞋',
+      '沙滩鞋',
+      '平底鞋',
+      '单鞋',
+      '运动鞋',
+      '板鞋',
+      '跑鞋',
+      '靴子',
+      '短靴',
+      '马丁靴',
+    ],
+  },
   { names: ['Flats', 'Flat Shoes', '平底鞋'], synonyms: ['平底鞋', '单鞋', '豆豆鞋', '芭蕾鞋'] },
-  { names: ['Slippers', '拖鞋'], synonyms: ['拖鞋', '凉拖', '人字拖', '棉拖'] },
-  { names: ['Sandals', '凉鞋'], synonyms: ['凉鞋', '沙滩鞋', '罗马鞋'] },
-  { names: ['Sneakers', 'Sneaker', '运动鞋'], synonyms: ['运动鞋', '板鞋', '跑鞋', '老爹鞋', '小白鞋'] },
+  {
+    // 站点常把拖鞋/凉鞋合成一个二级：Slippers & Sandals
+    names: [
+      'Slippers',
+      '拖鞋',
+      'Sandals',
+      '凉鞋',
+      'Slippers & Sandals',
+      'Slipper & Sandal',
+      'Slippers and Sandals',
+    ],
+    synonyms: [
+      '拖鞋',
+      '凉拖',
+      '凉拖鞋',
+      '沙滩拖鞋',
+      '外穿拖鞋',
+      '人字拖',
+      '棉拖',
+      '凉鞋',
+      '沙滩鞋',
+      '罗马鞋',
+      '平底凉鞋',
+    ],
+  },
+  {
+    names: ['Sneakers', 'Sneaker', '运动鞋', 'sports shoe', 'Sports Shoe', 'sports shoes'],
+    synonyms: ['运动鞋', '板鞋', '跑鞋', '老爹鞋', '小白鞋', '休闲鞋'],
+  },
   { names: ['Boots', 'Boot', '靴子'], synonyms: ['靴子', '短靴', '长靴', '马丁靴', '雪地靴', '踝靴'] },
 
   // —— 配饰 / Accessories ——
@@ -114,13 +194,71 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Lipstick', '口红'], synonyms: ['口红', '唇膏', '唇釉', '唇彩'] },
   { names: ['Perfume', '香水'], synonyms: ['香水', '香氛', '淡香'] },
   { names: ['Perfume Set', '香水套装'], synonyms: ['香水套装', '香氛套装'] },
+
+  // —— 品质 / 材质 / 价格带标签（关联类目，不当主类目）——
+  {
+    names: ['High Quality', 'high quality', 'High quality', 'high quality jewelry', 'High Quality Jewelry'],
+    synonyms: ['high quality', 'highquality', '高质量', '高品质', 'HQ'],
+  },
+  {
+    names: ['Normal Quality', 'normal quality', 'Normal quality', 'normal quality jewelry'],
+    synonyms: ['normal quality', 'normalquality', '普通品质', '普通质量', 'NQ'],
+  },
+  {
+    names: ['Low Quality', 'low quality', 'Low quality', 'premium quality'],
+    synonyms: ['low quality', 'lowquality', '低质量', 'premium quality'],
+  },
+  {
+    names: ['Stainless Steel', 'stainless steel', 'Stainless steel', '不锈钢', '钛钢'],
+    synonyms: ['stainless steel', 'stainlesssteel', '不锈钢', '钛钢', '316L', '316l'],
+  },
+  {
+    names: [
+      'Below 13usd',
+      'below13 usd',
+      'below 13 usd',
+      'Below 13 USD',
+      'below13usd',
+      'below13',
+    ],
+    synonyms: [
+      'below13usd',
+      'below 13usd',
+      'below13 usd',
+      'below 13 usd',
+      'below13',
+      '低于13美元',
+      '13美元以下',
+    ],
+  },
+  {
+    names: [
+      'Below 3 usd',
+      'below3 usd',
+      'below 3 usd',
+      'Below 3 USD',
+      'below3usd',
+      'below3',
+      'beloe 3 usd',
+    ],
+    synonyms: [
+      'below3usd',
+      'below 3usd',
+      'below3 usd',
+      'below 3 usd',
+      'below3',
+      '低于3美元',
+      '3美元以下',
+    ],
+  },
 ]
 
 const normalizeName = (value?: string | null) =>
   String(value || '')
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, '')
+    // 与匹配器一致：去空格；顺带去掉 &/· 等，便于「Slippers & Sandals」直接索引
+    .replace(/[\s_·./&+,|]+/g, '')
 
 const SYNONYM_INDEX: Map<string, string[]> = (() => {
   const index = new Map<string, string[]>()
@@ -138,9 +276,26 @@ const SYNONYM_INDEX: Map<string, string[]> = (() => {
 
 /**
  * 按类目名取中文同义关键词（大小写/空格不敏感）。未收录时返回空数组。
+ * 合并货架名（如 Slippers & Sandals）会拆段合并两侧同义词。
  */
 export function resolveCategorySynonyms(categoryName?: string | null): string[] {
-  const key = normalizeName(categoryName)
-  if (!key) return []
-  return SYNONYM_INDEX.get(key) || []
+  const raw = String(categoryName || '').trim()
+  if (!raw) return []
+  const key = normalizeName(raw)
+  const direct = key ? SYNONYM_INDEX.get(key) : undefined
+  if (direct?.length) return direct
+
+  const parts = raw
+    .split(/[&/|,+]+|(?:\s+and\s+)/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 2)
+  if (parts.length <= 1) return []
+
+  const merged = new Set<string>()
+  for (const part of parts) {
+    const partKey = normalizeName(part)
+    const syns = partKey ? SYNONYM_INDEX.get(partKey) : undefined
+    if (syns) for (const s of syns) merged.add(s)
+  }
+  return Array.from(merged)
 }
