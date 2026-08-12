@@ -46,7 +46,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${header.variable} ${body.variable} ${display.variable}`} style={{
+    <html
+      lang="en"
+      translate="no"
+      className={`notranslate ${header.variable} ${body.variable} ${display.variable}`}
+      style={{
       backgroundColor: '#fff',
       color: 'rgba(0, 0, 0, 0.85)'
     }}>

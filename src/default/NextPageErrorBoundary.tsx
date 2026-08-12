@@ -111,18 +111,37 @@ interface PageErrorBoundaryState {
   hasError: boolean
   error: Error | null
   errorInfo: React.ErrorInfo | null
+  remountKey: number
 }
 
-
+/** Chrome Translate / hydration often throws removeChild NotFoundError — recover instead of trapping users. */
+function isTransientDomMutationError(error: Error | null | undefined): boolean {
+  if (!error) return false
+  const message = String(error.message || '')
+  const name = String(error.name || '')
+  if (name === 'NotFoundError' || /NotFoundError/i.test(message)) {
+    return /removeChild|insertBefore|replaceChild|appendChild/i.test(message)
+  }
+  return /Failed to execute '(removeChild|insertBefore|replaceChild)'/i.test(message)
+}
 
 export class PageErrorBoundary extends Component<
   PageErrorBoundaryProps,
   PageErrorBoundaryState
 > {
+  private recoverTimer: ReturnType<typeof setTimeout> | null = null
+
   constructor(props: PageErrorBoundaryProps) {
     // React class components must call super(props) before accessing this
     super(props)
-    this.state = { hasError: false, error: null, errorInfo: null }
+    this.state = { hasError: false, error: null, errorInfo: null, remountKey: 0 }
+  }
+
+  componentWillUnmount() {
+    if (this.recoverTimer) {
+      clearTimeout(this.recoverTimer)
+      this.recoverTimer = null
+    }
   }
 
   static getDerivedStateFromError(error: Error): Partial<PageErrorBoundaryState> {
@@ -131,34 +150,52 @@ export class PageErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo })
+    if (!isTransientDomMutationError(error)) return
+    if (this.recoverTimer) clearTimeout(this.recoverTimer)
+    this.recoverTimer = setTimeout(() => {
+      this.setState((prev) => ({
+        hasError: false,
+        error: null,
+        errorInfo: null,
+        remountKey: prev.remountKey + 1,
+      }))
+      this.recoverTimer = null
+    }, 80)
   }
 
   handleFix = () => {
     const { error, errorInfo } = this.state
-    if (!error) return
-    const sourceLocation = extractSourceLocation(error)
-    const logData = {
-      type: 'error:react',
-      error: {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      },
-      componentStack: errorInfo?.componentStack ?? '',
-      url: typeof window !== 'undefined' ? window.location.href : '',
-      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-      timestamp: Date.now(),
-      sourceLocation,
-      context: { name: error.name, message: error.message },
-    }
-    const serializable = ensureSerializable(logData)
-    try {
-      if (typeof window !== 'undefined' && window.parent) {
-        window.parent.postMessage(serializable, '*')
+    if (error) {
+      const sourceLocation = extractSourceLocation(error)
+      const logData = {
+        type: 'error:react',
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+        componentStack: errorInfo?.componentStack ?? '',
+        url: typeof window !== 'undefined' ? window.location.href : '',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        timestamp: Date.now(),
+        sourceLocation,
+        context: { name: error.name, message: error.message },
       }
-    } catch (e) {
-      console.warn('Failed to send error via postMessage:', e)
+      const serializable = ensureSerializable(logData)
+      try {
+        if (typeof window !== 'undefined' && window.parent) {
+          window.parent.postMessage(serializable, '*')
+        }
+      } catch (e) {
+        console.warn('Failed to send error via postMessage:', e)
+      }
     }
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      remountKey: prev.remountKey + 1,
+    }))
   }
 
   handleBackHome = () => {
@@ -188,8 +225,20 @@ export class PageErrorBoundary extends Component<
 
   render() {
     if (!this.state.hasError || !this.state.error) {
-      return this.props.children
+      return (
+        <React.Fragment key={this.state.remountKey}>{this.props.children}</React.Fragment>
+      )
     }
+
+    // Transient DOM mutation errors auto-recover; show a light wait state briefly.
+    if (isTransientDomMutationError(this.state.error)) {
+      return (
+        <div className="flex min-h-[40vh] w-full items-center justify-center bg-background p-6">
+          <p className="text-muted-foreground text-sm">Refreshing page…</p>
+        </div>
+      )
+    }
+
     const { error } = this.state
 
     return (
@@ -209,7 +258,7 @@ export class PageErrorBoundary extends Component<
               className="px-4 py-2"
               onClick={this.handleFix}
             >
-              fix
+              Try again
             </Button>
             <Button
               variant="outline"
@@ -217,7 +266,7 @@ export class PageErrorBoundary extends Component<
               className="px-4 py-2"
               onClick={this.handleBackHome}
             >
-              go back
+              Go back
             </Button>
           </div>
         </div>

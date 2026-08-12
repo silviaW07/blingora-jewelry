@@ -395,10 +395,9 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
 export const HomeStorefrontView = ({ state, handlers }: Props) => {
   const { getPatch, isDecorateMode } = useDecorateMode();
   const router = useRouter();
-  const [viewport, setViewport] = useState<'mobile' | 'desktop' | null>(() => {
-    if (typeof window === 'undefined') return null
-    return window.innerWidth < 768 ? 'mobile' : 'desktop'
-  })
+  // Always start null so SSR HTML matches the first client paint (reading
+  // window here caused hydration removeChild crashes on mobile Chrome).
+  const [viewport, setViewport] = useState<'mobile' | 'desktop' | null>(null)
 
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 767px)')

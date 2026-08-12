@@ -95,6 +95,9 @@ export function persistLocale(code: AppLocaleCode) {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, code)
     document.cookie = `${LOCALE_STORAGE_KEY}=${encodeURIComponent(code)}; path=/; max-age=31536000; samesite=lax`
     document.documentElement.setAttribute('lang', code)
+    // Own i18n already localizes UI — keep Chrome Translate from rewriting React DOM.
+    document.documentElement.setAttribute('translate', 'no')
+    document.documentElement.classList.add('notranslate')
   } catch {
     // ignore
   }

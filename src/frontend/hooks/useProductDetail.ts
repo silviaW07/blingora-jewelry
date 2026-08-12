@@ -131,20 +131,16 @@ export const useProductDetail = (): {
   const { productId, slug } = useMemo(() => ProductDetail.getParams(searchParams), [searchParams])
   const isDecorateMode = searchParams.get('decorate') === '1'
   const session = useUserSession()
-  const initialCached =
-    typeof window !== 'undefined'
-      ? readCachedProductDetail(productId, slug, getClientPreferredLang())
-      : null
-
-  const [loading, setLoading] = useState(!initialCached)
+  // Keep SSR/client first paint identical — apply memory cache inside fetchProduct.
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [product, setProduct] = useState<ProductDetailData | null>(initialCached)
+  const [product, setProduct] = useState<ProductDetailData | null>(null)
   const [relatedProducts, setRelatedProducts] = useState<RelatedProductItem[]>([])
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({})
   const [selectedSku, setSelectedSku] = useState<ProductSkuData | null>(null)
   const [quantity, setQuantity] = useState<number>(1)
   const [skuQuantities, setSkuQuantities] = useState<Record<string, number>>({})
-  const [activeImage, setActiveImage] = useState<string>(initialCached?.mainImageUrl || '')
+  const [activeImage, setActiveImage] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [manualColorValue, setManualColorValue] = useState<string | null>(null)
   const [manualSizeSkuId, setManualSizeSkuId] = useState<string | null>(null)

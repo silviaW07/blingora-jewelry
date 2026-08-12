@@ -47,7 +47,7 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   return (
     <FrontendAuthGuard>
       <I18nProvider>
-        <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col">
+        <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col notranslate" translate="no">
           <Suspense fallback={null}>
             <CustomerAuthModalProvider>
               {/* 401 → open CustomerAuthModal (no bottom 初始化登录账号 sheet) */}
