@@ -84,10 +84,18 @@ const getCategoryCardGridClassName = (zone: HomeRecommendZoneSectionType) =>
   )
 
 const CATEGORY_CARD_PLACEHOLDER = '/category-covers/placeholder.svg'
+const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 1200
 
 const resolveCategoryCardSrc = (imageUrl?: string | null) => {
   const text = String(imageUrl || '').trim()
   return text || CATEGORY_CARD_PLACEHOLDER
+}
+
+const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
+  const fallback = String(item.fallbackImageUrl || '').trim()
+  const primary = String(item.imageUrl || '').trim()
+  if (fallback && fallback !== primary) return fallback
+  return CATEGORY_CARD_PLACEHOLDER
 }
 
 /** Horizontal squircle strip: ≤5 fill row; >5 scrolls (5 visible). */
@@ -358,7 +366,8 @@ const renderMobileSquircleContent = (
                   alt={displayName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  fallbackSrc={resolveCategoryCardFallback(item)}
+                  slowFallbackMs={CATEGORY_PRODUCT_IMAGE_SLOW_MS}
                   loading="lazy"
                   orientation="square"
                   className="h-full w-full object-cover"
@@ -456,7 +465,8 @@ const renderRecommendZoneContent = (
                   alt={displayName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  fallbackSrc={resolveCategoryCardFallback(item)}
+                  slowFallbackMs={CATEGORY_PRODUCT_IMAGE_SLOW_MS}
                   loading="lazy"
                   orientation="square"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"

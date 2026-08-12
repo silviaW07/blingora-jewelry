@@ -10,6 +10,29 @@ const compact = (value?: string | null) =>
     .toLowerCase()
     .replace(/[\s_\-·./]+/g, '')
 
+/** 标题常见拼写：quialty / 货号粘连 3313normalquality */
+export function canonicalizeQualityMatchText(value?: string | null): string {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s_·./&+,|-]+/g, '')
+    .replace(/QUIALTY/g, 'QUALITY')
+    .replace(/QUAILTY/g, 'QUALITY')
+    .replace(/QULITY/g, 'QUALITY')
+    .replace(/NOMALQUALITY/g, 'NORMALQUALITY')
+    .replace(/NORAMLQUALITY/g, 'NORMALQUALITY')
+}
+
+export function isGluedFilterSuffixToken(normalizedToken: string) {
+  if (!normalizedToken) return false
+  return (
+    /QUALITY/.test(normalizedToken) ||
+    /STAINLESS/.test(normalizedToken) ||
+    /BELOW\d/.test(normalizedToken) ||
+    /BELOE\d/.test(normalizedToken)
+  )
+}
+
 /** Parent shelves that hold material/quality filters rather than sellable product types. */
 const ATTRIBUTE_PARENT_NAMES = new Set(
   ['material', 'materials', '材质', '材料', 'quality', 'qualities', '品质', '成色', 'filter', 'filters', '筛选'].map(
@@ -48,6 +71,9 @@ const ATTRIBUTE_EXACT_NAMES = new Set(
     'high quality',
     'high quality jewelry',
     'normal quality',
+    'normal quality jewelry',
+    'normal quality bag',
+    'normal quialty',
     'low quality',
     'premium quality',
     'below13usd',
@@ -62,7 +88,7 @@ const ATTRIBUTE_EXACT_NAMES = new Set(
 )
 
 const ATTRIBUTE_NAME_RE =
-  /^(high|normal|low|premium)?quality|高质量|普通品质|低质量|不锈钢|钛钢|stainless|titaniumsteel|^alloy$|^合金$|锌合金|goldplated|rosegold|sterling|below\d+usd|below\d+|beloe\d+usd/
+  /^(high|normal|low|premium)?qualit|高质量|普通品质|低质量|不锈钢|钛钢|stainless|titaniumsteel|^alloy$|^合金$|锌合金|goldplated|rosegold|sterling|below\d+usd|below\d+|beloe\d+usd/
 
 /**
  * True for material / quality / filter categories that must not be 主类目.
@@ -79,6 +105,7 @@ export function isAttributeOrFilterCategoryName(name?: string | null): boolean {
   // "Stainless steel xxx" style
   if (key.includes('stainless') && key.includes('steel')) return true
   if (key.includes('highquality') || key.includes('normalquality') || key.includes('lowquality')) return true
+  if (key.includes('quialty') || key.includes('qulity')) return true
   return false
 }
 

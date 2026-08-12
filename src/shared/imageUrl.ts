@@ -42,7 +42,13 @@ export const shouldBypassImageOptimizer = (value?: string | null): boolean => {
     return true
   }
   try {
-    return new URL(text).pathname.startsWith('/img-proxy/')
+    const url = new URL(text)
+    if (url.pathname.startsWith('/img-proxy/')) return true
+    // Aliyun OSS (old-shop imports) is already a CDN — skip /_next/image so
+    // missing remotePatterns cannot blank home category cards.
+    const host = url.hostname.toLowerCase()
+    if (host.endsWith('.aliyuncs.com') || host === 'aliyuncs.com') return true
+    return false
   } catch {
     return false
   }
@@ -112,6 +118,19 @@ export const optimizeCatalogImageUrl = (
   }
 }
 
+export const resolveCategoryShelfImageUrl = (
+  imageUrl?: string | null,
+  bannerImageUrl?: string | null,
+  iconUrl?: string | null,
+): string | null => {
+  return (
+    optimizeCatalogImageUrl(imageUrl, 640) ||
+    optimizeCatalogImageUrl(bannerImageUrl, 640) ||
+    optimizeCatalogImageUrl(iconUrl, 640) ||
+    null
+  )
+}
+
 export const resolveCategoryCardImageUrl = (
   imageUrl?: string | null,
   bannerImageUrl?: string | null,
@@ -119,12 +138,9 @@ export const resolveCategoryCardImageUrl = (
   productImageUrl?: string | null,
 ): string => {
   return (
-    // 首页类目卡片：优先最新商品封面（productImageUrl）
-    // 没有则回退到后台配置（分类主图/ Banner / iconUrl）
+    // 优先该类目最新商品图；没有再回退分类主图
     optimizeCatalogImageUrl(productImageUrl, 640) ||
-    optimizeCatalogImageUrl(imageUrl, 640) ||
-    optimizeCatalogImageUrl(bannerImageUrl, 640) ||
-    optimizeCatalogImageUrl(iconUrl, 640) ||
+    resolveCategoryShelfImageUrl(imageUrl, bannerImageUrl, iconUrl) ||
     CATEGORY_CARD_PLACEHOLDER_URL
   )
 }

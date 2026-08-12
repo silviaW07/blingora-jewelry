@@ -68,6 +68,7 @@ export interface HomeRecommendCategoryCard {
   categoryName: string
   categorySlug: string | null
   imageUrl: string | null
+  fallbackImageUrl: string | null
   description: string | null
   productCount: number
   /** 该类目下最新 ACTIVE 商品（主分类或 relationCategories），按 createdAt desc */
@@ -534,6 +535,11 @@ export const getHomeRecommendZones = async (input?: {
             (category as any).iconUrl,
             coverImageByCategoryId.get(category.id) || null,
           ),
+          fallbackImageUrl:
+            optimizeCatalogImageUrl(category.imageUrl, 640) ||
+            optimizeCatalogImageUrl(category.bannerImageUrl, 640) ||
+            optimizeCatalogImageUrl((category as any).iconUrl, 640) ||
+            null,
           description: category.description,
           productCount: productCountByCategoryId.get(category.id) ?? category._count.products,
           latestProducts: (latestProductsByCategoryId.get(category.id) || []).slice(0, categoryLatestLimit),

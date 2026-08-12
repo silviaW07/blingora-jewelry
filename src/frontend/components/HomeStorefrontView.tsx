@@ -129,10 +129,18 @@ const getCategoryCardGridClassName = (zone: HomeRecommendZoneSection) =>
   );
 
 const CATEGORY_CARD_PLACEHOLDER = '/category-covers/placeholder.svg';
+const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 1200;
 
 const resolveCategoryCardSrc = (imageUrl?: string | null) => {
   const text = String(imageUrl || '').trim();
   return text || CATEGORY_CARD_PLACEHOLDER;
+};
+
+const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
+  const fallback = String(item.fallbackImageUrl || '').trim();
+  const primary = String(item.imageUrl || '').trim();
+  if (fallback && fallback !== primary) return fallback;
+  return CATEGORY_CARD_PLACEHOLDER;
 };
 
 import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
@@ -354,7 +362,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
                   alt={item.categoryName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  fallbackSrc={resolveCategoryCardFallback(item)}
+                  slowFallbackMs={CATEGORY_PRODUCT_IMAGE_SLOW_MS}
                   loading="lazy"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                 />
@@ -1228,7 +1237,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       onAddToCart={handlers.handleAddToCart}
                       onAddToWishlist={handlers.handleAddToWishlist}
                       controllerName={isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'}
-                      priority={index < 10}
+                      priority={index < 4}
                     />
                   ))}
                 </div>

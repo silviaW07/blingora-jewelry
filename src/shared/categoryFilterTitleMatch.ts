@@ -3,7 +3,12 @@
  * 独立模块，供运维脚本直连 DB，不依赖 ImportFrom1688 / RPC。
  */
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
-import { isAttributeOrFilterCategory } from '@/shared/categoryMatchGuards'
+import { canonicalizeQualityMatchText, isAttributeOrFilterCategory } from '@/shared/categoryMatchGuards'
+import {
+  detectShelfFamily,
+  shelfFamiliesCompatible,
+  type ShelfFamily,
+} from '@/shared/categoryShelfFamily'
 import { PRICE_THRESHOLD_RULES } from '@/backend/lib/priceThresholdAutoClassify'
 
 const compactCatKey = (value?: string | null) =>
@@ -20,11 +25,7 @@ const isPriceThresholdTagCategoryName = (name?: string | null) => {
   )
 }
 
-const normalizeToken = (value?: string | null) =>
-  String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, '')
+const normalizeToken = (value?: string | null) => canonicalizeQualityMatchText(value)
 
 const buildTitleCorpus = (...parts: Array<string | null | undefined>) =>
   normalizeToken(parts.map((p) => String(p || '').trim()).filter(Boolean).join(' '))
@@ -66,17 +67,26 @@ export async function loadFilterCategoriesFromDb(tx: {
     )
 }
 
-/** 标题命中品质/材质/below* 等筛选类目 */
+/** 标题命中品质/材质/below* 等筛选类目；包/饰品货架互不串挂 */
 export function matchFilterCategoriesByTitle(
   title: string,
   categories: FilterCategoryRow[],
   detailText?: string | null,
+  scopeFamily?: ShelfFamily,
 ): FilterCategoryRow[] {
   const corpus = buildTitleCorpus(title, detailText)
   if (!corpus) return []
 
+  const productFamily =
+    scopeFamily && scopeFamily !== 'unknown'
+      ? scopeFamily
+      : detectShelfFamily(title, detailText)
+
   const matched: FilterCategoryRow[] = []
   for (const category of categories) {
+    const tagFamily = detectShelfFamily(category.name, category.parentName)
+    if (!shelfFamiliesCompatible(productFamily, tagFamily)) continue
+
     const tokens = Array.from(
       new Set([category.name, ...resolveCategorySynonyms(category.name)].map((t) => String(t || '').trim()).filter(Boolean)),
     )

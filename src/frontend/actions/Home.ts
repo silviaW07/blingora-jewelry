@@ -8,7 +8,11 @@ import {
   type ProductItem,
   type StockStatusEnum,
 } from '@/frontend/actions/ProductCategory'
-import { readHomeRecommendZonesWithCache } from '@/backend/actions/homeRecommendZoneCache'
+import {
+  readAssembledHomeRecommendZones,
+  readHomeRecommendZonesWithCache,
+  writeAssembledHomeRecommendZones,
+} from '@/backend/actions/homeRecommendZoneCache'
 import prisma from '@/tools/prisma'
 import { withResult } from '@/frontend/action_utils'
 import {
@@ -26,7 +30,7 @@ import {
   resolveFrontRmbSellingPrice,
   toDecimalNumber,
 } from '@/shared/priceCoefficient'
-import { optimizeCatalogImageUrl, resolveCategoryCardImageUrl } from '@/shared/imageUrl'
+import { optimizeCatalogImageUrl, resolveCategoryCardImageUrl, resolveCategoryShelfImageUrl } from '@/shared/imageUrl'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 
 type HomeRecommendZoneType = 'PRODUCT' | 'CATEGORY' | 'SIDE_NAV'
@@ -72,6 +76,8 @@ export interface HomeRecommendCategoryCard {
   categoryName: string
   categorySlug: string | null
   imageUrl: string | null
+  /** 后台分类主图；商品图加载慢/失败时前端用它兜底 */
+  fallbackImageUrl: string | null
   description: string | null
   productCount: number
   /** 该类目下最新 ACTIVE 商品（主分类或 relationCategories），按 createdAt desc */
@@ -154,6 +160,11 @@ export const getHomeRecommendZones = async (input?: {
   lang?: string
 }): Promise<{ zones: HomeRecommendZoneSection[] }> => {
   const lang = normalizeProductLang(input?.lang)
+  const cachedAssembled = readAssembledHomeRecommendZones<HomeRecommendZoneSection[]>(lang)
+  if (cachedAssembled?.length) {
+    return { zones: cachedAssembled }
+  }
+
   const exchangeRate = await getUsdExchangeRate(prisma)
   const zones = await readHomeRecommendZonesWithCache()
 
@@ -198,86 +209,28 @@ export const getHomeRecommendZones = async (input?: {
     : []
   const freshCategoryMap = new Map(freshCategories.map((category) => [category.id, category]))
 
-  // 类目卡封面策略：
-  // 1) 优先用「最新商品主图」(coverImageByCategoryId)，让首页类目卡更鲜活
-  // 2) cover 不存在时再回退到后台配置的 category.imageUrl / bannerImageUrl / iconUrl
-  // 注意：不能用「全局最新 N 条」再分配——热门类目会占满 take，冷门类目永久占位图。
-  const categoryIdsNeedingCover = freshCategories.map((category) => category.id)
-  const coverImageByCategoryId = new Map<string, string>()
-  if (categoryIdsNeedingCover.length > 0) {
-    const needed = new Set(categoryIdsNeedingCover)
-    const coverProducts = await prisma.product.findMany({
-      where: {
-        status: 'ACTIVE',
-        mainImageUrl: { not: '' },
-        OR: [
-          { categoryId: { in: categoryIdsNeedingCover } },
-          { brandCategoryId: { in: categoryIdsNeedingCover } },
-          { relationCategories: { some: { categoryId: { in: categoryIdsNeedingCover } } } },
-        ],
-      },
-      select: {
-        categoryId: true,
-        brandCategoryId: true,
-        mainImageUrl: true,
-        relationCategories: {
-          where: { categoryId: { in: categoryIdsNeedingCover } },
-          select: { categoryId: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: Math.max(1200, categoryIdsNeedingCover.length * 50),
-    })
-
-    const assignCover = (categoryId: string | null | undefined, imageUrl: string) => {
-      const id = String(categoryId || '').trim()
-      if (!id || !needed.has(id) || coverImageByCategoryId.has(id)) return
-      coverImageByCategoryId.set(id, imageUrl)
-      needed.delete(id)
-    }
-
-    for (const product of coverProducts) {
-      if (needed.size === 0) break
-      const imageUrl = optimizeCatalogImageUrl(product.mainImageUrl, 640)
-      if (!imageUrl) continue
-      assignCover(product.categoryId, imageUrl)
-      assignCover(product.brandCategoryId, imageUrl)
-      for (const relation of product.relationCategories) {
-        assignCover(relation.categoryId, imageUrl)
-      }
-    }
-
-    // 第二轮：仍缺封面的类目各自查最新一条（保证 Below 3usd / Stainless steel 等标签类目也能出图）
-    const missingIds = Array.from(needed)
-    if (missingIds.length > 0) {
-      await Promise.all(
-        missingIds.map(async (categoryId) => {
-          const product = await prisma.product.findFirst({
-            where: {
-              status: 'ACTIVE',
-              mainImageUrl: { not: '' },
-              OR: [
-                { categoryId },
-                { brandCategoryId: categoryId },
-                { relationCategories: { some: { categoryId } } },
-              ],
-            },
-            orderBy: { updatedAt: 'desc' },
-            select: { mainImageUrl: true },
-          })
-          const imageUrl = optimizeCatalogImageUrl(product?.mainImageUrl, 640)
-          if (imageUrl) {
-            coverImageByCategoryId.set(categoryId, imageUrl)
-            needed.delete(categoryId)
-          }
-        }),
-      )
-    }
-  }
-
-  // 商品数：主分类 + 多分类关联一起统计，避免类目卡长期显示 0
+  // CATEGORY 专区：按类目拉取最新 ACTIVE 商品（主分类 + 多分类关联），供卡片展示图/标题/价
+  const categoryZoneCategoryIds = Array.from(
+    new Set(
+      zones
+        .filter((zone) => zone.zoneType === 'CATEGORY')
+        .flatMap((zone) =>
+          zone.items
+            .filter((item) => item.entityType === 'CATEGORY')
+            .map((item) => item.categoryId || item.category?.id || null)
+            .filter((id): id is string => Boolean(id)),
+        ),
+    ),
+  )
+  const maxLatestPerCategory = Math.max(
+    DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT,
+    ...zones
+      .filter((zone) => zone.zoneType === 'CATEGORY')
+      .map((zone) => normalizePcCols(zone.pcCols)),
+  )
   const productCountByCategoryId = new Map<string, number>()
-  if (categoryIds.length > 0) {
+  const loadProductCounts = async () => {
+    if (categoryIds.length === 0) return
     const [primaryCounts, relationCounts] = await Promise.all([
       prisma.product.groupBy({
         by: ['categoryId'],
@@ -304,29 +257,13 @@ export const getHomeRecommendZones = async (input?: {
     }
   }
 
-  // CATEGORY 专区：按类目拉取最新 ACTIVE 商品（主分类 + 多分类关联），供卡片展示图/标题/价
-  const categoryZoneCategoryIds = Array.from(
-    new Set(
-      zones
-        .filter((zone) => zone.zoneType === 'CATEGORY')
-        .flatMap((zone) =>
-          zone.items
-            .filter((item) => item.entityType === 'CATEGORY')
-            .map((item) => item.categoryId || item.category?.id || null)
-            .filter((id): id is string => Boolean(id)),
-        ),
-    ),
-  )
-  const maxLatestPerCategory = Math.max(
-    DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT,
-    ...zones
-      .filter((zone) => zone.zoneType === 'CATEGORY')
-      .map((zone) => normalizePcCols(zone.pcCols)),
-  )
   const latestProductsByCategoryId = new Map<string, HomeRecommendProductCard[]>()
 
   if (categoryZoneCategoryIds.length > 0) {
-    const latestCandidates = await prisma.product.findMany({
+    const latestTake = Math.min(180, Math.max(24, categoryZoneCategoryIds.length * maxLatestPerCategory * 3))
+    const [, latestCandidates] = await Promise.all([
+      loadProductCounts(),
+      prisma.product.findMany({
       where: {
         status: 'ACTIVE',
         mainImageUrl: { not: '' },
@@ -354,10 +291,12 @@ export const getHomeRecommendZones = async (input?: {
         skus: {
           select: {
             id: true,
+            skuCode: true,
             price: true,
             originalPrice: true,
           },
           orderBy: { price: 'asc' },
+          take: 6,
         },
         category: {
           select: {
@@ -396,8 +335,9 @@ export const getHomeRecommendZones = async (input?: {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: Math.max(800, categoryZoneCategoryIds.length * maxLatestPerCategory * 8),
-    })
+      take: latestTake,
+    }),
+    ])
 
     const mapLatestProductCard = (
       product: (typeof latestCandidates)[number],
@@ -456,6 +396,7 @@ export const getHomeRecommendZones = async (input?: {
           }
         })
         .filter((opt) => opt.skuId && opt.price !== null)
+        .slice(0, 6)
 
       const originalPriceRmb =
         cost !== null && cost > 0
@@ -476,7 +417,7 @@ export const getHomeRecommendZones = async (input?: {
         categoryId: product.categoryId,
         productName: translatedName,
         productSlug: product.slug,
-        imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 720),
+        imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 400),
         shortDescription: product.shortDescription,
         status: product.status,
         price: priceMinUsd,
@@ -518,6 +459,8 @@ export const getHomeRecommendZones = async (input?: {
         latestProductsByCategoryId.set(linkedCategoryId, bucket)
       }
     }
+  } else {
+    await loadProductCounts()
   }
 
   const result = zones
@@ -605,6 +548,7 @@ export const getHomeRecommendZones = async (input?: {
               }
             })
             .filter((opt) => opt.skuId && opt.price !== null)
+            .slice(0, 6)
           const originalPriceRmb =
             priceRmb === null
               ? null
@@ -629,7 +573,7 @@ export const getHomeRecommendZones = async (input?: {
             categoryId: product.categoryId,
             productName: translatedName,
             productSlug: product.slug,
-            imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 720),
+            imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 400),
             shortDescription: product.shortDescription,
             status: product.status,
             price,
@@ -686,6 +630,12 @@ export const getHomeRecommendZones = async (input?: {
           return acc
         }
 
+        const productCover = (latestProductsByCategoryId.get(category.id) || [])[0]?.imageUrl || null
+        const shelfImage = resolveCategoryShelfImageUrl(
+          category.imageUrl,
+          category.bannerImageUrl,
+          (category as { iconUrl?: string | null }).iconUrl,
+        )
         acc.push({
           itemId: item.id,
           entityType: 'CATEGORY' as const,
@@ -695,11 +645,10 @@ export const getHomeRecommendZones = async (input?: {
           imageUrl: resolveCategoryCardImageUrl(
             category.imageUrl,
             category.bannerImageUrl,
-            (category as any).iconUrl,
-            coverImageByCategoryId.get(category.id) ||
-              (latestProductsByCategoryId.get(category.id) || [])[0]?.imageUrl ||
-              null,
+            (category as { iconUrl?: string | null }).iconUrl,
+            productCover,
           ),
+          fallbackImageUrl: shelfImage,
           description: category.description,
           productCount: productCountByCategoryId.get(category.id) ?? category._count.products,
           latestProducts: (latestProductsByCategoryId.get(category.id) || []).slice(0, categoryLatestLimit),
@@ -721,6 +670,7 @@ export const getHomeRecommendZones = async (input?: {
       }
     })
 
+  writeAssembledHomeRecommendZones(lang, result)
   return {
     zones: result,
   }

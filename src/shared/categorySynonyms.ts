@@ -196,13 +196,40 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Perfume Set', '香水套装'], synonyms: ['香水套装', '香氛套装'] },
 
   // —— 品质 / 材质 / 价格带标签（关联类目，不当主类目）——
+  // 包 / 饰品必须拆开：high quality jewelry 不得被包标题里的 high quality 命中
   {
-    names: ['High Quality', 'high quality', 'High quality', 'high quality jewelry', 'High Quality Jewelry'],
+    names: ['High Quality', 'high quality', 'High quality'],
     synonyms: ['high quality', 'highquality', '高质量', '高品质', 'HQ'],
   },
   {
-    names: ['Normal Quality', 'normal quality', 'Normal quality', 'normal quality jewelry'],
-    synonyms: ['normal quality', 'normalquality', '普通品质', '普通质量', 'NQ'],
+    names: ['high quality jewelry', 'High Quality Jewelry', 'High quality jewelry'],
+    synonyms: ['high quality jewelry', 'highqualityjewelry', '高品质饰品', '高质量饰品'],
+  },
+  {
+    names: ['High quality bag', 'high quality bag', 'High Quality Bag'],
+    synonyms: ['high quality bag', 'highqualitybag', '高品质包', '高质量包'],
+  },
+  {
+    names: ['Normal Quality', 'normal quality', 'Normal quality'],
+    synonyms: [
+      'normal quality',
+      'normalquality',
+      'normal quialty',
+      'normalquialty',
+      'normal qulity',
+      'nomal quality',
+      '普通品质',
+      '普通质量',
+      'NQ',
+    ],
+  },
+  {
+    names: ['normal quality jewelry', 'Normal quality jewelry'],
+    synonyms: ['normal quality jewelry', 'normalqualityjewelry', '普通品质饰品'],
+  },
+  {
+    names: ['Normal quality bag', 'normal quality bag', 'Normal Quality Bag'],
+    synonyms: ['normal quality bag', 'normalqualitybag', '普通品质包'],
   },
   {
     names: ['Low Quality', 'low quality', 'Low quality', 'premium quality'],

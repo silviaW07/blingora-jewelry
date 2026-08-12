@@ -17,12 +17,47 @@ let inflightLang = ''
 
 /** Short TTL — zones change infrequently; names refresh on next fetch. */
 const TTL_MS = 2 * 60 * 1000
+const STORAGE_KEY = 'sj.home-zones.v2'
+
+function readSession(lang: string): CacheEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as CacheEntry
+    if (!Array.isArray(parsed?.zones) || parsed.zones.length === 0) return null
+    if (parsed.lang !== lang) return null
+    if (Date.now() - parsed.fetchedAt > TTL_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeSession(entry: CacheEntry) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(entry))
+  } catch {
+    // quota / private mode
+  }
+}
 
 export function peekCachedHomeRecommendZones(lang?: string): HomeRecommendZoneSection[] | null {
-  if (!cache) return null
-  if (lang && cache.lang !== lang) return null
-  if (Date.now() - cache.fetchedAt > TTL_MS) return null
-  return cache.zones
+  const normalized = String(lang || '').trim()
+  if (cache) {
+    if ((!normalized || cache.lang === normalized) && Date.now() - cache.fetchedAt <= TTL_MS) {
+      return cache.zones
+    }
+  }
+  if (normalized) {
+    const fromSession = readSession(normalized)
+    if (fromSession) {
+      cache = fromSession
+      return fromSession.zones
+    }
+  }
+  return null
 }
 
 /**
@@ -43,6 +78,7 @@ export async function loadHomeRecommendZonesCached(lang: string): Promise<HomeRe
     .then((res) => {
       const zones = Array.isArray(res.zones) ? res.zones : []
       cache = { lang: normalized, zones, fetchedAt: Date.now() }
+      writeSession(cache)
       return zones
     })
     .catch((err) => {

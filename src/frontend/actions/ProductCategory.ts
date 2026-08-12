@@ -277,9 +277,12 @@ const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
 const DEFAULT_KEYWORD_SCENE_AREAS: KeywordSceneArea[] = ['BOTH', 'LEFT_NAV', 'RECOMMENDATION']
 /** 列表卡片最多加载的 SKU 行数（缩略图 + 默认规格）；全量 min/max 价另走 groupBy */
-const PRODUCT_LIST_SKU_TAKE = 40
+const PRODUCT_LIST_SKU_TAKE = 8
 const CATEGORY_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000
+const CATEGORY_LIST_CACHE_TTL_MS = 90_000
 const categoryContextCache = new Map<string, { at: number; value: ResolvedCategoryContext }>()
+const categoryListServerCache = new Map<string, { at: number; value: GetCategoryListOutput }>()
+const posterListCache = new Map<string, { at: number; value: GetCategoryPosterListOutput }>()
 
 const normalizeSceneValue = (value?: string | null): string | undefined => {
   if (typeof value !== 'string') {
@@ -524,9 +527,6 @@ const buildProductWhere = (
 ) => {
   const where: any = {
     status: 'ACTIVE',
-    category: {
-      status: 'ACTIVE'
-    }
   }
 
   const orConditions: any[] = []
@@ -536,6 +536,9 @@ const buildProductWhere = (
     orConditions.push({
       categoryId: {
         in: context.categoryIdsForQuery
+      },
+      category: {
+        status: 'ACTIVE'
       }
     })
     // 品牌字段命中（Brand 货架商品常写在 brandCategoryId，而主类目是 Handbag）
@@ -568,12 +571,14 @@ const buildProductWhere = (
     }
   } else if (context.rootCategoryId) {
     where.category = {
-      ...where.category,
+      status: 'ACTIVE',
       OR: [
         { id: context.rootCategoryId },
         { parentId: context.rootCategoryId }
       ]
     }
+  } else {
+    where.category = { status: 'ACTIVE' }
   }
 
   if (orConditions.length > 0) {
@@ -638,12 +643,35 @@ const buildProductWhere = (
  */
 export const getCategoryList = withResult(async (input?: GetCategoryListInput): Promise<GetCategoryListOutput> => {
   const lang = normalizeProductLang(input?.lang)
+  const cachedList = categoryListServerCache.get(lang)
+  if (cachedList && Date.now() - cachedList.at < CATEGORY_LIST_CACHE_TTL_MS) {
+    return cachedList.value
+  }
+
   const categories = await prisma.category.findMany({
     where: {
       status: 'ACTIVE'
     },
-    include: {
-      navConfig: true
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+      level: true,
+      parentId: true,
+      isBrandCategory: true,
+      sortWeight: true,
+      createdAt: true,
+      imageUrl: true,
+      iconUrl: true,
+      translationsJson: true,
+      categoryDisplayConfigJson: true,
+      navConfig: {
+        select: {
+          isVisible: true,
+          navTitle: true,
+        },
+      },
     },
     orderBy: [
       { sortWeight: 'desc' },
@@ -659,48 +687,36 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
   // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
   const brandProductCount = new Map<string, number>()
   if (brandIds.length > 0) {
-    const linkedProducts = await prisma.product.findMany({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { categoryId: { in: brandIds } },
-          { brandCategoryId: { in: brandIds } },
-          {
-            relationCategories: {
-              some: {
-                categoryId: { in: brandIds },
-                category: { status: 'ACTIVE' },
-              },
-            },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        categoryId: true,
-        brandCategoryId: true,
-        relationCategories: {
-          where: { categoryId: { in: brandIds } },
-          select: { categoryId: true },
+    const [byCategory, byBrandCategory, byRelation] = await Promise.all([
+      prisma.product.groupBy({
+        by: ['categoryId'],
+        where: { status: 'ACTIVE', categoryId: { in: brandIds } },
+        _count: { _all: true },
+      }),
+      prisma.product.groupBy({
+        by: ['brandCategoryId'],
+        where: { status: 'ACTIVE', brandCategoryId: { in: brandIds } },
+        _count: { _all: true },
+      }),
+      prisma.product_category_relations.groupBy({
+        by: ['categoryId'],
+        where: {
+          categoryId: { in: brandIds },
+          product: { status: 'ACTIVE' },
         },
-      },
-    })
-    for (const product of linkedProducts) {
-      const hitIds = new Set<string>()
-      if (product.categoryId && brandIds.includes(product.categoryId)) hitIds.add(product.categoryId)
-      if (product.brandCategoryId && brandIds.includes(product.brandCategoryId)) {
-        hitIds.add(product.brandCategoryId)
-      }
-      for (const rel of product.relationCategories) {
-        if (brandIds.includes(rel.categoryId)) hitIds.add(rel.categoryId)
-      }
-      for (const brandId of hitIds) {
-        brandProductCount.set(brandId, (brandProductCount.get(brandId) || 0) + 1)
-      }
+        _count: { _all: true },
+      }),
+    ])
+    const addCount = (id: string | null | undefined, count: number) => {
+      if (!id) return
+      brandProductCount.set(id, (brandProductCount.get(id) || 0) + count)
     }
+    for (const row of byCategory) addCount(row.categoryId, row._count._all)
+    for (const row of byBrandCategory) addCount(row.brandCategoryId, row._count._all)
+    for (const row of byRelation) addCount(row.categoryId, row._count._all)
   }
 
-  return {
+  const output: GetCategoryListOutput = {
     list: mainCategories.map(cat => {
       const fallbackName = cat.navConfig?.navTitle?.trim() || cat.name
       return {
@@ -734,6 +750,8 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
       }
     })
   }
+  categoryListServerCache.set(lang, { at: Date.now(), value: output })
+  return output
 })
 
 /**
@@ -844,8 +862,16 @@ export const getCategoryDetail = withResult(async (input: GetCategoryDetailInput
  * 读取目录页海报，优先返回与当前一级分类关联的数据。
  */
 export const getCategoryPosterList = withResult(async (input: GetCategoryPosterListInput): Promise<GetCategoryPosterListOutput> => {
-  const categoryContext = await resolveCategoryContext(input.category_id)
-  const mainCategoryId = categoryContext.rootCategoryId
+  const cacheKey = String(input.category_id || '')
+  const cachedPosters = posterListCache.get(cacheKey)
+  if (cachedPosters && Date.now() - cachedPosters.at < CATEGORY_LIST_CACHE_TTL_MS) {
+    return cachedPosters.value
+  }
+
+  const categoryContext = input.category_id
+    ? await resolveCategoryContext(input.category_id)
+    : null
+  const mainCategoryId = categoryContext?.rootCategoryId
   const bannerRecords = await prisma.categorybanner.findMany({
     where: {
       isEnabled: true
@@ -875,9 +901,11 @@ export const getCategoryPosterList = withResult(async (input: GetCategoryPosterL
       ]
     : posterList
 
-  return {
+  const output: GetCategoryPosterListOutput = {
     list: [...sortedPosterList].sort((a, b) => b.sort_weight - a.sort_weight)
   }
+  posterListCache.set(cacheKey, { at: Date.now(), value: output })
+  return output
 })
 
 /**

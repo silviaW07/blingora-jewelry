@@ -19,7 +19,6 @@ import type {
 import {
   getCategoryDetail,
   getCategoryPosterList,
-  getCategorySideNavZones,
   getKeywordGroupList,
   getKeywordList,
   getProductList,
@@ -28,6 +27,7 @@ import {
   resolveCategoryRouteKey,
 } from '@/frontend/actions/ProductCategory'
 import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
+import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 
@@ -596,6 +596,10 @@ export const useProductCategory = (): {
   ])
 
   useEffect(() => {
+    if (isStorefrontHomePath) {
+      setPromotionConfig(null)
+      return
+    }
     getCategoryTopPromotion()
       .then((res) => {
         setPromotionConfig(res.promotion)
@@ -603,15 +607,18 @@ export const useProductCategory = (): {
       .catch(() => {
         setPromotionConfig(null)
       })
-  }, [])
+  }, [isStorefrontHomePath])
 
   useEffect(() => {
+    if (isStorefrontHomePath || !promotionConfig?.enabled) {
+      return
+    }
     const timer = window.setInterval(() => {
       setPromotionNow(Date.now())
     }, 1000)
 
     return () => window.clearInterval(timer)
-  }, [])
+  }, [isStorefrontHomePath, promotionConfig?.enabled])
 
   const selectedParentCategory = useMemo(() => {
     if (!queryState.categoryId) {
@@ -746,9 +753,9 @@ export const useProductCategory = (): {
     // Home brand rail prefers recommend SIDE_NAV; defer category side-nav to idle
     if (!isStorefrontHomePath) {
       const lang = getCurrentLang()
-      getCategorySideNavZones({ lang })
-        .then((res) => {
-          setSideNavZones(Array.isArray(res.zones) ? res.zones : [])
+      loadSideNavZonesCached(lang)
+        .then((zones) => {
+          setSideNavZones(Array.isArray(zones) ? zones : [])
         })
         .catch(() => undefined)
       return
@@ -760,10 +767,10 @@ export const useProductCategory = (): {
     const load = () => {
       if (cancelled) return
       const lang = getCurrentLang()
-      getCategorySideNavZones({ lang })
-        .then((res) => {
+      loadSideNavZonesCached(lang)
+        .then((zones) => {
           if (cancelled) return
-          setSideNavZones(Array.isArray(res.zones) ? res.zones : [])
+          setSideNavZones(Array.isArray(zones) ? zones : [])
         })
         .catch(() => undefined)
     }

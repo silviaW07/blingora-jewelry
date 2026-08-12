@@ -7,8 +7,8 @@ import { Loader2 } from 'lucide-react'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached } from '@/frontend/utils/categoryListCache'
+import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
-  getCategorySideNavZones,
   type CategoryItem,
   type SideNavZoneSection,
 } from '@/frontend/actions/ProductCategory'
@@ -120,9 +120,7 @@ export default function MobileCategoriesView() {
 
     Promise.all([
       loadCategoryListCached(lang).catch(() => [] as CategoryItem[]),
-      getCategorySideNavZones({ lang }).catch(() => ({
-        zones: [] as SideNavZoneSection[],
-      })),
+      loadSideNavZonesCached(lang).catch(() => [] as SideNavZoneSection[]),
     ])
       .then(([list, sideNav]) => {
         if (cancelled) return
@@ -131,7 +129,7 @@ export default function MobileCategoriesView() {
           if (prev && list.some((c) => c.category_id === prev)) return prev
           return list[0]?.category_id || ''
         })
-        setBrands(collectMobileCategoryBrands(list, sideNav.zones || []))
+        setBrands(collectMobileCategoryBrands(list, sideNav || []))
       })
       .catch(() => {
         if (!cancelled) {

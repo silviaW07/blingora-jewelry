@@ -629,7 +629,13 @@ import {
   UserRole
 } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
-import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
+import {
+  canonicalizeQualityMatchText,
+  isAttributeOrFilterCategory,
+  isGluedFilterSuffixToken,
+  isProductTypeCategory,
+} from '@/shared/categoryMatchGuards'
+import { detectShelfFamily, shelfFamiliesCompatible } from '@/shared/categoryShelfFamily'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
 import {
   loadFilterCategoriesFromDb,
@@ -638,6 +644,7 @@ import {
 } from '@/shared/categoryFilterTitleMatch'
 import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
+import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
 import { isPendingImportEffectivelyReady, hasPendingImportCoreFields } from '@/backend/utils/pendingImportReadiness'
@@ -4476,6 +4483,11 @@ const enrichPendingMatchedCategoriesFromTitle = (
   ).filter((hit) => isAttributeOrFilterCategory({ name: hit.name, parentName: hit.parentName }))
   const fromFilter = matchFilterCategoriesByTitle(title, context.filterCategories, detailText)
 
+  const productFamily = detectShelfFamily(title, detailText)
+  const parentById = new Map<string, string | null>()
+  for (const cat of context.secondaryCategories) parentById.set(cat.id, cat.parentName || null)
+  for (const cat of context.filterCategories) parentById.set(cat.id, cat.parentName || null)
+
   const byId = new Map<string, string>()
   for (const hit of fromMatcher) byId.set(hit.id, hit.name)
   for (const hit of fromFilter) byId.set(hit.id, hit.name)
@@ -4485,7 +4497,13 @@ const enrichPendingMatchedCategoriesFromTitle = (
   for (const cat of context.filterCategories) nameById.set(cat.id, cat.name)
   for (const [id, name] of byId) nameById.set(id, name)
 
-  const mergedIds = Array.from(new Set([...existingIds, ...Array.from(byId.keys())]))
+  const keepId = (id: string) => {
+    const name = nameById.get(id)
+    if (!name) return true
+    return shelfFamiliesCompatible(productFamily, detectShelfFamily(name, parentById.get(id)))
+  }
+
+  const mergedIds = Array.from(new Set([...existingIds, ...Array.from(byId.keys())])).filter(keepId)
   const mergedNames = Array.from(
     new Set([
       ...existingNames,
@@ -5220,10 +5238,12 @@ export type AutoMatchedSecondaryCategory = {
 }
 
 export const normalizeCategoryMatchText = (value?: string | null) =>
-  String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, '')
+  canonicalizeQualityMatchText(
+    String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ''),
+  )
 
 /** 「无品牌」兜底货架：不得与真实品牌（Chanel/LV…）抢标题命中，也不应在已命中品牌时残留为标签 */
 export const isNoBrandCatchAllCategoryName = (name?: string | null) => {
@@ -5255,6 +5275,9 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
   const normalizedToken = normalizeCategoryMatchText(token)
   if (!normalizedText || !normalizedToken) return false
   if (!normalizedText.includes(normalizedToken)) return false
+
+  // 品质/材质/below* 后缀：允许粘在货号后（3313normal quality）或后面再跟 jewelry
+  if (isGluedFilterSuffixToken(normalizedToken)) return true
 
   // 纯 ASCII 品牌词（Chanel/Gucci/LV…）：要求左右非字母数字邻居。
   // 标题常见「Chanel【钛钢】」「Chanel钛钢」「chanel 欧美」——品牌后直接接中文/符号仍算命中；
@@ -5655,8 +5678,17 @@ export function matchSecondaryCategoriesByTitle(
   const bestBrand = brandScored[0]?.category
   if (bestBrand) refinedProduct.push(bestBrand)
 
-  // 材质/品质：仅作关联标签挂上，不抢主类目
+  const productFamily =
+    detectShelfFamily(title) !== 'unknown'
+      ? detectShelfFamily(title)
+      : detectShelfFamily(
+          ...refinedProduct.map((category) => `${category.name} ${category.parentName || ''}`),
+        )
+
+  // 材质/品质：仅作关联标签挂上，不抢主类目；包不得挂饰品品质货架
   for (const item of attrScored) {
+    const tagFamily = detectShelfFamily(item.category.name, item.category.parentName)
+    if (!shelfFamiliesCompatible(productFamily, tagFamily)) continue
     if (!refinedProduct.some((c) => c.id === item.category.id)) {
       refinedProduct.push(item.category)
     }

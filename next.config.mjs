@@ -109,6 +109,9 @@ const nextConfig = {
       { protocol: 'https', hostname: 'sc04.alicdn.com', pathname: '/**' },
       { protocol: 'https', hostname: 'productp.s3.us-west-2.amazonaws.com', pathname: '/**' },
       { protocol: 'https', hostname: '**.amazonaws.com', pathname: '/**' },
+      // Old-shop / table-import images (e.g. jewelry category covers)
+      { protocol: 'https', hostname: 'hspi.oss-us-west-1.aliyuncs.com', pathname: '/**' },
+      { protocol: 'https', hostname: '**.aliyuncs.com', pathname: '/**' },
       { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },
       { protocol: 'https', hostname: 'sourcingjewelry.com', pathname: '/**' },
       { protocol: 'https', hostname: 'www.sourcingjewelry.com', pathname: '/**' },

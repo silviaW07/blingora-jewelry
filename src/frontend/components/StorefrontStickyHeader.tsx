@@ -27,11 +27,11 @@ import { StorefrontFloatingSideNav } from '@/frontend/components/StorefrontFloat
 import { useUserSession } from '@/tools/FrontendSession'
 import { ProductCategory, Cart } from '@/frontend/route-params'
 import {
-  getCategorySideNavZones,
   type CategoryItem,
   type SideNavZoneItem,
 } from '@/frontend/actions/ProductCategory'
 import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
+import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import {
   getDailyNewArrivalCalendar,
@@ -158,11 +158,11 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
         // keep cached / previous categories — never wipe nav to []
       })
 
-    getCategorySideNavZones({ lang })
-      .then((res) => {
-        const zones = Array.isArray(res.zones) ? res.zones : []
+    loadSideNavZonesCached(lang)
+      .then((zones) => {
+        const list = Array.isArray(zones) ? zones : []
         // Same Brand → Hot → first zone rule as home left rail
-        const brandZone = pickBrandSideNavZone(zones)
+        const brandZone = pickBrandSideNavZone(list)
         setFloatingBrandItems(Array.isArray(brandZone?.items) ? brandZone.items : [])
       })
       .catch(() => {
@@ -172,21 +172,38 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
 
   useEffect(() => {
     let cancelled = false
-    setIsLoadingDailyNewArrivalCalendar(true)
-    getDailyNewArrivalCalendar()
-      .then((res) => {
-        if (cancelled) return
-        const months = Array.isArray(res.months) && res.months.length > 0 ? res.months : fallbackMonths
-        setDailyNewArrivalMonths(months)
-      })
-      .catch(() => {
-        if (!cancelled) setDailyNewArrivalMonths(fallbackMonths)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingDailyNewArrivalCalendar(false)
-      })
+    let idleId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const load = () => {
+      if (cancelled) return
+      setIsLoadingDailyNewArrivalCalendar(true)
+      getDailyNewArrivalCalendar()
+        .then((res) => {
+          if (cancelled) return
+          const months = Array.isArray(res.months) && res.months.length > 0 ? res.months : fallbackMonths
+          setDailyNewArrivalMonths(months)
+        })
+        .catch(() => {
+          if (!cancelled) setDailyNewArrivalMonths(fallbackMonths)
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingDailyNewArrivalCalendar(false)
+        })
+    }
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(load, { timeout: 2200 })
+    } else {
+      timeoutId = setTimeout(load, 500)
+    }
+
     return () => {
       cancelled = true
+      if (idleId != null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [fallbackMonths])
 

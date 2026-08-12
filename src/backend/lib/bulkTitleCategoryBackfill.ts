@@ -6,6 +6,7 @@ import { DEFAULT_BRAND_ALIASES, type BrandAliasRule } from '@/backend/lib/brandA
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
 import { isAttributeOrFilterCategory } from '@/shared/categoryMatchGuards'
+import { detectShelfFamily, shelfFamiliesCompatible, type ShelfFamily } from '@/shared/categoryShelfFamily'
 import { expandCategoryIdsWithParents, loadFilterCategoriesFromDb, matchFilterCategoriesByTitle } from '@/shared/categoryFilterTitleMatch'
 import {
   buildCategoryMatchCorpus,
@@ -35,11 +36,15 @@ function pickTitleFilterHits(
   detailText: string | null | undefined,
   secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>,
   filterCategories: Awaited<ReturnType<typeof loadFilterCategoriesFromDb>>,
+  scopeFamily?: ShelfFamily,
 ) {
   const corpus = buildCategoryMatchCorpus(title, detailText)
   const fromMatcher = matchSecondaryCategoriesByTitle(title, secondaryCategories, detailText)
     .filter((hit) => isAttributeOrFilterCategory({ name: hit.name, parentName: hit.parentName }))
-  const fromFilter = matchFilterCategoriesByTitle(title, filterCategories, detailText)
+    .filter((hit) =>
+      shelfFamiliesCompatible(scopeFamily || detectShelfFamily(title, detailText), detectShelfFamily(hit.name, hit.parentName)),
+    )
+  const fromFilter = matchFilterCategoriesByTitle(title, filterCategories, detailText, scopeFamily)
   const byId = new Map<string, { id: string; name: string }>()
   for (const hit of fromMatcher) {
     byId.set(hit.id, { id: hit.id, name: hit.name })
@@ -84,6 +89,14 @@ export async function backfillTitleFilterCategoriesForAllProducts(options?: {
     loadBrandRules(),
   ])
 
+  const familyById = new Map<string, ReturnType<typeof detectShelfFamily>>()
+  for (const cat of secondaryCategories) {
+    familyById.set(cat.id, detectShelfFamily(cat.name, cat.parentName))
+  }
+  for (const cat of filterCategories) {
+    familyById.set(cat.id, detectShelfFamily(cat.name, cat.parentName))
+  }
+
   let productsScanned = 0
   let productsUpdated = 0
   let relationsAdded = 0
@@ -98,6 +111,7 @@ export async function backfillTitleFilterCategoriesForAllProducts(options?: {
         detailText: true,
         shortDescription: true,
         categoryId: true,
+        category: { select: { name: true, parent: { select: { name: true } } } },
         relationCategories: { select: { categoryId: true } },
       },
       orderBy: { id: 'asc' },
@@ -114,23 +128,41 @@ export async function backfillTitleFilterCategoriesForAllProducts(options?: {
 
       const effectiveName = applyBrandAliases(nameBefore, brandRules) || nameBefore
       const detailText = [product.detailText, product.shortDescription].filter(Boolean).join('\n') || null
-      const hits = pickTitleFilterHits(effectiveName, detailText, secondaryCategories, filterCategories)
-      if (!hits.length) {
-        if (!dryRun) {
-          await syncProductPriceThresholdRelations(prisma, product.id).catch(() => undefined)
-        }
-        continue
-      }
-
-      const expanded = await expandCategoryIdsWithParents(
-        prisma,
-        hits.map((h) => h.id),
+      const productFamily = detectShelfFamily(
+        effectiveName,
+        detailText,
+        product.category?.name,
+        product.category?.parent?.name,
       )
+      const hits = pickTitleFilterHits(
+        effectiveName,
+        detailText,
+        secondaryCategories,
+        filterCategories,
+        productFamily,
+      )
+
+      const expanded = hits.length
+        ? await expandCategoryIdsWithParents(
+            prisma,
+            hits.map((h) => h.id),
+          )
+        : []
       const existing = new Set(
         [product.categoryId, ...product.relationCategories.map((r) => r.categoryId)].filter(Boolean),
       )
       const toAdd = expanded.filter((id) => id && !existing.has(id))
-      if (!toAdd.length) {
+
+      const toRemove = product.relationCategories
+        .map((rel) => rel.categoryId)
+        .filter((id) => {
+          if (id === product.categoryId) return false
+          const fam = familyById.get(id)
+          if (!fam || fam === 'unknown') return false
+          return !shelfFamiliesCompatible(productFamily, fam)
+        })
+
+      if (!toAdd.length && !toRemove.length) {
         if (!dryRun) {
           await syncProductPriceThresholdRelations(prisma, product.id).catch(() => undefined)
         }
@@ -138,10 +170,17 @@ export async function backfillTitleFilterCategoriesForAllProducts(options?: {
       }
 
       if (!dryRun) {
-        await prisma.product_category_relations.createMany({
-          data: toAdd.map((categoryId) => ({ productId: product.id, categoryId })),
-          skipDuplicates: true,
-        })
+        if (toRemove.length) {
+          await prisma.product_category_relations.deleteMany({
+            where: { productId: product.id, categoryId: { in: toRemove } },
+          })
+        }
+        if (toAdd.length) {
+          await prisma.product_category_relations.createMany({
+            data: toAdd.map((categoryId) => ({ productId: product.id, categoryId })),
+            skipDuplicates: true,
+          })
+        }
         await syncProductPriceThresholdRelations(prisma, product.id).catch(() => undefined)
       }
 
@@ -202,8 +241,20 @@ export async function backfillTitleFilterCategoriesForPendingImports(options?: {
 
       const effectiveName = applyBrandAliases(nameBefore, brandRules) || nameBefore
       const detailText = [row.productDetail, preview.shortDescription].filter(Boolean).join('\n') || null
-      const hits = pickTitleFilterHits(effectiveName, detailText, secondaryCategories, filterCategories)
-      if (!hits.length) continue
+      const targetMeta = secondaryCategories.find((cat) => cat.id === (row.targetCategoryId || preview.categoryId))
+      const productFamily = detectShelfFamily(
+        effectiveName,
+        detailText,
+        targetMeta?.name,
+        targetMeta?.parentName,
+      )
+      const hits = pickTitleFilterHits(
+        effectiveName,
+        detailText,
+        secondaryCategories,
+        filterCategories,
+        productFamily,
+      )
 
       const mergedRaw = Array.from(
         new Set(
@@ -214,7 +265,17 @@ export async function backfillTitleFilterCategoriesForPendingImports(options?: {
             ...hits.map((h) => h.id),
           ]
             .map((id) => String(id || '').trim())
-            .filter(Boolean),
+            .filter(Boolean)
+            .filter((id) => {
+              const fam = detectShelfFamily(
+                secondaryCategories.find((cat) => cat.id === id)?.name ||
+                  filterCategories.find((cat) => cat.id === id)?.name,
+                secondaryCategories.find((cat) => cat.id === id)?.parentName ||
+                  filterCategories.find((cat) => cat.id === id)?.parentName,
+              )
+              if (id === row.targetCategoryId || id === preview.categoryId) return true
+              return shelfFamiliesCompatible(productFamily, fam)
+            }),
         ),
       )
       const mergedIds = await expandCategoryIdsWithParents(prisma, mergedRaw)

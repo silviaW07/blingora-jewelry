@@ -7,6 +7,8 @@ export const HOME_RECOMMEND_ZONE_CACHE_TAG = 'home-recommend-zones'
 const productPricingInclude = {
   skus: {
     orderBy: { price: 'asc' as const },
+    // Homepage cards only need a default price + a few option chips.
+    take: 8,
   },
   category: {
     select: {
@@ -74,6 +76,25 @@ export type HomeRecommendZoneCachedRecord = Awaited<
 
 let cachedZones: HomeRecommendZoneCachedRecord | null = null
 
+const ASSEMBLED_HOME_ZONES_TTL_MS = 90_000
+const assembledHomeZonesByLang = new Map<string, { at: number; zones: unknown }>()
+
+export function readAssembledHomeRecommendZones<T>(lang: string): T | null {
+  const key = String(lang || 'en').trim() || 'en'
+  const hit = assembledHomeZonesByLang.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > ASSEMBLED_HOME_ZONES_TTL_MS) {
+    assembledHomeZonesByLang.delete(key)
+    return null
+  }
+  return hit.zones as T
+}
+
+export function writeAssembledHomeRecommendZones(lang: string, zones: unknown) {
+  const key = String(lang || 'en').trim() || 'en'
+  assembledHomeZonesByLang.set(key, { at: Date.now(), zones })
+}
+
 export async function readHomeRecommendZonesWithCache(): Promise<HomeRecommendZoneCachedRecord> {
   if (cachedZones) {
     return cachedZones
@@ -118,4 +139,5 @@ export async function readHomeRecommendZonesWithCache(): Promise<HomeRecommendZo
 
 export function invalidateHomeRecommendZoneCache() {
   cachedZones = null
+  assembledHomeZonesByLang.clear()
 }

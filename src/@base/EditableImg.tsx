@@ -84,6 +84,8 @@ interface EditableImgProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement
     /** 关闭外链关键词搜图（首页类目卡等场景应关闭，避免长时间转圈） */
     disableKeywordSearch?: boolean;
     fallbackSrc?: string | null;
+    /** 主图超过该毫秒仍未加载成功时切到 fallbackSrc（首页类目卡：商品图慢则用分类主图） */
+    slowFallbackMs?: number;
 }
 
 const defaultStyle: CSSProperties = {
@@ -125,6 +127,7 @@ const EditableImg = ({
     orientation = 'landscape',
     disableKeywordSearch = false,
     fallbackSrc = null,
+    slowFallbackMs = 0,
     loading = 'lazy',
     decoding = 'async',
     ...imgProps
@@ -133,6 +136,8 @@ const EditableImg = ({
     const [imageAlt, setImageAlt] = useState<string | null | undefined>(alt);
     const [loadingState, setLoadingState] = useState<boolean>(false);
     const [hasError, setHasError] = useState<boolean>(false);
+    /** 0 = normal; 1 = force native <img> (skip /_next/image) before placeholder */
+    const [loadAttempt, setLoadAttempt] = useState(0);
     const [isFromKeywordSearch, setIsFromKeywordSearch] = useState<boolean>(false); // 新增状态
     const projectId = useMemo(() => extractProjectId(), []);
     const { getPatch } = useDecorateMode();
@@ -140,10 +145,55 @@ const EditableImg = ({
     const overrideSrc = patch?.imageUrl?.trim() || '';
 
     useEffect(() => {
-        setImageSrc(src);
+        if (slowFallbackMs > 0 && fallbackSrc && src && src !== fallbackSrc) {
+            setImageSrc(fallbackSrc);
+        } else {
+            setImageSrc(src);
+        }
         setHasError(false);
+        setLoadAttempt(0);
         setIsFromKeywordSearch(false); // 来自 src prop 时,标记为非关键词搜索
-    }, [src]);
+    }, [src, fallbackSrc, slowFallbackMs]);
+
+    useEffect(() => {
+        if (overrideSrc) return;
+        if (!(slowFallbackMs > 0) || !fallbackSrc || !src || src === fallbackSrc) return;
+
+        setImageSrc(fallbackSrc);
+        setHasError(false);
+        setLoadingState(false);
+
+        let cancelled = false;
+        let settled = false;
+        const img = new window.Image();
+        const proxied = toProxiedImageUrl(src, { width: 400 }) || src;
+        const timer = window.setTimeout(() => {
+            settled = true;
+            img.onload = null;
+            img.onerror = null;
+        }, slowFallbackMs);
+
+        img.onload = () => {
+            if (cancelled || settled) return;
+            settled = true;
+            window.clearTimeout(timer);
+            setLoadAttempt(0);
+            setImageSrc(src);
+        };
+        img.onerror = () => {
+            if (cancelled || settled) return;
+            settled = true;
+            window.clearTimeout(timer);
+        };
+        img.src = proxied;
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+            img.onload = null;
+            img.onerror = null;
+        };
+    }, [src, fallbackSrc, slowFallbackMs, overrideSrc]);
 
     useEffect(() => {
         setImageAlt(alt);
@@ -159,7 +209,9 @@ const EditableImg = ({
             return;
         }
         if (src) {
-            setImageSrc(src);
+            if (!(slowFallbackMs > 0 && fallbackSrc && src !== fallbackSrc)) {
+                setImageSrc(src);
+            }
             setHasError(false);
             setIsFromKeywordSearch(false);
             setLoadingState(false);
@@ -241,7 +293,7 @@ const EditableImg = ({
             cancelled = true;
             abortController.abort();
         };
-    }, [keywords, src, orientation, propKey, projectId, description, needLargeImage, overrideSrc, disableKeywordSearch, fallbackSrc]);
+    }, [keywords, src, orientation, propKey, projectId, description, needLargeImage, overrideSrc, disableKeywordSearch, fallbackSrc, slowFallbackMs]);
 
     const mergedStyle: CSSProperties = {
         ...defaultStyle,
@@ -266,33 +318,68 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: 800 }) || raw
+                const proxied = toProxiedImageUrl(raw, { width: 400 }) || raw
+                const useNativeImg =
+                    shouldBypassImageOptimizer(proxied) ||
+                    loadAttempt > 0 ||
+                    /\.svg($|\?)/i.test(proxied)
+                const imgStyle: CSSProperties = {
+                    ...mergedStyle,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: (mergedStyle.objectFit as any) || 'cover',
+                }
+                const handleError = () => {
+                    setLoadingState(false)
+                    // Soft-retry: native <img> before locking the placeholder.
+                    // Fixes hosts missing from next.config remotePatterns (e.g. old-shop OSS).
+                    if (loadAttempt < 1 && imageSrc && imageSrc !== fallbackSrc) {
+                        setLoadAttempt(1)
+                        setHasError(false)
+                        return
+                    }
+                    setHasError(true)
+                    if (fallbackSrc && imageSrc !== fallbackSrc) {
+                        setImageSrc(fallbackSrc)
+                        setLoadAttempt(0)
+                    }
+                }
+
+                if (useNativeImg) {
+                    return (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            {...(imgProps as any)}
+                            key={`native-${loadAttempt}-${proxied}`}
+                            referrerPolicy={imgProps.referrerPolicy ?? 'no-referrer'}
+                            loading={loading}
+                            decoding={decoding}
+                            style={imgStyle}
+                            src={proxied}
+                            alt={imageAlt ?? ''}
+                            className={className}
+                            data-api-exclude-tracking={isFromKeywordSearch ? 'true' : undefined}
+                            onError={handleError}
+                        />
+                    )
+                }
+
                 return (
                     <Image
                         {...(imgProps as any)}
+                        key={`next-${loadAttempt}-${proxied}`}
                         referrerPolicy={imgProps.referrerPolicy ?? 'no-referrer'}
                         width={1200}
                         height={800}
                         sizes="(max-width: 768px) 100vw, 80vw"
                         priority={loading === 'eager'}
-                        unoptimized={shouldBypassImageOptimizer(proxied)}
-                        style={{
-                            ...mergedStyle,
-                            width: '100%',
-                            height: '100%',
-                            objectFit: (mergedStyle.objectFit as any) || 'cover',
-                        }}
+                        unoptimized={false}
+                        style={imgStyle}
                         src={proxied}
                         alt={imageAlt ?? ''}
                         className={className}
                         data-api-exclude-tracking={isFromKeywordSearch ? "true" : undefined}
-                onError={() => {
-                    // If the provided URL can't be loaded (domain/404/proxy failure),
-                    // fall back so the card doesn't render as empty.
-                    setHasError(true)
-                    setLoadingState(false)
-                    setImageSrc(fallbackSrc || null)
-                }}
+                        onError={handleError}
                     />
                 )
             })()}

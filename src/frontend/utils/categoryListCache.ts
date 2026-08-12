@@ -15,12 +15,47 @@ let inflight: Promise<CategoryItem[]> | null = null
 let inflightLang = ''
 
 const TTL_MS = 5 * 60 * 1000
+const STORAGE_KEY = 'sj.category-list.v1'
+
+function readSession(lang: string): CacheEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as CacheEntry
+    if (!Array.isArray(parsed?.list) || parsed.list.length === 0) return null
+    if (parsed.lang !== lang) return null
+    if (Date.now() - parsed.fetchedAt > TTL_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeSession(entry: CacheEntry) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(entry))
+  } catch {
+    // quota / private mode
+  }
+}
 
 export function peekCachedCategoryList(lang?: string): CategoryItem[] | null {
-  if (!cache) return null
-  if (lang && cache.lang !== lang) return null
-  if (Date.now() - cache.fetchedAt > TTL_MS) return null
-  return cache.list
+  const normalized = String(lang || '').trim()
+  if (cache) {
+    if ((!normalized || cache.lang === normalized) && Date.now() - cache.fetchedAt <= TTL_MS) {
+      return cache.list
+    }
+  }
+  if (normalized) {
+    const fromSession = readSession(normalized)
+    if (fromSession) {
+      cache = fromSession
+      return fromSession.list
+    }
+  }
+  return null
 }
 
 /**
@@ -40,6 +75,7 @@ export async function loadCategoryListCached(lang: string): Promise<CategoryItem
     .then((res: GetCategoryListOutput) => {
       const list = Array.isArray(res.list) ? res.list : []
       cache = { lang: normalized, list, fetchedAt: Date.now() }
+      writeSession(cache)
       return list
     })
     .catch((err) => {

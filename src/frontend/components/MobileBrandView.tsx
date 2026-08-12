@@ -6,11 +6,11 @@ import { useTranslation } from 'react-i18next'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { ProductListCard } from '@/frontend/components/ProductListCard'
 import {
-  getCategorySideNavZones,
   getProductList,
   type ProductItem,
 } from '@/frontend/actions/ProductCategory'
 import { loadCategoryListCached } from '@/frontend/utils/categoryListCache'
+import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { ProductCategory, ProductDetail } from '@/frontend/route-params'
 import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
@@ -49,7 +49,7 @@ export default function MobileBrandView() {
 
     Promise.all([
       loadCategoryListCached(lang).catch(() => []),
-      getCategorySideNavZones({ lang }).catch(() => ({ zones: [] })),
+      loadSideNavZonesCached(lang).catch(() => []),
     ])
       .then(([categories, sideNav]) => {
         if (cancelled) return
@@ -66,7 +66,7 @@ export default function MobileBrandView() {
           }
         }
 
-        const brandZone = pickBrandSideNavZone(sideNav.zones || [], { requireSideNavType: true })
+        const brandZone = pickBrandSideNavZone(sideNav || [], { requireSideNavType: true })
         for (const item of brandZone?.items || []) {
           if (!fromTree.has(item.category_id)) {
             fromTree.set(item.category_id, {

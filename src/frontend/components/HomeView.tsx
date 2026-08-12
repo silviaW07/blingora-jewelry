@@ -157,7 +157,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                     src={imageSrc}
                     keywords={undefined}
                     disableKeywordSearch
-                    fallbackSrc="/category-covers/placeholder.svg"
+                    fallbackSrc={String(item.fallbackImageUrl || '').trim() || '/category-covers/placeholder.svg'}
+                    slowFallbackMs={1200}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </div>
