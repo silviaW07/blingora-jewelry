@@ -157,6 +157,13 @@ export function resolveCategoryDisplayName(
       ? (translationsJson as Record<string, unknown>)
       : null
 
+  // Admin `name` is source of truth for English. translationsJson.en often lags
+  // behind renames (slug-derived "Beloe 3 usd" after name became "Below 3 usd").
+  const healedFallback = healLatinTitle(fallback, code)
+  if (code === 'en' && healedFallback && !containsChinese(fallback)) {
+    return healedFallback
+  }
+
   if (root) {
     const fromLang = pickCategoryLocaleName(root[code]) || pickCategorySideField(root, code)
     const cleanLang = healLatinTitle(fromLang, code)
@@ -170,7 +177,6 @@ export function resolveCategoryDisplayName(
     }
   }
 
-  const healedFallback = healLatinTitle(fallback, code)
   if (healedFallback) return healedFallback
 
   const stripped = asCleanLatinTitle(stripChineseFromTitle(fallback))

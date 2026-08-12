@@ -144,6 +144,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
         <div className={getZoneGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格" data-api-unique-id='homeview-rzone-category-grid-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
           {categoryItems.map((item) => {
             const imageSrc = String(item.imageUrl || '').trim() || '/category-covers/placeholder.svg'
+            const shelfFallback = String(item.fallbackImageUrl || '').trim()
+            const hasRealShelf = Boolean(shelfFallback && shelfFallback !== imageSrc && shelfFallback !== '/category-covers/placeholder.svg')
             return (
               <button
                 key={item.itemId}
@@ -157,8 +159,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                     src={imageSrc}
                     keywords={undefined}
                     disableKeywordSearch
-                    fallbackSrc={String(item.fallbackImageUrl || '').trim() || '/category-covers/placeholder.svg'}
-                    slowFallbackMs={1200}
+                    fallbackSrc={hasRealShelf ? shelfFallback : '/category-covers/placeholder.svg'}
+                    slowFallbackMs={hasRealShelf ? 1200 : 0}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </div>

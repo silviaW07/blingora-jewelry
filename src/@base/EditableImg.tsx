@@ -166,7 +166,7 @@ const EditableImg = ({
         let cancelled = false;
         let settled = false;
         const img = new window.Image();
-        const proxied = toProxiedImageUrl(src, { width: 400 }) || src;
+        const proxied = toProxiedImageUrl(src, { width: 800 }) || src;
         const timer = window.setTimeout(() => {
             settled = true;
             img.onload = null;
@@ -318,7 +318,7 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: 400 }) || raw
+                const proxied = toProxiedImageUrl(raw, { width: 800 }) || raw
                 const useNativeImg =
                     shouldBypassImageOptimizer(proxied) ||
                     loadAttempt > 0 ||

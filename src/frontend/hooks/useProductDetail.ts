@@ -16,6 +16,13 @@ import {
   getRelatedProducts,
   addToCart,
 } from '@/frontend/actions/ProductDetail'
+import { getClientPreferredLang } from '@/frontend/i18n'
+import {
+  readCachedProductDetail,
+  readProductDetailPreview,
+  writeCachedProductDetail,
+  writeProductDetailPreview,
+} from '@/frontend/utils/productDetailCache'
 import {
   clampSelectedQuantityToMoq,
   formatMinOrderQtyMessage,
@@ -99,6 +106,8 @@ export interface ProductDetailState {
   productMinOrderQty: number;
   /** 是否支持多规格混批（SKU 数 > 1） */
   supportsMixedBatch: boolean;
+  /** 列表点击带过来的封面，冷加载时先画出主图 */
+  detailPreview: { id: string; name: string; image: string } | null;
 }
 
 export interface ProductDetailHandlers {
@@ -122,16 +131,20 @@ export const useProductDetail = (): {
   const { productId, slug } = useMemo(() => ProductDetail.getParams(searchParams), [searchParams])
   const isDecorateMode = searchParams.get('decorate') === '1'
   const session = useUserSession()
+  const initialCached =
+    typeof window !== 'undefined'
+      ? readCachedProductDetail(productId, slug, getClientPreferredLang())
+      : null
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialCached)
   const [error, setError] = useState<string | null>(null)
-  const [product, setProduct] = useState<ProductDetailData | null>(null)
+  const [product, setProduct] = useState<ProductDetailData | null>(initialCached)
   const [relatedProducts, setRelatedProducts] = useState<RelatedProductItem[]>([])
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({})
   const [selectedSku, setSelectedSku] = useState<ProductSkuData | null>(null)
   const [quantity, setQuantity] = useState<number>(1)
   const [skuQuantities, setSkuQuantities] = useState<Record<string, number>>({})
-  const [activeImage, setActiveImage] = useState<string>('')
+  const [activeImage, setActiveImage] = useState<string>(initialCached?.mainImageUrl || '')
   const [submitting, setSubmitting] = useState(false)
   const [manualColorValue, setManualColorValue] = useState<string | null>(null)
   const [manualSizeSkuId, setManualSizeSkuId] = useState<string | null>(null)
@@ -188,13 +201,33 @@ export const useProductDetail = (): {
     }
 
     try {
+      const lang = typeof window !== 'undefined' ? getClientPreferredLang() : 'en'
+      const cached = readCachedProductDetail(productId, slug, lang)
+      if (cached) {
+        setProduct(cached)
+        setActiveImage(cached.mainImageUrl)
+        setError(null)
+        setLoading(false)
+        void getRelatedProducts({
+          categoryId: cached.categoryId,
+          excludeProductId: cached.id,
+          lang,
+        })
+          .then((relatedData) => setRelatedProducts(relatedData.list))
+          .catch((relatedErr) => {
+            console.warn('[useProductDetail] related products failed', relatedErr)
+            setRelatedProducts([])
+          })
+        return
+      }
+
       setLoading(true)
       setError(null)
-      const lang =
-        typeof window !== 'undefined'
-          ? (await import('@/frontend/i18n')).getClientPreferredLang()
-          : 'en'
+      setProduct(null)
+      setRelatedProducts([])
+      setActiveImage('')
       const data = await getProductDetail({ productId, slug, lang })
+      writeCachedProductDetail(data.product, lang, slug)
       setProduct(data.product)
       setActiveImage(data.product.mainImageUrl)
       // Unblock first paint — related products must not hold the full-page spinner
@@ -771,6 +804,14 @@ export const useProductDetail = (): {
   }
 
   const handleRelatedClick = (id: string) => {
+    const related = relatedProducts.find((item) => item.id === id)
+    if (related) {
+      writeProductDetailPreview({
+        id: related.id,
+        name: related.name,
+        image: related.mainImageUrl,
+      })
+    }
     ProductDetail.navigateToById(router, { productId: id })
   }
 
@@ -804,6 +845,7 @@ export const useProductDetail = (): {
       selectionHighlight,
       productMinOrderQty,
       supportsMixedBatch,
+      detailPreview: readProductDetailPreview(productId),
     },
     handlers: {
       handleColorSelect,

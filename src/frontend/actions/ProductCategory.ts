@@ -1279,10 +1279,22 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   // before the in-memory fuzzy filter runs.
   const listTake = searchTokens.length > 0 ? 5000 : 2000
 
-  // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个 SKU 拖回
-  // attributeJson / fontOptionsJson 等大字段（2000 商品×几十~几百 SKU 时序列化开销极大）。
-  // 按创建顺序返回，保证颜色缩略图与详情页顺序一致（避免 uuid 随机序）。
-  const listInclude = {
+  // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个商品拖回
+  // detailText / detailContentJson / galleryJson 等大字段。
+  const listSelect = {
+    id: true,
+    slug: true,
+    name: true,
+    mainImageUrl: true,
+    shortDescription: true,
+    translationsJson: true,
+    costPrice: true,
+    tradeInfoJson: true,
+    ratingAverage: true,
+    ratingCount: true,
+    createdAt: true,
+    sortWeight: true,
+    brandCategoryId: true,
     skus: {
       select: {
         id: true,
@@ -1319,7 +1331,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       },
     },
     relationCategories: {
-      include: {
+      select: {
         category: {
           select: {
             id: true,
@@ -1340,17 +1352,6 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         },
       },
     },
-    relationKeywords: {
-      select: {
-        keywordId: true
-      }
-    },
-    keywordGroupLinks: {
-      select: {
-        keywordGroupId: true,
-        sortWeight: true
-      }
-    }
   }
 
   // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
@@ -1376,7 +1377,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       prisma.product.count({ where: dbWhere }),
       prisma.product.findMany({
         where: dbWhere,
-        include: listInclude,
+        select: listSelect,
         orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -1439,7 +1440,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
 
   const dbProducts = await prisma.product.findMany({
     where: dbWhere,
-    include: listInclude,
+    select: listSelect,
     take: listTake
   })
 
@@ -1632,7 +1633,20 @@ export const getWishlistProducts = withResult(async (
       status: 'ACTIVE',
       category: { status: 'ACTIVE' },
     },
-    include: {
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      mainImageUrl: true,
+      shortDescription: true,
+      translationsJson: true,
+      costPrice: true,
+      tradeInfoJson: true,
+      ratingAverage: true,
+      ratingCount: true,
+      createdAt: true,
+      sortWeight: true,
+      brandCategoryId: true,
       skus: {
         select: {
           id: true,
@@ -1665,7 +1679,7 @@ export const getWishlistProducts = withResult(async (
         },
       },
       relationCategories: {
-        include: {
+        select: {
           category: {
             select: {
               id: true,

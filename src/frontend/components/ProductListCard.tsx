@@ -10,6 +10,7 @@ import {
   GuestPlaceholder,
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
+import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -91,7 +92,16 @@ export const ProductListCard = ({
   }, [item.product_id, item.main_image_url])
 
   const goToDetail = () => {
+    writeProductDetailPreview({
+      id: item.product_id,
+      name: item.product_name,
+      image: previewImage || item.main_image_url || '',
+    })
     onNavigate(item.product_id)
+  }
+
+  const prefetchDetail = () => {
+    prefetchProductDetail(item.product_id)
   }
 
   const stopAnd = (event: React.MouseEvent, action?: () => void) => {
@@ -132,6 +142,8 @@ export const ProductListCard = ({
       )}
       data-controller-name={controllerName}
       onClick={goToDetail}
+      onPointerEnter={prefetchDetail}
+      onFocus={prefetchDetail}
       onKeyDown={handleCardKeyDown}
     >
       <div className="home-product-card-media relative aspect-square w-full shrink-0 overflow-hidden">
@@ -139,8 +151,8 @@ export const ProductListCard = ({
           src={previewImage || item.main_image_url}
           alt={item.product_name}
           className="transition duration-500 group-hover:scale-[1.03]"
-          sizes="(max-width: 640px) 50vw, 25vw"
-          imageWidth={400}
+          sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
+          imageWidth={800}
           priority={priority}
         />
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useCallback } from 'react';
+import React, { useMemo, useEffect, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
@@ -175,6 +175,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     selectionHighlight,
     productMinOrderQty,
     supportsMixedBatch,
+    detailPreview,
   } = state;
   const isColorSelected =
     !colorAttribute || Boolean(String(manualColorValue || '').trim())
@@ -237,20 +238,31 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     img.src = proxied;
   }, []);
 
-  // 空闲时预热前若干个颜色的大图，覆盖用户最可能点击的前排色块
+  const [showDesktopThumbs, setShowDesktopThumbs] = useState(false)
   useEffect(() => {
-    if (typeof window === 'undefined' || colorSwatches.length === 0) return;
-    const urls = colorSwatches.slice(0, 8).map((s) => s.imageUrl).filter(Boolean);
-    if (urls.length === 0) return;
-    const run = () => urls.forEach((u) => preheatMainImage(u));
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-    const cancel = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
-    const id = ric ? ric(run) : (setTimeout(run, 400) as unknown as number);
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const apply = () => setShowDesktopThumbs(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  // 空闲时预热少量颜色大图；手机只预热 2 张，避免和主图抢带宽
+  useEffect(() => {
+    if (typeof window === 'undefined' || colorSwatches.length === 0) return
+    const isNarrow = window.matchMedia('(max-width: 1023px)').matches
+    const urls = colorSwatches.slice(0, isNarrow ? 2 : 6).map((s) => s.imageUrl).filter(Boolean)
+    if (urls.length === 0) return
+    const run = () => urls.forEach((u) => preheatMainImage(u))
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    const cancel = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
+    const id = ric ? ric(run) : (setTimeout(run, 800) as unknown as number)
     return () => {
-      if (ric && cancel) cancel(id);
-      else clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
-    };
-  }, [colorSwatches, preheatMainImage]);
+      if (ric && cancel) cancel(id)
+      else clearTimeout(id as unknown as ReturnType<typeof setTimeout>)
+    }
+  }, [colorSwatches, preheatMainImage])
 
   const specListTitle = sizeAttributeGroup
     ? t('product.sizeOptions')
@@ -443,10 +455,36 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   if (loading) {
     return withStorefrontHeader(
       <section className="flex min-h-[50vh] w-full items-center justify-center bg-[#FFF5F5]">
-        <div className="flex flex-col items-center gap-4 text-[#64748B]">
-          <div className="size-8 animate-spin rounded-full border-2 border-[#111111] border-t-transparent" />
-          <p className="text-sm font-medium uppercase tracking-wide">Loading product...</p>
-        </div>
+        {detailPreview?.image ? (
+          <div className="storefront-container w-full py-5">
+            <div className="mx-auto max-w-xl">
+              <div className="relative aspect-square overflow-hidden rounded-[4px] bg-[#f3f3f3]">
+                <OptimizedProductImage
+                  src={detailPreview.image}
+                  alt={detailPreview.name || ''}
+                  className="size-full"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  imageWidth={960}
+                  priority
+                />
+                <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/25 to-transparent pb-6">
+                  <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-[#64748B]">
+                    <div className="size-4 animate-spin rounded-full border-2 border-[#111111] border-t-transparent" />
+                    Loading product...
+                  </div>
+                </div>
+              </div>
+              {detailPreview.name ? (
+                <p className="mt-3 truncate text-center text-sm font-medium text-[#111]">{detailPreview.name}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4 text-[#64748B]">
+            <div className="size-8 animate-spin rounded-full border-2 border-[#111111] border-t-transparent" />
+            <p className="text-sm font-medium uppercase tracking-wide">Loading product...</p>
+          </div>
+        )}
       </section>,
     );
   }
@@ -509,6 +547,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           <section className="product-detail-gallery" data-controller-name="详情主图区">
             <div className="rounded-[4px] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-4">
               <div className="flex gap-3">
+                {showDesktopThumbs ? (
                 <div className="hidden w-[4.5rem] shrink-0 flex-col gap-2 lg:flex">
                   {gallery.slice(0, 6).map((item, index) => (
                     <button
@@ -526,11 +565,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         className="size-full"
                         sizes="72px"
                         imageWidth={160}
-                        priority={index < 2}
                       />
                     </button>
                   ))}
                 </div>
+                ) : null}
 
                 <div className="relative min-w-0 flex-1">
                   <div className="relative aspect-square w-full overflow-hidden rounded-[2px] bg-[#f3f3f3]">
@@ -672,7 +711,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                       className="pointer-events-none"
                                       sizes="88px"
                                       imageWidth={200}
-                                      priority={swatchIndex < 4}
+                                      priority={swatchIndex < 2}
                                     />
                                   ) : null}
                                 </span>

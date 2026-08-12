@@ -363,72 +363,113 @@ export const getProductDetail = withResult(
       throw new Error('缺少必要的商品标识')
     }
 
-    const [exchangeRate, pricingConfig] = await Promise.all([
-      getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
-      loadPricingPromotionConfig(prisma),
-    ])
-
     const whereCondition = input.productId
       ? { id: input.productId }
       : { slug: input.slug! }
+    const now = new Date()
 
-    const product = await prisma.product.findUnique({
-      where: whereCondition,
-      include: {
-        category: {
-          include: {
-            parent: {
-              select: {
-                name: true,
-                priceCoefficient: true,
-                isBrandCategory: true,
+    const [exchangeRate, pricingConfig, product, couponCampaigns] = await Promise.all([
+      getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
+      loadPricingPromotionConfig(prisma),
+      prisma.product.findUnique({
+        where: whereCondition,
+        select: {
+          id: true,
+          name: true,
+          productCode: true,
+          status: true,
+          source: true,
+          mainImageUrl: true,
+          galleryJson: true,
+          parameterJson: true,
+          tradeInfoJson: true,
+          translationsJson: true,
+          ratingAverage: true,
+          ratingCount: true,
+          categoryId: true,
+          costPrice: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              level: true,
+              priceCoefficient: true,
+              isBrandCategory: true,
+              parent: {
+                select: {
+                  name: true,
+                  priceCoefficient: true,
+                  isBrandCategory: true,
+                },
               },
             },
           },
-        },
-        relationCategories: {
-          select: {
-            category: {
-              select: {
-                name: true,
-                level: true,
-                priceCoefficient: true,
-                isBrandCategory: true,
-                parent: {
-                  select: {
-                    name: true,
-                    priceCoefficient: true,
-                    isBrandCategory: true,
+          relationCategories: {
+            select: {
+              category: {
+                select: {
+                  name: true,
+                  level: true,
+                  priceCoefficient: true,
+                  isBrandCategory: true,
+                  parent: {
+                    select: {
+                      name: true,
+                      priceCoefficient: true,
+                      isBrandCategory: true,
+                    },
                   },
                 },
               },
             },
           },
+          skus: {
+            orderBy: [{ createdAt: 'asc' as const }, { skuCode: 'asc' as const }],
+            select: {
+              id: true,
+              skuCode: true,
+              imageUrl: true,
+              minOrderQty: true,
+              price: true,
+              originalPrice: true,
+              stockStatus: true,
+              attributeJson: true,
+              deliveryDays: true,
+              weightKg: true,
+              volumeM3: true,
+              sizeLabel: true,
+            },
+          },
         },
-        // 按创建顺序返回，避免 uuid 主键导致的随机序（颜色/规格前台乱序根因之一）
-        skus: { orderBy: [{ createdAt: 'asc' }, { skuCode: 'asc' }] }
-      }
-    })
+      }),
+      prisma.promotioncampaign.findMany({
+        where: {
+          isActive: true,
+          promotionType: {
+            in: ['COUPON', 'FULL_REDUCTION', 'PERCENTAGE_DISCOUNT', 'NEW_CUSTOMER'],
+          },
+          AND: [
+            { OR: [{ startAt: null }, { startAt: { lte: now } }] },
+            { OR: [{ endAt: null }, { endAt: { gte: now } }] },
+          ],
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 4,
+        select: {
+          id: true,
+          name: true,
+          promotionType: true,
+          discountPercent: true,
+          discountAmount: true,
+          contentJson: true,
+        },
+      }),
+    ])
 
     if (!product) {
       throw new Error('未找到对应商品')
     }
-
-    const now = new Date()
-    const couponCampaigns = await prisma.promotioncampaign.findMany({
-      where: {
-        isActive: true,
-        promotionType: {
-          in: ['COUPON', 'FULL_REDUCTION', 'PERCENTAGE_DISCOUNT', 'NEW_CUSTOMER'],
-        },
-        AND: [
-          { OR: [{ startAt: null }, { startAt: { lte: now } }] },
-          { OR: [{ endAt: null }, { endAt: { gte: now } }] },
-        ],
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 4,
-    })
 
     const parameterJson = product.parameterJson
       ? ((product.parameterJson as object) as ParameterGroup[])
@@ -438,10 +479,14 @@ export const getProductDetail = withResult(
       : null
 
     const descriptionParamsFromParams = flattenParameterJson(parameterJson)
-    const descriptionParams =
-      descriptionParamsFromParams.length > 0
-        ? descriptionParamsFromParams
-        : parseDescriptionParamsFromText(product.detailText)
+    let descriptionParams = descriptionParamsFromParams
+    if (descriptionParams.length === 0) {
+      const detailRow = await prisma.product.findUnique({
+        where: { id: product.id },
+        select: { detailText: true },
+      })
+      descriptionParams = parseDescriptionParamsFromText(detailRow?.detailText)
+    }
 
     const productMinOrderQty = resolveProductMinOrderQty(tradeInfoJson)
 
@@ -526,14 +571,14 @@ export const getProductDetail = withResult(
       source: String(product.source || ''),
       mainImageUrl: product.mainImageUrl,
       galleryJson: (product.galleryJson as object) as GalleryItem[],
-      shortDescription: translated?.shortDescription?.trim() || product.shortDescription,
-      detailText: translated?.detailText?.trim() || translated?.detail?.trim() || product.detailText || null,
-      sellingPointsJson: product.sellingPointsJson ? ((product.sellingPointsJson as object) as SellingPointItem[]) : null,
-      detailContentJson: product.detailContentJson ? ((product.detailContentJson as object) as DetailContentItem[]) : null,
-      parameterJson,
+      shortDescription: translated?.shortDescription?.trim() || null,
+      detailText: null,
+      sellingPointsJson: null,
+      detailContentJson: null,
+      parameterJson: null,
       descriptionParams,
-      tradeInfoJson,
-      faqJson: product.faqJson ? ((product.faqJson as object) as FaqItem[]) : null,
+      tradeInfoJson: null,
+      faqJson: null,
       ratingAverage: product.ratingAverage,
       ratingCount: product.ratingCount,
       categoryId: product.categoryId,
@@ -603,11 +648,16 @@ export const getRelatedProducts = withResult(
       },
       take: 4,
       orderBy: { sortWeight: 'desc' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        mainImageUrl: true,
+        translationsJson: true,
         skus: {
-          select: { price: true }
-        }
-      }
+          select: { price: true },
+        },
+      },
     })
 
     const list = products.map(p => {

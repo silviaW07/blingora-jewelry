@@ -139,8 +139,14 @@ const resolveCategoryCardSrc = (imageUrl?: string | null) => {
 const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
   const fallback = String(item.fallbackImageUrl || '').trim();
   const primary = String(item.imageUrl || '').trim();
-  if (fallback && fallback !== primary) return fallback;
-  return CATEGORY_CARD_PLACEHOLDER;
+  if (
+    fallback &&
+    fallback !== primary &&
+    fallback !== CATEGORY_CARD_PLACEHOLDER
+  ) {
+    return fallback;
+  }
+  return '';
 };
 
 import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
@@ -347,6 +353,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
       <div className={getCategoryCardGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格">
         {categoryItems.map((item) => {
           const imageSrc = resolveCategoryCardSrc(item.imageUrl);
+          const shelfFallback = resolveCategoryCardFallback(item);
           return (
             <button
               key={item.itemId}
@@ -362,8 +369,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
                   alt={item.categoryName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={resolveCategoryCardFallback(item)}
-                  slowFallbackMs={CATEGORY_PRODUCT_IMAGE_SLOW_MS}
+                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
+                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading="lazy"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                 />

@@ -145,38 +145,45 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   }, [])
 
   useEffect(() => {
-    const lang =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('app_preferred_locale') ||
-          document.documentElement.getAttribute('lang') ||
-          currentLocale ||
-          'en'
-        : currentLocale || 'en'
-    loadCategoryListCached(lang)
-      .then((list) => setCategories(list))
-      .catch(() => {
-        // keep cached / previous categories — never wipe nav to []
-      })
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 768px)')
+    const load = () => {
+      if (!mq.matches) return
+      const lang =
+        window.localStorage.getItem('app_preferred_locale') ||
+        document.documentElement.getAttribute('lang') ||
+        currentLocale ||
+        'en'
+      loadCategoryListCached(lang)
+        .then((list) => setCategories(list))
+        .catch(() => {
+          // keep cached / previous categories — never wipe nav to []
+        })
 
-    loadSideNavZonesCached(lang)
-      .then((zones) => {
-        const list = Array.isArray(zones) ? zones : []
-        // Same Brand → Hot → first zone rule as home left rail
-        const brandZone = pickBrandSideNavZone(list)
-        setFloatingBrandItems(Array.isArray(brandZone?.items) ? brandZone.items : [])
-      })
-      .catch(() => {
-        // keep previous brand items
-      })
+      loadSideNavZonesCached(lang)
+        .then((zones) => {
+          const list = Array.isArray(zones) ? zones : []
+          const brandZone = pickBrandSideNavZone(list)
+          setFloatingBrandItems(Array.isArray(brandZone?.items) ? brandZone.items : [])
+        })
+        .catch(() => {
+          // keep previous brand items
+        })
+    }
+    load()
+    mq.addEventListener('change', load)
+    return () => mq.removeEventListener('change', load)
   }, [currentLocale, localeTick])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 768px)')
     let cancelled = false
     let idleId: number | null = null
     let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     const load = () => {
-      if (cancelled) return
+      if (cancelled || !mq.matches) return
       setIsLoadingDailyNewArrivalCalendar(true)
       getDailyNewArrivalCalendar()
         .then((res) => {
@@ -192,15 +199,21 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
         })
     }
 
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleId = window.requestIdleCallback(load, { timeout: 2200 })
-    } else {
-      timeoutId = setTimeout(load, 500)
+    const schedule = () => {
+      if (!mq.matches) return
+      if ('requestIdleCallback' in window) {
+        idleId = window.requestIdleCallback(load, { timeout: 2200 })
+      } else {
+        timeoutId = setTimeout(load, 500)
+      }
     }
 
+    schedule()
+    mq.addEventListener('change', schedule)
     return () => {
       cancelled = true
-      if (idleId != null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+      mq.removeEventListener('change', schedule)
+      if (idleId != null && 'cancelIdleCallback' in window) {
         window.cancelIdleCallback(idleId)
       }
       if (timeoutId) clearTimeout(timeoutId)

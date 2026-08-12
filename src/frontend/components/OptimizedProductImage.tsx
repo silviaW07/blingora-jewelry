@@ -18,7 +18,7 @@ type Props = {
   height?: number
   sizes?: string
   priority?: boolean
-  /** Longest edge requested from alicdn (default 400 for cards) */
+  /** Longest edge requested from alicdn (800 covers retina list cards; swatches pass 120) */
   imageWidth?: number
 }
 
@@ -36,7 +36,7 @@ export function OptimizedProductImage({
   height,
   sizes = '(max-width: 640px) 50vw, 25vw',
   priority = false,
-  imageWidth = 400,
+  imageWidth = 800,
 }: Props) {
   const primary = toProxiedImageUrl(src, { width: imageWidth })
   const [attempt, setAttempt] = useState(0)

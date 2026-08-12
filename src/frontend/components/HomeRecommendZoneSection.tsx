@@ -17,6 +17,7 @@ import type {
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
 import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
+import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -94,8 +95,14 @@ const resolveCategoryCardSrc = (imageUrl?: string | null) => {
 const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
   const fallback = String(item.fallbackImageUrl || '').trim()
   const primary = String(item.imageUrl || '').trim()
-  if (fallback && fallback !== primary) return fallback
-  return CATEGORY_CARD_PLACEHOLDER
+  if (
+    fallback &&
+    fallback !== primary &&
+    fallback !== CATEGORY_CARD_PLACEHOLDER
+  ) {
+    return fallback
+  }
+  return ''
 }
 
 /** Horizontal squircle strip: ≤5 fill row; >5 scrolls (5 visible). */
@@ -155,6 +162,15 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
   const priceToShow = selectedOption?.price ?? item.price
   const originalPriceToShow = selectedOption?.originalPrice ?? item.originalPrice
 
+  const openProduct = () => {
+    writeProductDetailPreview({
+      id: item.productId,
+      name: item.productName,
+      image: item.imageUrl || '',
+    })
+    handlers.handleNavigateRecommendProduct(item.productId)
+  }
+
   return (
     <article
       key={item.itemId}
@@ -164,7 +180,8 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
       <button
         type="button"
         className="home-product-card-media relative block w-full shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-        onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+        onClick={openProduct}
+        onPointerEnter={() => prefetchProductDetail(item.productId)}
       >
         <EditableImg
           propKey={`home-recommend-product-${item.productId}`}
@@ -184,7 +201,8 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         <button
           type="button"
           className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
-          onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+          onClick={openProduct}
+          onPointerEnter={() => prefetchProductDetail(item.productId)}
           data-api-bind-info={`productItems-${index}-productName`}
           data-api-map-var-name="item"
         >
@@ -305,7 +323,15 @@ const renderMobileSquircleContent = (
             key={item.itemId}
             type="button"
             className="mobile-zone-squircle"
-            onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+            onClick={() => {
+              writeProductDetailPreview({
+                id: item.productId,
+                name: item.productName,
+                image: item.imageUrl || '',
+              })
+              handlers.handleNavigateRecommendProduct(item.productId)
+            }}
+            onPointerEnter={() => prefetchProductDetail(item.productId)}
             data-controller-name="移动端推荐商品图标"
           >
             <span className="mobile-zone-squircle__media">
@@ -349,6 +375,7 @@ const renderMobileSquircleContent = (
         {categoryItems.map((item) => {
           const displayName = translateCatalogLabel(t, item.categoryName)
           const imageSrc = resolveCategoryCardSrc(item.imageUrl)
+          const shelfFallback = resolveCategoryCardFallback(item)
           return (
             <button
               key={item.itemId}
@@ -366,8 +393,8 @@ const renderMobileSquircleContent = (
                   alt={displayName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={resolveCategoryCardFallback(item)}
-                  slowFallbackMs={CATEGORY_PRODUCT_IMAGE_SLOW_MS}
+                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
+                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading="lazy"
                   orientation="square"
                   className="h-full w-full object-cover"
@@ -448,6 +475,7 @@ const renderRecommendZoneContent = (
         {categoryItems.map((item) => {
           const displayName = translateCatalogLabel(t, item.categoryName)
           const imageSrc = resolveCategoryCardSrc(item.imageUrl)
+          const shelfFallback = resolveCategoryCardFallback(item)
           return (
             <button
               key={item.itemId}
@@ -465,8 +493,8 @@ const renderRecommendZoneContent = (
                   alt={displayName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={resolveCategoryCardFallback(item)}
-                  slowFallbackMs={CATEGORY_PRODUCT_IMAGE_SLOW_MS}
+                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
+                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading="lazy"
                   orientation="square"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"

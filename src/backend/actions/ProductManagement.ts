@@ -1794,10 +1794,18 @@ export const getProductList = requireRole([UserRole.ADMIN])(
 
     if (keyword) {
       const normalizedKeyword = keyword.trim()
+      const keywordUpper = normalizedKeyword.toUpperCase()
+      const keywordLower = normalizedKeyword.toLowerCase()
+      const codeVariants = Array.from(new Set([normalizedKeyword, keywordUpper, keywordLower])).filter(Boolean)
       andConditions.push({
         OR: [
           { name: { contains: normalizedKeyword } },
-          { productCode: { contains: normalizedKeyword } }
+          ...codeVariants.flatMap((code) => [
+            { productCode: { contains: code } },
+            { slug: { contains: code } },
+            { skus: { some: { skuCode: { contains: code } } } },
+          ]),
+          ...(normalizedKeyword.length >= 8 ? [{ id: { contains: normalizedKeyword } }] : []),
         ]
       })
     }

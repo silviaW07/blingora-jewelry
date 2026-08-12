@@ -379,6 +379,32 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
       throw new Error('专区明细数据异常')
     })
 
+    if (zone.zoneType === 'CATEGORY') {
+      const missing = detailItems.filter((row) => !String(row.imageUrl || '').trim())
+      if (missing.length > 0) {
+        await Promise.all(
+          missing.map(async (row) => {
+            const product = await prisma.product.findFirst({
+              where: {
+                status: 'ACTIVE',
+                mainImageUrl: { not: '' },
+                OR: [
+                  { categoryId: row.entityId },
+                  { brandCategoryId: row.entityId },
+                  { relationCategories: { some: { categoryId: row.entityId } } },
+                ],
+              },
+              orderBy: { updatedAt: 'desc' },
+              select: { mainImageUrl: true },
+            })
+            if (product?.mainImageUrl) {
+              row.imageUrl = product.mainImageUrl
+            }
+          }),
+        )
+      }
+    }
+
     return {
       id: zone.id,
       title: zone.title,

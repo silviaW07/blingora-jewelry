@@ -1770,6 +1770,20 @@ export const updateCategory = requireRole([UserRole.ADMIN])(
       category_display_config,
     }) as any
 
+    if (trimmedName !== category.name) {
+      const root =
+        category.translationsJson && typeof category.translationsJson === 'object' && !Array.isArray(category.translationsJson)
+          ? { ...(category.translationsJson as Record<string, unknown>) }
+          : {}
+      const en =
+        root.en && typeof root.en === 'object' && !Array.isArray(root.en)
+          ? { ...(root.en as Record<string, unknown>) }
+          : {}
+      en.name = trimmedName
+      root.en = en
+      updateData.translationsJson = root as Prisma.InputJsonValue
+    }
+
     if (category.status !== newStatus) {
       await updateCategoryAndCascade(category_id, updateData, newStatus)
     } else {
