@@ -631,6 +631,11 @@ import {
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
+import {
+  loadFilterCategoriesFromDb,
+  matchFilterCategoriesByTitle,
+  type FilterCategoryRow,
+} from '@/shared/categoryFilterTitleMatch'
 import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
@@ -4336,71 +4341,165 @@ const isPendingSellPriceStuckAtCost = (
   return comparable.every((row) => Math.abs((row.price as number) - (row.cost as number)) < 0.02)
 }
 
-const repairPendingImportPricesMissingCoefficient = async (limit = 80) => {
-  const items = await prisma.importtaskitem.findMany({
-    where: {
-      isPublished: false,
-      fetchStatus: 'COMPLETED' as any,
-      coefficient: { gt: 1 },
-    },
-    select: {
-      id: true,
-      costPrice: true,
-      coefficient: true,
-      cnyPriceMin: true,
-      cnyPriceMax: true,
-      previewDataJson: true,
-      skuSummaryText: true,
-      availableStock: true,
-      weightGrams: true,
-      parsedPriceMin: true,
-    },
-    orderBy: { updatedAt: 'desc' },
-    take: Math.max(1, Math.min(200, limit)),
-  })
-  if (!items.length) return 0
-
+const repairPendingImportPricesMissingCoefficient = async () => {
   const exchangeRate = await getGlobalExchangeRate(prisma)
+  const categoryMap = await loadImportPricingCategories(prisma)
   let updated = 0
-  for (const item of items) {
-    const coefficient = toNumberOrNull(item.coefficient)
-    if (coefficient === null || !(coefficient > 1.0001)) continue
-    const drafts = resolvePendingSkuDrafts(item)
-    const itemCost = toNumberOrNull(item.costPrice)
-    if (!isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) continue
+  let cursor: string | undefined
+  const batchSize = 100
 
-    const nextDrafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient)
-    const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
-    const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
-    await prisma.importtaskitem.update({
-      where: { id: item.id },
-      data: {
-        cnyPriceMin: priceSummary.cnyMin,
-        cnyPriceMax: priceSummary.cnyMax,
-        usdPriceMin: priceSummary.usdMin,
-        usdPriceMax: priceSummary.usdMax,
-        previewDataJson: {
-          ...currentPreview,
-          price: priceSummary.cnyMin ?? currentPreview.price,
-          skuTable: nextDrafts.map((sku) => ({
-            skuKey: sku.sku_key,
-            spec: sku.spec_text,
-            costPrice: sku.cost_price,
-            price: sku.price,
-            stock: sku.stock,
-            weightGrams: sku.weight_grams,
-            imageUrl: sku.image_url || undefined,
-            attributes: sku.attributes,
-          })),
-        } as any,
+  for (;;) {
+    const items = await prisma.importtaskitem.findMany({
+      where: {
+        isPublished: false,
+        fetchStatus: 'COMPLETED' as any,
       },
+      select: {
+        id: true,
+        costPrice: true,
+        coefficient: true,
+        targetCategoryId: true,
+        cnyPriceMin: true,
+        cnyPriceMax: true,
+        previewDataJson: true,
+        skuSummaryText: true,
+        availableStock: true,
+        weightGrams: true,
+        parsedPriceMin: true,
+      },
+      orderBy: { id: 'asc' },
+      take: batchSize,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     })
-    updated += 1
+    if (!items.length) break
+    cursor = items[items.length - 1]?.id
+
+    for (const item of items) {
+      const coefficient = resolvePendingItemCoefficient(item, categoryMap)
+      if (!(coefficient > 1.0001)) continue
+      const drafts = resolvePendingSkuDrafts(item)
+      const itemCost = toNumberOrNull(item.costPrice)
+      if (!isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) continue
+
+      const nextDrafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient)
+      const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
+      const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+      const dbCoefficient = toNumberOrNull(item.coefficient)
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: {
+          ...(dbCoefficient === null || dbCoefficient <= 0 ? { coefficient } : {}),
+          cnyPriceMin: priceSummary.cnyMin,
+          cnyPriceMax: priceSummary.cnyMax,
+          usdPriceMin: priceSummary.usdMin,
+          usdPriceMax: priceSummary.usdMax,
+          previewDataJson: {
+            ...currentPreview,
+            price: priceSummary.cnyMin ?? currentPreview.price,
+            skuTable: nextDrafts.map((sku) => ({
+              skuKey: sku.sku_key,
+              spec: sku.spec_text,
+              costPrice: sku.cost_price,
+              price: sku.price,
+              stock: sku.stock,
+              weightGrams: sku.weight_grams,
+              imageUrl: sku.image_url || undefined,
+              attributes: sku.attributes,
+            })),
+          } as any,
+        },
+      })
+      updated += 1
+    }
+
+    if (items.length < batchSize) break
   }
   return updated
 }
 
-const buildPendingItemStructure = (item: any, task?: any): PendingImportItemRecord => {
+type PendingListEnrichContext = {
+  exchangeRate: number
+  categoryMap: Map<string, ImportPricingCategoryMeta>
+  secondaryCategories: AutoMatchedSecondaryCategory[]
+  filterCategories: FilterCategoryRow[]
+}
+
+const resolvePendingItemCoefficient = (
+  item: { coefficient?: unknown; targetCategoryId?: string | null; previewDataJson?: unknown },
+  categoryMap: Map<string, ImportPricingCategoryMeta>,
+) => {
+  const fromDb = toNumberOrNull(item.coefficient)
+  if (fromDb !== null && fromDb > 0) return fromDb
+  const preview = (item.previewDataJson || {}) as PreviewDataJson
+  const categoryId = item.targetCategoryId || preview.categoryId || null
+  return resolveImportCategoryCoefficient(categoryMap, categoryId)
+}
+
+const resolvePendingItemPricedSkus = (
+  item: any,
+  context: Pick<PendingListEnrichContext, 'exchangeRate' | 'categoryMap'>,
+) => {
+  const coefficient = resolvePendingItemCoefficient(item, context.categoryMap)
+  const itemCost = toNumberOrNull(item.costPrice)
+  let drafts = resolvePendingSkuDrafts(item)
+  if (isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) {
+    drafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient)
+  }
+  const priceSummary = summarizePendingSkuPrices(drafts, context.exchangeRate)
+  return {
+    skus: drafts,
+    coefficient: toNumberOrNull(item.coefficient) ?? coefficient,
+    ...priceSummary,
+  }
+}
+
+const enrichPendingMatchedCategoriesFromTitle = (
+  item: any,
+  preview: PreviewDataJson,
+  context: Pick<PendingListEnrichContext, 'secondaryCategories' | 'filterCategories'>,
+) => {
+  const title =
+    normalizeBrandTitleSync(item.parsedName || preview.name || '') ||
+    String(item.parsedName || preview.name || '').trim()
+  const existingIds = Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean)))
+  const existingNames = Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean)))
+  if (!title) {
+    return { ids: existingIds, names: existingNames }
+  }
+
+  const detailText =
+    [item.productDetail, preview.shortDescription].filter(Boolean).join('\n') || null
+  const fromMatcher = matchSecondaryCategoriesByTitle(
+    title,
+    context.secondaryCategories,
+    detailText,
+  ).filter((hit) => isAttributeOrFilterCategory({ name: hit.name, parentName: hit.parentName }))
+  const fromFilter = matchFilterCategoriesByTitle(title, context.filterCategories, detailText)
+
+  const byId = new Map<string, string>()
+  for (const hit of fromMatcher) byId.set(hit.id, hit.name)
+  for (const hit of fromFilter) byId.set(hit.id, hit.name)
+
+  const nameById = new Map<string, string>()
+  for (const cat of context.secondaryCategories) nameById.set(cat.id, cat.name)
+  for (const cat of context.filterCategories) nameById.set(cat.id, cat.name)
+  for (const [id, name] of byId) nameById.set(id, name)
+
+  const mergedIds = Array.from(new Set([...existingIds, ...Array.from(byId.keys())]))
+  const mergedNames = Array.from(
+    new Set([
+      ...existingNames,
+      ...mergedIds.map((id) => nameById.get(id)).filter((name): name is string => Boolean(name)),
+    ]),
+  )
+  return { ids: mergedIds, names: mergedNames }
+}
+
+const buildPendingItemStructure = (
+  item: any,
+  task?: any,
+  enrich?: PendingListEnrichContext,
+): PendingImportItemRecord => {
   const preview = (item.previewDataJson as unknown as PreviewDataJson) || {}
   const mainImage = item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null
   const rawGallery = dedupeImageUrls([
@@ -4411,6 +4510,15 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   const galleryUrls = rawGallery.slice(0, 12)
   const rawDetail = String(item.productDetail || '')
   const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail
+  const priced = enrich
+    ? resolvePendingItemPricedSkus(item, enrich)
+    : null
+  const matchedCategories = enrich
+    ? enrichPendingMatchedCategoriesFromTitle(item, preview, enrich)
+    : {
+        ids: Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean))),
+        names: Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean))),
+      }
   return {
   item_id: item.id,
   item_importTaskId: item.importTaskId,
@@ -4428,9 +4536,9 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
   item_weightGrams: toNumberOrNull(item.weightGrams),
   item_sourceCategoryName: item.sourceCategoryName || null,
   item_targetCategoryId: item.targetCategoryId || task?.defaultCategoryId || null,
-  item_matchedCategoryIds: Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean))),
-  item_matchedCategoryNames: Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean))),
-  item_coefficient: toNumberOrNull(item.coefficient),
+  item_matchedCategoryIds: matchedCategories.ids,
+  item_matchedCategoryNames: matchedCategories.names,
+  item_coefficient: priced ? priced.coefficient : toNumberOrNull(item.coefficient),
   item_goodsStatus: (item.goodsStatus as ProductStatusType) || ((task?.defaultStatus as ProductStatusType) || 'DRAFT'),
   item_productDetail: listDetail || null,
   item_featureAttributes: Array.isArray(preview.featureAttributes)
@@ -4443,17 +4551,17 @@ const buildPendingItemStructure = (item: any, task?: any): PendingImportItemReco
         .slice(0, 40)
     : [],
   item_skuSummaryText: item.skuSummaryText || null,
-  item_cnyPriceMin: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
-  item_cnyPriceMax: toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax),
-  item_usdPriceMin: toNumberOrNull(item.usdPriceMin),
-  item_usdPriceMax: toNumberOrNull(item.usdPriceMax),
+  item_cnyPriceMin: priced?.cnyMin ?? toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
+  item_cnyPriceMax: priced?.cnyMax ?? toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax),
+  item_usdPriceMin: priced?.usdMin ?? toNumberOrNull(item.usdPriceMin),
+  item_usdPriceMax: priced?.usdMax ?? toNumberOrNull(item.usdPriceMax),
   item_minimumOrderQuantity: resolveInitialMinOrderQty(item.minimumOrderQuantity),
   item_availableStock: resolveInitialStock(item.availableStock),
   item_parsedName: normalizeBrandTitleSync(item.parsedName || null) || null,
   item_parsedMainImageUrl: item.parsedMainImageUrl || null,
   item_createdAt: item.createdAt,
   item_updatedAt: item.updatedAt || item.createdAt,
-  item_skus: resolvePendingSkuDrafts(item)
+  item_skus: priced?.skus ?? resolvePendingSkuDrafts(item),
   }
 }
 
@@ -4552,7 +4660,8 @@ const loadPendingImportQueueSnapshot = async (opts?: {
   // 预热品牌别名缓存，使列表展示的 normalizeBrandTitleSync 用到 DB 最新映射
   await loadBrandAliasRules()
 
-  const [activeTask, fallbackTask, total, items] = await Promise.all([
+  const [activeTask, fallbackTask, total, items, exchangeRate, categoryMap, secondaryCategories, filterCategories] =
+    await Promise.all([
     prisma.importtask.findFirst({
       where: {
         status: {
@@ -4601,7 +4710,18 @@ const loadPendingImportQueueSnapshot = async (opts?: {
       take: pageSize,
       select: PENDING_QUEUE_ITEM_SELECT,
     }),
+    getGlobalExchangeRate(prisma),
+    loadImportPricingCategories(prisma),
+    loadAutoMatchSecondaryCategories(prisma),
+    loadFilterCategoriesFromDb(prisma),
   ])
+
+  const enrichContext: PendingListEnrichContext = {
+    exchangeRate,
+    categoryMap,
+    secondaryCategories,
+    filterCategories,
+  }
 
   const task = activeTask || fallbackTask
 
@@ -4621,7 +4741,7 @@ const loadPendingImportQueueSnapshot = async (opts?: {
   // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
   return {
     activeTask: task ? buildPendingTaskSummary(task) : null,
-    items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask)),
+    items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask, enrichContext)),
     total,
   }
 }
@@ -5943,7 +6063,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
 
     // 系数已写入但售价仍=成本：每次打开队列都尝试修复（不限维护间隔）
     try {
-      const repairedPriceCount = await repairPendingImportPricesMissingCoefficient(200)
+      const repairedPriceCount = await repairPendingImportPricesMissingCoefficient()
       if (repairedPriceCount > 0) {
         console.info(
           `[getPendingImportQueue] repaired ${repairedPriceCount} pending items with sell price stuck at cost`,

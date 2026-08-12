@@ -5,11 +5,13 @@ import prisma from '@/tools/prisma'
 import { DEFAULT_BRAND_ALIASES, type BrandAliasRule } from '@/backend/lib/brandAlias'
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
+import { isAttributeOrFilterCategory } from '@/shared/categoryMatchGuards'
+import { expandCategoryIdsWithParents, loadFilterCategoriesFromDb, matchFilterCategoriesByTitle } from '@/shared/categoryFilterTitleMatch'
 import {
-  expandCategoryIdsWithParents,
-  loadFilterCategoriesFromDb,
-  matchFilterCategoriesByTitle,
-} from '@/shared/categoryFilterTitleMatch'
+  buildCategoryMatchCorpus,
+  loadAutoMatchSecondaryCategories,
+  matchSecondaryCategoriesByTitle,
+} from '@/backend/actions/ImportFrom1688'
 
 type PendingPreviewJson = {
   name?: string
@@ -26,6 +28,32 @@ export type BulkTitleFilterBackfillSummary = {
   relations_added: number
   pending_scanned: number
   pending_updated: number
+}
+
+function pickTitleFilterHits(
+  title: string,
+  detailText: string | null | undefined,
+  secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>,
+  filterCategories: Awaited<ReturnType<typeof loadFilterCategoriesFromDb>>,
+) {
+  const corpus = buildCategoryMatchCorpus(title, detailText)
+  const fromMatcher = matchSecondaryCategoriesByTitle(title, secondaryCategories, detailText)
+    .filter((hit) => isAttributeOrFilterCategory({ name: hit.name, parentName: hit.parentName }))
+  const fromFilter = matchFilterCategoriesByTitle(title, filterCategories, detailText)
+  const byId = new Map<string, { id: string; name: string }>()
+  for (const hit of fromMatcher) {
+    byId.set(hit.id, { id: hit.id, name: hit.name })
+  }
+  for (const hit of fromFilter) {
+    byId.set(hit.id, { id: hit.id, name: hit.name })
+  }
+  if (!byId.size && corpus) {
+    // 标题 glued 后缀兜底：BOXhigh quality → HIGHQUALITY
+    for (const hit of fromFilter) {
+      byId.set(hit.id, { id: hit.id, name: hit.name })
+    }
+  }
+  return Array.from(byId.values())
 }
 
 async function loadBrandRules(): Promise<BrandAliasRule[]> {
@@ -50,7 +78,11 @@ export async function backfillTitleFilterCategoriesForAllProducts(options?: {
   const dryRun = Boolean(options?.dryRun)
   const batchSize = Math.max(20, Math.min(500, options?.batchSize ?? 100))
 
-  const [filterCategories, brandRules] = await Promise.all([loadFilterCategoriesFromDb(prisma), loadBrandRules()])
+  const [filterCategories, secondaryCategories, brandRules] = await Promise.all([
+    loadFilterCategoriesFromDb(prisma),
+    loadAutoMatchSecondaryCategories(prisma),
+    loadBrandRules(),
+  ])
 
   let productsScanned = 0
   let productsUpdated = 0
@@ -81,11 +113,8 @@ export async function backfillTitleFilterCategoriesForAllProducts(options?: {
       if (!nameBefore) continue
 
       const effectiveName = applyBrandAliases(nameBefore, brandRules) || nameBefore
-      const hits = matchFilterCategoriesByTitle(
-        effectiveName,
-        filterCategories,
-        [product.detailText, product.shortDescription].filter(Boolean).join('\n') || null,
-      )
+      const detailText = [product.detailText, product.shortDescription].filter(Boolean).join('\n') || null
+      const hits = pickTitleFilterHits(effectiveName, detailText, secondaryCategories, filterCategories)
       if (!hits.length) {
         if (!dryRun) {
           await syncProductPriceThresholdRelations(prisma, product.id).catch(() => undefined)
@@ -138,7 +167,11 @@ export async function backfillTitleFilterCategoriesForPendingImports(options?: {
   const dryRun = Boolean(options?.dryRun)
   const batchSize = Math.max(20, Math.min(500, options?.batchSize ?? 100))
 
-  const [filterCategories, brandRules] = await Promise.all([loadFilterCategoriesFromDb(prisma), loadBrandRules()])
+  const [filterCategories, secondaryCategories, brandRules] = await Promise.all([
+    loadFilterCategoriesFromDb(prisma),
+    loadAutoMatchSecondaryCategories(prisma),
+    loadBrandRules(),
+  ])
 
   let pendingScanned = 0
   let pendingUpdated = 0
@@ -168,11 +201,8 @@ export async function backfillTitleFilterCategoriesForPendingImports(options?: {
       if (!nameBefore) continue
 
       const effectiveName = applyBrandAliases(nameBefore, brandRules) || nameBefore
-      const hits = matchFilterCategoriesByTitle(
-        effectiveName,
-        filterCategories,
-        [row.productDetail, preview.shortDescription].filter(Boolean).join('\n') || null,
-      )
+      const detailText = [row.productDetail, preview.shortDescription].filter(Boolean).join('\n') || null
+      const hits = pickTitleFilterHits(effectiveName, detailText, secondaryCategories, filterCategories)
       if (!hits.length) continue
 
       const mergedRaw = Array.from(

@@ -43,8 +43,8 @@ pnpm install --frozen-lockfile || pnpm install
 echo "==> clean .next"
 rm -rf .next
 
-echo "==> next build --webpack"
-pnpm exec next build --webpack
+echo "==> gen_rpc + next build --webpack"
+pnpm run build
 
 if [[ ! -f .next/standalone/server.js ]]; then
   echo "ERROR: .next/standalone/server.js missing" >&2

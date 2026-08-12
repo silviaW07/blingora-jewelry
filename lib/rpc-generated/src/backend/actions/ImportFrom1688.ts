@@ -4,6 +4,10 @@ type Actions = typeof import('../../../../../src/backend/actions/ImportFrom1688'
 
 export const loadAutoMatchSecondaryCategories = (...args: Parameters<Actions["loadAutoMatchSecondaryCategories"]>) => 
   rpcCall<Awaited<ReturnType<Actions["loadAutoMatchSecondaryCategories"]>>>("src.backend.actions.ImportFrom1688.loadAutoMatchSecondaryCategories", ...args);
+export const pickBestBrandCategoryFromTitle = (...args: Parameters<Actions["pickBestBrandCategoryFromTitle"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["pickBestBrandCategoryFromTitle"]>>>("src.backend.actions.ImportFrom1688.pickBestBrandCategoryFromTitle", ...args);
+export const pruneNoBrandCatchAllLinks = (...args: Parameters<Actions["pruneNoBrandCatchAllLinks"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["pruneNoBrandCatchAllLinks"]>>>("src.backend.actions.ImportFrom1688.pruneNoBrandCatchAllLinks", ...args);
 export const matchSecondaryCategoriesByTitle = (...args: Parameters<Actions["matchSecondaryCategoriesByTitle"]>) => 
   rpcCall<Awaited<ReturnType<Actions["matchSecondaryCategoriesByTitle"]>>>("src.backend.actions.ImportFrom1688.matchSecondaryCategoriesByTitle", ...args);
 export const pickImportPricingTargetCategory = (...args: Parameters<Actions["pickImportPricingTargetCategory"]>) => 
@@ -18,6 +22,8 @@ export const check1688OfferLiveStatus = (...args: Parameters<Actions["check1688O
   rpcCall<Awaited<ReturnType<Actions["check1688OfferLiveStatus"]>>>("src.backend.actions.ImportFrom1688.check1688OfferLiveStatus", ...args);
 export const normalizeCategoryMatchText = (...args: Parameters<Actions["normalizeCategoryMatchText"]>) => 
   rpcCall<Awaited<ReturnType<Actions["normalizeCategoryMatchText"]>>>("src.backend.actions.ImportFrom1688.normalizeCategoryMatchText", ...args);
+export const isNoBrandCatchAllCategoryName = (...args: Parameters<Actions["isNoBrandCatchAllCategoryName"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["isNoBrandCatchAllCategoryName"]>>>("src.backend.actions.ImportFrom1688.isNoBrandCatchAllCategoryName", ...args);
 export const containsCategoryMatchToken = (...args: Parameters<Actions["containsCategoryMatchToken"]>) => 
   rpcCall<Awaited<ReturnType<Actions["containsCategoryMatchToken"]>>>("src.backend.actions.ImportFrom1688.containsCategoryMatchToken", ...args);
 export const buildCategoryMatchCorpus = (...args: Parameters<Actions["buildCategoryMatchCorpus"]>) => 

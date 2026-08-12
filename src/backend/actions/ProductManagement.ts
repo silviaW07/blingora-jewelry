@@ -365,11 +365,41 @@ const PRODUCT_LIST_QUERY_SELECT = {
       originalPrice: true,
       stock: true,
       weightKg: true,
-      attributeJson: true,
+      sizeLabel: true,
+      materialLabel: true,
+      minOrderQty: true,
     },
     orderBy: { skuCode: 'asc' as const },
   },
 } as const
+
+let categoryDescendantsCache: {
+  at: number
+  childrenMap: Map<string, string[]>
+} | null = null
+const CATEGORY_DESCENDANTS_CACHE_TTL_MS = 5 * 60 * 1000
+
+async function getCategoryChildrenMap(): Promise<Map<string, string[]>> {
+  if (
+    categoryDescendantsCache &&
+    Date.now() - categoryDescendantsCache.at < CATEGORY_DESCENDANTS_CACHE_TTL_MS
+  ) {
+    return categoryDescendantsCache.childrenMap
+  }
+
+  const all = await prisma.category.findMany({
+    select: { id: true, parentId: true },
+  })
+  const childrenMap = new Map<string, string[]>()
+  for (const item of all) {
+    if (!item.parentId) continue
+    const list = childrenMap.get(item.parentId) || []
+    list.push(item.id)
+    childrenMap.set(item.parentId, list)
+  }
+  categoryDescendantsCache = { at: Date.now(), childrenMap }
+  return childrenMap
+}
 
 type PublishedImportMatchDbRecord = {
   id: string
@@ -595,6 +625,10 @@ import prisma from '@/tools/prisma'
 import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
+import {
+  loadFilterCategoriesFromDb,
+  matchFilterCategoriesByTitle,
+} from '@/shared/categoryFilterTitleMatch'
 import { DEFAULT_PRICE_COEFFICIENT, resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
@@ -1020,6 +1054,8 @@ function mapProductSkusToListItems(product: {
     originalPrice?: any
     stock: number
     weightKg?: any
+    sizeLabel?: string | null
+    materialLabel?: string | null
     attributeJson?: any
   }>
 }): ProductListSkuItem[] {
@@ -1027,12 +1063,19 @@ function mapProductSkusToListItems(product: {
     const price = toNumber(sku.price) ?? 0
     const originalPrice = toNumber(sku.originalPrice)
     const weightKg = toNumber(sku.weightKg)
-    const attributeJson = Array.isArray(sku.attributeJson)
+    const attributeJson = Array.isArray(sku.attributeJson) && sku.attributeJson.length > 0
       ? (sku.attributeJson as SkuAttribute[]).map(attr => ({
           name: String(attr?.name || '规格'),
           value: String(attr?.value || '')
         }))
-      : []
+      : [
+          ...(String(sku.sizeLabel || '').trim()
+            ? [{ name: '规格', value: String(sku.sizeLabel).trim() }]
+            : []),
+          ...(String(sku.materialLabel || '').trim()
+            ? [{ name: '材质', value: String(sku.materialLabel).trim() }]
+            : []),
+        ]
     return {
       sku_id: sku.id,
       sku_code: sku.skuCode,
@@ -1251,16 +1294,7 @@ async function resolveCategoryFilterIds(categoryId: string): Promise<string[]> {
   const rootId = String(categoryId || '').trim()
   if (!rootId) return []
 
-  const all = await prisma.category.findMany({
-    select: { id: true, parentId: true }
-  })
-  const childrenMap = new Map<string, string[]>()
-  for (const item of all) {
-    if (!item.parentId) continue
-    const list = childrenMap.get(item.parentId) || []
-    list.push(item.id)
-    childrenMap.set(item.parentId, list)
-  }
+  const childrenMap = await getCategoryChildrenMap()
 
   const result = new Set<string>([rootId])
   const stack = [rootId]
@@ -3788,8 +3822,9 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
     const scopedIds = Array.isArray(input?.product_ids)
       ? Array.from(new Set(input.product_ids.map(id => String(id || '').trim()).filter(Boolean)))
       : []
-    const [secondaryCategories, brandRules] = await Promise.all([
+    const [secondaryCategories, filterCategories, brandRules] = await Promise.all([
       loadAutoMatchSecondaryCategories(prisma),
+      loadFilterCategoriesFromDb(prisma),
       loadBrandAliasRules(),
     ])
     const products = await prisma.product.findMany({
@@ -3824,6 +3859,11 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
 
         const corpusDetail = buildCategoryMatchCorpus(product.detailText, product.shortDescription)
         const hits = matchSecondaryCategoriesByTitle(effectiveName, secondaryCategories, corpusDetail)
+        const filterHits = matchFilterCategoriesByTitle(
+          effectiveName,
+          filterCategories,
+          corpusDetail,
+        )
 
         const isBrandShelfHit = (item: {
           parentName?: string | null
@@ -3996,6 +4036,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         const linkedCategoryIdsRaw = await expandLinkedCategoryIdsWithParents(prisma, [
           ...(ownership?.linkedCategoryIds || [primaryCategoryId]),
           ...hits.map(item => item.id),
+          ...filterHits.map(item => item.id),
           ...(brandHit ? [brandHit.id] : []),
           // 一键校准以本次标题命中为准，不再把旧主类目硬塞回来（否则 wallet/Handbag 旧脏数据清不掉）
           primaryCategoryId || '',
@@ -4008,6 +4049,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
           pricingHit?.name,
           ...pricingHits.map(h => h.name),
           ...hits.map(h => h.name),
+          ...filterHits.map(h => h.name),
         ]
         const existingWeight = toNumber(product.weightGram)
         const textCorpus = buildCategoryMatchCorpus(effectiveName, product.detailText, product.shortDescription)
@@ -4156,8 +4198,9 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
     )
     if (!itemIds.length) throw new Error('请先勾选要校准的待上传商品')
 
-    const [secondaryCategories, brandRules] = await Promise.all([
+    const [secondaryCategories, filterCategories, brandRules] = await Promise.all([
       loadAutoMatchSecondaryCategories(prisma),
+      loadFilterCategoriesFromDb(prisma),
       loadBrandAliasRules(),
     ])
 
@@ -4231,6 +4274,11 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           preview.shortDescription,
         )
         const hits = matchSecondaryCategoriesByTitle(effectiveName, secondaryCategories, detailCorpus)
+        const filterHits = matchFilterCategoriesByTitle(
+          effectiveName,
+          filterCategories,
+          detailCorpus,
+        )
         const isBrandShelfHit = (item: {
           parentName?: string | null
           isBrandCategory?: boolean
@@ -4306,6 +4354,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
         const matchedIdsRaw = Array.from(new Set([
           ...preservedCategoryIds,
           ...hits.map(h => h.id),
+          ...filterHits.map(h => h.id),
           ...(targetCategoryId ? [targetCategoryId] : []),
           ...(brandHit ? [brandHit.id] : []),
         ].filter(Boolean)))
@@ -4337,6 +4386,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           ...(pricingTarget?.name ? [pricingTarget.name] : []),
           ...pricingHits.map(h => h.name),
           ...hits.map(h => h.name),
+          ...filterHits.map(h => h.name),
           ...(brandHit?.name ? [brandHit.name] : []),
           ...parentRows.map(r => r.name),
         ].filter((name) => Boolean(name) && !isNoBrandCatchAllCategoryName(name))))

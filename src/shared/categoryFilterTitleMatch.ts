@@ -4,6 +4,21 @@
  */
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
 import { isAttributeOrFilterCategory } from '@/shared/categoryMatchGuards'
+import { PRICE_THRESHOLD_RULES } from '@/backend/lib/priceThresholdAutoClassify'
+
+const compactCatKey = (value?: string | null) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s/_-]+/g, '')
+
+const isPriceThresholdTagCategoryName = (name?: string | null) => {
+  const key = compactCatKey(name)
+  if (!key) return false
+  return PRICE_THRESHOLD_RULES.some((rule) =>
+    rule.l2NameAliases.some((alias) => compactCatKey(alias) === key),
+  )
+}
 
 const normalizeToken = (value?: string | null) =>
   String(value || '')
@@ -43,7 +58,12 @@ export async function loadFilterCategoriesFromDb(tx: {
       parentId: row.parentId,
       parentName: row.parent?.name ? String(row.parent.name).trim() : null,
     }))
-    .filter((row) => row.name && isAttributeOrFilterCategory({ name: row.name, parentName: row.parentName }))
+    .filter(
+      (row) =>
+        row.name &&
+        (isAttributeOrFilterCategory({ name: row.name, parentName: row.parentName }) ||
+          isPriceThresholdTagCategoryName(row.name)),
+    )
 }
 
 /** 标题命中品质/材质/below* 等筛选类目 */

@@ -130,11 +130,15 @@ function matchesAlias(nameOrSlug: string | null | undefined, aliases: string[]):
 /** 标题含 below13 / below3 等后缀时，即使售价高于阈值也保留关联标签 */
 export function titleClaimsPriceThresholdTag(
   title: string | null | undefined,
-  rule: Pick<PriceThresholdRule, 'l2NameAliases'>,
+  rule: Pick<PriceThresholdRule, 'l2NameAliases' | 'key'>,
 ): boolean {
   const corpus = normalizeCatKey(title)
   if (!corpus) return false
-  return rule.l2NameAliases.some((alias) => {
+  const aliases =
+    Array.isArray(rule.l2NameAliases) && rule.l2NameAliases.length > 0
+      ? rule.l2NameAliases
+      : PRICE_THRESHOLD_RULES.find((item) => item.key === rule.key)?.l2NameAliases || []
+  return aliases.some((alias) => {
     const token = normalizeCatKey(alias)
     return token.length >= 4 && corpus.includes(token)
   })

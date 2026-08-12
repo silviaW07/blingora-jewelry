@@ -90,13 +90,12 @@ function PendingImportTableRowsInner({
     state.categoryOptions.find(option => option.category_id === item.item_targetCategoryId)
   const targetCategoryName =
     targetCategoryOption?.category_name?.replace(/^[　└\s]+/, '') ||
-    item.item_matchedCategoryNames?.[0] ||
+    item.item_sourceCategoryName ||
     null
   const linkedCategoryLabels = (item.item_matchedCategoryNames || [])
     .map(name => String(name || '').trim())
     .filter(Boolean)
     .filter(name => name !== targetCategoryName)
-    .slice(0, 6)
   const isReparsing = !!state.reparsingItemIds[item.item_id]
   const nowMs = state.pendingImportNowMs
   const readinessSnapshot = snapshotFromPendingImportQueueItem(item)

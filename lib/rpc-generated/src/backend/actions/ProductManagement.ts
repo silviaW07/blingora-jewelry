@@ -92,6 +92,8 @@ export const applyCalibrateCategoryEdits = (...args: Parameters<Actions["applyCa
   rpcCall<Awaited<ReturnType<Actions["applyCalibrateCategoryEdits"]>>>("src.backend.actions.ProductManagement.applyCalibrateCategoryEdits", ...args);
 export const autoClassifyPriceThresholdProducts = (...args: Parameters<Actions["autoClassifyPriceThresholdProducts"]>) => 
   rpcCall<Awaited<ReturnType<Actions["autoClassifyPriceThresholdProducts"]>>>("src.backend.actions.ProductManagement.autoClassifyPriceThresholdProducts", ...args);
+export const backfillAllTitleFilterCategories = (...args: Parameters<Actions["backfillAllTitleFilterCategories"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["backfillAllTitleFilterCategories"]>>>("src.backend.actions.ProductManagement.backfillAllTitleFilterCategories", ...args);
 export const batchTranslateProductTitlesToSpanish = (...args: Parameters<Actions["batchTranslateProductTitlesToSpanish"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchTranslateProductTitlesToSpanish"]>>>("src.backend.actions.ProductManagement.batchTranslateProductTitlesToSpanish", ...args);
 export const getHomeFeaturedKeywords = (...args: Parameters<Actions["getHomeFeaturedKeywords"]>) => 

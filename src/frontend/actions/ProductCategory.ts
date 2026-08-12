@@ -276,6 +276,10 @@ import {
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
 const DEFAULT_KEYWORD_SCENE_AREAS: KeywordSceneArea[] = ['BOTH', 'LEFT_NAV', 'RECOMMENDATION']
+/** 列表卡片最多加载的 SKU 行数（缩略图 + 默认规格）；全量 min/max 价另走 groupBy */
+const PRODUCT_LIST_SKU_TAKE = 40
+const CATEGORY_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000
+const categoryContextCache = new Map<string, { at: number; value: ResolvedCategoryContext }>()
 
 const normalizeSceneValue = (value?: string | null): string | undefined => {
   if (typeof value !== 'string') {
@@ -446,6 +450,11 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     }
   }
 
+  const cached = categoryContextCache.get(categoryId)
+  if (cached && Date.now() - cached.at < CATEGORY_CONTEXT_CACHE_TTL_MS) {
+    return cached.value
+  }
+
   const currentCategory = await prisma.category.findUnique({
     where: { id: categoryId },
     select: {
@@ -463,10 +472,12 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
   })
 
   if (!currentCategory || currentCategory.status !== 'ACTIVE') {
-    return {
+    const empty = {
       descendantCategoryIds: [],
       categoryIdsForQuery: []
     }
+    categoryContextCache.set(categoryId, { at: Date.now(), value: empty })
+    return empty
   }
 
   // L1 = level 1 or root (no parent). Expand to all ACTIVE direct L2 children.
@@ -482,22 +493,26 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
       }
     })
     const descendantCategoryIds = descendants.map((child) => child.id)
-    return {
+    const resolved = {
       rootCategoryId: currentCategory.id,
       matchedCategoryId: currentCategory.id,
       matchedCategoryLevel: currentCategory.level || 1,
       descendantCategoryIds,
       categoryIdsForQuery: Array.from(new Set([currentCategory.id, ...descendantCategoryIds]))
     }
+    categoryContextCache.set(categoryId, { at: Date.now(), value: resolved })
+    return resolved
   }
 
-  return {
+  const resolved = {
     rootCategoryId: currentCategory.parent?.status === 'ACTIVE' ? currentCategory.parent.id : currentCategory.parentId || undefined,
     matchedCategoryId: currentCategory.id,
     matchedCategoryLevel: currentCategory.level,
     descendantCategoryIds: [],
     categoryIdsForQuery: [currentCategory.id]
   }
+  categoryContextCache.set(categoryId, { at: Date.now(), value: resolved })
+  return resolved
 }
 
 const buildProductWhere = (
@@ -1100,6 +1115,11 @@ function mapProductRecordToItem(
   p: any,
   lang: ReturnType<typeof normalizeProductLang>,
   exchangeRate: number,
+  opts?: {
+    skuPriceMinRmb?: number | null
+    skuPriceMaxRmb?: number | null
+    stockStatus?: StockStatusEnum
+  },
 ): ProductItem {
   const skus = p.skus
   const skuCount = skus.length
@@ -1107,7 +1127,9 @@ function mapProductRecordToItem(
   const defaultSku = sortedSkus.length > 0 ? sortedSkus[0] : null
 
   let stockStatus: StockStatusEnum = 'OUT_OF_STOCK'
-  if (skus.some((s: any) => s.stockStatus === 'IN_STOCK')) {
+  if (opts?.stockStatus) {
+    stockStatus = opts.stockStatus
+  } else if (skus.some((s: any) => s.stockStatus === 'IN_STOCK')) {
     stockStatus = 'IN_STOCK'
   } else if (skus.some((s: any) => s.stockStatus === 'LOW_STOCK')) {
     stockStatus = 'LOW_STOCK'
@@ -1118,7 +1140,7 @@ function mapProductRecordToItem(
     relations: (p.relationCategories || []).map((rel: any) => rel.category),
   })
   const priceRmb = resolveFrontRmbSellingPrice({
-    skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
+    skuPriceRmb: opts?.skuPriceMinRmb ?? (defaultSku ? defaultSku.price.toNumber() : 0),
     costPrice: p.costPrice,
     ...pricingCoeffs,
   })
@@ -1132,18 +1154,38 @@ function mapProductRecordToItem(
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
   const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
   const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum
-  const usdPrices = skus
-    .map((sku: any) =>
-      toUsdPrice(
-        resolveFrontRmbSellingPrice({
-          skuPriceRmb: sku.price.toNumber(),
-          costPrice: p.costPrice,
-          ...pricingCoeffs,
-        }),
-        exchangeRate,
-      ),
-    )
-    .filter((value: number) => Number.isFinite(value) && value > 0)
+  const usdPrices =
+    opts?.skuPriceMinRmb != null && opts?.skuPriceMaxRmb != null
+      ? [
+          toUsdPrice(
+            resolveFrontRmbSellingPrice({
+              skuPriceRmb: opts.skuPriceMinRmb,
+              costPrice: p.costPrice,
+              ...pricingCoeffs,
+            }),
+            exchangeRate,
+          ),
+          toUsdPrice(
+            resolveFrontRmbSellingPrice({
+              skuPriceRmb: opts.skuPriceMaxRmb,
+              costPrice: p.costPrice,
+              ...pricingCoeffs,
+            }),
+            exchangeRate,
+          ),
+        ]
+      : skus
+          .map((sku: any) =>
+            toUsdPrice(
+              resolveFrontRmbSellingPrice({
+                skuPriceRmb: sku.price.toNumber(),
+                costPrice: p.costPrice,
+                ...pricingCoeffs,
+              }),
+              exchangeRate,
+            ),
+          )
+          .filter((value: number) => Number.isFinite(value) && value > 0)
   const priceMax = usdPrices.length > 0 ? Math.max(...usdPrices) : null
   const minOrderQuantity = Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
   const translated = pickProductTranslation((p as { translationsJson?: unknown }).translationsJson, lang)
@@ -1223,6 +1265,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         stockStatus: true,
       },
       orderBy: [{ createdAt: 'asc' as const }, { skuCode: 'asc' as const }],
+      take: PRODUCT_LIST_SKU_TAKE,
     },
     brandCategory: {
       select: {
@@ -1312,8 +1355,54 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       }),
     ])
 
+    const productIds = pageRows.map((p) => p.id)
+    const [skuPriceAggs, skuStockRows] =
+      productIds.length > 0
+        ? await Promise.all([
+            prisma.productsku.groupBy({
+              by: ['productId'],
+              where: { productId: { in: productIds } },
+              _min: { price: true },
+              _max: { price: true },
+            }),
+            prisma.productsku.findMany({
+              where: { productId: { in: productIds } },
+              select: { productId: true, stockStatus: true },
+            }),
+          ])
+        : [[], []]
+
+    const skuPriceAggByProduct = new Map(
+      skuPriceAggs.map((row) => [
+        row.productId,
+        {
+          min: row._min.price != null ? row._min.price.toNumber() : null,
+          max: row._max.price != null ? row._max.price.toNumber() : null,
+        },
+      ]),
+    )
+    const stockByProduct = new Map<string, StockStatusEnum>()
+    for (const row of skuStockRows) {
+      const current = stockByProduct.get(row.productId)
+      const next = row.stockStatus as StockStatusEnum
+      if (next === 'IN_STOCK') {
+        stockByProduct.set(row.productId, 'IN_STOCK')
+      } else if (next === 'LOW_STOCK' && current !== 'IN_STOCK') {
+        stockByProduct.set(row.productId, 'LOW_STOCK')
+      } else if (!current) {
+        stockByProduct.set(row.productId, 'OUT_OF_STOCK')
+      }
+    }
+
     const fastOutput: GetProductListOutput = {
-      list: pageRows.map((p) => mapProductRecordToItem(p, lang, exchangeRate)),
+      list: pageRows.map((p) => {
+        const agg = skuPriceAggByProduct.get(p.id)
+        return mapProductRecordToItem(p, lang, exchangeRate, {
+          skuPriceMinRmb: agg?.min ?? null,
+          skuPriceMaxRmb: agg?.max ?? null,
+          stockStatus: stockByProduct.get(p.id),
+        })
+      }),
       total,
     }
     setCachedList(cacheKey, fastOutput)
