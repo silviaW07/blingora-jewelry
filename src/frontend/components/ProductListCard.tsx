@@ -150,9 +150,8 @@ export const ProductListCard = ({
         <OptimizedProductImage
           src={previewImage || item.main_image_url}
           alt={item.product_name}
-          className="transition duration-500 group-hover:scale-[1.03]"
           sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-          imageWidth={800}
+          imageWidth={1200}
           priority={priority}
         />
       </div>
@@ -223,8 +222,8 @@ export const ProductListCard = ({
                     src={url}
                     alt=""
                     className="pointer-events-none"
-                    sizes="24px"
-                    imageWidth={120}
+                    sizes="48px"
+                    imageWidth={240}
                   />
                 </button>
               )

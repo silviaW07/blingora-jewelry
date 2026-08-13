@@ -28,7 +28,7 @@ export function stripAlicdnSize(url: string): string {
  * Full ~280KB JPEG → `_400x400q80.jpg` ~25KB (verified via img-proxy).
  * Always rewrites an existing size suffix to the requested width.
  */
-export function withAlicdnSize(url: string, width = 800, quality = 80): string {
+export function withAlicdnSize(url: string, width = 1200, quality = 90): string {
   const raw = String(url || '').trim()
   if (!raw) return raw
   // width <= 0 → unsized original (used by image error retry)
@@ -75,7 +75,7 @@ function proxyPathForHost(host: string, pathname: string, search: string): strin
 }
 
 export type ProxiedImageOptions = {
-  /** Longest edge in px for alicdn resize (default 800). Use 220 for thumbs, 400 for cards, 960 for detail hero. */
+  /** Longest edge in px for alicdn resize (default 1200). Use 240 for thumbs, 1200 for cards, 1600 for detail hero. */
   width?: number
   quality?: number
 }
@@ -97,8 +97,8 @@ export function toProxiedImageUrl(
   const raw = String(url || '').trim()
   if (!raw) return ''
 
-  const width = options.width ?? 800
-  const quality = options.quality ?? 80
+  const width = options.width ?? 1200
+  const quality = options.quality ?? 90
 
   // Already on our CDN — apply size suffix if missing
   if (IMAGE_CDN_BASE && raw.startsWith(IMAGE_CDN_BASE)) {

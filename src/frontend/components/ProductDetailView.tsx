@@ -464,7 +464,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                   alt={detailPreview.name || ''}
                   className="size-full"
                   sizes="(max-width: 1024px) 100vw, 50vw"
-                  imageWidth={960}
+                  imageWidth={1600}
                   priority
                 />
                 <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/25 to-transparent pb-6">
@@ -578,7 +578,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       alt={product.name}
                       className="size-full"
                       sizes="(max-width: 1024px) 100vw, 50vw"
-                      imageWidth={960}
+                      imageWidth={1600}
                       priority
                     />
                     <button
@@ -921,6 +921,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         alt={item.name}
                         className="size-full"
                         sizes="(max-width: 768px) 50vw, 25vw"
+                        imageWidth={800}
                         imageWidth={400}
                       />
                     </div>

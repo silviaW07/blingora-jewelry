@@ -68,7 +68,7 @@ export const optimizeCatalogImageUrl = (
     // Already same-origin (incl. /img-proxy) — append alicdn size when possible
     if (text.startsWith('/img-proxy/') && !/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
       if (/\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
-        return `${text.split('?')[0]}_${width}x${width}q80.jpg${text.includes('?') ? `?${text.split('?')[1]}` : ''}`
+        return `${text.split('?')[0]}_${width}x${width}q90.jpg${text.includes('?') ? `?${text.split('?')[1]}` : ''}`
       }
     }
     return text
@@ -80,7 +80,7 @@ export const optimizeCatalogImageUrl = (
     if (url.pathname.startsWith('/img-proxy/')) {
       const path = `${url.pathname}${url.search}`
       if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(url.pathname) && /\.(jpe?g|png|webp)$/i.test(url.pathname)) {
-        return `${url.pathname}_${width}x${width}q80.jpg${url.search}`
+        return `${url.pathname}_${width}x${width}q90.jpg${url.search}`
       }
       return path
     }
@@ -106,7 +106,7 @@ export const optimizeCatalogImageUrl = (
     if (host.includes('alicdn.com')) {
       const path = url.pathname
       if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(path) && /\.(jpe?g|png|webp)$/i.test(path)) {
-        url.pathname = `${path}_${width}x${width}q80.jpg`
+        url.pathname = `${path}_${width}x${width}q90.jpg`
       }
       return url.toString()
     }

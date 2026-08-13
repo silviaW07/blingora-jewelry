@@ -222,7 +222,7 @@ export default function MobileComingView() {
                       src={item.imageUrl}
                       alt={item.productName || zoneTitle}
                       sizes="(max-width: 480px) 50vw, 33vw"
-                      imageWidth={480}
+                      imageWidth={800}
                       className="object-cover"
                     />
                   ) : (
