@@ -922,7 +922,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         className="size-full"
                         sizes="(max-width: 768px) 50vw, 25vw"
                         imageWidth={800}
-                        imageWidth={400}
                       />
                     </div>
                     <div className="space-y-1 p-3">
