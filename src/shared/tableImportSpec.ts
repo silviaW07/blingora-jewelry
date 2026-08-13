@@ -44,6 +44,35 @@ export const TABLE_IMPORT_SPEC_HEADER_ALIASES = [
   'sku spec',
 ]
 
+/** 表格「类目」列表头：英文 Hat / 英文类目 也必须读进 categoryName */
+export const TABLE_IMPORT_CATEGORY_HEADER_ALIASES = [
+  '类目',
+  '英文类目',
+  '中文类目',
+  '类目名称',
+  '产品分类',
+  '商品类目',
+  '商品分类',
+  '分类',
+  'category',
+  'categories',
+  'category name',
+  'categoryname',
+  'product category',
+  'hat',
+  'hats',
+]
+
+export function isTableImportCategoryHeader(cell?: string | null): boolean {
+  const raw = String(cell || '').trim().toLowerCase()
+  if (!raw) return false
+  if (TABLE_IMPORT_CATEGORY_HEADER_ALIASES.includes(raw)) return true
+  // 英文类目 / 商品类目名称 — 含「类目」即可，避开「类目系数」
+  if (raw.includes('类目') && !raw.includes('系数')) return true
+  if (raw.includes('category') && !raw.includes('id')) return true
+  return false
+}
+
 const normalizeDimension = (raw: string) =>
   raw.replace(/\s+/g, '').replace(/[xX×]/g, '*')
 

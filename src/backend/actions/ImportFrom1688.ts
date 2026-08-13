@@ -668,6 +668,7 @@ import {
   collectTableImportSkuPairs,
   resolveTableImportColorSpec,
   TABLE_IMPORT_SPEC_HEADER_ALIASES,
+  isTableImportCategoryHeader,
 } from '@/shared/tableImportSpec'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
@@ -6272,7 +6273,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
       productName: ['名称', '产品名称', '商品名称', 'name'],
       brand: ['品牌', '品牌关键词', 'brand'],
       supplierName: ['供应商', 'supplier'],
-      categoryName: ['类目', '产品分类', '分类', 'category'],
+      categoryName: ['类目', '英文类目', '产品分类', '分类', 'category', 'hat', 'hats'],
       color: ['颜色', 'color'],
       spec: TABLE_IMPORT_SPEC_HEADER_ALIASES,
       weight: ['重量', '重量(g)', 'weight'],
@@ -6280,7 +6281,9 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
     }
     const indexMap: Record<string, number> = {}
     Object.entries(headerAliases).forEach(([field, aliases]) => {
-      const idx = headerCells.findIndex(cell => aliases.includes(cell))
+      const idx = headerCells.findIndex(cell =>
+        field === 'categoryName' ? isTableImportCategoryHeader(cell) : aliases.includes(cell),
+      )
       if (idx >= 0) indexMap[field] = idx
     })
     const hasNamedHeader = Object.keys(indexMap).length >= 2
