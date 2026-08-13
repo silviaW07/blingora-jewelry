@@ -645,7 +645,6 @@ import {
 import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
-import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
 import { isPendingImportEffectivelyReady, hasPendingImportCoreFields } from '@/backend/utils/pendingImportReadiness'
 import {
@@ -5762,6 +5761,18 @@ const categoryNameFuzzyMatch = (dbName: string, token: string) => {
   return false
 }
 
+/** 表格「帽子」必须能对上英文货架 Hats（含同义词，不只比库里的英文名） */
+const categoryCellMatchesCategory = (dbName: string, token: string) => {
+  if (categoryNameFuzzyMatch(dbName, token)) return true
+  const tokenNorm = normalizeCategoryMatchText(token)
+  if (!tokenNorm) return false
+  if (resolveCategorySynonyms(dbName).some((syn) => normalizeCategoryMatchText(syn) === tokenNorm)) {
+    return true
+  }
+  const dbNorm = normalizeCategoryMatchText(dbName)
+  return resolveCategorySynonyms(token).some((syn) => normalizeCategoryMatchText(syn) === dbNorm)
+}
+
 type TableImportCategoryRow = {
   id: string
   name: string
@@ -5811,8 +5822,9 @@ export function resolveTableImportCategoryPath(
 
   const matchPrimary =
     (l1Token
-      ? level1.find(c => categoryNameFuzzyMatch(c.name, l1Token)) ||
-        usable.find(c => categoryNameFuzzyMatch(c.name, l1Token) && levelOf(c) === 1)
+      ? level1.find(c => categoryCellMatchesCategory(c.name, l1Token)) ||
+        usable.find(c => categoryCellMatchesCategory(c.name, l1Token) && levelOf(c) === 1) ||
+        level2.find(c => categoryCellMatchesCategory(c.name, l1Token))
       : null) || null
 
   let matchSecondary: TableImportCategoryRow | null = null
@@ -5821,9 +5833,11 @@ export function resolveTableImportCategoryPath(
       ? level2.filter(c => c.parentId === matchPrimary.id)
       : level2
     matchSecondary =
-      underPrimary.find(c => categoryNameFuzzyMatch(c.name, l2Token)) ||
-      level2.find(c => categoryNameFuzzyMatch(c.name, l2Token)) ||
+      underPrimary.find(c => categoryCellMatchesCategory(c.name, l2Token)) ||
+      level2.find(c => categoryCellMatchesCategory(c.name, l2Token)) ||
       null
+  } else if (matchPrimary && levelOf(matchPrimary) === 2) {
+    matchSecondary = matchPrimary
   }
 
   // 仅写了一级时，也可把 L2 写成与一级同名的误填，回退一级
@@ -6504,44 +6518,54 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           ? categories.find(
               item =>
                 !item.isBrandCategory &&
-                item.name.trim().toLowerCase() === categoryCell.toLowerCase(),
+                (item.name.trim().toLowerCase() === categoryCell.toLowerCase() ||
+                  categoryCellMatchesCategory(item.name, categoryCell)),
             ) || null
           : null
-      // 仅当类目列为空时，才用标题/详情做二级类目自动命中（排除 Brand 下 LV/COACH 的优先级仍在匹配器里，
-      // 这里空格时才走；有类目词时彻底关掉）
-      const autoMatchedSecondaryCategories = categoryCell
-        ? []
-        : matchSecondaryCategoriesByTitle(
-            normalizeText(row.productName),
-            secondaryCategories,
-            [
-              normalizeText(row.detail),
-              // 品牌不得参与类目自动命中语料
-            ].filter(Boolean).join('\n') || null,
-          )
+      // 标题命中只用来补关联标签（品牌货架 / clothes）；主类目优先表格「类目」列
+      const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(
+        normalizeText(row.productName),
+        secondaryCategories,
+        [normalizeText(row.detail)].filter(Boolean).join('\n') || null,
+      )
+      const tableTargetId = pathResolved.targetCategoryId || exactCell?.id || null
       const categoryId =
-        normalizeText(row.categoryId) ||
-        pathResolved.targetCategoryId ||
-        exactCell?.id ||
-        (!categoryCell
-          ? pickImportPricingTargetCategory(autoMatchedSecondaryCategories, null)
-          : null) ||
-        input.defaultCategoryId ||
-        null
+        pickFirstNonBrandCategoryId(
+          [
+            normalizeText(row.categoryId),
+            tableTargetId,
+            pickImportPricingTargetCategory(autoMatchedSecondaryCategories, tableTargetId),
+            input.defaultCategoryId,
+          ],
+          new Map(
+            categories.map(item => [
+              item.id,
+              {
+                id: item.id,
+                name: item.name,
+                parentId: item.parentId,
+                priceCoefficient: item.priceCoefficient,
+                isBrandCategory: Boolean(item.isBrandCategory),
+              },
+            ]),
+          ),
+          new Map(secondaryCategories.map(item => [item.id, item])),
+        ) || null
 
       // 表格「类目」列解析结果写入 matched*，供待上传/校准弹窗默认勾选（不只写 targetCategoryId）
-      const tableResolvedCategoryIds = categoryCell
-        ? Array.from(
-            new Set(
-              [pathResolved.primaryId, pathResolved.secondaryId, categoryId].filter(
-                (id): id is string => Boolean(id),
-              ),
-            ),
-          )
-        : []
-      const matchedSecondaryCategoryIds = tableResolvedCategoryIds.length
-        ? tableResolvedCategoryIds
-        : autoMatchedSecondaryCategories.map(category => category.id)
+      const tableResolvedCategoryIds = Array.from(
+        new Set(
+          [pathResolved.primaryId, pathResolved.secondaryId, tableTargetId, categoryId].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      )
+      const matchedSecondaryCategoryIds = Array.from(
+        new Set([
+          ...tableResolvedCategoryIds,
+          ...autoMatchedSecondaryCategories.map(category => category.id),
+        ]),
+      )
       const matchedSecondaryCategoryNames = matchedSecondaryCategoryIds
         .map(id => categories.find(item => item.id === id)?.name || null)
         .filter((name): name is string => Boolean(name))
@@ -6580,11 +6604,20 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           : null,
       )
 
-      // sourceCategoryName：表格类目路径原文（Bag, Handbag），不是 LV/COACH
+      // sourceCategoryName：表格类目原文或真实品类名，禁止用 LV/COACH 冒充主类目
+      const firstProductTypeName =
+        autoMatchedSecondaryCategories.find(category =>
+          isProductTypeCategory({
+            name: category.name,
+            parentName: category.parentName,
+            isBrandCategory: category.isBrandCategory,
+            level: category.level,
+          }),
+        )?.name || null
       const sourceCategoryName =
         pathResolved.sourceCategoryLabel ||
         categoryCell ||
-        matchedSecondaryCategoryNames[0] ||
+        firstProductTypeName ||
         resolvedCategory?.name ||
         null
 

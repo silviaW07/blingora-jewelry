@@ -179,7 +179,14 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   { names: ['Watch Band', 'Watch Strap', '表带'], synonyms: ['表带', '手表带', '腕带'] },
 
   // —— 服饰 / Apparel ——
-  { names: ['Hat', 'Hats', 'Cap', '帽子'], synonyms: ['帽子', '棒球帽', '渔夫帽', '针织帽', '鸭舌帽', '贝雷帽'] },
+  {
+    names: ['Clothes', 'Clothing', 'Apparel', '服饰', '衣服'],
+    synonyms: ['服饰', '衣服', '服装', '衣帽'],
+  },
+  {
+    names: ['Hat', 'Hats', 'Cap', '帽子'],
+    synonyms: ['帽子', '棒球帽', '渔夫帽', '渔夫遮阳帽', '遮阳帽', '太阳帽', '草帽', '针织帽', '鸭舌帽', '贝雷帽', '盆帽'],
+  },
   { names: ['Scarf', 'Scarves', '围巾'], synonyms: ['围巾', '丝巾', '披肩', '方巾', '围脖'] },
   { names: ['Gloves', 'Glove', '手套'], synonyms: ['手套', '半指手套'] },
   { names: ['Top', 'Tops', '上衣'], synonyms: ['上衣', 'T恤', '卫衣', '衬衫', '针织衫', '打底衫'] },

@@ -4262,13 +4262,38 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
         } }).tableCategoryPath
         const existingTargetId =
           String(row.targetCategoryId || preview.categoryId || '').trim() || null
+        const previewMatchedIds = Array.from(
+          new Set(
+            (Array.isArray((preview as { matchedCategoryIds?: string[] }).matchedCategoryIds)
+              ? (preview as { matchedCategoryIds?: string[] }).matchedCategoryIds
+              : []
+            )
+              .map(id => String(id || '').trim())
+              .filter(Boolean),
+          ),
+        )
+        const isUsableProductTypeId = (id?: string | null) => {
+          const cat = id ? secondaryCategories.find(item => item.id === id) : null
+          if (!cat) return false
+          return isProductTypeCategory({
+            name: cat.name,
+            parentName: cat.parentName,
+            isBrandCategory: cat.isBrandCategory,
+            level: cat.level,
+          })
+        }
+        const tableProductTypeId =
+          [previewTablePath?.secondaryId, previewTablePath?.primaryId, existingTargetId].find(id =>
+            isUsableProductTypeId(id),
+          ) || null
         const preservedCategoryIds = Array.from(
           new Set(
             [
-              // 仅保留表格导入路径 / 当前主类目；不要保留旧的 matchedCategoryIds（常含误绑 wallet/化妆包）
+              tableProductTypeId,
               existingTargetId,
               previewTablePath?.primaryId,
               previewTablePath?.secondaryId,
+              ...previewMatchedIds.filter(id => isUsableProductTypeId(id)),
             ]
               .map(id => String(id || '').trim())
               .filter(Boolean),
@@ -4318,7 +4343,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
         const pricingTarget = pricingTargetId
           ? hits.find(h => h.id === pricingTargetId) || pricingHits.find(h => h.id === pricingTargetId) || null
           : pricingHits[0] || null
-        // 标题识别到真实品类时覆盖材质主类目；无标题命中时仅保留「真实品类」人工/表格目标
+        // 表格写了帽子等真实品类时，禁止被标题里的 DIOR/LV 品牌货架抢主类目
         const existingMeta = existingTargetId
           ? secondaryCategories.find((c) => c.id === existingTargetId) || null
           : null
@@ -4331,7 +4356,9 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
             })
           : false
         let targetCategoryId: string | null = null
-        if (pricingTarget?.id) {
+        if (tableProductTypeId) {
+          targetCategoryId = tableProductTypeId
+        } else if (pricingTarget?.id) {
           targetCategoryId = pricingTarget.id
         } else if (existingTargetId && existingIsProductType) {
           targetCategoryId = existingTargetId
@@ -4443,12 +4470,17 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           continue
         }
 
+        const persistedTarget =
+          targetCategoryId ||
+          (existingIsProductType ? existingTargetId : null) ||
+          (isUsableProductTypeId(preview.categoryId) ? String(preview.categoryId) : null)
+
         const nextPreview: PreviewDataJson = {
           ...preview,
           name: effectiveName,
           matchedCategoryIds: matchedIds,
           matchedCategoryNames: matchedNames,
-          categoryId: targetCategoryId || preview.categoryId,
+          categoryId: persistedTarget || undefined,
           categoryCalibrated: true,
         }
 
@@ -4456,7 +4488,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
           where: { id: row.id },
           data: {
             parsedName: effectiveName,
-            targetCategoryId: targetCategoryId,
+            targetCategoryId: persistedTarget,
             weightGrams: resolvedWeight,
             previewDataJson: nextPreview as any,
           },
