@@ -420,6 +420,39 @@ async function main() {
     }
   }
 
+  // Second pass: split leftover SKUs like 颜色="蓝色-大号43*33*13cm"
+  let unpacked = 0
+  const leftoverProducts = await prisma.product.findMany({
+    where: { source: 'TABLE_IMPORT' },
+    select: {
+      id: true,
+      productCode: true,
+      skus: { select: { id: true, attributeJson: true, sizeLabel: true } },
+    },
+  })
+  for (const product of leftoverProducts) {
+    for (const sku of product.skus) {
+      if (skuHasRealSpec(sku)) continue
+      const color = skuColor(sku)
+      const packed = parsePacked(color)
+      if (!packed?.size) continue
+      const attrs = buildAttrs(packed.color, packed.size)
+      if (dryRun) {
+        unpacked += 1
+        continue
+      }
+      await prisma.productsku.update({
+        where: { id: sku.id },
+        data: {
+          attributeJson: attrs,
+          sizeLabel: packed.size.slice(0, 60),
+        },
+      })
+      unpacked += 1
+    }
+  }
+  console.log('unpackedPackedColorSkus', unpacked)
+
   console.log(
     JSON.stringify(
       {
