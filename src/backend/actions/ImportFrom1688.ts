@@ -665,6 +665,11 @@ import {
   DEFAULT_AVAILABLE_STOCK,
   DEFAULT_MIN_ORDER_QTY,
 } from '@/shared/resolveInitialStock'
+import {
+  collectTableImportSkuPairs,
+  resolveTableImportColorSpec,
+  TABLE_IMPORT_SPEC_HEADER_ALIASES,
+} from '@/shared/tableImportSpec'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
   extractPinduoduoGoodsId,
@@ -6211,12 +6216,6 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
       throw new Error('请先粘贴表格内容')
     }
 
-    const splitOptions = (raw?: string) =>
-      normalizeCommaText(raw)
-        .split(',')
-        .map(value => value.trim())
-        .filter(Boolean)
-
     const lines = content
       .split(/\r?\n/)
       .map(line => line.trim())
@@ -6261,7 +6260,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
       supplierName: ['供应商', 'supplier'],
       categoryName: ['类目', '产品分类', '分类', 'category'],
       color: ['颜色', 'color'],
-      spec: ['规格', '尺码', '尺寸', 'size', 'spec'],
+      spec: TABLE_IMPORT_SPEC_HEADER_ALIASES,
       weight: ['重量', '重量(g)', 'weight'],
       detail: ['详情', '描述', '商品详情', 'detail', 'description'],
     }
@@ -6297,9 +6296,12 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
         const idx = fallbackIndex[field]
         return idx !== undefined ? (columns[idx] || '') : ''
       }
-      const color = pick('color')
-      const spec = pick('spec')
       const productPriceText = preserveProductPriceRaw(pick('productPrice'))
+      const resolved = resolveTableImportColorSpec({
+        color: pick('color'),
+        spec: pick('spec'),
+        extraCandidates: [productPriceText, pick('detail'), ...columns],
+      })
       return {
         rowId: `row-${index + 1}`,
         productCode: pick('productCode'),
@@ -6312,10 +6314,10 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
         supplierName: pick('supplierName'),
         categoryName: pick('categoryName'),
         categoryId: '',
-        color,
-        spec,
-        colors: splitOptions(color),
-        specs: splitOptions(spec),
+        color: resolved.color,
+        spec: resolved.spec,
+        colors: resolved.colors,
+        specs: resolved.specs,
         weight: pick('weight'),
         costPrice: null,
         imageUrl: '',
@@ -6361,12 +6363,9 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
     /** 表格导入专用：同产品编号多行合并为一个 SPU 草稿（1688 禁止复用） */
     const buildTableMergedDraft = (productCode: string, spuRows: TableImportDraftRow[]) => {
       const firstRow = spuRows[0]
-      const colors = dedupe(
-        spuRows.flatMap(row => (row.colors?.length ? row.colors : splitCommaList(row.color))),
-      )
-      const specs = dedupe(
-        spuRows.flatMap(row => (row.specs?.length ? row.specs : splitCommaList(row.spec))),
-      )
+      const skuPairs = collectTableImportSkuPairs(spuRows)
+      const colors = dedupe(skuPairs.map(pair => pair.color))
+      const specs = dedupe(skuPairs.map(pair => pair.spec))
       const scalarPrice =
         spuRows
           .map(row => parseSingleScalarPrice(row.productPriceText ?? ''))
@@ -6426,31 +6425,33 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         }
       }
       // SKU 编码一律由产品编号（SPU 合并键）生成，不使用表格 skuCode（常被误填为价格）
-      const colorList = colors.length > 0 ? colors : [null]
-      const specList = specs.length > 0 ? specs : [null]
+      const pairList =
+        skuPairs.length > 0
+          ? skuPairs
+          : [{ color: null as string | null, spec: null as string | null }]
       const skuTable: PreviewSkuTableRow[] = []
       let index = 0
 
-      for (const color of colorList) {
-        for (const spec of specList) {
-          const attributes: Array<{ name: string; value: string }> = []
-          if (color) attributes.push({ name: '颜色', value: color })
-          if (spec) attributes.push({ name: '规格', value: spec })
-          const mappedPrice = spec ? (priceBySpec.get(normalizeText(spec)) ?? scalarPrice) : scalarPrice
-          const colorKey = color ? normalizeText(color) : ''
-          skuTable.push({
-            skuKey: buildSkuIdentifier(productCode, spec, color, index),
-            spec: attributes.map(attr => attr.value).join('/') || '默认规格',
-            costPrice: mappedPrice,
-            price: mappedPrice,
-            // 表格无库存列：每 SKU 默认 1000（勿写 1，否则可用库存=SKU 个数）
-            stock: DEFAULT_AVAILABLE_STOCK,
-            weightGrams,
-            imageUrl: (colorKey && imageByColor.get(colorKey)) || imageByColor.get('') || galleryUrls[0] || '',
-            attributes: attributes.length > 0 ? attributes : [{ name: '规格', value: '默认规格' }],
-          })
-          index += 1
-        }
+      for (const pair of pairList) {
+        const color = pair.color
+        const spec = pair.spec
+        const attributes: Array<{ name: string; value: string }> = []
+        if (color) attributes.push({ name: '颜色', value: color })
+        if (spec) attributes.push({ name: '规格', value: spec })
+        const mappedPrice = spec ? (priceBySpec.get(normalizeText(spec)) ?? scalarPrice) : scalarPrice
+        const colorKey = color ? normalizeText(color) : ''
+        skuTable.push({
+          skuKey: buildSkuIdentifier(productCode, spec, color, index),
+          spec: attributes.map(attr => attr.value).join('/') || '默认规格',
+          costPrice: mappedPrice,
+          price: mappedPrice,
+          // 表格无库存列：每 SKU 默认 1000（勿写 1，否则可用库存=SKU 个数）
+          stock: DEFAULT_AVAILABLE_STOCK,
+          weightGrams,
+          imageUrl: (colorKey && imageByColor.get(colorKey)) || imageByColor.get('') || galleryUrls[0] || '',
+          attributes: attributes.length > 0 ? attributes : [{ name: '规格', value: '默认规格' }],
+        })
+        index += 1
       }
 
       const skuPrices = skuTable

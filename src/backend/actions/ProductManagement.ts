@@ -703,6 +703,7 @@ import {
   resolveInitialMinOrderQty,
   resolveInitialStock,
 } from '@/shared/resolveInitialStock'
+import { collectTableImportSkuPairs, resolveTableImportColorSpec } from '@/shared/tableImportSpec'
 
 export interface ReturnProductsToPendingUploadInput {
   product_ids: string[]
@@ -1620,12 +1621,18 @@ async function generateStructuredSpuCode(tx: any, shortCode: string, now = new D
 }
 
 function buildDraftSkus(row: BatchImportDraftRow, spuCode?: string): SkuItem[] {
-  const colors = (row.colors && row.colors.length > 0)
-    ? row.colors.map(item => item.trim()).filter(Boolean)
-    : splitCommaOptionValues(row.color)
-  const specs = (row.specs && row.specs.length > 0)
-    ? row.specs.map(item => item.trim()).filter(Boolean)
-    : splitCommaOptionValues(row.spec)
+  const resolved = resolveTableImportColorSpec({
+    color: row.color,
+    spec: row.spec,
+    extraCandidates: [
+      ...(row.colors || []),
+      ...(row.specs || []),
+    ],
+  })
+  const skuPairs = collectTableImportSkuPairs([
+    { color: resolved.color, spec: resolved.spec, colors: resolved.colors, specs: resolved.specs },
+  ])
+  const pairList = skuPairs.length > 0 ? skuPairs : [{ color: null, spec: null }]
 
   const hasProductPrice = row.product_price !== null && row.product_price !== undefined && !Number.isNaN(Number(row.product_price))
   const costPrice = hasProductPrice ? Number(row.product_price) : (row.cost_price ?? 0)
@@ -1636,22 +1643,13 @@ function buildDraftSkus(row: BatchImportDraftRow, spuCode?: string): SkuItem[] {
   const originalPrice = roundCurrency(price * 1.1)
   const weightKg = row.weight_gram ? Number((row.weight_gram / 1000).toFixed(3)) : null
   const imageUrl = row.main_image_url || row.gallery_urls?.[0] || ''
-  const attrGroups: SkuAttribute[][] = []
-  if (colors.length > 0) attrGroups.push(colors.map(value => ({ name: '颜色', value })))
-  if (specs.length > 0) attrGroups.push(specs.map(value => ({ name: '规格', value })))
 
-  const combinations = attrGroups.length === 0
-    ? [[]] as SkuAttribute[][]
-    : attrGroups.reduce<SkuAttribute[][]>((acc, group) => {
-        if (acc.length === 0) return group.map(item => [item])
-        const next: SkuAttribute[][] = []
-        acc.forEach(existing => group.forEach(item => next.push([...existing, item])))
-        return next
-      }, [])
-
-  return combinations.map((attrs, index) => {
-    const specValue = attrs.find(attr => attr.name === '规格' || attr.name === '尺码')?.value || row.spec || `SPEC${index + 1}`
-    const colorValue = attrs.find(attr => attr.name === '颜色')?.value || row.color || ''
+  return pairList.map((pair, index) => {
+    const attrs: SkuAttribute[] = []
+    if (pair.color) attrs.push({ name: '颜色', value: pair.color })
+    if (pair.spec) attrs.push({ name: '规格', value: pair.spec })
+    const specValue = pair.spec || row.spec || `SPEC${index + 1}`
+    const colorValue = pair.color || row.color || ''
     // 有 SPU 时始终按 SPU 生成 SKU，忽略表格 sku_code（常被误填为价格）
     const skuCode = spuCode
       ? buildSkuIdentifier(spuCode, specValue, colorValue, index)

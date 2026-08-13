@@ -29,6 +29,10 @@ import { upload_project_files } from '@/tools/tools'
 import type { ChangeEvent } from 'react'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
+import {
+  resolveTableImportColorSpec,
+  TABLE_IMPORT_SPEC_HEADER_ALIASES,
+} from '@/shared/tableImportSpec'
 
 interface CreateFormFields {
   urls: string
@@ -450,12 +454,6 @@ const parseExcelFileToTsv = async (file: File): Promise<string> => {
   return tsv
 }
 
-const splitOptions = (raw?: string) =>
-  preserveProductPriceRaw(raw)
-    .split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
-
 /** 本地解析表格文本：预览阶段价格列只保留原始字符串 */
 const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
   const normalizedContent = content.trim()
@@ -517,7 +515,7 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
     supplierName: ['供应商', 'supplier'],
     categoryName: ['类目', '产品分类', '分类', 'category'],
     color: ['颜色', 'color'],
-    spec: ['规格', '尺码', '尺寸', 'size', 'spec'],
+    spec: TABLE_IMPORT_SPEC_HEADER_ALIASES,
     weight: ['重量', '重量(g)', 'weight'],
     imageUrl: ['图片', '主图', 'image', 'image_url', 'image url'],
     detail: ['详情', '描述', '商品详情', 'detail', 'description'],
@@ -553,10 +551,13 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
       const idx = fallbackIndex[field]
       return idx !== undefined ? (columns[idx] || '') : ''
     }
-    const color = pick('color')
-    const spec = pick('spec')
     const productPriceText = preserveProductPriceRaw(pick('productPrice'))
     const imageUrl = pick('imageUrl').trim()
+    const resolved = resolveTableImportColorSpec({
+      color: pick('color'),
+      spec: pick('spec'),
+      extraCandidates: [productPriceText, pick('detail'), ...columns],
+    })
 
     return {
       rowId: `row-${index + 1}`,
@@ -569,10 +570,10 @@ const parseTableContentLocally = (content: string): TableImportDraftRow[] => {
       supplierName: pick('supplierName'),
       categoryName: pick('categoryName'),
       categoryId: '',
-      color,
-      spec,
-      colors: splitOptions(color),
-      specs: splitOptions(spec),
+      color: resolved.color,
+      spec: resolved.spec,
+      colors: resolved.colors,
+      specs: resolved.specs,
       weight: pick('weight'),
       costPrice: null,
       imageUrl,
@@ -1179,11 +1180,15 @@ export const useImportFrom1688 = (
     setTableImportRows(prev => prev.map(row => {
       if (row.rowId !== rowId) return row
       const next = { ...row, [field]: value }
-      if (field === 'color') {
-        next.colors = normalizeCommaText(value).split(',').map(v => v.trim()).filter(Boolean)
-      }
-      if (field === 'spec') {
-        next.specs = normalizeCommaText(value).split(',').map(v => v.trim()).filter(Boolean)
+      if (field === 'color' || field === 'spec') {
+        const resolved = resolveTableImportColorSpec({
+          color: field === 'color' ? String(value ?? '') : next.color,
+          spec: field === 'spec' ? String(value ?? '') : next.spec,
+        })
+        next.color = resolved.color
+        next.spec = resolved.spec
+        next.colors = resolved.colors
+        next.specs = resolved.specs
       }
       if (field === 'productPriceText') {
         next.productPriceText = preserveProductPriceRaw(value)
@@ -1216,14 +1221,23 @@ export const useImportFrom1688 = (
 
     setIsSubmittingTableImport(true)
     try {
-      const payload: ActionTableImportDraftRow[] = tableImportRows.map(row => ({
-        ...row,
-        colors: row.color.split(/[,，]/).map(v => v.trim()).filter(Boolean),
-        specs: row.spec.split(/[,，]/).map(v => v.trim()).filter(Boolean),
-        productPriceText: preserveProductPriceRaw(row.productPriceText ?? ''),
-        productPrice: null,
-        costPrice: null,
-      }))
+      const payload: ActionTableImportDraftRow[] = tableImportRows.map(row => {
+        const resolved = resolveTableImportColorSpec({
+          color: row.color,
+          spec: row.spec,
+          extraCandidates: [row.productPriceText, row.detail],
+        })
+        return {
+          ...row,
+          color: resolved.color,
+          spec: resolved.spec,
+          colors: resolved.colors,
+          specs: resolved.specs,
+          productPriceText: preserveProductPriceRaw(row.productPriceText ?? ''),
+          productPrice: null,
+          costPrice: null,
+        }
+      })
       const res = await createProductsFromTable({
         rows: payload,
         defaultCategoryId: createForm.defaultCategoryId || undefined
