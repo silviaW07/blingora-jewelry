@@ -14,6 +14,7 @@ import { PrismaClient } from '../prisma-generated/client/index.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const csvPath = path.join(root, 'import-ready', '旧站2026-批量导入.csv')
+const jsonPath = path.join(root, 'import-ready', 'spec-pairs.json')
 const dryRun = process.argv.includes('--dry-run')
 const LIMIT = Number(process.argv.find((a) => a.startsWith('--limit='))?.slice(8) || 0)
 
@@ -108,8 +109,29 @@ function unpackPair(colorRaw, specRaw) {
   return { color, spec }
 }
 
+function loadTableVariantsFromJson() {
+  const raw = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
+  const map = new Map()
+  const imageToCode = new Map()
+  for (const [code, rows] of Object.entries(raw || {})) {
+    const pairs = []
+    for (const row of rows || []) {
+      const pair = unpackPair(row?.[0], row?.[1])
+      const key = `${pair.color}::${pair.spec}`
+      if (!pairs.some((p) => `${p.color}::${p.spec}` === key) && (pair.color || pair.spec)) {
+        pairs.push(pair)
+      }
+    }
+    map.set(code, { pairs, images: [], names: [] })
+  }
+  return { map, imageToCode }
+}
+
 function loadTableVariants() {
-  if (!fs.existsSync(csvPath)) throw new Error(`Missing ${csvPath}`)
+  if (fs.existsSync(jsonPath) && !fs.existsSync(csvPath)) {
+    return loadTableVariantsFromJson()
+  }
+  if (!fs.existsSync(csvPath)) throw new Error(`Missing ${csvPath} or ${jsonPath}`)
   const text = fs.readFileSync(csvPath, 'utf8').replace(/^\uFEFF/, '')
   const lines = text.split(/\r?\n/).filter((line) => line.trim())
   const header = parseCsvLine(lines[0]).map((c) => c.trim())
@@ -205,7 +227,7 @@ function pickPairs(excelRec, preview) {
 }
 
 async function main() {
-  console.log(dryRun ? 'DRY-RUN' : 'APPLY', csvPath)
+  console.log(dryRun ? 'DRY-RUN' : 'APPLY', fs.existsSync(csvPath) ? csvPath : jsonPath)
   const { map: excelMap, imageToCode } = loadTableVariants()
   console.log('Excel products:', excelMap.size)
 
