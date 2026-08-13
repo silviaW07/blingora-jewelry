@@ -3838,38 +3838,41 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     try {
       const uploaded = await uploadImagesToProject(files)
-      let nextGallery: string[] = []
-      setPendingImportQueue(prev => prev.map(item => {
-        if (item.item_id !== itemId) return item
-        let gallery = readPendingGalleryUrls(item)
-        previewUrls.forEach((blob, index) => {
-          const real = uploaded[index]
-          const idx = gallery.indexOf(blob)
-          if (idx >= 0) {
-            if (real) gallery[idx] = real
-            else gallery.splice(idx, 1)
-          } else if (real) {
-            gallery.push(real)
-          }
-        })
-        // Drop any leftover blobs from this batch (failed slots).
-        gallery = gallery.filter(url => !previewUrls.includes(url))
-        nextGallery = gallery
-        const main = gallery.find(url => !url.startsWith('blob:')) || gallery[0] || null
-        return {
-          ...item,
-          item_galleryUrls: gallery,
-          item_mainImageUrl: main,
-          item_parsedMainImageUrl: main,
+      const itemNow =
+        pendingImportQueueRef.current.find(row => row.item_id === itemId) || itemBeforeUpload
+      let gallery = readPendingGalleryUrls(itemNow)
+      previewUrls.forEach((blob, index) => {
+        const real = uploaded[index]
+        const idx = gallery.indexOf(blob)
+        if (idx >= 0) {
+          if (real) gallery[idx] = real
+          else gallery.splice(idx, 1)
+        } else if (real) {
+          gallery.push(real)
         }
-      }))
-
-      const persistable = nextGallery.filter(url => !url.startsWith('blob:'))
+      })
+      gallery = gallery.filter(url => !previewUrls.includes(url))
+      const persistable = gallery.filter(url => !url.startsWith('blob:'))
       if (persistable.length === 0) {
-        throw new Error('图片上传失败：没有成功写入的图片')
+        throw new Error(
+          uploaded.length === 0
+            ? '图片上传失败：服务器没有返回可用地址'
+            : '图片上传失败：没有成功写入的图片',
+        )
       }
+      const main = persistable[0]
+      setPendingImportQueue(prev => prev.map(item =>
+        item.item_id === itemId
+          ? {
+              ...item,
+              item_galleryUrls: persistable,
+              item_mainImageUrl: main,
+              item_parsedMainImageUrl: main,
+            }
+          : item,
+      ))
       await enqueuePersistPendingImportGallery(itemId, persistable, 'merge')
-      toast.success(`已上传 ${uploaded.length} 张图片`)
+      toast.success(`已上传 ${persistable.length} 张图片`)
     } catch (err: any) {
       setPendingImportQueue(prev => prev.map(item => {
         if (item.item_id !== itemId) return item
