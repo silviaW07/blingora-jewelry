@@ -25,6 +25,9 @@ const uniq = (values: string[]) => {
 
 const DIMENSION_RE = /^\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){1,3}$/
 const PACKED_RE = /^(.+?)\s*[-–—]\s*(\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){1,3})$/
+/** 颜色1-10*10*2cm / 巴宝莉套盒-105cm / 扣-95 / 蓝色-大号43*33*13cm */
+const LOOSE_PACKED_RE =
+  /^(.+?)\s*[-–—]\s*((?:大号|中号|小号|均码|plus)?\s*\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){0,3}\s*(?:cm|mm|m|oz|ml|l|g|kg)?)$/i
 const LOOKS_LIKE_PRICE_RE = /^\d+(\.\d+)?$/
 
 export const TABLE_IMPORT_SPEC_HEADER_ALIASES = [
@@ -48,7 +51,7 @@ export function parsePackedColorSize(raw?: string | null): { color: string; size
   const text = String(raw ?? '').trim()
   if (!text || LOOKS_LIKE_PRICE_RE.test(text)) return null
 
-  const packed = text.match(PACKED_RE)
+  const packed = text.match(PACKED_RE) || text.match(LOOSE_PACKED_RE)
   if (packed) {
     const color = packed[1].trim()
     const size = normalizeDimension(packed[2])

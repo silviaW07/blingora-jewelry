@@ -52,6 +52,8 @@ const prisma = new PrismaClient()
 
 const DIMENSION_RE = /^\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){1,3}$/
 const PACKED_RE = /^(.+?)\s*[-–—]\s*(\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){1,3})$/
+const LOOSE_PACKED_RE =
+  /^(.+?)\s*[-–—]\s*((?:大号|中号|小号|均码|plus)?\s*\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){0,3}\s*(?:cm|mm|m|oz|ml|l|g|kg)?)$/i
 const LOOSE_SIZE_RE = /^(.+?)-((?:\d.*)|(?:.*(?:oz|ml|cm|mm)\b.*))$/i
 
 const isPlaceholder = (value) =>
@@ -62,12 +64,38 @@ const normalizeDim = (raw) => String(raw || '').replace(/\s+/g, '').replace(/[xX
 function parsePacked(raw) {
   const text = String(raw || '').trim()
   if (!text) return null
-  const packed = text.match(PACKED_RE)
+  const packed = text.match(PACKED_RE) || text.match(LOOSE_PACKED_RE)
   if (packed) return { color: packed[1].trim(), size: normalizeDim(packed[2]) }
   if (DIMENSION_RE.test(text)) return { color: '', size: normalizeDim(text) }
   const loose = text.match(LOOSE_SIZE_RE)
-  if (loose) return { color: loose[1].trim(), size: loose[2].trim() }
+  if (loose) return { color: loose[1].trim(), size: normalizeDim(loose[2]) }
   return null
+}
+
+function imageKey(url) {
+  const s = String(url || '').trim().split('?')[0]
+  if (!s) return ''
+  const parts = s.split(/[/\\]/)
+  return (parts[parts.length - 1] || '').toLowerCase()
+}
+
+function asPair(row) {
+  if (Array.isArray(row)) {
+    return {
+      color: String(row[0] || '').trim(),
+      spec: String(row[1] || '').trim(),
+      image: String(row[2] || '').trim(),
+      price: row[3] === '' || row[3] == null ? null : Number(row[3]),
+      weight: row[4] === '' || row[4] == null ? null : Number(row[4]),
+    }
+  }
+  return {
+    color: String(row?.color || row?.[0] || '').trim(),
+    spec: String(row?.spec || row?.[1] || '').trim(),
+    image: String(row?.image || row?.[2] || '').trim(),
+    price: null,
+    weight: null,
+  }
 }
 
 function parseCsvLine(line) {
@@ -120,19 +148,20 @@ function loadTableVariantsFromJson() {
   for (const [code, rows] of Object.entries(raw || {})) {
     const pairs = []
     for (const row of rows || []) {
-      const pair = unpackPair(row?.[0], row?.[1])
-      const key = `${pair.color}::${pair.spec}`
-      if (!pairs.some((p) => `${p.color}::${p.spec}` === key) && (pair.color || pair.spec)) {
+      const base = asPair(row)
+      const pair = { ...base, ...unpackPair(base.color, base.spec) }
+      const key = `${pair.color}::${pair.spec}::${imageKey(pair.image)}`
+      if (!pairs.some((p) => `${p.color}::${p.spec}::${imageKey(p.image)}` === key) && (pair.color || pair.spec)) {
         pairs.push(pair)
       }
     }
-    map.set(code, { pairs, images: [], names: [] })
+    map.set(code, { pairs, images: pairs.map((p) => p.image).filter(Boolean), names: [] })
   }
   return { map, imageToCode }
 }
 
 function loadTableVariants() {
-  if (fs.existsSync(jsonPath) && !fs.existsSync(csvPath)) {
+  if (fs.existsSync(jsonPath)) {
     return loadTableVariantsFromJson()
   }
   if (!fs.existsSync(csvPath)) throw new Error(`Missing ${csvPath} or ${jsonPath}`)
@@ -156,14 +185,19 @@ function loadTableVariants() {
     const cols = parseCsvLine(line)
     const code = String(cols[codeI] || '').trim()
     if (!code) continue
-    const pair = unpackPair(cols[colorI], cols[specI])
+    const img = String(imgI >= 0 ? cols[imgI] || '' : '').trim()
+    const pair = {
+      ...unpackPair(cols[colorI], cols[specI]),
+      image: img,
+      price: null,
+      weight: null,
+    }
     if (!map.has(code)) map.set(code, { pairs: [], images: [], names: [] })
     const rec = map.get(code)
-    const key = `${pair.color}::${pair.spec}`
-    if (!rec.pairs.some((p) => `${p.color}::${p.spec}` === key) && (pair.color || pair.spec)) {
+    const key = `${pair.color}::${pair.spec}::${imageKey(pair.image)}`
+    if (!rec.pairs.some((p) => `${p.color}::${p.spec}::${imageKey(p.image)}` === key) && (pair.color || pair.spec)) {
       rec.pairs.push(pair)
     }
-    const img = String(imgI >= 0 ? cols[imgI] || '' : '').trim()
     if (img && !rec.images.includes(img)) rec.images.push(img)
     if (img && !imageToCode.has(img)) imageToCode.set(img, code)
     const name = String(nameI >= 0 ? cols[nameI] || '' : '').trim()
@@ -189,6 +223,14 @@ function skuHasRealSpec(sku) {
       a?.value &&
       !isPlaceholder(a.value),
   )
+}
+
+function skuHasRealOption(sku) {
+  if (skuHasRealSpec(sku)) return true
+  const color = skuColor(sku)
+  if (!color || isPlaceholder(color)) return false
+  if (parsePacked(color)?.size) return false
+  return true
 }
 
 function buildAttrs(color, spec) {
@@ -234,9 +276,31 @@ function isRealSizeSpec(spec, color) {
 }
 
 function pickPairs(excelRec, preview) {
-  const fromExcel = (excelRec?.pairs || []).filter((p) => isRealSizeSpec(p.spec, p.color))
-  if (fromExcel.length > 0) return fromExcel
-  return pairsFromPreview(preview).filter((p) => isRealSizeSpec(p.spec, p.color))
+  const allExcel = excelRec?.pairs || []
+  const sized = allExcel.filter((p) => isRealSizeSpec(p.spec, p.color))
+  if (sized.length > 0) return sized
+  const colored = allExcel.filter((p) => p.color && !isPlaceholder(p.color))
+  if (colored.length > 0) return colored
+  const fromPreview = pairsFromPreview(preview)
+  const previewSized = fromPreview.filter((p) => isRealSizeSpec(p.spec, p.color))
+  if (previewSized.length > 0) return previewSized
+  return fromPreview.filter((p) => p.color && !isPlaceholder(p.color))
+}
+
+function resolvePairImage(pair, template, galleryUrls) {
+  const raw = String(pair?.image || '').trim()
+  if (/^https?:\/\//i.test(raw)) return raw
+  const key = imageKey(raw)
+  if (key) {
+    const fromGallery = galleryUrls.find((url) => imageKey(url) === key)
+    if (fromGallery) return fromGallery
+    const templateUrl = String(template?.imageUrl || '')
+    if (templateUrl) {
+      const replaced = templateUrl.replace(/[^/?#]+(?=[?#]|$)/, raw)
+      if (replaced && replaced !== templateUrl) return replaced
+    }
+  }
+  return template?.imageUrl || galleryUrls[0] || ''
 }
 
 async function main() {
@@ -281,6 +345,7 @@ async function main() {
       name: true,
       productCode: true,
       mainImageUrl: true,
+      galleryJson: true,
       parameterJson: true,
       source: true,
       skus: {
@@ -317,11 +382,6 @@ async function main() {
   const targets = LIMIT > 0 ? products.slice(0, LIMIT) : products
 
   for (const product of targets) {
-    if (product.skus.length > 0 && product.skus.every(skuHasRealSpec)) {
-      skippedAlreadyOk += 1
-      continue
-    }
-
     const matched = productMatch.get(product.id)
     let code = matched?.code || ''
     if (!code && Array.isArray(product.parameterJson)) {
@@ -336,11 +396,25 @@ async function main() {
     if (!code && product.mainImageUrl && imageToCode.has(product.mainImageUrl)) {
       code = imageToCode.get(product.mainImageUrl)
     }
+    if (!code && product.mainImageUrl) {
+      const mainKey = imageKey(product.mainImageUrl)
+      for (const [nextCode, rec] of excelMap) {
+        if ((rec.pairs || []).some((p) => imageKey(p.image) === mainKey)) {
+          code = nextCode
+          break
+        }
+      }
+    }
 
     const excelRec = code ? excelMap.get(code) : null
     const pairs = pickPairs(excelRec, matched?.preview)
-    if (pairs.length === 0 || pairs.every((p) => !p.spec || isPlaceholder(p.spec))) {
-      if (!skuHasRealSpec(product.skus[0] || {})) unmatched += 1
+    const allHaveOptions = product.skus.length > 0 && product.skus.every(skuHasRealOption)
+    if (allHaveOptions && pairs.length <= product.skus.length) {
+      skippedAlreadyOk += 1
+      continue
+    }
+    if (pairs.length === 0 || pairs.every((p) => !p.color && (!p.spec || isPlaceholder(p.spec)))) {
+      if (!skuHasRealOption(product.skus[0] || {})) unmatched += 1
       skippedNoPairs += 1
       continue
     }
@@ -352,13 +426,21 @@ async function main() {
       continue
     }
 
+    const galleryUrls = [
+      product.mainImageUrl,
+      ...(Array.isArray(product.galleryJson)
+        ? product.galleryJson.map((item) => item?.url || item).filter(Boolean)
+        : []),
+      ...product.skus.map((sku) => sku.imageUrl).filter(Boolean),
+    ].filter(Boolean)
+
     const remaining = [...product.skus]
     const plan = []
     for (const pair of pairs) {
-      const byColor = pair.color
-        ? remaining.findIndex((s) => skuColor(s) === pair.color)
-        : -1
-      const idx = byColor >= 0 ? byColor : remaining.findIndex((s) => !skuHasRealSpec(s))
+      const imgK = imageKey(pair.image)
+      let idx = imgK ? remaining.findIndex((s) => imageKey(s.imageUrl) === imgK) : -1
+      if (idx < 0 && pair.color) idx = remaining.findIndex((s) => skuColor(s) === pair.color)
+      if (idx < 0) idx = remaining.findIndex((s) => !skuHasRealOption(s))
       const existing = idx >= 0 ? remaining.splice(idx, 1)[0] : null
       plan.push({ pair, existing })
     }
@@ -381,12 +463,20 @@ async function main() {
       const { pair, existing } = plan[i]
       const attrs = buildAttrs(pair.color, pair.spec)
       const sizeLabel = pair.spec ? String(pair.spec).slice(0, 60) : null
+      const imageUrl = resolvePairImage(pair, existing || template, galleryUrls)
+      const nextPrice =
+        Number.isFinite(pair.price) && pair.price > 0 ? pair.price : existing?.price || template.price
+      const nextWeight =
+        Number.isFinite(pair.weight) && pair.weight > 0
+          ? Number((pair.weight / 1000).toFixed(3))
+          : existing?.weightKg || template.weightKg
       if (existing) {
         await prisma.productsku.update({
           where: { id: existing.id },
           data: {
             attributeJson: attrs,
             sizeLabel,
+            ...(existing.imageUrl ? {} : { imageUrl }),
           },
         })
         updatedSkus += 1
@@ -400,15 +490,15 @@ async function main() {
           data: {
             productId: product.id,
             skuCode,
-            imageUrl: template.imageUrl,
+            imageUrl: imageUrl || template.imageUrl,
             minOrderQty: template.minOrderQty,
-            price: template.price,
-            originalPrice: template.originalPrice,
+            price: nextPrice,
+            originalPrice: existing?.originalPrice || template.originalPrice,
             stock: template.stock || 1000,
             stockStatus: 'IN_STOCK',
             attributeJson: attrs,
             sizeLabel,
-            weightKg: template.weightKg,
+            weightKg: nextWeight,
           },
         })
         createdSkus += 1
