@@ -14,7 +14,11 @@ import { PrismaClient } from '../prisma-generated/client/index.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const csvPath = path.join(root, 'import-ready', '旧站2026-批量导入.csv')
-const jsonPath = path.join(root, 'import-ready', 'spec-pairs.json')
+const jsonCandidates = [
+  path.join(root, 'import-ready', 'spec-pairs.json'),
+  path.join(root, 'scripts', 'data', 'table-import-spec-pairs.json'),
+]
+const jsonPath = jsonCandidates.find((p) => fs.existsSync(p)) || jsonCandidates[0]
 const dryRun = process.argv.includes('--dry-run')
 const LIMIT = Number(process.argv.find((a) => a.startsWith('--limit='))?.slice(8) || 0)
 
