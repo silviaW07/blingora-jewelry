@@ -221,13 +221,22 @@ function pairsFromPreview(preview) {
   return out
 }
 
+function isRealSizeSpec(spec, color) {
+  const value = String(spec || '').trim()
+  if (!value || isPlaceholder(value)) return false
+  if (color && value === color) return false
+  return (
+    DIMENSION_RE.test(value) ||
+    /\d+\s*[xX×*]\s*\d+/.test(value) ||
+    /\d+\s*(cm|mm|oz|ml|l)\b/i.test(value) ||
+    /^\d+(?:\.\d+)?(?:cm|mm)?$/i.test(value)
+  )
+}
+
 function pickPairs(excelRec, preview) {
-  const fromExcel = (excelRec?.pairs || []).filter((p) => p.spec && !isPlaceholder(p.spec))
+  const fromExcel = (excelRec?.pairs || []).filter((p) => isRealSizeSpec(p.spec, p.color))
   if (fromExcel.length > 0) return fromExcel
-  const fromPreview = pairsFromPreview(preview).filter((p) => p.spec && !isPlaceholder(p.spec))
-  if (fromPreview.length > 0) return fromPreview
-  const colorOnly = (excelRec?.pairs || []).filter((p) => p.color)
-  return colorOnly
+  return pairsFromPreview(preview).filter((p) => isRealSizeSpec(p.spec, p.color))
 }
 
 async function main() {
