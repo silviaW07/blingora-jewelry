@@ -237,6 +237,24 @@ export interface GetProductListOutput {
   total: number
 }
 
+export interface GetAvailableBrandFiltersInput {
+  category_id?: string
+  keyword_id?: string
+  keyword_group_id?: string
+  search_keyword?: string
+  stock_status?: StockStatusEnum[]
+  min_price?: number
+  max_price?: number
+  has_discount?: boolean
+  min_rating?: number
+  /** 语言码：en / zh / es（兼容 zh-CN） */
+  lang?: string
+}
+
+export interface GetAvailableBrandFiltersOutput {
+  list: BrandCategoryItem[]
+}
+
 export interface AddToCartInput {
   product_id: string
   product_sku_id: string
@@ -1521,6 +1539,228 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   setCachedList(cacheKey, output)
   return output
 })
+
+const BRAND_FACET_CACHE_TTL_MS = Number(process.env.BRAND_FACET_CACHE_TTL_MS || 45_000)
+const BRAND_FACET_CACHE_MAX = 200
+const brandFacetCache = new Map<string, { at: number; value: GetAvailableBrandFiltersOutput }>()
+
+function buildBrandFacetCacheKey(input: GetAvailableBrandFiltersInput, lang: string): string {
+  return JSON.stringify({
+    c: input.category_id || '',
+    k: input.keyword_id || '',
+    kg: input.keyword_group_id || '',
+    s: input.search_keyword || '',
+    st: input.stock_status || null,
+    min: input.min_price ?? null,
+    max: input.max_price ?? null,
+    disc: input.has_discount ? 1 : 0,
+    mr: input.min_rating ?? null,
+    lang,
+  })
+}
+
+function resolveProductBrandCategoryId(p: {
+  brandCategoryId: string | null
+  category: { id: string; isBrandCategory: boolean; status?: string } | null
+  relationCategories: Array<{ category: { id: string; isBrandCategory: boolean; status: string } | null }>
+}): string | null {
+  if (p.brandCategoryId) return p.brandCategoryId
+  if (p.category?.isBrandCategory && p.category.status !== 'INACTIVE') return p.category.id
+  for (const rel of p.relationCategories || []) {
+    const cat = rel.category
+    if (cat?.isBrandCategory && cat.status === 'ACTIVE') return cat.id
+  }
+  return null
+}
+
+/**
+ * 当前列表上下文下可用的品牌快捷筛选项（按商品数降序）。
+ * 不含 brand_category_id 条件，便于在已选品牌时仍可切换其它品牌。
+ */
+export const getAvailableBrandFilters = withResult(
+  async (input: GetAvailableBrandFiltersInput): Promise<GetAvailableBrandFiltersOutput> => {
+    const lang = normalizeProductLang(input.lang)
+    const cacheKey = buildBrandFacetCacheKey(input, lang)
+    const cached = brandFacetCache.get(cacheKey)
+    if (cached && Date.now() - cached.at < BRAND_FACET_CACHE_TTL_MS) {
+      return cached.value
+    }
+
+    const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
+    const categoryContext = await resolveCategoryContext(input.category_id)
+    const dbWhere = buildProductWhere(
+      categoryContext,
+      undefined,
+      input.keyword_id,
+      input.keyword_group_id,
+      input.search_keyword,
+    )
+
+    if (input.min_rating !== undefined) {
+      dbWhere.ratingAverage = { gte: input.min_rating }
+    }
+
+    const searchTokens = tokenizeProductSearch(input.search_keyword)
+    const facetSelect = {
+      id: true,
+      name: true,
+      shortDescription: true,
+      translationsJson: true,
+      costPrice: true,
+      tradeInfoJson: true,
+      ratingAverage: true,
+      brandCategoryId: true,
+      skus: {
+        select: {
+          id: true,
+          skuCode: true,
+          price: true,
+          originalPrice: true,
+          stockStatus: true,
+        },
+        orderBy: [{ createdAt: 'asc' as const }, { skuCode: 'asc' as const }],
+        take: PRODUCT_LIST_SKU_TAKE,
+      },
+      brandCategory: {
+        select: {
+          name: true,
+          brandKeywordsJson: true,
+        },
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          isBrandCategory: true,
+          priceCoefficient: true,
+          parent: {
+            select: {
+              priceCoefficient: true,
+              isBrandCategory: true,
+            },
+          },
+        },
+      },
+      relationCategories: {
+        select: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              isBrandCategory: true,
+              priceCoefficient: true,
+              parent: {
+                select: {
+                  priceCoefficient: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    }
+
+    const dbProducts = await prisma.product.findMany({
+      where: dbWhere,
+      select: facetSelect,
+      take: searchTokens.length > 0 ? 5000 : 2000,
+    })
+
+    const brandCounts = new Map<string, number>()
+
+    for (const p of dbProducts) {
+      if (searchTokens.length > 0) {
+        const translationTexts = collectTranslationSearchTexts(
+          (p as { translationsJson?: unknown }).translationsJson,
+        )
+        const displayName = resolveProductDisplayName(
+          p.name,
+          (p as { translationsJson?: unknown }).translationsJson,
+          lang,
+        )
+        const brandKeywords = collectBrandKeywordTexts(
+          (p.brandCategory as { brandKeywordsJson?: unknown } | null)?.brandKeywordsJson,
+        )
+        const relatedCategoryNames = (p.relationCategories || [])
+          .map((rel) => rel.category?.name)
+          .filter(Boolean)
+        const matches = productMatchesSearchTokens(searchTokens, [
+          p.name,
+          displayName,
+          p.shortDescription,
+          p.brandCategory?.name,
+          p.category?.name,
+          ...brandKeywords,
+          ...relatedCategoryNames,
+          ...translationTexts,
+          ...p.skus.map((sku) => sku.skuCode),
+        ])
+        if (!matches) continue
+      }
+
+      const item = mapProductRecordToItem(p, lang, exchangeRate)
+
+      if (input.min_price !== undefined && item.price < input.min_price) continue
+      if (input.max_price !== undefined && item.price > input.max_price) continue
+      if (input.has_discount && !item.has_discount) continue
+      if (input.stock_status && input.stock_status.length > 0 && !input.stock_status.includes(item.stock_status)) {
+        continue
+      }
+
+      const brandId = resolveProductBrandCategoryId(p)
+      if (!brandId) continue
+      brandCounts.set(brandId, (brandCounts.get(brandId) || 0) + 1)
+    }
+
+    if (brandCounts.size === 0) {
+      const empty: GetAvailableBrandFiltersOutput = { list: [] }
+      brandFacetCache.set(cacheKey, { at: Date.now(), value: empty })
+      return empty
+    }
+
+    const brandIds = Array.from(brandCounts.keys())
+    const brandRows = await prisma.category.findMany({
+      where: {
+        id: { in: brandIds },
+        status: 'ACTIVE',
+        isBrandCategory: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        imageUrl: true,
+        iconUrl: true,
+        translationsJson: true,
+      },
+    })
+
+    const list: BrandCategoryItem[] = brandRows
+      .map((brand) => ({
+        category_id: brand.id,
+        category_name: resolveCategoryDisplayName(brand.translationsJson, brand.name, lang),
+        category_slug: brand.slug,
+        product_count: brandCounts.get(brand.id) || 0,
+        image_url: brand.imageUrl || brand.iconUrl || null,
+      }))
+      .filter((item) => item.product_count > 0)
+      .sort(
+        (a, b) =>
+          b.product_count - a.product_count ||
+          a.category_name.localeCompare(b.category_name, 'zh-CN'),
+      )
+
+    const output: GetAvailableBrandFiltersOutput = { list }
+    if (brandFacetCache.size >= BRAND_FACET_CACHE_MAX) {
+      const oldestKey = brandFacetCache.keys().next().value
+      if (oldestKey !== undefined) brandFacetCache.delete(oldestKey)
+    }
+    brandFacetCache.set(cacheKey, { at: Date.now(), value: output })
+    return output
+  },
+)
 
 /**
  * 将商品加入购物车 (仅限 CUSTOMER，单规格或具体已选规格)

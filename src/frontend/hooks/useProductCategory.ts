@@ -22,6 +22,7 @@ import {
   getKeywordGroupList,
   getKeywordList,
   getProductList,
+  getAvailableBrandFilters,
   addToCart,
   getCategoryTopPromotion,
   resolveCategoryRouteKey,
@@ -243,8 +244,10 @@ export interface ProductCategoryState {
   categories: CategoryItem[]
   selectedParentCategory: CategoryItem | null
   visibleBrandOptions: BrandCategoryItem[]
+  availableBrandFilters: BrandCategoryItem[]
   hasMoreBrandOptions: boolean
   isBrandExpanded: boolean
+  isLoadingBrandFilters: boolean
   expandedCategoryIds: string[]
   categoryDetail: CategoryDetail | null
   currentCategoryLevel: number | null
@@ -307,6 +310,7 @@ export interface ProductCategoryHandlers {
   handleNavigateToDetail: (productId: string) => void
   handleToggleCategoryChildren: (categoryId: string) => void
   handleToggleBrandExpand: () => void
+  handleBrandQuickFilterToggle: (brandId: string) => void
 }
 
 export const useProductCategory = (): {
@@ -343,7 +347,7 @@ export const useProductCategory = (): {
 
     return {
       categoryId,
-      brandCategoryId: '',
+      brandCategoryId: routeParams.brandCategoryId || '',
       keywordId: '',
       keywordGroupId: '',
       searchKeyword: routeParams.search || '',
@@ -373,6 +377,8 @@ export const useProductCategory = (): {
   const [leftNavKeywords, setLeftNavKeywords] = useState<ProductCategoryKeywordItem[]>([])
   const [recommendationKeywords, setRecommendationKeywords] = useState<ProductCategoryKeywordItem[]>([])
   const [products, setProducts] = useState<ProductCardItem[]>([])
+  const [availableBrandFilters, setAvailableBrandFilters] = useState<BrandCategoryItem[]>([])
+  const [isLoadingBrandFilters, setIsLoadingBrandFilters] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
   const [isLoadingCategories, setIsLoadingCategories] = useState(() => !(peekCachedCategoryList()?.length))
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
@@ -416,6 +422,7 @@ export const useProductCategory = (): {
     const nextSortBy = (routeParams.sortBy as SortByEnum) || 'NEWEST'
     const nextMinPrice = routeParams.minPrice ? parseFloat(routeParams.minPrice) : undefined
     const nextMaxPrice = routeParams.maxPrice ? parseFloat(routeParams.maxPrice) : undefined
+    const nextBrandCategoryId = routeParams.brandCategoryId || ''
     const nextStockStatus = (routeParams.stockStatus ? routeParams.stockStatus.split(',').filter(Boolean) : []).filter(
       (status): status is StockStatusEnum => status === 'IN_STOCK' || status === 'LOW_STOCK',
     ) as StockStatusEnum[]
@@ -430,6 +437,7 @@ export const useProductCategory = (): {
         prev.sortBy === nextSortBy &&
         prev.minPrice === nextMinPrice &&
         prev.maxPrice === nextMaxPrice &&
+        prev.brandCategoryId === nextBrandCategoryId &&
         prev.stockStatus.join(',') === nextStockStatus.join(',')
       ) {
         return prev
@@ -446,6 +454,7 @@ export const useProductCategory = (): {
         sortBy: nextSortBy,
         minPrice: nextMinPrice,
         maxPrice: nextMaxPrice,
+        brandCategoryId: categoryChanged || searchChanged ? '' : nextBrandCategoryId,
         stockStatus: nextStockStatus,
         ...(categoryChanged || searchChanged
           ? { brandCategoryId: '', keywordId: '', keywordGroupId: '' }
@@ -465,6 +474,7 @@ export const useProductCategory = (): {
     routeParams.sortBy,
     routeParams.minPrice,
     routeParams.maxPrice,
+    routeParams.brandCategoryId,
     routeParams.stockStatus,
   ])
 
@@ -954,10 +964,67 @@ export const useProductCategory = (): {
       .finally(() => setIsLoadingProducts(false))
   }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
 
+  useEffect(() => {
+    if (isDailyNewArrivalMode) {
+      setAvailableBrandFilters([])
+      setIsLoadingBrandFilters(false)
+      return
+    }
+
+    if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId) {
+      setIsLoadingBrandFilters(true)
+      return
+    }
+
+    if (!hasActiveListingQuery) {
+      setAvailableBrandFilters([])
+      setIsLoadingBrandFilters(false)
+      return
+    }
+
+    setIsLoadingBrandFilters(true)
+    const lang = getCurrentLang()
+    getAvailableBrandFilters({
+      category_id: queryState.categoryId || undefined,
+      keyword_id: queryState.keywordId || undefined,
+      keyword_group_id: queryState.keywordGroupId || undefined,
+      search_keyword: queryState.searchKeyword || undefined,
+      stock_status: queryState.stockStatus.length > 0 ? queryState.stockStatus : undefined,
+      min_price: queryState.minPrice,
+      max_price: queryState.maxPrice,
+      has_discount: queryState.hasDiscount,
+      min_rating: queryState.minRating,
+      lang,
+    })
+      .then((res) => {
+        setAvailableBrandFilters(res.list)
+      })
+      .catch(() => {
+        setAvailableBrandFilters([])
+      })
+      .finally(() => setIsLoadingBrandFilters(false))
+  }, [
+    isDailyNewArrivalMode,
+    isCategorySlugRoute,
+    routeCategorySlug,
+    hasActiveListingQuery,
+    queryState.categoryId,
+    queryState.keywordId,
+    queryState.keywordGroupId,
+    queryState.searchKeyword,
+    memoizedStockStatus,
+    queryState.minPrice,
+    queryState.maxPrice,
+    queryState.hasDiscount,
+    queryState.minRating,
+    localeTick,
+  ])
+
   const syncListingQueryToUrl = useCallback((patch: {
     sortBy?: SortByEnum
     minPrice?: number | undefined
     maxPrice?: number | undefined
+    brandCategoryId?: string
     page?: number
     clearPage?: boolean
   }) => {
@@ -984,6 +1051,14 @@ export const useProductCategory = (): {
         params.delete('maxPrice')
       } else {
         params.set('maxPrice', String(patch.maxPrice))
+      }
+    }
+
+    if ('brandCategoryId' in patch) {
+      if (!patch.brandCategoryId) {
+        params.delete('brandCategoryId')
+      } else {
+        params.set('brandCategoryId', patch.brandCategoryId)
       }
     }
 
@@ -1255,6 +1330,7 @@ export const useProductCategory = (): {
       sortBy: 'NEWEST',
       minPrice: undefined,
       maxPrice: undefined,
+      brandCategoryId: '',
       clearPage: true,
     })
   }, [syncListingQueryToUrl])
@@ -1339,6 +1415,19 @@ export const useProductCategory = (): {
   const handleToggleBrandExpand = useCallback(() => {
     setIsBrandExpanded(prev => !prev)
   }, [])
+
+  const handleBrandQuickFilterToggle = useCallback((brandId: string) => {
+    let nextBrandCategoryId = ''
+    setQueryState((prev) => {
+      nextBrandCategoryId = prev.brandCategoryId === brandId ? '' : brandId
+      return {
+        ...prev,
+        brandCategoryId: nextBrandCategoryId,
+        page: 1,
+      }
+    })
+    syncListingQueryToUrl({ brandCategoryId: nextBrandCategoryId, clearPage: true })
+  }, [syncListingQueryToUrl])
 
   const visibleBrandOptions = useMemo(() => {
     const options = selectedParentCategory?.brand_options || []
@@ -1484,8 +1573,10 @@ export const useProductCategory = (): {
       categories,
       selectedParentCategory,
       visibleBrandOptions,
+      availableBrandFilters,
       hasMoreBrandOptions,
       isBrandExpanded,
+      isLoadingBrandFilters,
       expandedCategoryIds,
       categoryDetail,
     currentCategoryLevel,
@@ -1545,7 +1636,8 @@ export const useProductCategory = (): {
       handleAddToWishlist,
       handleNavigateToDetail,
       handleToggleCategoryChildren,
-      handleToggleBrandExpand
+      handleToggleBrandExpand,
+      handleBrandQuickFilterToggle,
     }
   }
 }

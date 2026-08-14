@@ -1224,6 +1224,12 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   sortBy={queryState.sortBy}
                   onPriceRangeChange={handlers.handlePriceRangeChange}
                   onSortChange={handlers.handleSortChange}
+                  brandOptions={state.availableBrandFilters}
+                  selectedBrandId={queryState.brandCategoryId}
+                  onBrandToggle={handlers.handleBrandQuickFilterToggle}
+                  isBrandExpanded={state.isBrandExpanded}
+                  onBrandExpandToggle={handlers.handleToggleBrandExpand}
+                  isLoadingBrands={state.isLoadingBrandFilters}
                 />
               </div>
 

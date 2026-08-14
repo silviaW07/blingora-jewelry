@@ -39,7 +39,7 @@ export const Home = {
 }
 
 // ================================================================
-// F02 商品分类页 — 入参: categoryId, stockStatus, sortBy, page, minPrice, maxPrice, search
+// F02 商品分类页 — 入参: categoryId, stockStatus, sortBy, page, minPrice, maxPrice, search, brandCategoryId
 // ================================================================
 export const ProductCategory = {
   id: 'F02',
@@ -80,9 +80,14 @@ export const ProductCategory = {
       source_column: 'name / skuCode',
       description: '商品标题或 SKU 模糊搜索词',
     },
+    brandCategoryId: {
+      source_table: 'category',
+      source_column: 'id',
+      description: '品牌类目 ID（快捷筛选）',
+    },
   },
   getParams: (() => {
-    const cache = new WeakMap<URLSearchParams, { categoryId: string; stockStatus: string; sortBy: string; page: string; minPrice: string; maxPrice: string; search: string }>();
+    const cache = new WeakMap<URLSearchParams, { categoryId: string; stockStatus: string; sortBy: string; page: string; minPrice: string; maxPrice: string; search: string; brandCategoryId: string }>();
     return (sp: URLSearchParams) => {
       if (cache.has(sp)) return cache.get(sp)!;
       const result = {
@@ -93,6 +98,7 @@ export const ProductCategory = {
         minPrice: sp.get('minPrice') || '',
         maxPrice: sp.get('maxPrice') || '',
         search: sp.get('search') || '',
+        brandCategoryId: sp.get('brandCategoryId') || '',
       };
       cache.set(sp, result);
       return result;

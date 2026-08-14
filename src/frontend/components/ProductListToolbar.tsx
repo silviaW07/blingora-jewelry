@@ -10,7 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { SortByEnum } from '@/frontend/actions/ProductCategory'
+import type { BrandCategoryItem, SortByEnum } from '@/frontend/actions/ProductCategory'
+import { BrandQuickFilter } from '@/frontend/components/BrandQuickFilter'
 import { cn } from '@/lib/utils'
 
 const PRICE_SLIDER_MIN = 0
@@ -31,6 +32,13 @@ export type ProductListToolbarProps = {
   onSortChange: (sortBy: SortByEnum) => void
   /** Upper bound for the dual range slider (USD). Defaults to 120. */
   priceBoundMax?: number
+  brandOptions?: BrandCategoryItem[]
+  selectedBrandId?: string
+  onBrandToggle?: (brandId: string) => void
+  isBrandExpanded?: boolean
+  onBrandExpandToggle?: () => void
+  isLoadingBrands?: boolean
+  brandVisibleCount?: number
   className?: string
 }
 
@@ -71,6 +79,13 @@ export function ProductListToolbar({
   onPriceRangeChange,
   onSortChange,
   priceBoundMax = PRICE_SLIDER_MAX,
+  brandOptions = [],
+  selectedBrandId = '',
+  onBrandToggle,
+  isBrandExpanded = false,
+  onBrandExpandToggle,
+  isLoadingBrands = false,
+  brandVisibleCount,
   className,
 }: ProductListToolbarProps) {
   const { t } = useTranslation()
@@ -104,11 +119,28 @@ export function ProductListToolbar({
 
   const activeSort = SORT_OPTIONS.some((option) => option.value === sortBy) ? sortBy : 'NEWEST'
 
+  const showBrandFilter = Boolean(onBrandToggle) && (isLoadingBrands || brandOptions.length > 0)
+
   return (
     <div
-      className={cn('flex items-center gap-4', className)}
+      className={cn('flex flex-wrap items-end justify-end gap-x-4 gap-y-3', className)}
       data-controller-name="商品列表筛选排序工具栏"
     >
+      {showBrandFilter ? (
+        <div className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-[min(100%,420px)]">
+          <div className="mb-1.5 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
+          <BrandQuickFilter
+            brands={brandOptions}
+            selectedBrandId={selectedBrandId}
+            onToggle={onBrandToggle!}
+            isExpanded={isBrandExpanded}
+            onExpandToggle={onBrandExpandToggle}
+            visibleCount={brandVisibleCount}
+            isLoading={isLoadingBrands}
+          />
+        </div>
+      ) : null}
+
       <div className="w-[160px] shrink-0 sm:w-[200px]">
         <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-[#6f6a62]">
           <span className="font-medium text-[#3f3a34]">{t('product.priceRange')}</span>

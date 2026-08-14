@@ -353,6 +353,12 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 sortBy={queryState.sortBy}
                 onPriceRangeChange={handlers.handlePriceRangeChange}
                 onSortChange={handlers.handleSortChange}
+                brandOptions={state.availableBrandFilters}
+                selectedBrandId={queryState.brandCategoryId}
+                onBrandToggle={handlers.handleBrandQuickFilterToggle}
+                isBrandExpanded={state.isBrandExpanded}
+                onBrandExpandToggle={handlers.handleToggleBrandExpand}
+                isLoadingBrands={state.isLoadingBrandFilters}
               />
               {isLoadingProducts ? (
                 <div className="mt-8 flex flex-col items-center gap-2 text-[0.875rem] text-[#7a756c]">
