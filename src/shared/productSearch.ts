@@ -60,6 +60,21 @@ export function collectBrandKeywordTexts(raw: unknown): string[] {
   return out
 }
 
+/** Prisma AND of `contains` for each token — 供应商「黛尔 / 广州 珠宝」都能命中全称. */
+export function buildTokenContainsAnd(
+  field: string,
+  raw?: string | null,
+): Record<string, unknown> | null {
+  const tokens = tokenizeProductSearch(raw)
+  if (!tokens.length) return null
+  if (tokens.length === 1) {
+    return { [field]: { contains: tokens[0] } }
+  }
+  return {
+    AND: tokens.map((token) => ({ [field]: { contains: token } })),
+  }
+}
+
 export function productMatchesSearchTokens(
   tokens: string[],
   fields: Array<string | null | undefined>,

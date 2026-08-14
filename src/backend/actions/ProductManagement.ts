@@ -630,6 +630,7 @@ import {
   matchFilterCategoriesByTitle,
 } from '@/shared/categoryFilterTitleMatch'
 import { DEFAULT_PRICE_COEFFICIENT, resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
+import { buildTokenContainsAnd, tokenizeProductSearch } from '@/shared/productSearch'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
 import {
@@ -1674,6 +1675,33 @@ export const getProductBindingMeta = requireRole([UserRole.ADMIN])(
   })
 )
 
+export interface ListProductSupplierNamesOutput {
+  list: string[]
+}
+
+export const listProductSupplierNames = requireRole([UserRole.ADMIN])(
+  withResult(async (input?: { keyword?: string }): Promise<ListProductSupplierNamesOutput> => {
+    const tokens = tokenizeProductSearch(input?.keyword)
+    const rows = await prisma.product.groupBy({
+      by: ['supplierName'],
+      where: {
+        supplierName: { not: '' },
+        ...(tokens.length
+          ? { AND: tokens.map((token) => ({ supplierName: { contains: token } })) }
+          : {}),
+      },
+      _count: { _all: true },
+      orderBy: { _count: { supplierName: 'desc' } },
+      take: 80,
+    })
+    return {
+      list: rows
+        .map((row) => String(row.supplierName || '').trim())
+        .filter(Boolean),
+    }
+  }),
+)
+
 export const getCategoryOptions = requireRole([UserRole.ADMIN])(
   withResult(async (): Promise<CategoryOption[]> => {
     const categories = await prisma.category.findMany({
@@ -1840,8 +1868,10 @@ export const getProductList = requireRole([UserRole.ADMIN])(
     if (status_filter === 'DELETED') {
       whereClause.goodsStatus = 'DELETED'
     }
-    if (supplier_name?.trim()) {
-      whereClause.supplierName = { contains: supplier_name.trim() }
+    const supplierFuzzy = buildTokenContainsAnd('supplierName', supplier_name)
+    if (supplierFuzzy) {
+      andConditions.push(supplierFuzzy)
+      whereClause.AND = andConditions
     }
     if (brand_keyword?.trim()) {
       whereClause.brandName = { contains: brand_keyword.trim() }

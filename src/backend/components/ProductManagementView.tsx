@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, Building2, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages, Square } from 'lucide-react';
+import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages, Square } from 'lucide-react';
 import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Checkbox, Sheet, SheetContent, SheetHeader, SheetTitle, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Textarea, Badge, Card, CardContent, Separator, Alert, AlertTitle, AlertDescription, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/backend/components/ui';
 import EditableImg from '@/@base/EditableImg';
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement';
@@ -13,6 +13,7 @@ import { ImportFromPinduoduoCollectModal } from '@/backend/components/ImportFrom
 import { Sync1688StatusResultPanel } from '@/backend/components/Sync1688StatusResultPanel'
 import { SharedProductBatchUtilityButtons } from '@/backend/components/SharedProductBatchUtilityButtons'
 import CalibrateResultDialog from '@/backend/components/CalibrateResultDialog'
+import { SupplierFuzzyFilter } from '@/backend/components/SupplierFuzzyFilter'
 import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus, PendingImportItemFetchStatus, PendingImportItemPublishStatus } from '@/backend/types/ProductManagement';
 import { cn } from '@/lib/utils';
 
@@ -466,10 +467,11 @@ export const ProductManagementView = ({
             </div>
             <div data-api-unique-id='productmanagementview-r65d68ab19c9ebbe5-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block" data-api-unique-id='productmanagementview-r8a9e7c5335f53e93-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>供应商</label>
-              <div className="relative" data-api-unique-id='productmanagementview-ra7d91002ea5b5af1-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" data-api-unique-id='productmanagementview-r27e73d62d6d3f619-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
-                <Input className="h-10 pl-9" placeholder="按供应商名称筛选" value={state.filterSupplierName} onChange={e => handlers.setFilterSupplierName(e.target.value)} data-api-unique-id='productmanagementview-r8fd41c92f5438658-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
-              </div>
+              <SupplierFuzzyFilter
+                value={state.filterSupplierName}
+                onChange={handlers.setFilterSupplierName}
+                onSearch={handlers.handleSearch}
+              />
             </div>
             <div data-api-unique-id='productmanagementview-r294aeecd2aaebd56-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block" data-api-unique-id='productmanagementview-r2626e9c9a9fbbd07-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>品牌关键词 / Brand Keyword</label>
