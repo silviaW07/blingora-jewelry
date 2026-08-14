@@ -878,7 +878,7 @@ export const getCategoryDetail = withResult(async (input: GetCategoryDetailInput
 })
 
 /**
- * 分类管理「海报配置」(sitesetting HOMEPAGE_POSTER) — 优先于旧 categorybanner 种子数据。
+ * 分类管理「海报配置」(sitesetting HOMEPAGE_POSTER)，仅在某一级分类页生效。
  */
 type HomepagePosterSettingItem = {
   id?: string
@@ -929,8 +929,27 @@ async function loadConfiguredCategoryPosters(categoryId?: string | null): Promis
   return items.sort((a, b) => b.sort_weight - a.sort_weight)
 }
 
+async function loadCategoryBannerPosters(): Promise<CategoryPosterItem[]> {
+  const bannerRecords = await prisma.categorybanner.findMany({
+    where: { isEnabled: true },
+    orderBy: [{ sortWeight: 'desc' }, { updatedAt: 'desc' }],
+  })
+  return bannerRecords.map((banner) => ({
+    poster_id: banner.id,
+    title: banner.title || '首页横幅',
+    subtitle: null,
+    image_url: banner.imageUrl,
+    link_text: null,
+    link_url: normalizePosterLinkUrl(banner.linkUrl),
+    category_id: null,
+    sort_weight: Number(banner.sortWeight ?? 0),
+  }))
+}
+
 /**
- * 读取目录页海报，优先返回与当前一级分类关联的数据。
+ * 读取目录页海报：
+ * - 首页 / 未进具体分类：Banner 轮播图管理（categorybanner）
+ * - 某一级分类页：该分类「海报配置」优先，否则回退 Banner 轮播
  */
 export const getCategoryPosterList = withResult(async (input: GetCategoryPosterListInput): Promise<GetCategoryPosterListOutput> => {
   const cacheKey = String(input.category_id || '')
@@ -944,44 +963,21 @@ export const getCategoryPosterList = withResult(async (input: GetCategoryPosterL
     : null
   const mainCategoryId = categoryContext?.rootCategoryId
 
-  const configuredPosters = await loadConfiguredCategoryPosters(mainCategoryId || null)
-  if (configuredPosters.length > 0) {
-    const output: GetCategoryPosterListOutput = { list: configuredPosters }
-    posterListCache.set(cacheKey, { at: Date.now(), value: output })
-    return output
+  let list: CategoryPosterItem[] = []
+
+  if (mainCategoryId) {
+    const categoryPosters = await loadConfiguredCategoryPosters(mainCategoryId)
+    if (categoryPosters.length > 0) {
+      list = categoryPosters
+    }
   }
 
-  const bannerRecords = await prisma.categorybanner.findMany({
-    where: {
-      isEnabled: true
-    },
-    orderBy: [
-      { sortWeight: 'desc' },
-      { updatedAt: 'desc' }
-    ]
-  })
-
-  const posterList = bannerRecords.map((banner) => ({
-    poster_id: banner.id,
-    title: banner.title || '首页横幅',
-    subtitle: null,
-    image_url: banner.imageUrl,
-    link_text: null,
-    link_url: normalizePosterLinkUrl(banner.linkUrl),
-    category_id: null,
-    sort_weight: Number(banner.sortWeight ?? 0)
-  }))
-
-  const sortedPosterList = mainCategoryId
-    ? [
-        ...posterList.filter(item => item.category_id === mainCategoryId),
-        ...posterList.filter(item => !item.category_id),
-        ...posterList.filter(item => item.category_id && item.category_id !== mainCategoryId)
-      ]
-    : posterList
+  if (!list.length) {
+    list = await loadCategoryBannerPosters()
+  }
 
   const output: GetCategoryPosterListOutput = {
-    list: [...sortedPosterList].sort((a, b) => b.sort_weight - a.sort_weight)
+    list: [...list].sort((a, b) => b.sort_weight - a.sort_weight),
   }
   posterListCache.set(cacheKey, { at: Date.now(), value: output })
   return output

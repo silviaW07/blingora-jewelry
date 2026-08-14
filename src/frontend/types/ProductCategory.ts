@@ -757,31 +757,12 @@ async function loadConfiguredCategoryPosters(categoryId?: string | null): Promis
   return items.sort((a, b) => b.sort_weight - a.sort_weight)
 }
 
-/**
- * 读取目录页海报，优先返回与当前一级分类关联的数据。
- */
-export const getCategoryPosterList = withResult(async (input: GetCategoryPosterListInput): Promise<GetCategoryPosterListOutput> => {
-  const categoryContext = input.category_id
-    ? await resolveCategoryContext(input.category_id)
-    : null
-  const mainCategoryId = categoryContext?.rootCategoryId
-
-  const configuredPosters = await loadConfiguredCategoryPosters(mainCategoryId || null)
-  if (configuredPosters.length > 0) {
-    return { list: configuredPosters }
-  }
-
+async function loadCategoryBannerPosters(): Promise<CategoryPosterItem[]> {
   const bannerRecords = await prisma.categorybanner.findMany({
-    where: {
-      isEnabled: true
-    },
-    orderBy: [
-      { sortWeight: 'desc' },
-      { updatedAt: 'desc' }
-    ]
+    where: { isEnabled: true },
+    orderBy: [{ sortWeight: 'desc' }, { updatedAt: 'desc' }],
   })
-
-  const posterList = bannerRecords.map((banner) => ({
+  return bannerRecords.map((banner) => ({
     poster_id: banner.id,
     title: banner.title || '首页横幅',
     subtitle: null,
@@ -789,19 +770,34 @@ export const getCategoryPosterList = withResult(async (input: GetCategoryPosterL
     link_text: null,
     link_url: normalizePosterLinkUrl(banner.linkUrl),
     category_id: null,
-    sort_weight: Number(banner.sortWeight ?? 0)
+    sort_weight: Number(banner.sortWeight ?? 0),
   }))
+}
 
-  const sortedPosterList = mainCategoryId
-    ? [
-        ...posterList.filter(item => item.category_id === mainCategoryId),
-        ...posterList.filter(item => !item.category_id),
-        ...posterList.filter(item => item.category_id && item.category_id !== mainCategoryId)
-      ]
-    : posterList
+/**
+ * 读取目录页海报：首页用 Banner 轮播；分类页优先该分类海报配置。
+ */
+export const getCategoryPosterList = withResult(async (input: GetCategoryPosterListInput): Promise<GetCategoryPosterListOutput> => {
+  const categoryContext = input.category_id
+    ? await resolveCategoryContext(input.category_id)
+    : null
+  const mainCategoryId = categoryContext?.rootCategoryId
+
+  let list: CategoryPosterItem[] = []
+
+  if (mainCategoryId) {
+    const categoryPosters = await loadConfiguredCategoryPosters(mainCategoryId)
+    if (categoryPosters.length > 0) {
+      list = categoryPosters
+    }
+  }
+
+  if (!list.length) {
+    list = await loadCategoryBannerPosters()
+  }
 
   return {
-    list: [...sortedPosterList].sort((a, b) => b.sort_weight - a.sort_weight)
+    list: [...list].sort((a, b) => b.sort_weight - a.sort_weight),
   }
 })
 
