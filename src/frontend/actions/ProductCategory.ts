@@ -290,6 +290,7 @@ import {
   productMatchesSearchTokens,
   tokenizeProductSearch,
 } from '@/shared/productSearch'
+import { normalizePosterLinkUrl } from '@/shared/posterLink'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
@@ -877,6 +878,58 @@ export const getCategoryDetail = withResult(async (input: GetCategoryDetailInput
 })
 
 /**
+ * 分类管理「海报配置」(sitesetting HOMEPAGE_POSTER) — 优先于旧 categorybanner 种子数据。
+ */
+type HomepagePosterSettingItem = {
+  id?: string
+  title?: string
+  image_url?: string
+  imageUrl?: string
+  link?: string | null
+  sort_weight?: number
+  sortWeight?: number
+  is_active?: boolean
+  isActive?: boolean
+}
+
+async function loadConfiguredCategoryPosters(categoryId?: string | null): Promise<CategoryPosterItem[]> {
+  const settings = await prisma.sitesetting.findMany({
+    where: { settingType: 'HOMEPAGE_POSTER', isActive: true },
+    orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],
+  })
+
+  const items: CategoryPosterItem[] = []
+  for (const setting of settings) {
+    const payload = (setting.contentJson ?? {}) as {
+      categoryId?: string | null
+      items?: HomepagePosterSettingItem[]
+    }
+    const configCategoryId = String(payload.categoryId || '').trim()
+    if (categoryId && configCategoryId !== categoryId) continue
+    if (!categoryId && !configCategoryId) continue
+
+    for (const [index, raw] of (payload.items ?? []).entries()) {
+      const active = raw.is_active ?? raw.isActive
+      if (active === false) continue
+      const imageUrl = String(raw.image_url || raw.imageUrl || '').trim()
+      if (!imageUrl) continue
+      items.push({
+        poster_id: String(raw.id || `poster-${setting.id}-${index}`),
+        title: String(raw.title || `海报 ${index + 1}`),
+        subtitle: null,
+        image_url: imageUrl,
+        link_text: null,
+        link_url: normalizePosterLinkUrl(raw.link),
+        category_id: configCategoryId || null,
+        sort_weight: Number(raw.sort_weight ?? raw.sortWeight ?? index),
+      })
+    }
+  }
+
+  return items.sort((a, b) => b.sort_weight - a.sort_weight)
+}
+
+/**
  * 读取目录页海报，优先返回与当前一级分类关联的数据。
  */
 export const getCategoryPosterList = withResult(async (input: GetCategoryPosterListInput): Promise<GetCategoryPosterListOutput> => {
@@ -890,6 +943,14 @@ export const getCategoryPosterList = withResult(async (input: GetCategoryPosterL
     ? await resolveCategoryContext(input.category_id)
     : null
   const mainCategoryId = categoryContext?.rootCategoryId
+
+  const configuredPosters = await loadConfiguredCategoryPosters(mainCategoryId || null)
+  if (configuredPosters.length > 0) {
+    const output: GetCategoryPosterListOutput = { list: configuredPosters }
+    posterListCache.set(cacheKey, { at: Date.now(), value: output })
+    return output
+  }
+
   const bannerRecords = await prisma.categorybanner.findMany({
     where: {
       isEnabled: true
@@ -906,7 +967,7 @@ export const getCategoryPosterList = withResult(async (input: GetCategoryPosterL
     subtitle: null,
     image_url: banner.imageUrl,
     link_text: null,
-    link_url: banner.linkUrl || null,
+    link_url: normalizePosterLinkUrl(banner.linkUrl),
     category_id: null,
     sort_weight: Number(banner.sortWeight ?? 0)
   }))

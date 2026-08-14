@@ -892,7 +892,7 @@ export const CategoryManagementView = ({
                       </div>
                       <div className="space-y-2" data-api-unique-id='categorymanagementview-r4147d70ac76c35f7-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>
                         <label className="text-xs font-bold text-slate-500 uppercase" data-api-unique-id='categorymanagementview-re5b35d67fedbbfb6-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>跳转链接</label>
-                        <Input value={item.link || ''} onChange={e => handlers.updatePosterItem(item.id, 'link', e.target.value)} className="border-slate-200 focus-visible:ring-primary" data-api-unique-id='categorymanagementview-r2cd61f349bc8155a-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1' />
+                        <Input placeholder="/category/jewelry 或 https://..." value={item.link || ''} onChange={e => handlers.updatePosterItem(item.id, 'link', e.target.value)} className="border-slate-200 focus-visible:ring-primary" data-api-unique-id='categorymanagementview-r2cd61f349bc8155a-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1' />
                       </div>
                     </div>
                     <div className="space-y-2" data-api-unique-id='categorymanagementview-re1f6dca7c6ed33b3-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView' data-api-in-loop='1'>

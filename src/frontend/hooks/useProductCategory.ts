@@ -31,6 +31,7 @@ import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { normalizePosterLinkUrl, isAbsoluteHttpUrl } from '@/shared/posterLink'
 
 type CategoryChildItem = {
   category_id: string
@@ -1260,17 +1261,22 @@ export const useProductCategory = (): {
   }, [posters.length])
 
   const handleBannerClick = useCallback((banner: ProductCategoryBannerItem) => {
-    if (!banner.link_url) {
+    const target = normalizePosterLinkUrl(banner.link_url)
+    if (!target) {
       return
     }
 
-    if (banner.link_url.startsWith('/')) {
-      router.push(banner.link_url)
+    if (target.startsWith('/')) {
+      router.push(target)
       return
     }
 
     if (typeof window !== 'undefined') {
-      window.open(banner.link_url, '_self', 'noopener,noreferrer')
+      if (isAbsoluteHttpUrl(target)) {
+        window.location.href = target
+        return
+      }
+      router.push(target)
     }
   }, [router])
 
