@@ -463,36 +463,6 @@ export const getHomeRecommendZones = async (input?: {
     await loadProductCounts()
   }
 
-  // Filter tags (Below 3usd / high quality jewelry / silver) often miss the
-  // newest-180 batch. One cheap findFirst per remaining card keeps a real photo.
-  const coverImageByCategoryId = new Map<string, string>()
-  for (const [categoryId, products] of latestProductsByCategoryId) {
-    const url = products[0]?.imageUrl
-    if (url) coverImageByCategoryId.set(categoryId, url)
-  }
-  const missingCoverIds = categoryZoneCategoryIds.filter((id) => !coverImageByCategoryId.has(id))
-  if (missingCoverIds.length > 0) {
-    await Promise.all(
-      missingCoverIds.map(async (categoryId) => {
-        const product = await prisma.product.findFirst({
-          where: {
-            status: 'ACTIVE',
-            mainImageUrl: { not: '' },
-            OR: [
-              { categoryId },
-              { brandCategoryId: categoryId },
-              { relationCategories: { some: { categoryId } } },
-            ],
-          },
-          orderBy: { updatedAt: 'desc' },
-          select: { mainImageUrl: true },
-        })
-        const imageUrl = optimizeCatalogImageUrl(product?.mainImageUrl, 400)
-        if (imageUrl) coverImageByCategoryId.set(categoryId, imageUrl)
-      }),
-    )
-  }
-
   const result = zones
     .map((zone): HomeRecommendZoneSection => {
       const categoryLatestLimit =
@@ -660,10 +630,6 @@ export const getHomeRecommendZones = async (input?: {
           return acc
         }
 
-        const productCover =
-          coverImageByCategoryId.get(category.id) ||
-          (latestProductsByCategoryId.get(category.id) || [])[0]?.imageUrl ||
-          null
         const shelfImage = resolveCategoryShelfImageUrl(
           category.imageUrl,
           category.bannerImageUrl,
@@ -679,7 +645,6 @@ export const getHomeRecommendZones = async (input?: {
             category.imageUrl,
             category.bannerImageUrl,
             (category as { iconUrl?: string | null }).iconUrl,
-            productCover,
           ),
           fallbackImageUrl: shelfImage,
           description: category.description,

@@ -135,11 +135,10 @@ export const resolveCategoryCardImageUrl = (
   imageUrl?: string | null,
   bannerImageUrl?: string | null,
   iconUrl?: string | null,
-  productImageUrl?: string | null,
+  /** @deprecated 类目卡不再回退商品主图，保留参数仅为兼容旧调用 */
+  _productImageUrl?: string | null,
 ): string => {
   return (
-    // 优先该类目最新商品图；没有再回退分类主图
-    optimizeCatalogImageUrl(productImageUrl, 640) ||
     resolveCategoryShelfImageUrl(imageUrl, bannerImageUrl, iconUrl) ||
     CATEGORY_CARD_PLACEHOLDER_URL
   )

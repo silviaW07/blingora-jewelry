@@ -177,46 +177,6 @@ export const getHomeRecommendZones = async (input?: {
     : []
   const freshCategoryMap = new Map(freshCategories.map((category) => [category.id, category]))
 
-  // 类目卡封面：无 imageUrl 时回退到该类目下商品主图，避免前端关键词搜图长时间转圈
-  const categoryIdsNeedingCover = freshCategories
-    .filter((category) => !String(category.imageUrl || '').trim() && !String(category.bannerImageUrl || '').trim())
-    .map((category) => category.id)
-  const coverImageByCategoryId = new Map<string, string>()
-  if (categoryIdsNeedingCover.length > 0) {
-    const coverProducts = await prisma.product.findMany({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { categoryId: { in: categoryIdsNeedingCover } },
-          { relationCategories: { some: { categoryId: { in: categoryIdsNeedingCover } } } },
-        ],
-      },
-      select: {
-        categoryId: true,
-        mainImageUrl: true,
-        relationCategories: {
-          where: { categoryId: { in: categoryIdsNeedingCover } },
-          select: { categoryId: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: Math.min(400, categoryIdsNeedingCover.length * 8),
-    })
-
-    for (const product of coverProducts) {
-      const imageUrl = optimizeCatalogImageUrl(product.mainImageUrl, 640)
-      if (!imageUrl) continue
-      if (product.categoryId && categoryIdsNeedingCover.includes(product.categoryId) && !coverImageByCategoryId.has(product.categoryId)) {
-        coverImageByCategoryId.set(product.categoryId, imageUrl)
-      }
-      for (const relation of product.relationCategories) {
-        if (!coverImageByCategoryId.has(relation.categoryId)) {
-          coverImageByCategoryId.set(relation.categoryId, imageUrl)
-        }
-      }
-    }
-  }
-
   // 商品数：主分类 + 多分类关联一起统计，避免类目卡长期显示 0
   const productCountByCategoryId = new Map<string, number>()
   if (categoryIds.length > 0) {
@@ -533,7 +493,6 @@ export const getHomeRecommendZones = async (input?: {
             category.imageUrl,
             category.bannerImageUrl,
             (category as any).iconUrl,
-            coverImageByCategoryId.get(category.id) || null,
           ),
           fallbackImageUrl:
             optimizeCatalogImageUrl(category.imageUrl, 640) ||
