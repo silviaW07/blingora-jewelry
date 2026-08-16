@@ -19,12 +19,12 @@ export const RPC_DEFAULT_TIMEOUT_MS = 60_000;
 const TIMEOUT_ERROR_MESSAGE = (timeoutMs: number) =>
   `请求超时（${Math.round(timeoutMs / 1000)}秒），请稍后重试`;
 
-// 本地：直连 RPC 后端；经隧道访问时走同源 /rpc（由 next rewrites 转发到 3100）
+// 本地：直连 RPC 后端；线上走 /api/query（避免部分 Chrome 广告拦截把 /rpc/ 当追踪接口拦掉）
 const getApiUrl = () => {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1') {
-      return `${window.location.origin}/rpc/${PROJECT_ID}`;
+      return `${window.location.origin}/api/query/${PROJECT_ID}/`;
     }
   }
   return `http://localhost:3100/rpc/${PROJECT_ID}`;
@@ -189,6 +189,7 @@ async function rpcCallInternal<T>(
       const apiUrl = getApiUrl();
       const fetchOptions: RequestInit = {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
           'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
@@ -256,6 +257,22 @@ async function rpcCallInternal<T>(
       ) {
         await new Promise(r => setTimeout(r, 400));
         resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
+      }
+
+      // 401：公开店面接口去掉坏 token 再试一次（Chrome 里过期 JWT 会让类目列表整页空白）
+      if (resp.status === 401) {
+        const isStorefront = actionName.includes('.frontend.')
+        if (isStorefront && token) {
+          const retryHeaders = { ...(fetchOptions.headers as Record<string, string>) }
+          delete retryHeaders.Authorization
+          delete retryHeaders['X-User-Id']
+          delete retryHeaders['X-User-Role']
+          resp = await fetchWithTimeout(
+            apiUrl,
+            { ...fetchOptions, headers: retryHeaders },
+            timeoutMs,
+          )
+        }
       }
 
       // 401 统一拦截 — reject so callers leave loading state (do not hang forever)

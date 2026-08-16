@@ -2349,6 +2349,35 @@ img.home-service-card__icon-img {
   font-size: 0.8125rem !important;
 }
 
+.mobile-home__chips-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 1rem;
+  height: 40px;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.mobile-home__chips-row::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-home__chips-row .mobile-home__chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.mobile-home__banner-placeholder,
+.mobile-home__banner-placeholder p {
+  color: #fff !important;
+}
+
 /* Banner under L1 chips: needed height — absolute media alone collapses the shell */
 .mobile-home__banner-shell {
   position: relative;

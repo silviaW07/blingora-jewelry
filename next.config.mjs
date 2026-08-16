@@ -45,6 +45,10 @@ const nextConfig = {
           destination: 'http://localhost:3100/rpc/:path*',
         },
         {
+          source: '/api/query/:path*',
+          destination: 'http://localhost:3100/rpc/:path*',
+        },
+        {
           source: "/flow-engine/clash Ver/v2/run_flow",
           destination: "https://pztest.koudingvip.com/flow-engine/clash Ver/v2/run_flow",
         },

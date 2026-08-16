@@ -138,7 +138,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
 
       {/* Horizontal L1 directory only — no Expand all */}
       <div className="mobile-home__chips mb-3 border-b border-[#ebe4d8] bg-[#f7f4f0]">
-        <div className="mobile-home__chips-row no-scrollbar flex max-h-10 items-center gap-4 overflow-x-auto overflow-y-hidden px-3">
+        <div className="mobile-home__chips-row">
           {renderChipButton('home', t('nav.home'), isHomeChipActive, goHomeClear)}
           {categories.map((category) => {
             const isActive =
