@@ -6,6 +6,12 @@ import { header, body, display } from './font';
 
 const siteTitle = process.env.NEXT_PUBLIC_SITE_TITLE ?? "外贸跨境电商独立站";
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover' as const,
+};
+
 export const metadata = {
   title: siteTitle,
   description: 'E-commerce shop demo',
@@ -55,6 +61,7 @@ export default function RootLayout({
       color: 'rgba(0, 0, 0, 0.85)'
     }}>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}
         <meta name="referrer" content="no-referrer" />
         {/* Self-hosted Outfit (see app/(frontend)/theme-style.css @font-face) — no Google Fonts runtime */}

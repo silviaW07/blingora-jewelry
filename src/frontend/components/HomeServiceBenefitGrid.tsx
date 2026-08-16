@@ -62,7 +62,14 @@ export function HomeServiceBenefitGrid({
                   src={item.iconSrc}
                   alt={item.title}
                   className="home-service-card__icon-img"
-                  style={{ objectFit: 'contain', aspectRatio: '1 / 1' }}
+                  style={{
+                    objectFit: 'contain',
+                    width: 18,
+                    height: 18,
+                    maxWidth: 18,
+                    maxHeight: 18,
+                    aspectRatio: 'auto',
+                  }}
                   disableKeywordSearch
                 />
               </div>

@@ -1884,6 +1884,8 @@ input:-webkit-autofill:active {
 
 /* ===== Mobile storefront: banner, recommend squircles, unified type ===== */
 .mobile-home {
+  overflow-x: clip;
+  max-width: 100%;
   --mobile-fs: 0.8125rem; /* 13px base — denser than desktop */
   --mobile-fs-sm: 0.75rem;
   --mobile-fs-xs: 0.6875rem;
@@ -1899,25 +1901,42 @@ input:-webkit-autofill:active {
 }
 
 /* ===== Home service benefit cards =====
- * Fully isolated by breakpoint — desktop & mobile never share layout/sizing rules.
- * Shared: structure hooks + wrap anti-ellipsis only.
+ * Mobile-first (Chrome Android/iOS): lock icon size in the BASE rule.
+ * Chrome treats SVG <img> + width:100% + aspect-ratio as a full-bleed square
+ * when size is only inside @media; Safari/Firefox do not.
  */
 .home-service-cards {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .home-service-card-cell {
   display: flex;
   min-width: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .home-service-card {
   display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
   width: 100%;
   min-width: 0;
-  border: 1px solid #f0dede;
+  min-height: 72px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #efe8dc;
+  border-radius: 10px;
   background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
 }
 
@@ -1926,12 +1945,42 @@ input:-webkit-autofill:active {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: 36px;
+  max-height: 36px;
+  border-radius: 50%;
+  background: #f3f1ed;
+}
+
+.home-service-card__icon-img,
+.home-service-card__icon-img img,
+.home-service-card__icon-img svg,
+img.home-service-card__icon-img {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  flex-shrink: 0 !important;
+  object-fit: contain !important;
 }
 
 .home-service-card__body {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
+  width: auto;
 }
 
 /* Title/desc: wrap fully on both breakpoints — never truncate / line-clamp / ellipsis */
@@ -1951,6 +2000,20 @@ input:-webkit-autofill:active {
   overflow-wrap: break-word;
   word-break: break-word;
   hyphens: auto;
+}
+
+.home-service-card__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--mobile-text-strong, #333);
+}
+
+.home-service-card__desc {
+  font-size: 0.625rem;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--mobile-text-soft, #888888);
 }
 
 /* ----- Desktop (PC) only: 1×4, icon left + text right — 图二, no mobile leakage ----- */
@@ -2102,14 +2165,14 @@ input:-webkit-autofill:active {
   }
 
   .home-service-card__title {
-    font-size: 0.75rem !important; /* 12px — locked */
+    font-size: 0.75rem !important;
     font-weight: 700 !important;
     line-height: 1.25 !important;
     color: var(--mobile-text-strong, #333);
   }
 
   .home-service-card__desc {
-    font-size: 0.625rem !important; /* 10px — locked */
+    font-size: 0.625rem !important;
     font-weight: 400 !important;
     line-height: 1.3 !important;
     color: var(--mobile-text-soft, #888888) !important;

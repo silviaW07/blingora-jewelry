@@ -325,8 +325,8 @@ const EditableImg = ({
                     /\.svg($|\?)/i.test(proxied)
                 const imgStyle: CSSProperties = {
                     ...mergedStyle,
-                    width: '100%',
-                    height: '100%',
+                    width: mergedStyle.width ?? '100%',
+                    height: mergedStyle.height ?? '100%',
                     objectFit: (mergedStyle.objectFit as any) || 'cover',
                 }
                 const handleError = () => {
