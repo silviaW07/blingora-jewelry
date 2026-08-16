@@ -1324,16 +1324,28 @@ html.is-narrow [data-home-layout='desktop'],
 html.is-narrow [data-storefront-chrome='desktop'],
 html.is-narrow .storefront-footer-desktop-only {
   display: none !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
 }
 
 html.is-narrow [data-home-layout='mobile'],
 html.is-narrow [data-storefront-chrome='mobile'] {
   display: block !important;
+  pointer-events: auto !important;
+}
+
+html.is-narrow .mobile-bottom-nav {
+  display: block !important;
+  pointer-events: auto !important;
+  z-index: 200 !important;
 }
 
 @media (min-width: 768px) {
   html:not(.is-narrow) [data-home-layout='mobile'],
-  html:not(.is-narrow) [data-storefront-chrome='mobile'] {
+  html:not(.is-narrow) [data-storefront-chrome='mobile'],
+  html:not(.is-narrow) .mobile-bottom-nav {
     display: none !important;
   }
 }
@@ -2052,6 +2064,7 @@ html.is-narrow [data-storefront-chrome='mobile'] {
 .mobile-home {
   overflow-x: clip;
   max-width: 100%;
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   --mobile-fs: 0.8125rem; /* 13px base — denser than desktop */
   --mobile-fs-sm: 0.75rem;
   --mobile-fs-xs: 0.6875rem;
@@ -2399,13 +2412,19 @@ img.home-service-card__icon-img {
   display: block;
 }
 
-/* Horizontal squircle recommend strip */
+/* Horizontal squircle recommend strip.
+   Chrome Android blows up width:100% + aspect-ratio inside flex; use padding-box squares. */
 .mobile-zone-squircle-row {
   display: flex;
   align-items: flex-start;
   gap: var(--mobile-zone-gap, 0.5rem);
   width: 100%;
+  max-width: 100%;
   padding-bottom: 0.35rem;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  contain: layout paint;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(17, 17, 17, 0.18) transparent;
@@ -2460,6 +2479,8 @@ img.home-service-card__icon-img {
   color: #2a2620;
   cursor: pointer;
   text-align: center;
+  overflow: hidden;
+  max-width: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -2471,19 +2492,28 @@ img.home-service-card__icon-img {
   position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  height: 0 !important;
+  padding-bottom: 100%;
+  aspect-ratio: auto !important;
   overflow: hidden;
-  border-radius: 1.05rem; /* squircle-like rounded rectangle */
+  border-radius: 1.05rem;
   background: #ebe4d8;
   box-shadow: 0 6px 16px -12px rgba(17, 17, 17, 0.35);
   transition: transform 0.15s ease;
 }
 
+.mobile-zone-squircle__media > *,
 .mobile-zone-squircle__media img {
+  position: absolute !important;
+  inset: 0 !important;
   width: 100% !important;
   height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  aspect-ratio: auto !important;
   object-fit: cover !important;
-  display: block;
+  display: block !important;
 }
 
 .mobile-zone-squircle__label {

@@ -52,7 +52,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="mobile-bottom-nav md:hidden"
+      className="mobile-bottom-nav"
       aria-label={t('nav.siteNav', { defaultValue: 'Site navigation' })}
     >
       <ul className="mobile-bottom-nav__list">

@@ -344,8 +344,7 @@ const renderMobileSquircleContent = (
                 fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
                 loading="lazy"
                 orientation="square"
-                className="h-full w-full object-cover"
-                style={{ aspectRatio: '1 / 1' }}
+                className="mobile-zone-squircle__img h-full w-full object-cover"
               />
             </span>
             <span className="mobile-zone-squircle__label">
@@ -397,8 +396,7 @@ const renderMobileSquircleContent = (
                   slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading="lazy"
                   orientation="square"
-                  className="h-full w-full object-cover"
-                  style={{ aspectRatio: '1 / 1' }}
+                  className="mobile-zone-squircle__img h-full w-full object-cover"
                 />
               </span>
               <span className="mobile-zone-squircle__label">

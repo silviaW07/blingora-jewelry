@@ -15,6 +15,7 @@ import {
   DEFAULT_CUSTOMER_SERVICE_CONFIG,
 } from '@/frontend/decorate/customerService'
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 
 const WhatsAppGlyph = ({ size }: { size: number }) => (
   <svg
@@ -79,11 +80,14 @@ export function WhatsAppFloatButton() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const mq = window.matchMedia('(max-width: 767px)')
-    const syncViewport = () => setIsMobileViewport(mq.matches)
+    const syncViewport = () => setIsMobileViewport(isNarrowViewport())
     syncViewport()
-    mq.addEventListener('change', syncViewport)
-    return () => mq.removeEventListener('change', syncViewport)
+    window.addEventListener('resize', syncViewport)
+    window.visualViewport?.addEventListener('resize', syncViewport)
+    return () => {
+      window.removeEventListener('resize', syncViewport)
+      window.visualViewport?.removeEventListener('resize', syncViewport)
+    }
   }, [])
 
   // 页面加载 / 路由切换时，非装修态一律重新读取后台最新坐标

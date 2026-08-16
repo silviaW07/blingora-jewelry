@@ -931,7 +931,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
       <MobileHomeStorefrontView state={state} handlers={handlers} />
     </div>
     ) : null}
-    {viewport !== 'mobile' ? (
+    {viewport === 'desktop' ? (
     <div
       data-home-layout="desktop"
       className="bg-[#FFF5F5] text-[#111111]"
