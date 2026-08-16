@@ -1,10 +1,9 @@
 'use client'
-import { useState, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { CustomerLogin, Home, CustomerRegister } from '@/frontend/route-params';
+import { useState, useCallback, useEffect } from 'react';
 import type { LoginCustomerInput } from '@/frontend/actions/CustomerLogin';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { useUserSession } from '@/tools/FrontendSession';
+import { hardNavigate } from '@/frontend/utils/hardNavigate';
 import { toast } from "sonner";
 
 // Export States
@@ -41,10 +40,15 @@ export const useCustomerLogin = (): {
   state: CustomerLoginState;
   handlers: CustomerLoginHandlers;
 } => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { returnTo } = CustomerLogin.getParams(searchParams);
   const { set: setSession } = useUserSession();
+  const [returnTo, setReturnTo] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const next = (sp.get('returnTo') || sp.get('redirect') || '').trim()
+    setReturnTo(next || undefined)
+  }, [])
 
   const [formData, setFormData] = useState<LoginCustomerInput>({
     sysuser_account: '',
@@ -68,7 +72,7 @@ export const useCustomerLogin = (): {
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.sysuser_account || !formData.sysuser_password) {
-      setErrorMessage('请输入完整的账号和密码');
+      setErrorMessage('Please enter your email and password');
       return;
     }
 
@@ -87,13 +91,10 @@ export const useCustomerLogin = (): {
         role: 'CUSTOMER'
       });
 
-      toast.success('登录成功');
+      toast.success('Signed in successfully');
 
-      if (returnTo) {
-        router.push(decodeURIComponent(returnTo));
-      } else {
-        Home.navigateTo(router);
-      }
+      const target = returnTo ? decodeURIComponent(returnTo) : '/'
+      hardNavigate(target.startsWith('/') ? target : '/')
     } catch (error: any) {
       const raw = String(error?.message || '');
       // Prisma / engine dumps → friendly copy; business errors pass through
@@ -104,9 +105,9 @@ export const useCustomerLogin = (): {
         /prisma/i.test(raw) ||
         /Server is taking a break/i.test(raw)
       ) {
-        setErrorMessage('登录服务暂时不可用，请稍后重试');
+        setErrorMessage('Sign-in is temporarily unavailable. Please try again.');
       } else {
-        setErrorMessage(raw || '登录失败，请检查您的输入');
+        setErrorMessage(raw || 'Sign-in failed. Please check your details');
       }
     } finally {
       setIsSubmitting(false);
@@ -115,11 +116,11 @@ export const useCustomerLogin = (): {
 
   const handleGoToRegister = useCallback(() => {
     if (returnTo) {
-      CustomerRegister.navigateToWithReturn(router, { returnTo });
-    } else {
-      CustomerRegister.navigateToDefault(router);
+      hardNavigate(`/customerregister/?returnTo=${encodeURIComponent(returnTo)}`)
+      return
     }
-  }, [router, returnTo]);
+    hardNavigate('/customerregister/')
+  }, [returnTo]);
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword((prev) => !prev);

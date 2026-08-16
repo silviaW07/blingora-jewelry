@@ -1,3 +1,5 @@
+import { isDateKeyProductName } from '@/frontend/utils/dailyNewArrival'
+
 /**
  * 推荐专区前台展示限额工具（与后台「PC列数 × 行数」文案一致）。
  */
@@ -44,9 +46,15 @@ export function isComingSoonRecommendZoneTitle(title: string | null | undefined)
 export function pickComingSoonRecommendZone<T extends RecommendZoneLayout>(
   zones: T[],
 ): T | null {
-  const productZones = (zones || []).filter(
-    (zone) => zone.zoneType === 'PRODUCT' && Array.isArray(zone.items),
-  )
+  const productZones = (zones || []).filter((zone) => {
+    const items = Array.isArray(zone.items) ? zone.items : []
+    if (items.length === 0) return false
+    if (zone.zoneType && zone.zoneType !== 'PRODUCT') return false
+    return items.some((item) => {
+      const row = item as { entityType?: string; productId?: string }
+      return row.entityType === 'PRODUCT' || Boolean(row.productId)
+    })
+  })
   const exact = productZones.find((zone) => {
     const key = String(zone.title || '')
       .trim()
@@ -55,5 +63,19 @@ export function pickComingSoonRecommendZone<T extends RecommendZoneLayout>(
     return key === 'comingsoon'
   })
   if (exact) return exact
-  return productZones.find((zone) => isComingSoonRecommendZoneTitle(zone.title)) || null
+  const titled = productZones.find((zone) => isComingSoonRecommendZoneTitle(zone.title))
+  if (titled) return titled
+
+  const looksDated = productZones.find((zone) => {
+    const names = (zone.items || [])
+      .map((item) => {
+        const row = item as { productName?: string; rawProductName?: string }
+        return String(row.rawProductName || row.productName || '').trim()
+      })
+      .filter(Boolean)
+    if (names.length < 3) return false
+    const dated = names.filter((name) => isDateKeyProductName(name)).length
+    return dated * 2 >= names.length
+  })
+  return looksDated || null
 }

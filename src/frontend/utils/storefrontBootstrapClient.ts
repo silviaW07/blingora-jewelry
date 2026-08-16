@@ -8,10 +8,13 @@ export async function fetchStorefrontBootstrap(lang: string): Promise<Storefront
   const normalized = String(lang || 'en').trim() || 'en'
   if (inflight && inflightLang === normalized) return inflight
 
+  const controller = new AbortController()
+  const abortTimer = window.setTimeout(() => controller.abort(), 4000)
   inflightLang = normalized
   inflight = fetch(`/api/storefront/bootstrap?lang=${encodeURIComponent(normalized)}`, {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
+    signal: controller.signal,
   })
     .then(async (res) => {
       if (!res.ok) return null
@@ -25,6 +28,7 @@ export async function fetchStorefrontBootstrap(lang: string): Promise<Storefront
     })
     .catch(() => null)
     .finally(() => {
+      window.clearTimeout(abortTimer)
       inflight = null
       inflightLang = ''
     })

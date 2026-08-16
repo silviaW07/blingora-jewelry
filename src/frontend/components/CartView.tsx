@@ -265,7 +265,7 @@ export const CartView = ({
                     {t('common.selectAll')}
                   </button>
                   <span className="text-xs text-[#64748B]">
-                    已选 {selectedIds.length} / {state.items.length}
+                    {t('common.selectedCount', { selected: selectedIds.length, total: state.items.length })}
                   </span>
                 </div>
 
@@ -276,7 +276,7 @@ export const CartView = ({
                             <Checkbox
                               checked={selectedIds.includes(item.cartItemId)}
                               onCheckedChange={(checked) => toggleSelectItem(item.cartItemId, checked === true)}
-                              aria-label={`选择 ${item.productName}`}
+                              aria-label={t('checkout.selectItem', { name: item.productName })}
                               className={pinkCheckboxClass}
                             />
                           </div>
@@ -401,7 +401,7 @@ export const CartView = ({
                       {!addressConfirmed ? <div className="relative py-1" data-api-unique-id='cartview-r09e4fa516b1c369d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                           <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#f3dfe6]" data-api-unique-id='cartview-r9bf0863ee7d52f6d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
                           <DecorateText propKey="checkout_confirm_price_guide" as="div" className="relative mx-auto w-fit rounded-full border border-[#f3dfe6] bg-[#fff5f8] px-4 py-2 text-center font-body text-[15px] font-bold text-[#0F172A]">
-                            确认数量与价格
+                            Confirm quantity and price
                           </DecorateText>
                         </div> : null}
                     </div>
@@ -444,16 +444,16 @@ export const CartView = ({
                         }
                         onClick={async () => {
                           if (!checkoutAddress) {
-                            toast.error('请先保存收货地址')
+                            toast.error(t('checkout.saveAddressFirst'))
                             return
                           }
                           if (!selectedChannelId || selectedShippingFee == null) {
-                            toast.error('请选择物流渠道')
+                            toast.error(t('checkout.selectShipping'))
                             return
                           }
                           const validItems = state.items.filter((item) => item.status !== 'INVALID')
                           if (validItems.length === 0) {
-                            toast.error('没有可下单的商品')
+                            toast.error(t('checkout.noOrderableItems'))
                             return
                           }
 
@@ -491,7 +491,7 @@ export const CartView = ({
                             setSelectedChannelName(null)
                             setSelectedIds([])
                           } catch (error) {
-                            toast.error((error as Error).message || '下单失败，请稍后重试')
+                            toast.error((error as Error).message || t('checkout.placeOrderFailed'))
                           } finally {
                             setIsPlacingOrder(false)
                           }
@@ -724,7 +724,7 @@ export const CartView = ({
       {showScrollTop ? (
         <button
           type="button"
-          aria-label="回到顶部"
+          aria-label="Back to top"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className="fixed bottom-6 right-6 z-50 flex size-11 items-center justify-center rounded-full border border-[#f0dede] bg-white text-[#f254a6] shadow-md transition hover:bg-[#fff0f5] active:scale-95"
         >

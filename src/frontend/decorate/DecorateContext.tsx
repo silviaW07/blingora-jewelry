@@ -8,7 +8,7 @@ import React, {
   useMemo,
   useState,
 } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import type { DecoratePatch, DecorateStore } from './types'
 import { DECORATE_QUERY } from './types'
@@ -83,8 +83,7 @@ export function useDecorateMode() {
 export function DecorateModeProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const isDecorateMode = searchParams.get(DECORATE_QUERY) === '1'
+  const [isDecorateMode, setIsDecorateMode] = useState(false)
 
   const [draft, setDraft] = useState<DecorateStore>({})
   const [customerService, setCustomerService] = useState<CustomerServiceConfig>(() =>
@@ -96,6 +95,11 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
   const [isSavingCustomerService, setIsSavingCustomerService] = useState(false)
   const customerServiceRef = React.useRef(customerService)
   customerServiceRef.current = customerService
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setIsDecorateMode(new URLSearchParams(window.location.search).get(DECORATE_QUERY) === '1')
+  }, [pathname])
 
   useEffect(() => {
     setDraft(readDecorateStore())
@@ -218,11 +222,16 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
   }, [])
 
   const clearDecorateQuery = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search)
     params.delete(DECORATE_QUERY)
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
-  }, [pathname, router, searchParams])
+    const next = qs ? `${pathname}?${qs}` : pathname
+    if (typeof window !== 'undefined') {
+      window.location.assign(next)
+      return
+    }
+    router.replace(next)
+  }, [pathname, router])
 
   const publishAndExit = useCallback(async () => {
     const normalized = normalizeCustomerServiceConfig(customerServiceRef.current)

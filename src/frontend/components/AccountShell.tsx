@@ -2,12 +2,13 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, Heart, MapPin, Package, Settings, UserCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
+import { hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
 import { useUserSession } from '@/tools/FrontendSession'
 import {
   AccountAddresses,
@@ -38,7 +39,6 @@ export function AccountShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const router = useRouter()
   const { t } = useTranslation()
   const session = useUserSession()
   const avatarChar = (session.username || session.email || 'A').trim().slice(0, 1).toUpperCase() || 'A'
@@ -72,10 +72,10 @@ export function AccountShell({
 
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back()
+      window.history.back()
       return
     }
-    router.push('/')
+    hardNavigate('/')
   }
 
   return (
@@ -111,7 +111,7 @@ export function AccountShell({
 
           <button
             type="button"
-            onClick={() => router.push(withSlash(AccountProfile.path))}
+            onClick={() => hardNavigate(withSlash(AccountProfile.path))}
             className="relative inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e8e2d8] bg-[#f6f2ea] text-[0.7rem] font-bold text-[#1f1a14] active:bg-[#efe9df]"
             aria-label={t('accountShell.profileSettings')}
             title={t('accountShell.settings')}
@@ -126,7 +126,7 @@ export function AccountShell({
         </div>
       </header>
 
-      <div className="storefront-container px-2.5 py-2 sm:px-3 sm:py-3 md:px-4 md:py-8">
+      <div className="account-shell-wrap px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-8">
         <div className="mb-6 hidden md:block">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8a8073]">
             {t('accountShell.sectionLabel')}
@@ -146,19 +146,17 @@ export function AccountShell({
           ) : null}
         </div>
 
-        <div className="mobile-account-card flex w-full max-w-5xl flex-col items-stretch overflow-hidden rounded-[14px] border border-[#f0dede] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.35)] md:mx-auto md:rounded-[28px] lg:flex-row">
+        <div className="mobile-account-card flex w-full max-w-none flex-col items-stretch overflow-visible rounded-[14px] border border-[#f0dede] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.35)] md:rounded-[28px] lg:flex-row">
           <aside className="w-full shrink-0 border-b border-[#f0dede] bg-white p-1 md:p-2.5 lg:w-auto lg:min-w-[140px] lg:border-b-0 lg:border-r lg:border-[#f0dede]">
             <nav className="flex flex-row gap-0.5 overflow-x-auto sm:gap-1 lg:flex-col lg:space-y-1 lg:overflow-visible">
               {navItems.map((item) => {
                 const active = isNavActive(pathname, item.path)
                 const Icon = item.icon
                 return (
-                  <button
+                  <a
                     key={item.path}
-                    type="button"
-                    onClick={() => {
-                      router.push(item.href)
-                    }}
+                    href={item.href}
+                    onClick={onHardNavClick(item.href)}
                     className={cn(
                       'inline-flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[0.75rem] font-medium transition sm:gap-2 sm:rounded-[12px] sm:px-3 sm:py-2 sm:text-[0.8125rem] md:rounded-[16px] md:px-3 md:py-2.5 md:text-sm',
                       active
@@ -169,12 +167,12 @@ export function AccountShell({
                   >
                     <Icon className="size-3.5 shrink-0 sm:size-4" />
                     <span>{item.label}</span>
-                  </button>
+                  </a>
                 )
               })}
             </nav>
           </aside>
-          <section className="mobile-account-body min-w-0 flex-1 overflow-x-auto bg-white p-2.5 sm:p-4 md:p-6">
+          <section className="mobile-account-body min-w-0 flex-1 overflow-x-auto overflow-y-visible bg-white p-2.5 sm:p-4 md:p-6">
             {children}
           </section>
         </div>

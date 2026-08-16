@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
+import { useTranslation } from 'react-i18next';
 import type { CustomerLoginState, CustomerLoginHandlers } from '@/frontend/hooks/useCustomerLogin';
 
 interface Props {
@@ -24,10 +25,11 @@ interface Props {
 }
 
 export const CustomerLoginView = ({ state, handlers }: Props) => {
+  const { t } = useTranslation()
   const trustItems = [
-    { icon: ShieldCheck, textKey: 'login_trust_0', defaultText: '账户加密登录' },
-    { icon: CreditCard, textKey: 'login_trust_1', defaultText: '安全交易流程' },
-    { icon: Globe, textKey: 'login_trust_2', defaultText: '跨境履约协同' },
+    { icon: ShieldCheck, textKey: 'login_trust_0', defaultText: t('auth.trustEncrypted') },
+    { icon: CreditCard, textKey: 'login_trust_1', defaultText: t('auth.trustSecure') },
+    { icon: Globe, textKey: 'login_trust_2', defaultText: t('auth.trustGlobal') },
   ];
 
   return (
@@ -58,11 +60,11 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     as="h2"
                     className="font-header text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl"
                   >
-                    欢迎回到 Blingorajewelry
+                    Welcome back to Blingorajewelry
                   </DecorateText>
                   {state.returnTo ? (
                     <DecorateText propKey="login_return_hint" as="p" className="font-body text-sm leading-6 text-[#64748B] sm:text-base">
-                      登录后将自动返回之前的购物或询盘页面，当前进度不会丢失。
+                      After you sign in, you will return to the page you were on. Your progress is saved.
                     </DecorateText>
                   ) : null}
                 </div>
@@ -74,7 +76,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                   <div className="ml-8">
                     <AlertTitle className="font-header text-base font-bold text-[#F8FAFC]">
                       <DecorateText propKey="login_error_title" as="span">
-                        登录未通过
+                        Sign-in failed
                       </DecorateText>
                     </AlertTitle>
                     <AlertDescription className="mt-1 font-body text-sm leading-6 text-[#F8FAFC]/90">
@@ -95,7 +97,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     id="sysuser_account"
                     data-auto="account"
                     type="text"
-                    placeholder="请输入 Email"
+                    placeholder="Enter your email"
                     autoComplete="username"
                     disabled={state.isSubmitting}
                     value={state.formData.sysuser_account}
@@ -107,7 +109,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                 <div className="space-y-2.5">
                   <Label htmlFor="sysuser_password" className="block font-body text-xs font-semibold uppercase tracking-[0.08em] text-[#0F172A]">
                     <DecorateText propKey="auth_login_password_label" as="span">
-                      登录密码
+                      Password
                     </DecorateText>
                   </Label>
                   <div className="relative">
@@ -115,7 +117,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                       id="sysuser_password"
                       data-auto="password"
                       type={state.showPassword ? 'text' : 'password'}
-                      placeholder="请输入密码"
+                      placeholder="Enter your password"
                       autoComplete="current-password"
                       disabled={state.isSubmitting}
                       value={state.formData.sysuser_password}
@@ -128,7 +130,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                       size="icon"
                       disabled={state.isSubmitting}
                       onClick={handlers.togglePasswordVisibility}
-                      title={state.showPassword ? '隐藏密码' : '显示密码'}
+                      title={state.showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[10px] text-[#64748B] transition-colors hover:bg-[#E2E8F0] hover:text-[#0F172A]"
                     >
                       {state.showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
@@ -147,7 +149,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     />
                     <Label htmlFor="remember_me" className="cursor-pointer font-body text-sm font-medium text-[#0F172A]">
                       <DecorateText propKey="auth_login_remember" as="span">
-                        记住账号
+                        Remember me
                       </DecorateText>
                     </Label>
                   </div>
@@ -159,7 +161,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     className="h-auto justify-start p-0 font-body text-sm font-medium text-[#0055FF] hover:text-[#0044CC]"
                   >
                     <DecorateText propKey="auth_login_forgot" as="span">
-                      忘记密码？
+                      Forgot password?
                     </DecorateText>
                   </Button>
                 </div>
@@ -174,8 +176,8 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     className="mt-2 font-body text-sm leading-6 text-[#475569]"
                   >
                     {state.returnTo
-                      ? '当前会话含返回路径，登录成功后将直接回到原浏览流程继续操作。'
-                      : '当前未检测到返回路径，登录成功后将进入首页继续浏览商品。'}
+                      ? 'You will return to your previous page after signing in.'
+                      : 'After signing in you will continue from the homepage.'}
                   </DecorateText>
                 </div>
 
@@ -187,11 +189,11 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                 >
                   {state.isSubmitting ? (
                     <DecorateText propKey="auth_login_submitting" as="span">
-                      正在验证采购账户...
+                      Signing in...
                     </DecorateText>
                   ) : (
                     <DecorateText propKey="login_submit_btn" as="span">
-                      登录并继续采购
+                      Log in
                     </DecorateText>
                   )}
                 </Button>
@@ -204,7 +206,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                       New buyer onboarding
                     </DecorateText>
                     <DecorateText propKey="login_onboarding_desc" as="p" className="mt-2 font-body text-sm leading-6 text-[#475569]">
-                      首次采购可先注册账户，保留当前回流路径并进入企业买家流程。
+                      New here? Create an account to save your cart and continue shopping.
                     </DecorateText>
                   </div>
                   <Button
@@ -215,7 +217,7 @@ export const CustomerLoginView = ({ state, handlers }: Props) => {
                     className="rounded-full border-[#CBD5E1] bg-white px-5 py-2 font-body text-sm font-semibold text-[#0F172A] transition-colors hover:border-[#0055FF] hover:text-[#0055FF]"
                   >
                     <DecorateText propKey="login_left_register_btn" as="span">
-                      去注册
+                      Register
                     </DecorateText>
                     <ArrowRight className="ml-2 size-4 shrink-0" />
                   </Button>

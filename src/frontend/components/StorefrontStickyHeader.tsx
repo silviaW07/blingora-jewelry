@@ -582,7 +582,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                                     : [...prev, category.category_id],
                                 )
                               }}
-                              aria-label={isMobileExpanded ? '收起下拉菜单' : '展开下拉菜单'}
+                              aria-label={isMobileExpanded ? 'Collapse menu' : 'Expand menu'}
                             >
                               <ChevronDown
                                 className={`size-4 transition-transform ${isMobileExpanded ? 'rotate-180' : ''}`}

@@ -1,7 +1,6 @@
 import '../src/index.css';
 import { Providers } from './providers';
 import { Toaster } from 'sonner';
-import { Suspense } from 'react';
 import { header, body, display } from './font';
 
 const siteTitle = process.env.NEXT_PUBLIC_SITE_TITLE ?? "外贸跨境电商独立站";
@@ -88,10 +87,7 @@ export default function RootLayout({
       <body className={`${body.className} antialiased`}>
         <Providers>
           <Toaster position="top-center" richColors offset="100px" />
-          {/* Null fallback avoids a blank stuck "Loading..." paint if streaming stalls */}
-          <Suspense fallback={null}>
-            {children}
-          </Suspense>
+          {children}
         </Providers>
       </body>
     </html>

@@ -169,6 +169,7 @@ const DesktopRecommendZoneProductCard = ({
   selectedSkuId,
   selectedOption,
 }: DesktopRecommendZoneProductCardProps) => {
+  const { t } = useTranslation()
   const isDraft = item.status === 'DRAFT'
   const [currentSkuId, setCurrentSkuId] = useState<string>(selectedSkuId)
 
@@ -289,7 +290,7 @@ const DesktopRecommendZoneProductCard = ({
             >
               <ShoppingCart className="mr-2 size-4" />
               <DecorateText propKey="home_add_to_cart_label" as="span">
-                加入购物车
+              {t('product.addToCart')}
               </DecorateText>
             </Button>
           )}
@@ -313,7 +314,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
     if (productItems.length === 0) {
       return (
         <div className="rounded-[28px] border border-dashed border-[#ddd6c8] bg-white px-6 py-10 text-center text-sm text-[#8a8073]">
-          当前商品专区暂无可展示内容
+          No products in this section yet
         </div>
       );
     }
@@ -345,7 +346,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
     if (categoryItems.length === 0) {
       return (
         <div className="rounded-[28px] border border-dashed border-[#ddd6c8] bg-white px-4 py-3 text-center text-sm text-[#8a8073]">
-          当前类目专区暂无可展示内容
+          No categories in this section yet
         </div>
       );
     }
@@ -388,7 +389,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
 
   return (
     <div className="rounded-[28px] border border-dashed border-[#ddd6c8] bg-white px-6 py-10 text-center text-sm text-[#8a8073]">
-      当前专区暂无可展示内容
+      Nothing to show in this section yet
     </div>
   );
 };
@@ -451,7 +452,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   // 前端登录态：优先用 session token，其次用 hook 汇总的 userSession.isLoggedIn
   const isCustomerLoggedIn = Boolean(sessionToken?.trim()) || Boolean(userSession?.isLoggedIn);
   const authEntryLabel = isCustomerLoggedIn
-    ? userSession?.username && userSession.username !== '我的账户'
+    ? userSession?.username && userSession.username !== 'My Account' && userSession.username !== '我的账户'
       ? t('nav.hiUser', { name: (userSession.username.trim().split(/\s+/)[0] || userSession.username) })
       : t('nav.accountCenter')
     : t('common.login');
@@ -774,7 +775,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                         event.preventDefault();
                         handlers.handleToggleTopNavCategory(category.category_id);
                       }}
-                      aria-label={isMobileExpanded ? '收起下拉菜单' : '展开下拉菜单'}
+                      aria-label={isMobileExpanded ? 'Collapse menu' : 'Expand menu'}
                     >
                       <ChevronDown className={`size-4 transition-transform ${isMobileExpanded ? 'rotate-180' : ''}`} />
                     </button>
@@ -1095,7 +1096,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                             type="button"
                             className="absolute left-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center bg-white/88 text-[#111111] transition hover:bg-white sm:left-4 sm:size-11"
                             onClick={() => handlers.handleBannerChange(activeBannerIndex - 1)}
-                            aria-label="上一张横幅"
+                            aria-label="Previous banner"
                           >
                             <ChevronLeft className="size-5" />
                           </button>
@@ -1103,7 +1104,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                             type="button"
                             className="absolute right-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center bg-white/88 text-[#111111] transition hover:bg-white sm:right-4 sm:size-11"
                             onClick={() => handlers.handleBannerChange(activeBannerIndex + 1)}
-                            aria-label="下一张横幅"
+                            aria-label="Next banner"
                           >
                             <ChevronRight className="size-5" />
                           </button>
@@ -1116,7 +1117,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                                   index === activeBannerIndex ? 'w-8 bg-white' : 'w-2.5 bg-white/35 hover:bg-white/60'
                                 }`}
                                 onClick={() => handlers.handleBannerChange(index)}
-                                aria-label={`切换到第 ${index + 1} 张横幅`}
+                                aria-label={`Go to banner ${index + 1}`}
                               />
                             ))}
                           </div>
@@ -1293,7 +1294,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
               {isLoadingRecommendZones ? (
                 <div className="flex items-center justify-center gap-2 border-b border-[#ececec] bg-transparent px-6 py-10 text-sm text-[#7a756c]">
                   <Loader2 className="size-4 animate-spin" />
-                  推荐专区加载中...
+                  Loading recommended sections...
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -1317,9 +1318,9 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   <div className="mx-auto flex size-14 items-center justify-center bg-[#f0ebe2] text-[#4a4137]">
                     <Package className="size-6" />
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold text-[#40372f]">当前暂无可展示专区</h3>
+                  <h3 className="mt-4 text-lg font-semibold text-[#40372f]">No sections to display yet</h3>
                   <p className="mt-2 text-sm text-[#8a8073]">
-                    后台启用并配置商品或类目专区后，这里会按后台顺序自动展示。
+                    Enabled product or category zones will appear here in the order set in admin.
                   </p>
                 </div>
               ) : null}

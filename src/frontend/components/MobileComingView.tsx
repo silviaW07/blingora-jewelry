@@ -1,22 +1,22 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
-import { loadHomeRecommendZonesCached } from '@/frontend/utils/homeRecommendZonesCache'
+import { fetchStorefrontBootstrap } from '@/frontend/utils/storefrontBootstrapClient'
 import { pickComingSoonRecommendZone } from '@/frontend/utils/recommendZoneDisplay'
 import {
   buildLastNDays,
   isDateKeyProductName,
   toDateKeyInTimeZone,
 } from '@/frontend/utils/dailyNewArrival'
-import { ProductDetail } from '@/frontend/route-params'
+import { hardNavigate, productHref } from '@/frontend/utils/hardNavigate'
 import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
 import { cn } from '@/lib/utils'
+import type { HomeRecommendZoneSection } from '@/frontend/actions/Home'
 
 type ComingProductCard = {
   itemId: string
@@ -38,20 +38,68 @@ const resolveComingDateKey = (rawName?: string | null, createdAtTimestamp?: numb
   return toDateKeyInTimeZone(new Date(), 'Asia/Shanghai')
 }
 
+function comingProductsFromZones(zones: HomeRecommendZoneSection[] | undefined | null): {
+  products: ComingProductCard[]
+  zoneTitle: string
+  mobileCols: 1 | 2
+} {
+  const zone = pickComingSoonRecommendZone(zones || [])
+  if (!zone) {
+    return { products: [], zoneTitle: 'coming soon', mobileCols: 2 }
+  }
+  const list = (zone.items || [])
+    .filter((item): item is HomeRecommendZoneSection['items'][number] => {
+      return Boolean(item && item.entityType === 'PRODUCT' && 'productId' in item && item.productId)
+    })
+    .map((item) => {
+      const product = item as HomeRecommendZoneSection['items'][number] & {
+        productId: string
+        rawProductName?: string
+        productName?: string
+        productSlug?: string | null
+        imageUrl?: string | null
+        status?: string | null
+        createdAtTimestamp?: number | null
+        itemId?: string
+      }
+      const rawName = String(product.rawProductName || product.productName || '')
+      const dateKey = resolveComingDateKey(rawName, product.createdAtTimestamp)
+      const displayName = isDateKeyProductName(rawName) ? '' : String(product.productName || '')
+      return {
+        itemId: String(product.itemId || product.productId),
+        productId: String(product.productId),
+        productName: displayName,
+        productSlug: product.productSlug || null,
+        imageUrl: product.imageUrl || null,
+        status: product.status || null,
+        dateKey,
+      } satisfies ComingProductCard
+    })
+  return {
+    products: list,
+    zoneTitle: zone.title || 'coming soon',
+    mobileCols: zone.mobileCols === 1 ? 1 : 2,
+  }
+}
+
 /**
  * 移动端 Coming：
  * - 商品仍来自网页端推荐专区「coming soon」（与后台挂载一致）
  * - 上方恢复日期 Tab；快速发图商品名=YYYY-MM-DD 归到对应日期
  */
-export default function MobileComingView() {
-  const router = useRouter()
+export default function MobileComingView({
+  initialZones,
+}: {
+  initialZones?: HomeRecommendZoneSection[]
+}) {
   const { t, i18n } = useTranslation()
   const dateChips = useMemo(() => buildLastNDays(10), [])
+  const seeded = useMemo(() => comingProductsFromZones(initialZones), [initialZones])
   const [selectedDateKey, setSelectedDateKey] = useState(dateChips[0]?.date_key || '')
-  const [products, setProducts] = useState<ComingProductCard[]>([])
-  const [zoneTitle, setZoneTitle] = useState('coming soon')
-  const [mobileCols, setMobileCols] = useState<1 | 2>(2)
-  const [loading, setLoading] = useState(true)
+  const [products, setProducts] = useState<ComingProductCard[]>(seeded.products)
+  const [zoneTitle, setZoneTitle] = useState(seeded.zoneTitle)
+  const [mobileCols, setMobileCols] = useState<1 | 2>(seeded.mobileCols)
+  const [loading, setLoading] = useState(seeded.products.length === 0)
 
   const lang = useMemo(
     () =>
@@ -61,64 +109,41 @@ export default function MobileComingView() {
     [i18n.language],
   )
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
+  const applyComingList = (list: ComingProductCard[], title: string, cols: 1 | 2) => {
+    setProducts(list)
+    setZoneTitle(title)
+    setMobileCols(cols)
+    const counts = new Map<string, number>()
+    for (const p of list) {
+      counts.set(p.dateKey, (counts.get(p.dateKey) || 0) + 1)
+    }
+    const todayKey = dateChips[0]?.date_key
+    const firstWithProducts =
+      (todayKey && counts.get(todayKey) ? todayKey : null) ||
+      dateChips.find((d) => (counts.get(d.date_key) || 0) > 0)?.date_key ||
+      todayKey ||
+      ''
+    if (firstWithProducts) setSelectedDateKey(firstWithProducts)
+  }
 
+  useEffect(() => {
+    if (seeded.products.length > 0) {
+      applyComingList(seeded.products, seeded.zoneTitle, seeded.mobileCols)
+      setLoading(false)
+    }
+
+    let cancelled = false
     const safety = window.setTimeout(() => {
       if (!cancelled) setLoading(false)
-    }, 8000)
+    }, 2500)
 
-    loadHomeRecommendZonesCached(lang)
-      .then((zones) => {
+    void fetchStorefrontBootstrap(lang)
+      .then((boot) => {
         if (cancelled) return
-        const zone = pickComingSoonRecommendZone(zones)
-        if (!zone) {
-          setProducts([])
-          setZoneTitle('coming soon')
-          return
-        }
-        setZoneTitle(zone.title || 'coming soon')
-        setMobileCols(zone.mobileCols === 1 ? 1 : 2)
-        // Coming 页展示专区全部挂载商品（不按首页列×行截断），再按日期 Tab 筛选
-        const list = (zone.items || [])
-          .filter((item): item is any => {
-            return Boolean(item && item.entityType === 'PRODUCT' && item.productId)
-          })
-          .map((item) => {
-            const rawName = String(item.rawProductName || item.productName || '')
-            const dateKey = resolveComingDateKey(rawName, item.createdAtTimestamp)
-            const displayName = isDateKeyProductName(rawName)
-              ? ''
-              : String(item.productName || '')
-            return {
-              itemId: String(item.itemId || item.productId),
-              productId: String(item.productId),
-              productName: displayName,
-              productSlug: item.productSlug || null,
-              imageUrl: item.imageUrl || null,
-              status: item.status || null,
-              dateKey,
-            } satisfies ComingProductCard
-          })
-        setProducts(list)
-
-        // Prefer today if it has products; else newest date that has products; else today chip
-        const counts = new Map<string, number>()
-        for (const p of list) {
-          counts.set(p.dateKey, (counts.get(p.dateKey) || 0) + 1)
-        }
-        const todayKey = dateChips[0]?.date_key
-        const firstWithProducts =
-          (todayKey && counts.get(todayKey) ? todayKey : null) ||
-          dateChips.find((d) => (counts.get(d.date_key) || 0) > 0)?.date_key ||
-          todayKey ||
-          ''
-        if (firstWithProducts) setSelectedDateKey(firstWithProducts)
+        const next = comingProductsFromZones(boot?.recommendZones)
+        applyComingList(next.products, next.zoneTitle, next.mobileCols)
       })
-      .catch(() => {
-        if (!cancelled) setProducts([])
-      })
+      .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setLoading(false)
         window.clearTimeout(safety)
@@ -128,7 +153,8 @@ export default function MobileComingView() {
       cancelled = true
       window.clearTimeout(safety)
     }
-  }, [lang, dateChips])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dateChips is stable
+  }, [lang])
 
   const visibleProducts = useMemo(
     () => products.filter((item) => item.dateKey === selectedDateKey),
@@ -145,11 +171,7 @@ export default function MobileComingView() {
 
   const openProduct = (item: ComingProductCard) => {
     if (!item.productId) return
-    if (item.productSlug) {
-      ProductDetail.navigateToBySlug(router, { slug: item.productSlug })
-      return
-    }
-    ProductDetail.navigateToById(router, { productId: item.productId })
+    hardNavigate(productHref(item.productId))
   }
 
   return (

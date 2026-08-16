@@ -33,6 +33,7 @@
     "pieces": "piezas",
     "options": "opciones",
     "selectAll": "Seleccionar todo",
+    "selectedCount": "Seleccionados {{selected}} / {{total}}",
     "reviews": "reseñas",
     "bestSeller": "Más vendido",
     "itemNo": "N.º de artículo",
@@ -332,6 +333,16 @@
     "moqProgress": "Seleccionado: {{selected}} / {{moq}} pcs",
     "moqNeedMore": "Faltan {{count}}",
     "moqFloorHint": "La cantidad no puede ser inferior al MOQ {{qty}}",
+    "openFailed": "No se pudo abrir este producto",
+    "notFound": "Producto no encontrado",
+    "backHome": "Volver al inicio",
+    "decreaseQty": "Reducir cantidad",
+    "increaseQty": "Aumentar cantidad",
+    "prevImage": "Imagen anterior",
+    "nextImage": "Imagen siguiente",
+    "statusDraft": "Borrador",
+    "statusActive": "Activo",
+    "statusInactive": "Inactivo",
     "description": "Descripción",
     "defaultSpec": "Predeterminado",
     "sizeOptions": "Tallas",
@@ -412,7 +423,10 @@
     "loginRequired": "Introduce correo/teléfono y contraseña",
     "loginSuccess": "Sesión iniciada correctamente",
     "loginFailed": "Error al iniciar sesión. Revisa tus datos",
-    "registerFailed": "Error en el registro. Inténtalo más tarde"
+    "registerFailed": "Error en el registro. Inténtalo más tarde",
+    "trustEncrypted": "Inicio de sesión cifrado",
+    "trustSecure": "Pago seguro",
+    "trustGlobal": "Envío internacional"
   },
   "checkout": {
     "smartCheckout": "Checkout inteligente",
@@ -436,7 +450,11 @@
     "clickEditAddress": "Haz clic para editar la dirección",
     "addressConfirmed": "Dirección confirmada. Cargando métodos de envío",
     "addressSavedDefault": "Dirección guardada y establecida como predeterminada",
-    "addressSaveFailed": "No se pudo guardar la dirección; puedes continuar con el pago"
+    "addressSaveFailed": "No se pudo guardar la dirección; puedes continuar con el pago",
+    "selectShipping": "Selecciona un método de envío",
+    "noOrderableItems": "No hay artículos disponibles para pedir",
+    "placeOrderFailed": "No se pudo realizar el pedido. Inténtalo de nuevo.",
+    "selectItem": "Seleccionar {{name}}"
   },
   "accountAddresses": {
     "title": "Direcciones de envío",

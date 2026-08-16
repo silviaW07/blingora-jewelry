@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Loader2, Package } from 'lucide-react'
@@ -25,7 +24,12 @@ import type {
   CustomerOrderStatus,
   ReorderSkippedLine,
 } from '../actions/AccountCenter'
-import { AccountOrderDetail, AccountOrderPay, Cart } from '@/frontend/route-params'
+import {
+  hardNavigate,
+  onHardNavClick,
+  orderDetailHref,
+  orderPayHref,
+} from '@/frontend/utils/hardNavigate'
 
 const STATUS_CLASS: Record<CustomerOrderStatus, string> = {
   PENDING_PAYMENT: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -58,7 +62,6 @@ function formatOrderDateTime(iso: string, locale: string) {
 }
 
 export default function AccountOrdersView() {
-  const router = useRouter()
   const { t, i18n } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<CustomerOrderSummary[]>([])
@@ -107,7 +110,7 @@ export default function AccountOrdersView() {
           duration: 8000,
         })
       }
-      if (result.addedQuantity > 0) Cart.navigateTo(router)
+      if (result.addedQuantity > 0) hardNavigate('/cart/')
     } catch (error) {
       toast.error((error as Error).message || t('accountOrders.reorderFailed'))
     } finally {
@@ -137,7 +140,7 @@ export default function AccountOrdersView() {
         </div>
       ) : (
         <div className="w-full overflow-x-auto">
-          <Table className="w-full min-w-[1080px] border-y border-[#ebe6dc]">
+          <Table className="w-full border-y border-[#ebe6dc]">
             <TableHeader className="bg-[#fbfaf7]">
               <TableRow className="hover:bg-[#fbfaf7]">
                 <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.orderNumber')}</TableHead>
@@ -148,9 +151,8 @@ export default function AccountOrdersView() {
                 <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.shippingMethod')}</TableHead>
                 <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.weight')}</TableHead>
                 <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.orderNote')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.operations')}</TableHead>
-                <TableHead className={`${HEAD} min-w-[120px] whitespace-nowrap text-right`}>
-                  {t('accountOrders.payNow')}
+                <TableHead className={`${HEAD} account-orders-actions whitespace-nowrap bg-[#fbfaf7] text-right`}>
+                  {t('accountOrders.operations')}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -159,6 +161,8 @@ export default function AccountOrdersView() {
                 const { dateLine, timeLine } = formatOrderDateTime(order.createdAt, locale)
                 const orderNote = String(order.internalNote || '').trim()
                 const canPay = order.status === 'PENDING_PAYMENT'
+                const detailHref = orderDetailHref(order.orderId)
+                const payHref = orderPayHref(order.orderId)
                 const weightText =
                   order.totalWeightGrams > 0
                     ? t('accountOrders.weightValue', {
@@ -168,8 +172,14 @@ export default function AccountOrdersView() {
 
                 return (
                   <TableRow key={order.orderId} className="hover:bg-[#fffafa]">
-                    <TableCell className={`${CELL} whitespace-nowrap font-semibold text-[#1f1a14]`}>
-                      {order.orderNo}
+                    <TableCell className={`${CELL} whitespace-nowrap`}>
+                      <a
+                        href={detailHref}
+                        onClick={onHardNavClick(detailHref)}
+                        className="font-semibold text-[#0055FF] underline-offset-4 hover:underline"
+                      >
+                        {order.orderNo}
+                      </a>
                     </TableCell>
                     <TableCell className={`${CELL} whitespace-nowrap text-[#6f6558]`}>
                       <div className="leading-tight">
@@ -200,21 +210,21 @@ export default function AccountOrdersView() {
                     <TableCell className={`${CELL} max-w-[180px] whitespace-normal break-words text-[#6f6558]`}>
                       {orderNote || '—'}
                     </TableCell>
-                    <TableCell className={CELL}>
-                      <div className="flex flex-col items-center gap-2">
-                        <button
-                          type="button"
-                          className="text-sm font-medium text-[#2f2a24] underline-offset-4 hover:text-[#f254a6] hover:underline"
-                          onClick={() =>
-                            AccountOrderDetail.navigateTo(router, { orderId: order.orderId })
-                          }
-                        >
-                          {t('accountOrders.viewOrder')}
-                        </button>
+                    <TableCell className={`${CELL} account-orders-actions min-w-[168px] bg-white text-right`}>
+                      <div className="flex flex-wrap items-center justify-end gap-2 pr-1">
+                        {canPay ? (
+                          <a
+                            href={payHref}
+                            onClick={onHardNavClick(payHref)}
+                            className="inline-flex h-8 shrink-0 items-center rounded-full bg-[#f254a6] px-3 text-sm font-medium text-white hover:bg-[#df3f91]"
+                          >
+                            {t('accountOrders.payNow')}
+                          </a>
+                        ) : null}
                         <Button
                           type="button"
                           size="sm"
-                          className="min-w-24 rounded-full bg-[#f254a6] text-white hover:bg-[#df3f91]"
+                          className="min-w-24 shrink-0 rounded-full bg-[#f254a6] text-white hover:bg-[#df3f91]"
                           disabled={reorderingId !== null}
                           onClick={() => void handleReorder(order)}
                         >
@@ -223,24 +233,6 @@ export default function AccountOrdersView() {
                           )}
                           {t('accountOrders.reorder')}
                         </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className={`${CELL} min-w-[120px] text-right`}>
-                      <div className="flex justify-end pr-1">
-                        {canPay ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="shrink-0 rounded-full bg-[#f254a6] px-3 text-white hover:bg-[#df3f91]"
-                            onClick={() =>
-                              AccountOrderPay.navigateTo(router, { orderId: order.orderId })
-                            }
-                          >
-                            {t('accountOrders.payNow')}
-                          </Button>
-                        ) : (
-                          <span className="inline-block min-w-[72px] text-sm text-[#c4bdb2]">—</span>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>

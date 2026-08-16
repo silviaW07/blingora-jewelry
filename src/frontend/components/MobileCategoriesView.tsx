@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
   type CategoryItem,
@@ -304,6 +304,7 @@ export default function MobileCategoriesView({
                   key={cat.category_id}
                   type="button"
                   className={cn('mobile-categories-rail__item', selected && 'is-active')}
+                  onPointerUp={() => setActiveId(cat.category_id)}
                   onClick={() => setActiveId(cat.category_id)}
                 >
                   {translateCatalogLabel(t, cat.category_name)}
@@ -336,12 +337,8 @@ export default function MobileCategoriesView({
               {circleEntries.map((entry) => (
                 <a
                   key={entry.key}
-                  href={entry.href || '#'}
+                  href={entry.href || categoryHref(null, active?.category_id)}
                   className="mobile-categories-grid__item"
-                  onClick={entry.href ? onHardNavClick(entry.href) : (event) => {
-                    event.preventDefault()
-                    entry.onClick()
-                  }}
                 >
                   <span className="mobile-categories-grid__icon">
                     {entry.imageUrl ? (
@@ -384,7 +381,6 @@ export default function MobileCategoriesView({
                   key={brand.id}
                   href={categoryHref(brand.slug, brand.id)}
                   className="mobile-categories-brands__item"
-                  onClick={onHardNavClick(categoryHref(brand.slug, brand.id))}
                 >
                   <span className="mobile-categories-brands__icon">
                     {brand.imageUrl ? (

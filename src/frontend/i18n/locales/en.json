@@ -33,6 +33,7 @@
     "pieces": "pieces",
     "options": "options",
     "selectAll": "Select all",
+    "selectedCount": "Selected {{selected}} / {{total}}",
     "reviews": "reviews",
     "bestSeller": "Best Seller",
     "itemNo": "Item No.",
@@ -337,6 +338,16 @@
     "moqProgress": "Selected: {{selected}} / {{moq}} pcs",
     "moqNeedMore": "Need {{count}} more",
     "moqFloorHint": "Quantity cannot be lower than MOQ {{qty}}",
+    "openFailed": "Could not open this product",
+    "notFound": "Product not found",
+    "backHome": "Back to home",
+    "decreaseQty": "Decrease quantity",
+    "increaseQty": "Increase quantity",
+    "prevImage": "Previous image",
+    "nextImage": "Next image",
+    "statusDraft": "Draft",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
     "description": "Description",
     "defaultSpec": "Default",
     "sizeOptions": "Size options",
@@ -417,7 +428,10 @@
     "loginRequired": "Please enter email/phone and password",
     "loginSuccess": "Signed in successfully",
     "loginFailed": "Sign-in failed. Please check your details",
-    "registerFailed": "Registration failed. Please try again later"
+    "registerFailed": "Registration failed. Please try again later",
+    "trustEncrypted": "Encrypted sign-in",
+    "trustSecure": "Secure checkout",
+    "trustGlobal": "Worldwide fulfillment"
   },
   "checkout": {
     "smartCheckout": "Smart Checkout",
@@ -441,7 +455,11 @@
     "clickEditAddress": "Click to edit shipping address",
     "addressConfirmed": "Address confirmed. Loading shipping methods",
     "addressSavedDefault": "Address saved and set as default",
-    "addressSaveFailed": "Could not save the address; checkout can continue"
+    "addressSaveFailed": "Could not save the address; checkout can continue",
+    "selectShipping": "Please select a shipping method",
+    "noOrderableItems": "No items available to order",
+    "placeOrderFailed": "Could not place the order. Please try again.",
+    "selectItem": "Select {{name}}"
   },
   "accountAddresses": {
     "title": "Shipping addresses",

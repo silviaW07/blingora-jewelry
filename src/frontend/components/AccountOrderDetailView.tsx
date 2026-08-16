@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -14,10 +14,10 @@ import {
   reorderCustomerOrder,
 } from '@/frontend/actions/AccountCenter'
 import type { CustomerOrderItem, CustomerOrderSummary } from '../actions/AccountCenter'
-import { AccountOrderDetail, AccountOrders, Cart, ProductDetail } from '@/frontend/route-params'
+import { AccountOrderDetail } from '@/frontend/route-params'
+import { hardNavigate, onHardNavClick, orderPayHref, productHref } from '@/frontend/utils/hardNavigate'
 
 export default function AccountOrderDetailView() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { t, i18n } = useTranslation()
   const { orderId } = AccountOrderDetail.getParams(searchParams)
@@ -67,7 +67,7 @@ export default function AccountOrderDetailView() {
           duration: 8000,
         })
       }
-      if (result.addedQuantity > 0) Cart.navigateTo(router)
+      if (result.addedQuantity > 0) hardNavigate('/cart/')
     } catch (error) {
       toast.error((error as Error).message || t('accountOrders.reorderFailed'))
     } finally {
@@ -83,14 +83,14 @@ export default function AccountOrderDetailView() {
 
   return (
     <AccountShell title={t('accountOrders.detailTitle')} description={t('accountOrders.detailDescription')}>
-      <button
-        type="button"
+      <a
+        href="/account/orders/"
+        onClick={onHardNavClick('/account/orders/')}
         className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-[#2f2a24] hover:text-[#f254a6]"
-        onClick={() => AccountOrders.navigateTo(router)}
       >
         <ArrowLeft className="size-4" />
         {t('accountOrders.backToOrders')}
-      </button>
+      </a>
 
       {loading ? (
         <div className="flex min-h-[240px] items-center justify-center gap-2 text-sm text-[#7a756c]">
@@ -110,8 +110,17 @@ export default function AccountOrderDetailView() {
                 {new Date(order.createdAt).toLocaleString(locale)}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Badge variant="outline">{t(`accountOrders.statuses.${order.status}`)}</Badge>
+              {order.status === 'PENDING_PAYMENT' ? (
+                <a
+                  href={orderPayHref(order.orderId)}
+                  onClick={onHardNavClick(orderPayHref(order.orderId))}
+                  className="inline-flex h-10 items-center rounded-full bg-[#f254a6] px-4 text-sm font-medium text-white hover:bg-[#df3f91]"
+                >
+                  {t('accountOrders.payNow')}
+                </a>
+              ) : null}
               <Button
                 type="button"
                 className="rounded-full bg-[#f254a6] text-white hover:bg-[#df3f91]"
@@ -147,7 +156,7 @@ export default function AccountOrderDetailView() {
                   key={item.itemId}
                   item={item}
                   currencyCode={order.currencyCode}
-                  onOpenProduct={() => ProductDetail.navigateToById(router, { productId: item.productId })}
+                  onOpenProduct={() => hardNavigate(productHref(item.productId))}
                 />
               ))}
             </div>

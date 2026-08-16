@@ -15,6 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
+import { useTranslation } from 'react-i18next';
 import type { CustomerRegisterState, CustomerRegisterHandlers } from '@/frontend/hooks/useCustomerRegister';
 
 interface Props {
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export const CustomerRegisterView = ({ state, handlers }: Props) => {
+  const { t } = useTranslation();
   const { form, showPassword, globalError, isSubmitting, isSuccess } = state;
   const { handleFormFieldChange, handleTogglePassword, handleSubmit, handleGoLogin } = handlers;
 
@@ -48,22 +50,22 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                 as="h2"
                 className="font-display text-3xl font-extrabold tracking-tighter text-[#0F172A] md:text-4xl"
               >
-                账户创建成功
+                Account created
               </DecorateText>
               <DecorateText propKey="register_success_desc" as="p" className="mt-4 font-body text-base leading-relaxed text-[#64748B] md:px-6">
-                现在登录即可进入采购站，继续管理购物车、补充收货信息并推进后续下单流程。
+                Sign in to manage your cart, add a shipping address, and place orders.
               </DecorateText>
               <Button
                 onClick={handleGoLogin}
                 className="mt-8 h-14 w-full rounded-full bg-[#0055FF] font-body text-lg font-bold text-[#F8FAFC] transition-all duration-200 hover:bg-[#0044CC] hover:shadow-glow active:scale-[0.98] outline-none"
               >
                 <DecorateText propKey="register_success_btn" as="span" className="truncate">
-                  立即前往登录
+                  Go to sign in
                 </DecorateText>
                 <ArrowRight className="ml-2 size-5 shrink-0" />
               </Button>
               <DecorateText propKey="register_success_footer" as="p" className="mt-5 font-body text-sm text-[#64748B]">
-                登录后可继续此前采购路径，无需重新建立购物上下文。
+                You can continue from where you left off after signing in.
               </DecorateText>
             </div>
           ) : (
@@ -74,15 +76,15 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                     Create sourcing account
                   </DecorateText>
                   <DecorateText propKey="register_form_title" as="h2" className="font-display text-3xl font-extrabold tracking-tighter text-[#0F172A] md:text-4xl">
-                    注册采购账户
+                    Create your account
                   </DecorateText>
                   <DecorateText propKey="register_form_intro" as="p" className="font-body text-sm leading-relaxed text-[#64748B] md:text-[15px]">
-                    仅需填写邮箱、WhatsApp 与密码即可完成账户创建。
+                    Just email, WhatsApp, and a password to create your account.
                   </DecorateText>
                 </div>
                 <div className="rounded-[16px] border border-[#DBE4F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#475569] shadow-card-sm">
                   <DecorateText propKey="register_has_account" as="span" className="font-body">
-                    已有账户？
+                    Already have an account?
                   </DecorateText>
                   <button
                     onClick={handleGoLogin}
@@ -90,7 +92,7 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                     className="ml-2 font-semibold text-[#0055FF] hover:underline disabled:opacity-50"
                   >
                     <DecorateText propKey="register_go_login" as="span">
-                      立即登录
+                      Sign in
                     </DecorateText>
                   </button>
                 </div>
@@ -107,53 +109,53 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                   <div className="grid gap-5 md:grid-cols-2">
                     <div className="flex flex-col space-y-2 md:col-span-2">
                       <DecorateText propKey="register_name_label" as="label" className="font-body text-xs font-semibold uppercase tracking-[0.05em] text-[#0F172A]">
-                        姓名
+                        Name
                       </DecorateText>
                       <Input
                         value={form.sysuser_name}
                         onChange={(e) => handleFormFieldChange('sysuser_name', e.target.value)}
                         className="h-12 flex-1 rounded-[10px] border-[#CBD5E1] bg-[#F8FAFC] px-4 font-body text-base text-[#0F172A] shadow-sm placeholder:text-[#64748B] transition-all focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#0055FF]"
-                        placeholder="请输入您的姓名或常用称呼"
+                        placeholder="Enter your name"
                       />
                       <DecorateText propKey="register_name_hint" as="p" className="font-body text-xs leading-relaxed text-[#64748B]">
-                        该姓名将作为前台账户优先展示名称显示在头像下方。
+                        This name appears under your avatar in the account area.
                       </DecorateText>
                     </div>
 
                     <div className="flex flex-col space-y-2 md:col-span-2">
                       <DecorateText propKey="register_email_label" as="label" className="font-body text-xs font-semibold uppercase tracking-[0.05em] text-[#0F172A]">
-                        业务联络邮箱
+                        Email
                       </DecorateText>
                       <Input
                         type="text"
                         value={form.sysuser_email}
                         onChange={(e) => handleFormFieldChange('sysuser_email', e.target.value)}
                         className="h-12 flex-1 rounded-[10px] border-[#CBD5E1] bg-[#F8FAFC] px-4 font-body text-base text-[#0F172A] shadow-sm placeholder:text-[#64748B] transition-all focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#0055FF]"
-                        placeholder="请输入常用采购沟通邮箱"
+                        placeholder="Enter your email"
                       />
                       <DecorateText propKey="register_email_hint" as="p" className="font-body text-xs leading-relaxed text-[#64748B]">
-                        用于接收采购通知、订单动态与账户提醒。
+                        Used for order updates and account notices.
                       </DecorateText>
                     </div>
 
                     <div className="flex flex-col space-y-2 md:col-span-2">
                       <DecorateText propKey="register_phone_label" as="label" className="font-body text-xs font-semibold uppercase tracking-[0.05em] text-[#0F172A]">
-                        WhatsApp 号码
+                        WhatsApp number
                       </DecorateText>
                       <Input
                         value={form.sysuser_phone}
                         onChange={(e) => handleFormFieldChange('sysuser_phone', e.target.value)}
                         className="h-12 flex-1 rounded-[10px] border-[#CBD5E1] bg-[#F8FAFC] px-4 font-body text-base text-[#0F172A] shadow-sm placeholder:text-[#64748B] transition-all focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#0055FF]"
-                        placeholder="请输入常用 WhatsApp 联系方式"
+                        placeholder="Enter your WhatsApp number"
                       />
                       <DecorateText propKey="register_phone_hint" as="p" className="font-body text-xs leading-relaxed text-[#64748B]">
-                        用于后续订单沟通、发货确认与售后协作联系。
+                        Used for order updates and shipping coordination.
                       </DecorateText>
                     </div>
 
                     <div className="flex flex-col space-y-2 md:col-span-2">
                       <DecorateText propKey="register_password_label" as="label" className="font-body text-xs font-semibold uppercase tracking-[0.05em] text-[#0F172A]">
-                        安全访问密码
+                        Password
                       </DecorateText>
                       <div className="flex items-center gap-3">
                         <Input
@@ -161,7 +163,7 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                           value={form.sysuser_password}
                           onChange={(e) => handleFormFieldChange('sysuser_password', e.target.value)}
                           className="h-12 flex-1 rounded-[10px] border-[#CBD5E1] bg-[#F8FAFC] px-4 font-body text-base text-[#0F172A] shadow-sm placeholder:text-[#64748B] transition-all focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-[#0055FF]"
-                          placeholder="设置采购账户登录密码"
+                          placeholder="Create a password"
                         />
                         <button
                           type="button"
@@ -185,10 +187,10 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
 
                   <div className="rounded-[18px] border border-[#DBE4F0] bg-[#F8FAFC] p-4">
                     <DecorateText propKey="register_after_title" as="p" className="font-body text-xs font-semibold uppercase tracking-[0.14em] text-[#64748B]">
-                      注册后承接说明
+                      What happens next
                     </DecorateText>
                     <DecorateText propKey="register_after_desc" as="p" className="mt-2 font-body text-sm leading-relaxed text-[#475569]">
-                      注册完成后可直接登录，并继续后续商品浏览与购物流程。
+                      After registering you can sign in and continue browsing and checkout.
                     </DecorateText>
                   </div>
 
@@ -200,13 +202,13 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                     >
                       {isSubmitting && <Loader2 className="mr-3 size-5 shrink-0 animate-spin" />}
                       <DecorateText propKey="register_submit_btn" as="span" className="truncate">
-                        {isSubmitting ? '正在创建采购账户...' : '创建账户'}
+                        {isSubmitting ? t('auth.registering') : t('auth.createAccount')}
                       </DecorateText>
                     </Button>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="font-body text-sm text-[#64748B]">
                         <DecorateText propKey="register_has_account_footer" as="span">
-                          已有采购账户？
+                          Already have an account?
                         </DecorateText>
                         <button
                           onClick={handleGoLogin}
@@ -214,7 +216,7 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                           className="ml-2 font-semibold text-[#0055FF] hover:underline disabled:opacity-50"
                         >
                           <DecorateText propKey="register_go_login_footer" as="span">
-                            前往登录
+                            Sign in
                           </DecorateText>
                         </button>
                       </p>
@@ -222,14 +224,14 @@ export const CustomerRegisterView = ({ state, handlers }: Props) => {
                         <div className="flex items-center gap-2">
                           <Lock className="size-[16px]" />
                           <DecorateText propKey="register_ssl" as="span" className="font-body text-xs font-semibold uppercase tracking-[0.05em]">
-                            SSL 加密
+                            SSL encrypted
                           </DecorateText>
                         </div>
                         <div className="h-[14px] w-px bg-[#CBD5E1]" />
                         <div className="flex items-center gap-2">
                           <ShieldCheck className="size-[16px]" />
                           <DecorateText propKey="register_privacy" as="span" className="font-body text-xs font-semibold uppercase tracking-[0.05em]">
-                            隐私合规
+                            Privacy protected
                           </DecorateText>
                         </div>
                       </div>

@@ -217,7 +217,7 @@ export function WhatsAppFloatButton() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Contact us on WhatsApp"
-      title={isFloatDragMode ? '拖拽以调整位置' : 'WhatsApp'}
+      title={isFloatDragMode ? 'Drag to reposition' : 'WhatsApp'}
       className={`whatsapp-float-btn whatsapp-float-root fixed flex items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_28px_-10px_rgba(37,211,102,0.75)] transition select-none touch-none ${
         isFloatDragMode
           ? 'z-[120] cursor-grab ring-4 ring-[#2563EB]/70 ring-offset-2 active:cursor-grabbing hover:scale-100'
@@ -238,7 +238,7 @@ export function WhatsAppFloatButton() {
       <WhatsAppGlyph size={size} />
       {isFloatDragMode ? (
         <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D4ED8] px-2 py-0.5 text-[10px] font-semibold text-white shadow">
-          拖动定位中
+          Repositioning
         </span>
       ) : null}
     </a>

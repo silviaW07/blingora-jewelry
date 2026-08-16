@@ -103,15 +103,15 @@ export const ProductCategoryView = ({
                   </div>
                 </button>
 
-                <button type="button" className="absolute left-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-[#111111] shadow-[0_12px_30px_-20px_rgba(0,0,0,0.45)] transition hover:bg-white sm:left-4 sm:size-11" onClick={() => handlers.handleBannerChange(activeBannerIndex - 1)} aria-label="上一张横幅" data-api-unique-id='productcategoryview-r54014f18580d9e9e-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                <button type="button" className="absolute left-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-[#111111] shadow-[0_12px_30px_-20px_rgba(0,0,0,0.45)] transition hover:bg-white sm:left-4 sm:size-11" onClick={() => handlers.handleBannerChange(activeBannerIndex - 1)} aria-label="Previous banner" data-api-unique-id='productcategoryview-r54014f18580d9e9e-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                   <ChevronLeft className="size-5" data-api-unique-id='productcategoryview-r671215b03c0e2786-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
                 </button>
-                <button type="button" className="absolute right-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-[#111111] shadow-[0_12px_30px_-20px_rgba(0,0,0,0.45)] transition hover:bg-white sm:right-4 sm:size-11" onClick={() => handlers.handleBannerChange(activeBannerIndex + 1)} aria-label="下一张横幅" data-api-unique-id='productcategoryview-r91b5d7ac78d33ec2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                <button type="button" className="absolute right-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-[#111111] shadow-[0_12px_30px_-20px_rgba(0,0,0,0.45)] transition hover:bg-white sm:right-4 sm:size-11" onClick={() => handlers.handleBannerChange(activeBannerIndex + 1)} aria-label="Next banner" data-api-unique-id='productcategoryview-r91b5d7ac78d33ec2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                   <ChevronRightIcon className="size-5" data-api-unique-id='productcategoryview-ra16ed3630867bbde-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />
                 </button>
 
                 <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2" data-api-unique-id='productcategoryview-rf853f0b93917954f-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                  {posters.map((banner, index) => <button key={banner.poster_id} type="button" className={`h-2.5 rounded-full transition-all ${index === activeBannerIndex ? 'w-8 bg-white' : 'w-2.5 bg-white/35 hover:bg-white/60'}`} onClick={() => handlers.handleBannerChange(index)} aria-label={`切换到第 ${index + 1} 张横幅`} data-api-unique-id='productcategoryview-ra28ec7f140a8a8b7-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />)}
+                  {posters.map((banner, index) => <button key={banner.poster_id} type="button" className={`h-2.5 rounded-full transition-all ${index === activeBannerIndex ? 'w-8 bg-white' : 'w-2.5 bg-white/35 hover:bg-white/60'}`} onClick={() => handlers.handleBannerChange(index)} aria-label={`Go to banner ${index + 1}`} data-api-unique-id='productcategoryview-ra28ec7f140a8a8b7-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />)}
                 </div>
               </div>
           </div>
@@ -129,15 +129,15 @@ export const ProductCategoryView = ({
                     <div data-api-unique-id='productcategoryview-rcb29103897389b8d-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8477]" data-api-unique-id='productcategoryview-r77d4cca2a4ad9673-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>Floor {index + 1}</p>
                       <h2 className="mt-1 text-[26px] font-semibold tracking-[0.12em] text-[#111111]" data-api-unique-id='productcategoryview-rbff8c23634d2e45a-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`recommendationFloors-${index}-group_name`} data-api-map-var-name='floor'>{floor.group_name}</h2>
-                      <p className="mt-1 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-raf84ac0e74ca05c7-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>点击楼层标题可聚合展示该分组绑定商品，楼层内关键词入口仍可继续进入原有分类筛选链路。</p>
+                      <p className="mt-1 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-raf84ac0e74ca05c7-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>Click a floor title to see products in this group. Keywords still open the usual category filters.</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2" data-api-unique-id='productcategoryview-r400196e86aab0698-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
                     <div className="rounded-full border border-[#e6e0d5] bg-[#faf8f3] px-4 py-2 text-sm font-medium text-[#5f5a52]" data-api-unique-id='productcategoryview-r623db2de2905aa3b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' data-api-bind-info={`recommendationFloors-${index}-keywords.length`} data-api-map-var-name='floor'>
-                      {floor.keywords.length} 个关键词
+                      {floor.keywords.length} keywords
                     </div>
                     <Button type="button" variant="outline" className={`rounded-full border-[#d8d4ca] bg-white px-4 py-2 text-sm font-medium ${isFloorActive ? 'border-[#111111] bg-[#111111] text-white hover:bg-[#111111]' : 'text-[#111111] hover:bg-[#f3f1eb]'}`} onClick={() => handlers.handleSelectRecommendationGroup(floor.group_id)} data-api-unique-id='productcategoryview-r2d4422e01806f1fc-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
-                      {isFloorActive ? '查看全部结果中' : '查看本组商品'}
+                      {isFloorActive ? 'Viewing all results' : 'View this group'}
                     </Button>
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export const ProductCategoryView = ({
                   {floor.keywords.map((item) => <button key={item.keyword_id} type="button" className="group flex min-h-[88px] flex-col items-start justify-between rounded-[28px] border border-[#ece7dc] bg-[#faf8f3] px-5 py-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#111111] hover:bg-white" onClick={() => handlers.handleSelectKeyword(item)} data-api-unique-id='productcategoryview-r372953bfdff54fba-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
                       <span className="text-base font-semibold text-[#111111] transition-colors group-hover:text-black" data-api-unique-id='productcategoryview-re2ac97899345ac53-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>{renderKeywordLabel(item)}</span>
                       <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-[0.14em] text-[#7a756c] group-hover:text-[#111111]" data-api-unique-id='productcategoryview-r6e89f0b3cb9ed46c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1'>
-                        查看分类
+                        View category
                         <ChevronRight className="size-3.5" data-api-unique-id='productcategoryview-r5116f35fa66ecde1-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' data-api-in-loop='1' />
                       </span>
                     </button>)}

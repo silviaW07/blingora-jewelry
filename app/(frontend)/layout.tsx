@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense } from 'react'
+import React from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Footer from '@/components/layout/frontend/Footer'
 import TopPromotionBanner from '@/components/layout/frontend/TopPromotionBanner'
@@ -48,7 +48,6 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
     <FrontendAuthGuard>
       <I18nProvider>
         <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col notranslate" translate="no">
-          <Suspense fallback={null}>
             <CustomerAuthModalProvider>
               {/* 401 → open CustomerAuthModal (no bottom 初始化登录账号 sheet) */}
               <AuthExpiredDialog />
@@ -68,7 +67,6 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               <CustomerAuthModal />
               <CustomerAuthModalDecorateBridge />
             </CustomerAuthModalProvider>
-          </Suspense>
         </div>
       </I18nProvider>
     </FrontendAuthGuard>

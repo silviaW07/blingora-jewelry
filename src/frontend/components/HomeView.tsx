@@ -84,7 +84,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
 
   if (productItems.length === 0 && categoryItems.length === 0) {
     return <div className="rounded-[28px] border border-dashed border-[#ddd6c8] bg-white px-6 py-10 text-center text-sm text-[#8a8073]" data-api-unique-id='homeview-rzone-empty-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
-        当前专区暂无可展示内容
+        Nothing to show in this section yet
       </div>;
   }
 
@@ -130,7 +130,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                   ) : (
                     <Button type="button" className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]" onClick={() => handlers.handleAddRecommendProductToCart(item)} data-api-unique-id='homeview-rzone-product-cart-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
                       <ShoppingCart className="mr-2 size-4" data-api-unique-id='homeview-rzone-product-cart-icon-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' />
-                      加入购物车
+                      Add to cart
                     </Button>
                   )}
                 </div>
@@ -238,8 +238,8 @@ const HomeView = ({
                 <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#f0ebe2] text-[#4a4137]" data-api-unique-id='homeview-rb711b431f2c337cd-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
                   <Package className="size-6" data-api-unique-id='homeview-rd8437f3d6456a1d4-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-[#40372f]" data-api-unique-id='homeview-r626fe27c79ece115-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>当前暂无可展示专区</h3>
-                <p className="mt-2 text-sm text-[#8a8073]" data-api-unique-id='homeview-ra0449977115cbf1e-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>后台启用并配置商品或类目后，这里会自动展示在首页横幅下方。</p>
+                <h3 className="mt-4 text-lg font-semibold text-[#40372f]" data-api-unique-id='homeview-r626fe27c79ece115-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>No sections to display yet</h3>
+                <p className="mt-2 text-sm text-[#8a8073]" data-api-unique-id='homeview-ra0449977115cbf1e-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>Enabled product or category zones will appear here below the homepage banner.</p>
               </div> : null}
           </div>
         </section> : null}

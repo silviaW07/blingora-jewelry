@@ -35,10 +35,10 @@ import {
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
 
-const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
-  DRAFT: '草稿',
-  ACTIVE: '上架',
-  INACTIVE: '下架',
+const PRODUCT_STATUS_I18N: Record<ProductStatus, string> = {
+  DRAFT: 'product.statusDraft',
+  ACTIVE: 'product.statusActive',
+  INACTIVE: 'product.statusInactive',
 };
 
 interface Props {
@@ -421,7 +421,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             type="button"
             className="product-sku-stepper-btn"
             disabled={!canUseStepper || !canDecrease}
-            aria-label="减少数量"
+            aria-label={t('product.decreaseQty')}
             title={
               !isColorSelected
                 ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' })
@@ -441,7 +441,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             type="button"
             className="product-sku-stepper-btn"
             disabled={!canUseStepper || qty >= 9999 || sku.stockStatus === 'OUT_OF_STOCK'}
-            aria-label="增加数量并选中尺码"
+            aria-label={t('product.increaseQty')}
             title={!isColorSelected ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' }) : undefined}
             onClick={() => void handleSkuQuantityChange(sku.id, 'inc')}
           >
@@ -494,7 +494,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       <section className="flex min-h-[50vh] w-full items-center justify-center bg-[#FFF5F5] px-6">
         <Alert variant="destructive" className="w-full max-w-xl border-[#EF4444] bg-[#FEF2F2]">
           <AlertTriangle className="size-5" />
-          <AlertTitle className="font-bold text-[#EF4444]">无法打开商品详情</AlertTitle>
+          <AlertTitle className="font-bold text-[#EF4444]">{t('product.openFailed')}</AlertTitle>
           <AlertDescription className="space-y-3 text-[#7F1D1D]">
             <p>{error}</p>
             <Button
@@ -505,7 +505,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 router.push('/')
               }}
             >
-              返回首页
+              {t('product.backHome')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -518,7 +518,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       <section className="flex min-h-[60vh] w-full items-center justify-center bg-[#FFF5F5]">
         <div className="flex flex-col items-center gap-4 text-[#64748B]">
           <PackageSearch className="size-12 text-[#CBD5E1]" />
-          <p className="text-base font-medium">未找到指定商品信息</p>
+          <p className="text-base font-medium">{t('product.notFound')}</p>
         </div>
       </section>,
     );
@@ -537,7 +537,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
       {!isPurchasable ? (
         <div className="border-b border-[#e5e5e5] bg-[#fff7ed] px-4 py-3 text-center text-sm font-medium text-[#9a3412]">
-          当前商品状态为 {PRODUCT_STATUS_LABELS[product.status]}，暂不支持采购下单
+          {t('product.unavailable', { status: t(PRODUCT_STATUS_I18N[product.status]) })}
         </div>
       ) : null}
 
@@ -585,7 +585,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       type="button"
                       className="absolute left-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
                       onClick={() => shiftGallery(-1)}
-                      aria-label="上一张"
+                      aria-label={t('product.prevImage')}
                     >
                       <ChevronLeft className="size-4" />
                     </button>
@@ -593,7 +593,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       type="button"
                       className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
                       onClick={() => shiftGallery(1)}
-                      aria-label="下一张"
+                      aria-label={t('product.nextImage')}
                     >
                       <ChevronRight className="size-4" />
                     </button>
@@ -836,14 +836,14 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           {t('product.moqProgress', {
                             selected: totalSelectedQty,
                             moq: productMoq,
-                            defaultValue: `已选：${totalSelectedQty} / ${productMoq} 件`,
+                            defaultValue: `Selected: ${totalSelectedQty} / ${productMoq} pcs`,
                           })}
                         </span>
                         {totalSelectedQty > 0 && totalSelectedQty < productMoq ? (
                           <span className="text-xs font-medium">
                             {t('product.moqNeedMore', {
                               count: productMoq - totalSelectedQty,
-                              defaultValue: `还需 ${productMoq - totalSelectedQty} 件`,
+                              defaultValue: `Need ${productMoq - totalSelectedQty} more`,
                             })}
                           </span>
                         ) : null}

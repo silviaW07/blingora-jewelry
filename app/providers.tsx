@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useLayoutEffect } from 'react';
+import React, { useEffect, useLayoutEffect } from 'react';
 import { toast } from 'sonner';
 import { syncNarrowHtmlClass } from '@/frontend/utils/isNarrowViewport';
 
@@ -31,9 +31,5 @@ export function Providers({
     }
   }, [])
 
-  return (
-    <Suspense fallback={null}>
-      {children}
-    </Suspense>
-  )
+  return <>{children}</>
 }

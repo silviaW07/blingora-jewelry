@@ -7,8 +7,7 @@
  * Not used on Cart / Account pages.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { Camera, Globe, LayoutGrid, Loader2, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -25,7 +24,7 @@ import {
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
-import { onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { hardNavigate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = () => (
@@ -49,7 +48,6 @@ type Props = {
 }
 
 export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props) {
-  const router = useRouter()
   const pathname = usePathname()
   const { t, i18n } = useTranslation()
   const switchLocale = useSwitchAppLocale()
@@ -126,12 +124,12 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     const params = new URLSearchParams()
     if (keyword) params.set('search', keyword)
     /* ProductCategory.path === '/' — identical routing to desktop */
-    router.push(
+    hardNavigate(
       params.toString()
         ? `${ProductCategory.path}?${params.toString()}`
         : ProductCategory.path,
     )
-  }, [isSearchLoading, router, searchKeyword])
+  }, [isSearchLoading, searchKeyword])
 
   const handleCameraFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -143,7 +141,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     setIsSearchLoading(true)
     const params = new URLSearchParams()
     params.set('search', keyword)
-    router.push(`${ProductCategory.path}?${params.toString()}`)
+    hardNavigate(`${ProductCategory.path}?${params.toString()}`)
   }
 
   return (
@@ -167,17 +165,16 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
         </a>
 
         <div className="mobile-sf-header__brand">
-          <StorefrontBrandMark useNextLink compact ariaLabel={t('common.backToHome')} />
+          <StorefrontBrandMark compact ariaLabel={t('common.backToHome')} />
         </div>
 
-        <Link
+        <a
           href="/categories/"
           className="mobile-sf-header__icon-btn"
           aria-label={t('nav.categories', { defaultValue: 'Categories' })}
-          onClick={onHardNavClick('/categories/')}
         >
           <LayoutGrid width={20} height={20} strokeWidth={2} />
-        </Link>
+        </a>
       </div>
 
       <div className="mobile-sf-header__search-row">

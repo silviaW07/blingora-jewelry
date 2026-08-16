@@ -18,7 +18,6 @@ import { useTranslation } from 'react-i18next';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { registerCustomer } from '@/frontend/actions/CustomerRegister';
 import { useUserSession } from '@/tools/FrontendSession';
-import { useSearchParams } from 'next/navigation';
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { DecorateInput } from '@/frontend/decorate/DecorateInput';
@@ -63,8 +62,11 @@ export function CustomerAuthModal() {
   const { isOpen, activeTab, closeAuthModal, setActiveTab } = useCustomerAuthModal();
   const { set: setSession } = useUserSession();
   const { isDecorateMode } = useDecorateMode();
-  const searchParams = useSearchParams();
-  const authDecorate = searchParams.get('authDecorate');
+  const [authDecorate, setAuthDecorate] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setAuthDecorate(new URLSearchParams(window.location.search).get('authDecorate'))
+  }, [isDecorateMode])
   const isDecorateAuthOpen =
     isDecorateMode && (authDecorate === 'login' || authDecorate === 'register');
   const dialogOpen = isOpen || isDecorateAuthOpen;
