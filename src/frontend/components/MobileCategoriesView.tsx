@@ -1,12 +1,12 @@
 ﻿'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
+import { categoryHref, hardNavigate } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
   type CategoryItem,
@@ -16,7 +16,7 @@ import {
   getDailyNewArrivalCalendar,
   type DailyNewArrivalMonthCard,
 } from '@/frontend/actions/Home'
-import { ProductCategory } from '@/frontend/route-params'
+import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
 import {
   buildLast6Months,
@@ -25,7 +25,6 @@ import {
 } from '@/frontend/utils/dailyNewArrival'
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { cn } from '@/lib/utils'
-import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 
 type CircleEntry = {
   key: string
@@ -105,7 +104,6 @@ export default function MobileCategoriesView({
 }: {
   initialCategories?: CategoryItem[]
 }) {
-  const router = useRouter()
   const { t, i18n } = useTranslation()
   const [categories, setCategories] = useState<CategoryItem[]>(() => {
     if (initialCategories?.length) {
@@ -206,10 +204,7 @@ export default function MobileCategoriesView({
   }, [isNewTab, lang])
 
   const openCategory = (id: string, slug?: string | null) => {
-    ProductCategory.navigateToCategory(router, {
-      categoryId: id,
-      categorySlug: slug || undefined,
-    })
+    hardNavigate(categoryHref(slug, id))
   }
 
   /** Same URL shape as web month picker → product listing */
@@ -219,11 +214,11 @@ export default function MobileCategoriesView({
     params.set('dailyMonth', monthKey)
     const slug = String(active.category_slug || '').trim()
     if (slug) {
-      router.push(`/category/${encodeURIComponent(slug)}?${params.toString()}`)
+      hardNavigate(`/category/${encodeURIComponent(slug)}/?${params.toString()}`)
       return
     }
     params.set('categoryId', active.category_id)
-    router.push(`${ProductCategory.path}?${params.toString()}`)
+    hardNavigate(`/?${params.toString()}`)
   }
 
   const circleEntries: CircleEntry[] = useMemo(() => {

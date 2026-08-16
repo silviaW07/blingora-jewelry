@@ -18,6 +18,7 @@ import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
 import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
+import { categoryHref, onHardNavClick, productHref } from '@/frontend/utils/hardNavigate'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -105,7 +106,7 @@ const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
   return ''
 }
 
-/** Horizontal squircle strip: ≤5 fill row; >5 scrolls (5 visible). */
+const MOBILE_SQUIRCLE_MAX = 8
 const MobileSquircleStrip = ({
   count,
   children,
@@ -300,11 +301,13 @@ const renderMobileSquircleContent = (
   t: ReturnType<typeof useTranslation>['t'],
   limitDisplay = true,
 ) => {
-  const limitedItems = limitDisplay
-    ? limitRecommendZoneItems(zone, zone.items)
-    : Array.isArray(zone.items)
-      ? zone.items
-      : []
+  const limitedItems = (
+    limitDisplay
+      ? limitRecommendZoneItems(zone, zone.items)
+      : Array.isArray(zone.items)
+        ? zone.items
+        : []
+  ).slice(0, MOBILE_SQUIRCLE_MAX)
   if (zone.zoneType === 'PRODUCT') {
     const productItems = limitedItems.filter(
       (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
@@ -318,18 +321,20 @@ const renderMobileSquircleContent = (
     }
     return (
       <MobileSquircleStrip count={productItems.length}>
-        {productItems.map((item) => (
-          <button
+        {productItems.map((item) => {
+          const href = productHref(item.productId)
+          return (
+          <a
             key={item.itemId}
-            type="button"
+            href={href}
             className="mobile-zone-squircle"
-            onClick={() => {
+            onClick={(event) => {
               writeProductDetailPreview({
                 id: item.productId,
                 name: item.productName,
                 image: item.imageUrl || '',
               })
-              handlers.handleNavigateRecommendProduct(item.productId)
+              onHardNavClick(href)(event)
             }}
             onPointerEnter={() => prefetchProductDetail(item.productId)}
             data-controller-name="移动端推荐商品图标"
@@ -352,8 +357,9 @@ const renderMobileSquircleContent = (
                 {item.productName}
               </DecorateText>
             </span>
-          </button>
-        ))}
+          </a>
+          )
+        })}
       </MobileSquircleStrip>
     )
   }
@@ -376,13 +382,11 @@ const renderMobileSquircleContent = (
           const imageSrc = resolveCategoryCardSrc(item.imageUrl)
           const shelfFallback = resolveCategoryCardFallback(item)
           return (
-            <button
+            <a
               key={item.itemId}
-              type="button"
+              href={categoryHref(item.categorySlug, item.categoryId)}
               className="mobile-zone-squircle"
-              onClick={() =>
-                handlers.handleNavigateRecommendCategory(item.categoryId, item.categorySlug)
-              }
+              onClick={onHardNavClick(categoryHref(item.categorySlug, item.categoryId))}
               data-controller-name="移动端推荐类目图标"
             >
               <span className="mobile-zone-squircle__media">
@@ -404,7 +408,7 @@ const renderMobileSquircleContent = (
                   {displayName}
                 </DecorateText>
               </span>
-            </button>
+            </a>
           )
         })}
       </MobileSquircleStrip>
@@ -571,17 +575,25 @@ export const HomeRecommendZoneSection = ({
           {!isMobileSquircle ? <div className="h-px flex-1 bg-[#d8d1c7]" /> : null}
         </div>
         {showViewAll && (zone.zoneType === 'PRODUCT' || zone.zoneType === 'CATEGORY') ? (
+          isMobileSquircle ? (
+            <a
+              href={`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`}
+              className="inline-flex shrink-0 items-center gap-0.5 text-[0.8125rem] font-semibold text-[#4a4137] no-underline"
+              onClick={onHardNavClick(`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`)}
+            >
+              <span>{t('common.viewAll', { defaultValue: 'View All' })}</span>
+              <ChevronRight className="size-3.5" />
+            </a>
+          ) : (
           <button
             type="button"
-            className={cn(
-              'inline-flex shrink-0 items-center font-semibold text-[#4a4137] transition hover:text-[#111111]',
-              isMobileSquircle ? 'gap-0.5 text-[0.8125rem]' : 'gap-1 text-sm',
-            )}
+            className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#4a4137] transition hover:text-[#111111]"
             onClick={() => onViewAll?.(zone.zoneId)}
           >
             <span>{t('common.viewAll', { defaultValue: 'View All' })}</span>
-            <ChevronRight className={isMobileSquircle ? 'size-3.5' : 'size-4'} />
+            <ChevronRight className="size-4" />
           </button>
+          )
         ) : null}
       </div>
       {isMobileSquircle

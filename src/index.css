@@ -2458,12 +2458,10 @@ img.home-service-card__icon-img {
 
 /* >5 items: exactly 5 visible slots across the row */
 .mobile-zone-squircle-row--scroll .mobile-zone-squircle {
-  flex: 0 0 calc(
-    (100% - (var(--zone-visible, 5) - 1) * var(--mobile-zone-gap, 0.5rem)) / var(--zone-visible, 5)
-  );
-  min-width: calc(
-    (100% - (var(--zone-visible, 5) - 1) * var(--mobile-zone-gap, 0.5rem)) / var(--zone-visible, 5)
-  );
+  flex: 0 0 56px;
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
   scroll-snap-align: start;
 }
 
@@ -2491,16 +2489,18 @@ img.home-service-card__icon-img {
 .mobile-zone-squircle__media {
   position: relative;
   display: block;
-  width: 100%;
-  max-width: 100%;
-  height: 0 !important;
-  padding-bottom: 100%;
+  width: 56px !important;
+  height: 56px !important;
+  max-width: 56px !important;
+  max-height: 56px !important;
+  padding: 0 !important;
   aspect-ratio: auto !important;
   overflow: hidden;
   border-radius: 1.05rem;
   background: #ebe4d8;
   box-shadow: 0 6px 16px -12px rgba(17, 17, 17, 0.35);
-  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  margin: 0 auto;
 }
 
 .mobile-zone-squircle__media > *,
@@ -2530,8 +2530,10 @@ img.home-service-card__icon-img {
   white-space: nowrap;
 }
 
-.home-zone-section--mobile-squircle {
-  padding: 0 !important;
+a.mobile-zone-squircle,
+a.mobile-home__chip {
+  text-decoration: none;
+  color: inherit;
 }
 
 @media (max-width: 767px) {

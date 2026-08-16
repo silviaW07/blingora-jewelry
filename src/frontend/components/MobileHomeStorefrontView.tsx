@@ -25,6 +25,7 @@ import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefit
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
+import { categoryHref, onHardNavClick } from '@/frontend/utils/hardNavigate'
 
 interface Props {
   state: HomeState
@@ -113,23 +114,23 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
     key: string,
     label: string,
     isActive: boolean,
-    onClick: () => void,
+    href: string,
   ) => (
-    <button
+    <a
       key={key}
-      type="button"
+      href={href}
       data-active={isActive}
       className={cn(
         'mobile-home__chip relative shrink-0 py-2 text-[0.8125rem] font-semibold tracking-[0.02em] transition-colors',
         isActive ? 'text-[#f254a6]' : 'text-[#3a3a3a]',
       )}
-      onClick={onClick}
+      onClick={onHardNavClick(href)}
     >
       <span className="whitespace-nowrap">{label}</span>
       {isActive ? (
         <span className="absolute bottom-0 left-1/2 h-0.5 w-[70%] -translate-x-1/2 rounded-full bg-[#f254a6]" />
       ) : null}
-    </button>
+    </a>
   )
 
   return (
@@ -139,7 +140,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       {/* Horizontal L1 directory only — no Expand all */}
       <div className="mobile-home__chips mb-3 border-b border-[#ebe4d8] bg-[#f7f4f0]">
         <div className="mobile-home__chips-row">
-          {renderChipButton('home', t('nav.home'), isHomeChipActive, goHomeClear)}
+          {renderChipButton('home', t('nav.home'), isHomeChipActive, '/')}
           {categories.map((category) => {
             const isActive =
               queryState.categoryId === category.category_id ||
@@ -150,12 +151,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               category.category_id,
               translateCatalogLabel(t, category.category_name),
               isActive,
-              () =>
-                selectTopCategory(
-                  category.category_id,
-                  category.category_slug,
-                  category.category_name,
-                ),
+              categoryHref(category.category_slug, category.category_id),
             )
           })}
         </div>

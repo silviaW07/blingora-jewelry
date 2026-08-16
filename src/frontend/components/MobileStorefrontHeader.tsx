@@ -25,6 +25,7 @@ import {
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
+import { onHardNavClick } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = () => (
@@ -173,6 +174,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
           href="/categories/"
           className="mobile-sf-header__icon-btn"
           aria-label={t('nav.categories', { defaultValue: 'Categories' })}
+          onClick={onHardNavClick('/categories/')}
         >
           <LayoutGrid width={20} height={20} strokeWidth={2} />
         </Link>
