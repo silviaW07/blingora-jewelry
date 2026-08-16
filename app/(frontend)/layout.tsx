@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { Suspense } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Footer from '@/components/layout/frontend/Footer'
 import TopPromotionBanner from '@/components/layout/frontend/TopPromotionBanner'
@@ -54,7 +54,9 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
-                  <PageErrorBoundary onGoBack={handleGoBack}>{children}</PageErrorBoundary>
+                  <Suspense fallback={<div className="min-h-[40vh] bg-[#FFF5F5]" aria-hidden />}>
+                    <PageErrorBoundary onGoBack={handleGoBack}>{children}</PageErrorBoundary>
+                  </Suspense>
                 </main>
                 {showFooter ? (
                   <div className={isStorefrontHome ? undefined : 'storefront-footer-desktop-only hidden md:block'}>
