@@ -768,7 +768,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       sku_count: skuCount,
       first_sku_id: defaultSku ? defaultSku.id : '',
       first_sku_price_rmb: priceRmb,
-      created_at_timestamp: p.createdAt.getTime(),
+      created_at_timestamp: p.createdAt ? new Date(p.createdAt).getTime() : 0,
       sort_weight: p.sortWeight,
       brand_category_id: p.brandCategoryId,
       brand_category_name: p.brandCategory?.name || null

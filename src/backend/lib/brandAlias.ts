@@ -9,13 +9,34 @@ import { applyBrandAliases, type BrandAliasRule } from '@/shared/brandTitleNorma
 /** 迁移未执行 / 表为空时的兜底映射（与迁移 seed 保持一致） */
 export const DEFAULT_BRAND_ALIASES: BrandAliasRule[] = [
   { alias: '路易威登', standard: 'Louis Vuitton' },
+  { alias: '蔻C家', standard: 'Coach' },
+  { alias: '寇C家', standard: 'Coach' },
   { alias: '蔻C', standard: 'Coach' },
+  { alias: '寇C', standard: 'Coach' },
   { alias: '蔻家', standard: 'Coach' },
+  { alias: '寇家', standard: 'Coach' },
+  { alias: '蔻驰', standard: 'Coach' },
+  { alias: '寇驰', standard: 'Coach' },
   { alias: '古驰', standard: 'Gucci' },
   { alias: 'LV', standard: 'Louis Vuitton' },
   { alias: '香奈儿', standard: 'Chanel' },
   { alias: '小香', standard: 'Chanel' },
 ]
+
+const aliasKey = (value: string) => String(value || '').trim().toLowerCase()
+
+function mergeAliasRules(defaults: BrandAliasRule[], fromDb: BrandAliasRule[]): BrandAliasRule[] {
+  const map = new Map<string, BrandAliasRule>()
+  for (const rule of defaults) {
+    const key = aliasKey(rule.alias)
+    if (key) map.set(key, rule)
+  }
+  for (const rule of fromDb) {
+    const key = aliasKey(rule.alias)
+    if (key) map.set(key, rule)
+  }
+  return Array.from(map.values())
+}
 
 const CACHE_TTL_MS = 60_000
 
@@ -34,13 +55,28 @@ export async function loadBrandAliasRules(): Promise<BrandAliasRule[]> {
   const now = Date.now()
   if (cache && cache.expiresAt > now) return cache.rules
   try {
-    const rows = await prisma.brandalias.findMany({
+    let rows = await prisma.brandalias.findMany({
       orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],
       select: { alias: true, standardName: true },
     })
-    const rules: BrandAliasRule[] = rows.length
-      ? rows.map(row => ({ alias: row.alias, standard: row.standardName }))
-      : DEFAULT_BRAND_ALIASES
+    const existing = new Set(rows.map(row => aliasKey(row.alias)))
+    const missing = DEFAULT_BRAND_ALIASES.filter(rule => !existing.has(aliasKey(rule.alias)))
+    if (missing.length > 0) {
+      await prisma.brandalias.createMany({
+        data: missing.map(rule => ({
+          alias: rule.alias,
+          standardName: rule.standard,
+          sortWeight: Math.max(10, String(rule.alias).length * 10),
+        })),
+        skipDuplicates: true,
+      })
+      rows = await prisma.brandalias.findMany({
+        orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],
+        select: { alias: true, standardName: true },
+      })
+    }
+    const fromDb = rows.map(row => ({ alias: row.alias, standard: row.standardName }))
+    const rules = mergeAliasRules(DEFAULT_BRAND_ALIASES, fromDb)
     cache = { rules, expiresAt: now + CACHE_TTL_MS }
     return rules
   } catch {

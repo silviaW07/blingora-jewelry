@@ -64,6 +64,12 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
   },
   { names: ['Hair Band', 'Headband', '发带', 'hairband'], synonyms: ['发带', '发箍', '头箍', '头带'] },
 
+  // —— 品牌货架暗语（1688 标题常用错字/夹英文，供一键校准命中 Brand L2）——
+  {
+    names: ['Coach', 'COACH'],
+    synonyms: ['蔻C家', '蔻c家', '寇C家', '寇c家', '蔻C', '蔻c', '寇C', '寇c', '蔻家', '寇家', '蔻驰', '寇驰'],
+  },
+
   // —— 包 / Bags ——
   // Handbag / Crossbody：只用高信号词；泛词「包包/箱包」只挂在一级 Bags，避免所有二级一起命中
   {

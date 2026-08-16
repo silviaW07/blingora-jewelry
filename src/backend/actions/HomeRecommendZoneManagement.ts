@@ -49,6 +49,8 @@ export interface ZoneDetailContentItem {
   sortWeight: number          // data-from: homeRecommendZoneItem-sortWeight (对应此项在专区中的排序)
   /** 上新/创建时间（展示商品草稿用） */
   createdAt?: string | null
+  /** PRODUCT 专区：CATEGORY=按类目动态拉品；PRODUCT=草稿发图等商品绑定 */
+  itemKind?: 'PRODUCT' | 'CATEGORY'
 }
 
 export interface SideNavCategoryItem {
@@ -97,6 +99,7 @@ export interface SelectableCategoryItem {
   name: string                // data-from: category-name
   level: number               // data-from: category-level
   imageUrl: string | null     // data-from: category-imageUrl
+  parentId: string | null     // data-from: category-parentId
   parentName: string | null   // data-from: category-name (parent)
 }
 
@@ -116,6 +119,8 @@ export interface GetRecommendZoneListOutput {
 export interface SaveRecommendZoneItemInput {
   entityId: string            // 商品或类目ID
   sortWeight: number
+  /** PRODUCT 专区默认 CATEGORY（保存 category_ids）；草稿发图传 PRODUCT */
+  itemKind?: 'PRODUCT' | 'CATEGORY'
 }
 
 export interface CreateRecommendZoneInput {
@@ -128,6 +133,8 @@ export interface CreateRecommendZoneInput {
   isActive: boolean
   collectionName?: string     // 填了则生成永久集合（仅限 PRODUCT 专区有效）
   items: SaveRecommendZoneItemInput[]
+  /** 商品专区选中的类目 ID（与 items 中 itemKind=CATEGORY 合并保存） */
+  categoryIds?: string[]
 }
 
 export interface UpdateRecommendZoneInput extends CreateRecommendZoneInput {
@@ -190,7 +197,19 @@ const sanitizeZoneConfig = (input: CreateRecommendZoneInput | UpdateRecommendZon
 
   const sortWeight = Number.isFinite(input.sortWeight) ? input.sortWeight : 0
   const uniqueItems = new Map<string, SaveRecommendZoneItemInput>()
-  input.items.forEach((item, index) => {
+  const mergedItems: SaveRecommendZoneItemInput[] = [...(input.items || [])]
+  if (input.zoneType === 'PRODUCT') {
+    const extraCategoryIds = Array.from(new Set((input.categoryIds || []).map((id) => String(id || '').trim()).filter(Boolean)))
+    extraCategoryIds.forEach((categoryId, index) => {
+      if (mergedItems.some((item) => item.entityId === categoryId)) return
+      mergedItems.push({
+        entityId: categoryId,
+        sortWeight: (extraCategoryIds.length - index) * 10,
+        itemKind: 'CATEGORY',
+      })
+    })
+  }
+  mergedItems.forEach((item, index) => {
     if (!item.entityId) {
       throw new Error(`第 ${index + 1} 条内容缺少实体ID`)
     }
@@ -198,6 +217,7 @@ const sanitizeZoneConfig = (input: CreateRecommendZoneInput | UpdateRecommendZon
       uniqueItems.set(item.entityId, {
         entityId: item.entityId,
         sortWeight: Number.isFinite(item.sortWeight) ? item.sortWeight : 0,
+        itemKind: item.itemKind,
       })
     }
   })
@@ -215,16 +235,57 @@ const sanitizeZoneConfig = (input: CreateRecommendZoneInput | UpdateRecommendZon
   }
 }
 
+const resolveItemKind = (
+  zoneType: ZoneType,
+  item: SaveRecommendZoneItemInput,
+): 'PRODUCT' | 'CATEGORY' | 'SIDE_NAV' => {
+  if (item.itemKind === 'PRODUCT' || item.itemKind === 'CATEGORY') return item.itemKind
+  if (zoneType === 'PRODUCT') return 'CATEGORY'
+  if (zoneType === 'SIDE_NAV') return 'SIDE_NAV'
+  return 'CATEGORY'
+}
+
+const toCollectionProductRows = (
+  collectionId: string,
+  zoneType: ZoneType,
+  items: SaveRecommendZoneItemInput[],
+) =>
+  items
+    .filter((item) => resolveItemKind(zoneType, item) === 'PRODUCT')
+    .map((item) => ({
+      collectionId,
+      productId: item.entityId,
+      sortWeight: item.sortWeight,
+    }))
+
+const toZoneItemWriteRows = (
+  zoneId: string,
+  zoneType: ZoneType,
+  items: SaveRecommendZoneItemInput[],
+) =>
+  items.map((item) => {
+    const kind = resolveItemKind(zoneType, item)
+    return {
+      zoneId,
+      entityType: kind === 'PRODUCT' ? 'PRODUCT' : zoneType === 'SIDE_NAV' ? 'SIDE_NAV' : 'CATEGORY',
+      productId: kind === 'PRODUCT' ? item.entityId : null,
+      categoryId: kind === 'PRODUCT' ? null : item.entityId,
+      sortWeight: item.sortWeight,
+    }
+  })
+
 async function assertSelectableEntities(zoneType: ZoneType, items: SaveRecommendZoneItemInput[]) {
   if (items.length === 0) {
     return
   }
 
-  const entityIds = items.map(item => item.entityId)
-  if (zoneType === 'PRODUCT') {
+  const productIds = items.filter((item) => resolveItemKind(zoneType, item) === 'PRODUCT').map((item) => item.entityId)
+  const categoryIds = items.filter((item) => resolveItemKind(zoneType, item) !== 'PRODUCT').map((item) => item.entityId)
+
+  if (productIds.length > 0) {
     const count = await prisma.product.count({
       where: {
-        id: { in: entityIds },
+        id: { in: productIds },
         status: { in: ['ACTIVE', 'DRAFT'] },
         category: {
           status: 'ACTIVE'
@@ -232,21 +293,22 @@ async function assertSelectableEntities(zoneType: ZoneType, items: SaveRecommend
       }
     })
 
-    if (count !== entityIds.length) {
+    if (count !== productIds.length) {
       throw new Error('所选商品中包含不可用或所属分类未启用的商品，请刷新后重试')
     }
-    return
   }
 
-  const count = await prisma.category.count({
-    where: {
-      id: { in: entityIds },
-      status: 'ACTIVE'
-    }
-  })
+  if (categoryIds.length > 0) {
+    const count = await prisma.category.count({
+      where: {
+        id: { in: categoryIds },
+        status: 'ACTIVE'
+      }
+    })
 
-  if (count !== entityIds.length) {
-    throw new Error('所选类目中包含未启用类目，请刷新后重试')
+    if (count !== categoryIds.length) {
+      throw new Error('所选类目中包含未启用类目，请刷新后重试')
+    }
   }
 }
 
@@ -340,7 +402,7 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
     }
 
     const detailItems: Array<ZoneDetailContentItem | SideNavCategoryItem> = zone.items.map(item => {
-      if (zone.zoneType === 'PRODUCT' && item.product) {
+      if (item.product) {
         return {
           id: item.product.id,
           entityId: item.product.id,
@@ -350,8 +412,10 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
           status: item.product.status,
           sortWeight: item.sortWeight,
           createdAt: item.product.createdAt?.toISOString?.() || null,
+          itemKind: 'PRODUCT' as const,
         }
-      } else if (zone.zoneType === 'CATEGORY' && item.category) {
+      }
+      if (zone.zoneType === 'PRODUCT' && item.category) {
         return {
           id: item.category.id,
           entityId: item.category.id,
@@ -359,9 +423,23 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
           codeOrSku: item.category.slug || '-',
           imageUrl: item.category.imageUrl || item.category.iconUrl || null,
           status: item.category.status,
-          sortWeight: item.sortWeight
+          sortWeight: item.sortWeight,
+          itemKind: 'CATEGORY' as const,
         }
-      } else if (zone.zoneType === 'SIDE_NAV' && item.category) {
+      }
+      if (zone.zoneType === 'CATEGORY' && item.category) {
+        return {
+          id: item.category.id,
+          entityId: item.category.id,
+          name: item.category.name,
+          codeOrSku: item.category.slug || '-',
+          imageUrl: item.category.imageUrl || item.category.iconUrl || null,
+          status: item.category.status,
+          sortWeight: item.sortWeight,
+          itemKind: 'CATEGORY' as const,
+        }
+      }
+      if (zone.zoneType === 'SIDE_NAV' && item.category) {
         return {
           id: item.category.id,
           entityId: item.category.id,
@@ -445,15 +523,9 @@ export const createRecommendZone = requireRole([UserRole.ADMIN])(
 
       // 2. 插入明细关系
       if (payload.items.length > 0) {
-        const isSideNavZone = payload.zoneType === 'SIDE_NAV'
-        const itemData = payload.items.map(i => ({
-          zoneId: zone.id,
-          entityType: payload.zoneType,
-          productId: payload.zoneType === 'PRODUCT' ? i.entityId : null,
-          categoryId: isSideNavZone || payload.zoneType === 'CATEGORY' ? i.entityId : null,
-          sortWeight: i.sortWeight
-        }))
-        await tx.homeRecommendZoneItem.createMany({ data: itemData })
+        await tx.homeRecommendZoneItem.createMany({
+          data: toZoneItemWriteRows(zone.id, payload.zoneType, payload.items),
+        })
       }
 
       // 3. 处理自动生成永久商品集合业务 (Schema约束: 集合只能绑product，故仅限 PRODUCT 类型)
@@ -467,12 +539,10 @@ export const createRecommendZone = requireRole([UserRole.ADMIN])(
         })
         
         if (payload.items.length > 0) {
-          const colItems = payload.items.map(i => ({
-            collectionId: collection.id,
-            productId: i.entityId,
-            sortWeight: i.sortWeight
-          }))
-          await tx.homeRecommendCollectionItem.createMany({ data: colItems })
+          const colItems = toCollectionProductRows(collection.id, payload.zoneType, payload.items)
+          if (colItems.length > 0) {
+            await tx.homeRecommendCollectionItem.createMany({ data: colItems })
+          }
         }
 
         await tx.homeRecommendZone.update({
@@ -520,15 +590,9 @@ export const updateRecommendZone = requireRole([UserRole.ADMIN])(
       // 2. 全删全插专区明细
       await tx.homeRecommendZoneItem.deleteMany({ where: { zoneId: input.id } })
       if (payload.items.length > 0) {
-        const isSideNavZone = payload.zoneType === 'SIDE_NAV'
-        const itemData = payload.items.map(i => ({
-          zoneId: input.id,
-          entityType: payload.zoneType,
-          productId: payload.zoneType === 'PRODUCT' ? i.entityId : null,
-          categoryId: isSideNavZone || payload.zoneType === 'CATEGORY' ? i.entityId : null,
-          sortWeight: i.sortWeight
-        }))
-        await tx.homeRecommendZoneItem.createMany({ data: itemData })
+        await tx.homeRecommendZoneItem.createMany({
+          data: toZoneItemWriteRows(input.id, payload.zoneType, payload.items),
+        })
       }
 
       // 3. 处理永久集合更新 (仅限 PRODUCT)
@@ -543,14 +607,9 @@ export const updateRecommendZone = requireRole([UserRole.ADMIN])(
               data: { name: payload.collectionName }
             })
             await tx.homeRecommendCollectionItem.deleteMany({ where: { collectionId: zone.boundCollectionId } })
-            if (payload.items.length > 0) {
-              await tx.homeRecommendCollectionItem.createMany({
-                data: payload.items.map(i => ({
-                  collectionId: zone.boundCollectionId!,
-                  productId: i.entityId,
-                  sortWeight: i.sortWeight
-                }))
-              })
+            const colItems = toCollectionProductRows(zone.boundCollectionId, payload.zoneType, payload.items)
+            if (colItems.length > 0) {
+              await tx.homeRecommendCollectionItem.createMany({ data: colItems })
             }
           } else {
             // 没有集合，新创建
@@ -749,15 +808,21 @@ export const batchUpdateZoneItemSortWeight = requireRole([UserRole.ADMIN])(
       for (const u of updates) {
         const weight = Number(u.sortWeight)
         if (zone.zoneType === 'PRODUCT') {
-          await tx.homeRecommendZoneItem.updateMany({
+          const byProduct = await tx.homeRecommendZoneItem.updateMany({
             where: { zoneId, productId: u.entityId },
             data: { sortWeight: weight },
           })
-          // Coming / 列表同序：商品自身 sortWeight 与专区明细对齐
-          await tx.product.update({
-            where: { id: u.entityId },
-            data: { sortWeight: weight },
-          })
+          if (byProduct.count > 0) {
+            await tx.product.update({
+              where: { id: u.entityId },
+              data: { sortWeight: weight },
+            })
+          } else {
+            await tx.homeRecommendZoneItem.updateMany({
+              where: { zoneId, categoryId: u.entityId },
+              data: { sortWeight: weight },
+            })
+          }
         } else {
           await tx.homeRecommendZoneItem.updateMany({
             where: { zoneId, categoryId: u.entityId },
@@ -869,6 +934,7 @@ export const getSelectableCategories = requireRole([UserRole.ADMIN])(
         name: c.name,
         level: c.level,
         imageUrl: c.imageUrl,
+        parentId: c.parentId,
         parentName: c.parent?.name || null
       }))
     }
@@ -1000,6 +1066,7 @@ export const createDraftDisplayProducts = requireRole([UserRole.ADMIN])(
           status: product.status,
           sortWeight: maxSort + (images.length - index) * 10,
           createdAt: product.createdAt.toISOString(),
+          itemKind: 'PRODUCT' as const,
         })
       }
     })

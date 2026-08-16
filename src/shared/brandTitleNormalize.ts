@@ -21,7 +21,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
  * 对标题应用品牌别名替换。
  * - 别名按长度倒序，先替换更长的别名，避免短别名抢先造成错替。
  * - ASCII 别名（LV）大小写不敏感，且要求前后不是字母/数字，防止误伤英文单词内部。
- * - 含中文/混合别名直接全局替换。
+ * - 含中文/混合别名同样大小写不敏感（蔻C 能打中 蔻c家）。
  * - 幂等：对已归一化文本再次调用不会破坏结果。
  */
 export function applyBrandAliases(title: string | null | undefined, rules: BrandAliasRule[]): string {
@@ -39,7 +39,8 @@ export function applyBrandAliases(title: string | null | undefined, rules: Brand
       const re = new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(alias)}(?![A-Za-z0-9])`, 'gi')
       text = text.replace(re, standard)
     } else {
-      text = text.split(alias).join(standard)
+      const re = new RegExp(escapeRegExp(alias), 'gi')
+      text = text.replace(re, standard)
     }
   }
 

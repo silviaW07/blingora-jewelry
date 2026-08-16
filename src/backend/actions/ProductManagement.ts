@@ -688,6 +688,8 @@ import {
 } from '@/backend/lib/bulkTitleCategoryBackfill'
 import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
+import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
+import { invalidateStorefrontCatalogCaches } from '@/frontend/actions/ProductCategory'
 import {
   extractWeightGramsFromText,
   isLikelyUnreliableWeightGrams,
@@ -1173,6 +1175,11 @@ async function replaceProductCategoryRelations(tx: any, productId: string, linke
       skipDuplicates: true
     })
   }
+}
+
+function invalidateStorefrontAfterCategoryBind() {
+  invalidateStorefrontCatalogCaches()
+  invalidateHomeRecommendZoneCache()
 }
 
 function buildBoundCategories(
@@ -2133,6 +2140,7 @@ export const createProduct = requireRole([UserRole.ADMIN])(
       return product
     })
 
+    invalidateStorefrontAfterCategoryBind()
     return { product_id: result.id }
   })
 )
@@ -2326,6 +2334,7 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
       await syncProductPriceThresholdRelations(tx, input.product_id)
     })
 
+    invalidateStorefrontAfterCategoryBind()
     return { success: true }
   })
 )
@@ -2515,6 +2524,7 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
           await syncProductPriceThresholdRelations(tx, input.product_id)
         }
       })
+      invalidateStorefrontAfterCategoryBind()
       return { success: true }
     }
 
@@ -2718,6 +2728,7 @@ export const batchBindProductCategories = requireRole([UserRole.ADMIN])(
       }
     })
 
+    invalidateStorefrontAfterCategoryBind()
     return { success_count: productIds.length, fail_count: 0 }
   })
 )
@@ -2779,6 +2790,7 @@ export const batchUnbindProductCategories = requireRole([UserRole.ADMIN])(
       }
     }
 
+    invalidateStorefrontAfterCategoryBind()
     return { success_count: success, fail_count: fail }
   })
 )
@@ -2907,6 +2919,7 @@ export const unbindProductCategory = requireRole([UserRole.ADMIN])(
       }
     })
 
+    invalidateStorefrontAfterCategoryBind()
     return { success: true }
   })
 )

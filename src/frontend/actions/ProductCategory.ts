@@ -464,6 +464,18 @@ type ResolvedCategoryContext = {
   categoryIdsForQuery: string[]
 }
 
+const hasCategoryParentId = (parentId?: string | null) => {
+  const text = String(parentId || '').trim()
+  return text.length > 0 && text !== '0'
+}
+
+/** 与后台分类树一致：无父级且不是二级，视为一级（兼容 level=0/3 脏数据） */
+const isStorefrontLevel1 = (cat: { level?: number | null; parentId?: string | null }) =>
+  !hasCategoryParentId(cat.parentId) && Number(cat.level) !== 2
+
+/** 有父级即二级，不要求 level === 2 */
+const isStorefrontLevel2 = (cat: { parentId?: string | null }) => hasCategoryParentId(cat.parentId)
+
 const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCategoryContext> => {
   if (!categoryId) {
     return {
@@ -502,8 +514,8 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     return empty
   }
 
-  // L1 = level 1 or root (no parent). Expand to all ACTIVE direct L2 children.
-  const isL1 = currentCategory.level === 1 || !currentCategory.parentId
+  // L1 = 无父级且不是二级。有父级的类目即使 level 标成 1 也按二级查自己，避免 popular products 这类脏数据点进去变成空列表。
+  const isL1 = isStorefrontLevel1(currentCategory)
   if (isL1) {
     const descendants = await prisma.category.findMany({
       where: {
@@ -698,8 +710,10 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
     ]
   })
 
-  const mainCategories = categories.filter(cat => cat.level === 1 && !cat.isBrandCategory && cat.navConfig?.isVisible !== false)
-  const childCategories = categories.filter(cat => cat.level === 2 && !cat.isBrandCategory)
+  const mainCategories = categories.filter(
+    cat => isStorefrontLevel1(cat) && !cat.isBrandCategory && cat.navConfig?.isVisible !== false,
+  )
+  const childCategories = categories.filter(cat => isStorefrontLevel2(cat) && !cat.isBrandCategory)
   const brandCategories = categories.filter(cat => cat.isBrandCategory)
   const brandIds = brandCategories.map(brand => brand.id)
 
@@ -1214,6 +1228,16 @@ function setCachedList(key: string, value: GetProductListOutput): void {
 }
 
 /** 将单个商品记录映射为前台列表卡片项（价格系数换算 / 库存 / 缩略图等）。 */
+function toCreatedAtTimestamp(value: Date | string | number | null | undefined): number {
+  if (value == null || value === '') return 0
+  if (value instanceof Date) {
+    const ms = value.getTime()
+    return Number.isNaN(ms) ? 0 : ms
+  }
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? 0 : ms
+}
+
 function mapProductRecordToItem(
   p: any,
   lang: ReturnType<typeof normalizeProductLang>,
@@ -1312,7 +1336,7 @@ function mapProductRecordToItem(
     sku_count: skuCount,
     first_sku_id: defaultSku ? defaultSku.id : '',
     first_sku_price_rmb: priceRmb,
-    created_at_timestamp: p.createdAt.getTime(),
+    created_at_timestamp: toCreatedAtTimestamp(p.createdAt),
     sort_weight: p.sortWeight,
     brand_category_id: p.brandCategoryId,
     brand_category_name: p.brandCategory?.name || null,
@@ -1601,6 +1625,15 @@ const BRAND_FACET_CACHE_TTL_MS = Number(process.env.BRAND_FACET_CACHE_TTL_MS || 
 const BRAND_FACET_CACHE_MAX = 200
 const brandFacetCache = new Map<string, { at: number; value: GetAvailableBrandFiltersOutput }>()
 
+/** 后台改绑定/上下架后立刻失效前台列表与导航缓存，避免点进二级类目仍看到旧空列表。 */
+export function invalidateStorefrontCatalogCaches() {
+  productListCache.clear()
+  categoryListServerCache.clear()
+  categoryContextCache.clear()
+  posterListCache.clear()
+  brandFacetCache.clear()
+}
+
 function buildBrandFacetCacheKey(input: GetAvailableBrandFiltersInput, lang: string): string {
   return JSON.stringify({
     c: input.category_id || '',
@@ -1667,6 +1700,7 @@ export const getAvailableBrandFilters = withResult(
       tradeInfoJson: true,
       ratingAverage: true,
       brandCategoryId: true,
+      createdAt: true,
       skus: {
         select: {
           id: true,

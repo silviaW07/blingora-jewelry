@@ -14,6 +14,7 @@ datasource db {
 enum userrole {
   CUSTOMER
   ADMIN
+  SUB_ADMIN
 }
 
 enum userstatus {
@@ -200,10 +201,6 @@ model sysuser {
   id                   String     @id @default(uuid()) @db.VarChar(36)
   account              String     @unique @db.VarChar(50)
   password             String     @db.VarChar(255)
-  /**
-   * 明文密码（仅供后台客服协助；登录仍校验 password 哈希）
-   */
-  passwordPlain        String?    @db.VarChar(255)
   email                String     @unique @db.VarChar(100)
   role                 userrole
   status               userstatus @default(ACTIVE)
@@ -1236,4 +1233,29 @@ model keywordgroupproduct {
   @@index([keywordGroupId])
   @@index([productId])
   @@index([sortWeight])
+}
+
+/// 商品标题后缀预设（“批量加后缀”下拉框数据源，支持自定义 CRUD）
+model suffixconfig {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  suffixName String   @unique @map("suffix_name") @db.VarChar(120)
+  sortWeight Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([sortWeight])
+  @@map("suffix_config")
+}
+
+/// 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD
+model brandalias {
+  id           String   @id @default(uuid()) @db.VarChar(36)
+  alias        String   @unique @db.VarChar(120)
+  standardName String   @map("standard_name") @db.VarChar(120)
+  sortWeight   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([sortWeight])
+  @@map("brand_alias")
 }

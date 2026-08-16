@@ -84893,11 +84893,11 @@ router.post('/', async (req, res)=>{
         }
         // 不要改这里的路径，代码里有强匹配的替换逻辑！end
         const msg = String((_ref = e === null || e === void 0 ? void 0 : e.message) !== null && _ref !== void 0 ? _ref : 'Unknown error');
-        // Business validation (wrong password, disabled account, etc.) → 400 so storefront
-        // shows the real message instead of treating every 5xx as "Server is taking a break"
-        // and blindly retrying.
-        const looksLikeEngineOrSchema = /Invalid `[\s\S]*` invocation/i.test(msg) || /does not exist in the current database/i.test(msg) || /passwordPlain/i.test(msg) || /\bprisma\b/i.test(msg) || /ECONNREFUSED|ENOTFOUND|P20\d{2}/i.test(msg);
-        if (!looksLikeEngineOrSchema && e instanceof Error && msg && msg !== 'Unknown error') {
+        // Business validation (wrong password, disabled account, duplicate email, etc.) → 400
+        // so storefront shows the real message instead of a generic 5xx toast.
+        const looksLikeBusinessMsg = /该邮箱已被注册|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户|请填写|密码不|注册失败/i.test(msg);
+        const looksLikeEngineOrSchema = !looksLikeBusinessMsg && (/Invalid `[\s\S]*` invocation/i.test(msg) || /does not exist in the current database/i.test(msg) || /passwordPlain/i.test(msg) || /\bprisma\b/i.test(msg) || /ECONNREFUSED|ENOTFOUND|P20\d{2}/i.test(msg));
+        if ((looksLikeBusinessMsg || !looksLikeEngineOrSchema) && e instanceof Error && msg && msg !== 'Unknown error') {
             res.status(400).json({
                 error: msg
             });
@@ -84953,6 +84953,7 @@ const _HomeRecommendZoneManagement = /*#__PURE__*/ _interop_require_wildcard(__w
 const _homeRecommendZoneCache = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(78196));
 const _Dashboard = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(649));
 const _CategoryManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(78782));
+const _BrandAlias = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(53762));
 const _BannerManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(52008));
 const _AdminRegister = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(22503));
 const _AdminManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(25009));
@@ -85011,6 +85012,7 @@ const registry = {
     'src.backend.actions.homeRecommendZoneCache': _homeRecommendZoneCache,
     'src.backend.actions.Dashboard': _Dashboard,
     'src.backend.actions.CategoryManagement': _CategoryManagement,
+    'src.backend.actions.BrandAlias': _BrandAlias,
     'src.backend.actions.BannerManagement': _BannerManagement,
     'src.backend.actions.AdminRegister': _AdminRegister,
     'src.backend.actions.AdminManagement': _AdminManagement,
@@ -86466,6 +86468,211 @@ const updateBannerStatus = (0, _action_utils.requireRole)([
 
 /***/ },
 
+/***/ 53762
+(__unused_webpack_module, exports, __webpack_require__) {
+
+'use server';
+"use strict";
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get createBrandAlias () {
+        return createBrandAlias;
+    },
+    get deleteBrandAlias () {
+        return deleteBrandAlias;
+    },
+    get listBrandAliases () {
+        return listBrandAliases;
+    },
+    get updateBrandAlias () {
+        return updateBrandAlias;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
+const _action_utils = __webpack_require__(79153);
+const _brandAlias = __webpack_require__(69646);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+/** 首次访问且表为空时预置默认映射，保证行为不回退。 */ const DEFAULT_BRAND_ALIAS_PRESETS = [
+    {
+        alias: '路易威登',
+        standard: 'Louis Vuitton',
+        weight: 50
+    },
+    {
+        alias: '蔻C',
+        standard: 'Coach',
+        weight: 40
+    },
+    {
+        alias: '蔻家',
+        standard: 'Coach',
+        weight: 30
+    },
+    {
+        alias: '古驰',
+        standard: 'Gucci',
+        weight: 20
+    },
+    {
+        alias: 'LV',
+        standard: 'Louis Vuitton',
+        weight: 10
+    }
+];
+const normalizeAliasText = (raw)=>String(raw !== null && raw !== void 0 ? raw : '').trim();
+const toItem = (row)=>({
+        id: row.id,
+        alias: row.alias,
+        standard_name: row.standardName,
+        sort_weight: row.sortWeight
+    });
+const listBrandAliases = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    const count = await _prisma.default.brandalias.count();
+    if (count === 0) {
+        await _prisma.default.brandalias.createMany({
+            data: DEFAULT_BRAND_ALIAS_PRESETS.map((preset)=>({
+                    alias: preset.alias,
+                    standardName: preset.standard,
+                    sortWeight: preset.weight
+                })),
+            skipDuplicates: true
+        });
+        (0, _brandAlias.invalidateBrandAliasCache)();
+    }
+    const rows = await _prisma.default.brandalias.findMany({
+        orderBy: [
+            {
+                sortWeight: 'desc'
+            },
+            {
+                createdAt: 'asc'
+            }
+        ],
+        select: {
+            id: true,
+            alias: true,
+            standardName: true,
+            sortWeight: true
+        }
+    });
+    return rows.map(toItem);
+}));
+const createBrandAlias = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const alias = normalizeAliasText(input === null || input === void 0 ? void 0 : input.alias);
+    const standardName = normalizeAliasText(input === null || input === void 0 ? void 0 : input.standard_name);
+    if (!alias) throw new Error('原始别名不能为空');
+    if (!standardName) throw new Error('目标品牌名不能为空');
+    if (alias.length > 120 || standardName.length > 120) {
+        throw new Error('别名/品牌名长度不能超过 120 个字符');
+    }
+    const exists = await _prisma.default.brandalias.findUnique({
+        where: {
+            alias
+        }
+    });
+    if (exists) throw new Error('该别名已存在');
+    const created = await _prisma.default.brandalias.create({
+        data: {
+            alias,
+            standardName
+        },
+        select: {
+            id: true,
+            alias: true,
+            standardName: true,
+            sortWeight: true
+        }
+    });
+    (0, _brandAlias.invalidateBrandAliasCache)();
+    return toItem(created);
+}));
+const updateBrandAlias = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = String((input === null || input === void 0 ? void 0 : input.id) || '').trim();
+    if (!id) throw new Error('缺少别名 ID');
+    const alias = normalizeAliasText(input === null || input === void 0 ? void 0 : input.alias);
+    const standardName = normalizeAliasText(input === null || input === void 0 ? void 0 : input.standard_name);
+    if (!alias) throw new Error('原始别名不能为空');
+    if (!standardName) throw new Error('目标品牌名不能为空');
+    if (alias.length > 120 || standardName.length > 120) {
+        throw new Error('别名/品牌名长度不能超过 120 个字符');
+    }
+    const current = await _prisma.default.brandalias.findUnique({
+        where: {
+            id
+        }
+    });
+    if (!current) throw new Error('别名不存在或已被删除');
+    const duplicate = await _prisma.default.brandalias.findUnique({
+        where: {
+            alias
+        }
+    });
+    if (duplicate && duplicate.id !== id) throw new Error('该别名已存在');
+    const updated = await _prisma.default.brandalias.update({
+        where: {
+            id
+        },
+        data: {
+            alias,
+            standardName
+        },
+        select: {
+            id: true,
+            alias: true,
+            standardName: true,
+            sortWeight: true
+        }
+    });
+    (0, _brandAlias.invalidateBrandAliasCache)();
+    return toItem(updated);
+}));
+const deleteBrandAlias = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN,
+    _action_utils.UserRole.SUB_ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const id = String((input === null || input === void 0 ? void 0 : input.id) || '').trim();
+    if (!id) throw new Error('缺少别名 ID');
+    const current = await _prisma.default.brandalias.findUnique({
+        where: {
+            id
+        }
+    });
+    if (!current) throw new Error('别名不存在或已被删除');
+    await _prisma.default.brandalias.delete({
+        where: {
+            id
+        }
+    });
+    (0, _brandAlias.invalidateBrandAliasCache)();
+    return {
+        success: true
+    };
+}));
+
+
+/***/ },
+
 /***/ 78782
 (__unused_webpack_module, exports, __webpack_require__) {
 
@@ -87490,7 +87697,7 @@ const searchKeywordGroupProducts = (0, _action_utils.requireRole)([
         var _linkedSortWeightMap_get, _linkedSortWeightMap_get1;
         const weightDiff = ((_linkedSortWeightMap_get = linkedSortWeightMap.get(b.id)) !== null && _linkedSortWeightMap_get !== void 0 ? _linkedSortWeightMap_get : 0) - ((_linkedSortWeightMap_get1 = linkedSortWeightMap.get(a.id)) !== null && _linkedSortWeightMap_get1 !== void 0 ? _linkedSortWeightMap_get1 : 0);
         if (weightDiff !== 0) return weightDiff;
-        return b.createdAt.getTime() - a.createdAt.getTime();
+        return (b.createdAt ? new Date(b.createdAt).getTime() : 0) - (a.createdAt ? new Date(a.createdAt).getTime() : 0);
     }) : products;
     return {
         list: sortedProducts.map((item)=>{
@@ -87975,6 +88182,17 @@ const updateCategory = (0, _action_utils.requireRole)([
         price_coefficient: price_coefficient !== null && price_coefficient !== void 0 ? price_coefficient : undefined,
         category_display_config
     });
+    if (trimmedName !== category.name) {
+        const root = category.translationsJson && typeof category.translationsJson === 'object' && !Array.isArray(category.translationsJson) ? {
+            ...category.translationsJson
+        } : {};
+        const en = root.en && typeof root.en === 'object' && !Array.isArray(root.en) ? {
+            ...root.en
+        } : {};
+        en.name = trimmedName;
+        root.en = en;
+        updateData.translationsJson = root;
+    }
     if (category.status !== newStatus) {
         await updateCategoryAndCascade(category_id, updateData, newStatus);
     } else {
@@ -89425,14 +89643,29 @@ const sanitizeZoneConfig = (input)=>{
     }
     const sortWeight = Number.isFinite(input.sortWeight) ? input.sortWeight : 0;
     const uniqueItems = new Map();
-    input.items.forEach((item, index)=>{
+    const mergedItems = [
+        ...input.items || []
+    ];
+    if (input.zoneType === 'PRODUCT') {
+        const extraCategoryIds = Array.from(new Set((input.categoryIds || []).map((id)=>String(id || '').trim()).filter(Boolean)));
+        extraCategoryIds.forEach((categoryId, index)=>{
+            if (mergedItems.some((item)=>item.entityId === categoryId)) return;
+            mergedItems.push({
+                entityId: categoryId,
+                sortWeight: (extraCategoryIds.length - index) * 10,
+                itemKind: 'CATEGORY'
+            });
+        });
+    }
+    mergedItems.forEach((item, index)=>{
         if (!item.entityId) {
             throw new Error(`第 ${index + 1} 条内容缺少实体ID`);
         }
         if (!uniqueItems.has(item.entityId)) {
             uniqueItems.set(item.entityId, {
                 entityId: item.entityId,
-                sortWeight: Number.isFinite(item.sortWeight) ? item.sortWeight : 0
+                sortWeight: Number.isFinite(item.sortWeight) ? item.sortWeight : 0,
+                itemKind: item.itemKind
             });
         }
     });
@@ -89448,16 +89681,38 @@ const sanitizeZoneConfig = (input)=>{
         items: Array.from(uniqueItems.values())
     };
 };
+const resolveItemKind = (zoneType, item)=>{
+    if (item.itemKind === 'PRODUCT' || item.itemKind === 'CATEGORY') return item.itemKind;
+    if (zoneType === 'PRODUCT') return 'CATEGORY';
+    if (zoneType === 'SIDE_NAV') return 'SIDE_NAV';
+    return 'CATEGORY';
+};
+const toCollectionProductRows = (collectionId, zoneType, items)=>items.filter((item)=>resolveItemKind(zoneType, item) === 'PRODUCT').map((item)=>({
+            collectionId,
+            productId: item.entityId,
+            sortWeight: item.sortWeight
+        }));
+const toZoneItemWriteRows = (zoneId, zoneType, items)=>items.map((item)=>{
+        const kind = resolveItemKind(zoneType, item);
+        return {
+            zoneId,
+            entityType: kind === 'PRODUCT' ? 'PRODUCT' : zoneType === 'SIDE_NAV' ? 'SIDE_NAV' : 'CATEGORY',
+            productId: kind === 'PRODUCT' ? item.entityId : null,
+            categoryId: kind === 'PRODUCT' ? null : item.entityId,
+            sortWeight: item.sortWeight
+        };
+    });
 async function assertSelectableEntities(zoneType, items) {
     if (items.length === 0) {
         return;
     }
-    const entityIds = items.map((item)=>item.entityId);
-    if (zoneType === 'PRODUCT') {
+    const productIds = items.filter((item)=>resolveItemKind(zoneType, item) === 'PRODUCT').map((item)=>item.entityId);
+    const categoryIds = items.filter((item)=>resolveItemKind(zoneType, item) !== 'PRODUCT').map((item)=>item.entityId);
+    if (productIds.length > 0) {
         const count = await _prisma.default.product.count({
             where: {
                 id: {
-                    in: entityIds
+                    in: productIds
                 },
                 status: {
                     in: [
@@ -89470,21 +89725,22 @@ async function assertSelectableEntities(zoneType, items) {
                 }
             }
         });
-        if (count !== entityIds.length) {
+        if (count !== productIds.length) {
             throw new Error('所选商品中包含不可用或所属分类未启用的商品，请刷新后重试');
         }
-        return;
     }
-    const count = await _prisma.default.category.count({
-        where: {
-            id: {
-                in: entityIds
-            },
-            status: 'ACTIVE'
+    if (categoryIds.length > 0) {
+        const count = await _prisma.default.category.count({
+            where: {
+                id: {
+                    in: categoryIds
+                },
+                status: 'ACTIVE'
+            }
+        });
+        if (count !== categoryIds.length) {
+            throw new Error('所选类目中包含未启用类目，请刷新后重试');
         }
-    });
-    if (count !== entityIds.length) {
-        throw new Error('所选类目中包含未启用类目，请刷新后重试');
     }
 }
 const getRecommendZoneList = (0, _action_utils.requireRole)([
@@ -89554,7 +89810,7 @@ const getRecommendZoneDetail = (0, _action_utils.requireRole)([
                         sortWeight: 'desc'
                     },
                     {
-                        createdAt: 'asc'
+                        createdAt: 'desc'
                     }
                 ],
                 include: {
@@ -89577,7 +89833,7 @@ const getRecommendZoneDetail = (0, _action_utils.requireRole)([
         throw new Error('该推荐专区不存在');
     }
     const detailItems = zone.items.map((item)=>{
-        if (zone.zoneType === 'PRODUCT' && item.product) {
+        if (item.product) {
             var _item_product_createdAt_toISOString, _item_product_createdAt;
             return {
                 id: item.product.id,
@@ -89587,26 +89843,42 @@ const getRecommendZoneDetail = (0, _action_utils.requireRole)([
                 imageUrl: item.product.mainImageUrl,
                 status: item.product.status,
                 sortWeight: item.sortWeight,
-                createdAt: ((_item_product_createdAt = item.product.createdAt) === null || _item_product_createdAt === void 0 ? void 0 : (_item_product_createdAt_toISOString = _item_product_createdAt.toISOString) === null || _item_product_createdAt_toISOString === void 0 ? void 0 : _item_product_createdAt_toISOString.call(_item_product_createdAt)) || null
+                createdAt: ((_item_product_createdAt = item.product.createdAt) === null || _item_product_createdAt === void 0 ? void 0 : (_item_product_createdAt_toISOString = _item_product_createdAt.toISOString) === null || _item_product_createdAt_toISOString === void 0 ? void 0 : _item_product_createdAt_toISOString.call(_item_product_createdAt)) || null,
+                itemKind: 'PRODUCT'
             };
-        } else if (zone.zoneType === 'CATEGORY' && item.category) {
+        }
+        if (zone.zoneType === 'PRODUCT' && item.category) {
             return {
                 id: item.category.id,
                 entityId: item.category.id,
                 name: item.category.name,
                 codeOrSku: item.category.slug || '-',
-                imageUrl: item.category.imageUrl,
+                imageUrl: item.category.imageUrl || item.category.iconUrl || null,
                 status: item.category.status,
-                sortWeight: item.sortWeight
+                sortWeight: item.sortWeight,
+                itemKind: 'CATEGORY'
             };
-        } else if (zone.zoneType === 'SIDE_NAV' && item.category) {
+        }
+        if (zone.zoneType === 'CATEGORY' && item.category) {
+            return {
+                id: item.category.id,
+                entityId: item.category.id,
+                name: item.category.name,
+                codeOrSku: item.category.slug || '-',
+                imageUrl: item.category.imageUrl || item.category.iconUrl || null,
+                status: item.category.status,
+                sortWeight: item.sortWeight,
+                itemKind: 'CATEGORY'
+            };
+        }
+        if (zone.zoneType === 'SIDE_NAV' && item.category) {
             var _item_category_parent;
             return {
                 id: item.category.id,
                 entityId: item.category.id,
                 name: item.category.name,
                 codeOrSku: item.category.slug || '-',
-                imageUrl: item.category.imageUrl,
+                imageUrl: item.category.imageUrl || item.category.iconUrl || null,
                 status: item.category.status,
                 sortWeight: item.sortWeight,
                 level: item.category.level,
@@ -89617,6 +89889,45 @@ const getRecommendZoneDetail = (0, _action_utils.requireRole)([
         }
         throw new Error('专区明细数据异常');
     });
+    if (zone.zoneType === 'CATEGORY') {
+        const missing = detailItems.filter((row)=>!String(row.imageUrl || '').trim());
+        if (missing.length > 0) {
+            await Promise.all(missing.map(async (row)=>{
+                const product = await _prisma.default.product.findFirst({
+                    where: {
+                        status: 'ACTIVE',
+                        mainImageUrl: {
+                            not: ''
+                        },
+                        OR: [
+                            {
+                                categoryId: row.entityId
+                            },
+                            {
+                                brandCategoryId: row.entityId
+                            },
+                            {
+                                relationCategories: {
+                                    some: {
+                                        categoryId: row.entityId
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    orderBy: {
+                        updatedAt: 'desc'
+                    },
+                    select: {
+                        mainImageUrl: true
+                    }
+                });
+                if (product === null || product === void 0 ? void 0 : product.mainImageUrl) {
+                    row.imageUrl = product.mainImageUrl;
+                }
+            }));
+        }
+    }
     return {
         id: zone.id,
         title: zone.title,
@@ -89651,16 +89962,8 @@ const createRecommendZone = (0, _action_utils.requireRole)([
         });
         // 2. 插入明细关系
         if (payload.items.length > 0) {
-            const isSideNavZone = payload.zoneType === 'SIDE_NAV';
-            const itemData = payload.items.map((i)=>({
-                    zoneId: zone.id,
-                    entityType: payload.zoneType,
-                    productId: payload.zoneType === 'PRODUCT' ? i.entityId : null,
-                    categoryId: isSideNavZone || payload.zoneType === 'CATEGORY' ? i.entityId : null,
-                    sortWeight: i.sortWeight
-                }));
             await tx.homeRecommendZoneItem.createMany({
-                data: itemData
+                data: toZoneItemWriteRows(zone.id, payload.zoneType, payload.items)
             });
         }
         // 3. 处理自动生成永久商品集合业务 (Schema约束: 集合只能绑product，故仅限 PRODUCT 类型)
@@ -89673,14 +89976,12 @@ const createRecommendZone = (0, _action_utils.requireRole)([
                 }
             });
             if (payload.items.length > 0) {
-                const colItems = payload.items.map((i)=>({
-                        collectionId: collection.id,
-                        productId: i.entityId,
-                        sortWeight: i.sortWeight
-                    }));
-                await tx.homeRecommendCollectionItem.createMany({
-                    data: colItems
-                });
+                const colItems = toCollectionProductRows(collection.id, payload.zoneType, payload.items);
+                if (colItems.length > 0) {
+                    await tx.homeRecommendCollectionItem.createMany({
+                        data: colItems
+                    });
+                }
             }
             await tx.homeRecommendZone.update({
                 where: {
@@ -89732,16 +90033,8 @@ const updateRecommendZone = (0, _action_utils.requireRole)([
             }
         });
         if (payload.items.length > 0) {
-            const isSideNavZone = payload.zoneType === 'SIDE_NAV';
-            const itemData = payload.items.map((i)=>({
-                    zoneId: input.id,
-                    entityType: payload.zoneType,
-                    productId: payload.zoneType === 'PRODUCT' ? i.entityId : null,
-                    categoryId: isSideNavZone || payload.zoneType === 'CATEGORY' ? i.entityId : null,
-                    sortWeight: i.sortWeight
-                }));
             await tx.homeRecommendZoneItem.createMany({
-                data: itemData
+                data: toZoneItemWriteRows(input.id, payload.zoneType, payload.items)
             });
         }
         // 3. 处理永久集合更新 (仅限 PRODUCT)
@@ -89763,13 +90056,10 @@ const updateRecommendZone = (0, _action_utils.requireRole)([
                             collectionId: zone.boundCollectionId
                         }
                     });
-                    if (payload.items.length > 0) {
+                    const colItems = toCollectionProductRows(zone.boundCollectionId, payload.zoneType, payload.items);
+                    if (colItems.length > 0) {
                         await tx.homeRecommendCollectionItem.createMany({
-                            data: payload.items.map((i)=>({
-                                    collectionId: zone.boundCollectionId,
-                                    productId: i.entityId,
-                                    sortWeight: i.sortWeight
-                                }))
+                            data: colItems
                         });
                     }
                 } else {
@@ -89837,7 +90127,7 @@ const duplicateRecommendZone = (0, _action_utils.requireRole)([
                         sortWeight: 'desc'
                     },
                     {
-                        createdAt: 'asc'
+                        createdAt: 'desc'
                     }
                 ]
             }
@@ -89970,28 +90260,52 @@ const batchUpdateZoneItemSortWeight = (0, _action_utils.requireRole)([
         }
     });
     if (!zone) throw new Error('该推荐专区不存在');
-    await _prisma.default.$transaction(updates.map((u)=>{
-        if (zone.zoneType === 'PRODUCT') {
-            return _prisma.default.homeRecommendZoneItem.updateMany({
-                where: {
-                    zoneId,
-                    productId: u.entityId
-                },
-                data: {
-                    sortWeight: Number(u.sortWeight)
+    await _prisma.default.$transaction(async (tx)=>{
+        for (const u of updates){
+            const weight = Number(u.sortWeight);
+            if (zone.zoneType === 'PRODUCT') {
+                const byProduct = await tx.homeRecommendZoneItem.updateMany({
+                    where: {
+                        zoneId,
+                        productId: u.entityId
+                    },
+                    data: {
+                        sortWeight: weight
+                    }
+                });
+                if (byProduct.count > 0) {
+                    await tx.product.update({
+                        where: {
+                            id: u.entityId
+                        },
+                        data: {
+                            sortWeight: weight
+                        }
+                    });
+                } else {
+                    await tx.homeRecommendZoneItem.updateMany({
+                        where: {
+                            zoneId,
+                            categoryId: u.entityId
+                        },
+                        data: {
+                            sortWeight: weight
+                        }
+                    });
                 }
-            });
-        }
-        return _prisma.default.homeRecommendZoneItem.updateMany({
-            where: {
-                zoneId,
-                categoryId: u.entityId
-            },
-            data: {
-                sortWeight: Number(u.sortWeight)
+            } else {
+                await tx.homeRecommendZoneItem.updateMany({
+                    where: {
+                        zoneId,
+                        categoryId: u.entityId
+                    },
+                    data: {
+                        sortWeight: weight
+                    }
+                });
             }
-        });
-    }));
+        }
+    });
     (0, _homeRecommendZoneCache.invalidateHomeRecommendZoneCache)();
 }));
 const getSelectableProducts = (0, _action_utils.requireRole)([
@@ -90110,6 +90424,7 @@ const getSelectableCategories = (0, _action_utils.requireRole)([
                 name: c.name,
                 level: c.level,
                 imageUrl: c.imageUrl,
+                parentId: c.parentId,
                 parentName: ((_c_parent = c.parent) === null || _c_parent === void 0 ? void 0 : _c_parent.name) || null
             };
         })
@@ -90193,6 +90508,8 @@ const createDraftDisplayProducts = (0, _action_utils.requireRole)([
                     productCode: ids.productCode,
                     source: 'MANUAL',
                     status: 'DRAFT',
+                    // 与专区明细同权：越新越大，前台 Coming / 专区同序
+                    sortWeight: maxSort + (images.length - index) * 10,
                     mainImageUrl: image.url,
                     galleryJson: [
                         {
@@ -90221,7 +90538,8 @@ const createDraftDisplayProducts = (0, _action_utils.requireRole)([
                 imageUrl: product.mainImageUrl,
                 status: product.status,
                 sortWeight: maxSort + (images.length - index) * 10,
-                createdAt: product.createdAt.toISOString()
+                createdAt: product.createdAt.toISOString(),
+                itemKind: 'PRODUCT'
             });
         }
     });
@@ -90349,6 +90667,9 @@ _export(exports, {
     get inlineUpdatePendingImportSkuField () {
         return inlineUpdatePendingImportSkuField;
     },
+    get isNoBrandCatchAllCategoryName () {
+        return isNoBrandCatchAllCategoryName;
+    },
     get loadAutoMatchSecondaryCategories () {
         return loadAutoMatchSecondaryCategories;
     },
@@ -90361,8 +90682,14 @@ _export(exports, {
     get parseTableImportContent () {
         return parseTableImportContent;
     },
+    get pickBestBrandCategoryFromTitle () {
+        return pickBestBrandCategoryFromTitle;
+    },
     get pickImportPricingTargetCategory () {
         return pickImportPricingTargetCategory;
+    },
+    get pruneNoBrandCatchAllLinks () {
+        return pruneNoBrandCatchAllLinks;
     },
     get publishPendingImportItems () {
         return publishPendingImportItems;
@@ -90395,13 +90722,21 @@ _export(exports, {
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
 const _categoryPricing = __webpack_require__(73284);
+const _categoryMatchGuards = __webpack_require__(78565);
+const _categoryShelfFamily = __webpack_require__(80890);
 const _priceCoefficient = __webpack_require__(1282);
+const _categoryFilterTitleMatch = __webpack_require__(84777);
+const _categoryWeight = __webpack_require__(99552);
+const _categorySynonyms = __webpack_require__(10050);
 const _categorySlug = __webpack_require__(27863);
 const _productIdentifiers = __webpack_require__(92969);
 const _pendingImportReadiness = __webpack_require__(64481);
 const _resolveProductTitleEn = __webpack_require__(64205);
+const _brandAlias = __webpack_require__(69646);
+const _brandTitleNormalize = __webpack_require__(53958);
 const _priceThresholdAutoClassify = __webpack_require__(77744);
 const _resolveInitialStock = __webpack_require__(35196);
+const _tableImportSpec = __webpack_require__(22452);
 const _sortSizeLabels = __webpack_require__(15784);
 const _PinduoduoParser = __webpack_require__(52966);
 const _1688MtopClient = __webpack_require__(54314);
@@ -90557,10 +90892,12 @@ const resolveImportCategoryIdentifierMeta = async (tx, categoryId)=>{
     }
     return {
         categoryId: category.id,
-        shortCode
+        shortCode,
+        categoryName: category.name
     };
 };
 const resolveImportCategoryOwnership = async (tx, categoryId)=>{
+    var _category_parent, _category_parent1;
     const category = await tx.category.findUnique({
         where: {
             id: categoryId
@@ -90569,23 +90906,28 @@ const resolveImportCategoryOwnership = async (tx, categoryId)=>{
             id: true,
             level: true,
             parentId: true,
-            status: true
+            status: true,
+            isBrandCategory: true,
+            parent: {
+                select: {
+                    id: true,
+                    status: true,
+                    name: true,
+                    isBrandCategory: true
+                }
+            }
         }
     });
     if (!category || category.status !== 'ACTIVE') {
         throw new Error('目标分类不存在或已停用');
     }
+    const parentName = String(((_category_parent = category.parent) === null || _category_parent === void 0 ? void 0 : _category_parent.name) || '').trim().toLowerCase();
+    if (category.isBrandCategory || ((_category_parent1 = category.parent) === null || _category_parent1 === void 0 ? void 0 : _category_parent1.isBrandCategory) || parentName === 'brand' || parentName === 'brands' || parentName === '品牌') {
+        throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目');
+    }
     const isSecondary = Number(category.level) === 2 && !!category.parentId;
     if (isSecondary) {
-        const parent = await tx.category.findUnique({
-            where: {
-                id: category.parentId
-            },
-            select: {
-                id: true,
-                status: true
-            }
-        });
+        const parent = category.parent;
         if ((parent === null || parent === void 0 ? void 0 : parent.status) === 'ACTIVE') {
             return {
                 primaryCategoryId: category.id,
@@ -90681,7 +91023,8 @@ const loadImportPricingCategories = async (db)=>{
             id: true,
             name: true,
             parentId: true,
-            priceCoefficient: true
+            priceCoefficient: true,
+            isBrandCategory: true
         }
     });
     return new Map(categories.map((category)=>[
@@ -90689,14 +91032,18 @@ const loadImportPricingCategories = async (db)=>{
             category
         ]));
 };
+const isBrandShelfParentName = (name)=>[
+        'brand',
+        'brands',
+        '品牌'
+    ].includes(String(name || '').trim().toLowerCase());
 const resolveImportCategoryCoefficient = (categoryMap, categoryId)=>{
     const current = categoryId ? categoryMap.get(categoryId) || null : null;
     const parent = (current === null || current === void 0 ? void 0 : current.parentId) ? categoryMap.get(current.parentId) || null : null;
     // Brand shelf L2 must not drive import pricing — fall through to default via nulls.
-    const currentIsBrandChild = parent && String(parent.name || '').trim().toLowerCase() === 'brand';
-    const parentIsBrandShelf = parent && String(parent.name || '').trim().toLowerCase() === 'brand';
+    const currentIsBrandChild = Boolean(current === null || current === void 0 ? void 0 : current.isBrandCategory) || Boolean(parent === null || parent === void 0 ? void 0 : parent.isBrandCategory) || isBrandShelfParentName(parent === null || parent === void 0 ? void 0 : parent.name);
     const own = current && !currentIsBrandChild && !(0, _categoryPricing.isAggregatePricingCategoryName)(current.name) ? toNumberOrNull(current.priceCoefficient) : null;
-    const parentCoefficient = parent && !parentIsBrandShelf && !(0, _categoryPricing.isAggregatePricingCategoryName)(parent.name) ? toNumberOrNull(parent.priceCoefficient) : null;
+    const parentCoefficient = parent && !parent.isBrandCategory && !isBrandShelfParentName(parent.name) && !(0, _categoryPricing.isAggregatePricingCategoryName)(parent.name) ? toNumberOrNull(parent.priceCoefficient) : null;
     return (0, _priceCoefficient.resolveCategoryPriceCoefficient)(own, parentCoefficient);
 };
 const getGlobalExchangeRate = async (db)=>{
@@ -91464,7 +91811,8 @@ const buildNeutralFallbackSkuRow = (params)=>({
         costPrice: params.costPrice,
         price: params.price,
         stock: params.stock,
-        weightGrams: 500,
+        // 默认规格行不写死 500，交由上层「提取/分类兜底」决定重量
+        weightGrams: null,
         imageUrl: null,
         attributes: [
             {
@@ -91524,7 +91872,8 @@ const buildNeutralFallbackSkuRow = (params)=>({
                 costPrice: params.costPrice,
                 price: params.price,
                 stock: params.stock,
-                weightGrams: (_params_weightGrams = params.weightGrams) !== null && _params_weightGrams !== void 0 ? _params_weightGrams : 500,
+                // 颜色展开的行不写死 500，交由上层「提取/分类兜底」决定，避免默认重量失效
+                weightGrams: (_params_weightGrams = params.weightGrams) !== null && _params_weightGrams !== void 0 ? _params_weightGrams : null,
                 imageUrl: color.imageUrl,
                 attributes
             });
@@ -91624,6 +91973,7 @@ const empty1688OfferPreview = ()=>({
         sourceCategoryName: null,
         priceMin: null,
         priceMax: null,
+        minOrderQty: null,
         featureAttributes: [],
         skuTable: [],
         colors: [],
@@ -91731,6 +92081,7 @@ const buildPreviewFromParsedHtml = async (html)=>{
         sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
         priceMin,
         priceMax,
+        minOrderQty: extract1688MinOrderQtyFromHtml(html),
         featureAttributes,
         skuTable: multiSpec.skuTable,
         colors: multiSpec.colors,
@@ -92828,6 +93179,7 @@ const readSkuMapStock = (row)=>{
                         sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
                         priceMin,
                         priceMax,
+                        minOrderQty: extract1688MinOrderQtyFromHtml(html),
                         featureAttributes,
                         skuTable: multiSpec.skuTable,
                         colors: multiSpec.colors,
@@ -93115,6 +93467,29 @@ const pickJsonNumberField = (html, key)=>{
     if (!(matched === null || matched === void 0 ? void 0 : matched[1])) return null;
     const num = Number(matched[1]);
     return Number.isFinite(num) ? num : null;
+};
+/** 从 1688 详情 HTML/mtop JSON 提取起订量（beginAmount / 混批 / 文案） */ const extract1688MinOrderQtyFromHtml = (html)=>{
+    if (!html) return null;
+    const candidates = [
+        pickJsonNumberField(html, 'beginAmount'),
+        pickJsonNumberField(html, 'mixAmount'),
+        pickJsonNumberField(html, 'startAmount'),
+        pickJsonNumberField(html, 'minOrderQuantity'),
+        pickJsonNumberField(html, 'minOrderQty'),
+        pickJsonNumberField(html, 'minBuyCount')
+    ];
+    for (const n of candidates){
+        if (n != null && n > 0) return Math.max(1, Math.round(n));
+    }
+    // 价格梯度里常见 "begin": 10
+    const begins = Array.from(html.matchAll(/"begin"\s*:\s*(\d+)/gi)).map((m)=>Number(m[1])).filter((n)=>Number.isFinite(n) && n > 0);
+    if (begins.length) return Math.max(1, Math.round(Math.min(...begins)));
+    const textMatch = html.match(/(?:起订量|起批量|起批|起订)[：:\s]*(\d+)\s*件?/i) || html.match(/(\d+)\s*件起批/i) || html.match(/≥\s*(\d+)\s*件/i);
+    if (textMatch === null || textMatch === void 0 ? void 0 : textMatch[1]) {
+        const n = Number(textMatch[1]);
+        if (Number.isFinite(n) && n > 0) return Math.max(1, Math.round(n));
+    }
+    return null;
 };
 const classify1688OfferHtml = (html)=>{
     var _ref, _pickJsonNumberField, _ref1, _pickJsonNumberField1;
@@ -93487,7 +93862,10 @@ const resolvePendingSkuDrafts = (item)=>{
                     weight_grams: toNumberOrNull((_row_weightGrams = row.weightGrams) !== null && _row_weightGrams !== void 0 ? _row_weightGrams : item.weightGrams),
                     stock: (0, _resolveInitialStock.resolveInitialStock)((_row_stock = row.stock) !== null && _row_stock !== void 0 ? _row_stock : item.availableStock),
                     image_url: normalizeText(row.imageUrl) || null,
-                    attributes: row.attributes || []
+                    attributes: Array.isArray(row.attributes) ? row.attributes.map((attr)=>({
+                            name: normalizeText(attr === null || attr === void 0 ? void 0 : attr.name) || '规格',
+                            value: normalizeText(attr === null || attr === void 0 ? void 0 : attr.value) || '默认'
+                        })) : parseSpecAttributes(row.spec || '')
                 };
             });
         }
@@ -93677,8 +94055,180 @@ const summarizePendingSkuPrices = (drafts, exchangeRate)=>{
         usdMax: cnyMax !== null ? roundCurrency(cnyMax / exchangeRate) : null
     };
 };
-const buildPendingItemStructure = (item, task)=>{
-    var _item_cnyPriceMin, _item_cnyPriceMax;
+/** 售价仍等于成本、但系数>1：表格导入历史 bug，打开队列时补乘系数 */ const isPendingSellPriceStuckAtCost = (drafts, itemCost, coefficient)=>{
+    if (!(coefficient > 1.0001)) return false;
+    const samples = drafts.length ? drafts.map((sku)=>{
+        var _toNumberOrNull;
+        return {
+            cost: (_toNumberOrNull = toNumberOrNull(sku.cost_price)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : itemCost,
+            price: toNumberOrNull(sku.price)
+        };
+    }) : [
+        {
+            cost: itemCost,
+            price: itemCost
+        }
+    ];
+    const comparable = samples.filter((row)=>row.cost !== null && row.cost > 0 && row.price !== null && row.price > 0);
+    if (!comparable.length) return false;
+    return comparable.every((row)=>Math.abs(row.price - row.cost) < 0.02);
+};
+const repairPendingImportPricesMissingCoefficient = async ()=>{
+    const exchangeRate = await getGlobalExchangeRate(_prisma.default);
+    const categoryMap = await loadImportPricingCategories(_prisma.default);
+    let updated = 0;
+    let cursor;
+    const batchSize = 100;
+    for(;;){
+        var _items_;
+        const items = await _prisma.default.importtaskitem.findMany({
+            where: {
+                isPublished: false,
+                fetchStatus: 'COMPLETED'
+            },
+            select: {
+                id: true,
+                costPrice: true,
+                coefficient: true,
+                targetCategoryId: true,
+                cnyPriceMin: true,
+                cnyPriceMax: true,
+                previewDataJson: true,
+                skuSummaryText: true,
+                availableStock: true,
+                weightGrams: true,
+                parsedPriceMin: true
+            },
+            orderBy: {
+                id: 'asc'
+            },
+            take: batchSize,
+            ...cursor ? {
+                skip: 1,
+                cursor: {
+                    id: cursor
+                }
+            } : {}
+        });
+        if (!items.length) break;
+        cursor = (_items_ = items[items.length - 1]) === null || _items_ === void 0 ? void 0 : _items_.id;
+        for (const item of items){
+            var _priceSummary_cnyMin;
+            const coefficient = resolvePendingItemCoefficient(item, categoryMap);
+            if (!(coefficient > 1.0001)) continue;
+            const drafts = resolvePendingSkuDrafts(item);
+            const itemCost = toNumberOrNull(item.costPrice);
+            if (!isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) continue;
+            const nextDrafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient);
+            const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate);
+            const currentPreview = item.previewDataJson || {};
+            const dbCoefficient = toNumberOrNull(item.coefficient);
+            await _prisma.default.importtaskitem.update({
+                where: {
+                    id: item.id
+                },
+                data: {
+                    ...dbCoefficient === null || dbCoefficient <= 0 ? {
+                        coefficient
+                    } : {},
+                    cnyPriceMin: priceSummary.cnyMin,
+                    cnyPriceMax: priceSummary.cnyMax,
+                    usdPriceMin: priceSummary.usdMin,
+                    usdPriceMax: priceSummary.usdMax,
+                    previewDataJson: {
+                        ...currentPreview,
+                        price: (_priceSummary_cnyMin = priceSummary.cnyMin) !== null && _priceSummary_cnyMin !== void 0 ? _priceSummary_cnyMin : currentPreview.price,
+                        skuTable: nextDrafts.map((sku)=>({
+                                skuKey: sku.sku_key,
+                                spec: sku.spec_text,
+                                costPrice: sku.cost_price,
+                                price: sku.price,
+                                stock: sku.stock,
+                                weightGrams: sku.weight_grams,
+                                imageUrl: sku.image_url || undefined,
+                                attributes: sku.attributes
+                            }))
+                    }
+                }
+            });
+            updated += 1;
+        }
+        if (items.length < batchSize) break;
+    }
+    return updated;
+};
+const resolvePendingItemCoefficient = (item, categoryMap)=>{
+    const fromDb = toNumberOrNull(item.coefficient);
+    if (fromDb !== null && fromDb > 0) return fromDb;
+    const preview = item.previewDataJson || {};
+    const categoryId = item.targetCategoryId || preview.categoryId || null;
+    return resolveImportCategoryCoefficient(categoryMap, categoryId);
+};
+const resolvePendingItemPricedSkus = (item, context)=>{
+    var _toNumberOrNull;
+    const coefficient = resolvePendingItemCoefficient(item, context.categoryMap);
+    const itemCost = toNumberOrNull(item.costPrice);
+    let drafts = resolvePendingSkuDrafts(item);
+    if (isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) {
+        drafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient);
+    }
+    const priceSummary = summarizePendingSkuPrices(drafts, context.exchangeRate);
+    return {
+        skus: drafts,
+        coefficient: (_toNumberOrNull = toNumberOrNull(item.coefficient)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : coefficient,
+        ...priceSummary
+    };
+};
+const enrichPendingMatchedCategoriesFromTitle = (item, preview, context)=>{
+    const title = (0, _brandAlias.normalizeBrandTitleSync)(item.parsedName || preview.name || '') || String(item.parsedName || preview.name || '').trim();
+    const existingIds = Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean)));
+    const existingNames = Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean)));
+    if (!title) {
+        return {
+            ids: existingIds,
+            names: existingNames
+        };
+    }
+    const detailText = [
+        item.productDetail,
+        preview.shortDescription
+    ].filter(Boolean).join('\n') || null;
+    const fromMatcher = matchSecondaryCategoriesByTitle(title, context.secondaryCategories, detailText).filter((hit)=>(0, _categoryMatchGuards.isAttributeOrFilterCategory)({
+            name: hit.name,
+            parentName: hit.parentName
+        }));
+    const fromFilter = (0, _categoryFilterTitleMatch.matchFilterCategoriesByTitle)(title, context.filterCategories, detailText);
+    const productFamily = (0, _categoryShelfFamily.detectShelfFamily)(title, detailText);
+    const parentById = new Map();
+    for (const cat of context.secondaryCategories)parentById.set(cat.id, cat.parentName || null);
+    for (const cat of context.filterCategories)parentById.set(cat.id, cat.parentName || null);
+    const byId = new Map();
+    for (const hit of fromMatcher)byId.set(hit.id, hit.name);
+    for (const hit of fromFilter)byId.set(hit.id, hit.name);
+    const nameById = new Map();
+    for (const cat of context.secondaryCategories)nameById.set(cat.id, cat.name);
+    for (const cat of context.filterCategories)nameById.set(cat.id, cat.name);
+    for (const [id, name] of byId)nameById.set(id, name);
+    const keepId = (id)=>{
+        const name = nameById.get(id);
+        if (!name) return true;
+        return (0, _categoryShelfFamily.shelfFamiliesCompatible)(productFamily, (0, _categoryShelfFamily.detectShelfFamily)(name, parentById.get(id)));
+    };
+    const mergedIds = Array.from(new Set([
+        ...existingIds,
+        ...Array.from(byId.keys())
+    ])).filter(keepId);
+    const mergedNames = Array.from(new Set([
+        ...existingNames,
+        ...mergedIds.map((id)=>nameById.get(id)).filter((name)=>Boolean(name))
+    ]));
+    return {
+        ids: mergedIds,
+        names: mergedNames
+    };
+};
+const buildPendingItemStructure = (item, task, enrich)=>{
+    var _ref, _item_cnyPriceMin, _ref1, _item_cnyPriceMax, _ref2, _ref3, _ref4;
     const preview = item.previewDataJson || {};
     const mainImage = item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null;
     const rawGallery = dedupeImageUrls([
@@ -93691,6 +94241,11 @@ const buildPendingItemStructure = (item, task)=>{
     const galleryUrls = rawGallery.slice(0, 12);
     const rawDetail = String(item.productDetail || '');
     const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail;
+    const priced = enrich ? resolvePendingItemPricedSkus(item, enrich) : null;
+    const matchedCategories = enrich ? enrichPendingMatchedCategoriesFromTitle(item, preview, enrich) : {
+        ids: Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean))),
+        names: Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean)))
+    };
     return {
         item_id: item.id,
         item_importTaskId: item.importTaskId,
@@ -93700,7 +94255,7 @@ const buildPendingItemStructure = (item, task)=>{
         item_isPublished: Boolean(item.isPublished),
         item_importedProductId: item.importedProductId || null,
         item_failureReason: item.failureReason || null,
-        item_productName: item.productName || item.parsedName || null,
+        item_productName: (0, _brandAlias.normalizeBrandTitleSync)(item.productName || item.parsedName || null) || null,
         item_supplierName: item.supplierName || null,
         item_mainImageUrl: mainImage,
         item_galleryUrls: galleryUrls,
@@ -93708,23 +94263,27 @@ const buildPendingItemStructure = (item, task)=>{
         item_weightGrams: toNumberOrNull(item.weightGrams),
         item_sourceCategoryName: item.sourceCategoryName || null,
         item_targetCategoryId: item.targetCategoryId || (task === null || task === void 0 ? void 0 : task.defaultCategoryId) || null,
-        item_matchedCategoryIds: Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean))),
-        item_matchedCategoryNames: Array.from(new Set((preview.matchedCategoryNames || []).filter(Boolean))),
-        item_coefficient: toNumberOrNull(item.coefficient),
+        item_matchedCategoryIds: matchedCategories.ids,
+        item_matchedCategoryNames: matchedCategories.names,
+        item_coefficient: priced ? priced.coefficient : toNumberOrNull(item.coefficient),
         item_goodsStatus: item.goodsStatus || (task === null || task === void 0 ? void 0 : task.defaultStatus) || 'DRAFT',
         item_productDetail: listDetail || null,
+        item_featureAttributes: Array.isArray(preview.featureAttributes) ? preview.featureAttributes.map((attr)=>({
+                key: String((attr === null || attr === void 0 ? void 0 : attr.key) || '').trim(),
+                value: String((attr === null || attr === void 0 ? void 0 : attr.value) || '').trim()
+            })).filter((attr)=>attr.key && attr.value).slice(0, 40) : [],
         item_skuSummaryText: item.skuSummaryText || null,
-        item_cnyPriceMin: toNumberOrNull((_item_cnyPriceMin = item.cnyPriceMin) !== null && _item_cnyPriceMin !== void 0 ? _item_cnyPriceMin : item.parsedPriceMin),
-        item_cnyPriceMax: toNumberOrNull((_item_cnyPriceMax = item.cnyPriceMax) !== null && _item_cnyPriceMax !== void 0 ? _item_cnyPriceMax : item.parsedPriceMax),
-        item_usdPriceMin: toNumberOrNull(item.usdPriceMin),
-        item_usdPriceMax: toNumberOrNull(item.usdPriceMax),
+        item_cnyPriceMin: (_ref = priced === null || priced === void 0 ? void 0 : priced.cnyMin) !== null && _ref !== void 0 ? _ref : toNumberOrNull((_item_cnyPriceMin = item.cnyPriceMin) !== null && _item_cnyPriceMin !== void 0 ? _item_cnyPriceMin : item.parsedPriceMin),
+        item_cnyPriceMax: (_ref1 = priced === null || priced === void 0 ? void 0 : priced.cnyMax) !== null && _ref1 !== void 0 ? _ref1 : toNumberOrNull((_item_cnyPriceMax = item.cnyPriceMax) !== null && _item_cnyPriceMax !== void 0 ? _item_cnyPriceMax : item.parsedPriceMax),
+        item_usdPriceMin: (_ref2 = priced === null || priced === void 0 ? void 0 : priced.usdMin) !== null && _ref2 !== void 0 ? _ref2 : toNumberOrNull(item.usdPriceMin),
+        item_usdPriceMax: (_ref3 = priced === null || priced === void 0 ? void 0 : priced.usdMax) !== null && _ref3 !== void 0 ? _ref3 : toNumberOrNull(item.usdPriceMax),
         item_minimumOrderQuantity: (0, _resolveInitialStock.resolveInitialMinOrderQty)(item.minimumOrderQuantity),
         item_availableStock: (0, _resolveInitialStock.resolveInitialStock)(item.availableStock),
-        item_parsedName: item.parsedName || null,
+        item_parsedName: (0, _brandAlias.normalizeBrandTitleSync)(item.parsedName || null) || null,
         item_parsedMainImageUrl: item.parsedMainImageUrl || null,
         item_createdAt: item.createdAt,
         item_updatedAt: item.updatedAt || item.createdAt,
-        item_skus: resolvePendingSkuDrafts(item)
+        item_skus: (_ref4 = priced === null || priced === void 0 ? void 0 : priced.skus) !== null && _ref4 !== void 0 ? _ref4 : resolvePendingSkuDrafts(item)
     };
 };
 const buildPendingTaskSummary = (task)=>({
@@ -93827,7 +94386,9 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
     const page = Math.max(1, Number(opts === null || opts === void 0 ? void 0 : opts.page) || 1);
     const pageSize = Math.min(MAX_PENDING_QUEUE_PAGE_SIZE, Math.max(1, Number(opts === null || opts === void 0 ? void 0 : opts.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE));
     const skip = (page - 1) * pageSize;
-    const [activeTask, fallbackTask, total, items] = await Promise.all([
+    // 预热品牌别名缓存，使列表展示的 normalizeBrandTitleSync 用到 DB 最新映射
+    await (0, _brandAlias.loadBrandAliasRules)();
+    const [activeTask, fallbackTask, total, items, exchangeRate, categoryMap, secondaryCategories, filterCategories] = await Promise.all([
         _prisma.default.importtask.findFirst({
             where: {
                 status: {
@@ -93898,8 +94459,18 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
             skip,
             take: pageSize,
             select: PENDING_QUEUE_ITEM_SELECT
-        })
+        }),
+        getGlobalExchangeRate(_prisma.default),
+        loadImportPricingCategories(_prisma.default),
+        loadAutoMatchSecondaryCategories(_prisma.default),
+        (0, _categoryFilterTitleMatch.loadFilterCategoriesFromDb)(_prisma.default)
     ]);
+    const enrichContext = {
+        exchangeRate,
+        categoryMap,
+        secondaryCategories,
+        filterCategories
+    };
     const task = activeTask || fallbackTask;
     const sortedItems = [
         ...items
@@ -93918,7 +94489,7 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
     // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
     return {
         activeTask: task ? buildPendingTaskSummary(task) : null,
-        items: sortedItems.map((item)=>buildPendingItemStructure(item, item.importTask)),
+        items: sortedItems.map((item)=>buildPendingItemStructure(item, item.importTask, enrichContext)),
         total
     };
 };
@@ -93997,6 +94568,14 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
         price: finalPriceMin,
         stock: strategyStock
     });
+    // 重量自动识别：标题/详情正则提取 → 二级分类兜底 → 500g（运营可在待上传区双击覆盖）
+    const fallbackWeightGrams = (0, _categoryWeight.resolveProductWeightGrams)({
+        text: [
+            productName,
+            productDetail
+        ].filter(Boolean).join(' '),
+        categoryNames: matchedSecondaryCategoryNames || []
+    });
     const skuTable = baseSkuRows.map((row, index)=>{
         var _ref, _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
         const sourceCost = (_ref = (_toNumberOrNull = toNumberOrNull(row.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : toNumberOrNull(row.price)) !== null && _ref !== void 0 ? _ref : rawPriceMin;
@@ -94008,7 +94587,7 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
             costPrice: nextCost,
             price: nextPrice,
             stock: (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock),
-            weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
+            weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : fallbackWeightGrams,
             imageUrl: normalizeText(row.imageUrl) || null,
             attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
                     name: normalizeText(attr.name) || '规格',
@@ -94116,7 +94695,7 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
             mainImageUrl,
             parsedMainImageUrl: mainImageUrl,
             costPrice: (_toNumberOrNull = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : costMin,
-            weightGrams: (_toNumberOrNull1 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 500,
+            weightGrams: (_toNumberOrNull1 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : fallbackWeightGrams,
             sourceCategoryName: null,
             coefficient: resolvedCoefficient,
             goodsStatus: task.defaultStatus || 'DRAFT',
@@ -94157,8 +94736,40 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
     return groupedRows;
 };
 const createProductRecord = async (tx, params)=>{
-    var _params_costPrice, _params_weightGrams, _params_stock, _params_weightGrams1, _params_costPrice1, _params_priceCoefficient;
+    var _params_costPrice, _params_stock, _params_costPrice1, _params_priceCoefficient;
+    var _brandGuard_parent, _brandGuard_parent1;
     const categoryMeta = await resolveImportCategoryIdentifierMeta(tx, params.categoryId);
+    const brandGuard = await tx.category.findUnique({
+        where: {
+            id: params.categoryId
+        },
+        select: {
+            isBrandCategory: true,
+            parent: {
+                select: {
+                    name: true,
+                    isBrandCategory: true
+                }
+            }
+        }
+    });
+    if ((brandGuard === null || brandGuard === void 0 ? void 0 : brandGuard.isBrandCategory) || (brandGuard === null || brandGuard === void 0 ? void 0 : (_brandGuard_parent = brandGuard.parent) === null || _brandGuard_parent === void 0 ? void 0 : _brandGuard_parent.isBrandCategory) || isBrandShelfParentName(brandGuard === null || brandGuard === void 0 ? void 0 : (_brandGuard_parent1 = brandGuard.parent) === null || _brandGuard_parent1 === void 0 ? void 0 : _brandGuard_parent1.name)) {
+        throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目');
+    }
+    // 重量自动识别：显式重量优先 → 标题/规格/详情正则提取 → 二级分类兜底 → 500g
+    const weightSourceText = [
+        params.name,
+        params.skuSummaryText,
+        params.detailText,
+        ...(params.skus || []).map((s)=>s.spec_text).filter(Boolean)
+    ].filter(Boolean).join(' ');
+    const effectiveWeightGrams = (0, _categoryWeight.resolveProductWeightGrams)({
+        explicit: toNumberOrNull(params.weightGrams),
+        text: weightSourceText,
+        categoryNames: [
+            categoryMeta.categoryName
+        ]
+    });
     // 每次调用都生成新的独立 SPU 编号，不做标题/图片/产品编号合并
     const productCode = await generateStructuredSpuCode(tx, categoryMeta.shortCode);
     const draftSkus = Array.isArray(params.skus) && params.skus.length > 0 ? params.skus : [
@@ -94167,7 +94778,7 @@ const createProductRecord = async (tx, params)=>{
             spec_text: params.skuSummaryText || '默认规格',
             cost_price: (_params_costPrice = params.costPrice) !== null && _params_costPrice !== void 0 ? _params_costPrice : null,
             price: params.price,
-            weight_grams: (_params_weightGrams = params.weightGrams) !== null && _params_weightGrams !== void 0 ? _params_weightGrams : null,
+            weight_grams: effectiveWeightGrams,
             stock: (_params_stock = params.stock) !== null && _params_stock !== void 0 ? _params_stock : _resolveInitialStock.DEFAULT_AVAILABLE_STOCK,
             image_url: null,
             attributes: params.skuSummaryText ? [
@@ -94209,7 +94820,7 @@ const createProductRecord = async (tx, params)=>{
             brandCategoryId: params.brandCategoryId || null,
             brandMatchKeyword: params.brandMatchKeyword || null,
             autoBrandMatched: !!params.autoBrandMatched,
-            weightGram: (_params_weightGrams1 = params.weightGrams) !== null && _params_weightGrams1 !== void 0 ? _params_weightGrams1 : null,
+            weightGram: effectiveWeightGrams,
             costPrice: (_params_costPrice1 = params.costPrice) !== null && _params_costPrice1 !== void 0 ? _params_costPrice1 : null,
             priceCoefficient: (_params_priceCoefficient = params.priceCoefficient) !== null && _params_priceCoefficient !== void 0 ? _params_priceCoefficient : null,
             detailText: params.detailText || null,
@@ -94238,7 +94849,7 @@ const createProductRecord = async (tx, params)=>{
                         var _sku_attributes_find, _sku_attributes, _sku_attributes_find1, _sku_attributes1, _sku_attributes2;
                         const skuPrice = (_toNumberOrNull = toNumberOrNull(sku.price)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : params.price;
                         const skuStock = (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(sku.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : params.stock);
-                        const skuWeightGrams = (_toNumberOrNull2 = toNumberOrNull(sku.weight_grams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : params.weightGrams;
+                        const skuWeightGrams = (_toNumberOrNull2 = toNumberOrNull(sku.weight_grams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : effectiveWeightGrams;
                         const sizeLabel = ((_sku_attributes = sku.attributes) === null || _sku_attributes === void 0 ? void 0 : (_sku_attributes_find = _sku_attributes.find((attr)=>isSizeDimensionName(attr.name))) === null || _sku_attributes_find === void 0 ? void 0 : _sku_attributes_find.value) || null;
                         const materialLabel = ((_sku_attributes1 = sku.attributes) === null || _sku_attributes1 === void 0 ? void 0 : (_sku_attributes_find1 = _sku_attributes1.find((attr)=>/^(材质|材料|material)$/i.test(normalizeText(attr.name)))) === null || _sku_attributes_find1 === void 0 ? void 0 : _sku_attributes_find1.value) || null;
                         const { specValue, colorValue } = buildImportSkuSegments(sku, index);
@@ -94285,13 +94896,24 @@ const createProductRecord = async (tx, params)=>{
     await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product.id);
     return product;
 };
-const normalizeCategoryMatchText = (value)=>String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+const normalizeCategoryMatchText = (value)=>(0, _categoryMatchGuards.canonicalizeQualityMatchText)(String(value || '').trim().toUpperCase().replace(/\s+/g, ''));
+const isNoBrandCatchAllCategoryName = (name)=>{
+    const n = normalizeCategoryMatchText(name);
+    if (!n) return false;
+    return n === 'NOBRAND' || n === 'NOBRANDS' || n === 'UNBRANDED' || n === 'OTHER' || n === 'OTHERS' || n === 'OTHERBRAND' || n === 'OTHERBRANDS' || n === '无品牌' || n === '其他品牌' || n === '其它品牌';
+};
 const containsCategoryMatchToken = (text, token)=>{
     const normalizedText = normalizeCategoryMatchText(text);
     const normalizedToken = normalizeCategoryMatchText(token);
     if (!normalizedText || !normalizedToken) return false;
     if (!normalizedText.includes(normalizedToken)) return false;
-    if (normalizedToken.length <= 2) {
+    // 品质/材质/below* 后缀：允许粘在货号后（3313normal quality）或后面再跟 jewelry
+    if ((0, _categoryMatchGuards.isGluedFilterSuffixToken)(normalizedToken)) return true;
+    // 纯 ASCII 品牌词（Chanel/Gucci/LV…）：要求左右非字母数字邻居。
+    // 标题常见「Chanel【钛钢】」「Chanel钛钢」「chanel 欧美」——品牌后直接接中文/符号仍算命中；
+    // 但要避免短词误伤（LV⊂SALVATION）以及长词嵌在英文单词内部。
+    const isAsciiToken = /^[A-Z0-9]+$/.test(normalizedToken);
+    if (isAsciiToken) {
         let from = 0;
         while(from < normalizedText.length){
             const idx = normalizedText.indexOf(normalizedToken, from);
@@ -94321,18 +94943,31 @@ const parseCategoryBrandKeywords = (raw)=>{
 };
 const buildCategoryMatchCorpus = (...parts)=>parts.map((part)=>String(part || '').trim()).filter(Boolean).join('\n');
 async function loadAutoMatchSecondaryCategories(tx) {
+    // 同时加载 ACTIVE 一级（Bags/Jewelry…）与二级：
+    // 标题「手提斜挎包」若只命中一级 Bags，也能勾上一级，不再只剩 Brand。
     const categories = await tx.category.findMany({
         where: {
             status: 'ACTIVE',
-            level: 2
+            OR: [
+                {
+                    level: 2
+                },
+                {
+                    level: 1,
+                    isBrandCategory: false
+                }
+            ]
         },
         select: {
             id: true,
             name: true,
+            level: true,
             brandKeywordsJson: true,
+            isBrandCategory: true,
             parent: {
                 select: {
-                    name: true
+                    name: true,
+                    isBrandCategory: true
                 }
             }
         },
@@ -94346,20 +94981,47 @@ async function loadAutoMatchSecondaryCategories(tx) {
         ]
     });
     return categories.map((category)=>{
-        var _category_parent;
+        var _category_level;
+        var _category_parent, _category_parent1;
+        const name = String(category.name || '').trim();
+        const parentName = ((_category_parent = category.parent) === null || _category_parent === void 0 ? void 0 : _category_parent.name) ? String(category.parent.name).trim() : null;
+        // 只用本类目同义词，不要继承父级 Bags 词——否则 Handbag/Backpack/wallet 会同时命中「包」
+        const keywords = Array.from(new Set([
+            ...parseCategoryBrandKeywords(category.brandKeywordsJson).filter((token)=>{
+                const n = normalizeCategoryMatchText(token);
+                return n.length >= 2 && ![
+                    '包',
+                    '袋',
+                    'BAG',
+                    'BAGS',
+                    '收纳',
+                    '收纳包',
+                    '卡包',
+                    '卡夹'
+                ].includes(n);
+            }),
+            ...(0, _categorySynonyms.resolveCategorySynonyms)(name)
+        ]));
         return {
             id: category.id,
-            name: String(category.name || '').trim(),
-            keywords: parseCategoryBrandKeywords(category.brandKeywordsJson),
-            parentName: ((_category_parent = category.parent) === null || _category_parent === void 0 ? void 0 : _category_parent.name) ? String(category.parent.name).trim() : null
+            name,
+            keywords,
+            level: (_category_level = category.level) !== null && _category_level !== void 0 ? _category_level : null,
+            parentName,
+            isBrandCategory: Boolean(category.isBrandCategory || ((_category_parent1 = category.parent) === null || _category_parent1 === void 0 ? void 0 : _category_parent1.isBrandCategory))
         };
     }).filter((category)=>category.name);
 }
-const isBrandParentSecondaryCategory = (category)=>String(category.parentName || '').trim().toLowerCase() === 'brand';
-function matchSecondaryCategoriesByTitle(title, categories, detailText) {
+const isBrandParentSecondaryCategory = (category)=>{
+    if (isNoBrandCatchAllCategoryName(category.name)) return false;
+    if (category.isBrandCategory) return true;
+    return isBrandShelfParentName(category.parentName);
+};
+function pickBestBrandCategoryFromTitle(title, categories, detailText) {
+    var _scored_;
     const corpus = buildCategoryMatchCorpus(title, detailText);
-    if (!corpus) return [];
-    const scored = categories.map((category)=>{
+    if (!corpus) return null;
+    const scored = categories.filter((category)=>isBrandParentSecondaryCategory(category)).map((category)=>{
         const tokens = [
             category.name,
             ...category.keywords
@@ -94372,13 +95034,209 @@ function matchSecondaryCategoriesByTitle(title, categories, detailText) {
             bestTokenLength
         };
     }).filter((item)=>Boolean(item));
-    scored.sort((a, b)=>// Prefer real L1→L2 product categories over Brand shelf L2s for import targeting.
-        Number(isBrandParentSecondaryCategory(a.category)) - Number(isBrandParentSecondaryCategory(b.category)) || b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
-    return scored.map((item)=>item.category);
+    scored.sort((a, b)=>b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
+    return ((_scored_ = scored[0]) === null || _scored_ === void 0 ? void 0 : _scored_.category) || null;
+}
+async function pruneNoBrandCatchAllLinks(tx, linkedCategoryIds, options) {
+    const ids = Array.from(new Set((linkedCategoryIds || []).filter(Boolean)));
+    if (!ids.length) return [];
+    const hasRealBrand = (options === null || options === void 0 ? void 0 : options.hasRealBrand) === true;
+    if (!hasRealBrand && (options === null || options === void 0 ? void 0 : options.keepWhenNoRealBrand) !== false) {
+        // 无真实品牌时允许保留 No Brand
+        return ids;
+    }
+    if (!hasRealBrand) return ids;
+    const rows = await tx.category.findMany({
+        where: {
+            id: {
+                in: ids
+            }
+        },
+        select: {
+            id: true,
+            name: true
+        }
+    });
+    const drop = new Set(rows.filter((row)=>isNoBrandCatchAllCategoryName(row.name)).map((row)=>row.id));
+    return ids.filter((id)=>!drop.has(id));
+}
+/** Brand 货架（自身或父级）永远不能当主类目 / 定价类目 */ const isBrandShelfCategoryId = (categoryId, categoryMap, secondaryById)=>{
+    const id = String(categoryId || '').trim();
+    if (!id) return false;
+    const fromAuto = secondaryById === null || secondaryById === void 0 ? void 0 : secondaryById.get(id);
+    if (fromAuto && isBrandParentSecondaryCategory(fromAuto)) return true;
+    const meta = categoryMap.get(id);
+    if (!meta) return false;
+    if (meta.isBrandCategory) return true;
+    const parent = meta.parentId ? categoryMap.get(meta.parentId) : null;
+    if (parent === null || parent === void 0 ? void 0 : parent.isBrandCategory) return true;
+    return isBrandShelfParentName(parent === null || parent === void 0 ? void 0 : parent.name);
+};
+/**
+ * 从候选里挑主类目：只接受真实一/二级商品类目，跳过全部 Brand 货架。
+ * 顺序即优先级（运营手选 > 任务默认 > 自动命中的 Handbag 等）。
+ */ const pickFirstNonBrandCategoryId = (candidates, categoryMap, secondaryById)=>{
+    for (const raw of candidates){
+        const id = String(raw || '').trim();
+        if (!id) continue;
+        if (isBrandShelfCategoryId(id, categoryMap, secondaryById)) continue;
+        return id;
+    }
+    return null;
+};
+/**
+ * 过泛词：不能单独用来判定二级类目（详情里随处可见「包/收纳」）。
+ * 一级 Bags 仍可通过更长同义词命中。
+ */ const GENERIC_CATEGORY_MATCH_TOKENS = new Set([
+    '包',
+    '袋',
+    '鞋',
+    '饰',
+    'bag',
+    'bags',
+    'set',
+    '套装',
+    '收纳',
+    '收纳包',
+    '卡包',
+    '卡夹',
+    '包挂',
+    '挂饰'
+].map((token)=>normalizeCategoryMatchText(token)));
+const isUsableCategoryMatchToken = (token, options)=>{
+    const normalized = normalizeCategoryMatchText(token);
+    if (!normalized) return false;
+    if (normalized.length < 2) return false;
+    if (!(options === null || options === void 0 ? void 0 : options.allowGeneric) && GENERIC_CATEGORY_MATCH_TOKENS.has(normalized)) return false;
+    return true;
+};
+function matchSecondaryCategoriesByTitle(title, categories, detailText) {
+    var _brandScored_;
+    const titleCorpus = buildCategoryMatchCorpus(title);
+    const brandCorpus = buildCategoryMatchCorpus(title, detailText);
+    if (!titleCorpus && !brandCorpus) return [];
+    const scoreCategory = (category, corpus, options)=>{
+        if (!corpus) return null;
+        const allowGeneric = (options === null || options === void 0 ? void 0 : options.allowGeneric) || (category.level || 0) === 1;
+        const tokens = [
+            category.name,
+            ...category.keywords
+        ].map((token)=>String(token || '').trim()).filter((token)=>isUsableCategoryMatchToken(token, {
+                allowGeneric
+            }));
+        const matchedTokens = tokens.filter((token)=>containsCategoryMatchToken(corpus, token));
+        if (!matchedTokens.length) return null;
+        const bestTokenLength = Math.max(...matchedTokens.map((token)=>normalizeCategoryMatchText(token).length));
+        return {
+            category,
+            bestTokenLength
+        };
+    };
+    const isAttrCategory = (category)=>(0, _categoryMatchGuards.isAttributeOrFilterCategory)({
+            name: category.name,
+            parentName: category.parentName
+        });
+    const productScored = categories.filter((category)=>!isBrandParentSecondaryCategory(category) && !isAttrCategory(category)).map((category)=>scoreCategory(category, titleCorpus, {
+            allowGeneric: (category.level || 0) === 1
+        })).filter((item)=>Boolean(item));
+    // 材质/品质类目仍可挂关联标签，但不参与「最长命中」抢主类目
+    const attrScored = categories.filter((category)=>!isBrandParentSecondaryCategory(category) && isAttrCategory(category)).map((category)=>scoreCategory(category, titleCorpus, {
+            allowGeneric: false
+        })).filter((item)=>Boolean(item));
+    const brandScored = categories.filter((category)=>isBrandParentSecondaryCategory(category)).map((category)=>scoreCategory(category, brandCorpus, {
+            allowGeneric: false
+        })).filter((item)=>Boolean(item));
+    productScored.sort((a, b)=>(b.category.level || 0) - (a.category.level || 0) || b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
+    brandScored.sort((a, b)=>b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
+    const l1ByName = new Map();
+    for (const item of productScored){
+        if ((item.category.level || 0) === 1) {
+            l1ByName.set(normalizeCategoryMatchText(item.category.name), item.category);
+        }
+    }
+    for (const category of categories){
+        if ((category.level || 0) === 1 && !isBrandParentSecondaryCategory(category) && !isAttrCategory(category)) {
+            const key = normalizeCategoryMatchText(category.name);
+            if (!l1ByName.has(key)) l1ByName.set(key, category);
+        }
+    }
+    const l2Scored = productScored.filter((item)=>(item.category.level || 2) >= 2);
+    const refinedProduct = [];
+    const refinedL2WithScore = [];
+    const groups = new Map();
+    for (const item of l2Scored){
+        const parentKey = normalizeCategoryMatchText(item.category.parentName) || `self:${item.category.id}`;
+        const bucket = groups.get(parentKey) || [];
+        bucket.push(item);
+        groups.set(parentKey, bucket);
+    }
+    if (groups.size > 0) {
+        for (const [parentKey, group] of groups){
+            group.sort((a, b)=>b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
+            const best = group[0];
+            const ambiguous = group.filter((item)=>item.category.id !== best.category.id && item.bestTokenLength >= Math.max(1, best.bestTokenLength - 1));
+            if (ambiguous.length > 0 || group.length > 1 && group[1].bestTokenLength === best.bestTokenLength) {
+                const l1 = l1ByName.get(parentKey);
+                if (l1) refinedProduct.push(l1);
+                continue;
+            }
+            refinedL2WithScore.push(best);
+        }
+        // 跨一级仍可能同时留下 wallet + Handbag：只留全局最长命中的一个二级
+        if (refinedL2WithScore.length > 1) {
+            refinedL2WithScore.sort((a, b)=>b.bestTokenLength - a.bestTokenLength || a.category.name.localeCompare(b.category.name, 'zh-CN'));
+            const winner = refinedL2WithScore[0];
+            const nearTies = refinedL2WithScore.filter((item)=>item.category.id !== winner.category.id && item.bestTokenLength >= Math.max(1, winner.bestTokenLength - 1));
+            if (nearTies.length > 0) {
+                const parentKey = normalizeCategoryMatchText(winner.category.parentName);
+                const l1 = parentKey ? l1ByName.get(parentKey) : null;
+                if (l1) refinedProduct.push(l1);
+            } else {
+                refinedProduct.push(winner.category);
+            }
+        } else if (refinedL2WithScore.length === 1) {
+            refinedProduct.push(refinedL2WithScore[0].category);
+        }
+    } else {
+        for (const item of productScored){
+            if ((item.category.level || 0) === 1) refinedProduct.push(item.category);
+        }
+    }
+    const bestBrand = (_brandScored_ = brandScored[0]) === null || _brandScored_ === void 0 ? void 0 : _brandScored_.category;
+    if (bestBrand) refinedProduct.push(bestBrand);
+    const productFamily = (0, _categoryShelfFamily.detectShelfFamily)(title) !== 'unknown' ? (0, _categoryShelfFamily.detectShelfFamily)(title) : (0, _categoryShelfFamily.detectShelfFamily)(...refinedProduct.map((category)=>`${category.name} ${category.parentName || ''}`));
+    // 材质/品质：仅作关联标签挂上，不抢主类目；包不得挂饰品品质货架
+    for (const item of attrScored){
+        const tagFamily = (0, _categoryShelfFamily.detectShelfFamily)(item.category.name, item.category.parentName);
+        if (!(0, _categoryShelfFamily.shelfFamiliesCompatible)(productFamily, tagFamily)) continue;
+        if (!refinedProduct.some((c)=>c.id === item.category.id)) {
+            refinedProduct.push(item.category);
+        }
+    }
+    return refinedProduct;
 }
 function pickImportPricingTargetCategory(matched, fallbackId) {
-    const pricingHit = matched.find((category)=>!isBrandParentSecondaryCategory(category));
-    return (pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.id) || fallbackId || null;
+    const productType = matched.filter((category)=>(0, _categoryMatchGuards.isProductTypeCategory)({
+            name: category.name,
+            parentName: category.parentName,
+            isBrandCategory: category.isBrandCategory,
+            level: category.level
+        }));
+    const pricingHit = productType.find((category)=>(category.level || 2) >= 2) || productType.find((category)=>(category.level || 0) === 1) || null;
+    if (pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.id) return pricingHit.id;
+    const fallback = String(fallbackId || '').trim();
+    if (!fallback) return null;
+    // 若 fallback 本身就是 Brand / 材质命中，直接丢弃
+    const fallbackAsHit = matched.find((category)=>category.id === fallback);
+    if (fallbackAsHit && !(0, _categoryMatchGuards.isProductTypeCategory)({
+        name: fallbackAsHit.name,
+        parentName: fallbackAsHit.parentName,
+        isBrandCategory: fallbackAsHit.isBrandCategory,
+        level: fallbackAsHit.level
+    })) {
+        return null;
+    }
+    return fallback;
 }
 const splitTableCategoryPathTokens = (raw)=>normalizeText(raw).split(/[,，/|；;]+/).map((token)=>token.trim()).filter(Boolean);
 const categoryNameFuzzyMatch = (dbName, token)=>{
@@ -94386,12 +95244,26 @@ const categoryNameFuzzyMatch = (dbName, token)=>{
     const b = normalizeCategoryMatchText(token);
     if (!a || !b) return false;
     if (a === b) return true;
+    // No Brand ↔ Brand：禁止 includes 互相误伤（NOBRAND 包含 BRAND）
+    if (isNoBrandCatchAllCategoryName(dbName) || isNoBrandCatchAllCategoryName(token)) {
+        return false;
+    }
     // Bag ↔ Bags, Handbag ↔ Handbags
     if (a.endsWith('S') && a.slice(0, -1) === b) return true;
     if (b.endsWith('S') && b.slice(0, -1) === a) return true;
     // 长类目名包含短词（handbag ⊂ handbags 已在上面；也可 Bags 含子类时宽松包含）
     if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) return true;
     return false;
+};
+/** 表格「帽子」必须能对上英文货架 Hats（含同义词，不只比库里的英文名） */ const categoryCellMatchesCategory = (dbName, token)=>{
+    if (categoryNameFuzzyMatch(dbName, token)) return true;
+    const tokenNorm = normalizeCategoryMatchText(token);
+    if (!tokenNorm) return false;
+    if ((0, _categorySynonyms.resolveCategorySynonyms)(dbName).some((syn)=>normalizeCategoryMatchText(syn) === tokenNorm)) {
+        return true;
+    }
+    const dbNorm = normalizeCategoryMatchText(dbName);
+    return (0, _categorySynonyms.resolveCategorySynonyms)(token).some((syn)=>normalizeCategoryMatchText(syn) === dbNorm);
 };
 function resolveTableImportCategoryPath(categoryCell, categories) {
     const tokens = splitTableCategoryPathTokens(categoryCell);
@@ -94415,11 +95287,13 @@ function resolveTableImportCategoryPath(categoryCell, categories) {
     };
     const level1 = usable.filter((c)=>levelOf(c) === 1);
     const level2 = usable.filter((c)=>levelOf(c) === 2);
-    const matchPrimary = (l1Token ? level1.find((c)=>categoryNameFuzzyMatch(c.name, l1Token)) || usable.find((c)=>categoryNameFuzzyMatch(c.name, l1Token) && levelOf(c) === 1) : null) || null;
+    const matchPrimary = (l1Token ? level1.find((c)=>categoryCellMatchesCategory(c.name, l1Token)) || usable.find((c)=>categoryCellMatchesCategory(c.name, l1Token) && levelOf(c) === 1) || level2.find((c)=>categoryCellMatchesCategory(c.name, l1Token)) : null) || null;
     let matchSecondary = null;
     if (l2Token) {
         const underPrimary = matchPrimary ? level2.filter((c)=>c.parentId === matchPrimary.id) : level2;
-        matchSecondary = underPrimary.find((c)=>categoryNameFuzzyMatch(c.name, l2Token)) || level2.find((c)=>categoryNameFuzzyMatch(c.name, l2Token)) || null;
+        matchSecondary = underPrimary.find((c)=>categoryCellMatchesCategory(c.name, l2Token)) || level2.find((c)=>categoryCellMatchesCategory(c.name, l2Token)) || null;
+    } else if (matchPrimary && levelOf(matchPrimary) === 2) {
+        matchSecondary = matchPrimary;
     }
     // 仅写了一级时，也可把 L2 写成与一级同名的误填，回退一级
     const target = matchSecondary || matchPrimary || null;
@@ -94689,6 +95563,15 @@ const getPendingImportQueue = (0, _action_utils.requireRole)([
     } catch (error) {
         console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error);
     }
+    // 系数已写入但售价仍=成本：每次打开队列都尝试修复（不限维护间隔）
+    try {
+        const repairedPriceCount = await repairPendingImportPricesMissingCoefficient();
+        if (repairedPriceCount > 0) {
+            console.info(`[getPendingImportQueue] repaired ${repairedPriceCount} pending items with sell price stuck at cost`);
+        }
+    } catch (error) {
+        console.error('[getPendingImportQueue] failed to repair pending sell prices', error);
+    }
     const dueMaintenance = !skipMaintenance && Date.now() - lastPendingQueueMaintenanceAt >= PENDING_QUEUE_MAINTENANCE_INTERVAL_MS;
     if (dueMaintenance) {
         lastPendingQueueMaintenanceAt = Date.now();
@@ -94766,6 +95649,32 @@ const getPendingImportQueue = (0, _action_utils.requireRole)([
         page,
         page_size: pageSize
     });
+    // Self-heal stale in-memory mutex when DB has no RUNNING work (e.g. crash / multi-worker drift).
+    if (parseJobBusy) {
+        try {
+            const [runningTasks, runningItems] = await Promise.all([
+                _prisma.default.importtask.count({
+                    where: {
+                        status: 'RUNNING'
+                    }
+                }),
+                _prisma.default.importtaskitem.count({
+                    where: {
+                        fetchStatus: 'RUNNING',
+                        isPublished: false
+                    }
+                })
+            ]);
+            if (runningTasks === 0 && runningItems === 0) {
+                parseJobBusy = false;
+                parseJobLabel = null;
+                parseJobCancelRequested = false;
+                parseJobProgress = null;
+            }
+        } catch (error) {
+            console.error('[getPendingImportQueue] failed to self-heal parse job mutex', error);
+        }
+    }
     return {
         activeTask: snapshot.activeTask,
         list: snapshot.items,
@@ -94782,7 +95691,6 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
     if (!content) {
         throw new Error('请先粘贴表格内容');
     }
-    const splitOptions = (raw)=>normalizeCommaText(raw).split(',').map((value)=>value.trim()).filter(Boolean);
     const lines = content.split(/\r?\n/).map((line)=>line.trim()).filter(Boolean);
     if (lines.length === 0) return {
         rows: []
@@ -94842,21 +95750,18 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
         ],
         categoryName: [
             '类目',
+            '英文类目',
             '产品分类',
             '分类',
-            'category'
+            'category',
+            'hat',
+            'hats'
         ],
         color: [
             '颜色',
             'color'
         ],
-        spec: [
-            '规格',
-            '尺码',
-            '尺寸',
-            'size',
-            'spec'
-        ],
+        spec: _tableImportSpec.TABLE_IMPORT_SPEC_HEADER_ALIASES,
         weight: [
             '重量',
             '重量(g)',
@@ -94872,7 +95777,7 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
     };
     const indexMap = {};
     Object.entries(headerAliases).forEach(([field, aliases])=>{
-        const idx = headerCells.findIndex((cell)=>aliases.includes(cell));
+        const idx = headerCells.findIndex((cell)=>field === 'categoryName' ? (0, _tableImportSpec.isTableImportCategoryHeader)(cell) : aliases.includes(cell));
         if (idx >= 0) indexMap[field] = idx;
     });
     const hasNamedHeader = Object.keys(indexMap).length >= 2;
@@ -94900,9 +95805,16 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
             const idx = fallbackIndex[field];
             return idx !== undefined ? columns[idx] || '' : '';
         };
-        const color = pick('color');
-        const spec = pick('spec');
         const productPriceText = preserveProductPriceRaw(pick('productPrice'));
+        const resolved = (0, _tableImportSpec.resolveTableImportColorSpec)({
+            color: pick('color'),
+            spec: pick('spec'),
+            extraCandidates: [
+                productPriceText,
+                pick('detail'),
+                ...columns
+            ]
+        });
         return {
             rowId: `row-${index + 1}`,
             productCode: pick('productCode'),
@@ -94915,10 +95827,10 @@ const parseTableImportContent = (0, _action_utils.requireRole)([
             supplierName: pick('supplierName'),
             categoryName: pick('categoryName'),
             categoryId: '',
-            color,
-            spec,
-            colors: splitOptions(color),
-            specs: splitOptions(spec),
+            color: resolved.color,
+            spec: resolved.spec,
+            colors: resolved.colors,
+            specs: resolved.specs,
             weight: pick('weight'),
             costPrice: null,
             imageUrl: '',
@@ -94956,14 +95868,9 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
     /** 表格导入专用：同产品编号多行合并为一个 SPU 草稿（1688 禁止复用） */ const buildTableMergedDraft = (productCode, spuRows)=>{
         var _spuRows_map_find, _spuRows_map_find1;
         const firstRow = spuRows[0];
-        const colors = dedupe(spuRows.flatMap((row)=>{
-            var _row_colors;
-            return ((_row_colors = row.colors) === null || _row_colors === void 0 ? void 0 : _row_colors.length) ? row.colors : splitCommaList(row.color);
-        }));
-        const specs = dedupe(spuRows.flatMap((row)=>{
-            var _row_specs;
-            return ((_row_specs = row.specs) === null || _row_specs === void 0 ? void 0 : _row_specs.length) ? row.specs : splitCommaList(row.spec);
-        }));
+        const skuPairs = (0, _tableImportSpec.collectTableImportSkuPairs)(spuRows);
+        const colors = dedupe(skuPairs.map((pair)=>pair.color));
+        const specs = dedupe(skuPairs.map((pair)=>pair.spec));
         const scalarPrice = (_spuRows_map_find = spuRows.map((row)=>{
             var _row_productPriceText;
             return parseSingleScalarPrice((_row_productPriceText = row.productPriceText) !== null && _row_productPriceText !== void 0 ? _row_productPriceText : '');
@@ -94995,45 +95902,69 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             }
         }
         const weightGrams = (_spuRows_map_find1 = spuRows.map((row)=>Number(row.weight) > 0 ? Math.round(Number(row.weight)) : null).find((value)=>value != null)) !== null && _spuRows_map_find1 !== void 0 ? _spuRows_map_find1 : null;
+        const galleryUrls = dedupe(spuRows.flatMap((row)=>{
+            const raw = normalizeText(row.imageUrl);
+            if (!raw) return [];
+            return raw.split(/[,，|]/).map((part)=>part.trim()).filter(Boolean);
+        }));
+        const imageByColor = new Map();
+        for (const row of spuRows){
+            var _row_colors;
+            const raw = normalizeText(row.imageUrl);
+            if (!raw) continue;
+            const firstUrl = raw.split(/[,，|]/).map((part)=>part.trim()).filter(Boolean)[0];
+            if (!firstUrl) continue;
+            const rowColors = ((_row_colors = row.colors) === null || _row_colors === void 0 ? void 0 : _row_colors.length) ? row.colors : splitCommaList(row.color);
+            if (rowColors.length === 0) {
+                if (!imageByColor.has('')) imageByColor.set('', firstUrl);
+                continue;
+            }
+            for (const color of rowColors){
+                const key = normalizeText(color);
+                if (key && !imageByColor.has(key)) imageByColor.set(key, firstUrl);
+            }
+        }
         // SKU 编码一律由产品编号（SPU 合并键）生成，不使用表格 skuCode（常被误填为价格）
-        const colorList = colors.length > 0 ? colors : [
-            null
-        ];
-        const specList = specs.length > 0 ? specs : [
-            null
+        const pairList = skuPairs.length > 0 ? skuPairs : [
+            {
+                color: null,
+                spec: null
+            }
         ];
         const skuTable = [];
         let index = 0;
-        for (const color of colorList){
-            for (const spec of specList){
-                var _priceBySpec_get;
-                const attributes = [];
-                if (color) attributes.push({
-                    name: '颜色',
-                    value: color
-                });
-                if (spec) attributes.push({
-                    name: '规格',
-                    value: spec
-                });
-                const mappedPrice = spec ? (_priceBySpec_get = priceBySpec.get(normalizeText(spec))) !== null && _priceBySpec_get !== void 0 ? _priceBySpec_get : scalarPrice : scalarPrice;
-                skuTable.push({
-                    skuKey: (0, _productIdentifiers.buildSkuIdentifier)(productCode, spec, color, index),
-                    spec: attributes.map((attr)=>attr.value).join('/') || '默认规格',
-                    costPrice: mappedPrice,
-                    price: mappedPrice,
-                    stock: 1,
-                    weightGrams,
-                    imageUrl: '',
-                    attributes: attributes.length > 0 ? attributes : [
-                        {
-                            name: '规格',
-                            value: '默认规格'
-                        }
-                    ]
-                });
-                index += 1;
-            }
+        for (const pair of pairList){
+            var _priceBySpec_get;
+            const color = pair.color;
+            const spec = pair.spec;
+            const attributes = [];
+            if (color) attributes.push({
+                name: '颜色',
+                value: color
+            });
+            if (spec) attributes.push({
+                name: '规格',
+                value: spec
+            });
+            const mappedPrice = spec ? (_priceBySpec_get = priceBySpec.get(normalizeText(spec))) !== null && _priceBySpec_get !== void 0 ? _priceBySpec_get : scalarPrice : scalarPrice;
+            const colorKey = color ? normalizeText(color) : '';
+            skuTable.push({
+                skuKey: (0, _productIdentifiers.buildSkuIdentifier)(productCode, spec, color, index),
+                spec: attributes.map((attr)=>attr.value).join('/') || '默认规格',
+                costPrice: mappedPrice,
+                price: mappedPrice,
+                // 表格无库存列：每 SKU 默认 1000（勿写 1，否则可用库存=SKU 个数）
+                stock: _resolveInitialStock.DEFAULT_AVAILABLE_STOCK,
+                weightGrams,
+                imageUrl: colorKey && imageByColor.get(colorKey) || imageByColor.get('') || galleryUrls[0] || '',
+                attributes: attributes.length > 0 ? attributes : [
+                    {
+                        name: '规格',
+                        value: '默认规格'
+                    }
+                ]
+            });
+            index += 1;
         }
         const skuPrices = skuTable.map((sku)=>toNumberOrNull(sku.price)).filter((value)=>value !== null);
         return {
@@ -95051,6 +95982,8 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             colors,
             specs,
             weightGrams,
+            galleryUrls,
+            mainImageUrl: galleryUrls[0] || '',
             skuTable,
             specSummary: [
                 ...colors.length ? [
@@ -95076,19 +96009,52 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
     // 品牌关键词匹配仅可作参考标签；有「类目」单元格时主类目严禁被标题里的 LV/COACH 覆盖
     const secondaryCategories = await loadAutoMatchSecondaryCategories(_prisma.default);
     const itemCreates = mergedDrafts.map((row, index)=>{
-        var _row_priceMin;
+        var _autoMatchedSecondaryCategories_find, _row_galleryUrls;
         const categoryCell = normalizeText(row.categoryName);
         const pathResolved = resolveTableImportCategoryPath(categoryCell, categories);
         // 精确整格名兜底（不走品牌类目）
-        const exactCell = categoryCell && !pathResolved.targetCategoryId ? categories.find((item)=>!item.isBrandCategory && item.name.trim().toLowerCase() === categoryCell.toLowerCase()) || null : null;
-        // 仅当类目列为空时，才用标题/详情做二级类目自动命中（排除 Brand 下 LV/COACH 的优先级仍在匹配器里，
-        // 这里空格时才走；有类目词时彻底关掉）
-        const autoMatchedSecondaryCategories = categoryCell ? [] : matchSecondaryCategoriesByTitle(normalizeText(row.productName), secondaryCategories, [
+        const exactCell = categoryCell && !pathResolved.targetCategoryId ? categories.find((item)=>!item.isBrandCategory && (item.name.trim().toLowerCase() === categoryCell.toLowerCase() || categoryCellMatchesCategory(item.name, categoryCell))) || null : null;
+        // 标题命中只用来补关联标签（品牌货架 / clothes）；主类目优先表格「类目」列
+        const autoMatchedSecondaryCategories = matchSecondaryCategoriesByTitle(normalizeText(row.productName), secondaryCategories, [
             normalizeText(row.detail)
         ].filter(Boolean).join('\n') || null);
-        const matchedSecondaryCategoryIds = autoMatchedSecondaryCategories.map((category)=>category.id);
-        const matchedSecondaryCategoryNames = autoMatchedSecondaryCategories.map((category)=>category.name);
-        const categoryId = normalizeText(row.categoryId) || pathResolved.targetCategoryId || (exactCell === null || exactCell === void 0 ? void 0 : exactCell.id) || (!categoryCell ? pickImportPricingTargetCategory(autoMatchedSecondaryCategories, null) : null) || input.defaultCategoryId || null;
+        const tableTargetId = pathResolved.targetCategoryId || (exactCell === null || exactCell === void 0 ? void 0 : exactCell.id) || null;
+        const categoryId = pickFirstNonBrandCategoryId([
+            normalizeText(row.categoryId),
+            tableTargetId,
+            pickImportPricingTargetCategory(autoMatchedSecondaryCategories, tableTargetId),
+            input.defaultCategoryId
+        ], new Map(categories.map((item)=>[
+                item.id,
+                {
+                    id: item.id,
+                    name: item.name,
+                    parentId: item.parentId,
+                    priceCoefficient: item.priceCoefficient,
+                    isBrandCategory: Boolean(item.isBrandCategory)
+                }
+            ])), new Map(secondaryCategories.map((item)=>[
+                item.id,
+                item
+            ]))) || null;
+        // 表格「类目」列解析结果写入 matched*，供待上传/校准弹窗默认勾选（不只写 targetCategoryId）
+        const tableResolvedCategoryIds = Array.from(new Set([
+            pathResolved.primaryId,
+            pathResolved.secondaryId,
+            tableTargetId,
+            categoryId
+        ].filter((id)=>Boolean(id))));
+        const matchedSecondaryCategoryIds = Array.from(new Set([
+            ...tableResolvedCategoryIds,
+            ...autoMatchedSecondaryCategories.map((category)=>category.id)
+        ]));
+        const matchedSecondaryCategoryNames = matchedSecondaryCategoryIds.map((id)=>{
+            var _categories_find;
+            return ((_categories_find = categories.find((item)=>item.id === id)) === null || _categories_find === void 0 ? void 0 : _categories_find.name) || null;
+        }).filter((name)=>Boolean(name));
+        if (!matchedSecondaryCategoryNames.length) {
+            matchedSecondaryCategoryNames.push(...autoMatchedSecondaryCategories.map((category)=>category.name));
+        }
         const productDetailText = [
             normalizeText(row.detail),
             normalizeText(row.brand) ? `品牌：${normalizeText(row.brand)}` : '',
@@ -95100,21 +96066,42 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
         const resolvedParent = (resolvedCategory === null || resolvedCategory === void 0 ? void 0 : resolvedCategory.parentId) ? categories.find((item)=>item.id === resolvedCategory.parentId) || null : pathResolved.parentCategory || null;
         // 系数：二级优先，否则一级；不使用品牌类目系数
         const matchedCoefficient = (0, _priceCoefficient.resolveCategoryPriceCoefficient)(resolvedCategory && !(0, _categoryPricing.isAggregatePricingCategoryName)(resolvedCategory.name) ? toNumberOrNull(resolvedCategory.priceCoefficient) : null, resolvedParent && !(0, _categoryPricing.isAggregatePricingCategoryName)(resolvedParent.name) ? toNumberOrNull(resolvedParent.priceCoefficient) : null);
-        // sourceCategoryName：表格类目路径原文（Bag, Handbag），不是 LV/COACH
-        const sourceCategoryName = pathResolved.sourceCategoryLabel || categoryCell || matchedSecondaryCategoryNames[0] || (resolvedCategory === null || resolvedCategory === void 0 ? void 0 : resolvedCategory.name) || null;
+        // sourceCategoryName：表格类目原文或真实品类名，禁止用 LV/COACH 冒充主类目
+        const firstProductTypeName = ((_autoMatchedSecondaryCategories_find = autoMatchedSecondaryCategories.find((category)=>(0, _categoryMatchGuards.isProductTypeCategory)({
+                name: category.name,
+                parentName: category.parentName,
+                isBrandCategory: category.isBrandCategory,
+                level: category.level
+            }))) === null || _autoMatchedSecondaryCategories_find === void 0 ? void 0 : _autoMatchedSecondaryCategories_find.name) || null;
+        const sourceCategoryName = pathResolved.sourceCategoryLabel || categoryCell || firstProductTypeName || (resolvedCategory === null || resolvedCategory === void 0 ? void 0 : resolvedCategory.name) || null;
         const productCode = normalizeText(row.productCode) || `T${Date.now()}${index}`;
-        const usdMin = row.priceMin != null ? Number((Number(row.priceMin) / 6.5).toFixed(2)) : null;
-        const usdMax = row.priceMax != null ? Number((Number(row.priceMax) / 6.5).toFixed(2)) : null;
         const zhName = normalizeText(row.productName);
+        const mainImageUrl = normalizeText(row.mainImageUrl) || ((_row_galleryUrls = row.galleryUrls) === null || _row_galleryUrls === void 0 ? void 0 : _row_galleryUrls[0]) || null;
+        const detailImages = (row.galleryUrls || []).filter((url)=>url && url !== mainImageUrl);
+        // 表格价=成本；售价必须乘类目系数（此前只写了 coefficient，区间仍停在成本价）
+        const pricedSkuTable = row.skuTable.map((sku)=>{
+            var _toNumberOrNull;
+            const cost = (_toNumberOrNull = toNumberOrNull(sku.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : toNumberOrNull(sku.price);
+            return {
+                ...sku,
+                costPrice: cost,
+                price: cost !== null ? roundCurrency(cost * matchedCoefficient) : sku.price
+            };
+        });
+        const sellPrices = pricedSkuTable.map((sku)=>toNumberOrNull(sku.price)).filter((value)=>value !== null);
+        const sellMin = sellPrices.length > 0 ? Math.min(...sellPrices) : row.priceMin != null ? roundCurrency(Number(row.priceMin) * matchedCoefficient) : null;
+        const sellMax = sellPrices.length > 0 ? Math.max(...sellPrices) : row.priceMax != null ? roundCurrency(Number(row.priceMax) * matchedCoefficient) : sellMin;
+        const usdMin = sellMin != null ? roundCurrency(sellMin / 6.5) : null;
+        const usdMax = sellMax != null ? roundCurrency(sellMax / 6.5) : null;
         return {
             operatorId: userId,
             sourceUrl: `table-import://${productCode}`,
             parsedName: zhName,
-            parsedMainImageUrl: null,
+            parsedMainImageUrl: mainImageUrl,
             parsedPriceMin: row.priceMin,
             parsedPriceMax: row.priceMax,
             supplierName: normalizeText(row.supplierName) || null,
-            mainImageUrl: null,
+            mainImageUrl,
             costPrice: row.priceMin,
             weightGrams: row.weightGrams,
             sourceCategoryName,
@@ -95122,14 +96109,14 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             coefficient: matchedCoefficient,
             goodsStatus: 'DRAFT',
             minimumOrderQuantity: _resolveInitialStock.DEFAULT_MIN_ORDER_QTY,
-            // B：真实库存优先（全 0 即缺货），缺省回落 1000
-            availableStock: (0, _resolveInitialStock.resolveInitialStock)(row.skuTable.reduce((sum, sku)=>sum + (sku.stock || 0), 0)),
-            cnyPriceMin: row.priceMin,
-            cnyPriceMax: row.priceMax,
+            // 表格无库存列：每 SKU 已默认 1000，此处汇总供待上传区展示
+            availableStock: (0, _resolveInitialStock.resolveInitialStock)(pricedSkuTable.reduce((sum, sku)=>sum + (sku.stock || 0), 0)),
+            cnyPriceMin: sellMin,
+            cnyPriceMax: sellMax,
             usdPriceMin: usdMin,
             usdPriceMax: usdMax,
             productDetail: productDetailText,
-            skuSummaryText: row.skuTable.map((sku)=>sku.spec).join(' | '),
+            skuSummaryText: pricedSkuTable.map((sku)=>sku.spec).join(' | '),
             fetchStatus: 'COMPLETED',
             publishStatus: 'PENDING',
             isSelected: true,
@@ -95153,9 +96140,9 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
                 brand: normalizeText(row.brand) || undefined,
                 matchedCategoryIds: matchedSecondaryCategoryIds,
                 matchedCategoryNames: matchedSecondaryCategoryNames,
-                price: (_row_priceMin = row.priceMin) !== null && _row_priceMin !== void 0 ? _row_priceMin : undefined,
-                mainImageUrl: undefined,
-                detailImages: [],
+                price: sellMin !== null && sellMin !== void 0 ? sellMin : undefined,
+                mainImageUrl: mainImageUrl || undefined,
+                detailImages,
                 shortDescription: normalizeText(row.brand) || undefined,
                 importSortIndex: index,
                 inboundIdentity: {
@@ -95183,7 +96170,7 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
                         }
                     ] : []
                 ],
-                skuTable: row.skuTable
+                skuTable: pricedSkuTable
             }
         };
     });
@@ -95558,7 +96545,15 @@ const startParseTask = (0, _action_utils.requireRole)([
                         const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
                         const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
                         // Pricing target = real L1/L2 only; Brand hits stay in matched* for shelf linking.
-                        const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, taskSnapshot.defaultCategoryId);
+                        const secondaryById = new Map(secondaryCategories.map((category)=>[
+                                category.id,
+                                category
+                            ]));
+                        const targetCategoryId = pickFirstNonBrandCategoryId([
+                            pickImportPricingTargetCategory(matchedSecondaryCategories, null),
+                            taskSnapshot.defaultCategoryId,
+                            ...matchedSecondaryCategoryIds
+                        ], categoryMap, secondaryById);
                         const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
                         const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd));
                         const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd));
@@ -95590,6 +96585,18 @@ const startParseTask = (0, _action_utils.requireRole)([
                             price: finalPriceMin,
                             stock: strategyStock
                         });
+                        // 重量自动识别：标题/详情正则提取 → 二级分类兜底 → 500g（运营可在待上传区双击覆盖）
+                        const fallbackWeightGrams = (0, _categoryWeight.resolveProductWeightGrams)({
+                            text: [
+                                productName,
+                                productDetail,
+                                sourceCategoryName
+                            ].filter(Boolean).join(' '),
+                            categoryNames: [
+                                ...matchedSecondaryCategoryNames || [],
+                                sourceCategoryName
+                            ]
+                        });
                         const skuTable = baseSkuRows.map((row, index)=>{
                             var _ref, _toNumberOrNull, _toNumberOrNull1, _toNumberOrNull2;
                             // 源站价扣减后再乘类目系数；无独立价时回退到商品级源价
@@ -95602,7 +96609,7 @@ const startParseTask = (0, _action_utils.requireRole)([
                                 costPrice: nextCost,
                                 price: nextPrice,
                                 stock: (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock),
-                                weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : 500,
+                                weightGrams: (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : fallbackWeightGrams,
                                 // 无独立色图时保持空，待运营在待上传区补填；禁止回填主图冒充色图
                                 imageUrl: normalizeText(row.imageUrl) || null,
                                 attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
@@ -95708,7 +96715,7 @@ const startParseTask = (0, _action_utils.requireRole)([
                                 mainImageUrl,
                                 parsedMainImageUrl: mainImageUrl,
                                 costPrice: (_toNumberOrNull = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : adjustedCostMin,
-                                weightGrams: (_toNumberOrNull1 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : 500,
+                                weightGrams: (_toNumberOrNull1 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : fallbackWeightGrams,
                                 sourceCategoryName,
                                 coefficient: resolvedCoefficient,
                                 goodsStatus: taskSnapshot.defaultStatus || 'DRAFT',
@@ -95718,7 +96725,7 @@ const startParseTask = (0, _action_utils.requireRole)([
                                 cnyPriceMax: resolvedFinalPriceMax,
                                 usdPriceMin: resolvedUsdMin,
                                 usdPriceMax: resolvedUsdMax,
-                                minimumOrderQuantity: _resolveInitialStock.DEFAULT_MIN_ORDER_QTY,
+                                minimumOrderQuantity: (0, _resolveInitialStock.resolveInitialMinOrderQty)(fetched.minOrderQty),
                                 // B：真实库存优先（全 0 即缺货），缺省回落 1000
                                 availableStock: (0, _resolveInitialStock.resolveInitialStock)(totalStock),
                                 targetCategoryId,
@@ -95947,8 +96954,20 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
             data.sourceCategoryName = String(rawValue || '') || null;
             break;
         case 'target_category_id':
-            data.targetCategoryId = String(rawValue || '') || null;
-            break;
+            {
+                const nextId = String(rawValue || '') || null;
+                data.targetCategoryId = nextId;
+                const catPreview = item.previewDataJson || {};
+                data.previewDataJson = {
+                    ...catPreview,
+                    categoryId: nextId || catPreview.categoryId,
+                    // 人工改主类目也视为已确认，上架时不再重扫覆盖
+                    ...nextId ? {
+                        categoryCalibrated: true
+                    } : {}
+                };
+                break;
+            }
         case 'coefficient':
             if (numericValue === null || numericValue <= 0) throw new Error('价格系数必须大于0');
             data.coefficient = numericValue;
@@ -95964,6 +96983,27 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
         case 'weight_grams':
             if (numericValue === null || numericValue <= 0) throw new Error('重量必须大于0');
             data.weightGrams = numericValue;
+            {
+                // SPU 重量变更：强制覆盖 preview.skuTable 内全部 SKU 重量
+                const currentPreview = item.previewDataJson || {};
+                const nextDrafts = resolvePendingSkuDrafts(item).map((sku)=>({
+                        ...sku,
+                        weight_grams: numericValue
+                    }));
+                data.previewDataJson = {
+                    ...currentPreview,
+                    skuTable: nextDrafts.map((sku)=>({
+                            skuKey: sku.sku_key,
+                            spec: sku.spec_text,
+                            costPrice: sku.cost_price,
+                            price: sku.price,
+                            stock: sku.stock,
+                            weightGrams: numericValue,
+                            imageUrl: sku.image_url || undefined,
+                            attributes: sku.attributes
+                        }))
+                };
+            }
             break;
         case 'cost_price':
             if (numericValue === null || numericValue < 0) throw new Error('成本价不能小于0');
@@ -96221,6 +97261,18 @@ const inlineUpdatePendingImportSkuField = (0, _action_utils.requireRole)([
         next.stock = Math.round(numericValue);
     } else if (input.field === 'image_url') {
         next.image_url = String(input.value || '').trim() || null;
+    } else if (input.field === 'minimum_order_quantity') {
+        // 1688 起订量通常是整单级；在 SKU 行双击编辑时写回父条目
+        const qty = (0, _resolveInitialStock.resolveInitialMinOrderQty)(input.value);
+        await _prisma.default.importtaskitem.update({
+            where: {
+                id: item.id
+            },
+            data: {
+                minimumOrderQuantity: qty
+            }
+        });
+        return;
     } else {
         throw new Error('暂不支持的 SKU 字段');
     }
@@ -96282,10 +97334,11 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
         throw new Error('请至少选择一条待上传商品');
     }
     // Hoist shared lookups once — previously reloaded inside every item transaction.
-    const [secondaryCategories, exchangeRate, categoryMap] = await Promise.all([
+    const [secondaryCategories, exchangeRate, categoryMap, brandRules] = await Promise.all([
         loadAutoMatchSecondaryCategories(_prisma.default),
         getGlobalExchangeRate(_prisma.default),
-        loadImportPricingCategories(_prisma.default)
+        loadImportPricingCategories(_prisma.default),
+        (0, _brandAlias.loadBrandAliasRules)()
     ]);
     let success = 0;
     let fail = 0;
@@ -96308,7 +97361,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
                     previewDataJson: true
                 }
             });
-            const preName = normalizeText(pre === null || pre === void 0 ? void 0 : pre.parsedName) || '';
+            const preName = (0, _brandTitleNormalize.applyBrandAliases)(normalizeText(pre === null || pre === void 0 ? void 0 : pre.parsedName) || '', brandRules);
             const prePreview = (pre === null || pre === void 0 ? void 0 : pre.previewDataJson) || {};
             preNameEn = String(prePreview.nameEn || '').trim() || await (0, _resolveProductTitleEn.resolveEnglishProductTitle)(preName);
             preNameEs = String(prePreview.nameEs || '').trim() || await (0, _resolveProductTitleEn.resolveSpanishProductTitle)(preName, null, preNameEn);
@@ -96364,33 +97417,85 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
                         updatedAt: item.updatedAt,
                         createdAt: item.createdAt
                     };
-                    const effectivelyReady = (0, _pendingImportReadiness.isPendingImportEffectivelyReady)(readinessSnapshot);
+                    // 用户主动点「发布」是明确操作：只要核心字段齐全（真实标题+主图+价格>0）即放行，
+                    // 不再要求「卡住≥5 分钟」——否则刚采集完成的完整商品会因未满 5 分钟被误拦。
+                    // 兜底同时保留 isPendingImportEffectivelyReady（针对卡死抓取的自愈判断）。
+                    const readyByCoreFields = (0, _pendingImportReadiness.hasPendingImportCoreFields)(readinessSnapshot);
+                    const effectivelyReady = readyByCoreFields || (0, _pendingImportReadiness.isPendingImportEffectivelyReady)(readinessSnapshot);
                     if (item.fetchStatus !== 'COMPLETED' && !effectivelyReady) {
-                        throw new Error('仅可发布采集完成的商品');
+                        throw new Error('仅可发布采集完成的商品：缺少标题/主图/有效价格，请先「解析」');
                     }
-                    const productName = item.parsedName || '';
+                    // 品牌归一：把卖家暗语（蔻C/蔻家/古驰/LV…）替换成标准品牌名，
+                    // 写入商品名与后续 EN/ES 翻译都基于归一化后的标题。
+                    const productName = (0, _brandTitleNormalize.applyBrandAliases)(item.parsedName || '', brandRules);
                     const mainImageUrl = item.mainImageUrl || item.parsedMainImageUrl || '';
                     const previewData = item.previewDataJson || {};
-                    const detailForMatch = buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription);
-                    const rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, detailForMatch);
                     const previewMatchedIds = Array.from(new Set((previewData.matchedCategoryIds || []).filter(Boolean)));
-                    // 发布时重新扫描标题+详情；若预览已有多标签则合并去重
-                    const autoMatchedCategoryIds = Array.from(new Set([
-                        ...rematchedSecondaryCategories.map((category)=>category.id),
-                        ...previewMatchedIds
-                    ]));
-                    const autoMatchedCategoryNames = rematchedSecondaryCategories.map((category)=>category.name);
-                    // 发布时标题/详情重新命中的 L2 优先作为主分类（修复：旧 targetCategoryId 覆盖导致 Brand 下商品数为 0）
-                    const selectedCategoryId = autoMatchedCategoryIds[0] || item.targetCategoryId || item.importTask.defaultCategoryId || '';
-                    if (!selectedCategoryId) throw new Error('请选择目标分类');
+                    const secondaryById = new Map(secondaryCategories.map((category)=>[
+                            category.id,
+                            category
+                        ]));
+                    // 已一键校准（或弹窗保存过类目）：上架信任 target + matched，不再按标题重扫覆盖
+                    const trustCalibratedCategories = previewData.categoryCalibrated === true || Boolean(String(item.targetCategoryId || '').trim()) && previewMatchedIds.length > 0;
+                    let rematchedSecondaryCategories = [];
+                    let pricingFromRematch = null;
+                    let autoMatchedCategoryIds = [];
+                    let brandCategoryId = null;
+                    let brandMatchKeyword = null;
+                    let selectedCategoryId = '';
+                    if (trustCalibratedCategories) {
+                        autoMatchedCategoryIds = previewMatchedIds;
+                        const calibratedBrand = autoMatchedCategoryIds.map((id)=>secondaryById.get(id)).find((cat)=>cat && isBrandParentSecondaryCategory(cat)) || null;
+                        // 校准结果若只有 No Brand / 未带品牌，再按标题补一次真实品牌
+                        const titleBrand = calibratedBrand || pickBestBrandCategoryFromTitle(productName, secondaryCategories, buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription));
+                        brandCategoryId = (titleBrand === null || titleBrand === void 0 ? void 0 : titleBrand.id) || null;
+                        brandMatchKeyword = (titleBrand === null || titleBrand === void 0 ? void 0 : titleBrand.name) || null;
+                        selectedCategoryId = pickFirstNonBrandCategoryId([
+                            item.targetCategoryId,
+                            previewData.categoryId,
+                            item.importTask.defaultCategoryId,
+                            ...autoMatchedCategoryIds
+                        ], categoryMap, secondaryById) || '';
+                    } else {
+                        const detailForMatch = buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription);
+                        rematchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, detailForMatch);
+                        const brandHit = pickBestBrandCategoryFromTitle(productName, secondaryCategories, detailForMatch);
+                        pricingFromRematch = pickImportPricingTargetCategory(rematchedSecondaryCategories, null);
+                        autoMatchedCategoryIds = Array.from(new Set([
+                            ...rematchedSecondaryCategories.map((category)=>category.id),
+                            ...previewMatchedIds
+                        ]));
+                        brandCategoryId = (brandHit === null || brandHit === void 0 ? void 0 : brandHit.id) || null;
+                        brandMatchKeyword = (brandHit === null || brandHit === void 0 ? void 0 : brandHit.name) || null;
+                        selectedCategoryId = pickFirstNonBrandCategoryId([
+                            item.targetCategoryId,
+                            item.importTask.defaultCategoryId,
+                            pricingFromRematch,
+                            ...rematchedSecondaryCategories.map((category)=>category.id)
+                        ], categoryMap, secondaryById) || '';
+                    }
+                    if (!selectedCategoryId) {
+                        throw new Error('请选择手提包等真实一/二级类目（品牌货架不能作为主类目）');
+                    }
                     const ownership = await resolveImportCategoryOwnership(tx, selectedCategoryId);
+                    // 双保险：ownership 之后若仍落到 Brand，拒绝写入
+                    if (isBrandShelfCategoryId(ownership.primaryCategoryId, categoryMap, secondaryById)) {
+                        throw new Error('品牌货架不能作为商品主类目，请选择手提包等真实一/二级类目');
+                    }
                     const categoryId = ownership.primaryCategoryId;
-                    // 主分类 + 自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
-                    const linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
+                    // 主分类 + 校准/自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
+                    let linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
                         ...ownership.linkedCategoryIds,
                         ...autoMatchedCategoryIds,
-                        item.targetCategoryId || ''
+                        item.targetCategoryId || '',
+                        item.importTask.defaultCategoryId || '',
+                        pricingFromRematch || '',
+                        brandCategoryId || ''
                     ]);
+                    // 标题已命中真实品牌时，去掉 No Brand 兜底关联，避免列表显示「No Brand」
+                    linkedCategoryIds = await pruneNoBrandCatchAllLinks(tx, linkedCategoryIds, {
+                        hasRealBrand: Boolean(brandCategoryId)
+                    });
                     const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId);
                     const baseCostPrice = toNumberOrNull(item.costPrice);
                     const pendingSkus = recalculatePendingSkuPrices(pendingSkusForReadiness, baseCostPrice, resolvedCoefficient);
@@ -96453,9 +97558,9 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
                         skuSummaryText: item.skuSummaryText || null,
                         skus: pendingSkus,
                         linkedCategoryIds,
-                        brandCategoryId: autoMatchedCategoryIds[0] || null,
-                        brandMatchKeyword: autoMatchedCategoryNames[0] || null,
-                        autoBrandMatched: autoMatchedCategoryIds.length > 0
+                        brandCategoryId,
+                        brandMatchKeyword,
+                        autoBrandMatched: Boolean(brandCategoryId)
                     });
                     await tx.importtaskitem.update({
                         where: {
@@ -96476,7 +97581,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
                                 ...previewData || {},
                                 categoryId,
                                 matchedCategoryIds: autoMatchedCategoryIds,
-                                matchedCategoryNames: autoMatchedCategoryNames,
+                                matchedCategoryNames: rematchedSecondaryCategories.map((category)=>category.name),
                                 price: (_priceSummary_cnyMin1 = priceSummary.cnyMin) !== null && _priceSummary_cnyMin1 !== void 0 ? _priceSummary_cnyMin1 : previewData.price || undefined,
                                 skuTable: pendingSkus.map((sku)=>({
                                         skuKey: sku.sku_key,
@@ -96554,7 +97659,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     };
 }));
 /** 将重新抓取到的 1688 预览写回待上传条目（标题/主图/SKU/价格等） */ const applyReparsed1688PreviewToItem = async (params)=>{
-    var _ref, _toNumberOrNull, _ref1, _fetched_priceMin, _fetched_priceMax, _toNumberOrNull1, _ref2, _toNumberOrNull2;
+    var _ref, _toNumberOrNull, _ref1, _fetched_priceMin, _fetched_priceMax, _toNumberOrNull1, _ref2, _toNumberOrNull2, _fetched_minOrderQty;
     var _item_importTask_stockStrategyJson, _fetched_featureAttributes, _skuTable_, _skuTable_1;
     const { item, fetched, categoryMap, secondaryCategories, exchangeRate } = params;
     const sourceUrl = item.sourceUrl;
@@ -96569,8 +97674,17 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
     const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
     const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
     const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
-    // 重新解析：定价目标只用商品二级类目；Brand 命中不覆盖售价系数
-    const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, null) || item.targetCategoryId || item.importTask.defaultCategoryId || null;
+    const secondaryById = new Map(secondaryCategories.map((category)=>[
+            category.id,
+            category
+        ]));
+    // 重新解析：主类目只用真实一/二级；Brand 命中不覆盖售价系数 / 主类目
+    const targetCategoryId = pickFirstNonBrandCategoryId([
+        pickImportPricingTargetCategory(matchedSecondaryCategories, null),
+        item.targetCategoryId,
+        item.importTask.defaultCategoryId,
+        ...matchedSecondaryCategoryIds
+    ], categoryMap, secondaryById);
     const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
     const rawPriceMin = (_ref1 = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : toNumberOrNull(item.costPrice)) !== null && _ref1 !== void 0 ? _ref1 : 50;
     const rawPriceMax = (_fetched_priceMax = fetched.priceMax) !== null && _fetched_priceMax !== void 0 ? _fetched_priceMax : rawPriceMin;
@@ -96612,6 +97726,18 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
         stock: strategyStock,
         weightGrams: toNumberOrNull(item.weightGrams)
     }) : currentPreview.skuTable;
+    // 重量自动识别：沿用已存重量优先，缺省时标题/详情提取 → 二级分类兜底 → 500g
+    const fallbackWeightGrams = (0, _categoryWeight.resolveProductWeightGrams)({
+        text: [
+            productName,
+            productDetail,
+            sourceCategoryName
+        ].filter(Boolean).join(' '),
+        categoryNames: [
+            ...matchedSecondaryCategoryNames || [],
+            sourceCategoryName
+        ]
+    });
     const skuTable = sourceSkuRows.map((row, index)=>{
         var _ref, _toNumberOrNull, _toNumberOrNull1, _ref1, _toNumberOrNull2;
         const sourceCost = (_ref = (_toNumberOrNull = toNumberOrNull(row.costPrice)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : toNumberOrNull(row.price)) !== null && _ref !== void 0 ? _ref : rawPriceMin;
@@ -96623,7 +97749,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             costPrice: nextCost,
             price: nextPrice,
             stock: (0, _resolveInitialStock.resolveInitialStock)((_toNumberOrNull1 = toNumberOrNull(row.stock)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : strategyStock),
-            weightGrams: (_ref1 = (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : toNumberOrNull(item.weightGrams)) !== null && _ref1 !== void 0 ? _ref1 : 500,
+            weightGrams: (_ref1 = (_toNumberOrNull2 = toNumberOrNull(row.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : toNumberOrNull(item.weightGrams)) !== null && _ref1 !== void 0 ? _ref1 : fallbackWeightGrams,
             imageUrl: normalizeText(row.imageUrl) || null,
             attributes: Array.isArray(row.attributes) && row.attributes.length > 0 ? row.attributes.map((attr)=>({
                     name: normalizeText(attr.name) || '规格',
@@ -96732,7 +97858,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             mainImageUrl,
             parsedMainImageUrl: mainImageUrl,
             costPrice: (_toNumberOrNull1 = toNumberOrNull((_skuTable_ = skuTable[0]) === null || _skuTable_ === void 0 ? void 0 : _skuTable_.costPrice)) !== null && _toNumberOrNull1 !== void 0 ? _toNumberOrNull1 : adjustedCostMin,
-            weightGrams: (_ref2 = (_toNumberOrNull2 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : toNumberOrNull(item.weightGrams)) !== null && _ref2 !== void 0 ? _ref2 : 500,
+            weightGrams: (_ref2 = (_toNumberOrNull2 = toNumberOrNull((_skuTable_1 = skuTable[0]) === null || _skuTable_1 === void 0 ? void 0 : _skuTable_1.weightGrams)) !== null && _toNumberOrNull2 !== void 0 ? _toNumberOrNull2 : toNumberOrNull(item.weightGrams)) !== null && _ref2 !== void 0 ? _ref2 : fallbackWeightGrams,
             sourceCategoryName,
             coefficient: resolvedCoefficient,
             goodsStatus: item.goodsStatus || item.importTask.defaultStatus || 'DRAFT',
@@ -96742,7 +97868,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             cnyPriceMax: resolvedFinalPriceMax,
             usdPriceMin: resolvedUsdMin,
             usdPriceMax: resolvedUsdMax,
-            minimumOrderQuantity: (0, _resolveInitialStock.resolveInitialMinOrderQty)(item.minimumOrderQuantity),
+            minimumOrderQuantity: (0, _resolveInitialStock.resolveInitialMinOrderQty)((_fetched_minOrderQty = fetched.minOrderQty) !== null && _fetched_minOrderQty !== void 0 ? _fetched_minOrderQty : item.minimumOrderQuantity),
             // B：真实库存优先（全 0 即缺货），缺省回落 1000
             availableStock: (0, _resolveInitialStock.resolveInitialStock)(totalStock),
             targetCategoryId,
@@ -98083,8 +99209,14 @@ function _export(target, all) {
     });
 }
 _export(exports, {
+    get applyCalibrateCategoryEdits () {
+        return applyCalibrateCategoryEdits;
+    },
     get autoClassifyPriceThresholdProducts () {
         return autoClassifyPriceThresholdProducts;
+    },
+    get backfillAllTitleFilterCategories () {
+        return backfillAllTitleFilterCategories;
     },
     get batchAppendPendingImportTitleSuffix () {
         return batchAppendPendingImportTitleSuffix;
@@ -98137,6 +99269,9 @@ _export(exports, {
     get batchUpdateProductWeightPrice () {
         return batchUpdateProductWeightPrice;
     },
+    get calibratePendingImportItems () {
+        return calibratePendingImportItems;
+    },
     get cancelPendingImportParseJob () {
         return cancelPendingImportParseJob;
     },
@@ -98182,6 +99317,9 @@ _export(exports, {
     get inlineUpdateProductSkuField () {
         return inlineUpdateProductSkuField;
     },
+    get listProductSupplierNames () {
+        return listProductSupplierNames;
+    },
     get publishPendingImportItems () {
         return publishPendingImportItems;
     },
@@ -98225,14 +99363,22 @@ _export(exports, {
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
 const _categoryPricing = __webpack_require__(73284);
+const _categoryMatchGuards = __webpack_require__(78565);
+const _categoryFilterTitleMatch = __webpack_require__(84777);
 const _priceCoefficient = __webpack_require__(1282);
+const _productSearch = __webpack_require__(12597);
 const _categorySlug = __webpack_require__(27863);
 const _productIdentifiers = __webpack_require__(92969);
 const _ImportFrom1688 = __webpack_require__(13371);
 const _resolveProductTitleEn = __webpack_require__(64205);
 const _priceThresholdAutoClassify = __webpack_require__(77744);
+const _bulkTitleCategoryBackfill = __webpack_require__(99685);
+const _brandAlias = __webpack_require__(69646);
+const _brandTitleNormalize = __webpack_require__(53958);
+const _categoryWeight = __webpack_require__(99552);
 const _titleSuffix = __webpack_require__(73101);
 const _resolveInitialStock = __webpack_require__(35196);
+const _tableImportSpec = __webpack_require__(22452);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -98251,6 +99397,7 @@ function _interop_require_default(obj) {
     weightGram: true,
     costPrice: true,
     priceCoefficient: true,
+    mainImageUrl: true,
     tradeInfoJson: true,
     status: true,
     createdAt: true,
@@ -98289,13 +99436,40 @@ function _interop_require_default(obj) {
             originalPrice: true,
             stock: true,
             weightKg: true,
-            attributeJson: true
+            sizeLabel: true,
+            materialLabel: true,
+            minOrderQty: true
         },
         orderBy: {
             skuCode: 'asc'
         }
     }
 };
+let categoryDescendantsCache = null;
+const CATEGORY_DESCENDANTS_CACHE_TTL_MS = 5 * 60 * 1000;
+async function getCategoryChildrenMap() {
+    if (categoryDescendantsCache && Date.now() - categoryDescendantsCache.at < CATEGORY_DESCENDANTS_CACHE_TTL_MS) {
+        return categoryDescendantsCache.childrenMap;
+    }
+    const all = await _prisma.default.category.findMany({
+        select: {
+            id: true,
+            parentId: true
+        }
+    });
+    const childrenMap = new Map();
+    for (const item of all){
+        if (!item.parentId) continue;
+        const list = childrenMap.get(item.parentId) || [];
+        list.push(item.id);
+        childrenMap.set(item.parentId, list);
+    }
+    categoryDescendantsCache = {
+        at: Date.now(),
+        childrenMap
+    };
+    return childrenMap;
+}
 const USD_EXCHANGE_RATE = 6.5;
 function toNumber(value) {
     if (value === null || value === undefined) return null;
@@ -98523,6 +99697,7 @@ async function mapProductToListItem(product) {
         price_coefficient: toNumber(product.priceCoefficient),
         effective_price_coefficient: effectiveCoefficient,
         min_order_qty: Math.max(1, Number((_ref1 = (_product_tradeInfoJson = product.tradeInfoJson) === null || _product_tradeInfoJson === void 0 ? void 0 : _product_tradeInfoJson.minOrderQty) !== null && _ref1 !== void 0 ? _ref1 : 0) || 1),
+        main_image_url: String(product.mainImageUrl || '').trim() || null,
         price_min: priceMin,
         price_max: priceMax,
         usd_display_price_min: (_toUsdDisplayPrice = toUsdDisplayPrice(priceMin)) !== null && _toUsdDisplayPrice !== void 0 ? _toUsdDisplayPrice : 0,
@@ -98544,10 +99719,23 @@ function mapProductSkusToListItems(product) {
         const price = (_toNumber = toNumber(sku.price)) !== null && _toNumber !== void 0 ? _toNumber : 0;
         const originalPrice = toNumber(sku.originalPrice);
         const weightKg = toNumber(sku.weightKg);
-        const attributeJson = Array.isArray(sku.attributeJson) ? sku.attributeJson.map((attr)=>({
+        const attributeJson = Array.isArray(sku.attributeJson) && sku.attributeJson.length > 0 ? sku.attributeJson.map((attr)=>({
                 name: String((attr === null || attr === void 0 ? void 0 : attr.name) || '规格'),
                 value: String((attr === null || attr === void 0 ? void 0 : attr.value) || '')
-            })) : [];
+            })) : [
+            ...String(sku.sizeLabel || '').trim() ? [
+                {
+                    name: '规格',
+                    value: String(sku.sizeLabel).trim()
+                }
+            ] : [],
+            ...String(sku.materialLabel || '').trim() ? [
+                {
+                    name: '材质',
+                    value: String(sku.materialLabel).trim()
+                }
+            ] : []
+        ];
         return {
             sku_id: sku.id,
             sku_code: sku.skuCode,
@@ -98586,9 +99774,6 @@ function normalizeStringArray(values) {
 async function buildProductBindingMeta() {
     const [categories, keywords] = await Promise.all([
         _prisma.default.category.findMany({
-            where: {
-                status: 'ACTIVE'
-            },
             orderBy: [
                 {
                     level: 'asc'
@@ -98604,7 +99789,8 @@ async function buildProductBindingMeta() {
                 id: true,
                 name: true,
                 parentId: true,
-                level: true
+                level: true,
+                status: true
             }
         }),
         _prisma.default.keyworditem.findMany({
@@ -98630,8 +99816,31 @@ async function buildProductBindingMeta() {
             }
         })
     ]);
+    // ACTIVE 类目 + 祖先节点（祖先停用也保留，保证一级类目能展示）
+    const byId = new Map(categories.map((c)=>[
+            c.id,
+            c
+        ]));
+    const include = new Map();
+    for (const cat of categories){
+        if (String(cat.status || '').toUpperCase() !== 'ACTIVE') continue;
+        include.set(cat.id, cat);
+        let parentId = cat.parentId;
+        let guard = 0;
+        while(parentId && byId.has(parentId) && guard < 8){
+            const parent = byId.get(parentId);
+            if (!include.has(parent.id)) include.set(parent.id, parent);
+            parentId = parent.parentId;
+            guard += 1;
+        }
+    }
     return {
-        category_options: buildHierarchicalCategorySelectOptions(categories),
+        category_options: buildHierarchicalCategorySelectOptions(Array.from(include.values()).map((c)=>({
+                id: c.id,
+                name: c.name,
+                parentId: c.parentId,
+                level: c.level
+            }))),
         keyword_options: keywords.map((keyword)=>{
             var _keyword_group;
             return {
@@ -98776,19 +99985,7 @@ function buildRelationRows(productIds, relationIds) {
 /** Resolve a category id plus all descendant ids (L1 → L2…). */ async function resolveCategoryFilterIds(categoryId) {
     const rootId = String(categoryId || '').trim();
     if (!rootId) return [];
-    const all = await _prisma.default.category.findMany({
-        select: {
-            id: true,
-            parentId: true
-        }
-    });
-    const childrenMap = new Map();
-    for (const item of all){
-        if (!item.parentId) continue;
-        const list = childrenMap.get(item.parentId) || [];
-        list.push(item.id);
-        childrenMap.set(item.parentId, list);
-    }
+    const childrenMap = await getCategoryChildrenMap();
     const result = new Set([
         rootId
     ]);
@@ -99133,8 +100330,28 @@ async function generateStructuredSpuCode(tx, shortCode, now = new Date()) {
 function buildDraftSkus(row, spuCode) {
     var _row_cost_price;
     var _row_gallery_urls;
-    const colors = row.colors && row.colors.length > 0 ? row.colors.map((item)=>item.trim()).filter(Boolean) : splitCommaOptionValues(row.color);
-    const specs = row.specs && row.specs.length > 0 ? row.specs.map((item)=>item.trim()).filter(Boolean) : splitCommaOptionValues(row.spec);
+    const resolved = (0, _tableImportSpec.resolveTableImportColorSpec)({
+        color: row.color,
+        spec: row.spec,
+        extraCandidates: [
+            ...row.colors || [],
+            ...row.specs || []
+        ]
+    });
+    const skuPairs = (0, _tableImportSpec.collectTableImportSkuPairs)([
+        {
+            color: resolved.color,
+            spec: resolved.spec,
+            colors: resolved.colors,
+            specs: resolved.specs
+        }
+    ]);
+    const pairList = skuPairs.length > 0 ? skuPairs : [
+        {
+            color: null,
+            spec: null
+        }
+    ];
     const hasProductPrice = row.product_price !== null && row.product_price !== undefined && !Number.isNaN(Number(row.product_price));
     const costPrice = hasProductPrice ? Number(row.product_price) : (_row_cost_price = row.cost_price) !== null && _row_cost_price !== void 0 ? _row_cost_price : 0;
     const coefficient = hasProductPrice ? 1 : row.price_coefficient && row.price_coefficient > 0 ? row.price_coefficient : _priceCoefficient.DEFAULT_PRICE_COEFFICIENT;
@@ -99142,32 +100359,18 @@ function buildDraftSkus(row, spuCode) {
     const originalPrice = roundCurrency(price * 1.1);
     const weightKg = row.weight_gram ? Number((row.weight_gram / 1000).toFixed(3)) : null;
     const imageUrl = row.main_image_url || ((_row_gallery_urls = row.gallery_urls) === null || _row_gallery_urls === void 0 ? void 0 : _row_gallery_urls[0]) || '';
-    const attrGroups = [];
-    if (colors.length > 0) attrGroups.push(colors.map((value)=>({
+    return pairList.map((pair, index)=>{
+        const attrs = [];
+        if (pair.color) attrs.push({
             name: '颜色',
-            value
-        })));
-    if (specs.length > 0) attrGroups.push(specs.map((value)=>({
+            value: pair.color
+        });
+        if (pair.spec) attrs.push({
             name: '规格',
-            value
-        })));
-    const combinations = attrGroups.length === 0 ? [
-        []
-    ] : attrGroups.reduce((acc, group)=>{
-        if (acc.length === 0) return group.map((item)=>[
-                item
-            ]);
-        const next = [];
-        acc.forEach((existing)=>group.forEach((item)=>next.push([
-                    ...existing,
-                    item
-                ])));
-        return next;
-    }, []);
-    return combinations.map((attrs, index)=>{
-        var _attrs_find, _attrs_find1;
-        const specValue = ((_attrs_find = attrs.find((attr)=>attr.name === '规格' || attr.name === '尺码')) === null || _attrs_find === void 0 ? void 0 : _attrs_find.value) || row.spec || `SPEC${index + 1}`;
-        const colorValue = ((_attrs_find1 = attrs.find((attr)=>attr.name === '颜色')) === null || _attrs_find1 === void 0 ? void 0 : _attrs_find1.value) || row.color || '';
+            value: pair.spec
+        });
+        const specValue = pair.spec || row.spec || `SPEC${index + 1}`;
+        const colorValue = pair.color || row.color || '';
         // 有 SPU 时始终按 SPU 生成 SKU，忽略表格 sku_code（常被误填为价格）
         const skuCode = spuCode ? (0, _productIdentifiers.buildSkuIdentifier)(spuCode, specValue, colorValue, index) : generateUniqueCode('SKU');
         return {
@@ -99187,6 +100390,40 @@ const getProductBindingMeta = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async ()=>{
     return buildProductBindingMeta();
+}));
+const listProductSupplierNames = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const tokens = (0, _productSearch.tokenizeProductSearch)(input === null || input === void 0 ? void 0 : input.keyword);
+    const rows = await _prisma.default.product.groupBy({
+        by: [
+            'supplierName'
+        ],
+        where: {
+            supplierName: {
+                not: ''
+            },
+            ...tokens.length ? {
+                AND: tokens.map((token)=>({
+                        supplierName: {
+                            contains: token
+                        }
+                    }))
+            } : {}
+        },
+        _count: {
+            _all: true
+        },
+        orderBy: {
+            _count: {
+                supplierName: 'desc'
+            }
+        },
+        take: 80
+    });
+    return {
+        list: rows.map((row)=>String(row.supplierName || '').trim()).filter(Boolean)
+    };
 }));
 const getCategoryOptions = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -99208,10 +100445,29 @@ const getCategoryOptions = (0, _action_utils.requireRole)([
             name: true,
             parentId: true,
             level: true,
-            priceCoefficient: true
+            priceCoefficient: true,
+            status: true
         }
     });
-    return categories.map((c)=>({
+    // 启用中的类目 + 其祖先（即使祖先停用也要露出，避免 Sock 等二级悬空看不到一级）
+    const byId = new Map(categories.map((c)=>[
+            c.id,
+            c
+        ]));
+    const include = new Map();
+    for (const cat of categories){
+        if (String(cat.status || '').toUpperCase() !== 'ACTIVE') continue;
+        include.set(cat.id, cat);
+        let parentId = cat.parentId;
+        let guard = 0;
+        while(parentId && byId.has(parentId) && guard < 8){
+            const parent = byId.get(parentId);
+            if (!include.has(parent.id)) include.set(parent.id, parent);
+            parentId = parent.parentId;
+            guard += 1;
+        }
+    }
+    return Array.from(include.values()).map((c)=>({
             category_id: c.id,
             category_name: c.name,
             parent_id: c.parentId,
@@ -99292,6 +100548,13 @@ const getProductList = (0, _action_utils.requireRole)([
     const andConditions = [];
     if (keyword) {
         const normalizedKeyword = keyword.trim();
+        const keywordUpper = normalizedKeyword.toUpperCase();
+        const keywordLower = normalizedKeyword.toLowerCase();
+        const codeVariants = Array.from(new Set([
+            normalizedKeyword,
+            keywordUpper,
+            keywordLower
+        ])).filter(Boolean);
         andConditions.push({
             OR: [
                 {
@@ -99299,11 +100562,34 @@ const getProductList = (0, _action_utils.requireRole)([
                         contains: normalizedKeyword
                     }
                 },
-                {
-                    productCode: {
-                        contains: normalizedKeyword
+                ...codeVariants.flatMap((code)=>[
+                        {
+                            productCode: {
+                                contains: code
+                            }
+                        },
+                        {
+                            slug: {
+                                contains: code
+                            }
+                        },
+                        {
+                            skus: {
+                                some: {
+                                    skuCode: {
+                                        contains: code
+                                    }
+                                }
+                            }
+                        }
+                    ]),
+                ...normalizedKeyword.length >= 8 ? [
+                    {
+                        id: {
+                            contains: normalizedKeyword
+                        }
                     }
-                }
+                ] : []
             ]
         });
     }
@@ -99313,6 +100599,11 @@ const getProductList = (0, _action_utils.requireRole)([
             OR: [
                 {
                     categoryId: {
+                        in: categoryIds
+                    }
+                },
+                {
+                    brandCategoryId: {
                         in: categoryIds
                     }
                 },
@@ -99353,10 +100644,10 @@ const getProductList = (0, _action_utils.requireRole)([
     if (status_filter === 'DELETED') {
         whereClause.goodsStatus = 'DELETED';
     }
-    if (supplier_name === null || supplier_name === void 0 ? void 0 : supplier_name.trim()) {
-        whereClause.supplierName = {
-            contains: supplier_name.trim()
-        };
+    const supplierFuzzy = (0, _productSearch.buildTokenContainsAnd)('supplierName', supplier_name);
+    if (supplierFuzzy) {
+        andConditions.push(supplierFuzzy);
+        whereClause.AND = andConditions;
     }
     if (brand_keyword === null || brand_keyword === void 0 ? void 0 : brand_keyword.trim()) {
         whereClause.brandName = {
@@ -99425,6 +100716,7 @@ const getProductList = (0, _action_utils.requireRole)([
             price_coefficient: toNumber(p.priceCoefficient),
             effective_price_coefficient: effectiveCoefficient,
             min_order_qty: Math.max(1, Number((_ref1 = (_p_tradeInfoJson = p.tradeInfoJson) === null || _p_tradeInfoJson === void 0 ? void 0 : _p_tradeInfoJson.minOrderQty) !== null && _ref1 !== void 0 ? _ref1 : 1) || 1),
+            main_image_url: String(p.mainImageUrl || '').trim() || null,
             price_min: priceMin,
             price_max: priceMax,
             usd_display_price_min: (_toUsdDisplayPrice = toUsdDisplayPrice(priceMin)) !== null && _toUsdDisplayPrice !== void 0 ? _toUsdDisplayPrice : 0,
@@ -99607,7 +100899,8 @@ const createProduct = (0, _action_utils.requireRole)([
                             stockStatus: getStockStatus(nextStock),
                             attributeJson: s.attribute_json || [],
                             deliveryDays: s.delivery_days || null,
-                            weightKg: s.weight_kg || null,
+                            // SPU 重量强制覆盖全部 SKU，杜绝子规格残留旧重量
+                            weightKg: input.weight_gram != null && Number(input.weight_gram) > 0 ? Number((Number(input.weight_gram) / 1000).toFixed(3)) : null,
                             volumeM3: s.volume_m3 || null
                         };
                     })
@@ -99814,6 +101107,8 @@ const updateProduct = (0, _action_utils.requireRole)([
             var _sku_min_order_qty;
             const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : sku.price;
             const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : sku.original_price || null;
+            // SPU 重量强制覆盖全部 SKU（忽略各 SKU 原值，避免保存后残留旧重量）
+            const forcedWeightKg = input.weight_gram != null && Number(input.weight_gram) > 0 ? Number((Number(input.weight_gram) / 1000).toFixed(3)) : null;
             const skuData = {
                 skuCode: sku.sku_code || generateUniqueCode('SKU'),
                 imageUrl: sku.image_url || null,
@@ -99824,7 +101119,7 @@ const updateProduct = (0, _action_utils.requireRole)([
                 stockStatus: getStockStatus(sku.stock),
                 attributeJson: sku.attribute_json || [],
                 deliveryDays: sku.delivery_days || null,
-                weightKg: sku.weight_kg || null,
+                weightKg: forcedWeightKg,
                 volumeM3: sku.volume_m3 || null
             };
             if (sku.sku_id && existingSkuIds.includes(sku.sku_id)) {
@@ -99846,6 +101141,17 @@ const updateProduct = (0, _action_utils.requireRole)([
                     }
                 });
             }
+        }
+        // 保底：表单未带回的既有 SKU 也强制同步为 SPU 重量
+        if (input.weight_gram != null && Number(input.weight_gram) > 0) {
+            await tx.productsku.updateMany({
+                where: {
+                    productId: input.product_id
+                },
+                data: {
+                    weightKg: Number((Number(input.weight_gram) / 1000).toFixed(3))
+                }
+            });
         }
         await syncCartItemsValidState(tx, input.product_id);
         // After SKU prices settle — bind/prune below13 / below3 without touching primary category.
@@ -100262,6 +101568,26 @@ const inlineUpdateProductSkuField = (0, _action_utils.requireRole)([
             data: {
                 attributeJson: attributeJson
             }
+        });
+        return {
+            success: true
+        };
+    }
+    if (input.field === 'min_order_qty') {
+        const nextValue = Math.max(1, Math.round(Number(input.value)));
+        if (!Number.isFinite(nextValue) || nextValue <= 0) {
+            throw new Error('起订量必须大于0');
+        }
+        await _prisma.default.$transaction(async (tx)=>{
+            await tx.productsku.update({
+                where: {
+                    id: sku.id
+                },
+                data: {
+                    minOrderQty: nextValue
+                }
+            });
+            await syncCartItemsValidState(tx, input.product_id);
         });
         return {
             success: true
@@ -101468,8 +102794,13 @@ const updateProductStock = (0, _action_utils.requireRole)([
 }));
 const reclassifyPublishedProductsBySecondaryMatch = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
-])((0, _action_utils.withResult)(async ()=>{
-    const secondaryCategories = await (0, _ImportFrom1688.loadAutoMatchSecondaryCategories)(_prisma.default);
+])((0, _action_utils.withResult)(async (input = {})=>{
+    const scopedIds = Array.isArray(input === null || input === void 0 ? void 0 : input.product_ids) ? Array.from(new Set(input.product_ids.map((id)=>String(id || '').trim()).filter(Boolean))) : [];
+    const [secondaryCategories, filterCategories, brandRules] = await Promise.all([
+        (0, _ImportFrom1688.loadAutoMatchSecondaryCategories)(_prisma.default),
+        (0, _categoryFilterTitleMatch.loadFilterCategoriesFromDb)(_prisma.default),
+        (0, _brandAlias.loadBrandAliasRules)()
+    ]);
     const products = await _prisma.default.product.findMany({
         where: {
             status: {
@@ -101477,14 +102808,26 @@ const reclassifyPublishedProductsBySecondaryMatch = (0, _action_utils.requireRol
                     'ACTIVE',
                     'DRAFT'
                 ]
-            }
+            },
+            ...scopedIds.length > 0 ? {
+                id: {
+                    in: scopedIds
+                }
+            } : {}
         },
         select: {
             id: true,
             name: true,
             detailText: true,
             shortDescription: true,
-            categoryId: true
+            categoryId: true,
+            brandCategoryId: true,
+            weightGram: true,
+            relationCategories: {
+                select: {
+                    categoryId: true
+                }
+            }
         },
         orderBy: {
             updatedAt: 'desc'
@@ -101493,54 +102836,732 @@ const reclassifyPublishedProductsBySecondaryMatch = (0, _action_utils.requireRol
     let matched = 0;
     let skipped = 0;
     let failed = 0;
+    const items = [];
     for (const product of products){
         try {
+            var _toNumber;
+            var _after_category, _after_brandCategory;
+            const nameBefore = String(product.name || '');
+            const normalizedName = (0, _brandTitleNormalize.applyBrandAliases)(nameBefore, brandRules);
+            const brandNormalized = normalizedName !== nameBefore && normalizedName.trim().length > 0;
+            const effectiveName = brandNormalized ? normalizedName : nameBefore;
             const corpusDetail = (0, _ImportFrom1688.buildCategoryMatchCorpus)(product.detailText, product.shortDescription);
-            const hits = (0, _ImportFrom1688.matchSecondaryCategoriesByTitle)(product.name, secondaryCategories, corpusDetail);
-            if (!hits.length) {
+            const hits = (0, _ImportFrom1688.matchSecondaryCategoriesByTitle)(effectiveName, secondaryCategories, corpusDetail);
+            const filterHits = (0, _categoryFilterTitleMatch.matchFilterCategoriesByTitle)(effectiveName, filterCategories, corpusDetail);
+            const isBrandShelfHit = (item)=>!(0, _ImportFrom1688.isNoBrandCatchAllCategoryName)(item.name) && (Boolean(item.isBrandCategory) || [
+                    'brand',
+                    'brands',
+                    '品牌'
+                ].includes(String(item.parentName || '').trim().toLowerCase()));
+            // 标题内品牌名（Chanel/LV…）优先从 Brand 货架专用匹配
+            const brandHit = (0, _ImportFrom1688.pickBestBrandCategoryFromTitle)(effectiveName, secondaryCategories, corpusDetail) || hits.find(isBrandShelfHit) || null;
+            // 主类目：真实品类二级优先，其次一级；材质/Brand 不当主类目
+            const pricingHits = hits.filter((item)=>(0, _categoryMatchGuards.isProductTypeCategory)({
+                    name: item.name,
+                    parentName: item.parentName,
+                    isBrandCategory: item.isBrandCategory,
+                    level: item.level
+                })).slice().sort((a, b)=>(b.level || 0) - (a.level || 0) || b.name.length - a.name.length || a.name.localeCompare(b.name, 'zh-CN'));
+            // 禁止回退到含 Material/Stainless steel 的全量 hits，否则会误主成 Material
+            const pricingHitId = (0, _ImportFrom1688.pickImportPricingTargetCategory)(pricingHits, null);
+            const pricingHit = (pricingHitId ? pricingHits.find((h)=>h.id === pricingHitId) || hits.find((h)=>h.id === pricingHitId) : null) || pricingHits[0] || null;
+            const ownership = pricingHit ? await (0, _ImportFrom1688.resolveImportCategoryOwnership)(_prisma.default, pricingHit.id).catch(()=>null) : null;
+            let primaryCategoryId = (ownership === null || ownership === void 0 ? void 0 : ownership.primaryCategoryId) && (0, _categoryMatchGuards.isProductTypeCategory)({
+                name: pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.name,
+                parentName: pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.parentName,
+                isBrandCategory: pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.isBrandCategory,
+                level: pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.level
+            }) ? ownership.primaryCategoryId : (pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.id) || null;
+            if (!primaryCategoryId) {
+                const existingIds = [
+                    product.categoryId,
+                    ...(product.relationCategories || []).map((rel)=>rel.categoryId)
+                ].filter(Boolean);
+                const { categoryMap: existingMetaMap } = await getCategoryMetaMap(_prisma.default, existingIds);
+                const isUsablePrimary = (id)=>{
+                    var _existingMetaMap_get;
+                    const meta = id ? existingMetaMap.get(id) : null;
+                    if (!meta) return false;
+                    if (isBrandCategoryMeta(meta, existingMetaMap)) return false;
+                    if ((0, _categoryPricing.isAggregatePricingCategoryName)(meta.name)) return false;
+                    if ((0, _categoryMatchGuards.isAttributeOrFilterCategory)({
+                        name: meta.name,
+                        parentName: meta.parentId ? (_existingMetaMap_get = existingMetaMap.get(meta.parentId)) === null || _existingMetaMap_get === void 0 ? void 0 : _existingMetaMap_get.name : null
+                    })) {
+                        return false;
+                    }
+                    return true;
+                };
+                // 优先已有二级，其次已有一级（没二级时一级也能提交）
+                if (isUsablePrimary(product.categoryId)) {
+                    const meta = existingMetaMap.get(product.categoryId);
+                    if (meta && Number(meta.level) === 2) {
+                        primaryCategoryId = product.categoryId;
+                    }
+                }
+                if (!primaryCategoryId) {
+                    var _l2_;
+                    const l2 = existingIds.filter(isUsablePrimary).map((id)=>existingMetaMap.get(id)).filter((meta)=>Number(meta.level) === 2).sort((a, b)=>String(b.name || '').length - String(a.name || '').length);
+                    primaryCategoryId = ((_l2_ = l2[0]) === null || _l2_ === void 0 ? void 0 : _l2_.id) || null;
+                }
+                if (!primaryCategoryId) {
+                    var _l1_;
+                    const l1 = existingIds.filter(isUsablePrimary).map((id)=>existingMetaMap.get(id)).filter((meta)=>Number(meta.level) === 1).sort((a, b)=>String(b.name || '').length - String(a.name || '').length);
+                    primaryCategoryId = ((_l1_ = l1[0]) === null || _l1_ === void 0 ? void 0 : _l1_.id) || null;
+                }
+            }
+            if (!primaryCategoryId && !hits.length && !brandNormalized) {
+                const existingWeight = toNumber(product.weightGram);
+                if (existingWeight != null && existingWeight > 0 && !(0, _categoryWeight.isLikelyUnreliableWeightGrams)(existingWeight)) {
+                    skipped += 1;
+                    items.push({
+                        id: product.id,
+                        scope: 'product',
+                        name: effectiveName,
+                        name_before: brandNormalized ? nameBefore : null,
+                        brand_normalized: false,
+                        weight_grams: existingWeight,
+                        weight_updated: false,
+                        primary_category_id: product.categoryId || null,
+                        primary_category_name: null,
+                        brand_category_id: product.brandCategoryId || null,
+                        brand_category_name: null,
+                        categories: [],
+                        status: 'skipped',
+                        message: '未命中类目/品牌，且标题与重量无需校准'
+                    });
+                    continue;
+                }
+            }
+            // 标题没命中品类时：沿用现有主类目（二级优先，一级也可）
+            if (!primaryCategoryId) {
+                const fallbackIds = [
+                    product.categoryId
+                ].filter(Boolean);
+                if (fallbackIds.length) {
+                    var _fbMap_get;
+                    const { categoryMap: fbMap } = await getCategoryMetaMap(_prisma.default, fallbackIds);
+                    const fb = product.categoryId ? fbMap.get(product.categoryId) : null;
+                    if (fb && !isBrandCategoryMeta(fb, fbMap) && !(0, _categoryPricing.isAggregatePricingCategoryName)(fb.name) && !(0, _categoryMatchGuards.isAttributeOrFilterCategory)({
+                        name: fb.name,
+                        parentName: fb.parentId ? (_fbMap_get = fbMap.get(fb.parentId)) === null || _fbMap_get === void 0 ? void 0 : _fbMap_get.name : null
+                    })) {
+                        primaryCategoryId = product.categoryId;
+                    }
+                }
+            }
+            if (!primaryCategoryId) {
                 skipped += 1;
+                items.push({
+                    id: product.id,
+                    scope: 'product',
+                    name: effectiveName,
+                    name_before: brandNormalized ? nameBefore : null,
+                    brand_normalized: brandNormalized,
+                    weight_grams: toNumber(product.weightGram),
+                    weight_updated: false,
+                    primary_category_id: null,
+                    primary_category_name: null,
+                    brand_category_id: (brandHit === null || brandHit === void 0 ? void 0 : brandHit.id) || product.brandCategoryId || null,
+                    brand_category_name: (brandHit === null || brandHit === void 0 ? void 0 : brandHit.name) || null,
+                    categories: hits.map((h)=>({
+                            category_id: h.id,
+                            category_name: h.name,
+                            kind: isBrandShelfHit(h) ? 'brand' : 'linked'
+                        })),
+                    status: 'skipped',
+                    message: '缺少可用主类目'
+                });
                 continue;
             }
-            // hits 已按 Brand 父级优先排序；主分类必须落在命中的 Brand L2（若有）上
-            const brandHit = hits.find((item)=>String(item.parentName || '').trim().toLowerCase() === 'brand');
-            const primaryHit = brandHit || hits[0];
-            const ownership = await (0, _ImportFrom1688.resolveImportCategoryOwnership)(_prisma.default, primaryHit.id);
-            const linkedCategoryIds = await (0, _ImportFrom1688.expandLinkedCategoryIdsWithParents)(_prisma.default, [
-                ...ownership.linkedCategoryIds,
+            const linkedCategoryIdsRaw = await (0, _ImportFrom1688.expandLinkedCategoryIdsWithParents)(_prisma.default, [
+                ...(ownership === null || ownership === void 0 ? void 0 : ownership.linkedCategoryIds) || [
+                    primaryCategoryId
+                ],
                 ...hits.map((item)=>item.id),
-                product.categoryId || ''
+                ...filterHits.map((item)=>item.id),
+                ...brandHit ? [
+                    brandHit.id
+                ] : [],
+                // 一键校准以本次标题命中为准，不再把旧主类目硬塞回来（否则 wallet/Handbag 旧脏数据清不掉）
+                primaryCategoryId || ''
             ]);
+            const linkedCategoryIds = await (0, _ImportFrom1688.pruneNoBrandCatchAllLinks)(_prisma.default, linkedCategoryIdsRaw, {
+                hasRealBrand: Boolean(brandHit)
+            });
+            const hitNames = [
+                pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.name,
+                ...pricingHits.map((h)=>h.name),
+                ...hits.map((h)=>h.name),
+                ...filterHits.map((h)=>h.name)
+            ];
+            const existingWeight = toNumber(product.weightGram);
+            const textCorpus = (0, _ImportFrom1688.buildCategoryMatchCorpus)(effectiveName, product.detailText, product.shortDescription);
+            const fromTextWeight = (0, _categoryWeight.extractWeightGramsFromText)(textCorpus);
+            // 一键校准：标题有重量用标题；否则按命中类目重算。历史 500g 兜底不当作“已人工确认”
+            const keepExistingWeight = existingWeight != null && existingWeight > 0 && !fromTextWeight && !(0, _categoryWeight.isLikelyUnreliableWeightGrams)(existingWeight) && (0, _categoryWeight.resolveCategoryDefaultWeightGramsFromNames)(hitNames) == null;
+            const resolvedWeight = (0, _categoryWeight.resolveProductWeightGrams)({
+                explicit: keepExistingWeight ? existingWeight : fromTextWeight,
+                text: textCorpus,
+                categoryNames: hitNames
+            });
+            const weightUpdated = existingWeight == null || Math.round(existingWeight) !== resolvedWeight;
             await _prisma.default.$transaction(async (tx)=>{
+                var _ref, _ref1;
                 await tx.product.update({
                     where: {
                         id: product.id
                     },
                     data: {
-                        categoryId: ownership.primaryCategoryId,
-                        brandCategoryId: primaryHit.id,
-                        brandMatchKeyword: primaryHit.name,
-                        autoBrandMatched: true
+                        ...brandNormalized ? {
+                            name: effectiveName
+                        } : {},
+                        ...weightUpdated ? {
+                            weightGram: resolvedWeight
+                        } : {},
+                        categoryId: primaryCategoryId,
+                        // 标题命中真实品牌则写入；未命中则清空错误的 No Brand / 旧品牌
+                        brandCategoryId: (_ref = brandHit === null || brandHit === void 0 ? void 0 : brandHit.id) !== null && _ref !== void 0 ? _ref : null,
+                        brandMatchKeyword: (_ref1 = brandHit === null || brandHit === void 0 ? void 0 : brandHit.name) !== null && _ref1 !== void 0 ? _ref1 : null,
+                        autoBrandMatched: Boolean(brandHit)
                     }
                 });
                 await replaceProductCategoryRelations(tx, product.id, linkedCategoryIds);
                 await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product.id);
             });
+            const after = await _prisma.default.product.findUnique({
+                where: {
+                    id: product.id
+                },
+                select: {
+                    categoryId: true,
+                    brandCategoryId: true,
+                    weightGram: true,
+                    category: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    },
+                    brandCategory: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    },
+                    relationCategories: {
+                        select: {
+                            categoryId: true,
+                            category: {
+                                select: {
+                                    id: true,
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            const categories = [];
+            const seen = new Set();
+            const pushTag = (tag)=>{
+                if (!tag.category_id || seen.has(tag.category_id)) return;
+                seen.add(tag.category_id);
+                categories.push(tag);
+            };
+            if (after === null || after === void 0 ? void 0 : after.category) {
+                pushTag({
+                    category_id: after.category.id,
+                    category_name: after.category.name,
+                    kind: 'primary'
+                });
+            }
+            if (after === null || after === void 0 ? void 0 : after.brandCategory) {
+                pushTag({
+                    category_id: after.brandCategory.id,
+                    category_name: after.brandCategory.name,
+                    kind: 'brand'
+                });
+            }
+            for (const rel of (after === null || after === void 0 ? void 0 : after.relationCategories) || []){
+                const cat = rel.category;
+                if (!cat) continue;
+                pushTag({
+                    category_id: cat.id,
+                    category_name: cat.name,
+                    kind: (after === null || after === void 0 ? void 0 : after.categoryId) === cat.id ? 'primary' : (after === null || after === void 0 ? void 0 : after.brandCategoryId) === cat.id ? 'brand' : 'linked'
+                });
+            }
             matched += 1;
-        } catch  {
+            items.push({
+                id: product.id,
+                scope: 'product',
+                name: effectiveName,
+                name_before: brandNormalized ? nameBefore : null,
+                brand_normalized: brandNormalized,
+                weight_grams: (_toNumber = toNumber(after === null || after === void 0 ? void 0 : after.weightGram)) !== null && _toNumber !== void 0 ? _toNumber : resolvedWeight,
+                weight_updated: weightUpdated,
+                primary_category_id: (after === null || after === void 0 ? void 0 : after.categoryId) || primaryCategoryId,
+                primary_category_name: (after === null || after === void 0 ? void 0 : (_after_category = after.category) === null || _after_category === void 0 ? void 0 : _after_category.name) || (pricingHit === null || pricingHit === void 0 ? void 0 : pricingHit.name) || null,
+                brand_category_id: (after === null || after === void 0 ? void 0 : after.brandCategoryId) || (brandHit === null || brandHit === void 0 ? void 0 : brandHit.id) || null,
+                brand_category_name: (after === null || after === void 0 ? void 0 : (_after_brandCategory = after.brandCategory) === null || _after_brandCategory === void 0 ? void 0 : _after_brandCategory.name) || (brandHit === null || brandHit === void 0 ? void 0 : brandHit.name) || null,
+                categories,
+                status: 'matched',
+                message: null
+            });
+        } catch (err) {
             failed += 1;
+            items.push({
+                id: product.id,
+                scope: 'product',
+                name: product.name,
+                name_before: null,
+                brand_normalized: false,
+                weight_grams: toNumber(product.weightGram),
+                weight_updated: false,
+                primary_category_id: product.categoryId || null,
+                primary_category_name: null,
+                brand_category_id: product.brandCategoryId || null,
+                brand_category_name: null,
+                categories: [],
+                status: 'failed',
+                message: (err === null || err === void 0 ? void 0 : err.message) || '校准失败'
+            });
         }
     }
     return {
         matched,
         skipped,
         failed,
-        total: products.length
+        total: products.length,
+        items
+    };
+}));
+const calibratePendingImportItems = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const itemIds = Array.from(new Set(((input === null || input === void 0 ? void 0 : input.item_ids) || []).map((id)=>String(id || '').trim()).filter(Boolean)));
+    if (!itemIds.length) throw new Error('请先勾选要校准的待上传商品');
+    const [secondaryCategories, filterCategories, brandRules] = await Promise.all([
+        (0, _ImportFrom1688.loadAutoMatchSecondaryCategories)(_prisma.default),
+        (0, _categoryFilterTitleMatch.loadFilterCategoriesFromDb)(_prisma.default),
+        (0, _brandAlias.loadBrandAliasRules)()
+    ]);
+    const rows = await _prisma.default.importtaskitem.findMany({
+        where: {
+            id: {
+                in: itemIds
+            },
+            isPublished: false
+        },
+        select: {
+            id: true,
+            parsedName: true,
+            productDetail: true,
+            weightGrams: true,
+            targetCategoryId: true,
+            previewDataJson: true
+        }
+    });
+    let matched = 0;
+    let skipped = 0;
+    let failed = 0;
+    const items = [];
+    for (const row of rows){
+        try {
+            var _categories_find;
+            const preview = row.previewDataJson || {} || {};
+            const nameBefore = String(row.parsedName || preview.name || '').trim();
+            if (!nameBefore) {
+                skipped += 1;
+                items.push({
+                    id: row.id,
+                    scope: 'pending',
+                    name: '',
+                    name_before: null,
+                    brand_normalized: false,
+                    weight_grams: toNumber(row.weightGrams),
+                    weight_updated: false,
+                    primary_category_id: row.targetCategoryId || null,
+                    primary_category_name: null,
+                    brand_category_id: null,
+                    brand_category_name: null,
+                    categories: [],
+                    status: 'skipped',
+                    message: '标题为空，跳过'
+                });
+                continue;
+            }
+            const normalizedName = (0, _brandTitleNormalize.applyBrandAliases)(nameBefore, brandRules);
+            const brandNormalized = normalizedName !== nameBefore && normalizedName.trim().length > 0;
+            const effectiveName = brandNormalized ? normalizedName : nameBefore;
+            const previewTablePath = preview.tableCategoryPath;
+            const existingTargetId = String(row.targetCategoryId || preview.categoryId || '').trim() || null;
+            const previewMatchedIds = Array.from(new Set((Array.isArray(preview.matchedCategoryIds) ? preview.matchedCategoryIds : []).map((id)=>String(id || '').trim()).filter(Boolean)));
+            const isUsableProductTypeId = (id)=>{
+                const cat = id ? secondaryCategories.find((item)=>item.id === id) : null;
+                if (!cat) return false;
+                return (0, _categoryMatchGuards.isProductTypeCategory)({
+                    name: cat.name,
+                    parentName: cat.parentName,
+                    isBrandCategory: cat.isBrandCategory,
+                    level: cat.level
+                });
+            };
+            const tableProductTypeId = [
+                previewTablePath === null || previewTablePath === void 0 ? void 0 : previewTablePath.secondaryId,
+                previewTablePath === null || previewTablePath === void 0 ? void 0 : previewTablePath.primaryId,
+                existingTargetId
+            ].find((id)=>isUsableProductTypeId(id)) || null;
+            const preservedCategoryIds = Array.from(new Set([
+                tableProductTypeId,
+                existingTargetId,
+                previewTablePath === null || previewTablePath === void 0 ? void 0 : previewTablePath.primaryId,
+                previewTablePath === null || previewTablePath === void 0 ? void 0 : previewTablePath.secondaryId,
+                ...previewMatchedIds.filter((id)=>isUsableProductTypeId(id))
+            ].map((id)=>String(id || '').trim()).filter(Boolean)));
+            const detailCorpus = (0, _ImportFrom1688.buildCategoryMatchCorpus)(row.productDetail, preview.shortDescription);
+            const hits = (0, _ImportFrom1688.matchSecondaryCategoriesByTitle)(effectiveName, secondaryCategories, detailCorpus);
+            const filterHits = (0, _categoryFilterTitleMatch.matchFilterCategoriesByTitle)(effectiveName, filterCategories, detailCorpus);
+            const isBrandShelfHit = (item)=>!(0, _ImportFrom1688.isNoBrandCatchAllCategoryName)(item.name) && (Boolean(item.isBrandCategory) || [
+                    'brand',
+                    'brands',
+                    '品牌'
+                ].includes(String(item.parentName || '').trim().toLowerCase()));
+            const brandHit = (0, _ImportFrom1688.pickBestBrandCategoryFromTitle)(effectiveName, secondaryCategories, detailCorpus) || hits.find(isBrandShelfHit) || null;
+            const pricingHits = hits.filter((item)=>(0, _categoryMatchGuards.isProductTypeCategory)({
+                    name: item.name,
+                    parentName: item.parentName,
+                    isBrandCategory: item.isBrandCategory,
+                    level: item.level
+                })).slice().sort((a, b)=>(b.level || 0) - (a.level || 0) || b.name.length - a.name.length || a.name.localeCompare(b.name, 'zh-CN'));
+            // 禁止回退到含 Material/Stainless steel 的全量 hits
+            const pricingTargetId = (0, _ImportFrom1688.pickImportPricingTargetCategory)(pricingHits, null);
+            const pricingTarget = pricingTargetId ? hits.find((h)=>h.id === pricingTargetId) || pricingHits.find((h)=>h.id === pricingTargetId) || null : pricingHits[0] || null;
+            // 表格写了帽子等真实品类时，禁止被标题里的 DIOR/LV 品牌货架抢主类目
+            const existingMeta = existingTargetId ? secondaryCategories.find((c)=>c.id === existingTargetId) || null : null;
+            const existingIsProductType = existingMeta ? (0, _categoryMatchGuards.isProductTypeCategory)({
+                name: existingMeta.name,
+                parentName: existingMeta.parentName,
+                isBrandCategory: existingMeta.isBrandCategory,
+                level: existingMeta.level
+            }) : false;
+            let targetCategoryId = null;
+            if (tableProductTypeId) {
+                targetCategoryId = tableProductTypeId;
+            } else if (pricingTarget === null || pricingTarget === void 0 ? void 0 : pricingTarget.id) {
+                targetCategoryId = pricingTarget.id;
+            } else if (existingTargetId && existingIsProductType) {
+                targetCategoryId = existingTargetId;
+            }
+            if (!targetCategoryId && row.targetCategoryId) {
+                const ownershipFallback = await (0, _ImportFrom1688.resolveImportCategoryOwnership)(_prisma.default, row.targetCategoryId).catch(()=>null);
+                const fallbackMeta = (ownershipFallback === null || ownershipFallback === void 0 ? void 0 : ownershipFallback.primaryCategoryId) ? secondaryCategories.find((c)=>c.id === ownershipFallback.primaryCategoryId) || null : null;
+                if ((ownershipFallback === null || ownershipFallback === void 0 ? void 0 : ownershipFallback.primaryCategoryId) && fallbackMeta && (0, _categoryMatchGuards.isProductTypeCategory)({
+                    name: fallbackMeta.name,
+                    parentName: fallbackMeta.parentName,
+                    isBrandCategory: fallbackMeta.isBrandCategory,
+                    level: fallbackMeta.level
+                })) {
+                    targetCategoryId = ownershipFallback.primaryCategoryId;
+                }
+            }
+            const matchedIdsRaw = Array.from(new Set([
+                ...preservedCategoryIds,
+                ...hits.map((h)=>h.id),
+                ...filterHits.map((h)=>h.id),
+                ...targetCategoryId ? [
+                    targetCategoryId
+                ] : [],
+                ...brandHit ? [
+                    brandHit.id
+                ] : []
+            ].filter(Boolean)));
+            // 挂上一级父类，弹窗/待上传里能看到「服饰 → Sock」这类一级
+            const matchedIdsExpanded = await (0, _ImportFrom1688.expandLinkedCategoryIdsWithParents)(_prisma.default, matchedIdsRaw);
+            const matchedIds = await (0, _ImportFrom1688.pruneNoBrandCatchAllLinks)(_prisma.default, matchedIdsExpanded, {
+                hasRealBrand: Boolean(brandHit)
+            });
+            const parentOnlyIds = matchedIds.filter((id)=>!matchedIdsRaw.includes(id));
+            const preservedOnlyIds = preservedCategoryIds.filter((id)=>!hits.some((hit)=>hit.id === id) && !parentOnlyIds.includes(id));
+            const [parentRows, preservedRows] = await Promise.all([
+                parentOnlyIds.length ? _prisma.default.category.findMany({
+                    where: {
+                        id: {
+                            in: parentOnlyIds
+                        }
+                    },
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }) : Promise.resolve([]),
+                preservedOnlyIds.length ? _prisma.default.category.findMany({
+                    where: {
+                        id: {
+                            in: preservedOnlyIds
+                        }
+                    },
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }) : Promise.resolve([])
+            ]);
+            const matchedNames = Array.from(new Set([
+                ...preservedRows.map((r)=>r.name),
+                ...(pricingTarget === null || pricingTarget === void 0 ? void 0 : pricingTarget.name) ? [
+                    pricingTarget.name
+                ] : [],
+                ...pricingHits.map((h)=>h.name),
+                ...hits.map((h)=>h.name),
+                ...filterHits.map((h)=>h.name),
+                ...(brandHit === null || brandHit === void 0 ? void 0 : brandHit.name) ? [
+                    brandHit.name
+                ] : [],
+                ...parentRows.map((r)=>r.name)
+            ].filter((name)=>Boolean(name) && !(0, _ImportFrom1688.isNoBrandCatchAllCategoryName)(name))));
+            const existingWeight = toNumber(row.weightGrams);
+            const skuTable = Array.isArray(preview.skuTable) ? preview.skuTable : [];
+            const skuWeights = skuTable.map((sku)=>toNumber(sku === null || sku === void 0 ? void 0 : sku.weightGrams)).filter((n)=>n != null && n > 0);
+            const textCorpus = (0, _ImportFrom1688.buildCategoryMatchCorpus)(effectiveName, row.productDetail, preview.shortDescription);
+            const fromTextWeight = (0, _categoryWeight.extractWeightGramsFromText)(textCorpus);
+            const avgSkuWeight = skuWeights.length ? Math.round(skuWeights.reduce((a, b)=>a + b, 0) / skuWeights.length) : null;
+            const keepExistingWeight = existingWeight != null && existingWeight > 0 && !fromTextWeight && !(0, _categoryWeight.isLikelyUnreliableWeightGrams)(existingWeight) && (0, _categoryWeight.resolveCategoryDefaultWeightGramsFromNames)(matchedNames) == null;
+            const resolvedWeight = (0, _categoryWeight.resolveProductWeightGrams)({
+                explicit: keepExistingWeight ? existingWeight : fromTextWeight || (avgSkuWeight && !(0, _categoryWeight.isLikelyUnreliableWeightGrams)(avgSkuWeight) ? avgSkuWeight : null),
+                text: textCorpus,
+                categoryNames: matchedNames
+            });
+            const weightUpdated = existingWeight == null || Math.round(existingWeight) !== resolvedWeight;
+            if (!hits.length && !brandNormalized && !weightUpdated && !targetCategoryId) {
+                skipped += 1;
+                items.push({
+                    id: row.id,
+                    scope: 'pending',
+                    name: effectiveName,
+                    name_before: null,
+                    brand_normalized: false,
+                    weight_grams: existingWeight,
+                    weight_updated: false,
+                    primary_category_id: row.targetCategoryId || null,
+                    primary_category_name: null,
+                    brand_category_id: null,
+                    brand_category_name: null,
+                    categories: [],
+                    status: 'skipped',
+                    message: '未识别到可校准内容'
+                });
+                continue;
+            }
+            const persistedTarget = targetCategoryId || (existingIsProductType ? existingTargetId : null) || (isUsableProductTypeId(preview.categoryId) ? String(preview.categoryId) : null);
+            const nextPreview = {
+                ...preview,
+                name: effectiveName,
+                matchedCategoryIds: matchedIds,
+                matchedCategoryNames: matchedNames,
+                categoryId: persistedTarget || undefined,
+                categoryCalibrated: true
+            };
+            await _prisma.default.importtaskitem.update({
+                where: {
+                    id: row.id
+                },
+                data: {
+                    parsedName: effectiveName,
+                    targetCategoryId: persistedTarget,
+                    weightGrams: resolvedWeight,
+                    previewDataJson: nextPreview
+                }
+            });
+            const categories = [];
+            const seen = new Set();
+            for (const hit of hits){
+                if (seen.has(hit.id)) continue;
+                seen.add(hit.id);
+                categories.push({
+                    category_id: hit.id,
+                    category_name: hit.name,
+                    kind: hit.id === targetCategoryId ? 'primary' : isBrandShelfHit(hit) ? 'brand' : 'linked'
+                });
+            }
+            for (const parent of parentRows){
+                if (seen.has(parent.id)) continue;
+                seen.add(parent.id);
+                categories.push({
+                    category_id: parent.id,
+                    category_name: parent.name,
+                    kind: 'linked'
+                });
+            }
+            if (targetCategoryId && !seen.has(targetCategoryId)) {
+                var _preservedRows_find;
+                const name = ((_preservedRows_find = preservedRows.find((row)=>row.id === targetCategoryId)) === null || _preservedRows_find === void 0 ? void 0 : _preservedRows_find.name) || matchedNames[matchedIds.indexOf(targetCategoryId)] || (pricingTarget === null || pricingTarget === void 0 ? void 0 : pricingTarget.name) || targetCategoryId;
+                categories.unshift({
+                    category_id: targetCategoryId,
+                    category_name: name,
+                    kind: 'primary'
+                });
+                seen.add(targetCategoryId);
+            }
+            for (const preserved of preservedRows){
+                if (seen.has(preserved.id)) continue;
+                seen.add(preserved.id);
+                categories.push({
+                    category_id: preserved.id,
+                    category_name: preserved.name,
+                    kind: preserved.id === targetCategoryId ? 'primary' : 'linked'
+                });
+            }
+            if (brandHit && !seen.has(brandHit.id)) {
+                categories.push({
+                    category_id: brandHit.id,
+                    category_name: brandHit.name,
+                    kind: 'brand'
+                });
+            }
+            matched += 1;
+            items.push({
+                id: row.id,
+                scope: 'pending',
+                name: effectiveName,
+                name_before: brandNormalized ? nameBefore : null,
+                brand_normalized: brandNormalized,
+                weight_grams: resolvedWeight,
+                weight_updated: weightUpdated,
+                primary_category_id: targetCategoryId,
+                primary_category_name: (pricingTarget === null || pricingTarget === void 0 ? void 0 : pricingTarget.name) || ((_categories_find = categories.find((c)=>c.kind === 'primary')) === null || _categories_find === void 0 ? void 0 : _categories_find.category_name) || null,
+                brand_category_id: (brandHit === null || brandHit === void 0 ? void 0 : brandHit.id) || null,
+                brand_category_name: (brandHit === null || brandHit === void 0 ? void 0 : brandHit.name) || null,
+                categories,
+                status: 'matched',
+                message: null
+            });
+        } catch (err) {
+            failed += 1;
+            items.push({
+                id: row.id,
+                scope: 'pending',
+                name: String(row.parsedName || ''),
+                name_before: null,
+                brand_normalized: false,
+                weight_grams: toNumber(row.weightGrams),
+                weight_updated: false,
+                primary_category_id: row.targetCategoryId || null,
+                primary_category_name: null,
+                brand_category_id: null,
+                brand_category_name: null,
+                categories: [],
+                status: 'failed',
+                message: (err === null || err === void 0 ? void 0 : err.message) || '校准失败'
+            });
+        }
+    }
+    return {
+        matched,
+        skipped,
+        failed,
+        total: rows.length,
+        items
+    };
+}));
+const applyCalibrateCategoryEdits = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const edits = Array.isArray(input === null || input === void 0 ? void 0 : input.edits) ? input.edits : [];
+    if (!edits.length) throw new Error('没有可保存的类目修改');
+    let success_count = 0;
+    let fail_count = 0;
+    for (const edit of edits){
+        const id = String(edit.id || '').trim();
+        if (!id) {
+            fail_count += 1;
+            continue;
+        }
+        try {
+            const linkedIds = Array.from(new Set((edit.linked_category_ids || []).map((x)=>String(x || '').trim()).filter(Boolean)));
+            if (input.scope === 'product') {
+                const primaryId = String(edit.primary_category_id || linkedIds[0] || '').trim();
+                if (!primaryId) throw new Error('主类目不能为空');
+                const expanded = await (0, _ImportFrom1688.expandLinkedCategoryIdsWithParents)(_prisma.default, linkedIds.length ? linkedIds : [
+                    primaryId
+                ]);
+                await _prisma.default.$transaction(async (tx)=>{
+                    await tx.product.update({
+                        where: {
+                            id
+                        },
+                        data: {
+                            categoryId: primaryId
+                        }
+                    });
+                    await replaceProductCategoryRelations(tx, id, expanded);
+                    await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, id);
+                });
+            } else {
+                const item = await _prisma.default.importtaskitem.findUnique({
+                    where: {
+                        id
+                    },
+                    select: {
+                        previewDataJson: true,
+                        isPublished: true
+                    }
+                });
+                if (!item || item.isPublished) throw new Error('待上传条目不存在或已发布');
+                const preview = item.previewDataJson || {} || {};
+                const primaryId = String(edit.primary_category_id || linkedIds[0] || '').trim() || null;
+                const catRows = linkedIds.length ? await _prisma.default.category.findMany({
+                    where: {
+                        id: {
+                            in: linkedIds
+                        }
+                    },
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }) : [];
+                const nameById = new Map(catRows.map((c)=>[
+                        c.id,
+                        c.name
+                    ]));
+                const nextNames = linkedIds.map((cid)=>nameById.get(cid) || cid);
+                await _prisma.default.importtaskitem.update({
+                    where: {
+                        id
+                    },
+                    data: {
+                        targetCategoryId: primaryId,
+                        previewDataJson: {
+                            ...preview,
+                            categoryId: primaryId || preview.categoryId,
+                            matchedCategoryIds: linkedIds,
+                            matchedCategoryNames: nextNames,
+                            categoryCalibrated: true
+                        }
+                    }
+                });
+            }
+            success_count += 1;
+        } catch  {
+            fail_count += 1;
+        }
+    }
+    return {
+        success_count,
+        fail_count
     };
 }));
 const autoClassifyPriceThresholdProducts = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async ()=>{
     return (0, _priceThresholdAutoClassify.autoClassifyAllProductsByPriceThreshold)(_prisma.default);
+}));
+const backfillAllTitleFilterCategories = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    return (0, _bulkTitleCategoryBackfill.runBulkTitleFilterCategoryBackfill)();
 }));
 const batchTranslateProductTitlesToSpanish = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -102231,11 +104252,15 @@ _export(exports, {
     get updateUserCustomerTag () {
         return updateUserCustomerTag;
     },
+    get updateUserCustomerType () {
+        return updateUserCustomerType;
+    },
     get updateUserStatus () {
         return updateUserStatus;
     }
 });
 const _customerTags = __webpack_require__(54560);
+const _customerType = __webpack_require__(82804);
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
 function _interop_require_default(obj) {
@@ -102373,10 +104398,11 @@ const getUserList = (0, _action_utils.requireRole)([
     const skip = (page - 1) * pageSize;
     const sortBy = input.sortBy || 'createdAt';
     const sortOrder = input.sortOrder === 'asc' ? 'asc' : 'desc';
-    const where = {};
+    const customerTypeFilter = (0, _customerType.isValidCustomerType)(input.customerType) ? String(input.customerType) : '';
+    const baseWhere = {};
     const keyword = (_input_keyword = input.keyword) === null || _input_keyword === void 0 ? void 0 : _input_keyword.trim();
     if (keyword) {
-        where.OR = [
+        baseWhere.OR = [
             {
                 account: {
                     contains: keyword
@@ -102400,21 +104426,27 @@ const getUserList = (0, _action_utils.requireRole)([
         ];
     }
     if ((_input_account = input.account) === null || _input_account === void 0 ? void 0 : _input_account.trim()) {
-        where.account = {
+        baseWhere.account = {
             contains: input.account.trim()
         };
     }
     if ((_input_email = input.email) === null || _input_email === void 0 ? void 0 : _input_email.trim()) {
-        where.email = {
+        baseWhere.email = {
             contains: input.email.trim()
         };
     }
     if (input.role) {
-        where.role = input.role.toUpperCase();
+        baseWhere.role = input.role.toUpperCase();
     }
     if (input.status) {
-        where.status = input.status.toUpperCase();
+        baseWhere.status = input.status.toUpperCase();
     }
+    const where = {
+        ...baseWhere,
+        ...customerTypeFilter ? {
+            customerType: customerTypeFilter
+        } : {}
+    };
     const include = {
         carts: {
             include: {
@@ -102455,7 +104487,7 @@ const getUserList = (0, _action_utils.requireRole)([
         }
     };
     const needsInMemorySort = sortBy === 'cartUsdTotal';
-    const [total, users] = await Promise.all([
+    const [total, users, typeGroups] = await Promise.all([
         _prisma.default.sysuser.count({
             where
         }),
@@ -102471,8 +104503,26 @@ const getUserList = (0, _action_utils.requireRole)([
                 }
             },
             include
+        }),
+        _prisma.default.sysuser.groupBy({
+            by: [
+                'customerType'
+            ],
+            where: baseWhere,
+            _count: {
+                _all: true
+            }
         })
     ]);
+    const type_counts = {};
+    for (const opt of _customerType.CUSTOMER_TYPE_OPTIONS){
+        type_counts[opt.value] = 0;
+    }
+    for (const group of typeGroups){
+        var _group__count;
+        const key = (0, _customerType.normalizeCustomerType)(group.customerType);
+        type_counts[key] = (type_counts[key] || 0) + Number(((_group__count = group._count) === null || _group__count === void 0 ? void 0 : _group__count._all) || 0);
+    }
     const emails = Array.from(new Set(users.map((user)=>user.email.trim().toLowerCase()).filter(Boolean)));
     const emailOrders = emails.length ? await _prisma.default.orderrecord.findMany({
         where: {
@@ -102523,6 +104573,7 @@ const getUserList = (0, _action_utils.requireRole)([
             createdAt: user.createdAt.toISOString(),
             lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
             adminNote: user.adminNote || null,
+            customerType: user.customerType || _customerType.DEFAULT_CUSTOMER_TYPE,
             customerTagCode: tag.customerTagCode,
             customerTagName: tag.customerTagName,
             cartItemCount: (_ref = cart === null || cart === void 0 ? void 0 : (_cart__count = cart._count) === null || _cart__count === void 0 ? void 0 : _cart__count.items) !== null && _ref !== void 0 ? _ref : 0,
@@ -102540,7 +104591,8 @@ const getUserList = (0, _action_utils.requireRole)([
     }
     return {
         list,
-        total
+        total,
+        type_counts
     };
 }));
 const getUserDetail = (0, _action_utils.requireRole)([
@@ -102747,6 +104799,33 @@ const updateUserAdminNote = (0, _action_utils.requireRole)([
     });
     return {
         success: true
+    };
+}));
+const updateUserCustomerType = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const value = (input.customerType || '').trim();
+    if (!(0, _customerType.isValidCustomerType)(value)) throw new Error('无效的客户类型');
+    const user = await _prisma.default.sysuser.findUnique({
+        where: {
+            id: input.id
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!user) throw new Error('客户不存在');
+    await _prisma.default.sysuser.update({
+        where: {
+            id: input.id
+        },
+        data: {
+            customerType: value
+        }
+    });
+    return {
+        success: true,
+        customerType: value
     };
 }));
 const updateUserCustomerTag = (0, _action_utils.requireRole)([
@@ -103014,8 +105093,14 @@ _export(exports, {
     get invalidateHomeRecommendZoneCache () {
         return invalidateHomeRecommendZoneCache;
     },
+    get readAssembledHomeRecommendZones () {
+        return readAssembledHomeRecommendZones;
+    },
     get readHomeRecommendZonesWithCache () {
         return readHomeRecommendZonesWithCache;
+    },
+    get writeAssembledHomeRecommendZones () {
+        return writeAssembledHomeRecommendZones;
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
@@ -103029,7 +105114,9 @@ const productPricingInclude = {
     skus: {
         orderBy: {
             price: 'asc'
-        }
+        },
+        // Homepage cards only need a default price + a few option chips.
+        take: 8
     },
     category: {
         select: {
@@ -103068,6 +105155,25 @@ const productPricingInclude = {
     }
 };
 let cachedZones = null;
+const ASSEMBLED_HOME_ZONES_TTL_MS = 90000;
+const assembledHomeZonesByLang = new Map();
+function readAssembledHomeRecommendZones(lang) {
+    const key = String(lang || 'en').trim() || 'en';
+    const hit = assembledHomeZonesByLang.get(key);
+    if (!hit) return null;
+    if (Date.now() - hit.at > ASSEMBLED_HOME_ZONES_TTL_MS) {
+        assembledHomeZonesByLang.delete(key);
+        return null;
+    }
+    return hit.zones;
+}
+function writeAssembledHomeRecommendZones(lang, zones) {
+    const key = String(lang || 'en').trim() || 'en';
+    assembledHomeZonesByLang.set(key, {
+        at: Date.now(),
+        zones
+    });
+}
 async function readHomeRecommendZonesWithCache() {
     if (cachedZones) {
         return cachedZones;
@@ -103089,7 +105195,7 @@ async function readHomeRecommendZonesWithCache() {
                         sortWeight: 'desc'
                     },
                     {
-                        createdAt: 'asc'
+                        createdAt: 'desc'
                     }
                 ],
                 include: {
@@ -103115,6 +105221,471 @@ async function readHomeRecommendZonesWithCache() {
 }
 function invalidateHomeRecommendZoneCache() {
     cachedZones = null;
+    assembledHomeZonesByLang.clear();
+}
+
+
+/***/ },
+
+/***/ 69646
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/**
+ * Server-side brand alias loader with in-memory cache.
+ * Reads the `brand_alias` table (falls back to defaults if the table is missing
+ * or empty) and exposes helpers to normalize product titles during import/publish.
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get DEFAULT_BRAND_ALIASES () {
+        return DEFAULT_BRAND_ALIASES;
+    },
+    get getBrandAliasRulesSync () {
+        return getBrandAliasRulesSync;
+    },
+    get invalidateBrandAliasCache () {
+        return invalidateBrandAliasCache;
+    },
+    get loadBrandAliasRules () {
+        return loadBrandAliasRules;
+    },
+    get normalizeBrandTitle () {
+        return normalizeBrandTitle;
+    },
+    get normalizeBrandTitleSync () {
+        return normalizeBrandTitleSync;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
+const _brandTitleNormalize = __webpack_require__(53958);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+const DEFAULT_BRAND_ALIASES = [
+    {
+        alias: '路易威登',
+        standard: 'Louis Vuitton'
+    },
+    {
+        alias: '蔻C',
+        standard: 'Coach'
+    },
+    {
+        alias: '蔻家',
+        standard: 'Coach'
+    },
+    {
+        alias: '古驰',
+        standard: 'Gucci'
+    },
+    {
+        alias: 'LV',
+        standard: 'Louis Vuitton'
+    },
+    {
+        alias: '香奈儿',
+        standard: 'Chanel'
+    },
+    {
+        alias: '小香',
+        standard: 'Chanel'
+    }
+];
+const CACHE_TTL_MS = 60000;
+let cache = null;
+function invalidateBrandAliasCache() {
+    cache = null;
+}
+async function loadBrandAliasRules() {
+    const now = Date.now();
+    if (cache && cache.expiresAt > now) return cache.rules;
+    try {
+        const rows = await _prisma.default.brandalias.findMany({
+            orderBy: [
+                {
+                    sortWeight: 'desc'
+                },
+                {
+                    createdAt: 'asc'
+                }
+            ],
+            select: {
+                alias: true,
+                standardName: true
+            }
+        });
+        const rules = rows.length ? rows.map((row)=>({
+                alias: row.alias,
+                standard: row.standardName
+            })) : DEFAULT_BRAND_ALIASES;
+        cache = {
+            rules,
+            expiresAt: now + CACHE_TTL_MS
+        };
+        return rules;
+    } catch  {
+        // 迁移尚未执行等情况：用默认映射，绝不阻断采集/上架
+        return DEFAULT_BRAND_ALIASES;
+    }
+}
+function getBrandAliasRulesSync() {
+    var _ref;
+    return (_ref = cache === null || cache === void 0 ? void 0 : cache.rules) !== null && _ref !== void 0 ? _ref : DEFAULT_BRAND_ALIASES;
+}
+async function normalizeBrandTitle(raw) {
+    const text = String(raw !== null && raw !== void 0 ? raw : '');
+    if (!text.trim()) return text;
+    const rules = await loadBrandAliasRules();
+    return (0, _brandTitleNormalize.applyBrandAliases)(text, rules);
+}
+function normalizeBrandTitleSync(raw) {
+    const text = String(raw !== null && raw !== void 0 ? raw : '');
+    if (!text.trim()) return text;
+    return (0, _brandTitleNormalize.applyBrandAliases)(text, getBrandAliasRulesSync());
+}
+
+
+/***/ },
+
+/***/ 99685
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/**
+ * 全库批量：按标题后缀补挂品质/材质/below13/below3 等关联类目（不改主类目）。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get backfillTitleFilterCategoriesForAllProducts () {
+        return backfillTitleFilterCategoriesForAllProducts;
+    },
+    get backfillTitleFilterCategoriesForPendingImports () {
+        return backfillTitleFilterCategoriesForPendingImports;
+    },
+    get runBulkTitleFilterCategoryBackfill () {
+        return runBulkTitleFilterCategoryBackfill;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
+const _brandAlias = __webpack_require__(69646);
+const _priceThresholdAutoClassify = __webpack_require__(77744);
+const _brandTitleNormalize = __webpack_require__(53958);
+const _categoryMatchGuards = __webpack_require__(78565);
+const _categoryShelfFamily = __webpack_require__(80890);
+const _categoryFilterTitleMatch = __webpack_require__(84777);
+const _ImportFrom1688 = __webpack_require__(13371);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+function pickTitleFilterHits(title, detailText, secondaryCategories, filterCategories, scopeFamily) {
+    const corpus = (0, _ImportFrom1688.buildCategoryMatchCorpus)(title, detailText);
+    const fromMatcher = (0, _ImportFrom1688.matchSecondaryCategoriesByTitle)(title, secondaryCategories, detailText).filter((hit)=>(0, _categoryMatchGuards.isAttributeOrFilterCategory)({
+            name: hit.name,
+            parentName: hit.parentName
+        })).filter((hit)=>(0, _categoryShelfFamily.shelfFamiliesCompatible)(scopeFamily || (0, _categoryShelfFamily.detectShelfFamily)(title, detailText), (0, _categoryShelfFamily.detectShelfFamily)(hit.name, hit.parentName)));
+    const fromFilter = (0, _categoryFilterTitleMatch.matchFilterCategoriesByTitle)(title, filterCategories, detailText, scopeFamily);
+    const byId = new Map();
+    for (const hit of fromMatcher){
+        byId.set(hit.id, {
+            id: hit.id,
+            name: hit.name
+        });
+    }
+    for (const hit of fromFilter){
+        byId.set(hit.id, {
+            id: hit.id,
+            name: hit.name
+        });
+    }
+    if (!byId.size && corpus) {
+        // 标题 glued 后缀兜底：BOXhigh quality → HIGHQUALITY
+        for (const hit of fromFilter){
+            byId.set(hit.id, {
+                id: hit.id,
+                name: hit.name
+            });
+        }
+    }
+    return Array.from(byId.values());
+}
+async function loadBrandRules() {
+    try {
+        const rows = await _prisma.default.brandalias.findMany({
+            orderBy: [
+                {
+                    sortWeight: 'desc'
+                },
+                {
+                    createdAt: 'asc'
+                }
+            ],
+            select: {
+                alias: true,
+                standardName: true
+            }
+        });
+        return rows.length ? rows.map((row)=>({
+                alias: row.alias,
+                standard: row.standardName
+            })) : _brandAlias.DEFAULT_BRAND_ALIASES;
+    } catch  {
+        return _brandAlias.DEFAULT_BRAND_ALIASES;
+    }
+}
+async function backfillTitleFilterCategoriesForAllProducts(options) {
+    var _ref;
+    const dryRun = Boolean(options === null || options === void 0 ? void 0 : options.dryRun);
+    const batchSize = Math.max(20, Math.min(500, (_ref = options === null || options === void 0 ? void 0 : options.batchSize) !== null && _ref !== void 0 ? _ref : 100));
+    const [filterCategories, secondaryCategories, brandRules] = await Promise.all([
+        (0, _categoryFilterTitleMatch.loadFilterCategoriesFromDb)(_prisma.default),
+        (0, _ImportFrom1688.loadAutoMatchSecondaryCategories)(_prisma.default),
+        loadBrandRules()
+    ]);
+    const familyById = new Map();
+    for (const cat of secondaryCategories){
+        familyById.set(cat.id, (0, _categoryShelfFamily.detectShelfFamily)(cat.name, cat.parentName));
+    }
+    for (const cat of filterCategories){
+        familyById.set(cat.id, (0, _categoryShelfFamily.detectShelfFamily)(cat.name, cat.parentName));
+    }
+    let productsScanned = 0;
+    let productsUpdated = 0;
+    let relationsAdded = 0;
+    let cursor;
+    for(;;){
+        var _rows_;
+        const rows = await _prisma.default.product.findMany({
+            where: {
+                status: {
+                    in: [
+                        'ACTIVE',
+                        'DRAFT',
+                        'INACTIVE'
+                    ]
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                detailText: true,
+                shortDescription: true,
+                categoryId: true,
+                category: {
+                    select: {
+                        name: true,
+                        parent: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                },
+                relationCategories: {
+                    select: {
+                        categoryId: true
+                    }
+                }
+            },
+            orderBy: {
+                id: 'asc'
+            },
+            take: batchSize,
+            ...cursor ? {
+                skip: 1,
+                cursor: {
+                    id: cursor
+                }
+            } : {}
+        });
+        if (!rows.length) break;
+        cursor = (_rows_ = rows[rows.length - 1]) === null || _rows_ === void 0 ? void 0 : _rows_.id;
+        for (const product of rows){
+            var _product_category, _product_category_parent, _product_category1;
+            productsScanned += 1;
+            const nameBefore = String(product.name || '').trim();
+            if (!nameBefore) continue;
+            const effectiveName = (0, _brandTitleNormalize.applyBrandAliases)(nameBefore, brandRules) || nameBefore;
+            const detailText = [
+                product.detailText,
+                product.shortDescription
+            ].filter(Boolean).join('\n') || null;
+            const productFamily = (0, _categoryShelfFamily.detectShelfFamily)(effectiveName, detailText, (_product_category = product.category) === null || _product_category === void 0 ? void 0 : _product_category.name, (_product_category1 = product.category) === null || _product_category1 === void 0 ? void 0 : (_product_category_parent = _product_category1.parent) === null || _product_category_parent === void 0 ? void 0 : _product_category_parent.name);
+            const hits = pickTitleFilterHits(effectiveName, detailText, secondaryCategories, filterCategories, productFamily);
+            const expanded = hits.length ? await (0, _categoryFilterTitleMatch.expandCategoryIdsWithParents)(_prisma.default, hits.map((h)=>h.id)) : [];
+            const existing = new Set([
+                product.categoryId,
+                ...product.relationCategories.map((r)=>r.categoryId)
+            ].filter(Boolean));
+            const toAdd = expanded.filter((id)=>id && !existing.has(id));
+            const toRemove = product.relationCategories.map((rel)=>rel.categoryId).filter((id)=>{
+                if (id === product.categoryId) return false;
+                const fam = familyById.get(id);
+                if (!fam || fam === 'unknown') return false;
+                return !(0, _categoryShelfFamily.shelfFamiliesCompatible)(productFamily, fam);
+            });
+            if (!toAdd.length && !toRemove.length) {
+                if (!dryRun) {
+                    await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(_prisma.default, product.id).catch(()=>undefined);
+                }
+                continue;
+            }
+            if (!dryRun) {
+                if (toRemove.length) {
+                    await _prisma.default.product_category_relations.deleteMany({
+                        where: {
+                            productId: product.id,
+                            categoryId: {
+                                in: toRemove
+                            }
+                        }
+                    });
+                }
+                if (toAdd.length) {
+                    await _prisma.default.product_category_relations.createMany({
+                        data: toAdd.map((categoryId)=>({
+                                productId: product.id,
+                                categoryId
+                            })),
+                        skipDuplicates: true
+                    });
+                }
+                await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(_prisma.default, product.id).catch(()=>undefined);
+            }
+            productsUpdated += 1;
+            relationsAdded += toAdd.length;
+        }
+        if (rows.length < batchSize) break;
+    }
+    return {
+        products_scanned: productsScanned,
+        products_updated: productsUpdated,
+        relations_added: relationsAdded
+    };
+}
+async function backfillTitleFilterCategoriesForPendingImports(options) {
+    var _ref;
+    const dryRun = Boolean(options === null || options === void 0 ? void 0 : options.dryRun);
+    const batchSize = Math.max(20, Math.min(500, (_ref = options === null || options === void 0 ? void 0 : options.batchSize) !== null && _ref !== void 0 ? _ref : 100));
+    const [filterCategories, secondaryCategories, brandRules] = await Promise.all([
+        (0, _categoryFilterTitleMatch.loadFilterCategoriesFromDb)(_prisma.default),
+        (0, _ImportFrom1688.loadAutoMatchSecondaryCategories)(_prisma.default),
+        loadBrandRules()
+    ]);
+    let pendingScanned = 0;
+    let pendingUpdated = 0;
+    let cursor;
+    for(;;){
+        var _rows_;
+        const rows = await _prisma.default.importtaskitem.findMany({
+            where: {
+                isPublished: false,
+                fetchStatus: 'COMPLETED'
+            },
+            select: {
+                id: true,
+                parsedName: true,
+                productDetail: true,
+                targetCategoryId: true,
+                previewDataJson: true
+            },
+            orderBy: {
+                id: 'asc'
+            },
+            take: batchSize,
+            ...cursor ? {
+                skip: 1,
+                cursor: {
+                    id: cursor
+                }
+            } : {}
+        });
+        if (!rows.length) break;
+        cursor = (_rows_ = rows[rows.length - 1]) === null || _rows_ === void 0 ? void 0 : _rows_.id;
+        for (const row of rows){
+            pendingScanned += 1;
+            const preview = row.previewDataJson || {} || {};
+            const nameBefore = String(row.parsedName || preview.name || '').trim();
+            if (!nameBefore) continue;
+            const effectiveName = (0, _brandTitleNormalize.applyBrandAliases)(nameBefore, brandRules) || nameBefore;
+            const detailText = [
+                row.productDetail,
+                preview.shortDescription
+            ].filter(Boolean).join('\n') || null;
+            const targetMeta = secondaryCategories.find((cat)=>cat.id === (row.targetCategoryId || preview.categoryId));
+            const productFamily = (0, _categoryShelfFamily.detectShelfFamily)(effectiveName, detailText, targetMeta === null || targetMeta === void 0 ? void 0 : targetMeta.name, targetMeta === null || targetMeta === void 0 ? void 0 : targetMeta.parentName);
+            const hits = pickTitleFilterHits(effectiveName, detailText, secondaryCategories, filterCategories, productFamily);
+            const mergedRaw = Array.from(new Set([
+                row.targetCategoryId,
+                preview.categoryId,
+                ...preview.matchedCategoryIds || [],
+                ...hits.map((h)=>h.id)
+            ].map((id)=>String(id || '').trim()).filter(Boolean).filter((id)=>{
+                var _secondaryCategories_find, _filterCategories_find, _secondaryCategories_find1, _filterCategories_find1;
+                const fam = (0, _categoryShelfFamily.detectShelfFamily)(((_secondaryCategories_find = secondaryCategories.find((cat)=>cat.id === id)) === null || _secondaryCategories_find === void 0 ? void 0 : _secondaryCategories_find.name) || ((_filterCategories_find = filterCategories.find((cat)=>cat.id === id)) === null || _filterCategories_find === void 0 ? void 0 : _filterCategories_find.name), ((_secondaryCategories_find1 = secondaryCategories.find((cat)=>cat.id === id)) === null || _secondaryCategories_find1 === void 0 ? void 0 : _secondaryCategories_find1.parentName) || ((_filterCategories_find1 = filterCategories.find((cat)=>cat.id === id)) === null || _filterCategories_find1 === void 0 ? void 0 : _filterCategories_find1.parentName));
+                if (id === row.targetCategoryId || id === preview.categoryId) return true;
+                return (0, _categoryShelfFamily.shelfFamiliesCompatible)(productFamily, fam);
+            })));
+            const mergedIds = await (0, _categoryFilterTitleMatch.expandCategoryIdsWithParents)(_prisma.default, mergedRaw);
+            const mergedNames = Array.from(new Set([
+                ...preview.matchedCategoryNames || [],
+                ...hits.map((h)=>h.name)
+            ].filter(Boolean)));
+            const prevIds = (preview.matchedCategoryIds || []).slice().sort().join(',');
+            const nextIds = mergedIds.slice().sort().join(',');
+            if (prevIds === nextIds) continue;
+            if (!dryRun) {
+                await _prisma.default.importtaskitem.update({
+                    where: {
+                        id: row.id
+                    },
+                    data: {
+                        previewDataJson: {
+                            ...preview,
+                            name: effectiveName,
+                            matchedCategoryIds: mergedIds,
+                            matchedCategoryNames: mergedNames,
+                            categoryCalibrated: true
+                        }
+                    }
+                });
+            }
+            pendingUpdated += 1;
+        }
+        if (rows.length < batchSize) break;
+    }
+    return {
+        pending_scanned: pendingScanned,
+        pending_updated: pendingUpdated
+    };
+}
+async function runBulkTitleFilterCategoryBackfill(options) {
+    const productStats = await backfillTitleFilterCategoriesForAllProducts(options);
+    const pendingStats = await backfillTitleFilterCategoriesForPendingImports(options);
+    return {
+        ...productStats,
+        ...pendingStats
+    };
 }
 
 
@@ -103170,12 +105741,12 @@ const CUSTOMER_TAG_OPTIONS = [
 
 "use strict";
 /**
- * Auto-bind price-threshold L2 categories onto products via product_category_relations.
+ * Auto-bind price-threshold categories onto products via product_category_relations.
  * Never changes product.categoryId / brandCategoryId (primary shelf stays intact).
  *
- * Admin already created the L2 shelves — we only resolve them by name:
- * - L1 Bags (包) + min sell USD <= 13 → existing L2 "below13 usd"
- * - L1 Jewelry/饰品 + min sell USD <= 3 → existing L2 "below3 usd"
+ * Rules:
+ * - Product under L1 Bags/包 + min sell USD <= 13 → relate tag "Below 13usd" (L1 or L2)
+ * - Product under L1 Jewelry/饰品 + min sell USD <= 3 → relate tag "Below 3 usd" (L1 or L2)
  */ 
 Object.defineProperty(exports, "__esModule", ({
     value: true
@@ -103213,9 +105784,14 @@ _export(exports, {
     },
     get syncProductPriceThresholdRelations () {
         return syncProductPriceThresholdRelations;
+    },
+    get titleClaimsPriceThresholdTag () {
+        return titleClaimsPriceThresholdTag;
     }
 });
+const _crypto = __webpack_require__(76982);
 const _exchangeRate = __webpack_require__(48511);
+const _categorySlug = __webpack_require__(27863);
 const BELOW13_USD_CATEGORY_NAME = 'below13 usd';
 const BELOW3_USD_CATEGORY_NAME = 'below3 usd';
 const PRICE_THRESHOLD_RULES = [
@@ -103228,11 +105804,17 @@ const PRICE_THRESHOLD_RULES = [
             '箱包',
             '包包'
         ],
+        l2CanonicalName: BELOW13_USD_CATEGORY_NAME,
         l2NameAliases: [
             'below13 usd',
             'below13usd',
             'below13-usd',
-            'below 13 usd'
+            'below 13 usd',
+            'below 13usd',
+            'Below 13usd',
+            'below13',
+            '低于13美元',
+            '13美元以下'
         ],
         maxUsd: 13
     },
@@ -103247,11 +105829,20 @@ const PRICE_THRESHOLD_RULES = [
             'accessory',
             '配件'
         ],
+        l2CanonicalName: BELOW3_USD_CATEGORY_NAME,
         l2NameAliases: [
             'below3 usd',
             'below3usd',
             'below3-usd',
-            'below 3 usd'
+            'below 3 usd',
+            'Below 3 usd',
+            'below3',
+            // 后台 slug 历史拼写 beloe-3-usd
+            'beloe3usd',
+            'beloe-3-usd',
+            'beloe 3 usd',
+            '低于3美元',
+            '3美元以下'
         ],
         maxUsd: 3
     }
@@ -103265,6 +105856,16 @@ function matchesAlias(nameOrSlug, aliases) {
     return aliases.some((alias)=>{
         const a = normalizeCatKey(alias);
         return !!a && key === a;
+    });
+}
+function titleClaimsPriceThresholdTag(title, rule) {
+    var _PRICE_THRESHOLD_RULES_find;
+    const corpus = normalizeCatKey(title);
+    if (!corpus) return false;
+    const aliases = Array.isArray(rule.l2NameAliases) && rule.l2NameAliases.length > 0 ? rule.l2NameAliases : ((_PRICE_THRESHOLD_RULES_find = PRICE_THRESHOLD_RULES.find((item)=>item.key === rule.key)) === null || _PRICE_THRESHOLD_RULES_find === void 0 ? void 0 : _PRICE_THRESHOLD_RULES_find.l2NameAliases) || [];
+    return aliases.some((alias)=>{
+        const token = normalizeCatKey(alias);
+        return token.length >= 4 && corpus.includes(token);
     });
 }
 function toNumber(value) {
@@ -103300,31 +105901,49 @@ function productBelongsToL1(product, l1Id, categoryMap) {
     }
     return false;
 }
-function resolveProductMinUsdPrice(product, usdExchangeRate) {
+function resolveProductMinUsdPrice(product, usdExchangeRate = _exchangeRate.DEFAULT_USD_EXCHANGE_RATE) {
     const skuPrices = (product.skus || []).map((sku)=>toNumber(sku.price)).filter((n)=>n !== null && n >= 0);
-    let minRmb = null;
+    let minCny = null;
     if (skuPrices.length > 0) {
-        minRmb = Math.min(...skuPrices);
+        minCny = Math.min(...skuPrices);
     } else {
         var _toNumber;
         const cost = toNumber(product.costPrice);
         const coeff = (_toNumber = toNumber(product.priceCoefficient)) !== null && _toNumber !== void 0 ? _toNumber : 2;
-        if (cost !== null && cost >= 0) minRmb = cost * coeff;
+        if (cost !== null && cost >= 0) minCny = cost * coeff;
     }
-    if (minRmb === null) return null;
-    return (0, _exchangeRate.toUsdFromCny)(minRmb, usdExchangeRate);
+    if (minCny === null) return null;
+    return (0, _exchangeRate.toUsdFromCny)(minCny, usdExchangeRate);
+}
+async function uniqueCategorySlug(db, baseName) {
+    const base = (0, _categorySlug.slugifyCategoryName)(baseName) || `cat-${(0, _crypto.randomUUID)().slice(0, 8)}`;
+    let slug = base.slice(0, 120);
+    let n = 0;
+    while(n < 20){
+        const hit = await db.category.findFirst({
+            where: {
+                slug
+            },
+            select: {
+                id: true
+            }
+        });
+        if (!hit) return slug;
+        n += 1;
+        const suffix = `-${n}`;
+        slug = `${base.slice(0, Math.max(1, 120 - suffix.length))}${suffix}`;
+    }
+    return `${base.slice(0, 100)}-${(0, _crypto.randomUUID)().slice(0, 8)}`;
 }
 async function resolvePriceThresholdCategories(db) {
-    const l2Candidates = await db.category.findMany({
-        where: {
-            level: 2,
-            status: 'ACTIVE'
-        },
+    const allCats = await db.category.findMany({
         select: {
             id: true,
             name: true,
             slug: true,
+            level: true,
             parentId: true,
+            status: true,
             parent: {
                 select: {
                     id: true,
@@ -103333,18 +105952,81 @@ async function resolvePriceThresholdCategories(db) {
             }
         }
     });
+    const l1Rows = allCats.filter((cat)=>cat.level === 1 && (!cat.status || cat.status === 'ACTIVE'));
+    const l2Rows = allCats.filter((cat)=>cat.level === 2);
     const resolved = [];
     for (const rule of PRICE_THRESHOLD_RULES){
-        var _child_parent;
-        const child = l2Candidates.find((cat)=>matchesAlias(cat.name, rule.l2NameAliases) || matchesAlias(cat.slug, rule.l2NameAliases));
-        if (!(child === null || child === void 0 ? void 0 : child.parentId)) continue;
+        var _tag_parent;
+        // Scope: products under 包 / 饰品 (never treat the Below* shelf itself as scope)
+        const scopeL1 = l1Rows.find((cat)=>!matchesAlias(cat.name, rule.l2NameAliases) && !matchesAlias(cat.slug, rule.l2NameAliases) && (matchesAlias(cat.name, rule.l1Aliases) || matchesAlias(cat.slug, rule.l1Aliases))) || null;
+        const nameMatches = (cat)=>matchesAlias(cat.name, rule.l2NameAliases) || matchesAlias(cat.slug, rule.l2NameAliases);
+        // 1) L2 under scope L1
+        // 2) Top-level (or any-level) category named Below* — your admin setup
+        // 3) Any L2 with that name if no scope L1
+        let tag = (scopeL1 ? l2Rows.find((cat)=>cat.parentId === scopeL1.id && nameMatches(cat)) : null) || allCats.find((cat)=>nameMatches(cat)) || null;
+        let created = false;
+        if (tag && tag.status && tag.status !== 'ACTIVE') {
+            await db.category.update({
+                where: {
+                    id: tag.id
+                },
+                data: {
+                    status: 'ACTIVE'
+                }
+            });
+            tag = {
+                ...tag,
+                status: 'ACTIVE'
+            };
+        }
+        // Only auto-create under scope L1 when nothing named Below* exists at all
+        if (!tag) {
+            if (!scopeL1) continue;
+            const slug = await uniqueCategorySlug(db, rule.l2CanonicalName);
+            const createdRow = await db.category.create({
+                data: {
+                    id: (0, _crypto.randomUUID)(),
+                    name: rule.l2CanonicalName,
+                    slug,
+                    parentId: scopeL1.id,
+                    level: 2,
+                    status: 'ACTIVE',
+                    sortWeight: 0,
+                    isBrandCategory: false,
+                    path: `${scopeL1.name}/${rule.l2CanonicalName}`
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    parentId: true,
+                    status: true,
+                    level: true
+                }
+            });
+            tag = {
+                ...createdRow,
+                parent: {
+                    id: scopeL1.id,
+                    name: scopeL1.name
+                }
+            };
+            l2Rows.push(tag);
+            allCats.push(tag);
+            created = true;
+        }
+        if (!tag) continue;
+        // Products must belong to scope L1 (包/饰品). Tag may be a sibling top-level shelf.
+        const parentId = (scopeL1 === null || scopeL1 === void 0 ? void 0 : scopeL1.id) || (tag.level === 2 ? tag.parentId : null);
+        if (!parentId) continue;
         resolved.push({
             key: rule.key,
-            parentId: child.parentId,
-            parentName: ((_child_parent = child.parent) === null || _child_parent === void 0 ? void 0 : _child_parent.name) || '',
-            categoryId: child.id,
-            categoryName: child.name,
-            maxUsd: rule.maxUsd
+            parentId,
+            parentName: (scopeL1 === null || scopeL1 === void 0 ? void 0 : scopeL1.name) || ((_tag_parent = tag.parent) === null || _tag_parent === void 0 ? void 0 : _tag_parent.name) || '',
+            categoryId: tag.id,
+            categoryName: tag.name,
+            maxUsd: rule.maxUsd,
+            created
         });
     }
     return resolved;
@@ -103367,7 +106049,7 @@ async function loadCategoryMap(db) {
         ]));
 }
 async function syncProductPriceThresholdRelations(db, productId, options) {
-    var _ref, _ref1, _ref2;
+    var _ref, _ref1;
     const ensured = (_ref = options === null || options === void 0 ? void 0 : options.ensured) !== null && _ref !== void 0 ? _ref : await resolvePriceThresholdCategories(db);
     const thresholdIds = ensured.map((item)=>item.categoryId);
     const empty = {
@@ -103384,6 +106066,7 @@ async function syncProductPriceThresholdRelations(db, productId, options) {
         },
         select: {
             id: true,
+            name: true,
             categoryId: true,
             costPrice: true,
             priceCoefficient: true,
@@ -103401,26 +106084,42 @@ async function syncProductPriceThresholdRelations(db, productId, options) {
     });
     if (!product) return empty;
     const categoryMap = (_ref1 = options === null || options === void 0 ? void 0 : options.categoryMap) !== null && _ref1 !== void 0 ? _ref1 : await loadCategoryMap(db);
-    const usdExchangeRate = (_ref2 = options === null || options === void 0 ? void 0 : options.usdExchangeRate) !== null && _ref2 !== void 0 ? _ref2 : await (0, _exchangeRate.getUsdExchangeRate)(db);
+    let usdExchangeRate = _exchangeRate.DEFAULT_USD_EXCHANGE_RATE;
+    try {
+        usdExchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(db, {
+            ttlMs: 60000
+        });
+    } catch  {
+        usdExchangeRate = _exchangeRate.DEFAULT_USD_EXCHANGE_RATE;
+    }
     const minUsd = resolveProductMinUsdPrice(product, usdExchangeRate);
     const relationCategoryIds = (product.relationCategories || []).map((rel)=>rel.categoryId);
     const shouldHaveIds = [];
     const matchedKeys = [];
-    if (minUsd !== null) {
-        for (const rule of ensured){
-            const belongs = productBelongsToL1({
-                categoryId: product.categoryId,
-                relationCategoryIds
-            }, rule.parentId, categoryMap);
-            if (belongs && minUsd <= rule.maxUsd) {
-                shouldHaveIds.push(rule.categoryId);
-                matchedKeys.push(rule.key);
-            }
+    const titleCorpus = String(product.name || '');
+    for (const rule of ensured){
+        const belongs = productBelongsToL1({
+            categoryId: product.categoryId,
+            relationCategoryIds
+        }, rule.parentId, categoryMap);
+        const titleClaim = titleClaimsPriceThresholdTag(titleCorpus, rule);
+        const priceClaim = minUsd !== null && belongs && minUsd <= rule.maxUsd;
+        if (priceClaim || titleClaim && belongs) {
+            shouldHaveIds.push(rule.categoryId);
+            matchedKeys.push(rule.key);
         }
     }
     const existingThreshold = relationCategoryIds.filter((id)=>thresholdIds.includes(id));
     const toAdd = shouldHaveIds.filter((id)=>!existingThreshold.includes(id));
-    const toRemove = existingThreshold.filter((id)=>!shouldHaveIds.includes(id));
+    const toRemove = existingThreshold.filter((id)=>{
+        if (!shouldHaveIds.includes(id)) {
+            // 标题显式写了 below13/below3 后缀时，不因售价超标而摘掉标签
+            const rule = ensured.find((item)=>item.categoryId === id);
+            if (rule && titleClaimsPriceThresholdTag(titleCorpus, rule)) return false;
+            return true;
+        }
+        return false;
+    });
     if (toRemove.length > 0) {
         await db.product_category_relations.deleteMany({
             where: {
@@ -103450,9 +106149,13 @@ async function syncProductPriceThresholdRelations(db, productId, options) {
 }
 async function autoClassifyAllProductsByPriceThreshold(db) {
     const ensured = await resolvePriceThresholdCategories(db);
-    const missingTargets = PRICE_THRESHOLD_RULES.filter((rule)=>!ensured.some((item)=>item.key === rule.key)).map((rule)=>rule.l2NameAliases[0]);
+    const createdCategories = ensured.filter((item)=>item.created).map((item)=>item.categoryName);
+    const missingTargets = PRICE_THRESHOLD_RULES.filter((rule)=>!ensured.some((item)=>item.key === rule.key)).map((rule)=>{
+        const l1Hint = rule.l1Aliases.slice(0, 2).join('/');
+        return `${rule.l2CanonicalName}（需同时有一级「${l1Hint}」用于判定商品归属）`;
+    });
+    // Reload map after possible creates so new L2 parents resolve correctly
     const categoryMap = await loadCategoryMap(db);
-    const usdExchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(db);
     const products = await db.product.findMany({
         where: {
             status: {
@@ -103478,8 +106181,7 @@ async function autoClassifyAllProductsByPriceThreshold(db) {
         try {
             const result = await syncProductPriceThresholdRelations(db, product.id, {
                 ensured,
-                categoryMap,
-                usdExchangeRate
+                categoryMap
             });
             if (result.addedCategoryIds.length > 0) bound += 1;
             else if (result.removedCategoryIds.length > 0) unbound += 1;
@@ -103494,6 +106196,7 @@ async function autoClassifyAllProductsByPriceThreshold(db) {
         unbound,
         skipped,
         failed,
+        created_categories: createdCategories,
         resolvedCategories: ensured.map((item)=>({
                 key: item.key,
                 parent_name: item.parentName,
@@ -103547,6 +106250,7 @@ _export(exports, {
 });
 const _translateText = __webpack_require__(27604);
 const _productKeywordDictionary = __webpack_require__(58938);
+const _brandAlias = __webpack_require__(69646);
 function getCachedSpanishTitle(existingEs, translationsJson) {
     const direct = (0, _productKeywordDictionary.collapseRepeatedTitleWords)(existingEs);
     if (direct && !(0, _productKeywordDictionary.containsChinese)(direct)) return direct.slice(0, 200);
@@ -103574,7 +106278,8 @@ function getCachedEnglishTitle(existingEn, translationsJson) {
 async function resolveEnglishProductTitle(chineseName, existingEn) {
     const existing = (0, _productKeywordDictionary.collapseRepeatedTitleWords)(existingEn);
     if (existing && !(0, _productKeywordDictionary.containsChinese)(existing)) return existing.slice(0, 200);
-    const zh = String(chineseName || '').trim();
+    // 品牌别名归一（蔻C→Coach 等）：翻译前先替换，保证 EN 品牌名正确
+    const zh = await (0, _brandAlias.normalizeBrandTitle)(String(chineseName || '').trim());
     if (!zh) return existing.slice(0, 200);
     if (!(0, _productKeywordDictionary.containsChinese)(zh)) return (0, _productKeywordDictionary.collapseRepeatedTitleWords)(zh).slice(0, 200);
     const fromApi = await (0, _translateText.translateTextTo)(zh, 'en', 'zh');
@@ -103592,7 +106297,8 @@ async function resolveEnglishProductTitle(chineseName, existingEn) {
 async function resolveSpanishProductTitle(chineseName, existingEs, englishFallback, translationsJson) {
     const cached = getCachedSpanishTitle(existingEs, translationsJson);
     if (cached) return cached;
-    const zh = String(chineseName || '').trim();
+    // 品牌别名归一（蔻C→Coach 等）：翻译前先替换，保证 ES 品牌名正确
+    const zh = await (0, _brandAlias.normalizeBrandTitle)(String(chineseName || '').trim());
     const en = getCachedEnglishTitle(englishFallback, translationsJson);
     if (zh && (0, _productKeywordDictionary.containsChinese)(zh)) {
         const fromZh = await (0, _translateText.translateTextTo)(zh, 'es', 'zh');
@@ -105514,7 +108220,7 @@ function snapshotFromPendingImportQueueItem(item) {
         mainImageUrl: item.item_mainImageUrl || item.item_parsedMainImageUrl,
         galleryUrls: item.item_galleryUrls,
         prices: [
-            ...(item.item_skus || []).map((sku)=>sku.price),
+            ...(item.item_skus || []).map((sku)=>sku === null || sku === void 0 ? void 0 : sku.price),
             item.item_cnyPriceMin,
             item.item_cnyPriceMax,
             item.item_costPrice,
@@ -106575,16 +109281,16 @@ const getCartData = (0, _action_utils.requireRole)([
         let invalidReason = null;
         if (pStatus !== 'ACTIVE' || cStatus !== 'ACTIVE') {
             isValid = false;
-            invalidReason = '商品或分类已失效';
+            invalidReason = 'Product or category unavailable';
         } else if (stock < item.quantity) {
             isValid = false;
-            invalidReason = '库存不足';
+            invalidReason = 'Insufficient stock';
         } else if (item.quantity < effectiveSkuMinOrderQty) {
             isValid = false;
-            invalidReason = `当前规格起订量为 ${effectiveSkuMinOrderQty}`;
+            invalidReason = `Minimum order quantity is ${effectiveSkuMinOrderQty}`;
         } else if (totalProductQty < productMinOrderQty) {
             isValid = false;
-            invalidReason = `该商品混批起订量为 ${productMinOrderQty}`;
+            invalidReason = `Mixed MOQ for this product is ${productMinOrderQty}`;
         }
         const expectedStatus = isValid ? 'VALID' : 'INVALID';
         // 如果状态发生变化，则记录到更新队列同步至数据库
@@ -106832,8 +109538,9 @@ const removeInvalidCartItems = (0, _action_utils.requireRole)([
 }));
 const getRecommendedProducts = (0, _action_utils.requireRole)([
     _action_utils.UserRole.CUSTOMER
-])((0, _action_utils.withResult)(async ()=>{
-    // 查找有效商品，权重排序
+])((0, _action_utils.withResult)(async (input)=>{
+    const lang = (0, _productTranslation.normalizeProductLang)(input === null || input === void 0 ? void 0 : input.lang);
+    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
     const products = await _prisma.default.product.findMany({
         where: {
             status: 'ACTIVE',
@@ -106846,10 +109553,51 @@ const getRecommendedProducts = (0, _action_utils.requireRole)([
             name: true,
             mainImageUrl: true,
             ratingAverage: true,
+            translationsJson: true,
+            costPrice: true,
+            category: {
+                select: {
+                    name: true,
+                    level: true,
+                    priceCoefficient: true,
+                    isBrandCategory: true,
+                    parent: {
+                        select: {
+                            name: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true
+                        }
+                    }
+                }
+            },
+            relationCategories: {
+                select: {
+                    category: {
+                        select: {
+                            name: true,
+                            level: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true,
+                            parent: {
+                                select: {
+                                    name: true,
+                                    priceCoefficient: true,
+                                    isBrandCategory: true
+                                }
+                            }
+                        }
+                    }
+                },
+                take: 12
+            },
             skus: {
                 select: {
                     price: true
-                }
+                },
+                orderBy: {
+                    price: 'asc'
+                },
+                take: 24
             }
         },
         orderBy: [
@@ -106863,14 +109611,22 @@ const getRecommendedProducts = (0, _action_utils.requireRole)([
         take: 8
     });
     const list = products.map((p)=>{
-        // 获取最低SKU价格
-        let priceMin = 0;
-        if (p.skus && p.skus.length > 0) {
-            priceMin = Math.min(...p.skus.map((s)=>s.price.toNumber()));
-        }
+        const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
+            primary: p.category,
+            relations: (p.relationCategories || []).map((rel)=>rel.category)
+        });
+        const skuPricesUsd = (p.skus || []).map((s)=>{
+            const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                skuPriceRmb: s.price.toNumber(),
+                costPrice: p.costPrice,
+                ...pricingCoeffs
+            });
+            return (0, _exchangeRate.toUsdFromCny)(priceRmb, exchangeRate);
+        }).filter((n)=>Number.isFinite(n) && n >= 0);
+        const priceMin = skuPricesUsd.length > 0 ? Math.min(...skuPricesUsd) : 0;
         return {
             productId: p.id,
-            name: p.name,
+            name: (0, _productTranslation.resolveProductDisplayName)(p.name, p.translationsJson, lang),
             mainImageUrl: p.mainImageUrl,
             ratingAverage: p.ratingAverage,
             priceMin
@@ -106916,6 +109672,7 @@ const _priceCoefficient = __webpack_require__(1282);
 const _exchangeRate = __webpack_require__(48511);
 const _pricingPromotionConfig = __webpack_require__(53281);
 const _pricingPromotionCalc = __webpack_require__(13050);
+const _productTranslation = __webpack_require__(17908);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -107292,6 +110049,7 @@ const placeCheckoutOrder = (0, _action_utils.requireRole)([
                     weightGram: true,
                     tradeInfoJson: true,
                     costPrice: true,
+                    translationsJson: true,
                     category: {
                         select: {
                             status: true,
@@ -107330,10 +110088,10 @@ const placeCheckoutOrder = (0, _action_utils.requireRole)([
             throw new Error('商品信息已变更，请刷新购物车后重试');
         }
         if (sku.product.status !== 'ACTIVE' || ((_sku_product_category = sku.product.category) === null || _sku_product_category === void 0 ? void 0 : _sku_product_category.status) !== 'ACTIVE') {
-            throw new Error(`商品「${sku.product.name}」已失效，无法下单`);
+            throw new Error(`Product “${(0, _productTranslation.resolveProductDisplayName)(sku.product.name, sku.product.translationsJson, 'en')}” is unavailable`);
         }
         if (sku.stock < quantity) {
-            throw new Error(`商品「${sku.product.name}」库存不足`);
+            throw new Error(`Insufficient stock for “${(0, _productTranslation.resolveProductDisplayName)(sku.product.name, sku.product.translationsJson, 'en')}”`);
         }
         const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
             primary: sku.product.category,
@@ -107356,7 +110114,7 @@ const placeCheckoutOrder = (0, _action_utils.requireRole)([
         lineRows.push({
             productId: sku.product.id,
             productSkuId: sku.id,
-            productName: sku.product.name,
+            productName: (0, _productTranslation.resolveProductDisplayName)(sku.product.name, sku.product.translationsJson, 'en'),
             skuCode: sku.skuCode,
             quantity,
             unitPrice: unitPriceUsd,
@@ -107771,6 +110529,7 @@ _export(exports, {
         return registerCustomer;
     }
 });
+const _crypto = __webpack_require__(76982);
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(78851);
 function _interop_require_default(obj) {
@@ -107778,10 +110537,37 @@ function _interop_require_default(obj) {
         default: obj
     };
 }
+const EMAIL_TAKEN_MSG = 'This email is already registered. Please sign in or use another email.';
+const SCHEMA_LAG_MSG = 'Database schema is out of date. Please run prisma migrate deploy on the server.';
+/** account 列 VarChar(50)；邮箱可更长，超长时用稳定短账号，email 仍存完整值 */ function buildAccountFromEmail(email) {
+    if (email.length <= 50) return email;
+    const digest = (0, _crypto.createHash)('sha256').update(email).digest('hex').slice(0, 48);
+    return `e_${digest}`;
+}
+function mapRegisterError(err) {
+    const raw = err instanceof Error ? err.message : String(err || '');
+    if (/P2002|Unique constraint|unique constraint/i.test(raw)) {
+        return new Error(EMAIL_TAKEN_MSG);
+    }
+    if (/customerType/i.test(raw) || /does not exist in the current database/i.test(raw) || /passwordPlain/i.test(raw)) {
+        return new Error(SCHEMA_LAG_MSG);
+    }
+    if (err instanceof Error && raw && !/Invalid `[\s\S]*` invocation/i.test(raw) && !/\bprisma\b/i.test(raw)) {
+        return err;
+    }
+    if (raw && !/Invalid `[\s\S]*` invocation/i.test(raw) && !/\bprisma\b/i.test(raw)) {
+        return new Error(raw);
+    }
+    return new Error('Registration failed. Please try again later.');
+}
 const checkEmailUnique = (0, _action_utils.withResult)(async (input)=>{
+    const email = String(input.sysuser_email || '').trim().toLowerCase();
+    if (!email) return {
+        is_unique: true
+    };
     const count = await _prisma.default.sysuser.count({
         where: {
-            email: input.sysuser_email
+            email
         }
     });
     return {
@@ -107791,43 +110577,67 @@ const checkEmailUnique = (0, _action_utils.withResult)(async (input)=>{
 const registerCustomer = (0, _action_utils.withResult)(async (input)=>{
     const normalizedName = input.sysuser_name.trim();
     const normalizedPhone = input.sysuser_phone.trim();
-    const normalizedEmail = input.sysuser_email.trim().toLowerCase() || `${crypto.randomUUID()}@guest.local`;
+    const normalizedEmail = input.sysuser_email.trim().toLowerCase() || `${(0, _crypto.randomUUID)()}@guest.local`;
     const username = normalizedName ? normalizedName.slice(0, 100) : (normalizedEmail.split('@')[0] || normalizedEmail).slice(0, 100);
-    const result = await _prisma.default.$transaction(async (tx)=>{
-        const generatedAccount = normalizedEmail;
-        const newUser = await tx.sysuser.create({
-            data: {
-                account: generatedAccount,
-                email: normalizedEmail,
-                password: (0, _action_utils.hashPassword)(input.sysuser_password),
-                // passwordPlain requires DB column; omit so register works when schema lag
-                role: _action_utils.UserRole.CUSTOMER,
-                status: 'ACTIVE',
-                username,
-                phone: normalizedPhone || null,
-                lastLoginAt: new Date()
-            },
-            select: {
-                id: true,
-                account: true,
-                email: true,
-                username: true,
-                preferredLocale: true,
-                role: true
-            }
-        });
-        // 初始化空购物车
-        await tx.cart.create({
-            data: {
-                account: {
-                    connect: {
-                        id: newUser.id
+    const generatedAccount = buildAccountFromEmail(normalizedEmail);
+    // 先查重：避免 Unique 变成 Prisma dump → 前端「后台服务异常」
+    const existing = await _prisma.default.sysuser.findFirst({
+        where: {
+            OR: [
+                {
+                    email: normalizedEmail
+                },
+                {
+                    account: generatedAccount
+                }
+            ]
+        },
+        select: {
+            id: true
+        }
+    });
+    if (existing) {
+        throw new Error(EMAIL_TAKEN_MSG);
+    }
+    let result;
+    try {
+        result = await _prisma.default.$transaction(async (tx)=>{
+            const newUser = await tx.sysuser.create({
+                data: {
+                    account: generatedAccount,
+                    email: normalizedEmail,
+                    password: (0, _action_utils.hashPassword)(input.sysuser_password),
+                    // 勿写 passwordPlain：库无该列时会导致注册整体失败
+                    role: _action_utils.UserRole.CUSTOMER,
+                    status: 'ACTIVE',
+                    username,
+                    phone: normalizedPhone || null,
+                    customerType: 'NEW',
+                    lastLoginAt: new Date()
+                },
+                select: {
+                    id: true,
+                    account: true,
+                    email: true,
+                    username: true,
+                    preferredLocale: true,
+                    role: true
+                }
+            });
+            await tx.cart.create({
+                data: {
+                    account: {
+                        connect: {
+                            id: newUser.id
+                        }
                     }
                 }
-            }
+            });
+            return newUser;
         });
-        return newUser;
-    });
+    } catch (err) {
+        throw mapRegisterError(err);
+    }
     const token = await (0, _action_utils.signToken)(result.id, result.role);
     return {
         sysuser_id: result.id,
@@ -108019,6 +110829,19 @@ const toUsdPrice = (rmbPrice, exchangeRate)=>{
     }
     return (0, _exchangeRate.toUsdFromCny)(rmbPrice, exchangeRate);
 };
+const buildSkuOptionLabel = (sku, index)=>{
+    // Prefer existing label-like fields. Keep it simple: only need a short, stable display string on home cards.
+    const sizeLabel = typeof (sku === null || sku === void 0 ? void 0 : sku.sizeLabel) === 'string' ? sku.sizeLabel.trim() : '';
+    if (sizeLabel) return sizeLabel;
+    const skuCode = typeof (sku === null || sku === void 0 ? void 0 : sku.skuCode) === 'string' ? sku.skuCode.trim() : '';
+    if (skuCode) return skuCode;
+    const attrs = Array.isArray(sku === null || sku === void 0 ? void 0 : sku.attributeJson) ? sku.attributeJson : null;
+    if (attrs && attrs.length > 0) {
+        const values = attrs.map((a)=>a && typeof a.value === 'string' ? a.value.trim() : '').filter(Boolean);
+        if (values.length) return values.join(' / ');
+    }
+    return `Option ${index + 1}`;
+};
 const normalizePcCols = (value)=>{
     if (value === 3 || value === 5) {
         return value;
@@ -108037,6 +110860,12 @@ const normalizePcRows = (value)=>{
 };
 const getHomeRecommendZones = async (input)=>{
     const lang = (0, _productTranslation.normalizeProductLang)(input === null || input === void 0 ? void 0 : input.lang);
+    const cachedAssembled = (0, _homeRecommendZoneCache.readAssembledHomeRecommendZones)(lang);
+    if (cachedAssembled === null || cachedAssembled === void 0 ? void 0 : cachedAssembled.length) {
+        return {
+            zones: cachedAssembled
+        };
+    }
     const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
     const zones = await (0, _homeRecommendZoneCache.readHomeRecommendZonesWithCache)();
     // 专区结构可缓存，但分类名称会在后台改名后过期；每次请求按 ID 回源最新名称/翻译
@@ -108059,6 +110888,7 @@ const getHomeRecommendZones = async (input)=>{
             parentId: true,
             imageUrl: true,
             bannerImageUrl: true,
+            iconUrl: true,
             description: true,
             translationsJson: true,
             parent: {
@@ -108078,65 +110908,53 @@ const getHomeRecommendZones = async (input)=>{
             category.id,
             category
         ]));
-    // 类目卡封面：无 imageUrl 时回退到该类目下商品主图，避免前端关键词搜图长时间转圈
-    const categoryIdsNeedingCover = freshCategories.filter((category)=>!String(category.imageUrl || '').trim() && !String(category.bannerImageUrl || '').trim()).map((category)=>category.id);
-    const coverImageByCategoryId = new Map();
-    if (categoryIdsNeedingCover.length > 0) {
-        const coverProducts = await _prisma.default.product.findMany({
-            where: {
-                status: 'ACTIVE',
-                OR: [
-                    {
-                        categoryId: {
-                            in: categoryIdsNeedingCover
-                        }
-                    },
-                    {
-                        relationCategories: {
-                            some: {
-                                categoryId: {
-                                    in: categoryIdsNeedingCover
-                                }
-                            }
-                        }
-                    }
-                ]
+    // CATEGORY 专区：按类目拉取最新 ACTIVE 商品（主分类 + 多分类关联），供卡片展示图/标题/价
+    const categoryZoneCategoryIds = Array.from(new Set(zones.filter((zone)=>zone.zoneType === 'CATEGORY').flatMap((zone)=>zone.items.filter((item)=>item.entityType === 'CATEGORY').map((item)=>{
+            var _item_category;
+            return item.categoryId || ((_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id) || null;
+        }).filter((id)=>Boolean(id)))));
+    const productZoneSourceCategoryIds = Array.from(new Set(zones.filter((zone)=>zone.zoneType === 'PRODUCT').flatMap((zone)=>zone.items.map((item)=>{
+            var _item_category;
+            return item.categoryId || (item.entityType === 'CATEGORY' ? (_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id : null) || null;
+        }).filter((id)=>Boolean(id)))));
+    const productZoneChildCategories = productZoneSourceCategoryIds.length > 0 ? await _prisma.default.category.findMany({
+        where: {
+            parentId: {
+                in: productZoneSourceCategoryIds
             },
-            select: {
-                categoryId: true,
-                mainImageUrl: true,
-                relationCategories: {
-                    where: {
-                        categoryId: {
-                            in: categoryIdsNeedingCover
-                        }
-                    },
-                    select: {
-                        categoryId: true
-                    }
-                }
-            },
-            orderBy: {
-                updatedAt: 'desc'
-            },
-            take: Math.min(400, categoryIdsNeedingCover.length * 8)
-        });
-        for (const product of coverProducts){
-            const imageUrl = (0, _imageUrl.optimizeCatalogImageUrl)(product.mainImageUrl, 640);
-            if (!imageUrl) continue;
-            if (product.categoryId && categoryIdsNeedingCover.includes(product.categoryId) && !coverImageByCategoryId.has(product.categoryId)) {
-                coverImageByCategoryId.set(product.categoryId, imageUrl);
-            }
-            for (const relation of product.relationCategories){
-                if (!coverImageByCategoryId.has(relation.categoryId)) {
-                    coverImageByCategoryId.set(relation.categoryId, imageUrl);
-                }
-            }
+            status: 'ACTIVE'
+        },
+        select: {
+            id: true,
+            parentId: true
         }
+    }) : [];
+    const productZoneExpandMap = new Map();
+    for (const categoryId of productZoneSourceCategoryIds){
+        productZoneExpandMap.set(categoryId, new Set([
+            categoryId
+        ]));
     }
-    // 商品数：主分类 + 多分类关联一起统计，避免类目卡长期显示 0
+    for (const child of productZoneChildCategories){
+        if (!child.parentId) continue;
+        const bucket = productZoneExpandMap.get(child.parentId) || new Set([
+            child.parentId
+        ]);
+        bucket.add(child.id);
+        productZoneExpandMap.set(child.parentId, bucket);
+    }
+    const productZoneQueryIds = Array.from(new Set([
+        ...productZoneSourceCategoryIds,
+        ...productZoneChildCategories.map((item)=>item.id)
+    ]));
+    const fetchCategoryIds = Array.from(new Set([
+        ...categoryZoneCategoryIds,
+        ...productZoneQueryIds
+    ]));
+    const maxLatestPerCategory = Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, ...zones.filter((zone)=>zone.zoneType === 'CATEGORY').map((zone)=>normalizePcCols(zone.pcCols)), productZoneSourceCategoryIds.length > 0 ? 80 : 0);
     const productCountByCategoryId = new Map();
-    if (categoryIds.length > 0) {
+    const loadProductCounts = async ()=>{
+        if (categoryIds.length === 0) return;
         const [primaryCounts, relationCounts] = await Promise.all([
             _prisma.default.product.groupBy({
                 by: [
@@ -108175,102 +110993,111 @@ const getHomeRecommendZones = async (input)=>{
         for (const row of relationCounts){
             productCountByCategoryId.set(row.categoryId, (productCountByCategoryId.get(row.categoryId) || 0) + row._count._all);
         }
-    }
-    // CATEGORY 专区：按类目拉取最新 ACTIVE 商品（主分类 + 多分类关联），供卡片展示图/标题/价
-    const categoryZoneCategoryIds = Array.from(new Set(zones.filter((zone)=>zone.zoneType === 'CATEGORY').flatMap((zone)=>zone.items.filter((item)=>item.entityType === 'CATEGORY').map((item)=>{
-            var _item_category;
-            return item.categoryId || ((_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id) || null;
-        }).filter((id)=>Boolean(id)))));
-    const maxLatestPerCategory = Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, ...zones.filter((zone)=>zone.zoneType === 'CATEGORY').map((zone)=>normalizePcCols(zone.pcCols)));
+    };
     const latestProductsByCategoryId = new Map();
-    if (categoryZoneCategoryIds.length > 0) {
-        const latestCandidates = await _prisma.default.product.findMany({
-            where: {
-                status: 'ACTIVE',
-                OR: [
-                    {
-                        categoryId: {
-                            in: categoryZoneCategoryIds
-                        }
+    if (fetchCategoryIds.length > 0) {
+        const latestTake = Math.min(400, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)));
+        const [, latestCandidates] = await Promise.all([
+            loadProductCounts(),
+            _prisma.default.product.findMany({
+                where: {
+                    status: 'ACTIVE',
+                    mainImageUrl: {
+                        not: ''
                     },
-                    {
-                        relationCategories: {
-                            some: {
-                                categoryId: {
-                                    in: categoryZoneCategoryIds
+                    OR: [
+                        {
+                            categoryId: {
+                                in: fetchCategoryIds
+                            }
+                        },
+                        {
+                            brandCategoryId: {
+                                in: fetchCategoryIds
+                            }
+                        },
+                        {
+                            relationCategories: {
+                                some: {
+                                    categoryId: {
+                                        in: fetchCategoryIds
+                                    }
                                 }
                             }
                         }
-                    }
-                ],
-                skus: {
-                    some: {}
-                }
-            },
-            select: {
-                id: true,
-                slug: true,
-                name: true,
-                mainImageUrl: true,
-                shortDescription: true,
-                status: true,
-                categoryId: true,
-                costPrice: true,
-                ratingAverage: true,
-                ratingCount: true,
-                translationsJson: true,
-                createdAt: true,
-                skus: {
-                    select: {
-                        id: true,
-                        price: true,
-                        originalPrice: true
-                    },
-                    orderBy: {
-                        price: 'asc'
+                    ],
+                    skus: {
+                        some: {}
                     }
                 },
-                category: {
-                    select: {
-                        name: true,
-                        level: true,
-                        priceCoefficient: true,
-                        isBrandCategory: true,
-                        parent: {
-                            select: {
-                                name: true,
-                                priceCoefficient: true,
-                                isBrandCategory: true
+                select: {
+                    id: true,
+                    slug: true,
+                    name: true,
+                    mainImageUrl: true,
+                    shortDescription: true,
+                    status: true,
+                    categoryId: true,
+                    brandCategoryId: true,
+                    costPrice: true,
+                    ratingAverage: true,
+                    ratingCount: true,
+                    translationsJson: true,
+                    createdAt: true,
+                    skus: {
+                        select: {
+                            id: true,
+                            skuCode: true,
+                            price: true,
+                            originalPrice: true
+                        },
+                        orderBy: {
+                            price: 'asc'
+                        },
+                        take: 6
+                    },
+                    category: {
+                        select: {
+                            name: true,
+                            level: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true,
+                            parent: {
+                                select: {
+                                    name: true,
+                                    priceCoefficient: true,
+                                    isBrandCategory: true
+                                }
                             }
                         }
-                    }
-                },
-                relationCategories: {
-                    select: {
-                        categoryId: true,
-                        category: {
-                            select: {
-                                name: true,
-                                level: true,
-                                priceCoefficient: true,
-                                isBrandCategory: true,
-                                parent: {
-                                    select: {
-                                        name: true,
-                                        priceCoefficient: true,
-                                        isBrandCategory: true
+                    },
+                    relationCategories: {
+                        select: {
+                            categoryId: true,
+                            category: {
+                                select: {
+                                    name: true,
+                                    level: true,
+                                    priceCoefficient: true,
+                                    isBrandCategory: true,
+                                    parent: {
+                                        select: {
+                                            name: true,
+                                            priceCoefficient: true,
+                                            isBrandCategory: true
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            },
-            orderBy: {
-                createdAt: 'desc'
-            },
-            take: Math.min(500, categoryZoneCategoryIds.length * maxLatestPerCategory * 4)
-        });
+                },
+                orderBy: {
+                    createdAt: 'desc'
+                },
+                take: latestTake
+            })
+        ]);
         const mapLatestProductCard = (product, itemIdPrefix)=>{
             const sortedSkus = [
                 ...product.skus
@@ -108281,12 +111108,36 @@ const getHomeRecommendZones = async (input)=>{
                 primary: product.category,
                 relations: (product.relationCategories || []).map((rel)=>rel.category)
             });
-            const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+            const skuSellingRmbPrices = product.skus.map((sku)=>(0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                    skuPriceRmb: sku.price.toNumber(),
+                    costPrice: product.costPrice,
+                    ...pricingCoeffs
+                })).filter((n)=>Number.isFinite(n) && n > 0);
+            const priceMinRmb = skuSellingRmbPrices.length ? Math.min(...skuSellingRmbPrices) : null;
+            const priceMaxRmb = skuSellingRmbPrices.length ? Math.max(...skuSellingRmbPrices) : null;
+            const priceMinUsd = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null;
+            const priceMaxUsd = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null;
+            const priceRmb = priceMinRmb !== null ? priceMinRmb : (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                 skuPriceRmb: defaultSku.price.toNumber(),
                 costPrice: product.costPrice,
                 ...pricingCoeffs
             });
             const cost = (0, _priceCoefficient.toDecimalNumber)(product.costPrice);
+            const skuOptions = sortedSkus.map((sku, index)=>{
+                const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                    skuPriceRmb: sku.price.toNumber(),
+                    costPrice: product.costPrice,
+                    ...pricingCoeffs
+                });
+                const priceUsd = priceRmb > 0 ? toUsdPrice(priceRmb, exchangeRate) : null;
+                const originalPriceRmb = cost !== null && cost > 0 ? Number((priceRmb * 1.1).toFixed(2)) : sku.originalPrice ? sku.originalPrice.toNumber() : null;
+                return {
+                    skuId: sku.id,
+                    label: buildSkuOptionLabel(sku, index),
+                    price: priceUsd,
+                    originalPrice: originalPriceRmb !== null && originalPriceRmb > 0 ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+                };
+            }).filter((opt)=>opt.skuId && opt.price !== null).slice(0, 6);
             const originalPriceRmb = cost !== null && cost > 0 ? Number((priceRmb * 1.1).toFixed(2)) : defaultSku.originalPrice ? defaultSku.originalPrice.toNumber() : null;
             const translatedName = (0, _productTranslation.resolveProductDisplayName)(product.name, product.translationsJson, lang);
             return {
@@ -108296,24 +111147,32 @@ const getHomeRecommendZones = async (input)=>{
                 categoryId: product.categoryId,
                 productName: translatedName,
                 productSlug: product.slug,
-                imageUrl: (0, _imageUrl.optimizeCatalogImageUrl)(product.mainImageUrl, 720),
+                imageUrl: (0, _imageUrl.optimizeCatalogImageUrl)(product.mainImageUrl, 400),
                 shortDescription: product.shortDescription,
                 status: product.status,
-                price: toUsdPrice(priceRmb, exchangeRate),
+                price: priceMinUsd,
+                priceMin: priceMinUsd,
+                priceMax: priceMaxUsd,
+                skuOptions,
                 originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
                 ratingAverage: product.ratingAverage,
                 ratingCount: product.ratingCount,
                 skuCount: product.skus.length,
-                defaultSkuId: defaultSku.id
+                defaultSkuId: defaultSku.id,
+                rawProductName: product.name || null,
+                createdAtTimestamp: product.createdAt ? new Date(product.createdAt).getTime() : null
             };
         };
         for (const product of latestCandidates){
             const linkedCategoryIds = new Set();
-            if (product.categoryId && categoryZoneCategoryIds.includes(product.categoryId)) {
+            if (product.categoryId && fetchCategoryIds.includes(product.categoryId)) {
                 linkedCategoryIds.add(product.categoryId);
             }
+            if (product.brandCategoryId && fetchCategoryIds.includes(product.brandCategoryId)) {
+                linkedCategoryIds.add(product.brandCategoryId);
+            }
             for (const relation of product.relationCategories){
-                if (categoryZoneCategoryIds.includes(relation.categoryId)) {
+                if (fetchCategoryIds.includes(relation.categoryId)) {
                     linkedCategoryIds.add(relation.categoryId);
                 }
             }
@@ -108326,12 +111185,17 @@ const getHomeRecommendZones = async (input)=>{
                 latestProductsByCategoryId.set(linkedCategoryId, bucket);
             }
         }
+    } else {
+        await loadProductCounts();
     }
     const result = zones.map((zone)=>{
         var _zone_pcRows;
         const categoryLatestLimit = zone.zoneType === 'CATEGORY' ? Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, normalizePcCols(zone.pcCols)) : DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT;
-        const items = zone.items.reduce((acc, item)=>{
+        let items = zone.items.reduce((acc, item)=>{
             var _productCountByCategoryId_get;
+            if (zone.zoneType === 'PRODUCT' && item.entityType === 'CATEGORY') {
+                return acc;
+            }
             if (item.entityType === 'PRODUCT') {
                 const product = item.product;
                 if (!product || product.status !== 'ACTIVE' && product.status !== 'DRAFT') {
@@ -108350,14 +111214,38 @@ const getHomeRecommendZones = async (input)=>{
                     primary: product.category,
                     relations: (product.relationCategories || []).map((rel)=>rel.category)
                 });
-                const priceRmb = defaultSku ? (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                const skuSellingRmbPrices = product.skus.map((sku)=>(0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                        skuPriceRmb: sku.price.toNumber(),
+                        costPrice: product.costPrice,
+                        ...pricingCoeffs
+                    })).filter((n)=>Number.isFinite(n) && n > 0);
+                const priceMinRmb = skuSellingRmbPrices.length ? Math.min(...skuSellingRmbPrices) : null;
+                const priceMaxRmb = skuSellingRmbPrices.length ? Math.max(...skuSellingRmbPrices) : null;
+                const priceMin = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null;
+                const priceMax = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null;
+                const priceRmb = priceMinRmb !== null ? priceMinRmb : defaultSku ? (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                     skuPriceRmb: defaultSku.price.toNumber(),
                     costPrice: product.costPrice,
                     ...pricingCoeffs
                 }) : null;
                 const cost = (0, _priceCoefficient.toDecimalNumber)(product.costPrice);
+                const skuOptions = sortedSkus.map((sku, index)=>{
+                    const skuPriceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                        skuPriceRmb: sku.price.toNumber(),
+                        costPrice: product.costPrice,
+                        ...pricingCoeffs
+                    });
+                    const priceUsd = skuPriceRmb > 0 ? toUsdPrice(skuPriceRmb, exchangeRate) : null;
+                    const originalPriceRmb = cost !== null && cost > 0 ? Number((skuPriceRmb * 1.1).toFixed(2)) : sku.originalPrice ? sku.originalPrice.toNumber() : null;
+                    return {
+                        skuId: sku.id,
+                        label: buildSkuOptionLabel(sku, index),
+                        price: priceUsd,
+                        originalPrice: originalPriceRmb !== null && originalPriceRmb > 0 ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+                    };
+                }).filter((opt)=>opt.skuId && opt.price !== null).slice(0, 6);
                 const originalPriceRmb = priceRmb === null ? null : cost !== null && cost > 0 ? Number((priceRmb * 1.1).toFixed(2)) : (defaultSku === null || defaultSku === void 0 ? void 0 : defaultSku.originalPrice) ? defaultSku.originalPrice.toNumber() : null;
-                const price = priceRmb !== null ? toUsdPrice(priceRmb, exchangeRate) : null;
+                const price = priceMin;
                 const originalPrice = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null;
                 const translatedName = (0, _productTranslation.resolveProductDisplayName)(product.name, product.translationsJson, lang);
                 acc.push({
@@ -108367,15 +111255,20 @@ const getHomeRecommendZones = async (input)=>{
                     categoryId: product.categoryId,
                     productName: translatedName,
                     productSlug: product.slug,
-                    imageUrl: (0, _imageUrl.optimizeCatalogImageUrl)(product.mainImageUrl, 720),
+                    imageUrl: (0, _imageUrl.optimizeCatalogImageUrl)(product.mainImageUrl, 400),
                     shortDescription: product.shortDescription,
                     status: product.status,
                     price,
+                    priceMin,
+                    priceMax,
+                    skuOptions,
                     originalPrice,
                     ratingAverage: product.ratingAverage,
                     ratingCount: product.ratingCount,
                     skuCount: product.skus.length,
-                    defaultSkuId: (defaultSku === null || defaultSku === void 0 ? void 0 : defaultSku.id) || null
+                    defaultSkuId: (defaultSku === null || defaultSku === void 0 ? void 0 : defaultSku.id) || null,
+                    rawProductName: product.name || null,
+                    createdAtTimestamp: product.createdAt ? new Date(product.createdAt).getTime() : null
                 });
                 return acc;
             }
@@ -108401,23 +111294,57 @@ const getHomeRecommendZones = async (input)=>{
                 });
                 return acc;
             }
+            const shelfImage = (0, _imageUrl.resolveCategoryShelfImageUrl)(category.imageUrl, category.bannerImageUrl, category.iconUrl);
             acc.push({
                 itemId: item.id,
                 entityType: 'CATEGORY',
                 categoryId: category.id,
                 categoryName,
                 categorySlug: category.slug,
-                imageUrl: (0, _imageUrl.resolveCategoryCardImageUrl)(category.imageUrl, category.bannerImageUrl, coverImageByCategoryId.get(category.id) || null),
+                imageUrl: (0, _imageUrl.resolveCategoryCardImageUrl)(category.imageUrl, category.bannerImageUrl, category.iconUrl),
+                fallbackImageUrl: shelfImage,
                 description: category.description,
                 productCount: (_productCountByCategoryId_get = productCountByCategoryId.get(category.id)) !== null && _productCountByCategoryId_get !== void 0 ? _productCountByCategoryId_get : category._count.products,
                 latestProducts: (latestProductsByCategoryId.get(category.id) || []).slice(0, categoryLatestLimit)
             });
             return acc;
         }, []);
+        if (zone.zoneType === 'PRODUCT') {
+            const selectedCategoryIds = zone.items.map((item)=>{
+                var _item_category;
+                return item.categoryId || (item.entityType === 'CATEGORY' ? (_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id : null);
+            }).filter((id)=>Boolean(id));
+            const productItems = items.filter((item)=>item.entityType === 'PRODUCT');
+            if (selectedCategoryIds.length > 0) {
+                const seen = new Set(productItems.map((item)=>item.productId));
+                const dynamicProducts = [];
+                for (const categoryId of selectedCategoryIds){
+                    const queryIds = productZoneExpandMap.get(categoryId) || new Set([
+                        categoryId
+                    ]);
+                    for (const queryId of queryIds){
+                        for (const card of latestProductsByCategoryId.get(queryId) || []){
+                            if (seen.has(card.productId)) continue;
+                            seen.add(card.productId);
+                            dynamicProducts.push({
+                                ...card,
+                                itemId: `zone-${zone.id}-${card.productId}`
+                            });
+                        }
+                    }
+                }
+                items = [
+                    ...productItems,
+                    ...dynamicProducts
+                ];
+            } else {
+                items = productItems;
+            }
+        }
         // 激活专区即使暂无有效明细也保留，保证绿灯专区数量与前台区块一致
         return {
             zoneId: zone.id,
-            title: zone.title,
+            title: (0, _productTranslation.resolveCategoryDisplayName)(null, zone.title, lang),
             zoneType: zone.zoneType,
             pcCols: normalizePcCols(zone.pcCols),
             mobileCols: normalizeMobileCols(zone.mobileCols),
@@ -108426,6 +111353,7 @@ const getHomeRecommendZones = async (input)=>{
             items
         };
     });
+    (0, _homeRecommendZoneCache.writeAssembledHomeRecommendZones)(lang, result);
     return {
         zones: result
     };
@@ -108532,6 +111460,24 @@ const addCartItem = async (input)=>{
         quantity: 1
     });
 };
+const DAILY_NEW_CACHE_TTL_MS = Number(process.env.DAILY_NEW_CACHE_TTL_MS || 45000);
+const dailyNewCalendarCache = new Map();
+const dailyNewProductsCache = new Map();
+function readDailyNewCache(map, key) {
+    const hit = map.get(key);
+    if (!hit) return null;
+    if (hit.expiresAt <= Date.now()) {
+        map.delete(key);
+        return null;
+    }
+    return hit.value;
+}
+function writeDailyNewCache(map, key, value) {
+    map.set(key, {
+        value,
+        expiresAt: Date.now() + DAILY_NEW_CACHE_TTL_MS
+    });
+}
 const mapActiveProductToItem = (product, exchangeRate, lang)=>{
     var _ref;
     var _product_tradeInfoJson, _product_mainImageUrl, _translated_shortDescription, _product_brandCategory;
@@ -108597,7 +111543,7 @@ const mapActiveProductToItem = (product, exchangeRate, lang)=>{
         sku_count: skuCount,
         first_sku_id: defaultSku ? defaultSku.id : '',
         first_sku_price_rmb: priceRmb,
-        created_at_timestamp: product.createdAt.getTime(),
+        created_at_timestamp: product.createdAt ? new Date(product.createdAt).getTime() : 0,
         sort_weight: product.sortWeight,
         brand_category_id: product.brandCategoryId,
         brand_category_name: ((_product_brandCategory = product.brandCategory) === null || _product_brandCategory === void 0 ? void 0 : _product_brandCategory.name) || null,
@@ -108613,154 +111559,154 @@ const activeListedProductWhere = {
     }
 };
 const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
+    const cacheKey = 'calendar:v2';
+    const cached = readDailyNewCache(dailyNewCalendarCache, cacheKey);
+    if (cached) return cached;
     const months = (0, _dailyNewArrival.buildLast6Months)();
-    const rangeStart = (0, _dailyNewArrival.getLast6MonthsRangeStart)();
-    const monthKeys = new Set(months.map((item)=>item.monthKey));
-    const countMap = new Map(months.map((item)=>[
-            item.monthKey,
-            0
-        ]));
-    const [totalActiveProducts, productsInRange] = await Promise.all([
+    const [totalActiveProducts, ...monthCounts] = await Promise.all([
         _prisma.default.product.count({
             where: activeListedProductWhere
         }),
-        _prisma.default.product.findMany({
-            where: {
-                ...activeListedProductWhere,
-                createdAt: {
-                    gte: rangeStart
+        ...months.map(async (item)=>{
+            const { start, end } = (0, _dailyNewArrival.getMonthDateRange)(item.year, item.month);
+            const productCount = await _prisma.default.product.count({
+                where: {
+                    ...activeListedProductWhere,
+                    createdAt: {
+                        gte: start,
+                        lt: end
+                    }
                 }
-            },
-            select: {
-                createdAt: true
-            }
+            });
+            return productCount;
         })
     ]);
-    productsInRange.forEach((product)=>{
-        const anchor = product.createdAt;
-        const monthKey = (0, _dailyNewArrival.toMonthKey)(anchor.getFullYear(), anchor.getMonth() + 1);
-        if (!monthKeys.has(monthKey)) {
-            return;
-        }
-        countMap.set(monthKey, (countMap.get(monthKey) || 0) + 1);
-    });
-    return {
-        months: months.map((item)=>({
+    const result = {
+        months: months.map((item, index)=>({
                 year: item.year,
                 month: item.month,
                 monthKey: item.monthKey,
                 label: (0, _dailyNewArrival.formatMonthLabel)(item.year, item.month),
-                productCount: countMap.get(item.monthKey) || 0
+                productCount: monthCounts[index] || 0
             })),
         totalActiveProducts
     };
+    writeDailyNewCache(dailyNewCalendarCache, cacheKey, result);
+    return result;
 });
 const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = {})=>{
     const hasMonth = Number.isInteger(Number(input.year)) && Number.isInteger(Number(input.month)) && Number(input.month) >= 1 && Number(input.month) <= 12;
-    let rangeStart;
-    let rangeEnd;
-    if (hasMonth) {
-        const year = Number(input.year);
-        const month = Number(input.month);
-        const range = (0, _dailyNewArrival.getMonthDateRange)(year, month);
-        rangeStart = range.start;
-        rangeEnd = range.end;
-    } else {
-        rangeStart = (0, _dailyNewArrival.getLast6MonthsRangeStart)();
-        rangeEnd = undefined;
-    }
-    const dbProducts = await _prisma.default.product.findMany({
-        where: {
-            ...activeListedProductWhere,
-            createdAt: rangeEnd ? {
-                gte: rangeStart,
-                lt: rangeEnd
-            } : {
-                gte: rangeStart
-            }
-        },
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            mainImageUrl: true,
-            shortDescription: true,
-            status: true,
-            costPrice: true,
-            ratingAverage: true,
-            ratingCount: true,
-            sortWeight: true,
-            brandCategoryId: true,
-            tradeInfoJson: true,
-            createdAt: true,
-            translationsJson: true,
-            skus: {
-                select: {
-                    id: true,
-                    skuCode: true,
-                    price: true,
-                    originalPrice: true,
-                    stock: true,
-                    stockStatus: true,
-                    imageUrl: true
+    const now = new Date();
+    const year = hasMonth ? Number(input.year) : now.getFullYear();
+    const month = hasMonth ? Number(input.month) : now.getMonth() + 1;
+    const { start: rangeStart, end: rangeEnd } = (0, _dailyNewArrival.getMonthDateRange)(year, month);
+    const page = Math.max(1, Number(input.page) || 1);
+    const pageSize = Math.min(60, Math.max(1, Number(input.page_size) || 60));
+    const skip = (page - 1) * pageSize;
+    const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
+    const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}`;
+    const cached = readDailyNewCache(dailyNewProductsCache, cacheKey);
+    if (cached) return cached;
+    const where = {
+        ...activeListedProductWhere,
+        createdAt: {
+            gte: rangeStart,
+            lt: rangeEnd
+        }
+    };
+    const [total, dbProducts, exchangeRate] = await Promise.all([
+        _prisma.default.product.count({
+            where
+        }),
+        _prisma.default.product.findMany({
+            where,
+            select: {
+                id: true,
+                slug: true,
+                name: true,
+                mainImageUrl: true,
+                shortDescription: true,
+                status: true,
+                costPrice: true,
+                ratingAverage: true,
+                ratingCount: true,
+                sortWeight: true,
+                brandCategoryId: true,
+                tradeInfoJson: true,
+                createdAt: true,
+                translationsJson: true,
+                skus: {
+                    select: {
+                        id: true,
+                        skuCode: true,
+                        price: true,
+                        originalPrice: true,
+                        stock: true,
+                        stockStatus: true,
+                        imageUrl: true
+                    },
+                    orderBy: {
+                        price: 'asc'
+                    },
+                    take: 24
                 },
-                orderBy: {
-                    price: 'asc'
-                }
-            },
-            brandCategory: {
-                select: {
-                    id: true,
-                    name: true
-                }
-            },
-            category: {
-                select: {
-                    name: true,
-                    level: true,
-                    priceCoefficient: true,
-                    isBrandCategory: true,
-                    parentId: true,
-                    parent: {
-                        select: {
-                            name: true,
-                            priceCoefficient: true,
-                            isBrandCategory: true
-                        }
+                brandCategory: {
+                    select: {
+                        id: true,
+                        name: true
                     }
-                }
-            },
-            relationCategories: {
-                select: {
-                    category: {
-                        select: {
-                            name: true,
-                            level: true,
-                            priceCoefficient: true,
-                            isBrandCategory: true,
-                            parent: {
-                                select: {
-                                    name: true,
-                                    priceCoefficient: true,
-                                    isBrandCategory: true
-                                }
+                },
+                category: {
+                    select: {
+                        name: true,
+                        level: true,
+                        priceCoefficient: true,
+                        isBrandCategory: true,
+                        parentId: true,
+                        parent: {
+                            select: {
+                                name: true,
+                                priceCoefficient: true,
+                                isBrandCategory: true
                             }
                         }
                     }
+                },
+                relationCategories: {
+                    select: {
+                        category: {
+                            select: {
+                                name: true,
+                                level: true,
+                                priceCoefficient: true,
+                                isBrandCategory: true,
+                                parent: {
+                                    select: {
+                                        name: true,
+                                        priceCoefficient: true,
+                                        isBrandCategory: true
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    take: 12
                 }
-            }
-        },
-        orderBy: {
-            createdAt: 'desc'
-        },
-        take: 200
-    });
-    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
-    const list = dbProducts.slice().sort((a, b)=>b.createdAt.getTime() - a.createdAt.getTime()).map((product)=>mapActiveProductToItem(product, exchangeRate, input.lang));
-    return {
-        list,
-        total: list.length
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            skip,
+            take: pageSize
+        }),
+        (0, _exchangeRate.getUsdExchangeRate)(_prisma.default)
+    ]);
+    const result = {
+        list: dbProducts.map((product)=>mapActiveProductToItem(product, exchangeRate, lang)),
+        total
     };
+    writeDailyNewCache(dailyNewProductsCache, cacheKey, result);
+    return result;
 });
 const comingTeaserSelect = {
     id: true,
@@ -108894,13 +111840,21 @@ const mapComingSoonProductItem = (product, lang)=>({
         }
     }
     const anchor = product.publishedAt || product.createdAt;
+    if (!anchor) {
+        return {
+            key: (0, _dailyNewArrival.toDateKey)(new Date()),
+            label: (0, _dailyNewArrival.toDateLabel)(new Date()),
+            anchorMs: Date.now()
+        };
+    }
     return {
         key: (0, _dailyNewArrival.toDateKey)(anchor),
         label: (0, _dailyNewArrival.toDateLabel)(anchor),
-        anchorMs: anchor.getTime()
+        anchorMs: anchor instanceof Date ? anchor.getTime() : new Date(anchor).getTime()
     };
 };
-const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
+const getComingSoonDateCards = (0, _action_utils.withResult)(async (input)=>{
+    const lang = (0, _productTranslation.normalizeProductLang)(input === null || input === void 0 ? void 0 : input.lang);
     const products = await loadComingSoonProductRows(500);
     const byDay = new Map();
     for (const product of products){
@@ -108919,7 +111873,7 @@ const getComingSoonDateCards = (0, _action_utils.withResult)(async ()=>{
             preview_image_url: row.product.mainImageUrl || null,
             preview_product_id: row.product.id,
             preview_product_slug: row.product.slug || null,
-            preview_product_name: row.product.name || ''
+            preview_product_name: (0, _productTranslation.resolveProductDisplayName)(row.product.name || '', row.product.translationsJson, lang)
         }));
     return {
         cards
@@ -109130,6 +112084,9 @@ _export(exports, {
     get addToCart () {
         return addToCart;
     },
+    get getAvailableBrandFilters () {
+        return getAvailableBrandFilters;
+    },
     get getCategoryDetail () {
         return getCategoryDetail;
     },
@@ -109154,6 +112111,9 @@ _export(exports, {
     get getProductList () {
         return getProductList;
     },
+    get getWishlistProducts () {
+        return getWishlistProducts;
+    },
     get resolveCategoryRouteKey () {
         return resolveCategoryRouteKey;
     }
@@ -109165,6 +112125,7 @@ const _productTranslation = __webpack_require__(17908);
 const _priceCoefficient = __webpack_require__(1282);
 const _exchangeRate = __webpack_require__(48511);
 const _productSearch = __webpack_require__(12597);
+const _posterLink = __webpack_require__(87993);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -109177,6 +112138,12 @@ const DEFAULT_KEYWORD_SCENE_AREAS = [
     'LEFT_NAV',
     'RECOMMENDATION'
 ];
+/** 列表卡片最多加载的 SKU 行数（缩略图 + 默认规格）；全量 min/max 价另走 groupBy */ const PRODUCT_LIST_SKU_TAKE = 8;
+const CATEGORY_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000;
+const CATEGORY_LIST_CACHE_TTL_MS = 90000;
+const categoryContextCache = new Map();
+const categoryListServerCache = new Map();
+const posterListCache = new Map();
 const normalizeSceneValue = (value)=>{
     if (typeof value !== 'string') {
         return undefined;
@@ -109321,6 +112288,10 @@ const resolveCategoryContext = async (categoryId)=>{
             categoryIdsForQuery: []
         };
     }
+    const cached = categoryContextCache.get(categoryId);
+    if (cached && Date.now() - cached.at < CATEGORY_CONTEXT_CACHE_TTL_MS) {
+        return cached.value;
+    }
     const currentCategory = await _prisma.default.category.findUnique({
         where: {
             id: categoryId
@@ -109339,10 +112310,15 @@ const resolveCategoryContext = async (categoryId)=>{
         }
     });
     if (!currentCategory || currentCategory.status !== 'ACTIVE') {
-        return {
+        const empty = {
             descendantCategoryIds: [],
             categoryIdsForQuery: []
         };
+        categoryContextCache.set(categoryId, {
+            at: Date.now(),
+            value: empty
+        });
+        return empty;
     }
     // L1 = level 1 or root (no parent). Expand to all ACTIVE direct L2 children.
     const isL1 = currentCategory.level === 1 || !currentCategory.parentId;
@@ -109357,7 +112333,7 @@ const resolveCategoryContext = async (categoryId)=>{
             }
         });
         const descendantCategoryIds = descendants.map((child)=>child.id);
-        return {
+        const resolved = {
             rootCategoryId: currentCategory.id,
             matchedCategoryId: currentCategory.id,
             matchedCategoryLevel: currentCategory.level || 1,
@@ -109367,8 +112343,13 @@ const resolveCategoryContext = async (categoryId)=>{
                 ...descendantCategoryIds
             ]))
         };
+        categoryContextCache.set(categoryId, {
+            at: Date.now(),
+            value: resolved
+        });
+        return resolved;
     }
-    return {
+    const resolved = {
         rootCategoryId: ((_currentCategory_parent = currentCategory.parent) === null || _currentCategory_parent === void 0 ? void 0 : _currentCategory_parent.status) === 'ACTIVE' ? currentCategory.parent.id : currentCategory.parentId || undefined,
         matchedCategoryId: currentCategory.id,
         matchedCategoryLevel: currentCategory.level,
@@ -109377,19 +112358,30 @@ const resolveCategoryContext = async (categoryId)=>{
             currentCategory.id
         ]
     };
+    categoryContextCache.set(categoryId, {
+        at: Date.now(),
+        value: resolved
+    });
+    return resolved;
 };
 const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, searchKeyword)=>{
     const where = {
-        status: 'ACTIVE',
-        category: {
-            status: 'ACTIVE'
-        }
+        status: 'ACTIVE'
     };
     const orConditions = [];
     if (context.categoryIdsForQuery.length > 0) {
         // Primary categoryId in (L1 + L2 children)
         orConditions.push({
             categoryId: {
+                in: context.categoryIdsForQuery
+            },
+            category: {
+                status: 'ACTIVE'
+            }
+        });
+        // 品牌字段命中（Brand 货架商品常写在 brandCategoryId，而主类目是 Handbag）
+        orConditions.push({
+            brandCategoryId: {
                 in: context.categoryIdsForQuery
             }
         });
@@ -109417,7 +112409,7 @@ const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, 
         }
     } else if (context.rootCategoryId) {
         where.category = {
-            ...where.category,
+            status: 'ACTIVE',
             OR: [
                 {
                     id: context.rootCategoryId
@@ -109427,12 +112419,52 @@ const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, 
                 }
             ]
         };
+    } else {
+        where.category = {
+            status: 'ACTIVE'
+        };
     }
     if (orConditions.length > 0) {
         where.OR = orConditions;
     }
     if (brandCategoryId) {
-        where.brandCategoryId = brandCategoryId;
+        // 品牌货架三路命中（去重靠 OR）：
+        // 1) brandCategoryId 主品牌字段
+        // 2) 主类目 categoryId（历史误把品牌当主类目的商品）
+        // 3) product_category_relations 关联绑定
+        const brandMatchOr = [
+            {
+                brandCategoryId
+            },
+            {
+                categoryId: brandCategoryId
+            },
+            {
+                relationCategories: {
+                    some: {
+                        categoryId: brandCategoryId,
+                        category: {
+                            status: 'ACTIVE'
+                        }
+                    }
+                }
+            }
+        ];
+        if (where.OR) {
+            // 已有类目 OR 条件时，与品牌条件做 AND 组合，避免语义被覆盖
+            where.AND = [
+                ...where.AND || [],
+                {
+                    OR: where.OR
+                },
+                {
+                    OR: brandMatchOr
+                }
+            ];
+            delete where.OR;
+        } else {
+            where.OR = brandMatchOr;
+        }
     }
     if (keywordId) {
         where.relationKeywords = {
@@ -109457,20 +112489,34 @@ const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, 
 };
 const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
     const lang = (0, _productTranslation.normalizeProductLang)(input === null || input === void 0 ? void 0 : input.lang);
+    const cachedList = categoryListServerCache.get(lang);
+    if (cachedList && Date.now() - cachedList.at < CATEGORY_LIST_CACHE_TTL_MS) {
+        return cachedList.value;
+    }
     const categories = await _prisma.default.category.findMany({
         where: {
             status: 'ACTIVE'
         },
-        include: {
-            products: {
-                where: {
-                    status: 'ACTIVE'
-                },
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true,
+            level: true,
+            parentId: true,
+            isBrandCategory: true,
+            sortWeight: true,
+            createdAt: true,
+            imageUrl: true,
+            iconUrl: true,
+            translationsJson: true,
+            categoryDisplayConfigJson: true,
+            navConfig: {
                 select: {
-                    id: true
+                    isVisible: true,
+                    navTitle: true
                 }
-            },
-            navConfig: true
+            }
         },
         orderBy: [
             {
@@ -109487,7 +112533,65 @@ const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
     });
     const childCategories = categories.filter((cat)=>cat.level === 2 && !cat.isBrandCategory);
     const brandCategories = categories.filter((cat)=>cat.isBrandCategory);
-    return {
+    const brandIds = brandCategories.map((brand)=>brand.id);
+    // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
+    const brandProductCount = new Map();
+    if (brandIds.length > 0) {
+        const [byCategory, byBrandCategory, byRelation] = await Promise.all([
+            _prisma.default.product.groupBy({
+                by: [
+                    'categoryId'
+                ],
+                where: {
+                    status: 'ACTIVE',
+                    categoryId: {
+                        in: brandIds
+                    }
+                },
+                _count: {
+                    _all: true
+                }
+            }),
+            _prisma.default.product.groupBy({
+                by: [
+                    'brandCategoryId'
+                ],
+                where: {
+                    status: 'ACTIVE',
+                    brandCategoryId: {
+                        in: brandIds
+                    }
+                },
+                _count: {
+                    _all: true
+                }
+            }),
+            _prisma.default.product_category_relations.groupBy({
+                by: [
+                    'categoryId'
+                ],
+                where: {
+                    categoryId: {
+                        in: brandIds
+                    },
+                    product: {
+                        status: 'ACTIVE'
+                    }
+                },
+                _count: {
+                    _all: true
+                }
+            })
+        ]);
+        const addCount = (id, count)=>{
+            if (!id) return;
+            brandProductCount.set(id, (brandProductCount.get(id) || 0) + count);
+        };
+        for (const row of byCategory)addCount(row.categoryId, row._count._all);
+        for (const row of byBrandCategory)addCount(row.brandCategoryId, row._count._all);
+        for (const row of byRelation)addCount(row.categoryId, row._count._all);
+    }
+    const output = {
         list: mainCategories.map((cat)=>{
             var _cat_navConfig_navTitle, _cat_navConfig;
             const fallbackName = ((_cat_navConfig = cat.navConfig) === null || _cat_navConfig === void 0 ? void 0 : (_cat_navConfig_navTitle = _cat_navConfig.navTitle) === null || _cat_navConfig_navTitle === void 0 ? void 0 : _cat_navConfig_navTitle.trim()) || cat.name;
@@ -109509,12 +112613,17 @@ const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
                         category_id: brand.id,
                         category_name: (0, _productTranslation.resolveCategoryDisplayName)(brand.translationsJson, brand.name, lang),
                         category_slug: brand.slug,
-                        product_count: brand.products.length,
+                        product_count: brandProductCount.get(brand.id) || 0,
                         image_url: brand.imageUrl || brand.iconUrl || null
                     })).sort((a, b)=>b.product_count - a.product_count || a.category_name.localeCompare(b.category_name, 'zh-CN'))
             };
         })
     };
+    categoryListServerCache.set(lang, {
+        at: Date.now(),
+        value: output
+    });
+    return output;
 });
 const resolveCategoryRouteKey = (0, _action_utils.withResult)(async (input)=>{
     const routeKey = String(input.routeKey || '').trim();
@@ -109606,9 +112715,49 @@ const getCategoryDetail = (0, _action_utils.withResult)(async (input)=>{
         }
     };
 });
-const getCategoryPosterList = (0, _action_utils.withResult)(async (input)=>{
-    const categoryContext = await resolveCategoryContext(input.category_id);
-    const mainCategoryId = categoryContext.rootCategoryId;
+async function loadConfiguredCategoryPosters(categoryId) {
+    const settings = await _prisma.default.sitesetting.findMany({
+        where: {
+            settingType: 'HOMEPAGE_POSTER',
+            isActive: true
+        },
+        orderBy: [
+            {
+                sortWeight: 'desc'
+            },
+            {
+                createdAt: 'asc'
+            }
+        ]
+    });
+    const items = [];
+    for (const setting of settings){
+        var _setting_contentJson, _payload_items;
+        const payload = (_setting_contentJson = setting.contentJson) !== null && _setting_contentJson !== void 0 ? _setting_contentJson : {};
+        const configCategoryId = String(payload.categoryId || '').trim();
+        if (categoryId && configCategoryId !== categoryId) continue;
+        if (!categoryId && !configCategoryId) continue;
+        for (const [index, raw] of ((_payload_items = payload.items) !== null && _payload_items !== void 0 ? _payload_items : []).entries()){
+            var _raw_is_active, _ref, _raw_sort_weight;
+            const active = (_raw_is_active = raw.is_active) !== null && _raw_is_active !== void 0 ? _raw_is_active : raw.isActive;
+            if (active === false) continue;
+            const imageUrl = String(raw.image_url || raw.imageUrl || '').trim();
+            if (!imageUrl) continue;
+            items.push({
+                poster_id: String(raw.id || `poster-${setting.id}-${index}`),
+                title: String(raw.title || `海报 ${index + 1}`),
+                subtitle: null,
+                image_url: imageUrl,
+                link_text: null,
+                link_url: (0, _posterLink.normalizePosterLinkUrl)(raw.link),
+                category_id: configCategoryId || null,
+                sort_weight: Number((_ref = (_raw_sort_weight = raw.sort_weight) !== null && _raw_sort_weight !== void 0 ? _raw_sort_weight : raw.sortWeight) !== null && _ref !== void 0 ? _ref : index)
+            });
+        }
+    }
+    return items.sort((a, b)=>b.sort_weight - a.sort_weight);
+}
+async function loadCategoryBannerPosters() {
     const bannerRecords = await _prisma.default.categorybanner.findMany({
         where: {
             isEnabled: true
@@ -109622,7 +112771,7 @@ const getCategoryPosterList = (0, _action_utils.withResult)(async (input)=>{
             }
         ]
     });
-    const posterList = bannerRecords.map((banner)=>{
+    return bannerRecords.map((banner)=>{
         var _banner_sortWeight;
         return {
             poster_id: banner.id,
@@ -109630,21 +112779,40 @@ const getCategoryPosterList = (0, _action_utils.withResult)(async (input)=>{
             subtitle: null,
             image_url: banner.imageUrl,
             link_text: null,
-            link_url: banner.linkUrl || null,
+            link_url: (0, _posterLink.normalizePosterLinkUrl)(banner.linkUrl),
             category_id: null,
             sort_weight: Number((_banner_sortWeight = banner.sortWeight) !== null && _banner_sortWeight !== void 0 ? _banner_sortWeight : 0)
         };
     });
-    const sortedPosterList = mainCategoryId ? [
-        ...posterList.filter((item)=>item.category_id === mainCategoryId),
-        ...posterList.filter((item)=>!item.category_id),
-        ...posterList.filter((item)=>item.category_id && item.category_id !== mainCategoryId)
-    ] : posterList;
-    return {
+}
+const getCategoryPosterList = (0, _action_utils.withResult)(async (input)=>{
+    const cacheKey = String(input.category_id || '');
+    const cachedPosters = posterListCache.get(cacheKey);
+    if (cachedPosters && Date.now() - cachedPosters.at < CATEGORY_LIST_CACHE_TTL_MS) {
+        return cachedPosters.value;
+    }
+    const categoryContext = input.category_id ? await resolveCategoryContext(input.category_id) : null;
+    const mainCategoryId = categoryContext === null || categoryContext === void 0 ? void 0 : categoryContext.rootCategoryId;
+    let list = [];
+    if (mainCategoryId) {
+        const categoryPosters = await loadConfiguredCategoryPosters(mainCategoryId);
+        if (categoryPosters.length > 0) {
+            list = categoryPosters;
+        }
+    }
+    if (!list.length) {
+        list = await loadCategoryBannerPosters();
+    }
+    const output = {
         list: [
-            ...sortedPosterList
+            ...list
         ].sort((a, b)=>b.sort_weight - a.sort_weight)
     };
+    posterListCache.set(cacheKey, {
+        at: Date.now(),
+        value: output
+    });
+    return output;
 });
 const getCategoryTopPromotion = (0, _action_utils.withResult)(async ()=>{
     const setting = await _prisma.default.sitesetting.findFirst({
@@ -109826,10 +112994,138 @@ const getCategorySideNavZones = (0, _action_utils.withResult)(async (input)=>{
             })).filter((zone)=>zone.items.length > 0)
     };
 });
+// ===== 商品列表：结果短 TTL 缓存（进程内，键=归一化查询参数） =====
+const LIST_CACHE_TTL_MS = Number(process.env.PRODUCT_LIST_CACHE_TTL_MS || 45000);
+const LIST_CACHE_MAX = 300;
+const productListCache = new Map();
+function buildListCacheKey(input, lang) {
+    var _input_min_price, _input_max_price, _input_min_rating;
+    return JSON.stringify({
+        c: input.category_id || '',
+        b: input.brand_category_id || '',
+        k: input.keyword_id || '',
+        kg: input.keyword_group_id || '',
+        s: input.search_keyword || '',
+        st: input.stock_status || null,
+        sort: input.sort_by || 'NEWEST',
+        min: (_input_min_price = input.min_price) !== null && _input_min_price !== void 0 ? _input_min_price : null,
+        max: (_input_max_price = input.max_price) !== null && _input_max_price !== void 0 ? _input_max_price : null,
+        disc: input.has_discount ? 1 : 0,
+        mr: (_input_min_rating = input.min_rating) !== null && _input_min_rating !== void 0 ? _input_min_rating : null,
+        p: input.page || 1,
+        ps: input.page_size || 24,
+        lang
+    });
+}
+function getCachedList(key) {
+    const hit = productListCache.get(key);
+    if (!hit) return null;
+    if (Date.now() - hit.at > LIST_CACHE_TTL_MS) {
+        productListCache.delete(key);
+        return null;
+    }
+    return hit.value;
+}
+function setCachedList(key, value) {
+    if (productListCache.size >= LIST_CACHE_MAX) {
+        const oldestKey = productListCache.keys().next().value;
+        if (oldestKey !== undefined) productListCache.delete(oldestKey);
+    }
+    productListCache.set(key, {
+        at: Date.now(),
+        value
+    });
+}
+/** 将单个商品记录映射为前台列表卡片项（价格系数换算 / 库存 / 缩略图等）。 */ function toCreatedAtTimestamp(value) {
+    if (value == null || value === '') return 0;
+    if (value instanceof Date) {
+        const ms = value.getTime();
+        return Number.isNaN(ms) ? 0 : ms;
+    }
+    const ms = new Date(value).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+}
+function mapProductRecordToItem(p, lang, exchangeRate, opts) {
+    var _ref, _ref1;
+    var _p_tradeInfoJson, _translated_shortDescription, _p_brandCategory;
+    const skus = p.skus;
+    const skuCount = skus.length;
+    const sortedSkus = [
+        ...skus
+    ].sort((a, b)=>a.price.toNumber() - b.price.toNumber());
+    const defaultSku = sortedSkus.length > 0 ? sortedSkus[0] : null;
+    let stockStatus = 'OUT_OF_STOCK';
+    if (opts === null || opts === void 0 ? void 0 : opts.stockStatus) {
+        stockStatus = opts.stockStatus;
+    } else if (skus.some((s)=>s.stockStatus === 'IN_STOCK')) {
+        stockStatus = 'IN_STOCK';
+    } else if (skus.some((s)=>s.stockStatus === 'LOW_STOCK')) {
+        stockStatus = 'LOW_STOCK';
+    }
+    const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
+        primary: p.category,
+        relations: (p.relationCategories || []).map((rel)=>rel.category)
+    });
+    const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+        skuPriceRmb: (_ref = opts === null || opts === void 0 ? void 0 : opts.skuPriceMinRmb) !== null && _ref !== void 0 ? _ref : defaultSku ? defaultSku.price.toNumber() : 0,
+        costPrice: p.costPrice,
+        ...pricingCoeffs
+    });
+    const cost = (0, _priceCoefficient.toDecimalNumber)(p.costPrice);
+    const originalPriceRmb = cost !== null && cost > 0 ? Number((priceRmb * 1.1).toFixed(2)) : (defaultSku === null || defaultSku === void 0 ? void 0 : defaultSku.originalPrice) ? defaultSku.originalPrice.toNumber() : null;
+    const priceNum = toUsdPrice(priceRmb, exchangeRate);
+    const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null;
+    const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum;
+    const usdPrices = (opts === null || opts === void 0 ? void 0 : opts.skuPriceMinRmb) != null && (opts === null || opts === void 0 ? void 0 : opts.skuPriceMaxRmb) != null ? [
+        toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+            skuPriceRmb: opts.skuPriceMinRmb,
+            costPrice: p.costPrice,
+            ...pricingCoeffs
+        }), exchangeRate),
+        toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+            skuPriceRmb: opts.skuPriceMaxRmb,
+            costPrice: p.costPrice,
+            ...pricingCoeffs
+        }), exchangeRate)
+    ] : skus.map((sku)=>toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+            skuPriceRmb: sku.price.toNumber(),
+            costPrice: p.costPrice,
+            ...pricingCoeffs
+        }), exchangeRate)).filter((value)=>Number.isFinite(value) && value > 0);
+    const priceMax = usdPrices.length > 0 ? Math.max(...usdPrices) : null;
+    const minOrderQuantity = Math.max(1, Number((_ref1 = (_p_tradeInfoJson = p.tradeInfoJson) === null || _p_tradeInfoJson === void 0 ? void 0 : _p_tradeInfoJson.minOrderQty) !== null && _ref1 !== void 0 ? _ref1 : 0) || 1);
+    const translated = (0, _productTranslation.pickProductTranslation)(p.translationsJson, lang);
+    return {
+        product_id: p.id,
+        product_slug: p.slug,
+        product_name: (0, _productTranslation.resolveProductDisplayName)(p.name, p.translationsJson, lang),
+        main_image_url: p.mainImageUrl,
+        short_description: (translated === null || translated === void 0 ? void 0 : (_translated_shortDescription = translated.shortDescription) === null || _translated_shortDescription === void 0 ? void 0 : _translated_shortDescription.trim()) || p.shortDescription,
+        rating_average: p.ratingAverage,
+        rating_count: p.ratingCount,
+        stock_status: stockStatus,
+        price: priceNum,
+        original_price: originalPriceNum,
+        has_discount: hasDiscount,
+        sku_count: skuCount,
+        first_sku_id: defaultSku ? defaultSku.id : '',
+        first_sku_price_rmb: priceRmb,
+        created_at_timestamp: toCreatedAtTimestamp(p.createdAt),
+        sort_weight: p.sortWeight,
+        brand_category_id: p.brandCategoryId,
+        brand_category_name: ((_p_brandCategory = p.brandCategory) === null || _p_brandCategory === void 0 ? void 0 : _p_brandCategory.name) || null,
+        variant_thumbnails: collectVariantThumbnails(skus, p.mainImageUrl),
+        min_order_quantity: minOrderQuantity,
+        price_max: priceMax && priceMax > priceNum ? priceMax : null
+    };
+}
 const getProductList = (0, _action_utils.withResult)(async (input)=>{
     const page = input.page && input.page > 0 ? input.page : 1;
     const pageSize = input.page_size && input.page_size > 0 ? input.page_size : 24;
     const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
+    const cacheKey = buildListCacheKey(input, lang);
+    const cachedOutput = getCachedList(cacheKey);
+    if (cachedOutput) return cachedOutput;
     const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
         ttlMs: 60000
     });
@@ -109844,77 +113140,202 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
     // Broader take when searching so translated English titles are not truncated away
     // before the in-memory fuzzy filter runs.
     const listTake = searchTokens.length > 0 ? 5000 : 2000;
-    const dbProducts = await _prisma.default.product.findMany({
-        where: dbWhere,
-        include: {
-            // 按创建顺序返回 SKU，保证列表卡片颜色缩略图与详情页顺序一致（避免 uuid 随机序）
-            skus: {
-                orderBy: [
-                    {
-                        createdAt: 'asc'
-                    },
-                    {
-                        skuCode: 'asc'
-                    }
-                ]
+    // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个商品拖回
+    // detailText / detailContentJson / galleryJson 等大字段。
+    const listSelect = {
+        id: true,
+        slug: true,
+        name: true,
+        mainImageUrl: true,
+        shortDescription: true,
+        translationsJson: true,
+        costPrice: true,
+        tradeInfoJson: true,
+        ratingAverage: true,
+        ratingCount: true,
+        createdAt: true,
+        sortWeight: true,
+        brandCategoryId: true,
+        skus: {
+            select: {
+                id: true,
+                skuCode: true,
+                imageUrl: true,
+                price: true,
+                originalPrice: true,
+                stockStatus: true
             },
-            brandCategory: {
-                select: {
-                    name: true,
-                    brandKeywordsJson: true
+            orderBy: [
+                {
+                    createdAt: 'asc'
+                },
+                {
+                    skuCode: 'asc'
                 }
-            },
-            category: {
-                select: {
-                    id: true,
-                    name: true,
-                    level: true,
-                    priceCoefficient: true,
-                    isBrandCategory: true,
-                    parentId: true,
-                    parent: {
-                        select: {
-                            name: true,
-                            priceCoefficient: true,
-                            isBrandCategory: true
-                        }
+            ],
+            take: PRODUCT_LIST_SKU_TAKE
+        },
+        brandCategory: {
+            select: {
+                name: true,
+                brandKeywordsJson: true
+            }
+        },
+        category: {
+            select: {
+                id: true,
+                name: true,
+                level: true,
+                priceCoefficient: true,
+                isBrandCategory: true,
+                parentId: true,
+                parent: {
+                    select: {
+                        name: true,
+                        priceCoefficient: true,
+                        isBrandCategory: true
                     }
                 }
-            },
-            relationCategories: {
-                include: {
-                    category: {
-                        select: {
-                            id: true,
-                            name: true,
-                            level: true,
-                            status: true,
-                            parentId: true,
-                            priceCoefficient: true,
-                            isBrandCategory: true,
-                            parent: {
-                                select: {
-                                    name: true,
-                                    priceCoefficient: true,
-                                    isBrandCategory: true
-                                }
+            }
+        },
+        relationCategories: {
+            select: {
+                category: {
+                    select: {
+                        id: true,
+                        name: true,
+                        level: true,
+                        status: true,
+                        parentId: true,
+                        priceCoefficient: true,
+                        isBrandCategory: true,
+                        parent: {
+                            select: {
+                                name: true,
+                                priceCoefficient: true,
+                                isBrandCategory: true
                             }
                         }
                     }
                 }
-            },
-            relationKeywords: {
-                select: {
-                    keywordId: true
-                }
-            },
-            keywordGroupLinks: {
-                select: {
-                    keywordGroupId: true,
-                    sortWeight: true
-                }
             }
-        },
+        }
+    };
+    // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
+    // 直接用 SQL orderBy + skip/take 分页 + count()，只回本页数据，避免一次拉 2000 条全量再 JS 过滤。
+    // 其余场景（搜索、价格排序、价格区间/折扣/库存筛选）仍走下方原逻辑，结果零回归。
+    const canPushdownPaginate = searchTokens.length === 0 && input.min_price === undefined && input.max_price === undefined && !input.has_discount && !(input.stock_status && input.stock_status.length > 0) && (input.sort_by === undefined || input.sort_by === 'NEWEST' || input.sort_by === 'POPULARITY');
+    if (canPushdownPaginate) {
+        const orderBy = input.sort_by === 'POPULARITY' ? [
+            {
+                sortWeight: 'desc'
+            },
+            {
+                ratingCount: 'desc'
+            },
+            {
+                id: 'desc'
+            }
+        ] : input.keyword_group_id ? [
+            {
+                sortWeight: 'desc'
+            },
+            {
+                createdAt: 'desc'
+            },
+            {
+                id: 'desc'
+            }
+        ] : [
+            {
+                createdAt: 'desc'
+            },
+            {
+                id: 'desc'
+            }
+        ];
+        const [total, pageRows] = await Promise.all([
+            _prisma.default.product.count({
+                where: dbWhere
+            }),
+            _prisma.default.product.findMany({
+                where: dbWhere,
+                select: listSelect,
+                orderBy,
+                skip: (page - 1) * pageSize,
+                take: pageSize
+            })
+        ]);
+        const productIds = pageRows.map((p)=>p.id);
+        const [skuPriceAggs, skuStockRows] = productIds.length > 0 ? await Promise.all([
+            _prisma.default.productsku.groupBy({
+                by: [
+                    'productId'
+                ],
+                where: {
+                    productId: {
+                        in: productIds
+                    }
+                },
+                _min: {
+                    price: true
+                },
+                _max: {
+                    price: true
+                }
+            }),
+            _prisma.default.productsku.findMany({
+                where: {
+                    productId: {
+                        in: productIds
+                    }
+                },
+                select: {
+                    productId: true,
+                    stockStatus: true
+                }
+            })
+        ]) : [
+            [],
+            []
+        ];
+        const skuPriceAggByProduct = new Map(skuPriceAggs.map((row)=>[
+                row.productId,
+                {
+                    min: row._min.price != null ? row._min.price.toNumber() : null,
+                    max: row._max.price != null ? row._max.price.toNumber() : null
+                }
+            ]));
+        const stockByProduct = new Map();
+        for (const row of skuStockRows){
+            const current = stockByProduct.get(row.productId);
+            const next = row.stockStatus;
+            if (next === 'IN_STOCK') {
+                stockByProduct.set(row.productId, 'IN_STOCK');
+            } else if (next === 'LOW_STOCK' && current !== 'IN_STOCK') {
+                stockByProduct.set(row.productId, 'LOW_STOCK');
+            } else if (!current) {
+                stockByProduct.set(row.productId, 'OUT_OF_STOCK');
+            }
+        }
+        const fastOutput = {
+            list: pageRows.map((p)=>{
+                var _ref, _ref1;
+                const agg = skuPriceAggByProduct.get(p.id);
+                return mapProductRecordToItem(p, lang, exchangeRate, {
+                    skuPriceMinRmb: (_ref = agg === null || agg === void 0 ? void 0 : agg.min) !== null && _ref !== void 0 ? _ref : null,
+                    skuPriceMaxRmb: (_ref1 = agg === null || agg === void 0 ? void 0 : agg.max) !== null && _ref1 !== void 0 ? _ref1 : null,
+                    stockStatus: stockByProduct.get(p.id)
+                });
+            }),
+            total
+        };
+        setCachedList(cacheKey, fastOutput);
+        return fastOutput;
+    }
+    const dbProducts = await _prisma.default.product.findMany({
+        where: dbWhere,
+        select: listSelect,
         take: listTake
     });
     let items = dbProducts.filter((p)=>{
@@ -109939,67 +113360,7 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
             ...translationTexts,
             ...p.skus.map((sku)=>sku.skuCode)
         ]);
-    }).map((p)=>{
-        var _ref;
-        var _p_tradeInfoJson, _translated_shortDescription, _p_brandCategory;
-        const skus = p.skus;
-        const skuCount = skus.length;
-        const sortedSkus = [
-            ...skus
-        ].sort((a, b)=>a.price.toNumber() - b.price.toNumber());
-        const defaultSku = sortedSkus.length > 0 ? sortedSkus[0] : null;
-        let stockStatus = 'OUT_OF_STOCK';
-        if (skus.some((s)=>s.stockStatus === 'IN_STOCK')) {
-            stockStatus = 'IN_STOCK';
-        } else if (skus.some((s)=>s.stockStatus === 'LOW_STOCK')) {
-            stockStatus = 'LOW_STOCK';
-        }
-        const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
-            primary: p.category,
-            relations: (p.relationCategories || []).map((rel)=>rel.category)
-        });
-        const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
-            skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
-            costPrice: p.costPrice,
-            ...pricingCoeffs
-        });
-        const cost = (0, _priceCoefficient.toDecimalNumber)(p.costPrice);
-        const originalPriceRmb = cost !== null && cost > 0 ? Number((priceRmb * 1.1).toFixed(2)) : (defaultSku === null || defaultSku === void 0 ? void 0 : defaultSku.originalPrice) ? defaultSku.originalPrice.toNumber() : null;
-        const priceNum = toUsdPrice(priceRmb, exchangeRate);
-        const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null;
-        const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum;
-        const usdPrices = skus.map((sku)=>toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
-                skuPriceRmb: sku.price.toNumber(),
-                costPrice: p.costPrice,
-                ...pricingCoeffs
-            }), exchangeRate)).filter((value)=>Number.isFinite(value) && value > 0);
-        const priceMax = usdPrices.length > 0 ? Math.max(...usdPrices) : null;
-        const minOrderQuantity = Math.max(1, Number((_ref = (_p_tradeInfoJson = p.tradeInfoJson) === null || _p_tradeInfoJson === void 0 ? void 0 : _p_tradeInfoJson.minOrderQty) !== null && _ref !== void 0 ? _ref : 0) || 1);
-        const translated = (0, _productTranslation.pickProductTranslation)(p.translationsJson, lang);
-        return {
-            product_id: p.id,
-            product_slug: p.slug,
-            product_name: (0, _productTranslation.resolveProductDisplayName)(p.name, p.translationsJson, lang),
-            main_image_url: p.mainImageUrl,
-            short_description: (translated === null || translated === void 0 ? void 0 : (_translated_shortDescription = translated.shortDescription) === null || _translated_shortDescription === void 0 ? void 0 : _translated_shortDescription.trim()) || p.shortDescription,
-            rating_average: p.ratingAverage,
-            rating_count: p.ratingCount,
-            stock_status: stockStatus,
-            price: priceNum,
-            original_price: originalPriceNum,
-            has_discount: hasDiscount,
-            sku_count: skuCount,
-            first_sku_id: defaultSku ? defaultSku.id : '',
-            first_sku_price_rmb: priceRmb,
-            created_at_timestamp: p.createdAt.getTime(),
-            sort_weight: p.sortWeight,
-            brand_category_id: p.brandCategoryId,
-            brand_category_name: ((_p_brandCategory = p.brandCategory) === null || _p_brandCategory === void 0 ? void 0 : _p_brandCategory.name) || null,
-            variant_thumbnails: collectVariantThumbnails(skus, p.mainImageUrl),
-            min_order_quantity: minOrderQuantity,
-            price_max: priceMax && priceMax > priceNum ? priceMax : null
-        };
-    });
+    }).map((p)=>mapProductRecordToItem(p, lang, exchangeRate));
     if (input.min_price !== undefined) {
         items = items.filter((i)=>i.price >= input.min_price);
     }
@@ -110032,10 +113393,214 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
     });
     const total = items.length;
     const skip = (page - 1) * pageSize;
-    return {
+    const output = {
         list: items.slice(skip, skip + pageSize),
         total
     };
+    setCachedList(cacheKey, output);
+    return output;
+});
+const BRAND_FACET_CACHE_TTL_MS = Number(process.env.BRAND_FACET_CACHE_TTL_MS || 45000);
+const BRAND_FACET_CACHE_MAX = 200;
+const brandFacetCache = new Map();
+function buildBrandFacetCacheKey(input, lang) {
+    var _input_min_price, _input_max_price, _input_min_rating;
+    return JSON.stringify({
+        c: input.category_id || '',
+        k: input.keyword_id || '',
+        kg: input.keyword_group_id || '',
+        s: input.search_keyword || '',
+        st: input.stock_status || null,
+        min: (_input_min_price = input.min_price) !== null && _input_min_price !== void 0 ? _input_min_price : null,
+        max: (_input_max_price = input.max_price) !== null && _input_max_price !== void 0 ? _input_max_price : null,
+        disc: input.has_discount ? 1 : 0,
+        mr: (_input_min_rating = input.min_rating) !== null && _input_min_rating !== void 0 ? _input_min_rating : null,
+        lang
+    });
+}
+function resolveProductBrandCategoryId(p) {
+    var _p_category;
+    if (p.brandCategoryId) return p.brandCategoryId;
+    if (((_p_category = p.category) === null || _p_category === void 0 ? void 0 : _p_category.isBrandCategory) && p.category.status !== 'INACTIVE') return p.category.id;
+    for (const rel of p.relationCategories || []){
+        const cat = rel.category;
+        if ((cat === null || cat === void 0 ? void 0 : cat.isBrandCategory) && cat.status === 'ACTIVE') return cat.id;
+    }
+    return null;
+}
+const getAvailableBrandFilters = (0, _action_utils.withResult)(async (input)=>{
+    const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
+    const cacheKey = buildBrandFacetCacheKey(input, lang);
+    const cached = brandFacetCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < BRAND_FACET_CACHE_TTL_MS) {
+        return cached.value;
+    }
+    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
+        ttlMs: 60000
+    });
+    const categoryContext = await resolveCategoryContext(input.category_id);
+    const dbWhere = buildProductWhere(categoryContext, undefined, input.keyword_id, input.keyword_group_id, input.search_keyword);
+    if (input.min_rating !== undefined) {
+        dbWhere.ratingAverage = {
+            gte: input.min_rating
+        };
+    }
+    const searchTokens = (0, _productSearch.tokenizeProductSearch)(input.search_keyword);
+    const facetSelect = {
+        id: true,
+        name: true,
+        shortDescription: true,
+        translationsJson: true,
+        costPrice: true,
+        tradeInfoJson: true,
+        ratingAverage: true,
+        brandCategoryId: true,
+        createdAt: true,
+        skus: {
+            select: {
+                id: true,
+                skuCode: true,
+                price: true,
+                originalPrice: true,
+                stockStatus: true
+            },
+            orderBy: [
+                {
+                    createdAt: 'asc'
+                },
+                {
+                    skuCode: 'asc'
+                }
+            ],
+            take: PRODUCT_LIST_SKU_TAKE
+        },
+        brandCategory: {
+            select: {
+                name: true,
+                brandKeywordsJson: true
+            }
+        },
+        category: {
+            select: {
+                id: true,
+                name: true,
+                status: true,
+                isBrandCategory: true,
+                priceCoefficient: true,
+                parent: {
+                    select: {
+                        priceCoefficient: true,
+                        isBrandCategory: true
+                    }
+                }
+            }
+        },
+        relationCategories: {
+            select: {
+                category: {
+                    select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        isBrandCategory: true,
+                        priceCoefficient: true,
+                        parent: {
+                            select: {
+                                priceCoefficient: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    const dbProducts = await _prisma.default.product.findMany({
+        where: dbWhere,
+        select: facetSelect,
+        take: searchTokens.length > 0 ? 5000 : 2000
+    });
+    const brandCounts = new Map();
+    for (const p of dbProducts){
+        if (searchTokens.length > 0) {
+            var _p_brandCategory, _p_brandCategory1, _p_category;
+            const translationTexts = (0, _productSearch.collectTranslationSearchTexts)(p.translationsJson);
+            const displayName = (0, _productTranslation.resolveProductDisplayName)(p.name, p.translationsJson, lang);
+            const brandKeywords = (0, _productSearch.collectBrandKeywordTexts)((_p_brandCategory = p.brandCategory) === null || _p_brandCategory === void 0 ? void 0 : _p_brandCategory.brandKeywordsJson);
+            const relatedCategoryNames = (p.relationCategories || []).map((rel)=>{
+                var _rel_category;
+                return (_rel_category = rel.category) === null || _rel_category === void 0 ? void 0 : _rel_category.name;
+            }).filter(Boolean);
+            const matches = (0, _productSearch.productMatchesSearchTokens)(searchTokens, [
+                p.name,
+                displayName,
+                p.shortDescription,
+                (_p_brandCategory1 = p.brandCategory) === null || _p_brandCategory1 === void 0 ? void 0 : _p_brandCategory1.name,
+                (_p_category = p.category) === null || _p_category === void 0 ? void 0 : _p_category.name,
+                ...brandKeywords,
+                ...relatedCategoryNames,
+                ...translationTexts,
+                ...p.skus.map((sku)=>sku.skuCode)
+            ]);
+            if (!matches) continue;
+        }
+        const item = mapProductRecordToItem(p, lang, exchangeRate);
+        if (input.min_price !== undefined && item.price < input.min_price) continue;
+        if (input.max_price !== undefined && item.price > input.max_price) continue;
+        if (input.has_discount && !item.has_discount) continue;
+        if (input.stock_status && input.stock_status.length > 0 && !input.stock_status.includes(item.stock_status)) {
+            continue;
+        }
+        const brandId = resolveProductBrandCategoryId(p);
+        if (!brandId) continue;
+        brandCounts.set(brandId, (brandCounts.get(brandId) || 0) + 1);
+    }
+    if (brandCounts.size === 0) {
+        const empty = {
+            list: []
+        };
+        brandFacetCache.set(cacheKey, {
+            at: Date.now(),
+            value: empty
+        });
+        return empty;
+    }
+    const brandIds = Array.from(brandCounts.keys());
+    const brandRows = await _prisma.default.category.findMany({
+        where: {
+            id: {
+                in: brandIds
+            },
+            status: 'ACTIVE',
+            isBrandCategory: true
+        },
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+            imageUrl: true,
+            iconUrl: true,
+            translationsJson: true
+        }
+    });
+    const list = brandRows.map((brand)=>({
+            category_id: brand.id,
+            category_name: (0, _productTranslation.resolveCategoryDisplayName)(brand.translationsJson, brand.name, lang),
+            category_slug: brand.slug,
+            product_count: brandCounts.get(brand.id) || 0,
+            image_url: brand.imageUrl || brand.iconUrl || null
+        })).filter((item)=>item.product_count > 0).sort((a, b)=>b.product_count - a.product_count || a.category_name.localeCompare(b.category_name, 'zh-CN'));
+    const output = {
+        list
+    };
+    if (brandFacetCache.size >= BRAND_FACET_CACHE_MAX) {
+        const oldestKey = brandFacetCache.keys().next().value;
+        if (oldestKey !== undefined) brandFacetCache.delete(oldestKey);
+    }
+    brandFacetCache.set(cacheKey, {
+        at: Date.now(),
+        value: output
+    });
+    return output;
 });
 const addToCart = (0, _action_utils.requireRole)([
     _action_utils.UserRole.CUSTOMER
@@ -110131,6 +113696,113 @@ const addToCart = (0, _action_utils.requireRole)([
         success: true
     };
 }));
+const getWishlistProducts = (0, _action_utils.withResult)(async (input)=>{
+    const ids = Array.from(new Set((input.product_ids || []).map((id)=>String(id || '').trim()).filter(Boolean))).slice(0, 200);
+    if (!ids.length) return {
+        list: []
+    };
+    const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
+    const exchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
+        ttlMs: 60000
+    });
+    const rows = await _prisma.default.product.findMany({
+        where: {
+            id: {
+                in: ids
+            },
+            status: 'ACTIVE',
+            category: {
+                status: 'ACTIVE'
+            }
+        },
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            mainImageUrl: true,
+            shortDescription: true,
+            translationsJson: true,
+            costPrice: true,
+            tradeInfoJson: true,
+            ratingAverage: true,
+            ratingCount: true,
+            createdAt: true,
+            sortWeight: true,
+            brandCategoryId: true,
+            skus: {
+                select: {
+                    id: true,
+                    skuCode: true,
+                    imageUrl: true,
+                    price: true,
+                    originalPrice: true,
+                    stockStatus: true
+                },
+                orderBy: [
+                    {
+                        createdAt: 'asc'
+                    },
+                    {
+                        skuCode: 'asc'
+                    }
+                ]
+            },
+            brandCategory: {
+                select: {
+                    name: true,
+                    brandKeywordsJson: true
+                }
+            },
+            category: {
+                select: {
+                    id: true,
+                    name: true,
+                    level: true,
+                    priceCoefficient: true,
+                    isBrandCategory: true,
+                    parentId: true,
+                    parent: {
+                        select: {
+                            name: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true
+                        }
+                    }
+                }
+            },
+            relationCategories: {
+                select: {
+                    category: {
+                        select: {
+                            id: true,
+                            name: true,
+                            level: true,
+                            status: true,
+                            parentId: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true,
+                            parent: {
+                                select: {
+                                    name: true,
+                                    priceCoefficient: true,
+                                    isBrandCategory: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    const byId = new Map(rows.map((row)=>[
+            row.id,
+            row
+        ]));
+    const list = ids.map((id)=>byId.get(id)).filter(Boolean).map((row)=>mapProductRecordToItem(row, lang, exchangeRate));
+    return {
+        list
+    };
+});
 
 
 /***/ },
@@ -110172,6 +113844,7 @@ const _priceCoefficient = __webpack_require__(1282);
 const _productTranslation = __webpack_require__(17908);
 const _exchangeRate = __webpack_require__(48511);
 const _pricingPromotionConfig = __webpack_require__(53281);
+const _minOrderQty = __webpack_require__(25834);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -110299,118 +113972,171 @@ const mapActiveCoupons = (campaigns, exchangeRate)=>{
     });
 };
 const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
-    var _translated_shortDescription, _translated_detailText, _translated_detail;
+    var _translated_shortDescription;
     if (!input.productId && !input.slug) {
         throw new Error('缺少必要的商品标识');
     }
-    const [exchangeRate, pricingConfig] = await Promise.all([
-        (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
-            ttlMs: 60000
-        }),
-        (0, _pricingPromotionConfig.loadPricingPromotionConfig)(_prisma.default)
-    ]);
     const whereCondition = input.productId ? {
         id: input.productId
     } : {
         slug: input.slug
     };
-    const product = await _prisma.default.product.findUnique({
-        where: whereCondition,
-        include: {
-            category: {
-                include: {
-                    parent: {
-                        select: {
-                            name: true,
-                            priceCoefficient: true,
-                            isBrandCategory: true
+    const now = new Date();
+    const [exchangeRate, pricingConfig, product, couponCampaigns] = await Promise.all([
+        (0, _exchangeRate.getUsdExchangeRate)(_prisma.default, {
+            ttlMs: 60000
+        }),
+        (0, _pricingPromotionConfig.loadPricingPromotionConfig)(_prisma.default),
+        _prisma.default.product.findUnique({
+            where: whereCondition,
+            select: {
+                id: true,
+                name: true,
+                productCode: true,
+                status: true,
+                source: true,
+                mainImageUrl: true,
+                galleryJson: true,
+                parameterJson: true,
+                tradeInfoJson: true,
+                translationsJson: true,
+                ratingAverage: true,
+                ratingCount: true,
+                categoryId: true,
+                costPrice: true,
+                category: {
+                    select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        level: true,
+                        priceCoefficient: true,
+                        isBrandCategory: true,
+                        parent: {
+                            select: {
+                                name: true,
+                                priceCoefficient: true,
+                                isBrandCategory: true
+                            }
                         }
                     }
-                }
-            },
-            relationCategories: {
-                select: {
-                    category: {
-                        select: {
-                            name: true,
-                            level: true,
-                            priceCoefficient: true,
-                            isBrandCategory: true,
-                            parent: {
-                                select: {
-                                    name: true,
-                                    priceCoefficient: true,
-                                    isBrandCategory: true
+                },
+                relationCategories: {
+                    select: {
+                        category: {
+                            select: {
+                                name: true,
+                                level: true,
+                                priceCoefficient: true,
+                                isBrandCategory: true,
+                                parent: {
+                                    select: {
+                                        name: true,
+                                        priceCoefficient: true,
+                                        isBrandCategory: true
+                                    }
                                 }
                             }
                         }
                     }
+                },
+                skus: {
+                    orderBy: [
+                        {
+                            createdAt: 'asc'
+                        },
+                        {
+                            skuCode: 'asc'
+                        }
+                    ],
+                    select: {
+                        id: true,
+                        skuCode: true,
+                        imageUrl: true,
+                        minOrderQty: true,
+                        price: true,
+                        originalPrice: true,
+                        stockStatus: true,
+                        attributeJson: true,
+                        deliveryDays: true,
+                        weightKg: true,
+                        volumeM3: true,
+                        sizeLabel: true
+                    }
                 }
-            },
-            // 按创建顺序返回，避免 uuid 主键导致的随机序（颜色/规格前台乱序根因之一）
-            skus: {
-                orderBy: [
+            }
+        }),
+        _prisma.default.promotioncampaign.findMany({
+            where: {
+                isActive: true,
+                promotionType: {
+                    in: [
+                        'COUPON',
+                        'FULL_REDUCTION',
+                        'PERCENTAGE_DISCOUNT',
+                        'NEW_CUSTOMER'
+                    ]
+                },
+                AND: [
                     {
-                        createdAt: 'asc'
+                        OR: [
+                            {
+                                startAt: null
+                            },
+                            {
+                                startAt: {
+                                    lte: now
+                                }
+                            }
+                        ]
                     },
                     {
-                        skuCode: 'asc'
+                        OR: [
+                            {
+                                endAt: null
+                            },
+                            {
+                                endAt: {
+                                    gte: now
+                                }
+                            }
+                        ]
                     }
                 ]
+            },
+            orderBy: {
+                updatedAt: 'desc'
+            },
+            take: 4,
+            select: {
+                id: true,
+                name: true,
+                promotionType: true,
+                discountPercent: true,
+                discountAmount: true,
+                contentJson: true
             }
-        }
-    });
+        })
+    ]);
     if (!product) {
         throw new Error('未找到对应商品');
     }
-    const now = new Date();
-    const couponCampaigns = await _prisma.default.promotioncampaign.findMany({
-        where: {
-            isActive: true,
-            promotionType: {
-                in: [
-                    'COUPON',
-                    'FULL_REDUCTION',
-                    'PERCENTAGE_DISCOUNT',
-                    'NEW_CUSTOMER'
-                ]
-            },
-            AND: [
-                {
-                    OR: [
-                        {
-                            startAt: null
-                        },
-                        {
-                            startAt: {
-                                lte: now
-                            }
-                        }
-                    ]
-                },
-                {
-                    OR: [
-                        {
-                            endAt: null
-                        },
-                        {
-                            endAt: {
-                                gte: now
-                            }
-                        }
-                    ]
-                }
-            ]
-        },
-        orderBy: {
-            updatedAt: 'desc'
-        },
-        take: 4
-    });
     const parameterJson = product.parameterJson ? product.parameterJson : null;
     const tradeInfoJson = product.tradeInfoJson ? product.tradeInfoJson : null;
     const descriptionParamsFromParams = flattenParameterJson(parameterJson);
-    const descriptionParams = descriptionParamsFromParams.length > 0 ? descriptionParamsFromParams : parseDescriptionParamsFromText(product.detailText);
+    let descriptionParams = descriptionParamsFromParams;
+    if (descriptionParams.length === 0) {
+        const detailRow = await _prisma.default.product.findUnique({
+            where: {
+                id: product.id
+            },
+            select: {
+                detailText: true
+            }
+        });
+        descriptionParams = parseDescriptionParamsFromText(detailRow === null || detailRow === void 0 ? void 0 : detailRow.detailText);
+    }
+    const productMinOrderQty = (0, _minOrderQty.resolveProductMinOrderQty)(tradeInfoJson);
     const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
         primary: product.category,
         relations: (product.relationCategories || []).map((rel)=>rel.category)
@@ -110440,7 +114166,7 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
             id: sku.id,
             skuCode: sku.skuCode,
             imageUrl: sku.imageUrl,
-            minOrderQty: null,
+            minOrderQty: sku.minOrderQty != null && Number(sku.minOrderQty) > 0 ? Math.max(1, Math.round(Number(sku.minOrderQty))) : null,
             price,
             originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
             stockStatus: sku.stockStatus,
@@ -110455,7 +114181,7 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
     const prices = skus.map((sku)=>sku.price).filter((p)=>p > 0);
     const priceMin = prices.length ? Math.min(...prices) : 0;
     const priceMax = prices.length ? Math.max(...prices) : 0;
-    const minOrderQty = Number((tradeInfoJson === null || tradeInfoJson === void 0 ? void 0 : tradeInfoJson.minOrderQty) || 0) || 1;
+    const minOrderQty = productMinOrderQty;
     const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
     const translated = (0, _productTranslation.pickProductTranslation)(product.translationsJson, lang);
     const baseTiers = buildPriceTiers(prices, minOrderQty);
@@ -110471,14 +114197,14 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
         source: String(product.source || ''),
         mainImageUrl: product.mainImageUrl,
         galleryJson: product.galleryJson,
-        shortDescription: (translated === null || translated === void 0 ? void 0 : (_translated_shortDescription = translated.shortDescription) === null || _translated_shortDescription === void 0 ? void 0 : _translated_shortDescription.trim()) || product.shortDescription,
-        detailText: (translated === null || translated === void 0 ? void 0 : (_translated_detailText = translated.detailText) === null || _translated_detailText === void 0 ? void 0 : _translated_detailText.trim()) || (translated === null || translated === void 0 ? void 0 : (_translated_detail = translated.detail) === null || _translated_detail === void 0 ? void 0 : _translated_detail.trim()) || product.detailText || null,
-        sellingPointsJson: product.sellingPointsJson ? product.sellingPointsJson : null,
-        detailContentJson: product.detailContentJson ? product.detailContentJson : null,
-        parameterJson,
+        shortDescription: (translated === null || translated === void 0 ? void 0 : (_translated_shortDescription = translated.shortDescription) === null || _translated_shortDescription === void 0 ? void 0 : _translated_shortDescription.trim()) || null,
+        detailText: null,
+        sellingPointsJson: null,
+        detailContentJson: null,
+        parameterJson: null,
         descriptionParams,
-        tradeInfoJson,
-        faqJson: product.faqJson ? product.faqJson : null,
+        tradeInfoJson: null,
+        faqJson: null,
         ratingAverage: product.ratingAverage,
         ratingCount: product.ratingCount,
         categoryId: product.categoryId,
@@ -110551,7 +114277,12 @@ const getRelatedProducts = (0, _action_utils.withResult)(async (input)=>{
         orderBy: {
             sortWeight: 'desc'
         },
-        include: {
+        select: {
+            id: true,
+            name: true,
+            slug: true,
+            mainImageUrl: true,
+            translationsJson: true,
             skus: {
                 select: {
                     price: true
@@ -110603,6 +114334,20 @@ const addToCart = (0, _action_utils.requireRole)([
     if (input.quantity > sku.stock) {
         throw new Error('库存不足，请减少购买数量');
     }
+    const productMinOrderQty = (0, _minOrderQty.resolveProductMinOrderQty)(sku.product.tradeInfoJson);
+    const siblingSkuCount = await _prisma.default.productsku.count({
+        where: {
+            productId: sku.productId
+        }
+    });
+    const supportsMixedBatch = siblingSkuCount > 1;
+    const skuMinOrderQty = (0, _minOrderQty.resolveEffectiveSkuMinOrderQty)(productMinOrderQty, sku.minOrderQty, {
+        supportsMixedBatch
+    });
+    if (input.quantity < skuMinOrderQty) {
+        throw new Error((0, _minOrderQty.formatMinOrderQtyMessage)(skuMinOrderQty));
+    }
+    const sameRequestSiblingQty = Math.max(0, Math.floor(Number(input.sameRequestSiblingQty) || 0));
     // 2. 查找或创建用户购物车
     let cart = await _prisma.default.cart.findUnique({
         where: {
@@ -110632,9 +114377,29 @@ const addToCart = (0, _action_utils.requireRole)([
     });
     // 4. 事务或者合并逻辑更新
     if (existingItem) {
+        var _siblingQty__sum_quantity;
         const newQuantity = existingItem.quantity + input.quantity;
         if (newQuantity > sku.stock) {
             throw new Error('加购后数量超过可用库存，请减少购买数量');
+        }
+        if (newQuantity < skuMinOrderQty) {
+            throw new Error((0, _minOrderQty.formatMinOrderQtyMessage)(skuMinOrderQty));
+        }
+        const siblingQty = await _prisma.default.cartitem.aggregate({
+            where: {
+                cartId: cart.id,
+                productId: sku.productId,
+                id: {
+                    not: existingItem.id
+                }
+            },
+            _sum: {
+                quantity: true
+            }
+        });
+        const totalProductQty = ((_siblingQty__sum_quantity = siblingQty._sum.quantity) !== null && _siblingQty__sum_quantity !== void 0 ? _siblingQty__sum_quantity : 0) + newQuantity + sameRequestSiblingQty;
+        if (totalProductQty < productMinOrderQty) {
+            throw new Error((0, _minOrderQty.formatMinOrderQtyMessage)(productMinOrderQty));
         }
         await _prisma.default.cartitem.update({
             where: {
@@ -110646,6 +114411,20 @@ const addToCart = (0, _action_utils.requireRole)([
             }
         });
     } else {
+        var _siblingQty__sum_quantity1;
+        const siblingQty = await _prisma.default.cartitem.aggregate({
+            where: {
+                cartId: cart.id,
+                productId: sku.productId
+            },
+            _sum: {
+                quantity: true
+            }
+        });
+        const totalProductQty = ((_siblingQty__sum_quantity1 = siblingQty._sum.quantity) !== null && _siblingQty__sum_quantity1 !== void 0 ? _siblingQty__sum_quantity1 : 0) + input.quantity + sameRequestSiblingQty;
+        if (totalProductQty < productMinOrderQty) {
+            throw new Error((0, _minOrderQty.formatMinOrderQtyMessage)(productMinOrderQty));
+        }
         await _prisma.default.cartitem.create({
             data: {
                 cart: {
@@ -110675,6 +114454,7 @@ const addToCart = (0, _action_utils.requireRole)([
 const setCartSkuQuantity = (0, _action_utils.requireRole)([
     _action_utils.UserRole.CUSTOMER
 ])((0, _action_utils.withResult)(async (input)=>{
+    var _siblingQty__sum_quantity;
     const { userId } = (0, _action_utils.getAuthContext)();
     const targetQty = Math.max(0, Math.floor(Number(input.quantity) || 0));
     const sku = await _prisma.default.productsku.findUnique({
@@ -110739,6 +114519,37 @@ const setCartSkuQuantity = (0, _action_utils.requireRole)([
     }
     if (targetQty > sku.stock) {
         throw new Error('库存不足，请减少购买数量');
+    }
+    const productMinOrderQty = (0, _minOrderQty.resolveProductMinOrderQty)(sku.product.tradeInfoJson);
+    const siblingSkuCount = await _prisma.default.productsku.count({
+        where: {
+            productId: sku.productId
+        }
+    });
+    const supportsMixedBatch = siblingSkuCount > 1;
+    const skuMinOrderQty = (0, _minOrderQty.resolveEffectiveSkuMinOrderQty)(productMinOrderQty, sku.minOrderQty, {
+        supportsMixedBatch
+    });
+    if (targetQty < skuMinOrderQty) {
+        throw new Error((0, _minOrderQty.formatMinOrderQtyMessage)(skuMinOrderQty));
+    }
+    const siblingQty = await _prisma.default.cartitem.aggregate({
+        where: {
+            cartId: cart.id,
+            productId: sku.productId,
+            ...existingItem ? {
+                id: {
+                    not: existingItem.id
+                }
+            } : {}
+        },
+        _sum: {
+            quantity: true
+        }
+    });
+    const totalProductQty = ((_siblingQty__sum_quantity = siblingQty._sum.quantity) !== null && _siblingQty__sum_quantity !== void 0 ? _siblingQty__sum_quantity : 0) + targetQty;
+    if (totalProductQty < productMinOrderQty) {
+        throw new Error((0, _minOrderQty.formatMinOrderQtyMessage)(productMinOrderQty));
     }
     if (existingItem) {
         await _prisma.default.cartitem.update({
@@ -111132,9 +114943,7 @@ _export(exports, {
 const _productKeywordDictionary = __webpack_require__(58938);
 function normalizeProductLang(raw) {
     const value = String(raw || '').trim().toLowerCase();
-    if (value.startsWith('zh')) return 'zh';
     if (value.startsWith('es')) return 'es';
-    if (value.startsWith('en')) return 'en';
     return 'en';
 }
 function pickExactProductTranslation(raw, lang) {
@@ -111147,9 +114956,8 @@ function pickProductTranslation(raw, lang) {
     if (!raw || typeof raw !== 'object') return null;
     const map = raw;
     const code = normalizeProductLang(lang);
-    // Keep soft fallback for shortDescription / detail consumers;
-    // product titles should use resolveProductDisplayName instead.
-    return map[code] || map[lang || ''] || map.en || map.zh || null;
+    // Soft fallback for shortDescription / detail: prefer locale → en only (never zh).
+    return map[code] || map[lang || ''] || map.en || null;
 }
 function asCleanLatinTitle(raw) {
     const text = (0, _productKeywordDictionary.collapseRepeatedTitleWords)(String(raw || '').trim());
@@ -111183,35 +114991,32 @@ function pickEnglishTitle(translationsJson, fallback) {
 function resolveProductDisplayName(name, translationsJson, lang) {
     const fallback = String(name || '').trim();
     const code = normalizeProductLang(lang);
-    if (code === 'zh') return fallback;
     const exact = pickExactProductTranslation(translationsJson, code);
     const fromLang = String((exact === null || exact === void 0 ? void 0 : exact.name) || '').trim();
     const fromExact = healLatinTitle(fromLang, code);
     if (fromExact) return fromExact;
     if (translationsJson && typeof translationsJson === 'object') {
+        var _ref, _ref1, _root_title_en;
         const root = translationsJson;
         if (code === 'es') {
-            var _ref, _ref1, _root_title_es;
-            const sideEs = String((_ref = (_ref1 = (_root_title_es = root.title_es) !== null && _root_title_es !== void 0 ? _root_title_es : root.titleEs) !== null && _ref1 !== void 0 ? _ref1 : root.nameEs) !== null && _ref !== void 0 ? _ref : '').trim();
+            var _ref2, _ref3, _root_title_es;
+            const sideEs = String((_ref2 = (_ref3 = (_root_title_es = root.title_es) !== null && _root_title_es !== void 0 ? _root_title_es : root.titleEs) !== null && _ref3 !== void 0 ? _ref3 : root.nameEs) !== null && _ref2 !== void 0 ? _ref2 : '').trim();
             const cleanEs = healLatinTitle(sideEs, 'es');
             if (cleanEs) return cleanEs;
         }
-        if (code === 'en') {
-            var _ref2, _ref3, _root_title_en;
-            const sideEn = String((_ref2 = (_ref3 = (_root_title_en = root.title_en) !== null && _root_title_en !== void 0 ? _root_title_en : root.titleEn) !== null && _ref3 !== void 0 ? _ref3 : root.nameEn) !== null && _ref2 !== void 0 ? _ref2 : '').trim();
-            const cleanEn = healLatinTitle(sideEn, 'en');
-            if (cleanEn) return cleanEn;
-        }
+        const sideEn = String((_ref = (_ref1 = (_root_title_en = root.title_en) !== null && _root_title_en !== void 0 ? _root_title_en : root.titleEn) !== null && _ref1 !== void 0 ? _ref1 : root.nameEn) !== null && _ref !== void 0 ? _ref : '').trim();
+        const cleanEn = healLatinTitle(sideEn, 'en');
+        if (cleanEn) return cleanEn;
     }
     const fromFallback = healLatinTitle(fallback, code);
     if (fromFallback) return fromFallback;
-    // ES without a clean Spanish title → show English rather than Chinese mix
     if (code === 'es') {
         const en = pickEnglishTitle(translationsJson, fallback);
         if (en) return en;
     }
     const stripped = (0, _productKeywordDictionary.stripChineseFromTitle)(fromLang || fallback);
-    return stripped || 'Product';
+    const cleanStripped = asCleanLatinTitle(stripped);
+    return cleanStripped || 'Product';
 }
 function pickCategoryLocaleName(block) {
     var _ref, _obj_name;
@@ -111222,30 +115027,35 @@ function pickCategoryLocaleName(block) {
 }
 function pickCategorySideField(root, code) {
     var _ref, _ref1, _root_title_en;
-    if (code === 'zh') {
-        var _ref2, _ref3, _root_title_zh;
-        return String((_ref2 = (_ref3 = (_root_title_zh = root.title_zh) !== null && _root_title_zh !== void 0 ? _root_title_zh : root.titleZh) !== null && _ref3 !== void 0 ? _ref3 : root.nameZh) !== null && _ref2 !== void 0 ? _ref2 : '').trim();
-    }
     if (code === 'es') {
-        var _ref4, _ref5, _root_title_es;
-        return String((_ref4 = (_ref5 = (_root_title_es = root.title_es) !== null && _root_title_es !== void 0 ? _root_title_es : root.titleEs) !== null && _ref5 !== void 0 ? _ref5 : root.nameEs) !== null && _ref4 !== void 0 ? _ref4 : '').trim();
+        var _ref2, _ref3, _root_title_es;
+        return String((_ref2 = (_ref3 = (_root_title_es = root.title_es) !== null && _root_title_es !== void 0 ? _root_title_es : root.titleEs) !== null && _ref3 !== void 0 ? _ref3 : root.nameEs) !== null && _ref2 !== void 0 ? _ref2 : '').trim();
     }
     return String((_ref = (_ref1 = (_root_title_en = root.title_en) !== null && _root_title_en !== void 0 ? _root_title_en : root.titleEn) !== null && _ref1 !== void 0 ? _ref1 : root.nameEn) !== null && _ref !== void 0 ? _ref : '').trim();
 }
 function resolveCategoryDisplayName(translationsJson, fallbackName, lang) {
     const fallback = String(fallbackName || '').trim();
-    if (!translationsJson || typeof translationsJson !== 'object') {
-        return fallback;
-    }
-    const root = translationsJson;
     const code = normalizeProductLang(lang);
-    const fromLang = pickCategoryLocaleName(root[code]) || pickCategorySideField(root, code);
-    if (fromLang) return fromLang;
-    if (code !== 'zh') {
-        const fromZh = pickCategoryLocaleName(root.zh) || pickCategorySideField(root, 'zh');
-        if (fromZh) return fromZh;
+    const root = translationsJson && typeof translationsJson === 'object' ? translationsJson : null;
+    // Admin `name` is source of truth for English. translationsJson.en often lags
+    // behind renames (slug-derived "Beloe 3 usd" after name became "Below 3 usd").
+    const healedFallback = healLatinTitle(fallback, code);
+    if (code === 'en' && healedFallback && !(0, _productKeywordDictionary.containsChinese)(fallback)) {
+        return healedFallback;
     }
-    return fallback;
+    if (root) {
+        const fromLang = pickCategoryLocaleName(root[code]) || pickCategorySideField(root, code);
+        const cleanLang = healLatinTitle(fromLang, code);
+        if (cleanLang) return cleanLang;
+        if (code === 'es') {
+            const fromEn = pickCategoryLocaleName(root.en) || pickCategorySideField(root, 'en');
+            const cleanEn = healLatinTitle(fromEn, 'en');
+            if (cleanEn) return cleanEn;
+        }
+    }
+    if (healedFallback) return healedFallback;
+    const stripped = asCleanLatinTitle((0, _productKeywordDictionary.stripChineseFromTitle)(fallback));
+    return stripped || 'Category';
 }
 
 
@@ -111432,6 +115242,309 @@ const getDateKeyRange = (dateKey)=>{
 
 /***/ },
 
+/***/ 53958
+(__unused_webpack_module, exports) {
+
+"use strict";
+var __webpack_unused_export__;
+/**
+ * Brand alias normalization for product titles.
+ * Replaces seller slang / mixed-language brand tokens (e.g. "蔻C", "蔻家", "古驰", "LV")
+ * with the canonical brand name ("Coach", "Gucci", "Louis Vuitton") BEFORE the title is
+ * translated or written to the DB. Shared by web + backend (no DB access here).
+ */ 
+__webpack_unused_export__ = ({
+    value: true
+});
+Object.defineProperty(exports, "applyBrandAliases", ({
+    enumerable: true,
+    get: function() {
+        return applyBrandAliases;
+    }
+}));
+/** 纯 ASCII 别名（如 "LV"）需要边界匹配，避免命中英文单词内部（如 "solve"） */ const isAsciiAlias = (value)=>/^[\x00-\x7F]+$/.test(value);
+const escapeRegExp = (value)=>value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function applyBrandAliases(title, rules) {
+    let text = String(title !== null && title !== void 0 ? title : '');
+    if (!text.trim() || !Array.isArray(rules) || rules.length === 0) return text;
+    const sorted = [
+        ...rules
+    ].sort((a, b)=>String(b.alias || '').length - String(a.alias || '').length);
+    for (const rule of sorted){
+        var _ref, _ref1;
+        const alias = String((_ref = rule === null || rule === void 0 ? void 0 : rule.alias) !== null && _ref !== void 0 ? _ref : '').trim();
+        const standard = String((_ref1 = rule === null || rule === void 0 ? void 0 : rule.standard) !== null && _ref1 !== void 0 ? _ref1 : '').trim();
+        if (!alias || !standard) continue;
+        if (isAsciiAlias(alias)) {
+            const re = new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(alias)}(?![A-Za-z0-9])`, 'gi');
+            text = text.replace(re, standard);
+        } else {
+            text = text.split(alias).join(standard);
+        }
+    }
+    return text;
+}
+
+
+/***/ },
+
+/***/ 84777
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/**
+ * 标题 → 品质/材质/价格带筛选类目（仅关联标签，不当主类目）。
+ * 独立模块，供运维脚本直连 DB，不依赖 ImportFrom1688 / RPC。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get expandCategoryIdsWithParents () {
+        return expandCategoryIdsWithParents;
+    },
+    get loadFilterCategoriesFromDb () {
+        return loadFilterCategoriesFromDb;
+    },
+    get matchFilterCategoriesByTitle () {
+        return matchFilterCategoriesByTitle;
+    }
+});
+const _categorySynonyms = __webpack_require__(10050);
+const _categoryMatchGuards = __webpack_require__(78565);
+const _categoryShelfFamily = __webpack_require__(80890);
+const _priceThresholdAutoClassify = __webpack_require__(77744);
+const compactCatKey = (value)=>String(value || '').trim().toLowerCase().replace(/[\s/_-]+/g, '');
+const isPriceThresholdTagCategoryName = (name)=>{
+    const key = compactCatKey(name);
+    if (!key) return false;
+    return _priceThresholdAutoClassify.PRICE_THRESHOLD_RULES.some((rule)=>rule.l2NameAliases.some((alias)=>compactCatKey(alias) === key));
+};
+const normalizeToken = (value)=>(0, _categoryMatchGuards.canonicalizeQualityMatchText)(value);
+const buildTitleCorpus = (...parts)=>normalizeToken(parts.map((p)=>String(p || '').trim()).filter(Boolean).join(' '));
+async function loadFilterCategoriesFromDb(tx) {
+    const rows = await tx.category.findMany({
+        where: {
+            status: 'ACTIVE'
+        },
+        select: {
+            id: true,
+            name: true,
+            level: true,
+            parentId: true,
+            parent: {
+                select: {
+                    name: true
+                }
+            }
+        }
+    });
+    return rows.map((row)=>{
+        var _row_parent;
+        return {
+            id: row.id,
+            name: String(row.name || '').trim(),
+            level: row.level,
+            parentId: row.parentId,
+            parentName: ((_row_parent = row.parent) === null || _row_parent === void 0 ? void 0 : _row_parent.name) ? String(row.parent.name).trim() : null
+        };
+    }).filter((row)=>row.name && ((0, _categoryMatchGuards.isAttributeOrFilterCategory)({
+            name: row.name,
+            parentName: row.parentName
+        }) || isPriceThresholdTagCategoryName(row.name)));
+}
+function matchFilterCategoriesByTitle(title, categories, detailText, scopeFamily) {
+    const corpus = buildTitleCorpus(title, detailText);
+    if (!corpus) return [];
+    const productFamily = scopeFamily && scopeFamily !== 'unknown' ? scopeFamily : (0, _categoryShelfFamily.detectShelfFamily)(title, detailText);
+    const matched = [];
+    for (const category of categories){
+        const tagFamily = (0, _categoryShelfFamily.detectShelfFamily)(category.name, category.parentName);
+        if (!(0, _categoryShelfFamily.shelfFamiliesCompatible)(productFamily, tagFamily)) continue;
+        const tokens = Array.from(new Set([
+            category.name,
+            ...(0, _categorySynonyms.resolveCategorySynonyms)(category.name)
+        ].map((t)=>String(t || '').trim()).filter(Boolean)));
+        const hit = tokens.some((token)=>{
+            const key = normalizeToken(token);
+            return key.length >= 3 && corpus.includes(key);
+        });
+        if (hit) matched.push(category);
+    }
+    return matched;
+}
+async function expandCategoryIdsWithParents(tx, categoryIds) {
+    const uniqueIds = Array.from(new Set(categoryIds.filter(Boolean)));
+    if (!uniqueIds.length) return [];
+    const categories = await tx.category.findMany({
+        where: {
+            id: {
+                in: uniqueIds
+            },
+            status: 'ACTIVE'
+        },
+        select: {
+            id: true,
+            level: true,
+            parentId: true
+        }
+    });
+    const result = new Set();
+    for (const category of categories){
+        result.add(category.id);
+        if (Number(category.level) === 2 && category.parentId) {
+            result.add(category.parentId);
+        }
+    }
+    return Array.from(result);
+}
+
+
+/***/ },
+
+/***/ 78565
+(__unused_webpack_module, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get canonicalizeQualityMatchText () {
+        return canonicalizeQualityMatchText;
+    },
+    get isAttributeOrFilterCategory () {
+        return isAttributeOrFilterCategory;
+    },
+    get isAttributeOrFilterCategoryName () {
+        return isAttributeOrFilterCategoryName;
+    },
+    get isGluedFilterSuffixToken () {
+        return isGluedFilterSuffixToken;
+    },
+    get isProductTypeCategory () {
+        return isProductTypeCategory;
+    }
+});
+/**
+ * Attribute / material / quality filter categories.
+ * They may be linked as tags, but must NOT win product-type matching or become 主类目
+ * (e.g. title "…不锈钢项链 stainless steel" must pick Necklace, not "Stainless steel").
+ */ const compact = (value)=>String(value || '').trim().toLowerCase().replace(/[\s_\-·./]+/g, '');
+function canonicalizeQualityMatchText(value) {
+    return String(value || '').trim().toUpperCase().replace(/[\s_·./&+,|-]+/g, '').replace(/QUIALTY/g, 'QUALITY').replace(/QUAILTY/g, 'QUALITY').replace(/QULITY/g, 'QUALITY').replace(/NOMALQUALITY/g, 'NORMALQUALITY').replace(/NORAMLQUALITY/g, 'NORMALQUALITY');
+}
+function isGluedFilterSuffixToken(normalizedToken) {
+    if (!normalizedToken) return false;
+    return /QUALITY/.test(normalizedToken) || /STAINLESS/.test(normalizedToken) || /BELOW\d/.test(normalizedToken) || /BELOE\d/.test(normalizedToken);
+}
+/** Parent shelves that hold material/quality filters rather than sellable product types. */ const ATTRIBUTE_PARENT_NAMES = new Set([
+    'material',
+    'materials',
+    '材质',
+    '材料',
+    'quality',
+    'qualities',
+    '品质',
+    '成色',
+    'filter',
+    'filters',
+    '筛选'
+].map(compact));
+const ATTRIBUTE_EXACT_NAMES = new Set([
+    'stainless steel',
+    'stainlesssteel',
+    '不锈钢',
+    '钛钢',
+    'titanium',
+    'titanium steel',
+    'titaniumsteel',
+    '925',
+    '925 silver',
+    'sterling silver',
+    'alloy',
+    '合金',
+    '锌合金',
+    'copper',
+    '铜',
+    'brass',
+    '黄铜',
+    '白铜',
+    'gold plated',
+    'rosegold',
+    'rose gold',
+    '真皮',
+    'pu',
+    'pu leather',
+    'leather',
+    '皮革',
+    'high quality',
+    'high quality jewelry',
+    'normal quality',
+    'normal quality jewelry',
+    'normal quality bag',
+    'normal quialty',
+    'low quality',
+    'premium quality',
+    'below13usd',
+    'below3usd',
+    'below13',
+    'below3',
+    'beloe3usd',
+    '高质量',
+    '普通品质',
+    '低质量'
+].map(compact));
+const ATTRIBUTE_NAME_RE = /^(high|normal|low|premium)?qualit|高质量|普通品质|低质量|不锈钢|钛钢|stainless|titaniumsteel|^alloy$|^合金$|锌合金|goldplated|rosegold|sterling|below\d+usd|below\d+|beloe\d+usd/;
+function isAttributeOrFilterCategoryName(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return false;
+    const key = compact(raw);
+    if (!key) return false;
+    // L1 shelf itself: Material / Quality must never be 主类目
+    if (ATTRIBUTE_PARENT_NAMES.has(key)) return true;
+    if (ATTRIBUTE_EXACT_NAMES.has(key)) return true;
+    if (ATTRIBUTE_NAME_RE.test(key)) return true;
+    // "Stainless steel xxx" style
+    if (key.includes('stainless') && key.includes('steel')) return true;
+    if (key.includes('highquality') || key.includes('normalquality') || key.includes('lowquality')) return true;
+    if (key.includes('quialty') || key.includes('qulity')) return true;
+    return false;
+}
+function isAttributeOrFilterCategory(input) {
+    if (!input) return false;
+    if (isAttributeOrFilterCategoryName(input.name)) return true;
+    const parentKey = compact(input.parentName);
+    if (parentKey && ATTRIBUTE_PARENT_NAMES.has(parentKey)) return true;
+    return false;
+}
+function isProductTypeCategory(input) {
+    if (!(input === null || input === void 0 ? void 0 : input.name)) return false;
+    if (input.isBrandCategory) return false;
+    const name = String(input.name).trim().toLowerCase();
+    if (name === 'brand' || name === 'brands' || name === '品牌') return false;
+    const parent = String(input.parentName || '').trim().toLowerCase();
+    if (parent === 'brand' || parent === 'brands' || parent === '品牌') return false;
+    if (isAttributeOrFilterCategory(input)) return false;
+    return true;
+}
+
+
+/***/ },
+
 /***/ 73284
 (__unused_webpack_module, exports) {
 
@@ -111502,6 +115615,116 @@ function canEditCategoryPriceCoefficient(input) {
         name: input.name
     })) return false;
     return input.level === 1 || Boolean(input.parentId);
+}
+
+
+/***/ },
+
+/***/ 80890
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * 包 / 饰品 / 鞋 货架隔离：品质标签不得跨一级乱挂
+ * （包不能进 high quality jewelry，饰品不能进 High quality bag）。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get detectShelfFamily () {
+        return detectShelfFamily;
+    },
+    get shelfFamiliesCompatible () {
+        return shelfFamiliesCompatible;
+    }
+});
+const compact = (value)=>String(value || '').trim().toLowerCase().replace(/[\s_\-·./&+,|]+/g, '');
+const BAG_HINTS = [
+    'bags',
+    'bag',
+    'handbag',
+    'backpack',
+    'crossbody',
+    'tote',
+    'clutch',
+    'wallet',
+    'purse',
+    '箱包',
+    '包包',
+    '手提包',
+    '斜挎包',
+    '单肩包',
+    '腋下包',
+    '旅行包',
+    '枕头包',
+    '双肩包',
+    '钱包',
+    '挎包',
+    '包'
+].map(compact);
+const JEWELRY_HINTS = [
+    'jewelry',
+    'jewellery',
+    'necklace',
+    'earring',
+    'bracelet',
+    'bangle',
+    'ring',
+    'anklet',
+    'pendant',
+    'brooch',
+    '饰品',
+    '首饰',
+    '珠宝',
+    '项链',
+    '耳环',
+    '耳钉',
+    '耳饰',
+    '手链',
+    '手镯',
+    '戒指',
+    '脚链',
+    '吊坠',
+    '胸针'
+].map(compact);
+const SHOE_HINTS = [
+    'shoes',
+    'shoe',
+    'slipper',
+    'sandal',
+    'boot',
+    'sneaker',
+    'flat',
+    'heel',
+    '鞋',
+    '拖鞋',
+    '凉鞋',
+    '靴子'
+].map(compact);
+const hasHint = (key, hints)=>Boolean(key) && hints.some((hint)=>hint.length >= 1 && key.includes(hint));
+function detectShelfFamily(...parts) {
+    const key = compact(parts.filter(Boolean).join(' '));
+    if (!key) return 'unknown';
+    const bags = hasHint(key, BAG_HINTS);
+    const jewelry = hasHint(key, JEWELRY_HINTS);
+    const shoes = hasHint(key, SHOE_HINTS);
+    // 标题同时有「包」和 quality jewelry 后缀时，以商品品类为准：包就是包
+    if (bags && !jewelry) return 'bags';
+    if (jewelry && !bags) return 'jewelry';
+    if (bags && jewelry) return 'bags';
+    if (shoes) return 'shoes';
+    return 'unknown';
+}
+function shelfFamiliesCompatible(productFamily, tagFamily) {
+    if (productFamily === 'unknown' || tagFamily === 'unknown') return true;
+    return productFamily === tagFamily;
 }
 
 
@@ -111619,6 +115842,1291 @@ async function ensureCategorySlugPersisted(client, category) {
         }
     });
     return slug;
+}
+
+
+/***/ },
+
+/***/ 10050
+(__unused_webpack_module, exports) {
+
+"use strict";
+var __webpack_unused_export__;
+
+__webpack_unused_export__ = ({
+    value: true
+});
+Object.defineProperty(exports, "resolveCategorySynonyms", ({
+    enumerable: true,
+    get: function() {
+        return resolveCategorySynonyms;
+    }
+}));
+/**
+ * 二级类目中文同义关键词字典。
+ *
+ * 背景：二级类目名多为英文（Bracelet / Necklace / Ring…），而 1688 抓取的商品标题是中文
+ * （手链 / 项链 / 戒指…），导致中文标题无法命中英文类目名。此字典按「类目名 → 中文同义词」
+ * 在归类匹配时并入关键词（不写数据库），从而让带品类词的中文标题能自动命中真实二级类目。
+ *
+ * 说明：
+ *  - key 会以「大写 + 去空格」归一化后索引，需与 normalizeCategoryMatchText 保持一致。
+ *  - 同一品类同时挂英文名与中文名两种 key，兼容不同命名的类目。
+ *  - 词条尽量高信号、避免过泛（如不放裸「套装」到服饰，以免与珠宝套装冲突）。
+ */ const SYNONYM_GROUPS = [
+    // —— 饰品 / Jewelry ——
+    // L1 兜底：标题只有「项链」且二级缺失/被材质挤掉时，仍能落到 Jewelry
+    {
+        names: [
+            'Jewelry',
+            'Jewellery',
+            '饰品',
+            '首饰'
+        ],
+        synonyms: [
+            '饰品',
+            '首饰',
+            '珠宝',
+            '项链',
+            '颈链',
+            '手链',
+            '戒指',
+            '耳环',
+            '耳钉',
+            '耳饰',
+            '手镯',
+            '脚链',
+            '吊坠',
+            'jewelry'
+        ]
+    },
+    {
+        names: [
+            'Necklace',
+            'Necklaces',
+            '项链'
+        ],
+        synonyms: [
+            '项链',
+            '颈链',
+            '项圈',
+            '锁骨链',
+            '毛衣链',
+            '吊坠项链',
+            'choker'
+        ]
+    },
+    {
+        names: [
+            'Earring',
+            'Earrings',
+            'Earing',
+            '耳环',
+            '耳饰'
+        ],
+        synonyms: [
+            '耳环',
+            '耳钉',
+            '耳饰',
+            '耳坠',
+            '耳夹',
+            '耳线',
+            '耳扣',
+            '耳圈'
+        ]
+    },
+    {
+        names: [
+            'Bracelet',
+            'Bracelets',
+            '手链'
+        ],
+        synonyms: [
+            '手链',
+            '手串',
+            '手绳',
+            '串珠手链'
+        ]
+    },
+    {
+        names: [
+            'Bangle',
+            'Bangles',
+            '手镯'
+        ],
+        synonyms: [
+            '手镯',
+            '手环',
+            '开口镯'
+        ]
+    },
+    {
+        names: [
+            'Ring',
+            'Rings',
+            '戒指'
+        ],
+        synonyms: [
+            '戒指',
+            '指环',
+            '尾戒',
+            '对戒',
+            '关节戒'
+        ]
+    },
+    {
+        names: [
+            'Anklet',
+            'Anklets',
+            '脚链'
+        ],
+        synonyms: [
+            '脚链',
+            '脚镯',
+            '脚踝链'
+        ]
+    },
+    {
+        names: [
+            'Brooch',
+            'Brooches',
+            '胸针'
+        ],
+        synonyms: [
+            '胸针',
+            '胸花',
+            '别针'
+        ]
+    },
+    {
+        names: [
+            'Pendant',
+            'Pendants',
+            '吊坠'
+        ],
+        synonyms: [
+            '吊坠',
+            '挂坠',
+            '坠子'
+        ]
+    },
+    {
+        // DB 常见小写 jewelry set；「套装」过泛会被匹配器屏蔽，只用高信号复合词
+        names: [
+            'Jewelry Set',
+            'Jewellery Set',
+            'jewelry set',
+            '珠宝套装',
+            '首饰套装',
+            '饰品套装'
+        ],
+        synonyms: [
+            '饰品套装',
+            '套装饰品',
+            '珠宝套装',
+            '首饰套装',
+            '饰品三件套',
+            '首饰三件套',
+            '三件套',
+            '四件套',
+            '二件套',
+            '五件套',
+            '套链',
+            '项链耳环套装',
+            '耳环项链套装',
+            '项链耳钉套装',
+            '耳钉项链套装',
+            '项链手链套装',
+            'earrings set',
+            'earring set',
+            'necklace set',
+            'necklace earrings set',
+            'jewelry set'
+        ]
+    },
+    {
+        // DB 合并货架名：Hair Clips & Hair Ties
+        names: [
+            'Hair Clip',
+            'Hairpin',
+            '发夹',
+            'Hair Clips',
+            'Hair Clips & Hair Ties'
+        ],
+        synonyms: [
+            '发夹',
+            '发卡',
+            '发簪',
+            '抓夹'
+        ]
+    },
+    {
+        names: [
+            'Hair Rope',
+            'Hair Tie',
+            'Hair Ties',
+            '发绳',
+            'Hair Clips & Hair Ties'
+        ],
+        synonyms: [
+            '发绳',
+            '发圈',
+            '皮筋',
+            '头绳'
+        ]
+    },
+    {
+        names: [
+            'Hair Band',
+            'Headband',
+            '发带',
+            'hairband'
+        ],
+        synonyms: [
+            '发带',
+            '发箍',
+            '头箍',
+            '头带'
+        ]
+    },
+    // —— 包 / Bags ——
+    // Handbag / Crossbody：只用高信号词；泛词「包包/箱包」只挂在一级 Bags，避免所有二级一起命中
+    {
+        names: [
+            'Bags',
+            'Bag',
+            '包'
+        ],
+        synonyms: [
+            '手提包',
+            '手提斜挎包',
+            '单肩斜挎包',
+            '单肩腋下包',
+            '斜挎包',
+            '单肩包',
+            '腋下包',
+            '挎包',
+            '手袋',
+            '包包',
+            '箱包',
+            '女包',
+            '包袋',
+            'bags'
+        ]
+    },
+    {
+        names: [
+            'Backpack',
+            'Backpacks',
+            '双肩包',
+            '背包'
+        ],
+        synonyms: [
+            '双肩包',
+            '背包',
+            '书包',
+            '旅行背包',
+            'backpack'
+        ]
+    },
+    {
+        names: [
+            'Wallet',
+            'Wallets',
+            '钱包'
+        ],
+        synonyms: [
+            '钱包',
+            '钱夹',
+            '零钱包',
+            '长款钱包',
+            'wallet'
+        ]
+    },
+    {
+        names: [
+            'Cosmetic Bag',
+            'Makeup Bag',
+            '化妆包',
+            'coesmetic bag',
+            'cosmetic bag'
+        ],
+        // 不用「收纳包」：详情文案常写收纳，会误绑到斜挎/单肩包
+        synonyms: [
+            '化妆包',
+            '洗漱包',
+            'cosmetic bag',
+            'makeup bag',
+            'coesmetic bag'
+        ]
+    },
+    {
+        names: [
+            'Crossbody Bag',
+            'Shoulder Bag',
+            '斜挎包',
+            '单肩包'
+        ],
+        synonyms: [
+            '斜挎包',
+            '手提斜挎包',
+            '单肩斜挎包',
+            '单肩腋下包',
+            '斜背包',
+            '单肩包',
+            '邮差包',
+            '链条包',
+            '腋下包',
+            '挎包',
+            'crossbody',
+            'shoulder bag'
+        ]
+    },
+    {
+        // Handbag：不要用「手提斜挎包」（与斜挎类抢分）；手拿包留给 Clutch
+        names: [
+            'Handbag',
+            'Handbags',
+            'Tote',
+            '手提包'
+        ],
+        synonyms: [
+            '手提包',
+            '手袋',
+            '托特包',
+            '手拎包',
+            '托特',
+            'tote',
+            'handbag',
+            'handbags'
+        ]
+    },
+    {
+        names: [
+            'Clutch',
+            '手拿包'
+        ],
+        synonyms: [
+            '手拿包',
+            '晚宴包',
+            '手抓包',
+            'clutch'
+        ]
+    },
+    // —— 鞋 / Shoes ——
+    // L1 兜底：裸「鞋」过泛被屏蔽；用具体鞋型词挂一级，避免无二级同义词时整单跳过
+    {
+        names: [
+            'Shoes',
+            'Shoe',
+            '鞋'
+        ],
+        synonyms: [
+            '拖鞋',
+            '凉拖',
+            '凉拖鞋',
+            '沙滩拖鞋',
+            '人字拖',
+            '凉鞋',
+            '沙滩鞋',
+            '平底鞋',
+            '单鞋',
+            '运动鞋',
+            '板鞋',
+            '跑鞋',
+            '靴子',
+            '短靴',
+            '马丁靴'
+        ]
+    },
+    {
+        names: [
+            'Flats',
+            'Flat Shoes',
+            '平底鞋'
+        ],
+        synonyms: [
+            '平底鞋',
+            '单鞋',
+            '豆豆鞋',
+            '芭蕾鞋'
+        ]
+    },
+    {
+        // 站点常把拖鞋/凉鞋合成一个二级：Slippers & Sandals
+        names: [
+            'Slippers',
+            '拖鞋',
+            'Sandals',
+            '凉鞋',
+            'Slippers & Sandals',
+            'Slipper & Sandal',
+            'Slippers and Sandals'
+        ],
+        synonyms: [
+            '拖鞋',
+            '凉拖',
+            '凉拖鞋',
+            '沙滩拖鞋',
+            '外穿拖鞋',
+            '人字拖',
+            '棉拖',
+            '凉鞋',
+            '沙滩鞋',
+            '罗马鞋',
+            '平底凉鞋'
+        ]
+    },
+    {
+        names: [
+            'Sneakers',
+            'Sneaker',
+            '运动鞋',
+            'sports shoe',
+            'Sports Shoe',
+            'sports shoes'
+        ],
+        synonyms: [
+            '运动鞋',
+            '板鞋',
+            '跑鞋',
+            '老爹鞋',
+            '小白鞋',
+            '休闲鞋'
+        ]
+    },
+    {
+        names: [
+            'Boots',
+            'Boot',
+            '靴子'
+        ],
+        synonyms: [
+            '靴子',
+            '短靴',
+            '长靴',
+            '马丁靴',
+            '雪地靴',
+            '踝靴'
+        ]
+    },
+    // —— 配饰 / Accessories ——
+    {
+        names: [
+            'Belt',
+            'Belts',
+            '皮带'
+        ],
+        synonyms: [
+            '皮带',
+            '腰带',
+            '腰封'
+        ]
+    },
+    {
+        names: [
+            'Glasses',
+            'Sunglasses',
+            '眼镜'
+        ],
+        synonyms: [
+            '眼镜',
+            '墨镜',
+            '太阳镜',
+            '近视镜'
+        ]
+    },
+    {
+        names: [
+            'Watch',
+            'Watches',
+            '手表'
+        ],
+        synonyms: [
+            '手表',
+            '腕表',
+            '石英表',
+            '机械表'
+        ]
+    },
+    {
+        names: [
+            'Phone Case',
+            '手机壳'
+        ],
+        synonyms: [
+            '手机壳',
+            '手机套',
+            '保护壳',
+            '保护套'
+        ]
+    },
+    {
+        names: [
+            'Keychain',
+            'Key Chain',
+            '钥匙扣'
+        ],
+        synonyms: [
+            '钥匙扣',
+            '钥匙链',
+            '包挂',
+            '挂饰'
+        ]
+    },
+    {
+        names: [
+            'Watch Band',
+            'Watch Strap',
+            '表带'
+        ],
+        synonyms: [
+            '表带',
+            '手表带',
+            '腕带'
+        ]
+    },
+    // —— 服饰 / Apparel ——
+    {
+        names: [
+            'Clothes',
+            'Clothing',
+            'Apparel',
+            '服饰',
+            '衣服'
+        ],
+        synonyms: [
+            '服饰',
+            '衣服',
+            '服装',
+            '衣帽'
+        ]
+    },
+    {
+        names: [
+            'Hat',
+            'Hats',
+            'Cap',
+            '帽子'
+        ],
+        synonyms: [
+            'hat',
+            'hats',
+            'cap',
+            'caps',
+            '帽子',
+            '棒球帽',
+            '渔夫帽',
+            '渔夫遮阳帽',
+            '遮阳帽',
+            '太阳帽',
+            '草帽',
+            '针织帽',
+            '鸭舌帽',
+            '贝雷帽',
+            '盆帽'
+        ]
+    },
+    {
+        names: [
+            'Scarf',
+            'Scarves',
+            '围巾'
+        ],
+        synonyms: [
+            '围巾',
+            '丝巾',
+            '披肩',
+            '方巾',
+            '围脖'
+        ]
+    },
+    {
+        names: [
+            'Gloves',
+            'Glove',
+            '手套'
+        ],
+        synonyms: [
+            '手套',
+            '半指手套'
+        ]
+    },
+    {
+        names: [
+            'Top',
+            'Tops',
+            '上衣'
+        ],
+        synonyms: [
+            '上衣',
+            'T恤',
+            '卫衣',
+            '衬衫',
+            '针织衫',
+            '打底衫'
+        ]
+    },
+    {
+        names: [
+            'Pants',
+            'Trousers',
+            '裤子'
+        ],
+        synonyms: [
+            '裤子',
+            '长裤',
+            '短裤',
+            '牛仔裤',
+            '休闲裤'
+        ]
+    },
+    {
+        names: [
+            'Skirt',
+            'Dress',
+            '裙子'
+        ],
+        synonyms: [
+            '裙子',
+            '半身裙',
+            '连衣裙',
+            '短裙',
+            '长裙'
+        ]
+    },
+    {
+        names: [
+            'Underwear',
+            'Lingerie',
+            '内衣'
+        ],
+        synonyms: [
+            '内衣',
+            '文胸',
+            '内裤',
+            '胸罩',
+            '内衣裤'
+        ]
+    },
+    {
+        names: [
+            'Socks',
+            'Sock',
+            '袜子'
+        ],
+        synonyms: [
+            '袜子',
+            '船袜',
+            '丝袜',
+            '棉袜',
+            '中筒袜'
+        ]
+    },
+    {
+        names: [
+            'Swimwear',
+            'Swimsuit',
+            '泳衣'
+        ],
+        synonyms: [
+            '泳衣',
+            '泳装',
+            '比基尼',
+            '泳裤',
+            '连体泳衣'
+        ]
+    },
+    {
+        names: [
+            'Yoga',
+            'Yoga Wear',
+            '瑜伽服'
+        ],
+        synonyms: [
+            '瑜伽服',
+            '瑜伽裤',
+            '健身服'
+        ]
+    },
+    // —— 美妆 / Beauty ——
+    {
+        names: [
+            'Lipstick',
+            '口红'
+        ],
+        synonyms: [
+            '口红',
+            '唇膏',
+            '唇釉',
+            '唇彩'
+        ]
+    },
+    {
+        names: [
+            'Perfume',
+            '香水'
+        ],
+        synonyms: [
+            '香水',
+            '香氛',
+            '淡香'
+        ]
+    },
+    {
+        names: [
+            'Perfume Set',
+            '香水套装'
+        ],
+        synonyms: [
+            '香水套装',
+            '香氛套装'
+        ]
+    },
+    // —— 品质 / 材质 / 价格带标签（关联类目，不当主类目）——
+    // 包 / 饰品必须拆开：high quality jewelry 不得被包标题里的 high quality 命中
+    {
+        names: [
+            'High Quality',
+            'high quality',
+            'High quality'
+        ],
+        synonyms: [
+            'high quality',
+            'highquality',
+            '高质量',
+            '高品质',
+            'HQ'
+        ]
+    },
+    {
+        names: [
+            'high quality jewelry',
+            'High Quality Jewelry',
+            'High quality jewelry'
+        ],
+        synonyms: [
+            'high quality jewelry',
+            'highqualityjewelry',
+            '高品质饰品',
+            '高质量饰品'
+        ]
+    },
+    {
+        names: [
+            'High quality bag',
+            'high quality bag',
+            'High Quality Bag'
+        ],
+        synonyms: [
+            'high quality bag',
+            'highqualitybag',
+            '高品质包',
+            '高质量包'
+        ]
+    },
+    {
+        names: [
+            'Normal Quality',
+            'normal quality',
+            'Normal quality'
+        ],
+        synonyms: [
+            'normal quality',
+            'normalquality',
+            'normal quialty',
+            'normalquialty',
+            'normal qulity',
+            'nomal quality',
+            '普通品质',
+            '普通质量',
+            'NQ'
+        ]
+    },
+    {
+        names: [
+            'normal quality jewelry',
+            'Normal quality jewelry'
+        ],
+        synonyms: [
+            'normal quality jewelry',
+            'normalqualityjewelry',
+            '普通品质饰品'
+        ]
+    },
+    {
+        names: [
+            'Normal quality bag',
+            'normal quality bag',
+            'Normal Quality Bag'
+        ],
+        synonyms: [
+            'normal quality bag',
+            'normalqualitybag',
+            '普通品质包'
+        ]
+    },
+    {
+        names: [
+            'Low Quality',
+            'low quality',
+            'Low quality',
+            'premium quality'
+        ],
+        synonyms: [
+            'low quality',
+            'lowquality',
+            '低质量',
+            'premium quality'
+        ]
+    },
+    {
+        names: [
+            'Stainless Steel',
+            'stainless steel',
+            'Stainless steel',
+            '不锈钢',
+            '钛钢'
+        ],
+        synonyms: [
+            'stainless steel',
+            'stainlesssteel',
+            '不锈钢',
+            '钛钢',
+            '316L',
+            '316l'
+        ]
+    },
+    {
+        names: [
+            'Below 13usd',
+            'below13 usd',
+            'below 13 usd',
+            'Below 13 USD',
+            'below13usd',
+            'below13'
+        ],
+        synonyms: [
+            'below13usd',
+            'below 13usd',
+            'below13 usd',
+            'below 13 usd',
+            'below13',
+            '低于13美元',
+            '13美元以下'
+        ]
+    },
+    {
+        names: [
+            'Below 3 usd',
+            'below3 usd',
+            'below 3 usd',
+            'Below 3 USD',
+            'below3usd',
+            'below3',
+            'beloe 3 usd'
+        ],
+        synonyms: [
+            'below3usd',
+            'below 3usd',
+            'below3 usd',
+            'below 3 usd',
+            'below3',
+            '低于3美元',
+            '3美元以下'
+        ]
+    }
+];
+const normalizeName = (value)=>String(value || '').trim().toUpperCase()// 与匹配器一致：去空格；顺带去掉 &/· 等，便于「Slippers & Sandals」直接索引
+    .replace(/[\s_·./&+,|]+/g, '');
+const SYNONYM_INDEX = (()=>{
+    const index = new Map();
+    for (const group of SYNONYM_GROUPS){
+        const synonyms = Array.from(new Set(group.synonyms.map((s)=>s.trim()).filter(Boolean)));
+        for (const name of group.names){
+            const key = normalizeName(name);
+            if (!key) continue;
+            const existing = index.get(key) || [];
+            index.set(key, Array.from(new Set([
+                ...existing,
+                ...synonyms
+            ])));
+        }
+    }
+    return index;
+})();
+function resolveCategorySynonyms(categoryName) {
+    const raw = String(categoryName || '').trim();
+    if (!raw) return [];
+    const key = normalizeName(raw);
+    const direct = key ? SYNONYM_INDEX.get(key) : undefined;
+    if (direct === null || direct === void 0 ? void 0 : direct.length) return direct;
+    const parts = raw.split(/[&/|,+]+|(?:\s+and\s+)/i).map((part)=>part.trim()).filter((part)=>part.length >= 2);
+    if (parts.length <= 1) return [];
+    const merged = new Set();
+    for (const part of parts){
+        const partKey = normalizeName(part);
+        const syns = partKey ? SYNONYM_INDEX.get(partKey) : undefined;
+        if (syns) for (const s of syns)merged.add(s);
+    }
+    return Array.from(merged);
+}
+
+
+/***/ },
+
+/***/ 99552
+(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/**
+ * 商品重量自动识别（前后端共享）。
+ *
+ * 策略（优先级从高到低）：
+ *  1) 数据源已显式给出重量（表格/OneBound）→ 直接采用；
+ *  2) 从标题/规格/详情文本正则提取（如 “500g / 0.5kg / 250克 / 1斤”）；
+ *  3) 按商品「二级分类」兜底默认重量（下表，含中英文类目名）；
+ *  4) 最终兜底 500g。
+ *
+ * 单位：克(g)。运营在「待上传区」仍可双击逐条覆盖。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get CATEGORY_DEFAULT_WEIGHT_GRAMS () {
+        return CATEGORY_DEFAULT_WEIGHT_GRAMS;
+    },
+    get FINAL_FALLBACK_WEIGHT_GRAMS () {
+        return FINAL_FALLBACK_WEIGHT_GRAMS;
+    },
+    get extractWeightGramsFromText () {
+        return extractWeightGramsFromText;
+    },
+    get isLikelyFallbackWeightGrams () {
+        return isLikelyFallbackWeightGrams;
+    },
+    get isLikelyUnreliableWeightGrams () {
+        return isLikelyUnreliableWeightGrams;
+    },
+    get resolveCategoryDefaultWeightGrams () {
+        return resolveCategoryDefaultWeightGrams;
+    },
+    get resolveCategoryDefaultWeightGramsFromNames () {
+        return resolveCategoryDefaultWeightGramsFromNames;
+    },
+    get resolveProductWeightGrams () {
+        return resolveProductWeightGrams;
+    }
+});
+const _categorySynonyms = __webpack_require__(10050);
+const CATEGORY_DEFAULT_WEIGHT_GRAMS = {
+    // 珠宝 / Jewelry（中英都要能命中：后台类目多为 Necklace/earrings）
+    '耳环': 20,
+    '耳钉': 20,
+    '耳饰': 20,
+    earring: 20,
+    earrings: 20,
+    earing: 20,
+    '项链': 40,
+    necklace: 40,
+    necklaces: 40,
+    '手链': 30,
+    bracelet: 30,
+    bracelets: 30,
+    '手镯': 30,
+    bangle: 30,
+    bangles: 30,
+    '戒指': 15,
+    ring: 15,
+    rings: 15,
+    '脚链': 20,
+    anklet: 20,
+    anklets: 20,
+    '胸针': 25,
+    brooch: 25,
+    brooches: 25,
+    '吊坠': 25,
+    pendant: 25,
+    pendants: 25,
+    // 发饰 / 珠宝套装
+    '发夹': 20,
+    '发绳': 20,
+    '发带': 80,
+    '珠宝套装': 80,
+    '首饰套装': 80,
+    'jewelry set': 80,
+    'jewellery set': 80,
+    jewelryset: 80,
+    jewelleryset: 80,
+    'earrings set': 80,
+    'earring set': 80,
+    'necklace set': 80,
+    // 鞋靴
+    '平底鞋': 1500,
+    flats: 1500,
+    '拖鞋': 1200,
+    slippers: 1200,
+    '凉鞋': 1200,
+    sandals: 1200,
+    '运动鞋': 2500,
+    sneakers: 2500,
+    '靴子': 2800,
+    boots: 2800,
+    // 美妆 / 香氛
+    '口红': 60,
+    lipstick: 60,
+    '香水': 650,
+    perfume: 650,
+    '香水套装': 1200,
+    'perfume set': 1200,
+    // 配件
+    '皮带': 250,
+    belt: 250,
+    belts: 250,
+    '眼镜': 80,
+    glasses: 80,
+    sunglasses: 80,
+    '手表': 180,
+    watch: 180,
+    watches: 180,
+    '手机壳': 60,
+    'phone case': 60,
+    phonecase: 60,
+    '钥匙扣': 120,
+    keychain: 120,
+    '表带': 40,
+    'watch band': 40,
+    // 服饰 / 服饰配件
+    '帽子': 450,
+    hat: 450,
+    hats: 450,
+    '围巾': 650,
+    scarf: 650,
+    '手套': 120,
+    gloves: 120,
+    '上衣': 450,
+    top: 450,
+    tops: 450,
+    '裤子': 650,
+    pants: 650,
+    '裙子': 650,
+    skirt: 650,
+    dress: 650,
+    // 内衣 / 运动
+    '内衣': 100,
+    underwear: 100,
+    '袜子': 150,
+    socks: 150,
+    '泳衣': 150,
+    swimwear: 150,
+    '瑜伽服': 500,
+    yoga: 500,
+    '套装': 850,
+    // 箱包
+    '手提包': 700,
+    handbag: 700,
+    handbags: 700,
+    tote: 700,
+    '背包': 1500,
+    backpack: 1500,
+    '钱包': 350,
+    wallet: 350,
+    '化妆包': 650,
+    'cosmetic bag': 650
+};
+const FINAL_FALLBACK_WEIGHT_GRAMS = 500;
+const WEIGHT_MIN_GRAMS = 1;
+const WEIGHT_MAX_GRAMS = 200000 // 200kg 上限，过滤明显异常数值
+;
+const normalizeWeightKey = (value)=>String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+/** 分类键按长度降序，includes 兜底时优先命中更长（更具体）的类目名，如“珠宝套装”优先于“套装” */ const CATEGORY_KEYS_BY_LENGTH_DESC = Object.keys(CATEGORY_DEFAULT_WEIGHT_GRAMS).sort((a, b)=>b.length - a.length);
+const CATEGORY_WEIGHT_BY_NORMALIZED = (()=>{
+    const map = new Map();
+    for (const [key, grams] of Object.entries(CATEGORY_DEFAULT_WEIGHT_GRAMS)){
+        map.set(normalizeWeightKey(key), grams);
+        map.set(normalizeWeightKey(key).replace(/\s+/g, ''), grams);
+    }
+    return map;
+})();
+function clampGrams(value) {
+    if (!Number.isFinite(value)) return null;
+    const rounded = Math.round(value);
+    if (rounded < WEIGHT_MIN_GRAMS || rounded > WEIGHT_MAX_GRAMS) return null;
+    return rounded;
+}
+function extractWeightGramsFromText(text) {
+    if (!text) return null;
+    const s = String(text);
+    // kg / 千克 / 公斤
+    const kg = s.match(/(\d+(?:\.\d+)?)\s*(?:kg|千克|公斤)/i);
+    if (kg) {
+        const grams = clampGrams(parseFloat(kg[1]) * 1000);
+        if (grams != null) return grams;
+    }
+    // 斤（1 斤 = 500g）
+    const jin = s.match(/(\d+(?:\.\d+)?)\s*斤/);
+    if (jin) {
+        const grams = clampGrams(parseFloat(jin[1]) * 500);
+        if (grams != null) return grams;
+    }
+    // g / 克（'g' 前必须紧跟数字，避免 mg / kg 误命中；kg 已在上面优先处理）
+    const g = s.match(/(\d+(?:\.\d+)?)\s*(?:g|克)(?![a-zA-Z])/i);
+    if (g) {
+        const grams = clampGrams(parseFloat(g[1]));
+        if (grams != null) return grams;
+    }
+    return null;
+}
+function resolveCategoryDefaultWeightGrams(categoryName) {
+    var _CATEGORY_WEIGHT_BY_NORMALIZED_get;
+    if (!categoryName) return null;
+    const name = String(categoryName).trim();
+    if (!name) return null;
+    if (CATEGORY_DEFAULT_WEIGHT_GRAMS[name] != null) return CATEGORY_DEFAULT_WEIGHT_GRAMS[name];
+    const normalized = normalizeWeightKey(name);
+    const compact = normalized.replace(/\s+/g, '');
+    const byNormalized = (_CATEGORY_WEIGHT_BY_NORMALIZED_get = CATEGORY_WEIGHT_BY_NORMALIZED.get(normalized)) !== null && _CATEGORY_WEIGHT_BY_NORMALIZED_get !== void 0 ? _CATEGORY_WEIGHT_BY_NORMALIZED_get : CATEGORY_WEIGHT_BY_NORMALIZED.get(compact);
+    if (byNormalized != null) return byNormalized;
+    for (const key of CATEGORY_KEYS_BY_LENGTH_DESC){
+        const keyNorm = normalizeWeightKey(key);
+        if (name.includes(key) || normalized.includes(keyNorm) || compact.includes(keyNorm.replace(/\s+/g, ''))) {
+            return CATEGORY_DEFAULT_WEIGHT_GRAMS[key];
+        }
+    }
+    // Necklace → 同义词含「项链」→ 走中文重量表
+    for (const syn of (0, _categorySynonyms.resolveCategorySynonyms)(name)){
+        var _CATEGORY_DEFAULT_WEIGHT_GRAMS_syn;
+        const synGrams = (_CATEGORY_DEFAULT_WEIGHT_GRAMS_syn = CATEGORY_DEFAULT_WEIGHT_GRAMS[syn]) !== null && _CATEGORY_DEFAULT_WEIGHT_GRAMS_syn !== void 0 ? _CATEGORY_DEFAULT_WEIGHT_GRAMS_syn : CATEGORY_WEIGHT_BY_NORMALIZED.get(normalizeWeightKey(syn));
+        if (synGrams != null) return synGrams;
+    }
+    return null;
+}
+function resolveCategoryDefaultWeightGramsFromNames(names) {
+    if (!names || names.length === 0) return null;
+    // 更具体的类目名优先（jewelry set > necklace）
+    const ordered = [
+        ...names
+    ].map((n)=>String(n || '').trim()).filter(Boolean).sort((a, b)=>b.length - a.length);
+    for (const n of ordered){
+        const grams = resolveCategoryDefaultWeightGrams(n);
+        if (grams != null) return grams;
+    }
+    return null;
+}
+function resolveProductWeightGrams(input) {
+    const fromCategory = resolveCategoryDefaultWeightGramsFromNames(input.categoryNames);
+    const trustOrNull = (value)=>{
+        if (value == null) return null;
+        if (!isLikelyUnreliableWeightGrams(value)) return value;
+        // 有更合理的类目默认时，丢弃 1g / 500 等不可信值
+        if (fromCategory != null && fromCategory > value) return null;
+        // 无类目时：1g 仍不可信（常为金重文案/0.001kg），继续往下兜底
+        if (Math.round(value) <= 1) return null;
+        return value;
+    };
+    const explicit = typeof input.explicit === 'number' && Number.isFinite(input.explicit) && input.explicit > 0 ? Math.round(input.explicit) : null;
+    const trustedExplicit = trustOrNull(explicit);
+    if (trustedExplicit != null) return trustedExplicit;
+    const trustedText = trustOrNull(extractWeightGramsFromText(input.text));
+    if (trustedText != null) return trustedText;
+    if (fromCategory != null) return fromCategory;
+    return FINAL_FALLBACK_WEIGHT_GRAMS;
+}
+function isLikelyFallbackWeightGrams(value) {
+    return typeof value === 'number' && Number.isFinite(value) && Math.round(value) === FINAL_FALLBACK_WEIGHT_GRAMS;
+}
+function isLikelyUnreliableWeightGrams(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return false;
+    const g = Math.round(value);
+    return g <= 1 || g === FINAL_FALLBACK_WEIGHT_GRAMS;
+}
+
+
+/***/ },
+
+/***/ 82804
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * 客户类型（客户管理列表行内下拉）配置——前后端共享的唯一数据源。
+ * value 存库（稳定枚举码），label 为后台展示中文。
+ * 新增客户默认 NEW（“新客户”）。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get CUSTOMER_TYPE_OPTIONS () {
+        return CUSTOMER_TYPE_OPTIONS;
+    },
+    get CUSTOMER_TYPE_VALUES () {
+        return CUSTOMER_TYPE_VALUES;
+    },
+    get DEFAULT_CUSTOMER_TYPE () {
+        return DEFAULT_CUSTOMER_TYPE;
+    },
+    get getCustomerTypeLabel () {
+        return getCustomerTypeLabel;
+    },
+    get isValidCustomerType () {
+        return isValidCustomerType;
+    },
+    get normalizeCustomerType () {
+        return normalizeCustomerType;
+    }
+});
+const CUSTOMER_TYPE_OPTIONS = [
+    {
+        value: 'NEW',
+        label: '新客户'
+    },
+    {
+        value: 'UNCONVERTED',
+        label: '未转化'
+    },
+    {
+        value: 'FIRST_ORDER',
+        label: '首单'
+    },
+    {
+        value: 'MULTI_ORDER',
+        label: '多单'
+    },
+    {
+        value: 'HIGH_RISK',
+        label: '高危'
+    },
+    {
+        value: 'CHURNED',
+        label: '流失'
+    }
+];
+const DEFAULT_CUSTOMER_TYPE = 'NEW';
+const CUSTOMER_TYPE_VALUES = CUSTOMER_TYPE_OPTIONS.map((o)=>o.value);
+function isValidCustomerType(value) {
+    return !!value && CUSTOMER_TYPE_VALUES.includes(value);
+}
+function normalizeCustomerType(value) {
+    return isValidCustomerType(value || undefined) ? value : DEFAULT_CUSTOMER_TYPE;
+}
+function getCustomerTypeLabel(value) {
+    var _CUSTOMER_TYPE_OPTIONS_find;
+    const target = normalizeCustomerType(value);
+    return ((_CUSTOMER_TYPE_OPTIONS_find = CUSTOMER_TYPE_OPTIONS.find((o)=>o.value === target)) === null || _CUSTOMER_TYPE_OPTIONS_find === void 0 ? void 0 : _CUSTOMER_TYPE_OPTIONS_find.label) || '新客户';
 }
 
 
@@ -111765,6 +117273,9 @@ _export(exports, {
     get resolveCategoryCardImageUrl () {
         return resolveCategoryCardImageUrl;
     },
+    get resolveCategoryShelfImageUrl () {
+        return resolveCategoryShelfImageUrl;
+    },
     get shouldBypassImageOptimizer () {
         return shouldBypassImageOptimizer;
     }
@@ -111798,7 +117309,13 @@ const shouldBypassImageOptimizer = (value)=>{
         return true;
     }
     try {
-        return new URL(text).pathname.startsWith('/img-proxy/');
+        const url = new URL(text);
+        if (url.pathname.startsWith('/img-proxy/')) return true;
+        // Aliyun OSS (old-shop imports) is already a CDN — skip /_next/image so
+        // missing remotePatterns cannot blank home category cards.
+        const host = url.hostname.toLowerCase();
+        if (host.endsWith('.aliyuncs.com') || host === 'aliyuncs.com') return true;
+        return false;
     } catch  {
         return false;
     }
@@ -111810,7 +117327,7 @@ const optimizeCatalogImageUrl = (value, width = 640)=>{
         // Already same-origin (incl. /img-proxy) — append alicdn size when possible
         if (text.startsWith('/img-proxy/') && !/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
             if (/\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
-                return `${text.split('?')[0]}_${width}x${width}q80.jpg${text.includes('?') ? `?${text.split('?')[1]}` : ''}`;
+                return `${text.split('?')[0]}_${width}x${width}q90.jpg${text.includes('?') ? `?${text.split('?')[1]}` : ''}`;
             }
         }
         return text;
@@ -111821,7 +117338,7 @@ const optimizeCatalogImageUrl = (value, width = 640)=>{
         if (url.pathname.startsWith('/img-proxy/')) {
             const path = `${url.pathname}${url.search}`;
             if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(url.pathname) && /\.(jpe?g|png|webp)$/i.test(url.pathname)) {
-                return `${url.pathname}_${width}x${width}q80.jpg${url.search}`;
+                return `${url.pathname}_${width}x${width}q90.jpg${url.search}`;
             }
             return path;
         }
@@ -111844,7 +117361,7 @@ const optimizeCatalogImageUrl = (value, width = 640)=>{
         if (host.includes('alicdn.com')) {
             const path = url.pathname;
             if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(path) && /\.(jpe?g|png|webp)$/i.test(path)) {
-                url.pathname = `${path}_${width}x${width}q80.jpg`;
+                url.pathname = `${path}_${width}x${width}q90.jpg`;
             }
             return url.toString();
         }
@@ -111854,9 +117371,98 @@ const optimizeCatalogImageUrl = (value, width = 640)=>{
         return text;
     }
 };
-const resolveCategoryCardImageUrl = (imageUrl, bannerImageUrl, productImageUrl)=>{
-    return optimizeCatalogImageUrl(imageUrl, 640) || optimizeCatalogImageUrl(bannerImageUrl, 640) || optimizeCatalogImageUrl(productImageUrl, 640) || CATEGORY_CARD_PLACEHOLDER_URL;
+const resolveCategoryShelfImageUrl = (imageUrl, bannerImageUrl, iconUrl)=>{
+    return optimizeCatalogImageUrl(imageUrl, 640) || optimizeCatalogImageUrl(bannerImageUrl, 640) || optimizeCatalogImageUrl(iconUrl, 640) || null;
 };
+const resolveCategoryCardImageUrl = (imageUrl, bannerImageUrl, iconUrl, /** @deprecated 类目卡不再回退商品主图，保留参数仅为兼容旧调用 */ _productImageUrl)=>{
+    return resolveCategoryShelfImageUrl(imageUrl, bannerImageUrl, iconUrl) || CATEGORY_CARD_PLACEHOLDER_URL;
+};
+
+
+/***/ },
+
+/***/ 25834
+(__unused_webpack_module, exports) {
+
+"use strict";
+/** 商品级混批起订量（tradeInfoJson.minOrderQty），默认 1 */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get clampSelectedQuantityToMoq () {
+        return clampSelectedQuantityToMoq;
+    },
+    get formatMinOrderQtyMessage () {
+        return formatMinOrderQtyMessage;
+    },
+    get formatMixedBatchShortfallMessage () {
+        return formatMixedBatchShortfallMessage;
+    },
+    get nextQuantityAfterDecrement () {
+        return nextQuantityAfterDecrement;
+    },
+    get nextQuantityAfterIncrement () {
+        return nextQuantityAfterIncrement;
+    },
+    get resolveEffectiveSkuMinOrderQty () {
+        return resolveEffectiveSkuMinOrderQty;
+    },
+    get resolveProductMinOrderQty () {
+        return resolveProductMinOrderQty;
+    },
+    get resolveSkuMinOrderQty () {
+        return resolveSkuMinOrderQty;
+    }
+});
+function resolveProductMinOrderQty(tradeInfoJson) {
+    var _ref;
+    return Math.max(1, Math.round(Number((_ref = tradeInfoJson === null || tradeInfoJson === void 0 ? void 0 : tradeInfoJson.minOrderQty) !== null && _ref !== void 0 ? _ref : 0) || 1));
+}
+function resolveEffectiveSkuMinOrderQty(productMinOrderQty, skuMinOrderQty, options) {
+    const raw = Number(skuMinOrderQty !== null && skuMinOrderQty !== void 0 ? skuMinOrderQty : 0);
+    if (Number.isFinite(raw) && raw > 0) return Math.round(raw);
+    if (options === null || options === void 0 ? void 0 : options.supportsMixedBatch) return 1;
+    return Math.max(1, Math.round(productMinOrderQty) || 1);
+}
+function resolveSkuMinOrderQty(input) {
+    return resolveEffectiveSkuMinOrderQty(input.productMinOrderQty, input.skuMinOrderQty, {
+        supportsMixedBatch: input.supportsMixedBatch
+    });
+}
+function clampSelectedQuantityToMoq(quantity, minOrderQty) {
+    const moq = Math.max(1, Math.round(minOrderQty) || 1);
+    if (quantity <= 0) return 0;
+    return Math.max(moq, Math.round(quantity));
+}
+function nextQuantityAfterIncrement(current, minOrderQty, cap) {
+    const moq = Math.max(1, Math.round(minOrderQty) || 1);
+    if (current <= 0) return Math.min(cap, moq);
+    return Math.min(cap, current + 1);
+}
+function nextQuantityAfterDecrement(current, minOrderQty, options) {
+    const moq = Math.max(1, Math.round(minOrderQty) || 1);
+    const allowClear = (options === null || options === void 0 ? void 0 : options.allowClear) !== false;
+    if (current <= 0) return 0;
+    if (current <= moq) return allowClear ? 0 : moq;
+    return current - 1;
+}
+function formatMinOrderQtyMessage(minOrderQty, locale = 'zh') {
+    const qty = Math.max(1, Math.round(minOrderQty) || 1);
+    return locale === 'en' ? `Minimum order quantity is ${qty}` : `该商品最低起订量为 ${qty} 件`;
+}
+function formatMixedBatchShortfallMessage(productMinOrderQty, selectedQty, locale = 'zh') {
+    const moq = Math.max(1, Math.round(productMinOrderQty) || 1);
+    const selected = Math.max(0, Math.round(selectedQty) || 0);
+    const need = Math.max(0, moq - selected);
+    return locale === 'en' ? `Mixed MOQ is ${moq} pcs. Please select at least ${need} more.` : `该商品混批起订量为 ${moq} 件，请至少再选择 ${need} 件。`;
+}
 
 
 /***/ },
@@ -111890,6 +117496,47 @@ function formatUsd(amount) {
 function formatUsdCompact(amount) {
     if (typeof amount !== 'number' || Number.isNaN(amount)) return '--';
     return amount.toFixed(2);
+}
+
+
+/***/ },
+
+/***/ 87993
+(__unused_webpack_module, exports) {
+
+"use strict";
+/**
+ * 海报/横幅跳转链接规范化：支持站内路径、完整 URL、无协议域名。
+ */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get isAbsoluteHttpUrl () {
+        return isAbsoluteHttpUrl;
+    },
+    get normalizePosterLinkUrl () {
+        return normalizePosterLinkUrl;
+    }
+});
+function normalizePosterLinkUrl(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return null;
+    if (text.startsWith('/')) return text;
+    if (/^https?:\/\//i.test(text)) return text;
+    if (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(text)) {
+        return text.startsWith('//') ? `https:${text}` : `https://${text.replace(/^\/+/, '')}`;
+    }
+    return `/${text.replace(/^\/+/, '')}`;
+}
+function isAbsoluteHttpUrl(url) {
+    return /^https?:\/\//i.test(url);
 }
 
 
@@ -112007,12 +117654,16 @@ function resolveFrontRmbSellingPrice(options) {
         name: options.parentCategoryName,
         isBrandCategory: options.parentIsBrandCategory
     });
+    const skuPrice = typeof options.skuPriceRmb === 'number' && Number.isFinite(options.skuPriceRmb) ? options.skuPriceRmb : 0;
+    if (skuPrice > 0) {
+        return Number(skuPrice.toFixed(2));
+    }
     const cost = toDecimalNumber(options.costPrice);
     const coefficient = resolveCategoryPriceCoefficient(ownBlocked ? null : toDecimalNumber(options.ownCoefficient), parentBlocked ? null : toDecimalNumber(options.parentCoefficient));
     if (cost !== null && cost > 0) {
         return Number((cost * coefficient).toFixed(2));
     }
-    return options.skuPriceRmb;
+    return 0;
 }
 
 
@@ -112791,6 +118442,54 @@ const PRODUCT_KEYWORD_ORDER = [
     '刺绣',
     '外穿',
     '增高',
+    // extra materials (jewelry / shoes) — compound before shorter
+    '锌合金',
+    '纯银',
+    '古铜色',
+    '古铜',
+    '树脂',
+    '亚克力',
+    '硅胶',
+    '网面',
+    '漆皮',
+    '麂皮',
+    '羊毛',
+    '锆石',
+    '水钻',
+    '莫桑石',
+    '铜',
+    // extra colors — compound before shorter
+    '军绿色',
+    '香槟色',
+    '枪色',
+    '裸粉',
+    '玫瑰粉',
+    '银白',
+    '混色',
+    '拼色',
+    '彩色',
+    '透明',
+    '原色',
+    '军绿',
+    // extra styles / jewelry types
+    '基础款',
+    '经典款',
+    '欧美风',
+    '学院风',
+    '度假风',
+    'ins风',
+    '韩版',
+    '欧美',
+    '百搭',
+    '通勤',
+    '锁骨链',
+    '耳钉',
+    '耳夹',
+    '吊坠',
+    '项圈',
+    '套装',
+    '开口',
+    '款式',
     // packaging / spec add-ons (compound before shorter)
     '礼品盒',
     '飞机盒',
@@ -112981,7 +118680,52 @@ const PRODUCT_KEYWORD_EN = {
     现货: 'In Stock',
     预售: 'Pre-Order',
     均码: 'One Size',
-    单码: 'One Size'
+    单码: 'One Size',
+    锌合金: 'Zinc Alloy',
+    纯银: 'Sterling Silver',
+    古铜色: 'Bronze',
+    古铜: 'Bronze',
+    树脂: 'Resin',
+    亚克力: 'Acrylic',
+    硅胶: 'Silicone',
+    网面: 'Mesh',
+    漆皮: 'Patent Leather',
+    麂皮: 'Suede',
+    羊毛: 'Wool',
+    锆石: 'Zircon',
+    水钻: 'Rhinestone',
+    莫桑石: 'Moissanite',
+    铜: 'Copper',
+    军绿色: 'Army Green',
+    军绿: 'Army Green',
+    香槟色: 'Champagne',
+    枪色: 'Gunmetal',
+    裸粉: 'Nude Pink',
+    玫瑰粉: 'Rose Pink',
+    银白: 'Silver White',
+    混色: 'Mixed',
+    拼色: 'Color Block',
+    彩色: 'Multicolor',
+    透明: 'Transparent',
+    原色: 'Natural',
+    基础款: 'Basic',
+    经典款: 'Classic',
+    欧美风: 'European Style',
+    欧美: 'European Style',
+    学院风: 'Preppy',
+    度假风: 'Resort',
+    ins风: 'Ins Style',
+    韩版: 'Korean Style',
+    百搭: 'Versatile',
+    通勤: 'Commuter',
+    款式: 'Style',
+    锁骨链: 'Choker Necklace',
+    耳钉: 'Stud Earrings',
+    耳夹: 'Ear Cuff',
+    吊坠: 'Pendant',
+    项圈: 'Choker',
+    套装: 'Set',
+    开口: 'Open'
 };
 const PRODUCT_KEYWORD_ES = {
     不锈钢: 'Acero inoxidable',
@@ -113163,7 +118907,52 @@ const PRODUCT_KEYWORD_ES = {
     现货: 'En stock',
     预售: 'Preventa',
     均码: 'Talla única',
-    单码: 'Talla única'
+    单码: 'Talla única',
+    锌合金: 'Aleación de zinc',
+    纯银: 'Plata de ley',
+    古铜色: 'Bronce',
+    古铜: 'Bronce',
+    树脂: 'Resina',
+    亚克力: 'Acrílico',
+    硅胶: 'Silicona',
+    网面: 'Malla',
+    漆皮: 'Charol',
+    麂皮: 'Ante',
+    羊毛: 'Lana',
+    锆石: 'Circonita',
+    水钻: 'Diamante de imitación',
+    莫桑石: 'Moissanita',
+    铜: 'Cobre',
+    军绿色: 'Verde militar',
+    军绿: 'Verde militar',
+    香槟色: 'Champán',
+    枪色: 'Gris pistola',
+    裸粉: 'Rosa nude',
+    玫瑰粉: 'Rosa',
+    银白: 'Blanco plateado',
+    混色: 'Mixto',
+    拼色: 'Combinado',
+    彩色: 'Multicolor',
+    透明: 'Transparente',
+    原色: 'Natural',
+    基础款: 'Básico',
+    经典款: 'Clásico',
+    欧美风: 'Estilo europeo',
+    欧美: 'Estilo europeo',
+    学院风: 'Preppy',
+    度假风: 'Resort',
+    ins风: 'Estilo Ins',
+    韩版: 'Estilo coreano',
+    百搭: 'Versátil',
+    通勤: 'De oficina',
+    款式: 'Estilo',
+    锁骨链: 'Gargantilla',
+    耳钉: 'Aretes',
+    耳夹: 'Clip de oreja',
+    吊坠: 'Colgante',
+    项圈: 'Gargantilla',
+    套装: 'Conjunto',
+    开口: 'Abierto'
 };
 const LATIN_EDGE = /[A-Za-z0-9]/;
 const CJK_EDGE = /[\u4e00-\u9fff]/;
@@ -113286,6 +119075,9 @@ function _export(target, all) {
     });
 }
 _export(exports, {
+    get buildTokenContainsAnd () {
+        return buildTokenContainsAnd;
+    },
     get collectBrandKeywordTexts () {
         return collectBrandKeywordTexts;
     },
@@ -113354,6 +119146,24 @@ function collectBrandKeywordTexts(raw) {
         }
     }
     return out;
+}
+function buildTokenContainsAnd(field, raw) {
+    const tokens = tokenizeProductSearch(raw);
+    if (!tokens.length) return null;
+    if (tokens.length === 1) {
+        return {
+            [field]: {
+                contains: tokens[0]
+            }
+        };
+    }
+    return {
+        AND: tokens.map((token)=>({
+                [field]: {
+                    contains: token
+                }
+            }))
+    };
 }
 function productMatchesSearchTokens(tokens, fields) {
     if (!tokens.length) return true;
@@ -114161,6 +119971,208 @@ function summarizeCountryRule(mode, rule) {
     const parts = express.tiers.slice(0, 3).map((t)=>`≤${t.maxKg}kg ${formatShippingFeeCny(t.fee)}`);
     const more = express.tiers.length > 3 ? ` +${express.tiers.length - 3}` : '';
     return parts.join(' · ') + more;
+}
+
+
+/***/ },
+
+/***/ 22452
+(__unused_webpack_module, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get TABLE_IMPORT_CATEGORY_HEADER_ALIASES () {
+        return TABLE_IMPORT_CATEGORY_HEADER_ALIASES;
+    },
+    get TABLE_IMPORT_SPEC_HEADER_ALIASES () {
+        return TABLE_IMPORT_SPEC_HEADER_ALIASES;
+    },
+    get collectTableImportSkuPairs () {
+        return collectTableImportSkuPairs;
+    },
+    get isTableImportCategoryHeader () {
+        return isTableImportCategoryHeader;
+    },
+    get looksLikePackedColorSize () {
+        return looksLikePackedColorSize;
+    },
+    get parsePackedColorSize () {
+        return parsePackedColorSize;
+    },
+    get resolveTableImportColorSpec () {
+        return resolveTableImportColorSpec;
+    }
+});
+/**
+ * 旧站/供货表常见把颜色和尺寸写在同一格：
+ *   颜色1-30*24*10  /  黑色-23*14*7  /  30*24*10
+ * 表格导入必须拆成 颜色 + 规格，否则前台 Options 会落成 Default。
+ */ const splitComma = (raw)=>String(raw !== null && raw !== void 0 ? raw : '').replace(/，/g, ',').split(',').map((value)=>value.trim()).filter(Boolean);
+const uniq = (values)=>{
+    const seen = new Set();
+    const out = [];
+    for (const value of values){
+        const key = value.trim();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(key);
+    }
+    return out;
+};
+const DIMENSION_RE = /^\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){1,3}$/;
+const PACKED_RE = /^(.+?)\s*[-–—]\s*(\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){1,3})$/;
+/** 颜色1-10*10*2cm / 巴宝莉套盒-105cm / 扣-95 / 蓝色-大号43*33*13cm */ const LOOSE_PACKED_RE = /^(.+?)\s*[-–—]\s*((?:大号|中号|小号|均码|plus)?\s*\d+(?:\.\d+)?(?:\s*[xX×*]\s*\d+(?:\.\d+)?){0,3}\s*(?:cm|mm|m|oz|ml|l|g|kg)?)$/i;
+const LOOKS_LIKE_PRICE_RE = /^\d+(\.\d+)?$/;
+const TABLE_IMPORT_SPEC_HEADER_ALIASES = [
+    '规格',
+    '尺码',
+    '尺寸',
+    'size',
+    'spec',
+    'sku规格',
+    '规格名称',
+    'sku名称',
+    '属性',
+    '型号',
+    'sku spec'
+];
+const TABLE_IMPORT_CATEGORY_HEADER_ALIASES = [
+    '类目',
+    '英文类目',
+    '中文类目',
+    '类目名称',
+    '产品分类',
+    '商品类目',
+    '商品分类',
+    '分类',
+    'category',
+    'categories',
+    'category name',
+    'categoryname',
+    'product category',
+    'hat',
+    'hats'
+];
+function isTableImportCategoryHeader(cell) {
+    const raw = String(cell || '').trim().toLowerCase();
+    if (!raw) return false;
+    if (TABLE_IMPORT_CATEGORY_HEADER_ALIASES.includes(raw)) return true;
+    // 英文类目 / 商品类目名称 — 含「类目」即可，避开「类目系数」
+    if (raw.includes('类目') && !raw.includes('系数')) return true;
+    if (raw.includes('category') && !raw.includes('id')) return true;
+    return false;
+}
+const normalizeDimension = (raw)=>raw.replace(/\s+/g, '').replace(/[xX×]/g, '*');
+function parsePackedColorSize(raw) {
+    const text = String(raw !== null && raw !== void 0 ? raw : '').trim();
+    if (!text || LOOKS_LIKE_PRICE_RE.test(text)) return null;
+    const packed = text.match(PACKED_RE) || text.match(LOOSE_PACKED_RE);
+    if (packed) {
+        const color = packed[1].trim();
+        const size = normalizeDimension(packed[2]);
+        if (!color || !size) return null;
+        return {
+            color,
+            size
+        };
+    }
+    if (DIMENSION_RE.test(text)) {
+        return {
+            color: '',
+            size: normalizeDimension(text)
+        };
+    }
+    return null;
+}
+function looksLikePackedColorSize(raw) {
+    return parsePackedColorSize(raw) != null;
+}
+function resolveTableImportColorSpec(input) {
+    const colors = [];
+    const specs = [];
+    const ingest = (token, prefer)=>{
+        const packed = parsePackedColorSize(token);
+        if (packed) {
+            if (packed.color) colors.push(packed.color);
+            if (packed.size) specs.push(packed.size);
+            return;
+        }
+        if (!token || LOOKS_LIKE_PRICE_RE.test(token)) return;
+        if (prefer === 'spec' || prefer === 'auto' && DIMENSION_RE.test(token)) {
+            specs.push(token);
+            return;
+        }
+        colors.push(token);
+    };
+    for (const token of splitComma(input.color))ingest(token, 'color');
+    for (const token of splitComma(input.spec))ingest(token, 'spec');
+    if (colors.length === 0 && specs.length === 0) {
+        for (const extra of input.extraCandidates || []){
+            for (const token of splitComma(extra)){
+                if (!parsePackedColorSize(token)) continue;
+                ingest(token, 'auto');
+            }
+        }
+    }
+    const uniqueColors = uniq(colors);
+    const uniqueSpecs = uniq(specs);
+    return {
+        color: uniqueColors.join(','),
+        spec: uniqueSpecs.join(','),
+        colors: uniqueColors,
+        specs: uniqueSpecs
+    };
+}
+function collectTableImportSkuPairs(rows) {
+    const pairs = [];
+    const seen = new Set();
+    const push = (color, spec)=>{
+        if (!color && !spec) return;
+        const key = `${color || ''}::${spec || ''}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        pairs.push({
+            color,
+            spec
+        });
+    };
+    for (const row of rows){
+        var _row_colors, _row_specs;
+        const colorTokens = (((_row_colors = row.colors) === null || _row_colors === void 0 ? void 0 : _row_colors.length) ? row.colors : splitComma(row.color)).map((value)=>value.trim()).filter(Boolean);
+        const specTokens = (((_row_specs = row.specs) === null || _row_specs === void 0 ? void 0 : _row_specs.length) ? row.specs : splitComma(row.spec)).map((value)=>value.trim()).filter(Boolean);
+        const packedFromRow = [
+            ...colorTokens,
+            ...specTokens
+        ].map((token)=>parsePackedColorSize(token)).filter((item)=>Boolean((item === null || item === void 0 ? void 0 : item.color) && (item === null || item === void 0 ? void 0 : item.size)));
+        if (packedFromRow.length > 0) {
+            for (const item of packedFromRow){
+                push(item.color || null, item.size || null);
+            }
+            continue;
+        }
+        const colors = colorTokens.length > 0 ? colorTokens : [
+            null
+        ];
+        const specs = specTokens.length > 0 ? specTokens : [
+            null
+        ];
+        for (const color of colors){
+            for (const spec of specs){
+                push(color, spec);
+            }
+        }
+    }
+    return pairs;
 }
 
 
@@ -119026,7 +125038,6 @@ exports.Prisma.SysuserScalarFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
-  passwordPlain: 'passwordPlain',
   email: 'email',
   role: 'role',
   status: 'status',
@@ -119039,6 +125050,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   countryName: 'countryName',
   purchaseCount: 'purchaseCount',
   adminNote: 'adminNote',
+  customerType: 'customerType',
   ringSizeUs: 'ringSizeUs',
   ringSizeEu: 'ringSizeEu',
   braceletSize: 'braceletSize',
@@ -119734,6 +125746,23 @@ exports.Prisma.KeywordgroupproductScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.SuffixconfigScalarFieldEnum = {
+  id: 'id',
+  suffixName: 'suffixName',
+  sortWeight: 'sortWeight',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BrandaliasScalarFieldEnum = {
+  id: 'id',
+  alias: 'alias',
+  standardName: 'standardName',
+  sortWeight: 'sortWeight',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -119768,7 +125797,6 @@ exports.Prisma.sysuserOrderByRelevanceFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
-  passwordPlain: 'passwordPlain',
   email: 'email',
   username: 'username',
   avatarUrl: 'avatarUrl',
@@ -119778,6 +125806,7 @@ exports.Prisma.sysuserOrderByRelevanceFieldEnum = {
   countryCode: 'countryCode',
   countryName: 'countryName',
   adminNote: 'adminNote',
+  customerType: 'customerType',
   ringSizeUs: 'ringSizeUs',
   ringSizeEu: 'ringSizeEu',
   braceletSize: 'braceletSize'
@@ -120191,9 +126220,21 @@ exports.Prisma.keywordgroupproductOrderByRelevanceFieldEnum = {
   keywordGroupId: 'keywordGroupId',
   productId: 'productId'
 };
+
+exports.Prisma.suffixconfigOrderByRelevanceFieldEnum = {
+  id: 'id',
+  suffixName: 'suffixName'
+};
+
+exports.Prisma.brandaliasOrderByRelevanceFieldEnum = {
+  id: 'id',
+  alias: 'alias',
+  standardName: 'standardName'
+};
 exports.userrole = exports.$Enums.userrole = {
   CUSTOMER: 'CUSTOMER',
-  ADMIN: 'ADMIN'
+  ADMIN: 'ADMIN',
+  SUB_ADMIN: 'SUB_ADMIN'
 };
 
 exports.userstatus = exports.$Enums.userstatus = {
@@ -120423,7 +126464,9 @@ exports.Prisma.ModelName = {
   categorybanner: 'categorybanner',
   product_category_relations: 'product_category_relations',
   product_keyword_relations: 'product_keyword_relations',
-  keywordgroupproduct: 'keywordgroupproduct'
+  keywordgroupproduct: 'keywordgroupproduct',
+  suffixconfig: 'suffixconfig',
+  brandalias: 'brandalias'
 };
 /**
  * Create the Client
@@ -120476,8 +126519,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  // Custom path used by server/webpack (not node_modules default)\n  output        = \"../prisma-generated/client\"\n  // Dev may be Windows; prod ECS is Debian OpenSSL 3 — always include both\n  binaryTargets = [\"native\", \"debian-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"mysql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum userrole {\n  CUSTOMER\n  ADMIN\n}\n\nenum userstatus {\n  ACTIVE\n  DISABLED\n}\n\nenum categorystatus {\n  ACTIVE\n  INACTIVE\n}\n\nenum productstatus {\n  DRAFT\n  ACTIVE\n  INACTIVE\n  OUT_OF_STOCK\n  PREORDER\n}\n\nenum productsource {\n  MANUAL\n  IMPORT_1688\n  TABLE_IMPORT\n}\n\nenum stockstatus {\n  IN_STOCK\n  LOW_STOCK\n  OUT_OF_STOCK\n}\n\nenum cartitemstatus {\n  VALID\n  INVALID\n}\n\nenum importtaskstatus {\n  PENDING\n  RUNNING\n  COMPLETED\n  FAILED\n  QUEUED\n  RATE_LIMITED\n  PARTIAL_SUCCESS\n  RETRY_PENDING\n}\n\nenum materialtype {\n  GOLD_14K\n  GOLD_18K\n  SILVER_925\n  GOLD_PLATED\n  ROSE_GOLD\n  WHITE_GOLD\n  PEARL\n  GEMSTONE\n}\n\nenum gemstoneType {\n  DIAMOND\n  ZIRCON\n  PEARL\n  COLOR_GEM\n  NONE\n}\n\nenum jewelryproducttype {\n  RING\n  NECKLACE\n  EARRING\n  BRACELET\n  ANKLET\n  SET\n  MENS_JEWELRY\n  GIFT_BOX\n  CUSTOM_ENGRAVING\n}\n\nenum sitesettingtype {\n  PROMO_BAR\n  HERO_BANNER\n  CATEGORY_BANNER\n  HOT_MATERIAL\n  LOOKBOOK\n  TRUST_BADGE\n  HOT_SEARCH\n  FOOTER_LINK\n  FLOAT_CONTACT\n  HOMEPAGE_POSTER\n  HOME_SECTION\n  STATIC_COPY\n  EMAIL_TEMPLATE\n  PAYMENT_METHOD\n  CURRENCY_SETTING\n  EXCHANGE_RATE\n  SHIPPING_TEMPLATE\n  TAX_RULE\n  ROLE_PERMISSION\n  HOME_BRAND_SECTION\n  HOME_REVIEW_SECTION\n  HOME_FEATURED_KEYWORDS\n  FRONTEND_SCENE_SLOT\n}\n\nenum keywordgrouptype {\n  BRAND\n  NEW_ARRIVAL\n  PROMOTION\n  GENERAL\n}\n\nenum keywordscenearea {\n  LEFT_NAV\n  RECOMMENDATION\n  BOTH\n}\n\nenum homerecommendzonetype {\n  PRODUCT\n  CATEGORY\n  SIDE_NAV\n}\n\nenum wishlistitemstatus {\n  ACTIVE\n  MOVED_TO_CART\n}\n\nenum orderstatus {\n  PENDING_PAYMENT\n  PAID\n  PROCESSING\n  SHIPPED\n  DELIVERED\n  CANCELLED\n  REFUNDED\n}\n\nenum ordershipmethod {\n  STANDARD\n  EXPRESS\n}\n\nenum paymentmethodtype {\n  PAYPAL\n  BANK_TRANSFER\n  STRIPE\n  CREDIT_CARD\n}\n\nenum reviewstatus {\n  PUBLISHED\n  HIDDEN\n  PENDING\n}\n\nenum promotiontype {\n  FLASH_SALE\n  COUPON\n  NEW_CUSTOMER\n  HOLIDAY\n  FULL_REDUCTION\n  PERCENTAGE_DISCOUNT\n  BUY_X_GET_Y\n}\n\nenum ticketstatus {\n  OPEN\n  REPLIED\n  RESOLVED\n  CLOSED\n}\n\nenum customorderstatus {\n  PENDING_CONFIRMATION\n  IN_PRODUCTION\n  READY_TO_SHIP\n  SHIPPED\n  COMPLETED\n}\n\nmodel sysuser {\n  id                   String     @id @default(uuid()) @db.VarChar(36)\n  account              String     @unique @db.VarChar(50)\n  password             String     @db.VarChar(255)\n  /**\n   * 明文密码（仅供后台客服协助；登录仍校验 password 哈希）\n   */\n  passwordPlain        String?    @db.VarChar(255)\n  email                String     @unique @db.VarChar(100)\n  role                 userrole\n  status               userstatus @default(ACTIVE)\n  username             String     @db.VarChar(100)\n  avatarUrl            String?    @db.VarChar(700)\n  phone                String?    @db.VarChar(30) // WhatsApp 号（前台注册同步写入）\n  preferredCurrency    String?    @db.VarChar(10)\n  preferredLocale      String?    @db.VarChar(20)\n  countryCode          String?    @db.VarChar(10)\n  countryName          String?    @db.VarChar(100)\n  purchaseCount        Int        @default(0)\n  adminNote            String?    @db.Text\n  ringSizeUs           String?    @db.VarChar(20)\n  ringSizeEu           String?    @db.VarChar(20)\n  braceletSize         String?    @db.VarChar(20)\n  savedPreferencesJson Json? // 用户偏好，格式：{ \"recentMaterials\": [\"GOLD_14K\"], \"recentSearches\": [\"pearl ring\"] }\n  savedSizesJson       Json? // 保存尺寸，格式：[{ \"type\": \"ring\", \"label\": \"US 6\" }]\n  lastLoginAt          DateTime?\n  createdAt            DateTime   @default(now())\n  updatedAt            DateTime   @default(now()) @updatedAt\n\n  carts             cart[]\n  importTasks       importtask[]\n  importTaskItems   importtaskitem[]\n  addresses         useraddress[]\n  wishlists         wishlistitem[]\n  orders            orderrecord[]\n  reviews           productreview[]\n  tickets           customerticket[]\n  customOrders      customorder[]\n  customerTags      customertaglink[]\n  communicationLogs customercommunication[]\n}\n\nmodel category {\n  id                        String         @id @default(uuid()) @db.VarChar(36)\n  parentId                  String?        @db.VarChar(36)\n  level                     Int            @default(1) // 目录层级：1=一级分类，2=二级分类\n  name                      String         @db.VarChar(120)\n  slug                      String?        @db.VarChar(120)\n  imageUrl                  String?        @db.VarChar(700)\n  iconUrl                   String?        @db.VarChar(700)\n  bannerImageUrl            String?        @db.VarChar(700)\n  description               String?        @db.Text\n  seoTitle                  String?        @db.VarChar(200)\n  seoDescription            String?        @db.Text\n  seoKeywords               String?        @db.VarChar(300)\n  sortWeight                Int            @default(0) // 排序权重，数值越大越靠前\n  status                    categorystatus @default(ACTIVE)\n  path                      String?        @db.VarChar(500)\n  isBrandCategory           Boolean        @default(false)\n  brandCode                 String?        @db.VarChar(80)\n  brandKeywordsJson         Json? // 品牌关键词，格式：[{ \"keyword\": \"chanel\", \"weight\": 100 }, { \"keyword\": \"香奈儿\", \"weight\": 90 }]\n  homepageConfigJson        Json? // 首页联动配置，格式：{ \"showOnHome\": true, \"showInHotSection\": true, \"showInBrandSection\": false, \"heroTitle\": \"\", \"heroSubtitle\": \"\", \"heroButtonText\": \"\", \"heroButtonLink\": \"\" }\n  categoryDisplayConfigJson Json? // 类目展示配置，格式：{ \"showChildrenByDefault\": true, \"allowChildrenCollapse\": true, \"showBrandFilter\": false, \"brandFilterCollapsedRows\": 3 }\n  keywordMappingJson        Json? // 关键词映射配置，格式：{ \"groupIds\": [\"uuid\"], \"keywordIds\": [\"uuid\"], \"syncToHomepage\": true }\n  priceCoefficient          Decimal?       @db.Decimal(6, 2) // 售价系数（子级优先：二级有值用二级，否则用一级，都未设则前台按 1；成本价×系数换算展示）\n  translationsJson          Json? // 多语言字段，格式：{ \"zh\": {\"name\": \"戒指\"}, \"en\": {\"name\": \"Rings\"}, \"ar\": {\"name\": \"خواتم\"} }\n  seoTranslationsJson       Json? // 多语言SEO，格式：{ \"zh\": {\"title\": \"\", \"description\": \"\", \"keywords\": \"\"} }\n  createdAt                 DateTime       @default(now())\n  updatedAt                 DateTime       @default(now()) @updatedAt\n\n  parent             category?                     @relation(\"CategoryTree\", fields: [parentId], references: [id])\n  children           category[]                    @relation(\"CategoryTree\")\n  products           product[]\n  brandProducts      product[]                     @relation(\"BrandCategoryProducts\")\n  recommendZoneItems homeRecommendZoneItem[]\n  categoryFilters    categoryfilterbinding[]\n  categorySpecs      categoryspectemplatebinding[]\n  productLinks       productcategory[]\n  keywordLinks       categorykeywordlink[]\n  relationProducts   product_category_relations[]\n  navConfig          categorynavconfig?\n\n  @@index([parentId])\n  @@index([level])\n  @@index([status])\n  @@index([isBrandCategory])\n  @@index([brandCode])\n}\n\nmodel categorynavconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  navTitle   String?  @db.VarChar(120)\n  sortWeight Int      @default(0)\n  isVisible  Boolean  @default(true)\n  badgeText  String?  @db.VarChar(60)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([categoryId])\n  @@index([isVisible])\n  @@index([sortWeight])\n}\n\nmodel product {\n  id                      String             @id @default(uuid()) @db.VarChar(36)\n  categoryId              String             @db.VarChar(36) // FK → category.id\n  name                    String             @db.VarChar(200)\n  slug                    String             @unique @db.VarChar(200)\n  productCode             String             @unique @db.VarChar(100)\n  source                  productsource\n  supplierName            String?            @db.VarChar(160)\n  status                  productstatus      @default(DRAFT)\n  productType             jewelryproducttype @default(RING)\n  goodsStatus             String?            @db.VarChar(60)\n  costPrice               Decimal?           @db.Decimal(10, 2)\n  priceCoefficient        Decimal?           @db.Decimal(6, 2)\n  detailText              String?            @db.Text\n  brandName               String?            @db.VarChar(120)\n  brandCategoryId         String?            @db.VarChar(36)\n  brandMatchKeyword       String?            @db.VarChar(120)\n  autoBrandMatched        Boolean            @default(false)\n  materialType            materialtype?\n  gemstoneType            gemstoneType?      @default(NONE)\n  metalPurity             String?            @db.VarChar(50)\n  platingProcess          String?            @db.VarChar(120)\n  totalCarat              Decimal?           @db.Decimal(8, 2)\n  weightGram              Decimal?           @db.Decimal(8, 2)\n  mainImageUrl            String             @db.VarChar(700)\n  hoverImageUrl           String?            @db.VarChar(700)\n  wearImageUrl            String?            @db.VarChar(700)\n  videoUrl                String?            @db.VarChar(700)\n  rotate360Json           Json? // 360 视图，格式：[{ \"url\": \"图片URL\", \"sort\": 1 }]\n  galleryJson             Json // 商品相册，格式：[{ \"url\": \"图片URL\", \"sort\": 1, \"type\": \"image|detail|wear\" }]\n  shortDescription        String?            @db.Text\n  designStory             String?            @db.Text\n  translationsJson        Json? // 多语言商品信息，格式：{ \"zh\": {\"name\": \"\", \"shortDescription\": \"\", \"detail\": \"\"}, \"en\": {...}, \"ar\": {...} }\n  detailTranslationsJson  Json? // 多语言图文详情，格式：{ \"zh\": [{\"type\": \"text\", \"content\": \"\"}], \"en\": [...] }\n  sellingPointsJson       Json? // 商品卖点，格式：[{ \"title\": \"卖点标题\", \"content\": \"卖点内容\" }]\n  detailContentJson       Json? // 图文详情，格式：[{ \"type\": \"text|image\", \"content\": \"文本内容或图片URL\", \"title\": \"可选标题\" }]\n  parameterJson           Json? // 参数表，格式：[{ \"group\": \"参数分组\", \"items\": [{ \"key\": \"参数名\", \"value\": \"参数值\" }] }]\n  careGuideJson           Json? // 护理指南，格式：[{ \"title\": \"步骤\", \"content\": \"说明\" }]\n  sizeGuideJson           Json? // 尺码指南，格式：{ \"ring\": [...], \"necklace\": [...], \"printableUrl\": \"PDF链接\" }\n  engravingPreviewBaseUrl String?            @db.VarChar(700)\n  packagingImageUrl       String?            @db.VarChar(700)\n  certificateInfo         String?            @db.Text\n  tradeInfoJson           Json? // 物流与贸易说明，格式：{ \"shipFrom\": \"发货地\", \"deliveryDays\": 7, \"minOrderQty\": 1, \"supportedRegions\": [\"US\",\"EU\"], \"shippingNote\": \"运输说明\", \"tradeNotice\": \"注意事项\" }\n  faqJson                 Json? // 常见购买问题，格式：[{ \"question\": \"问题\", \"answer\": \"回答\" }]\n  ratingAverage           Float              @default(0) // 平均评分（X分，0-5）\n  ratingCount             Int                @default(0) // 评价数量（X个）\n  soldCount               Int                @default(0)\n  isNewArrival            Boolean            @default(false)\n  isBestSeller            Boolean            @default(false)\n  isLimitedDiscount       Boolean            @default(false)\n  sortWeight              Int                @default(0) // 排序权重，数值越大越靠前\n  /**\n   * 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt\n   */\n  publishedAt             DateTime?\n  createdAt               DateTime           @default(now())\n  updatedAt               DateTime           @default(now()) @updatedAt\n\n  category             category                      @relation(fields: [categoryId], references: [id])\n  brandCategory        category?                     @relation(\"BrandCategoryProducts\", fields: [brandCategoryId], references: [id])\n  skus                 productsku[]\n  cartItems            cartitem[]\n  importTaskItems      importtaskitem[]\n  reviews              productreview[]\n  wishlistItems        wishlistitem[]\n  lookbookLinks        lookbookproduct[]\n  orderItems           orderitem[]\n  customOrders         customorder[]\n  categoryLinks        productcategory[]\n  relationCategories   product_category_relations[]\n  relationKeywords     product_keyword_relations[]\n  keywordGroupLinks    keywordgroupproduct[]\n  recommendZoneItems   homeRecommendZoneItem[]\n  recommendCollections homeRecommendCollectionItem[]\n\n  @@index([categoryId])\n  @@index([brandCategoryId])\n  @@index([status])\n  @@index([productType])\n  @@index([materialType])\n  @@index([gemstoneType])\n  @@index([goodsStatus])\n  @@index([brandName])\n  @@index([publishedAt])\n}\n\nmodel productsku {\n  id                 String        @id @default(uuid()) @db.VarChar(36)\n  productId          String        @db.VarChar(36) // FK → product.id\n  skuCode            String        @unique @db.VarChar(100)\n  imageUrl           String?       @db.VarChar(700)\n  minOrderQty        Int? // SKU独立起订量；为空时继承商品级，若商品级也未设则前台按1\n  materialType       materialtype?\n  gemstoneType       gemstoneType? @default(NONE)\n  ringSizeUs         String?       @db.VarChar(20)\n  ringSizeEu         String?       @db.VarChar(20)\n  materialLabel      String?       @db.VarChar(60)\n  sizeLabel          String?       @db.VarChar(60)\n  necklaceLengthInch String?       @db.VarChar(20)\n  braceletLengthCm   String?       @db.VarChar(20)\n  engravingSupported Boolean       @default(false)\n  engravingMaxChars  Int?          @default(0)\n  fontOptionsJson    Json? // 字体选项，格式：[{ \"name\": \"Serif\", \"extraFee\": 5 }]\n  extraFee           Decimal?      @db.Decimal(10, 2)\n  price              Decimal       @db.Decimal(10, 2) // 售价（X元）\n  originalPrice      Decimal?      @db.Decimal(10, 2) // 原价（X元）\n  stock              Int           @default(0) // 库存（X个）\n  stockStatus        stockstatus   @default(IN_STOCK)\n  attributeJson      Json // SKU规格属性，格式：[{ \"name\": \"颜色\", \"value\": \"黑色\" }, { \"name\": \"尺寸\", \"value\": \"L\" }]\n  deliveryDays       Int? // 预计交期（X天）\n  weightKg           Decimal?      @db.Decimal(10, 3) // 重量（X千克）\n  volumeM3           Decimal?      @db.Decimal(10, 4) // 体积（X立方米）\n  createdAt          DateTime      @default(now())\n  updatedAt          DateTime      @default(now()) @updatedAt\n\n  product      product       @relation(fields: [productId], references: [id])\n  cartItems    cartitem[]\n  orderItems   orderitem[]\n  customOrders customorder[]\n\n  @@index([productId])\n  @@index([materialType])\n}\n\nmodel cart {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  accountId String   @unique @db.VarChar(36) // FK → sysuser.id\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  account sysuser    @relation(fields: [accountId], references: [id])\n  items   cartitem[]\n}\n\nmodel cartitem {\n  id                  String         @id @default(uuid()) @db.VarChar(36)\n  cartId              String         @db.VarChar(36) // FK → cart.id\n  productId           String         @db.VarChar(36) // FK → product.id\n  productSkuId        String         @db.VarChar(36) // FK → productsku.id\n  quantity            Int            @default(1) // 商品数量（X个）\n  engravingText       String?        @db.VarChar(120)\n  engravingFont       String?        @db.VarChar(50)\n  engravingPreviewUrl String?        @db.VarChar(700)\n  giftWrapSelected    Boolean        @default(false)\n  giftWrapFee         Decimal?       @db.Decimal(10, 2)\n  status              cartitemstatus @default(VALID)\n  createdAt           DateTime       @default(now())\n  updatedAt           DateTime       @default(now()) @updatedAt\n\n  cart       cart       @relation(fields: [cartId], references: [id])\n  product    product    @relation(fields: [productId], references: [id])\n  productSku productsku @relation(fields: [productSkuId], references: [id])\n\n  @@unique([cartId, productSkuId, engravingText, engravingFont])\n  @@index([cartId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel importtask {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  creatorId            String           @db.VarChar(36) // FK → sysuser.id\n  taskName             String           @db.VarChar(150)\n  status               importtaskstatus @default(PENDING)\n  sourceLinkCount      Int              @default(0) // 来源链接数量（X条）\n  successCount         Int              @default(0) // 成功数量（X条）\n  failureCount         Int              @default(0) // 失败数量（X条）\n  progressPercent      Int              @default(0) // 进度百分比（X%）\n  markupRate           Decimal?         @db.Decimal(5, 2) // 加价比例（X%）\n  defaultStatus        productstatus    @default(DRAFT)\n  defaultCategoryId    String?          @db.VarChar(36)\n  queueConcurrency     Int              @default(1) // 采集并发上限，默认串行或小并发\n  rateLimitMinDelaySec Int              @default(2) // 每次采集最小延迟秒数\n  rateLimitMaxDelaySec Int              @default(5) // 每次采集最大延迟秒数\n  startedAt            DateTime?\n  finishedAt           DateTime?\n  lastScheduledAt      DateTime?\n  lastRateLimitedAt    DateTime?\n  stockStrategyJson    Json? // 默认库存策略，格式：{ \"type\": \"fixed\", \"stock\": 100 }\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  creator sysuser          @relation(fields: [creatorId], references: [id])\n  items   importtaskitem[]\n\n  @@index([creatorId])\n  @@index([status])\n}\n\nmodel importtaskitem {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  importTaskId         String           @db.VarChar(36) // FK → importtask.id\n  operatorId           String           @db.VarChar(36) // FK → sysuser.id\n  sourceUrl            String           @db.VarChar(700)\n  parsedName           String?          @db.VarChar(200)\n  parsedMainImageUrl   String?          @db.VarChar(700)\n  parsedPriceMin       Decimal?         @db.Decimal(10, 2) // 解析最低价（X元）\n  parsedPriceMax       Decimal?         @db.Decimal(10, 2) // 解析最高价（X元）\n  supplierName         String?          @db.VarChar(150)\n  mainImageUrl         String?          @db.VarChar(700)\n  costPrice            Decimal?         @db.Decimal(10, 2) // 成本价（人民币）\n  weightGrams          Int? // 重量（克）\n  sourceCategoryName   String?          @db.VarChar(150) // 1688来源主类目名称\n  targetCategoryId     String?          @db.VarChar(36) // 发布到正式商品时使用的目标分类ID\n  coefficient          Decimal?         @db.Decimal(8, 2) // 当前成本系数\n  goodsStatus          productstatus? // 待上传项目标商品状态（上架/下架/缺货/预售等）\n  minimumOrderQuantity Int? // 起订量\n  availableStock       Int? // 可用库存\n  cnyPriceMin          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最低价\n  cnyPriceMax          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最高价\n  usdPriceMin          Decimal?         @db.Decimal(10, 2) // 美元预估区间最低价\n  usdPriceMax          Decimal?         @db.Decimal(10, 2) // 美元预估区间最高价\n  productDetail        String?          @db.LongText // 商品详情描述/图文摘要\n  skuSummaryText       String?          @db.LongText // SKU摘要文本，便于待上传列表直接编辑\n  fetchStatus          importtaskstatus @default(PENDING) // 单条采集状态：排队/抓取中/成功/失败/可重试\n  publishStatus        importtaskstatus @default(PENDING) // 单条发布状态：待发布/发布中/完成/失败/可重试\n  retryCount           Int              @default(0)\n  fetchStartedAt       DateTime?\n  fetchFinishedAt      DateTime?\n  publishStartedAt     DateTime?\n  publishedAt          DateTime?\n  specSummaryJson      Json? // 规格摘要，格式：[{ \"name\": \"颜色\", \"values\": [\"黑色\",\"白色\"] }]\n  previewDataJson      Json? // 导入/采集预览数据，格式：{ \"name\": \"商品名\", \"categoryId\": \"分类ID\", \"price\": 99.99, \"mainImageUrl\": \"图片URL\", \"shortDescription\": \"简述\", \"detailImages\": [\"图片URL1\"], \"skuTable\": [{ \"spec\": \"金色/7号\", \"costPrice\": 88.5, \"stock\": 20 }] }\n  isSelected           Boolean          @default(false)\n  isPublished          Boolean          @default(false)\n  importedProductId    String?          @db.VarChar(36) // FK → product.id\n  failureReason        String?          @db.Text\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  importTask      importtask @relation(fields: [importTaskId], references: [id])\n  operator        sysuser    @relation(fields: [operatorId], references: [id])\n  importedProduct product?   @relation(fields: [importedProductId], references: [id])\n\n  @@index([importTaskId])\n  @@index([operatorId])\n  @@index([importedProductId])\n  @@index([fetchStatus])\n  @@index([publishStatus])\n  @@index([isPublished])\n  @@index([targetCategoryId])\n}\n\nmodel useraddress {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  userId        String   @db.VarChar(36)\n  recipientName String   @db.VarChar(100)\n  phone         String?  @db.VarChar(30)\n  countryCode   String   @db.VarChar(10)\n  countryName   String   @db.VarChar(100)\n  stateName     String?  @db.VarChar(100)\n  cityName      String?  @db.VarChar(100)\n  addressLine1  String   @db.VarChar(255)\n  addressLine2  String?  @db.VarChar(255)\n  postalCode    String?  @db.VarChar(30)\n  isDefault     Boolean  @default(false)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  user   sysuser       @relation(fields: [userId], references: [id])\n  orders orderrecord[]\n\n  @@index([userId])\n}\n\nmodel wishlistitem {\n  id         String             @id @default(uuid()) @db.VarChar(36)\n  userId     String             @db.VarChar(36)\n  productId  String             @db.VarChar(36)\n  status     wishlistitemstatus @default(ACTIVE)\n  shareToken String?            @unique @db.VarChar(100)\n  createdAt  DateTime           @default(now())\n  updatedAt  DateTime           @default(now()) @updatedAt\n\n  user    sysuser @relation(fields: [userId], references: [id])\n  product product @relation(fields: [productId], references: [id])\n\n  @@unique([userId, productId])\n  @@index([userId])\n  @@index([productId])\n}\n\nmodel sitesetting {\n  id           String          @id @default(uuid()) @db.VarChar(36)\n  settingType  sitesettingtype\n  title        String          @db.VarChar(150)\n  subtitle     String?         @db.VarChar(200)\n  contentJson  Json // 配置内容，格式：{ \"items\": [...], \"link\": \"\", \"categoryId\": \"一级分类ID\" }\n  imageUrl     String?         @db.VarChar(700)\n  localeCode   String?         @db.VarChar(20)\n  currencyCode String?         @db.VarChar(10)\n  sortWeight   Int             @default(0)\n  isActive     Boolean         @default(true)\n  createdAt    DateTime        @default(now())\n  updatedAt    DateTime        @default(now()) @updatedAt\n\n  @@index([settingType])\n  @@index([isActive])\n}\n\nmodel lookbook {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  title       String   @db.VarChar(150)\n  subtitle    String?  @db.VarChar(200)\n  imageUrl    String   @db.VarChar(700)\n  videoUrl    String?  @db.VarChar(700)\n  description String?  @db.Text\n  isActive    Boolean  @default(true)\n  sortWeight  Int      @default(0)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  products lookbookproduct[]\n}\n\nmodel lookbookproduct {\n  id          String @id @default(uuid()) @db.VarChar(36)\n  lookbookId  String @db.VarChar(36)\n  productId   String @db.VarChar(36)\n  hotspotJson Json? // 热点信息，格式：{ \"x\": 50, \"y\": 40, \"label\": \"戒指\" }\n\n  lookbook lookbook @relation(fields: [lookbookId], references: [id])\n  product  product  @relation(fields: [productId], references: [id])\n\n  @@unique([lookbookId, productId])\n  @@index([lookbookId])\n  @@index([productId])\n}\n\nmodel homeRecommendCollection {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  name         String   @db.VarChar(150)\n  description  String?  @db.Text\n  sourceZoneId String?  @unique @db.VarChar(36)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  sourceZone        homeRecommendZone?            @relation(\"CollectionSourceZone\", fields: [sourceZoneId], references: [id])\n  collectionItems   homeRecommendCollectionItem[]\n  zonesUsingAsBound homeRecommendZone[]           @relation(\"ZoneBoundCollection\")\n\n  @@index([isActive])\n}\n\nmodel homeRecommendCollectionItem {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  collectionId String   @db.VarChar(36)\n  productId    String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  collection homeRecommendCollection @relation(fields: [collectionId], references: [id])\n  product    product                 @relation(fields: [productId], references: [id])\n\n  @@unique([collectionId, productId])\n  @@index([collectionId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZone {\n  id                String                @id @default(uuid()) @db.VarChar(36)\n  title             String                @db.VarChar(150)\n  zoneType          homerecommendzonetype\n  pcCols            Int                   @default(4)\n  mobileCols        Int                   @default(2)\n  pcRows            Int                   @default(2)\n  sortWeight        Int                   @default(0)\n  isActive          Boolean               @default(true)\n  boundCollectionId String?               @unique @db.VarChar(36)\n  createdAt         DateTime              @default(now())\n  updatedAt         DateTime              @default(now()) @updatedAt\n\n  sourceCollection homeRecommendCollection? @relation(\"CollectionSourceZone\")\n  boundCollection  homeRecommendCollection? @relation(\"ZoneBoundCollection\", fields: [boundCollectionId], references: [id])\n  items            homeRecommendZoneItem[]\n\n  @@index([zoneType])\n  @@index([isActive])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZoneItem {\n  id         String                @id @default(uuid()) @db.VarChar(36)\n  zoneId     String                @db.VarChar(36)\n  entityType homerecommendzonetype\n  productId  String?               @db.VarChar(36)\n  categoryId String?               @db.VarChar(36)\n  sortWeight Int                   @default(0)\n  createdAt  DateTime              @default(now())\n  updatedAt  DateTime              @default(now()) @updatedAt\n\n  zone     homeRecommendZone @relation(fields: [zoneId], references: [id])\n  product  product?          @relation(fields: [productId], references: [id])\n  category category?         @relation(fields: [categoryId], references: [id])\n\n  @@index([zoneId])\n  @@index([productId])\n  @@index([categoryId])\n  @@index([sortWeight])\n}\n\nmodel promotioncampaign {\n  id              String        @id @default(uuid()) @db.VarChar(36)\n  name            String        @db.VarChar(150)\n  promotionType   promotiontype\n  code            String?       @unique @db.VarChar(60)\n  discountPercent Decimal?      @db.Decimal(5, 2)\n  discountAmount  Decimal?      @db.Decimal(10, 2)\n  minOrderAmount  Decimal?      @db.Decimal(10, 2)\n  startAt         DateTime?\n  endAt           DateTime?\n  usageLimit      Int?\n  usedCount       Int           @default(0)\n  contentJson     Json? // 活动说明，格式：{ \"bannerText\": \"\", \"eligibleMaterials\": [] }\n  isActive        Boolean       @default(true)\n  createdAt       DateTime      @default(now())\n  updatedAt       DateTime      @default(now()) @updatedAt\n\n  orders       orderrecord[]\n  customOrders customorder[]\n\n  @@index([promotionType])\n  @@index([isActive])\n}\n\nmodel orderrecord {\n  id                 String            @id @default(uuid()) @db.VarChar(36)\n  orderNo            String            @unique @db.VarChar(60)\n  userId             String            @db.VarChar(36)\n  addressId          String?           @db.VarChar(36)\n  status             orderstatus       @default(PENDING_PAYMENT)\n  currencyCode       String            @db.VarChar(10)\n  localeCode         String?           @db.VarChar(20)\n  subtotalAmount     Decimal           @db.Decimal(10, 2)\n  discountAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  shippingAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  giftWrapAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  totalAmount        Decimal           @db.Decimal(10, 2)\n  paymentMethod      paymentmethodtype\n  paymentStatus      String?           @db.VarChar(50)\n  installmentInfo    String?           @db.VarChar(100)\n  couponId           String?           @db.VarChar(36)\n  shipMethod         ordershipmethod   @default(STANDARD)\n  trackingCarrier    String?           @db.VarChar(60)\n  trackingNumber     String?           @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  internalNote       String?           @db.Text\n  giftMessage        String?           @db.VarChar(255)\n  note               String?           @db.Text\n  createdAt          DateTime          @default(now())\n  updatedAt          DateTime          @default(now()) @updatedAt\n\n  user      sysuser                 @relation(fields: [userId], references: [id])\n  address   useraddress?            @relation(fields: [addressId], references: [id])\n  coupon    promotioncampaign?      @relation(fields: [couponId], references: [id])\n  items     orderitem[]\n  reviews   productreview[]\n  logistics orderlogisticssegment[]\n  logs      orderoperationlog[]\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel orderitem {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  orderId          String   @db.VarChar(36)\n  productId        String   @db.VarChar(36)\n  productSkuId     String   @db.VarChar(36)\n  productName      String   @db.VarChar(200)\n  skuCode          String   @db.VarChar(100)\n  materialLabel    String?  @db.VarChar(60)\n  sizeLabel        String?  @db.VarChar(60)\n  engravingText    String?  @db.VarChar(120)\n  engravingFont    String?  @db.VarChar(50)\n  quantity         Int      @default(1)\n  unitPrice        Decimal  @db.Decimal(10, 2)\n  lineAmount       Decimal  @db.Decimal(10, 2)\n  giftWrapSelected Boolean  @default(false)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  order      orderrecord @relation(fields: [orderId], references: [id])\n  product    product     @relation(fields: [productId], references: [id])\n  productSku productsku  @relation(fields: [productSkuId], references: [id])\n\n  @@index([orderId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel productreview {\n  id            String       @id @default(uuid()) @db.VarChar(36)\n  productId     String       @db.VarChar(36)\n  userId        String       @db.VarChar(36)\n  orderId       String?      @db.VarChar(36)\n  rating        Int\n  title         String?      @db.VarChar(150)\n  content       String?      @db.Text\n  imageUrlsJson Json? // 晒图，格式：[\"url1\", \"url2\"]\n  hasImages     Boolean      @default(false)\n  status        reviewstatus @default(PUBLISHED)\n  createdAt     DateTime     @default(now())\n  updatedAt     DateTime     @default(now()) @updatedAt\n\n  product product      @relation(fields: [productId], references: [id])\n  user    sysuser      @relation(fields: [userId], references: [id])\n  order   orderrecord? @relation(fields: [orderId], references: [id])\n\n  @@index([productId])\n  @@index([userId])\n  @@index([status])\n}\n\nmodel customorder {\n  id                  String            @id @default(uuid()) @db.VarChar(36)\n  orderId             String?           @unique @db.VarChar(36)\n  userId              String            @db.VarChar(36)\n  productId           String            @db.VarChar(36)\n  productSkuId        String            @db.VarChar(36)\n  promotionId         String?           @db.VarChar(36)\n  engravingText       String?           @db.VarChar(120)\n  engravingFont       String?           @db.VarChar(50)\n  engravingPreviewUrl String?           @db.VarChar(700)\n  status              customorderstatus @default(PENDING_CONFIRMATION)\n  productionNote      String?           @db.Text\n  shippingLabelUrl    String?           @db.VarChar(700)\n  completedAt         DateTime?\n  createdAt           DateTime          @default(now())\n  updatedAt           DateTime          @default(now()) @updatedAt\n\n  user       sysuser            @relation(fields: [userId], references: [id])\n  product    product            @relation(fields: [productId], references: [id])\n  productSku productsku         @relation(fields: [productSkuId], references: [id])\n  promotion  promotioncampaign? @relation(fields: [promotionId], references: [id])\n\n  @@index([userId])\n  @@index([productId])\n  @@index([productSkuId])\n  @@index([status])\n}\n\nmodel sizemapping {\n  id               String             @id @default(uuid()) @db.VarChar(36)\n  regionCode       String             @db.VarChar(20)\n  jewelryType      jewelryproducttype\n  sourceSize       String             @db.VarChar(20)\n  targetRegionCode String             @db.VarChar(20)\n  targetSize       String             @db.VarChar(20)\n  note             String?            @db.VarChar(200)\n  createdAt        DateTime           @default(now())\n  updatedAt        DateTime           @default(now()) @updatedAt\n\n  @@index([regionCode, jewelryType])\n}\n\nmodel customerticket {\n  id           String       @id @default(uuid()) @db.VarChar(36)\n  userId       String?      @db.VarChar(36)\n  contactName  String       @db.VarChar(100)\n  email        String?      @db.VarChar(120)\n  channel      String?      @db.VarChar(50)\n  subject      String       @db.VarChar(150)\n  content      String       @db.Text\n  status       ticketstatus @default(OPEN)\n  replyContent String?      @db.Text\n  createdAt    DateTime     @default(now())\n  updatedAt    DateTime     @default(now()) @updatedAt\n\n  user sysuser? @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel productcategory {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  isPrimary  Boolean  @default(false)\n  createdAt  DateTime @default(now())\n\n  product  product  @relation(fields: [productId], references: [id])\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([productId, categoryId])\n  @@index([categoryId])\n}\n\nmodel filterspec {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  inputType        String   @db.VarChar(50)\n  optionJson       Json? // 筛选项选项，格式：[{ \"label\": \"Gold\", \"value\": \"gold\" }]\n  translationsJson Json? // 多语言名称，格式：{ \"zh\": {\"name\": \"材质\"}, \"en\": {\"name\": \"Material\"} }\n  sortWeight       Int      @default(0)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryfilterbinding[]\n}\n\nmodel categoryfilterbinding {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  categoryId   String   @db.VarChar(36)\n  filterSpecId String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n\n  category   category   @relation(fields: [categoryId], references: [id])\n  filterSpec filterspec @relation(fields: [filterSpecId], references: [id])\n\n  @@unique([categoryId, filterSpecId])\n  @@index([filterSpecId])\n}\n\nmodel spectemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  fieldsJson       Json // 规格模板字段，格式：[{ \"name\": \"ringSize\", \"label\": \"戒指尺寸\", \"type\": \"select\" }]\n  translationsJson Json? // 多语言模板信息，格式：{ \"zh\": {\"name\": \"戒指尺寸\"}, \"en\": {\"name\": \"Ring Size\"} }\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryspectemplatebinding[]\n}\n\nmodel categoryspectemplatebinding {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  categoryId     String   @db.VarChar(36)\n  specTemplateId String   @db.VarChar(36)\n  createdAt      DateTime @default(now())\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  specTemplate spectemplate @relation(fields: [specTemplateId], references: [id])\n\n  @@unique([categoryId, specTemplateId])\n  @@index([specTemplateId])\n}\n\nmodel customertag {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  name        String   @db.VarChar(120)\n  code        String   @unique @db.VarChar(100)\n  color       String?  @db.VarChar(30)\n  description String?  @db.Text\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  userLinks customertaglink[]\n}\n\nmodel customertaglink {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  userId    String   @db.VarChar(36)\n  tagId     String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n\n  user sysuser     @relation(fields: [userId], references: [id])\n  tag  customertag @relation(fields: [tagId], references: [id])\n\n  @@unique([userId, tagId])\n  @@index([tagId])\n}\n\nmodel customercommunication {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  userId       String   @db.VarChar(36)\n  channel      String   @db.VarChar(50)\n  content      String   @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  user sysuser @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n}\n\nmodel orderlogisticssegment {\n  id                 String    @id @default(uuid()) @db.VarChar(36)\n  orderId            String    @db.VarChar(36)\n  segmentType        String    @db.VarChar(50)\n  carrierName        String?   @db.VarChar(100)\n  trackingNumber     String?   @db.VarChar(120)\n  statusLabel        String?   @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  remark             String?   @db.Text\n  timelineJson       Json? // 物流轨迹，格式：[{ \"time\": \"2026-07-11T10:00:00Z\", \"label\": \"已出库\" }]\n  createdAt          DateTime  @default(now())\n  updatedAt          DateTime  @default(now()) @updatedAt\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel orderoperationlog {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  orderId      String   @db.VarChar(36)\n  actionType   String   @db.VarChar(60)\n  actionNote   String?  @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel shippingtemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  countryCode      String?  @db.VarChar(10)\n  minWeightKg      Decimal? @db.Decimal(10, 3)\n  maxWeightKg      Decimal? @db.Decimal(10, 3)\n  minOrderAmount   Decimal? @db.Decimal(10, 2)\n  maxOrderAmount   Decimal? @db.Decimal(10, 2)\n  shippingFee      Decimal  @db.Decimal(10, 2)\n  freeShippingOver Decimal? @db.Decimal(10, 2)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n}\n\n/// 物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态\nmodel shippingchannel {\n  id                 String   @id @default(uuid()) @db.VarChar(36)\n  name               String   @db.VarChar(120)\n  estimatedTime      String   @db.VarChar(120)\n  /// 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）\n  billingMode        String   @default(\"EXPRESS_TIER\") @db.VarChar(30)\n  /// 渠道系数，最终运费 = 基础运费 × 系数，默认 1.00\n  channelCoefficient Decimal  @default(1.0000) @db.Decimal(10, 4)\n  /// 按国家运费规则（人民币 ¥）。\n  /// EXPRESS_TIER: { \"United States\": { \"tiers\": [{ \"maxKg\": 0.5, \"fee\": 10 }] } }\n  /// SEA_PER_KG:   { \"United States\": { \"baseKg\": 12, \"baseFee\": 180, \"perKgFee\": 12 } }\n  /// 兼容旧版固定价数字：{ \"United States\": 15.53 }\n  countryFeesJson    Json\n  isEnabled          Boolean  @default(true)\n  sortWeight         Int      @default(0)\n  createdAt          DateTime @default(now())\n  updatedAt          DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n  @@index([billingMode])\n}\n\nmodel currencysetting {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  currencyCode String   @unique @db.VarChar(10)\n  currencyName String   @db.VarChar(60)\n  exchangeRate Decimal  @db.Decimal(12, 6)\n  isDefault    Boolean  @default(false)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n}\n\nmodel taxrule {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  countryCode String   @db.VarChar(10)\n  countryName String?  @db.VarChar(100)\n  taxType     String   @db.VarChar(50)\n  taxRate     Decimal  @db.Decimal(6, 2)\n  taxNumber   String?  @db.VarChar(100)\n  isActive    Boolean  @default(true)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  @@index([countryCode])\n}\n\nmodel rolepermission {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  roleCode      String   @db.VarChar(50)\n  permissionKey String   @db.VarChar(100)\n  isAllowed     Boolean  @default(true)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  @@unique([roleCode, permissionKey])\n}\n\nmodel keywordgroup {\n  id                 String           @id @default(uuid()) @db.VarChar(36)\n  name               String           @db.VarChar(120)\n  slug               String?          @db.VarChar(120)\n  groupType          keywordgrouptype @default(GENERAL)\n  parentGroupId      String?          @db.VarChar(36)\n  sceneKey           String?          @db.VarChar(160)\n  sceneType          String?          @db.VarChar(80)\n  sceneArea          keywordscenearea @default(RECOMMENDATION)\n  sceneSlotKey       String?          @db.VarChar(160)\n  sceneSlotName      String?          @db.VarChar(120)\n  floorTitle         String?          @db.VarChar(160)\n  floorIcon          String?          @db.VarChar(160)\n  floorLink          String?          @db.VarChar(255)\n  homepageSortWeight Int              @default(0)\n  showOnHomepage     Boolean          @default(false)\n  sortWeight         Int              @default(0)\n  isActive           Boolean          @default(true)\n  description        String?          @db.Text\n  createdAt          DateTime         @default(now())\n  updatedAt          DateTime         @default(now()) @updatedAt\n\n  parentGroup    keywordgroup?         @relation(\"KeywordGroupTree\", fields: [parentGroupId], references: [id])\n  childrenGroups keywordgroup[]        @relation(\"KeywordGroupTree\")\n  keywords       keyworditem[]\n  categoryLinks  categorykeywordlink[]\n  productLinks   keywordgroupproduct[]\n\n  @@index([groupType])\n  @@index([parentGroupId])\n  @@index([sceneKey])\n  @@index([sceneType])\n  @@index([sceneArea])\n  @@index([sceneSlotKey])\n  @@index([showOnHomepage])\n  @@index([homepageSortWeight])\n  @@index([isActive])\n}\n\nmodel keyworditem {\n  id                String   @id @default(uuid()) @db.VarChar(36)\n  groupId           String   @db.VarChar(36)\n  parentKeywordId   String?  @db.VarChar(36)\n  keyword           String   @db.VarChar(160)\n  normalizedKeyword String?  @db.VarChar(160)\n  sortWeight        Int      @default(0)\n  isActive          Boolean  @default(true)\n  createdAt         DateTime @default(now())\n  updatedAt         DateTime @default(now()) @updatedAt\n\n  group            keywordgroup                @relation(fields: [groupId], references: [id])\n  parentKeyword    keyworditem?                @relation(\"KeywordItemTree\", fields: [parentKeywordId], references: [id])\n  childrenKeywords keyworditem[]               @relation(\"KeywordItemTree\")\n  categoryLinks    categorykeywordlink[]\n  productLinks     product_keyword_relations[]\n\n  @@index([groupId])\n  @@index([parentKeywordId])\n  @@index([normalizedKeyword])\n  @@index([isActive])\n}\n\nmodel categorykeywordlink {\n  id              String   @id @default(uuid()) @db.VarChar(36)\n  categoryId      String   @db.VarChar(36)\n  keywordGroupId  String   @db.VarChar(36)\n  keywordItemId   String?  @db.VarChar(36)\n  applyToHomepage Boolean  @default(false)\n  sortWeight      Int      @default(0)\n  createdAt       DateTime @default(now())\n  updatedAt       DateTime @default(now()) @updatedAt\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  keywordItem  keyworditem? @relation(fields: [keywordItemId], references: [id])\n\n  @@unique([categoryId, keywordGroupId, keywordItemId])\n  @@index([categoryId])\n  @@index([keywordGroupId])\n  @@index([keywordItemId])\n}\n\nmodel categorybanner {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  title      String?  @db.VarChar(150)\n  imageUrl   String   @db.VarChar(700)\n  linkUrl    String   @db.VarChar(1000)\n  sortWeight Int      @default(0)\n  isEnabled  Boolean  @default(true)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n}\n\nmodel product_category_relations {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  product  product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n  category category @relation(fields: [categoryId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, categoryId])\n  @@index([productId])\n  @@index([categoryId])\n}\n\nmodel product_keyword_relations {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  productId String   @db.VarChar(36)\n  keywordId String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  product product     @relation(fields: [productId], references: [id], onDelete: Cascade)\n  keyword keyworditem @relation(fields: [keywordId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, keywordId])\n  @@index([productId])\n  @@index([keywordId])\n}\n\nmodel keywordgroupproduct {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  keywordGroupId String   @db.VarChar(36)\n  productId      String   @db.VarChar(36)\n  sortWeight     Int      @default(0)\n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @default(now()) @updatedAt\n\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  product      product      @relation(fields: [productId], references: [id])\n\n  @@unique([keywordGroupId, productId])\n  @@index([keywordGroupId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n",
-  "inlineSchemaHash": "d2e683a7a928d560e27e2beefe26fc36b6abe27b08504b4d9ea37aec22428088",
+  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  // Custom path used by server/webpack (not node_modules default)\n  output        = \"../prisma-generated/client\"\n  // Dev may be Windows; prod ECS is Debian OpenSSL 3 — always include both\n  binaryTargets = [\"native\", \"debian-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"mysql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum userrole {\n  CUSTOMER\n  ADMIN\n  SUB_ADMIN\n}\n\nenum userstatus {\n  ACTIVE\n  DISABLED\n}\n\nenum categorystatus {\n  ACTIVE\n  INACTIVE\n}\n\nenum productstatus {\n  DRAFT\n  ACTIVE\n  INACTIVE\n  OUT_OF_STOCK\n  PREORDER\n}\n\nenum productsource {\n  MANUAL\n  IMPORT_1688\n  TABLE_IMPORT\n}\n\nenum stockstatus {\n  IN_STOCK\n  LOW_STOCK\n  OUT_OF_STOCK\n}\n\nenum cartitemstatus {\n  VALID\n  INVALID\n}\n\nenum importtaskstatus {\n  PENDING\n  RUNNING\n  COMPLETED\n  FAILED\n  QUEUED\n  RATE_LIMITED\n  PARTIAL_SUCCESS\n  RETRY_PENDING\n}\n\nenum materialtype {\n  GOLD_14K\n  GOLD_18K\n  SILVER_925\n  GOLD_PLATED\n  ROSE_GOLD\n  WHITE_GOLD\n  PEARL\n  GEMSTONE\n}\n\nenum gemstoneType {\n  DIAMOND\n  ZIRCON\n  PEARL\n  COLOR_GEM\n  NONE\n}\n\nenum jewelryproducttype {\n  RING\n  NECKLACE\n  EARRING\n  BRACELET\n  ANKLET\n  SET\n  MENS_JEWELRY\n  GIFT_BOX\n  CUSTOM_ENGRAVING\n}\n\nenum sitesettingtype {\n  PROMO_BAR\n  HERO_BANNER\n  CATEGORY_BANNER\n  HOT_MATERIAL\n  LOOKBOOK\n  TRUST_BADGE\n  HOT_SEARCH\n  FOOTER_LINK\n  FLOAT_CONTACT\n  HOMEPAGE_POSTER\n  HOME_SECTION\n  STATIC_COPY\n  EMAIL_TEMPLATE\n  PAYMENT_METHOD\n  CURRENCY_SETTING\n  EXCHANGE_RATE\n  SHIPPING_TEMPLATE\n  TAX_RULE\n  ROLE_PERMISSION\n  HOME_BRAND_SECTION\n  HOME_REVIEW_SECTION\n  HOME_FEATURED_KEYWORDS\n  FRONTEND_SCENE_SLOT\n}\n\nenum keywordgrouptype {\n  BRAND\n  NEW_ARRIVAL\n  PROMOTION\n  GENERAL\n}\n\nenum keywordscenearea {\n  LEFT_NAV\n  RECOMMENDATION\n  BOTH\n}\n\nenum homerecommendzonetype {\n  PRODUCT\n  CATEGORY\n  SIDE_NAV\n}\n\nenum wishlistitemstatus {\n  ACTIVE\n  MOVED_TO_CART\n}\n\nenum orderstatus {\n  PENDING_PAYMENT\n  PAID\n  PROCESSING\n  SHIPPED\n  DELIVERED\n  CANCELLED\n  REFUNDED\n}\n\nenum ordershipmethod {\n  STANDARD\n  EXPRESS\n}\n\nenum paymentmethodtype {\n  PAYPAL\n  BANK_TRANSFER\n  STRIPE\n  CREDIT_CARD\n}\n\nenum reviewstatus {\n  PUBLISHED\n  HIDDEN\n  PENDING\n}\n\nenum promotiontype {\n  FLASH_SALE\n  COUPON\n  NEW_CUSTOMER\n  HOLIDAY\n  FULL_REDUCTION\n  PERCENTAGE_DISCOUNT\n  BUY_X_GET_Y\n}\n\nenum ticketstatus {\n  OPEN\n  REPLIED\n  RESOLVED\n  CLOSED\n}\n\nenum customorderstatus {\n  PENDING_CONFIRMATION\n  IN_PRODUCTION\n  READY_TO_SHIP\n  SHIPPED\n  COMPLETED\n}\n\nmodel sysuser {\n  id                   String     @id @default(uuid()) @db.VarChar(36)\n  account              String     @unique @db.VarChar(50)\n  password             String     @db.VarChar(255)\n  email                String     @unique @db.VarChar(100)\n  role                 userrole\n  status               userstatus @default(ACTIVE)\n  username             String     @db.VarChar(100)\n  avatarUrl            String?    @db.VarChar(700)\n  phone                String?    @db.VarChar(30) // WhatsApp 号（前台注册同步写入）\n  preferredCurrency    String?    @db.VarChar(10)\n  preferredLocale      String?    @db.VarChar(20)\n  countryCode          String?    @db.VarChar(10)\n  countryName          String?    @db.VarChar(100)\n  purchaseCount        Int        @default(0)\n  adminNote            String?    @db.Text\n  customerType         String     @default(\"NEW\") @db.VarChar(20) // 客户类型：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED，后台可行内下拉修改\n  ringSizeUs           String?    @db.VarChar(20)\n  ringSizeEu           String?    @db.VarChar(20)\n  braceletSize         String?    @db.VarChar(20)\n  savedPreferencesJson Json? // 用户偏好，格式：{ \"recentMaterials\": [\"GOLD_14K\"], \"recentSearches\": [\"pearl ring\"] }\n  savedSizesJson       Json? // 保存尺寸，格式：[{ \"type\": \"ring\", \"label\": \"US 6\" }]\n  lastLoginAt          DateTime?\n  createdAt            DateTime   @default(now())\n  updatedAt            DateTime   @default(now()) @updatedAt\n\n  carts             cart[]\n  importTasks       importtask[]\n  importTaskItems   importtaskitem[]\n  addresses         useraddress[]\n  wishlists         wishlistitem[]\n  orders            orderrecord[]\n  reviews           productreview[]\n  tickets           customerticket[]\n  customOrders      customorder[]\n  customerTags      customertaglink[]\n  communicationLogs customercommunication[]\n}\n\nmodel category {\n  id                        String         @id @default(uuid()) @db.VarChar(36)\n  parentId                  String?        @db.VarChar(36)\n  level                     Int            @default(1) // 目录层级：1=一级分类，2=二级分类\n  name                      String         @db.VarChar(120)\n  slug                      String?        @db.VarChar(120)\n  imageUrl                  String?        @db.VarChar(700)\n  iconUrl                   String?        @db.VarChar(700)\n  bannerImageUrl            String?        @db.VarChar(700)\n  description               String?        @db.Text\n  seoTitle                  String?        @db.VarChar(200)\n  seoDescription            String?        @db.Text\n  seoKeywords               String?        @db.VarChar(300)\n  sortWeight                Int            @default(0) // 排序权重，数值越大越靠前\n  status                    categorystatus @default(ACTIVE)\n  path                      String?        @db.VarChar(500)\n  isBrandCategory           Boolean        @default(false)\n  brandCode                 String?        @db.VarChar(80)\n  brandKeywordsJson         Json? // 品牌关键词，格式：[{ \"keyword\": \"chanel\", \"weight\": 100 }, { \"keyword\": \"香奈儿\", \"weight\": 90 }]\n  homepageConfigJson        Json? // 首页联动配置，格式：{ \"showOnHome\": true, \"showInHotSection\": true, \"showInBrandSection\": false, \"heroTitle\": \"\", \"heroSubtitle\": \"\", \"heroButtonText\": \"\", \"heroButtonLink\": \"\" }\n  categoryDisplayConfigJson Json? // 类目展示配置，格式：{ \"showChildrenByDefault\": true, \"allowChildrenCollapse\": true, \"showBrandFilter\": false, \"brandFilterCollapsedRows\": 3 }\n  keywordMappingJson        Json? // 关键词映射配置，格式：{ \"groupIds\": [\"uuid\"], \"keywordIds\": [\"uuid\"], \"syncToHomepage\": true }\n  priceCoefficient          Decimal?       @db.Decimal(6, 2) // 售价系数（子级优先：二级有值用二级，否则用一级，都未设则前台按 1；成本价×系数换算展示）\n  translationsJson          Json? // 多语言字段，格式：{ \"zh\": {\"name\": \"戒指\"}, \"en\": {\"name\": \"Rings\"}, \"ar\": {\"name\": \"خواتم\"} }\n  seoTranslationsJson       Json? // 多语言SEO，格式：{ \"zh\": {\"title\": \"\", \"description\": \"\", \"keywords\": \"\"} }\n  createdAt                 DateTime       @default(now())\n  updatedAt                 DateTime       @default(now()) @updatedAt\n\n  parent             category?                     @relation(\"CategoryTree\", fields: [parentId], references: [id])\n  children           category[]                    @relation(\"CategoryTree\")\n  products           product[]\n  brandProducts      product[]                     @relation(\"BrandCategoryProducts\")\n  recommendZoneItems homeRecommendZoneItem[]\n  categoryFilters    categoryfilterbinding[]\n  categorySpecs      categoryspectemplatebinding[]\n  productLinks       productcategory[]\n  keywordLinks       categorykeywordlink[]\n  relationProducts   product_category_relations[]\n  navConfig          categorynavconfig?\n\n  @@index([parentId])\n  @@index([level])\n  @@index([status])\n  @@index([isBrandCategory])\n  @@index([brandCode])\n}\n\nmodel categorynavconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  navTitle   String?  @db.VarChar(120)\n  sortWeight Int      @default(0)\n  isVisible  Boolean  @default(true)\n  badgeText  String?  @db.VarChar(60)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([categoryId])\n  @@index([isVisible])\n  @@index([sortWeight])\n}\n\nmodel product {\n  id                      String             @id @default(uuid()) @db.VarChar(36)\n  categoryId              String             @db.VarChar(36) // FK → category.id\n  name                    String             @db.VarChar(200)\n  slug                    String             @unique @db.VarChar(200)\n  productCode             String             @unique @db.VarChar(100)\n  source                  productsource\n  supplierName            String?            @db.VarChar(160)\n  status                  productstatus      @default(DRAFT)\n  productType             jewelryproducttype @default(RING)\n  goodsStatus             String?            @db.VarChar(60)\n  costPrice               Decimal?           @db.Decimal(10, 2)\n  priceCoefficient        Decimal?           @db.Decimal(6, 2)\n  detailText              String?            @db.Text\n  brandName               String?            @db.VarChar(120)\n  brandCategoryId         String?            @db.VarChar(36)\n  brandMatchKeyword       String?            @db.VarChar(120)\n  autoBrandMatched        Boolean            @default(false)\n  materialType            materialtype?\n  gemstoneType            gemstoneType?      @default(NONE)\n  metalPurity             String?            @db.VarChar(50)\n  platingProcess          String?            @db.VarChar(120)\n  totalCarat              Decimal?           @db.Decimal(8, 2)\n  weightGram              Decimal?           @db.Decimal(8, 2)\n  mainImageUrl            String             @db.VarChar(700)\n  hoverImageUrl           String?            @db.VarChar(700)\n  wearImageUrl            String?            @db.VarChar(700)\n  videoUrl                String?            @db.VarChar(700)\n  rotate360Json           Json? // 360 视图，格式：[{ \"url\": \"图片URL\", \"sort\": 1 }]\n  galleryJson             Json // 商品相册，格式：[{ \"url\": \"图片URL\", \"sort\": 1, \"type\": \"image|detail|wear\" }]\n  shortDescription        String?            @db.Text\n  designStory             String?            @db.Text\n  translationsJson        Json? // 多语言商品信息，格式：{ \"zh\": {\"name\": \"\", \"shortDescription\": \"\", \"detail\": \"\"}, \"en\": {...}, \"ar\": {...} }\n  detailTranslationsJson  Json? // 多语言图文详情，格式：{ \"zh\": [{\"type\": \"text\", \"content\": \"\"}], \"en\": [...] }\n  sellingPointsJson       Json? // 商品卖点，格式：[{ \"title\": \"卖点标题\", \"content\": \"卖点内容\" }]\n  detailContentJson       Json? // 图文详情，格式：[{ \"type\": \"text|image\", \"content\": \"文本内容或图片URL\", \"title\": \"可选标题\" }]\n  parameterJson           Json? // 参数表，格式：[{ \"group\": \"参数分组\", \"items\": [{ \"key\": \"参数名\", \"value\": \"参数值\" }] }]\n  careGuideJson           Json? // 护理指南，格式：[{ \"title\": \"步骤\", \"content\": \"说明\" }]\n  sizeGuideJson           Json? // 尺码指南，格式：{ \"ring\": [...], \"necklace\": [...], \"printableUrl\": \"PDF链接\" }\n  engravingPreviewBaseUrl String?            @db.VarChar(700)\n  packagingImageUrl       String?            @db.VarChar(700)\n  certificateInfo         String?            @db.Text\n  tradeInfoJson           Json? // 物流与贸易说明，格式：{ \"shipFrom\": \"发货地\", \"deliveryDays\": 7, \"minOrderQty\": 1, \"supportedRegions\": [\"US\",\"EU\"], \"shippingNote\": \"运输说明\", \"tradeNotice\": \"注意事项\" }\n  faqJson                 Json? // 常见购买问题，格式：[{ \"question\": \"问题\", \"answer\": \"回答\" }]\n  ratingAverage           Float              @default(0) // 平均评分（X分，0-5）\n  ratingCount             Int                @default(0) // 评价数量（X个）\n  soldCount               Int                @default(0)\n  isNewArrival            Boolean            @default(false)\n  isBestSeller            Boolean            @default(false)\n  isLimitedDiscount       Boolean            @default(false)\n  sortWeight              Int                @default(0) // 排序权重，数值越大越靠前\n  /**\n   * 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt\n   */\n  publishedAt             DateTime?\n  createdAt               DateTime           @default(now())\n  updatedAt               DateTime           @default(now()) @updatedAt\n\n  category             category                      @relation(fields: [categoryId], references: [id])\n  brandCategory        category?                     @relation(\"BrandCategoryProducts\", fields: [brandCategoryId], references: [id])\n  skus                 productsku[]\n  cartItems            cartitem[]\n  importTaskItems      importtaskitem[]\n  reviews              productreview[]\n  wishlistItems        wishlistitem[]\n  lookbookLinks        lookbookproduct[]\n  orderItems           orderitem[]\n  customOrders         customorder[]\n  categoryLinks        productcategory[]\n  relationCategories   product_category_relations[]\n  relationKeywords     product_keyword_relations[]\n  keywordGroupLinks    keywordgroupproduct[]\n  recommendZoneItems   homeRecommendZoneItem[]\n  recommendCollections homeRecommendCollectionItem[]\n\n  @@index([categoryId])\n  @@index([brandCategoryId])\n  @@index([status])\n  @@index([productType])\n  @@index([materialType])\n  @@index([gemstoneType])\n  @@index([goodsStatus])\n  @@index([brandName])\n  @@index([publishedAt])\n}\n\nmodel productsku {\n  id                 String        @id @default(uuid()) @db.VarChar(36)\n  productId          String        @db.VarChar(36) // FK → product.id\n  skuCode            String        @unique @db.VarChar(100)\n  imageUrl           String?       @db.VarChar(700)\n  minOrderQty        Int? // SKU独立起订量；为空时继承商品级，若商品级也未设则前台按1\n  materialType       materialtype?\n  gemstoneType       gemstoneType? @default(NONE)\n  ringSizeUs         String?       @db.VarChar(20)\n  ringSizeEu         String?       @db.VarChar(20)\n  materialLabel      String?       @db.VarChar(60)\n  sizeLabel          String?       @db.VarChar(60)\n  necklaceLengthInch String?       @db.VarChar(20)\n  braceletLengthCm   String?       @db.VarChar(20)\n  engravingSupported Boolean       @default(false)\n  engravingMaxChars  Int?          @default(0)\n  fontOptionsJson    Json? // 字体选项，格式：[{ \"name\": \"Serif\", \"extraFee\": 5 }]\n  extraFee           Decimal?      @db.Decimal(10, 2)\n  price              Decimal       @db.Decimal(10, 2) // 售价（X元）\n  originalPrice      Decimal?      @db.Decimal(10, 2) // 原价（X元）\n  stock              Int           @default(0) // 库存（X个）\n  stockStatus        stockstatus   @default(IN_STOCK)\n  attributeJson      Json // SKU规格属性，格式：[{ \"name\": \"颜色\", \"value\": \"黑色\" }, { \"name\": \"尺寸\", \"value\": \"L\" }]\n  deliveryDays       Int? // 预计交期（X天）\n  weightKg           Decimal?      @db.Decimal(10, 3) // 重量（X千克）\n  volumeM3           Decimal?      @db.Decimal(10, 4) // 体积（X立方米）\n  createdAt          DateTime      @default(now())\n  updatedAt          DateTime      @default(now()) @updatedAt\n\n  product      product       @relation(fields: [productId], references: [id])\n  cartItems    cartitem[]\n  orderItems   orderitem[]\n  customOrders customorder[]\n\n  @@index([productId])\n  @@index([materialType])\n}\n\nmodel cart {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  accountId String   @unique @db.VarChar(36) // FK → sysuser.id\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  account sysuser    @relation(fields: [accountId], references: [id])\n  items   cartitem[]\n}\n\nmodel cartitem {\n  id                  String         @id @default(uuid()) @db.VarChar(36)\n  cartId              String         @db.VarChar(36) // FK → cart.id\n  productId           String         @db.VarChar(36) // FK → product.id\n  productSkuId        String         @db.VarChar(36) // FK → productsku.id\n  quantity            Int            @default(1) // 商品数量（X个）\n  engravingText       String?        @db.VarChar(120)\n  engravingFont       String?        @db.VarChar(50)\n  engravingPreviewUrl String?        @db.VarChar(700)\n  giftWrapSelected    Boolean        @default(false)\n  giftWrapFee         Decimal?       @db.Decimal(10, 2)\n  status              cartitemstatus @default(VALID)\n  createdAt           DateTime       @default(now())\n  updatedAt           DateTime       @default(now()) @updatedAt\n\n  cart       cart       @relation(fields: [cartId], references: [id])\n  product    product    @relation(fields: [productId], references: [id])\n  productSku productsku @relation(fields: [productSkuId], references: [id])\n\n  @@unique([cartId, productSkuId, engravingText, engravingFont])\n  @@index([cartId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel importtask {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  creatorId            String           @db.VarChar(36) // FK → sysuser.id\n  taskName             String           @db.VarChar(150)\n  status               importtaskstatus @default(PENDING)\n  sourceLinkCount      Int              @default(0) // 来源链接数量（X条）\n  successCount         Int              @default(0) // 成功数量（X条）\n  failureCount         Int              @default(0) // 失败数量（X条）\n  progressPercent      Int              @default(0) // 进度百分比（X%）\n  markupRate           Decimal?         @db.Decimal(5, 2) // 加价比例（X%）\n  defaultStatus        productstatus    @default(DRAFT)\n  defaultCategoryId    String?          @db.VarChar(36)\n  queueConcurrency     Int              @default(1) // 采集并发上限，默认串行或小并发\n  rateLimitMinDelaySec Int              @default(2) // 每次采集最小延迟秒数\n  rateLimitMaxDelaySec Int              @default(5) // 每次采集最大延迟秒数\n  startedAt            DateTime?\n  finishedAt           DateTime?\n  lastScheduledAt      DateTime?\n  lastRateLimitedAt    DateTime?\n  stockStrategyJson    Json? // 默认库存策略，格式：{ \"type\": \"fixed\", \"stock\": 100 }\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  creator sysuser          @relation(fields: [creatorId], references: [id])\n  items   importtaskitem[]\n\n  @@index([creatorId])\n  @@index([status])\n}\n\nmodel importtaskitem {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  importTaskId         String           @db.VarChar(36) // FK → importtask.id\n  operatorId           String           @db.VarChar(36) // FK → sysuser.id\n  sourceUrl            String           @db.VarChar(700)\n  parsedName           String?          @db.VarChar(200)\n  parsedMainImageUrl   String?          @db.VarChar(700)\n  parsedPriceMin       Decimal?         @db.Decimal(10, 2) // 解析最低价（X元）\n  parsedPriceMax       Decimal?         @db.Decimal(10, 2) // 解析最高价（X元）\n  supplierName         String?          @db.VarChar(150)\n  mainImageUrl         String?          @db.VarChar(700)\n  costPrice            Decimal?         @db.Decimal(10, 2) // 成本价（人民币）\n  weightGrams          Int? // 重量（克）\n  sourceCategoryName   String?          @db.VarChar(150) // 1688来源主类目名称\n  targetCategoryId     String?          @db.VarChar(36) // 发布到正式商品时使用的目标分类ID\n  coefficient          Decimal?         @db.Decimal(8, 2) // 当前成本系数\n  goodsStatus          productstatus? // 待上传项目标商品状态（上架/下架/缺货/预售等）\n  minimumOrderQuantity Int? // 起订量\n  availableStock       Int? // 可用库存\n  cnyPriceMin          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最低价\n  cnyPriceMax          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最高价\n  usdPriceMin          Decimal?         @db.Decimal(10, 2) // 美元预估区间最低价\n  usdPriceMax          Decimal?         @db.Decimal(10, 2) // 美元预估区间最高价\n  productDetail        String?          @db.LongText // 商品详情描述/图文摘要\n  skuSummaryText       String?          @db.LongText // SKU摘要文本，便于待上传列表直接编辑\n  fetchStatus          importtaskstatus @default(PENDING) // 单条采集状态：排队/抓取中/成功/失败/可重试\n  publishStatus        importtaskstatus @default(PENDING) // 单条发布状态：待发布/发布中/完成/失败/可重试\n  retryCount           Int              @default(0)\n  fetchStartedAt       DateTime?\n  fetchFinishedAt      DateTime?\n  publishStartedAt     DateTime?\n  publishedAt          DateTime?\n  specSummaryJson      Json? // 规格摘要，格式：[{ \"name\": \"颜色\", \"values\": [\"黑色\",\"白色\"] }]\n  previewDataJson      Json? // 导入/采集预览数据，格式：{ \"name\": \"商品名\", \"categoryId\": \"分类ID\", \"price\": 99.99, \"mainImageUrl\": \"图片URL\", \"shortDescription\": \"简述\", \"detailImages\": [\"图片URL1\"], \"skuTable\": [{ \"spec\": \"金色/7号\", \"costPrice\": 88.5, \"stock\": 20 }] }\n  isSelected           Boolean          @default(false)\n  isPublished          Boolean          @default(false)\n  importedProductId    String?          @db.VarChar(36) // FK → product.id\n  failureReason        String?          @db.Text\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  importTask      importtask @relation(fields: [importTaskId], references: [id])\n  operator        sysuser    @relation(fields: [operatorId], references: [id])\n  importedProduct product?   @relation(fields: [importedProductId], references: [id])\n\n  @@index([importTaskId])\n  @@index([operatorId])\n  @@index([importedProductId])\n  @@index([fetchStatus])\n  @@index([publishStatus])\n  @@index([isPublished])\n  @@index([targetCategoryId])\n}\n\nmodel useraddress {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  userId        String   @db.VarChar(36)\n  recipientName String   @db.VarChar(100)\n  phone         String?  @db.VarChar(30)\n  countryCode   String   @db.VarChar(10)\n  countryName   String   @db.VarChar(100)\n  stateName     String?  @db.VarChar(100)\n  cityName      String?  @db.VarChar(100)\n  addressLine1  String   @db.VarChar(255)\n  addressLine2  String?  @db.VarChar(255)\n  postalCode    String?  @db.VarChar(30)\n  isDefault     Boolean  @default(false)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  user   sysuser       @relation(fields: [userId], references: [id])\n  orders orderrecord[]\n\n  @@index([userId])\n}\n\nmodel wishlistitem {\n  id         String             @id @default(uuid()) @db.VarChar(36)\n  userId     String             @db.VarChar(36)\n  productId  String             @db.VarChar(36)\n  status     wishlistitemstatus @default(ACTIVE)\n  shareToken String?            @unique @db.VarChar(100)\n  createdAt  DateTime           @default(now())\n  updatedAt  DateTime           @default(now()) @updatedAt\n\n  user    sysuser @relation(fields: [userId], references: [id])\n  product product @relation(fields: [productId], references: [id])\n\n  @@unique([userId, productId])\n  @@index([userId])\n  @@index([productId])\n}\n\nmodel sitesetting {\n  id           String          @id @default(uuid()) @db.VarChar(36)\n  settingType  sitesettingtype\n  title        String          @db.VarChar(150)\n  subtitle     String?         @db.VarChar(200)\n  contentJson  Json // 配置内容，格式：{ \"items\": [...], \"link\": \"\", \"categoryId\": \"一级分类ID\" }\n  imageUrl     String?         @db.VarChar(700)\n  localeCode   String?         @db.VarChar(20)\n  currencyCode String?         @db.VarChar(10)\n  sortWeight   Int             @default(0)\n  isActive     Boolean         @default(true)\n  createdAt    DateTime        @default(now())\n  updatedAt    DateTime        @default(now()) @updatedAt\n\n  @@index([settingType])\n  @@index([isActive])\n}\n\nmodel lookbook {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  title       String   @db.VarChar(150)\n  subtitle    String?  @db.VarChar(200)\n  imageUrl    String   @db.VarChar(700)\n  videoUrl    String?  @db.VarChar(700)\n  description String?  @db.Text\n  isActive    Boolean  @default(true)\n  sortWeight  Int      @default(0)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  products lookbookproduct[]\n}\n\nmodel lookbookproduct {\n  id          String @id @default(uuid()) @db.VarChar(36)\n  lookbookId  String @db.VarChar(36)\n  productId   String @db.VarChar(36)\n  hotspotJson Json? // 热点信息，格式：{ \"x\": 50, \"y\": 40, \"label\": \"戒指\" }\n\n  lookbook lookbook @relation(fields: [lookbookId], references: [id])\n  product  product  @relation(fields: [productId], references: [id])\n\n  @@unique([lookbookId, productId])\n  @@index([lookbookId])\n  @@index([productId])\n}\n\nmodel homeRecommendCollection {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  name         String   @db.VarChar(150)\n  description  String?  @db.Text\n  sourceZoneId String?  @unique @db.VarChar(36)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  sourceZone        homeRecommendZone?            @relation(\"CollectionSourceZone\", fields: [sourceZoneId], references: [id])\n  collectionItems   homeRecommendCollectionItem[]\n  zonesUsingAsBound homeRecommendZone[]           @relation(\"ZoneBoundCollection\")\n\n  @@index([isActive])\n}\n\nmodel homeRecommendCollectionItem {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  collectionId String   @db.VarChar(36)\n  productId    String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  collection homeRecommendCollection @relation(fields: [collectionId], references: [id])\n  product    product                 @relation(fields: [productId], references: [id])\n\n  @@unique([collectionId, productId])\n  @@index([collectionId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZone {\n  id                String                @id @default(uuid()) @db.VarChar(36)\n  title             String                @db.VarChar(150)\n  zoneType          homerecommendzonetype\n  pcCols            Int                   @default(4)\n  mobileCols        Int                   @default(2)\n  pcRows            Int                   @default(2)\n  sortWeight        Int                   @default(0)\n  isActive          Boolean               @default(true)\n  boundCollectionId String?               @unique @db.VarChar(36)\n  createdAt         DateTime              @default(now())\n  updatedAt         DateTime              @default(now()) @updatedAt\n\n  sourceCollection homeRecommendCollection? @relation(\"CollectionSourceZone\")\n  boundCollection  homeRecommendCollection? @relation(\"ZoneBoundCollection\", fields: [boundCollectionId], references: [id])\n  items            homeRecommendZoneItem[]\n\n  @@index([zoneType])\n  @@index([isActive])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZoneItem {\n  id         String                @id @default(uuid()) @db.VarChar(36)\n  zoneId     String                @db.VarChar(36)\n  entityType homerecommendzonetype\n  productId  String?               @db.VarChar(36)\n  categoryId String?               @db.VarChar(36)\n  sortWeight Int                   @default(0)\n  createdAt  DateTime              @default(now())\n  updatedAt  DateTime              @default(now()) @updatedAt\n\n  zone     homeRecommendZone @relation(fields: [zoneId], references: [id])\n  product  product?          @relation(fields: [productId], references: [id])\n  category category?         @relation(fields: [categoryId], references: [id])\n\n  @@index([zoneId])\n  @@index([productId])\n  @@index([categoryId])\n  @@index([sortWeight])\n}\n\nmodel promotioncampaign {\n  id              String        @id @default(uuid()) @db.VarChar(36)\n  name            String        @db.VarChar(150)\n  promotionType   promotiontype\n  code            String?       @unique @db.VarChar(60)\n  discountPercent Decimal?      @db.Decimal(5, 2)\n  discountAmount  Decimal?      @db.Decimal(10, 2)\n  minOrderAmount  Decimal?      @db.Decimal(10, 2)\n  startAt         DateTime?\n  endAt           DateTime?\n  usageLimit      Int?\n  usedCount       Int           @default(0)\n  contentJson     Json? // 活动说明，格式：{ \"bannerText\": \"\", \"eligibleMaterials\": [] }\n  isActive        Boolean       @default(true)\n  createdAt       DateTime      @default(now())\n  updatedAt       DateTime      @default(now()) @updatedAt\n\n  orders       orderrecord[]\n  customOrders customorder[]\n\n  @@index([promotionType])\n  @@index([isActive])\n}\n\nmodel orderrecord {\n  id                 String            @id @default(uuid()) @db.VarChar(36)\n  orderNo            String            @unique @db.VarChar(60)\n  userId             String            @db.VarChar(36)\n  addressId          String?           @db.VarChar(36)\n  status             orderstatus       @default(PENDING_PAYMENT)\n  currencyCode       String            @db.VarChar(10)\n  localeCode         String?           @db.VarChar(20)\n  subtotalAmount     Decimal           @db.Decimal(10, 2)\n  discountAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  shippingAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  giftWrapAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  totalAmount        Decimal           @db.Decimal(10, 2)\n  paymentMethod      paymentmethodtype\n  paymentStatus      String?           @db.VarChar(50)\n  installmentInfo    String?           @db.VarChar(100)\n  couponId           String?           @db.VarChar(36)\n  shipMethod         ordershipmethod   @default(STANDARD)\n  trackingCarrier    String?           @db.VarChar(60)\n  trackingNumber     String?           @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  internalNote       String?           @db.Text\n  giftMessage        String?           @db.VarChar(255)\n  note               String?           @db.Text\n  createdAt          DateTime          @default(now())\n  updatedAt          DateTime          @default(now()) @updatedAt\n\n  user      sysuser                 @relation(fields: [userId], references: [id])\n  address   useraddress?            @relation(fields: [addressId], references: [id])\n  coupon    promotioncampaign?      @relation(fields: [couponId], references: [id])\n  items     orderitem[]\n  reviews   productreview[]\n  logistics orderlogisticssegment[]\n  logs      orderoperationlog[]\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel orderitem {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  orderId          String   @db.VarChar(36)\n  productId        String   @db.VarChar(36)\n  productSkuId     String   @db.VarChar(36)\n  productName      String   @db.VarChar(200)\n  skuCode          String   @db.VarChar(100)\n  materialLabel    String?  @db.VarChar(60)\n  sizeLabel        String?  @db.VarChar(60)\n  engravingText    String?  @db.VarChar(120)\n  engravingFont    String?  @db.VarChar(50)\n  quantity         Int      @default(1)\n  unitPrice        Decimal  @db.Decimal(10, 2)\n  lineAmount       Decimal  @db.Decimal(10, 2)\n  giftWrapSelected Boolean  @default(false)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  order      orderrecord @relation(fields: [orderId], references: [id])\n  product    product     @relation(fields: [productId], references: [id])\n  productSku productsku  @relation(fields: [productSkuId], references: [id])\n\n  @@index([orderId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel productreview {\n  id            String       @id @default(uuid()) @db.VarChar(36)\n  productId     String       @db.VarChar(36)\n  userId        String       @db.VarChar(36)\n  orderId       String?      @db.VarChar(36)\n  rating        Int\n  title         String?      @db.VarChar(150)\n  content       String?      @db.Text\n  imageUrlsJson Json? // 晒图，格式：[\"url1\", \"url2\"]\n  hasImages     Boolean      @default(false)\n  status        reviewstatus @default(PUBLISHED)\n  createdAt     DateTime     @default(now())\n  updatedAt     DateTime     @default(now()) @updatedAt\n\n  product product      @relation(fields: [productId], references: [id])\n  user    sysuser      @relation(fields: [userId], references: [id])\n  order   orderrecord? @relation(fields: [orderId], references: [id])\n\n  @@index([productId])\n  @@index([userId])\n  @@index([status])\n}\n\nmodel customorder {\n  id                  String            @id @default(uuid()) @db.VarChar(36)\n  orderId             String?           @unique @db.VarChar(36)\n  userId              String            @db.VarChar(36)\n  productId           String            @db.VarChar(36)\n  productSkuId        String            @db.VarChar(36)\n  promotionId         String?           @db.VarChar(36)\n  engravingText       String?           @db.VarChar(120)\n  engravingFont       String?           @db.VarChar(50)\n  engravingPreviewUrl String?           @db.VarChar(700)\n  status              customorderstatus @default(PENDING_CONFIRMATION)\n  productionNote      String?           @db.Text\n  shippingLabelUrl    String?           @db.VarChar(700)\n  completedAt         DateTime?\n  createdAt           DateTime          @default(now())\n  updatedAt           DateTime          @default(now()) @updatedAt\n\n  user       sysuser            @relation(fields: [userId], references: [id])\n  product    product            @relation(fields: [productId], references: [id])\n  productSku productsku         @relation(fields: [productSkuId], references: [id])\n  promotion  promotioncampaign? @relation(fields: [promotionId], references: [id])\n\n  @@index([userId])\n  @@index([productId])\n  @@index([productSkuId])\n  @@index([status])\n}\n\nmodel sizemapping {\n  id               String             @id @default(uuid()) @db.VarChar(36)\n  regionCode       String             @db.VarChar(20)\n  jewelryType      jewelryproducttype\n  sourceSize       String             @db.VarChar(20)\n  targetRegionCode String             @db.VarChar(20)\n  targetSize       String             @db.VarChar(20)\n  note             String?            @db.VarChar(200)\n  createdAt        DateTime           @default(now())\n  updatedAt        DateTime           @default(now()) @updatedAt\n\n  @@index([regionCode, jewelryType])\n}\n\nmodel customerticket {\n  id           String       @id @default(uuid()) @db.VarChar(36)\n  userId       String?      @db.VarChar(36)\n  contactName  String       @db.VarChar(100)\n  email        String?      @db.VarChar(120)\n  channel      String?      @db.VarChar(50)\n  subject      String       @db.VarChar(150)\n  content      String       @db.Text\n  status       ticketstatus @default(OPEN)\n  replyContent String?      @db.Text\n  createdAt    DateTime     @default(now())\n  updatedAt    DateTime     @default(now()) @updatedAt\n\n  user sysuser? @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel productcategory {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  isPrimary  Boolean  @default(false)\n  createdAt  DateTime @default(now())\n\n  product  product  @relation(fields: [productId], references: [id])\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([productId, categoryId])\n  @@index([categoryId])\n}\n\nmodel filterspec {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  inputType        String   @db.VarChar(50)\n  optionJson       Json? // 筛选项选项，格式：[{ \"label\": \"Gold\", \"value\": \"gold\" }]\n  translationsJson Json? // 多语言名称，格式：{ \"zh\": {\"name\": \"材质\"}, \"en\": {\"name\": \"Material\"} }\n  sortWeight       Int      @default(0)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryfilterbinding[]\n}\n\nmodel categoryfilterbinding {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  categoryId   String   @db.VarChar(36)\n  filterSpecId String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n\n  category   category   @relation(fields: [categoryId], references: [id])\n  filterSpec filterspec @relation(fields: [filterSpecId], references: [id])\n\n  @@unique([categoryId, filterSpecId])\n  @@index([filterSpecId])\n}\n\nmodel spectemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  fieldsJson       Json // 规格模板字段，格式：[{ \"name\": \"ringSize\", \"label\": \"戒指尺寸\", \"type\": \"select\" }]\n  translationsJson Json? // 多语言模板信息，格式：{ \"zh\": {\"name\": \"戒指尺寸\"}, \"en\": {\"name\": \"Ring Size\"} }\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryspectemplatebinding[]\n}\n\nmodel categoryspectemplatebinding {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  categoryId     String   @db.VarChar(36)\n  specTemplateId String   @db.VarChar(36)\n  createdAt      DateTime @default(now())\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  specTemplate spectemplate @relation(fields: [specTemplateId], references: [id])\n\n  @@unique([categoryId, specTemplateId])\n  @@index([specTemplateId])\n}\n\nmodel customertag {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  name        String   @db.VarChar(120)\n  code        String   @unique @db.VarChar(100)\n  color       String?  @db.VarChar(30)\n  description String?  @db.Text\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  userLinks customertaglink[]\n}\n\nmodel customertaglink {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  userId    String   @db.VarChar(36)\n  tagId     String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n\n  user sysuser     @relation(fields: [userId], references: [id])\n  tag  customertag @relation(fields: [tagId], references: [id])\n\n  @@unique([userId, tagId])\n  @@index([tagId])\n}\n\nmodel customercommunication {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  userId       String   @db.VarChar(36)\n  channel      String   @db.VarChar(50)\n  content      String   @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  user sysuser @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n}\n\nmodel orderlogisticssegment {\n  id                 String    @id @default(uuid()) @db.VarChar(36)\n  orderId            String    @db.VarChar(36)\n  segmentType        String    @db.VarChar(50)\n  carrierName        String?   @db.VarChar(100)\n  trackingNumber     String?   @db.VarChar(120)\n  statusLabel        String?   @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  remark             String?   @db.Text\n  timelineJson       Json? // 物流轨迹，格式：[{ \"time\": \"2026-07-11T10:00:00Z\", \"label\": \"已出库\" }]\n  createdAt          DateTime  @default(now())\n  updatedAt          DateTime  @default(now()) @updatedAt\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel orderoperationlog {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  orderId      String   @db.VarChar(36)\n  actionType   String   @db.VarChar(60)\n  actionNote   String?  @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel shippingtemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  countryCode      String?  @db.VarChar(10)\n  minWeightKg      Decimal? @db.Decimal(10, 3)\n  maxWeightKg      Decimal? @db.Decimal(10, 3)\n  minOrderAmount   Decimal? @db.Decimal(10, 2)\n  maxOrderAmount   Decimal? @db.Decimal(10, 2)\n  shippingFee      Decimal  @db.Decimal(10, 2)\n  freeShippingOver Decimal? @db.Decimal(10, 2)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n}\n\n/// 物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态\nmodel shippingchannel {\n  id                 String   @id @default(uuid()) @db.VarChar(36)\n  name               String   @db.VarChar(120)\n  estimatedTime      String   @db.VarChar(120)\n  /// 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）\n  billingMode        String   @default(\"EXPRESS_TIER\") @db.VarChar(30)\n  /// 渠道系数，最终运费 = 基础运费 × 系数，默认 1.00\n  channelCoefficient Decimal  @default(1.0000) @db.Decimal(10, 4)\n  /// 按国家运费规则（人民币 ¥）。\n  /// EXPRESS_TIER: { \"United States\": { \"tiers\": [{ \"maxKg\": 0.5, \"fee\": 10 }] } }\n  /// SEA_PER_KG:   { \"United States\": { \"baseKg\": 12, \"baseFee\": 180, \"perKgFee\": 12 } }\n  /// 兼容旧版固定价数字：{ \"United States\": 15.53 }\n  countryFeesJson    Json\n  isEnabled          Boolean  @default(true)\n  sortWeight         Int      @default(0)\n  createdAt          DateTime @default(now())\n  updatedAt          DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n  @@index([billingMode])\n}\n\nmodel currencysetting {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  currencyCode String   @unique @db.VarChar(10)\n  currencyName String   @db.VarChar(60)\n  exchangeRate Decimal  @db.Decimal(12, 6)\n  isDefault    Boolean  @default(false)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n}\n\nmodel taxrule {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  countryCode String   @db.VarChar(10)\n  countryName String?  @db.VarChar(100)\n  taxType     String   @db.VarChar(50)\n  taxRate     Decimal  @db.Decimal(6, 2)\n  taxNumber   String?  @db.VarChar(100)\n  isActive    Boolean  @default(true)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  @@index([countryCode])\n}\n\nmodel rolepermission {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  roleCode      String   @db.VarChar(50)\n  permissionKey String   @db.VarChar(100)\n  isAllowed     Boolean  @default(true)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  @@unique([roleCode, permissionKey])\n}\n\nmodel keywordgroup {\n  id                 String           @id @default(uuid()) @db.VarChar(36)\n  name               String           @db.VarChar(120)\n  slug               String?          @db.VarChar(120)\n  groupType          keywordgrouptype @default(GENERAL)\n  parentGroupId      String?          @db.VarChar(36)\n  sceneKey           String?          @db.VarChar(160)\n  sceneType          String?          @db.VarChar(80)\n  sceneArea          keywordscenearea @default(RECOMMENDATION)\n  sceneSlotKey       String?          @db.VarChar(160)\n  sceneSlotName      String?          @db.VarChar(120)\n  floorTitle         String?          @db.VarChar(160)\n  floorIcon          String?          @db.VarChar(160)\n  floorLink          String?          @db.VarChar(255)\n  homepageSortWeight Int              @default(0)\n  showOnHomepage     Boolean          @default(false)\n  sortWeight         Int              @default(0)\n  isActive           Boolean          @default(true)\n  description        String?          @db.Text\n  createdAt          DateTime         @default(now())\n  updatedAt          DateTime         @default(now()) @updatedAt\n\n  parentGroup    keywordgroup?         @relation(\"KeywordGroupTree\", fields: [parentGroupId], references: [id])\n  childrenGroups keywordgroup[]        @relation(\"KeywordGroupTree\")\n  keywords       keyworditem[]\n  categoryLinks  categorykeywordlink[]\n  productLinks   keywordgroupproduct[]\n\n  @@index([groupType])\n  @@index([parentGroupId])\n  @@index([sceneKey])\n  @@index([sceneType])\n  @@index([sceneArea])\n  @@index([sceneSlotKey])\n  @@index([showOnHomepage])\n  @@index([homepageSortWeight])\n  @@index([isActive])\n}\n\nmodel keyworditem {\n  id                String   @id @default(uuid()) @db.VarChar(36)\n  groupId           String   @db.VarChar(36)\n  parentKeywordId   String?  @db.VarChar(36)\n  keyword           String   @db.VarChar(160)\n  normalizedKeyword String?  @db.VarChar(160)\n  sortWeight        Int      @default(0)\n  isActive          Boolean  @default(true)\n  createdAt         DateTime @default(now())\n  updatedAt         DateTime @default(now()) @updatedAt\n\n  group            keywordgroup                @relation(fields: [groupId], references: [id])\n  parentKeyword    keyworditem?                @relation(\"KeywordItemTree\", fields: [parentKeywordId], references: [id])\n  childrenKeywords keyworditem[]               @relation(\"KeywordItemTree\")\n  categoryLinks    categorykeywordlink[]\n  productLinks     product_keyword_relations[]\n\n  @@index([groupId])\n  @@index([parentKeywordId])\n  @@index([normalizedKeyword])\n  @@index([isActive])\n}\n\nmodel categorykeywordlink {\n  id              String   @id @default(uuid()) @db.VarChar(36)\n  categoryId      String   @db.VarChar(36)\n  keywordGroupId  String   @db.VarChar(36)\n  keywordItemId   String?  @db.VarChar(36)\n  applyToHomepage Boolean  @default(false)\n  sortWeight      Int      @default(0)\n  createdAt       DateTime @default(now())\n  updatedAt       DateTime @default(now()) @updatedAt\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  keywordItem  keyworditem? @relation(fields: [keywordItemId], references: [id])\n\n  @@unique([categoryId, keywordGroupId, keywordItemId])\n  @@index([categoryId])\n  @@index([keywordGroupId])\n  @@index([keywordItemId])\n}\n\nmodel categorybanner {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  title      String?  @db.VarChar(150)\n  imageUrl   String   @db.VarChar(700)\n  linkUrl    String   @db.VarChar(1000)\n  sortWeight Int      @default(0)\n  isEnabled  Boolean  @default(true)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n}\n\nmodel product_category_relations {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  product  product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n  category category @relation(fields: [categoryId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, categoryId])\n  @@index([productId])\n  @@index([categoryId])\n}\n\nmodel product_keyword_relations {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  productId String   @db.VarChar(36)\n  keywordId String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  product product     @relation(fields: [productId], references: [id], onDelete: Cascade)\n  keyword keyworditem @relation(fields: [keywordId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, keywordId])\n  @@index([productId])\n  @@index([keywordId])\n}\n\nmodel keywordgroupproduct {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  keywordGroupId String   @db.VarChar(36)\n  productId      String   @db.VarChar(36)\n  sortWeight     Int      @default(0)\n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @default(now()) @updatedAt\n\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  product      product      @relation(fields: [productId], references: [id])\n\n  @@unique([keywordGroupId, productId])\n  @@index([keywordGroupId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\n/// 商品标题后缀预设（“批量加后缀”下拉框数据源，支持自定义 CRUD）\nmodel suffixconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  suffixName String   @unique @map(\"suffix_name\") @db.VarChar(120)\n  sortWeight Int      @default(0)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([sortWeight])\n  @@map(\"suffix_config\")\n}\n\n/// 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD\nmodel brandalias {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  alias        String   @unique @db.VarChar(120)\n  standardName String   @map(\"standard_name\") @db.VarChar(120)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  @@index([sortWeight])\n  @@map(\"brand_alias\")\n}\n",
+  "inlineSchemaHash": "ae204b55d126e36fbce4d056c10b36bc5aa2dbe1d1beda781d2004c758aa2429",
   "copyEngine": true
 }
 
@@ -120498,7 +126541,7 @@ if (!fs.existsSync(path.join(__dirname, 'schema.prisma'))) {
   config.isBundled = true
 }
 
-config.runtimeDataModel = JSON.parse("{\"models\":{\"sysuser\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"account\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"password\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"passwordPlain\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"* 明文密码（仅供后台客服协助；登录仍校验 password 哈希）\"},{\"name\":\"email\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"role\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"userrole\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"userstatus\",\"nativeType\":null,\"default\":\"ACTIVE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"username\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"avatarUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"phone\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"preferredCurrency\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"preferredLocale\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"purchaseCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"adminNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeUs\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeEu\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"braceletSize\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"savedPreferencesJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"savedSizesJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lastLoginAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"carts\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cart\",\"nativeType\":null,\"relationName\":\"cartTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTasks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtask\",\"nativeType\":null,\"relationName\":\"importtaskTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTaskItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtaskitem\",\"nativeType\":null,\"relationName\":\"importtaskitemTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addresses\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"useraddress\",\"nativeType\":null,\"relationName\":\"sysuserTouseraddress\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"wishlists\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"wishlistitem\",\"nativeType\":null,\"relationName\":\"sysuserTowishlistitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"reviews\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productreview\",\"nativeType\":null,\"relationName\":\"productreviewTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tickets\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customerticket\",\"nativeType\":null,\"relationName\":\"customerticketTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customerTags\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customertaglink\",\"nativeType\":null,\"relationName\":\"customertaglinkTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"communicationLogs\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customercommunication\",\"nativeType\":null,\"relationName\":\"customercommunicationTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"category\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"level\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"slug\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"iconUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"bannerImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoTitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoDescription\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoKeywords\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"300\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"categorystatus\",\"nativeType\":null,\"default\":\"ACTIVE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"path\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"500\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isBrandCategory\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"80\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandKeywordsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"homepageConfigJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryDisplayConfigJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordMappingJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"priceCoefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"6\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoTranslationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"parent\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"CategoryTree\",\"relationFromFields\":[\"parentId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"children\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"CategoryTree\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"products\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"categoryToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandProducts\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"BrandCategoryProducts\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recommendZoneItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZoneItem\",\"nativeType\":null,\"relationName\":\"categoryTohomeRecommendZoneItem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryFilters\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryfilterbinding\",\"nativeType\":null,\"relationName\":\"categoryTocategoryfilterbinding\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categorySpecs\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryspectemplatebinding\",\"nativeType\":null,\"relationName\":\"categoryTocategoryspectemplatebinding\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productcategory\",\"nativeType\":null,\"relationName\":\"categoryToproductcategory\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorykeywordlink\",\"nativeType\":null,\"relationName\":\"categoryTocategorykeywordlink\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"relationProducts\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_category_relations\",\"nativeType\":null,\"relationName\":\"categoryToproduct_category_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"navConfig\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorynavconfig\",\"nativeType\":null,\"relationName\":\"categoryTocategorynavconfig\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categorynavconfig\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"navTitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isVisible\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"badgeText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategorynavconfig\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\"]}],\"isGenerated\":false},\"product\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"slug\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"source\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsource\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"supplierName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"productstatus\",\"nativeType\":null,\"default\":\"DRAFT\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"jewelryproducttype\",\"nativeType\":null,\"default\":\"RING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"goodsStatus\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"costPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"priceCoefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"6\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"detailText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandCategoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandMatchKeyword\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"autoBrandMatched\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"materialtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"gemstoneType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"gemstoneType\",\"nativeType\":null,\"default\":\"NONE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"metalPurity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"platingProcess\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"totalCarat\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"8\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"weightGram\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"8\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"mainImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"hoverImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"wearImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"videoUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rotate360Json\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"galleryJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shortDescription\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"designStory\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"detailTranslationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sellingPointsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"detailContentJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parameterJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"careGuideJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sizeGuideJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingPreviewBaseUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"packagingImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"certificateInfo\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tradeInfoJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"faqJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ratingAverage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Float\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ratingCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"soldCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isNewArrival\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isBestSeller\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isLimitedDiscount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"* 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryToproduct\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandCategory\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"BrandCategoryProducts\",\"relationFromFields\":[\"brandCategoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skus\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"productToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cartItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cartitem\",\"nativeType\":null,\"relationName\":\"cartitemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTaskItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtaskitem\",\"nativeType\":null,\"relationName\":\"importtaskitemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"reviews\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productreview\",\"nativeType\":null,\"relationName\":\"productToproductreview\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"wishlistItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"wishlistitem\",\"nativeType\":null,\"relationName\":\"productTowishlistitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lookbookLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"lookbookproduct\",\"nativeType\":null,\"relationName\":\"lookbookproductToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderitem\",\"nativeType\":null,\"relationName\":\"orderitemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productcategory\",\"nativeType\":null,\"relationName\":\"productToproductcategory\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"relationCategories\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_category_relations\",\"nativeType\":null,\"relationName\":\"productToproduct_category_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"relationKeywords\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_keyword_relations\",\"nativeType\":null,\"relationName\":\"productToproduct_keyword_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroupLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroupproduct\",\"nativeType\":null,\"relationName\":\"keywordgroupproductToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recommendZoneItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZoneItem\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneItemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recommendCollections\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollectionItem\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionItemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"productsku\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skuCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minOrderQty\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"materialtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"gemstoneType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"gemstoneType\",\"nativeType\":null,\"default\":\"NONE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeUs\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeEu\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sizeLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"necklaceLengthInch\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"braceletLengthCm\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingSupported\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingMaxChars\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fontOptionsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"extraFee\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"price\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"originalPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stock\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stockStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"stockstatus\",\"nativeType\":null,\"default\":\"IN_STOCK\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"attributeJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"deliveryDays\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"weightKg\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"3\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"volumeM3\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"4\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproductsku\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cartItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cartitem\",\"nativeType\":null,\"relationName\":\"cartitemToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderitem\",\"nativeType\":null,\"relationName\":\"orderitemToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"cart\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"accountId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"account\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"cartTosysuser\",\"relationFromFields\":[\"accountId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cartitem\",\"nativeType\":null,\"relationName\":\"cartTocartitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"cartitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cartId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSkuId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"quantity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingFont\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingPreviewUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapSelected\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapFee\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"cartitemstatus\",\"nativeType\":null,\"default\":\"VALID\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"cart\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cart\",\"nativeType\":null,\"relationName\":\"cartTocartitem\",\"relationFromFields\":[\"cartId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"cartitemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSku\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"cartitemToproductsku\",\"relationFromFields\":[\"productSkuId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"cartId\",\"productSkuId\",\"engravingText\",\"engravingFont\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"cartId\",\"productSkuId\",\"engravingText\",\"engravingFont\"]}],\"isGenerated\":false},\"importtask\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"creatorId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taskName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"importtaskstatus\",\"nativeType\":null,\"default\":\"PENDING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceLinkCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"successCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"failureCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"progressPercent\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"markupRate\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"5\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"defaultStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"productstatus\",\"nativeType\":null,\"default\":\"DRAFT\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"defaultCategoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"queueConcurrency\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rateLimitMinDelaySec\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":2,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rateLimitMaxDelaySec\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":5,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"startedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"finishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lastScheduledAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lastRateLimitedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stockStrategyJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"creator\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"importtaskTosysuser\",\"relationFromFields\":[\"creatorId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtaskitem\",\"nativeType\":null,\"relationName\":\"importtaskToimporttaskitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"importtaskitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTaskId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operatorId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedMainImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedPriceMin\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedPriceMax\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"supplierName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"mainImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"costPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"weightGrams\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceCategoryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"targetCategoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"coefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"8\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"goodsStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productstatus\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minimumOrderQuantity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"availableStock\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cnyPriceMin\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cnyPriceMax\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usdPriceMin\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usdPriceMax\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productDetail\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"LongText\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skuSummaryText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"LongText\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fetchStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"importtaskstatus\",\"nativeType\":null,\"default\":\"PENDING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"importtaskstatus\",\"nativeType\":null,\"default\":\"PENDING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"retryCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fetchStartedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fetchFinishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishStartedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"specSummaryJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"previewDataJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isSelected\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isPublished\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importedProductId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"failureReason\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"importTask\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtask\",\"nativeType\":null,\"relationName\":\"importtaskToimporttaskitem\",\"relationFromFields\":[\"importTaskId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operator\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"importtaskitemTosysuser\",\"relationFromFields\":[\"operatorId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importedProduct\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"importtaskitemToproduct\",\"relationFromFields\":[\"importedProductId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"useraddress\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recipientName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"phone\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stateName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cityName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addressLine1\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addressLine2\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"postalCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isDefault\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"sysuserTouseraddress\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordTouseraddress\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"wishlistitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"wishlistitemstatus\",\"nativeType\":null,\"default\":\"ACTIVE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shareToken\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"sysuserTowishlistitem\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productTowishlistitem\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"userId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"userId\",\"productId\"]}],\"isGenerated\":false},\"sitesetting\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"settingType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sitesettingtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subtitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"contentJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"localeCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"lookbook\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subtitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"videoUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"products\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"lookbookproduct\",\"nativeType\":null,\"relationName\":\"lookbookTolookbookproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"lookbookproduct\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lookbookId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"hotspotJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lookbook\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"lookbook\",\"nativeType\":null,\"relationName\":\"lookbookTolookbookproduct\",\"relationFromFields\":[\"lookbookId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"lookbookproductToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"lookbookId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"lookbookId\",\"productId\"]}],\"isGenerated\":false},\"homeRecommendCollection\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceZoneId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"sourceZone\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZone\",\"nativeType\":null,\"relationName\":\"CollectionSourceZone\",\"relationFromFields\":[\"sourceZoneId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"collectionItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollectionItem\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionTohomeRecommendCollectionItem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"zonesUsingAsBound\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZone\",\"nativeType\":null,\"relationName\":\"ZoneBoundCollection\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"homeRecommendCollectionItem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"collectionId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"collection\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollection\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionTohomeRecommendCollectionItem\",\"relationFromFields\":[\"collectionId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionItemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"collectionId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"collectionId\",\"productId\"]}],\"isGenerated\":false},\"homeRecommendZone\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"zoneType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homerecommendzonetype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"pcCols\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":4,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"mobileCols\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":2,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"pcRows\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":2,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"boundCollectionId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"sourceCollection\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollection\",\"nativeType\":null,\"relationName\":\"CollectionSourceZone\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"boundCollection\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollection\",\"nativeType\":null,\"relationName\":\"ZoneBoundCollection\",\"relationFromFields\":[\"boundCollectionId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZoneItem\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneTohomeRecommendZoneItem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"homeRecommendZoneItem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"zoneId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"entityType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homerecommendzonetype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"zone\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZone\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneTohomeRecommendZoneItem\",\"relationFromFields\":[\"zoneId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneItemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTohomeRecommendZoneItem\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"promotioncampaign\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"promotionType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"promotiontype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"discountPercent\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"5\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"discountAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minOrderAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"startAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"endAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usageLimit\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usedCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"contentJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"orders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordTopromotioncampaign\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderTopromotioncampaign\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderrecord\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderNo\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addressId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"orderstatus\",\"nativeType\":null,\"default\":\"PENDING_PAYMENT\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"localeCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subtotalAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"discountAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippingAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"totalAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"paymentMethod\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"paymentmethodtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"paymentStatus\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"installmentInfo\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"couponId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shipMethod\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"ordershipmethod\",\"nativeType\":null,\"default\":\"STANDARD\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"trackingCarrier\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"trackingNumber\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"estimatedArrivalAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"internalNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftMessage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"note\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"orderrecordTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"address\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"useraddress\",\"nativeType\":null,\"relationName\":\"orderrecordTouseraddress\",\"relationFromFields\":[\"addressId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"coupon\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"promotioncampaign\",\"nativeType\":null,\"relationName\":\"orderrecordTopromotioncampaign\",\"relationFromFields\":[\"couponId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderitem\",\"nativeType\":null,\"relationName\":\"orderitemToorderrecord\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"reviews\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productreview\",\"nativeType\":null,\"relationName\":\"orderrecordToproductreview\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"logistics\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderlogisticssegment\",\"nativeType\":null,\"relationName\":\"orderlogisticssegmentToorderrecord\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"logs\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderoperationlog\",\"nativeType\":null,\"relationName\":\"orderoperationlogToorderrecord\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSkuId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skuCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sizeLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingFont\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"quantity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"unitPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lineAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapSelected\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderitemToorderrecord\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"orderitemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSku\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"orderitemToproductsku\",\"relationFromFields\":[\"productSkuId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"productreview\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rating\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"content\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrlsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"hasImages\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"reviewstatus\",\"nativeType\":null,\"default\":\"PUBLISHED\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproductreview\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"productreviewTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordToproductreview\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"customorder\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSkuId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"promotionId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingFont\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingPreviewUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"customorderstatus\",\"nativeType\":null,\"default\":\"PENDING_CONFIRMATION\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productionNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippingLabelUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"completedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customorderTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"customorderToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSku\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"customorderToproductsku\",\"relationFromFields\":[\"productSkuId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"promotion\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"promotioncampaign\",\"nativeType\":null,\"relationName\":\"customorderTopromotioncampaign\",\"relationFromFields\":[\"promotionId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"sizemapping\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"regionCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"jewelryType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"jewelryproducttype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceSize\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"targetRegionCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"targetSize\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"note\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"customerticket\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"contactName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"email\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"channel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subject\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"content\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"ticketstatus\",\"nativeType\":null,\"default\":\"OPEN\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"replyContent\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customerticketTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"productcategory\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isPrimary\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproductcategory\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryToproductcategory\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"productId\",\"categoryId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"productId\",\"categoryId\"]}],\"isGenerated\":false},\"filterspec\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"inputType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"optionJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"categoryBindings\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryfilterbinding\",\"nativeType\":null,\"relationName\":\"categoryfilterbindingTofilterspec\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categoryfilterbinding\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"filterSpecId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategoryfilterbinding\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"filterSpec\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"filterspec\",\"nativeType\":null,\"relationName\":\"categoryfilterbindingTofilterspec\",\"relationFromFields\":[\"filterSpecId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\",\"filterSpecId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\",\"filterSpecId\"]}],\"isGenerated\":false},\"spectemplate\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fieldsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"categoryBindings\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryspectemplatebinding\",\"nativeType\":null,\"relationName\":\"categoryspectemplatebindingTospectemplate\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categoryspectemplatebinding\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"specTemplateId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategoryspectemplatebinding\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"specTemplate\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"spectemplate\",\"nativeType\":null,\"relationName\":\"categoryspectemplatebindingTospectemplate\",\"relationFromFields\":[\"specTemplateId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\",\"specTemplateId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\",\"specTemplateId\"]}],\"isGenerated\":false},\"customertag\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"color\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"userLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customertaglink\",\"nativeType\":null,\"relationName\":\"customertagTocustomertaglink\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"customertaglink\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tagId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customertaglinkTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tag\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customertag\",\"nativeType\":null,\"relationName\":\"customertagTocustomertaglink\",\"relationFromFields\":[\"tagId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"userId\",\"tagId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"userId\",\"tagId\"]}],\"isGenerated\":false},\"customercommunication\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"channel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"content\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operatorName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customercommunicationTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderlogisticssegment\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"segmentType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"carrierName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"trackingNumber\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"statusLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"estimatedArrivalAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"remark\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"timelineJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderlogisticssegmentToorderrecord\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderoperationlog\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"actionType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"actionNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operatorName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderoperationlogToorderrecord\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"shippingtemplate\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minWeightKg\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"3\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"maxWeightKg\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"3\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minOrderAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"maxOrderAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippingFee\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"freeShippingOver\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"shippingchannel\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"estimatedTime\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"billingMode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"default\":\"EXPRESS_TIER\",\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）\"},{\"name\":\"channelCoefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"4\"]],\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"渠道系数，最终运费 = 基础运费 × 系数，默认 1.00\"},{\"name\":\"countryFeesJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"按国家运费规则（人民币 ¥）。\\\\nEXPRESS_TIER: { \\\"United States\\\": { \\\"tiers\\\": [{ \\\"maxKg\\\": 0.5, \\\"fee\\\": 10 }] } }\\\\nSEA_PER_KG:   { \\\"United States\\\": { \\\"baseKg\\\": 12, \\\"baseFee\\\": 180, \\\"perKgFee\\\": 12 } }\\\\n兼容旧版固定价数字：{ \\\"United States\\\": 15.53 }\"},{\"name\":\"isEnabled\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false,\"documentation\":\"物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态\"},\"currencysetting\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"exchangeRate\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"12\",\"6\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isDefault\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"taxrule\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taxType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taxRate\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"6\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taxNumber\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"rolepermission\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"roleCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"permissionKey\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isAllowed\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[[\"roleCode\",\"permissionKey\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"roleCode\",\"permissionKey\"]}],\"isGenerated\":false},\"keywordgroup\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"slug\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"groupType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"keywordgrouptype\",\"nativeType\":null,\"default\":\"GENERAL\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentGroupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneKey\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"80\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneArea\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"keywordscenearea\",\"nativeType\":null,\"default\":\"RECOMMENDATION\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneSlotKey\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneSlotName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"floorTitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"floorIcon\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"floorLink\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"homepageSortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"showOnHomepage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"parentGroup\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"KeywordGroupTree\",\"relationFromFields\":[\"parentGroupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"childrenGroups\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"KeywordGroupTree\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywords\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeyworditem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorykeywordlink\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeywordgroup\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroupproduct\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeywordgroupproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"keyworditem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"groupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentKeywordId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keyword\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"normalizedKeyword\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"group\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeyworditem\",\"relationFromFields\":[\"groupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentKeyword\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"KeywordItemTree\",\"relationFromFields\":[\"parentKeywordId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"childrenKeywords\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"KeywordItemTree\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorykeywordlink\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeyworditem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_keyword_relations\",\"nativeType\":null,\"relationName\":\"keyworditemToproduct_keyword_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categorykeywordlink\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordItemId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"applyToHomepage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategorykeywordlink\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroup\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeywordgroup\",\"relationFromFields\":[\"keywordGroupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordItem\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeyworditem\",\"relationFromFields\":[\"keywordItemId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\",\"keywordGroupId\",\"keywordItemId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\",\"keywordGroupId\",\"keywordItemId\"]}],\"isGenerated\":false},\"categorybanner\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"linkUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"1000\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isEnabled\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"product_category_relations\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproduct_category_relations\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryToproduct_category_relations\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"productId\",\"categoryId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"productId\",\"categoryId\"]}],\"isGenerated\":false},\"product_keyword_relations\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproduct_keyword_relations\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keyword\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"keyworditemToproduct_keyword_relations\",\"relationFromFields\":[\"keywordId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"productId\",\"keywordId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"productId\",\"keywordId\"]}],\"isGenerated\":false},\"keywordgroupproduct\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"keywordGroup\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeywordgroupproduct\",\"relationFromFields\":[\"keywordGroupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"keywordgroupproductToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"keywordGroupId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"keywordGroupId\",\"productId\"]}],\"isGenerated\":false}},\"enums\":{\"userrole\":{\"values\":[{\"name\":\"CUSTOMER\",\"dbName\":null},{\"name\":\"ADMIN\",\"dbName\":null}],\"dbName\":null},\"userstatus\":{\"values\":[{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"DISABLED\",\"dbName\":null}],\"dbName\":null},\"categorystatus\":{\"values\":[{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"INACTIVE\",\"dbName\":null}],\"dbName\":null},\"productstatus\":{\"values\":[{\"name\":\"DRAFT\",\"dbName\":null},{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"INACTIVE\",\"dbName\":null},{\"name\":\"OUT_OF_STOCK\",\"dbName\":null},{\"name\":\"PREORDER\",\"dbName\":null}],\"dbName\":null},\"productsource\":{\"values\":[{\"name\":\"MANUAL\",\"dbName\":null},{\"name\":\"IMPORT_1688\",\"dbName\":null},{\"name\":\"TABLE_IMPORT\",\"dbName\":null}],\"dbName\":null},\"stockstatus\":{\"values\":[{\"name\":\"IN_STOCK\",\"dbName\":null},{\"name\":\"LOW_STOCK\",\"dbName\":null},{\"name\":\"OUT_OF_STOCK\",\"dbName\":null}],\"dbName\":null},\"cartitemstatus\":{\"values\":[{\"name\":\"VALID\",\"dbName\":null},{\"name\":\"INVALID\",\"dbName\":null}],\"dbName\":null},\"importtaskstatus\":{\"values\":[{\"name\":\"PENDING\",\"dbName\":null},{\"name\":\"RUNNING\",\"dbName\":null},{\"name\":\"COMPLETED\",\"dbName\":null},{\"name\":\"FAILED\",\"dbName\":null},{\"name\":\"QUEUED\",\"dbName\":null},{\"name\":\"RATE_LIMITED\",\"dbName\":null},{\"name\":\"PARTIAL_SUCCESS\",\"dbName\":null},{\"name\":\"RETRY_PENDING\",\"dbName\":null}],\"dbName\":null},\"materialtype\":{\"values\":[{\"name\":\"GOLD_14K\",\"dbName\":null},{\"name\":\"GOLD_18K\",\"dbName\":null},{\"name\":\"SILVER_925\",\"dbName\":null},{\"name\":\"GOLD_PLATED\",\"dbName\":null},{\"name\":\"ROSE_GOLD\",\"dbName\":null},{\"name\":\"WHITE_GOLD\",\"dbName\":null},{\"name\":\"PEARL\",\"dbName\":null},{\"name\":\"GEMSTONE\",\"dbName\":null}],\"dbName\":null},\"gemstoneType\":{\"values\":[{\"name\":\"DIAMOND\",\"dbName\":null},{\"name\":\"ZIRCON\",\"dbName\":null},{\"name\":\"PEARL\",\"dbName\":null},{\"name\":\"COLOR_GEM\",\"dbName\":null},{\"name\":\"NONE\",\"dbName\":null}],\"dbName\":null},\"jewelryproducttype\":{\"values\":[{\"name\":\"RING\",\"dbName\":null},{\"name\":\"NECKLACE\",\"dbName\":null},{\"name\":\"EARRING\",\"dbName\":null},{\"name\":\"BRACELET\",\"dbName\":null},{\"name\":\"ANKLET\",\"dbName\":null},{\"name\":\"SET\",\"dbName\":null},{\"name\":\"MENS_JEWELRY\",\"dbName\":null},{\"name\":\"GIFT_BOX\",\"dbName\":null},{\"name\":\"CUSTOM_ENGRAVING\",\"dbName\":null}],\"dbName\":null},\"sitesettingtype\":{\"values\":[{\"name\":\"PROMO_BAR\",\"dbName\":null},{\"name\":\"HERO_BANNER\",\"dbName\":null},{\"name\":\"CATEGORY_BANNER\",\"dbName\":null},{\"name\":\"HOT_MATERIAL\",\"dbName\":null},{\"name\":\"LOOKBOOK\",\"dbName\":null},{\"name\":\"TRUST_BADGE\",\"dbName\":null},{\"name\":\"HOT_SEARCH\",\"dbName\":null},{\"name\":\"FOOTER_LINK\",\"dbName\":null},{\"name\":\"FLOAT_CONTACT\",\"dbName\":null},{\"name\":\"HOMEPAGE_POSTER\",\"dbName\":null},{\"name\":\"HOME_SECTION\",\"dbName\":null},{\"name\":\"STATIC_COPY\",\"dbName\":null},{\"name\":\"EMAIL_TEMPLATE\",\"dbName\":null},{\"name\":\"PAYMENT_METHOD\",\"dbName\":null},{\"name\":\"CURRENCY_SETTING\",\"dbName\":null},{\"name\":\"EXCHANGE_RATE\",\"dbName\":null},{\"name\":\"SHIPPING_TEMPLATE\",\"dbName\":null},{\"name\":\"TAX_RULE\",\"dbName\":null},{\"name\":\"ROLE_PERMISSION\",\"dbName\":null},{\"name\":\"HOME_BRAND_SECTION\",\"dbName\":null},{\"name\":\"HOME_REVIEW_SECTION\",\"dbName\":null},{\"name\":\"HOME_FEATURED_KEYWORDS\",\"dbName\":null},{\"name\":\"FRONTEND_SCENE_SLOT\",\"dbName\":null}],\"dbName\":null},\"keywordgrouptype\":{\"values\":[{\"name\":\"BRAND\",\"dbName\":null},{\"name\":\"NEW_ARRIVAL\",\"dbName\":null},{\"name\":\"PROMOTION\",\"dbName\":null},{\"name\":\"GENERAL\",\"dbName\":null}],\"dbName\":null},\"keywordscenearea\":{\"values\":[{\"name\":\"LEFT_NAV\",\"dbName\":null},{\"name\":\"RECOMMENDATION\",\"dbName\":null},{\"name\":\"BOTH\",\"dbName\":null}],\"dbName\":null},\"homerecommendzonetype\":{\"values\":[{\"name\":\"PRODUCT\",\"dbName\":null},{\"name\":\"CATEGORY\",\"dbName\":null},{\"name\":\"SIDE_NAV\",\"dbName\":null}],\"dbName\":null},\"wishlistitemstatus\":{\"values\":[{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"MOVED_TO_CART\",\"dbName\":null}],\"dbName\":null},\"orderstatus\":{\"values\":[{\"name\":\"PENDING_PAYMENT\",\"dbName\":null},{\"name\":\"PAID\",\"dbName\":null},{\"name\":\"PROCESSING\",\"dbName\":null},{\"name\":\"SHIPPED\",\"dbName\":null},{\"name\":\"DELIVERED\",\"dbName\":null},{\"name\":\"CANCELLED\",\"dbName\":null},{\"name\":\"REFUNDED\",\"dbName\":null}],\"dbName\":null},\"ordershipmethod\":{\"values\":[{\"name\":\"STANDARD\",\"dbName\":null},{\"name\":\"EXPRESS\",\"dbName\":null}],\"dbName\":null},\"paymentmethodtype\":{\"values\":[{\"name\":\"PAYPAL\",\"dbName\":null},{\"name\":\"BANK_TRANSFER\",\"dbName\":null},{\"name\":\"STRIPE\",\"dbName\":null},{\"name\":\"CREDIT_CARD\",\"dbName\":null}],\"dbName\":null},\"reviewstatus\":{\"values\":[{\"name\":\"PUBLISHED\",\"dbName\":null},{\"name\":\"HIDDEN\",\"dbName\":null},{\"name\":\"PENDING\",\"dbName\":null}],\"dbName\":null},\"promotiontype\":{\"values\":[{\"name\":\"FLASH_SALE\",\"dbName\":null},{\"name\":\"COUPON\",\"dbName\":null},{\"name\":\"NEW_CUSTOMER\",\"dbName\":null},{\"name\":\"HOLIDAY\",\"dbName\":null},{\"name\":\"FULL_REDUCTION\",\"dbName\":null},{\"name\":\"PERCENTAGE_DISCOUNT\",\"dbName\":null},{\"name\":\"BUY_X_GET_Y\",\"dbName\":null}],\"dbName\":null},\"ticketstatus\":{\"values\":[{\"name\":\"OPEN\",\"dbName\":null},{\"name\":\"REPLIED\",\"dbName\":null},{\"name\":\"RESOLVED\",\"dbName\":null},{\"name\":\"CLOSED\",\"dbName\":null}],\"dbName\":null},\"customorderstatus\":{\"values\":[{\"name\":\"PENDING_CONFIRMATION\",\"dbName\":null},{\"name\":\"IN_PRODUCTION\",\"dbName\":null},{\"name\":\"READY_TO_SHIP\",\"dbName\":null},{\"name\":\"SHIPPED\",\"dbName\":null},{\"name\":\"COMPLETED\",\"dbName\":null}],\"dbName\":null}},\"types\":{}}")
+config.runtimeDataModel = JSON.parse("{\"models\":{\"sysuser\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"account\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"password\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"email\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"role\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"userrole\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"userstatus\",\"nativeType\":null,\"default\":\"ACTIVE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"username\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"avatarUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"phone\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"preferredCurrency\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"preferredLocale\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"purchaseCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"adminNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customerType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"default\":\"NEW\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeUs\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeEu\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"braceletSize\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"savedPreferencesJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"savedSizesJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lastLoginAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"carts\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cart\",\"nativeType\":null,\"relationName\":\"cartTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTasks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtask\",\"nativeType\":null,\"relationName\":\"importtaskTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTaskItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtaskitem\",\"nativeType\":null,\"relationName\":\"importtaskitemTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addresses\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"useraddress\",\"nativeType\":null,\"relationName\":\"sysuserTouseraddress\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"wishlists\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"wishlistitem\",\"nativeType\":null,\"relationName\":\"sysuserTowishlistitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"reviews\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productreview\",\"nativeType\":null,\"relationName\":\"productreviewTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tickets\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customerticket\",\"nativeType\":null,\"relationName\":\"customerticketTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customerTags\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customertaglink\",\"nativeType\":null,\"relationName\":\"customertaglinkTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"communicationLogs\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customercommunication\",\"nativeType\":null,\"relationName\":\"customercommunicationTosysuser\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"category\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"level\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"slug\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"iconUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"bannerImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoTitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoDescription\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoKeywords\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"300\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"categorystatus\",\"nativeType\":null,\"default\":\"ACTIVE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"path\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"500\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isBrandCategory\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"80\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandKeywordsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"homepageConfigJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryDisplayConfigJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordMappingJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"priceCoefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"6\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"seoTranslationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"parent\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"CategoryTree\",\"relationFromFields\":[\"parentId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"children\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"CategoryTree\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"products\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"categoryToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandProducts\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"BrandCategoryProducts\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recommendZoneItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZoneItem\",\"nativeType\":null,\"relationName\":\"categoryTohomeRecommendZoneItem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryFilters\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryfilterbinding\",\"nativeType\":null,\"relationName\":\"categoryTocategoryfilterbinding\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categorySpecs\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryspectemplatebinding\",\"nativeType\":null,\"relationName\":\"categoryTocategoryspectemplatebinding\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productcategory\",\"nativeType\":null,\"relationName\":\"categoryToproductcategory\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorykeywordlink\",\"nativeType\":null,\"relationName\":\"categoryTocategorykeywordlink\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"relationProducts\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_category_relations\",\"nativeType\":null,\"relationName\":\"categoryToproduct_category_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"navConfig\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorynavconfig\",\"nativeType\":null,\"relationName\":\"categoryTocategorynavconfig\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categorynavconfig\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"navTitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isVisible\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"badgeText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategorynavconfig\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\"]}],\"isGenerated\":false},\"product\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"slug\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"source\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsource\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"supplierName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"productstatus\",\"nativeType\":null,\"default\":\"DRAFT\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"jewelryproducttype\",\"nativeType\":null,\"default\":\"RING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"goodsStatus\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"costPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"priceCoefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"6\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"detailText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandCategoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandMatchKeyword\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"autoBrandMatched\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"materialtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"gemstoneType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"gemstoneType\",\"nativeType\":null,\"default\":\"NONE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"metalPurity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"platingProcess\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"totalCarat\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"8\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"weightGram\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"8\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"mainImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"hoverImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"wearImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"videoUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rotate360Json\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"galleryJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shortDescription\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"designStory\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"detailTranslationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sellingPointsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"detailContentJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parameterJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"careGuideJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sizeGuideJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingPreviewBaseUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"packagingImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"certificateInfo\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tradeInfoJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"faqJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ratingAverage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Float\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ratingCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"soldCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isNewArrival\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isBestSeller\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isLimitedDiscount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"* 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryToproduct\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"brandCategory\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"BrandCategoryProducts\",\"relationFromFields\":[\"brandCategoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skus\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"productToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cartItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cartitem\",\"nativeType\":null,\"relationName\":\"cartitemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTaskItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtaskitem\",\"nativeType\":null,\"relationName\":\"importtaskitemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"reviews\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productreview\",\"nativeType\":null,\"relationName\":\"productToproductreview\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"wishlistItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"wishlistitem\",\"nativeType\":null,\"relationName\":\"productTowishlistitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lookbookLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"lookbookproduct\",\"nativeType\":null,\"relationName\":\"lookbookproductToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderitem\",\"nativeType\":null,\"relationName\":\"orderitemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productcategory\",\"nativeType\":null,\"relationName\":\"productToproductcategory\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"relationCategories\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_category_relations\",\"nativeType\":null,\"relationName\":\"productToproduct_category_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"relationKeywords\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_keyword_relations\",\"nativeType\":null,\"relationName\":\"productToproduct_keyword_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroupLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroupproduct\",\"nativeType\":null,\"relationName\":\"keywordgroupproductToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recommendZoneItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZoneItem\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneItemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recommendCollections\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollectionItem\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionItemToproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"productsku\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skuCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minOrderQty\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"materialtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"gemstoneType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"gemstoneType\",\"nativeType\":null,\"default\":\"NONE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeUs\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"ringSizeEu\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sizeLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"necklaceLengthInch\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"braceletLengthCm\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingSupported\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingMaxChars\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fontOptionsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"extraFee\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"price\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"originalPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stock\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stockStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"stockstatus\",\"nativeType\":null,\"default\":\"IN_STOCK\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"attributeJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"deliveryDays\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"weightKg\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"3\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"volumeM3\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"4\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproductsku\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cartItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cartitem\",\"nativeType\":null,\"relationName\":\"cartitemToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderitem\",\"nativeType\":null,\"relationName\":\"orderitemToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderToproductsku\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"cart\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"accountId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"account\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"cartTosysuser\",\"relationFromFields\":[\"accountId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cartitem\",\"nativeType\":null,\"relationName\":\"cartTocartitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"cartitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cartId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSkuId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"quantity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingFont\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingPreviewUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapSelected\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapFee\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"cartitemstatus\",\"nativeType\":null,\"default\":\"VALID\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"cart\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"cart\",\"nativeType\":null,\"relationName\":\"cartTocartitem\",\"relationFromFields\":[\"cartId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"cartitemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSku\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"cartitemToproductsku\",\"relationFromFields\":[\"productSkuId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"cartId\",\"productSkuId\",\"engravingText\",\"engravingFont\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"cartId\",\"productSkuId\",\"engravingText\",\"engravingFont\"]}],\"isGenerated\":false},\"importtask\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"creatorId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taskName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"importtaskstatus\",\"nativeType\":null,\"default\":\"PENDING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceLinkCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"successCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"failureCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"progressPercent\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"markupRate\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"5\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"defaultStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"productstatus\",\"nativeType\":null,\"default\":\"DRAFT\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"defaultCategoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"queueConcurrency\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rateLimitMinDelaySec\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":2,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rateLimitMaxDelaySec\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":5,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"startedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"finishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lastScheduledAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lastRateLimitedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stockStrategyJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"creator\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"importtaskTosysuser\",\"relationFromFields\":[\"creatorId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtaskitem\",\"nativeType\":null,\"relationName\":\"importtaskToimporttaskitem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"importtaskitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importTaskId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operatorId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedMainImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedPriceMin\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parsedPriceMax\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"supplierName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"mainImageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"costPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"weightGrams\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceCategoryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"targetCategoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"coefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"8\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"goodsStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productstatus\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minimumOrderQuantity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"availableStock\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cnyPriceMin\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cnyPriceMax\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usdPriceMin\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usdPriceMax\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productDetail\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"LongText\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skuSummaryText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"LongText\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fetchStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"importtaskstatus\",\"nativeType\":null,\"default\":\"PENDING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishStatus\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"importtaskstatus\",\"nativeType\":null,\"default\":\"PENDING\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"retryCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fetchStartedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fetchFinishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishStartedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"publishedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"specSummaryJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"previewDataJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isSelected\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isPublished\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importedProductId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"failureReason\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"importTask\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"importtask\",\"nativeType\":null,\"relationName\":\"importtaskToimporttaskitem\",\"relationFromFields\":[\"importTaskId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operator\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"importtaskitemTosysuser\",\"relationFromFields\":[\"operatorId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"importedProduct\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"importtaskitemToproduct\",\"relationFromFields\":[\"importedProductId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"useraddress\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"recipientName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"phone\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"stateName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"cityName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addressLine1\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addressLine2\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"postalCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isDefault\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"sysuserTouseraddress\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordTouseraddress\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"wishlistitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"wishlistitemstatus\",\"nativeType\":null,\"default\":\"ACTIVE\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shareToken\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"sysuserTowishlistitem\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productTowishlistitem\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"userId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"userId\",\"productId\"]}],\"isGenerated\":false},\"sitesetting\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"settingType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sitesettingtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subtitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"contentJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"localeCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"lookbook\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subtitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"videoUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"products\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"lookbookproduct\",\"nativeType\":null,\"relationName\":\"lookbookTolookbookproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"lookbookproduct\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lookbookId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"hotspotJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lookbook\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"lookbook\",\"nativeType\":null,\"relationName\":\"lookbookTolookbookproduct\",\"relationFromFields\":[\"lookbookId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"lookbookproductToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"lookbookId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"lookbookId\",\"productId\"]}],\"isGenerated\":false},\"homeRecommendCollection\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceZoneId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"sourceZone\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZone\",\"nativeType\":null,\"relationName\":\"CollectionSourceZone\",\"relationFromFields\":[\"sourceZoneId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"collectionItems\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollectionItem\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionTohomeRecommendCollectionItem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"zonesUsingAsBound\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZone\",\"nativeType\":null,\"relationName\":\"ZoneBoundCollection\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"homeRecommendCollectionItem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"collectionId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"collection\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollection\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionTohomeRecommendCollectionItem\",\"relationFromFields\":[\"collectionId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"homeRecommendCollectionItemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"collectionId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"collectionId\",\"productId\"]}],\"isGenerated\":false},\"homeRecommendZone\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"zoneType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homerecommendzonetype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"pcCols\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":4,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"mobileCols\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":2,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"pcRows\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":2,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"boundCollectionId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"sourceCollection\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollection\",\"nativeType\":null,\"relationName\":\"CollectionSourceZone\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"boundCollection\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendCollection\",\"nativeType\":null,\"relationName\":\"ZoneBoundCollection\",\"relationFromFields\":[\"boundCollectionId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZoneItem\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneTohomeRecommendZoneItem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"homeRecommendZoneItem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"zoneId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"entityType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homerecommendzonetype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"zone\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"homeRecommendZone\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneTohomeRecommendZoneItem\",\"relationFromFields\":[\"zoneId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"homeRecommendZoneItemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTohomeRecommendZoneItem\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"promotioncampaign\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"promotionType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"promotiontype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"discountPercent\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"5\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"discountAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minOrderAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"startAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"endAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usageLimit\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"usedCount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"contentJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"orders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordTopromotioncampaign\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"customOrders\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customorder\",\"nativeType\":null,\"relationName\":\"customorderTopromotioncampaign\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderrecord\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderNo\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"addressId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"orderstatus\",\"nativeType\":null,\"default\":\"PENDING_PAYMENT\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"localeCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subtotalAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"discountAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippingAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"totalAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"paymentMethod\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"paymentmethodtype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"paymentStatus\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"installmentInfo\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"couponId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shipMethod\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"ordershipmethod\",\"nativeType\":null,\"default\":\"STANDARD\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"trackingCarrier\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"trackingNumber\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"estimatedArrivalAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"internalNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftMessage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"note\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"orderrecordTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"address\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"useraddress\",\"nativeType\":null,\"relationName\":\"orderrecordTouseraddress\",\"relationFromFields\":[\"addressId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"coupon\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"promotioncampaign\",\"nativeType\":null,\"relationName\":\"orderrecordTopromotioncampaign\",\"relationFromFields\":[\"couponId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"items\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderitem\",\"nativeType\":null,\"relationName\":\"orderitemToorderrecord\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"reviews\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productreview\",\"nativeType\":null,\"relationName\":\"orderrecordToproductreview\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"logistics\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderlogisticssegment\",\"nativeType\":null,\"relationName\":\"orderlogisticssegmentToorderrecord\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"logs\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderoperationlog\",\"nativeType\":null,\"relationName\":\"orderoperationlogToorderrecord\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderitem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSkuId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"skuCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"materialLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sizeLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingFont\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"quantity\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"unitPrice\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"lineAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"giftWrapSelected\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderitemToorderrecord\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"orderitemToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSku\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"orderitemToproductsku\",\"relationFromFields\":[\"productSkuId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"productreview\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"rating\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Int\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"content\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrlsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"hasImages\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"reviewstatus\",\"nativeType\":null,\"default\":\"PUBLISHED\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproductreview\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"productreviewTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderrecordToproductreview\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"customorder\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSkuId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"promotionId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingText\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingFont\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"engravingPreviewUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"customorderstatus\",\"nativeType\":null,\"default\":\"PENDING_CONFIRMATION\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productionNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippingLabelUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"completedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customorderTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"customorderToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productSku\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"productsku\",\"nativeType\":null,\"relationName\":\"customorderToproductsku\",\"relationFromFields\":[\"productSkuId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"promotion\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"promotioncampaign\",\"nativeType\":null,\"relationName\":\"customorderTopromotioncampaign\",\"relationFromFields\":[\"promotionId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"sizemapping\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"regionCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"jewelryType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"jewelryproducttype\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sourceSize\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"targetRegionCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"targetSize\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"20\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"note\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"200\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"customerticket\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"contactName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"email\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"channel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"subject\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"content\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"status\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"ticketstatus\",\"nativeType\":null,\"default\":\"OPEN\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"replyContent\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customerticketTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"productcategory\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isPrimary\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproductcategory\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryToproductcategory\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"productId\",\"categoryId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"productId\",\"categoryId\"]}],\"isGenerated\":false},\"filterspec\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"inputType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"optionJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"categoryBindings\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryfilterbinding\",\"nativeType\":null,\"relationName\":\"categoryfilterbindingTofilterspec\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categoryfilterbinding\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"filterSpecId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategoryfilterbinding\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"filterSpec\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"filterspec\",\"nativeType\":null,\"relationName\":\"categoryfilterbindingTofilterspec\",\"relationFromFields\":[\"filterSpecId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\",\"filterSpecId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\",\"filterSpecId\"]}],\"isGenerated\":false},\"spectemplate\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"fieldsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"translationsJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"categoryBindings\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categoryspectemplatebinding\",\"nativeType\":null,\"relationName\":\"categoryspectemplatebindingTospectemplate\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categoryspectemplatebinding\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"specTemplateId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategoryspectemplatebinding\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"specTemplate\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"spectemplate\",\"nativeType\":null,\"relationName\":\"categoryspectemplatebindingTospectemplate\",\"relationFromFields\":[\"specTemplateId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\",\"specTemplateId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\",\"specTemplateId\"]}],\"isGenerated\":false},\"customertag\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"code\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"color\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"userLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customertaglink\",\"nativeType\":null,\"relationName\":\"customertagTocustomertaglink\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"customertaglink\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tagId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customertaglinkTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"tag\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"customertag\",\"nativeType\":null,\"relationName\":\"customertagTocustomertaglink\",\"relationFromFields\":[\"tagId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"userId\",\"tagId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"userId\",\"tagId\"]}],\"isGenerated\":false},\"customercommunication\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"userId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"channel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"content\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operatorName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"user\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"sysuser\",\"nativeType\":null,\"relationName\":\"customercommunicationTosysuser\",\"relationFromFields\":[\"userId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderlogisticssegment\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"segmentType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"carrierName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"trackingNumber\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"statusLabel\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"estimatedArrivalAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"DateTime\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"remark\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"timelineJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderlogisticssegmentToorderrecord\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"orderoperationlog\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"orderId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"actionType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"actionNote\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"operatorName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"order\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"orderrecord\",\"nativeType\":null,\"relationName\":\"orderoperationlogToorderrecord\",\"relationFromFields\":[\"orderId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"shippingtemplate\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minWeightKg\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"3\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"maxWeightKg\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"3\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"minOrderAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"maxOrderAmount\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"shippingFee\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"freeShippingOver\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"shippingchannel\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"estimatedTime\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"billingMode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"30\"]],\"default\":\"EXPRESS_TIER\",\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）\"},{\"name\":\"channelCoefficient\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"10\",\"4\"]],\"default\":1,\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"渠道系数，最终运费 = 基础运费 × 系数，默认 1.00\"},{\"name\":\"countryFeesJson\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Json\",\"nativeType\":null,\"isGenerated\":false,\"isUpdatedAt\":false,\"documentation\":\"按国家运费规则（人民币 ¥）。\\\\nEXPRESS_TIER: { \\\"United States\\\": { \\\"tiers\\\": [{ \\\"maxKg\\\": 0.5, \\\"fee\\\": 10 }] } }\\\\nSEA_PER_KG:   { \\\"United States\\\": { \\\"baseKg\\\": 12, \\\"baseFee\\\": 180, \\\"perKgFee\\\": 12 } }\\\\n兼容旧版固定价数字：{ \\\"United States\\\": 15.53 }\"},{\"name\":\"isEnabled\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false,\"documentation\":\"物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态\"},\"currencysetting\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"currencyName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"60\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"exchangeRate\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"12\",\"6\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isDefault\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"taxrule\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"10\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"countryName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taxType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taxRate\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"Decimal\",\"nativeType\":[\"Decimal\",[\"6\",\"2\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"taxNumber\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"rolepermission\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"roleCode\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"50\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"permissionKey\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"100\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isAllowed\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[[\"roleCode\",\"permissionKey\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"roleCode\",\"permissionKey\"]}],\"isGenerated\":false},\"keywordgroup\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"slug\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"groupType\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"keywordgrouptype\",\"nativeType\":null,\"default\":\"GENERAL\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentGroupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneKey\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneType\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"80\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneArea\",\"kind\":\"enum\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"keywordscenearea\",\"nativeType\":null,\"default\":\"RECOMMENDATION\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneSlotKey\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sceneSlotName\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"floorTitle\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"floorIcon\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"floorLink\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"255\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"homepageSortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"showOnHomepage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"description\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"Text\",[]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"parentGroup\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"KeywordGroupTree\",\"relationFromFields\":[\"parentGroupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"childrenGroups\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"KeywordGroupTree\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywords\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeyworditem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorykeywordlink\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeywordgroup\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroupproduct\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeywordgroupproduct\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"keyworditem\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"groupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentKeywordId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keyword\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"normalizedKeyword\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"160\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isActive\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"group\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeyworditem\",\"relationFromFields\":[\"groupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"parentKeyword\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"KeywordItemTree\",\"relationFromFields\":[\"parentKeywordId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"childrenKeywords\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"KeywordItemTree\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"categorykeywordlink\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeyworditem\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productLinks\",\"kind\":\"object\",\"isList\":true,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product_keyword_relations\",\"nativeType\":null,\"relationName\":\"keyworditemToproduct_keyword_relations\",\"relationFromFields\":[],\"relationToFields\":[],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"categorykeywordlink\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordItemId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"applyToHomepage\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":false,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryTocategorykeywordlink\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroup\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeywordgroup\",\"relationFromFields\":[\"keywordGroupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordItem\",\"kind\":\"object\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"categorykeywordlinkTokeyworditem\",\"relationFromFields\":[\"keywordItemId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"categoryId\",\"keywordGroupId\",\"keywordItemId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"categoryId\",\"keywordGroupId\",\"keywordItemId\"]}],\"isGenerated\":false},\"categorybanner\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"title\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":false,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"150\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"imageUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"700\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"linkUrl\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"1000\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"isEnabled\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Boolean\",\"nativeType\":null,\"default\":true,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false},\"product_category_relations\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"categoryId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproduct_category_relations\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"category\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"category\",\"nativeType\":null,\"relationName\":\"categoryToproduct_category_relations\",\"relationFromFields\":[\"categoryId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"productId\",\"categoryId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"productId\",\"categoryId\"]}],\"isGenerated\":false},\"product_keyword_relations\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"productToproduct_keyword_relations\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keyword\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keyworditem\",\"nativeType\":null,\"relationName\":\"keyworditemToproduct_keyword_relations\",\"relationFromFields\":[\"keywordId\"],\"relationToFields\":[\"id\"],\"relationOnDelete\":\"Cascade\",\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"productId\",\"keywordId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"productId\",\"keywordId\"]}],\"isGenerated\":false},\"keywordgroupproduct\":{\"dbName\":null,\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"keywordGroupId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"productId\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":true,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true},{\"name\":\"keywordGroup\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"keywordgroup\",\"nativeType\":null,\"relationName\":\"keywordgroupTokeywordgroupproduct\",\"relationFromFields\":[\"keywordGroupId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"product\",\"kind\":\"object\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"product\",\"nativeType\":null,\"relationName\":\"keywordgroupproductToproduct\",\"relationFromFields\":[\"productId\"],\"relationToFields\":[\"id\"],\"isGenerated\":false,\"isUpdatedAt\":false}],\"primaryKey\":null,\"uniqueFields\":[[\"keywordGroupId\",\"productId\"]],\"uniqueIndexes\":[{\"name\":null,\"fields\":[\"keywordGroupId\",\"productId\"]}],\"isGenerated\":false},\"suffixconfig\":{\"dbName\":\"suffix_config\",\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"suffixName\",\"dbName\":\"suffix_name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false,\"documentation\":\"商品标题后缀预设（“批量加后缀”下拉框数据源，支持自定义 CRUD）\"},\"brandalias\":{\"dbName\":\"brand_alias\",\"schema\":null,\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":true,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"36\"]],\"default\":{\"name\":\"uuid\",\"args\":[4]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"alias\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":true,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"standardName\",\"dbName\":\"standard_name\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":false,\"type\":\"String\",\"nativeType\":[\"VarChar\",[\"120\"]],\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"sortWeight\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"Int\",\"nativeType\":null,\"default\":0,\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":false},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"isList\":false,\"isRequired\":true,\"isUnique\":false,\"isId\":false,\"isReadOnly\":false,\"hasDefaultValue\":true,\"type\":\"DateTime\",\"nativeType\":null,\"default\":{\"name\":\"now\",\"args\":[]},\"isGenerated\":false,\"isUpdatedAt\":true}],\"primaryKey\":null,\"uniqueFields\":[],\"uniqueIndexes\":[],\"isGenerated\":false,\"documentation\":\"品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD\"}},\"enums\":{\"userrole\":{\"values\":[{\"name\":\"CUSTOMER\",\"dbName\":null},{\"name\":\"ADMIN\",\"dbName\":null},{\"name\":\"SUB_ADMIN\",\"dbName\":null}],\"dbName\":null},\"userstatus\":{\"values\":[{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"DISABLED\",\"dbName\":null}],\"dbName\":null},\"categorystatus\":{\"values\":[{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"INACTIVE\",\"dbName\":null}],\"dbName\":null},\"productstatus\":{\"values\":[{\"name\":\"DRAFT\",\"dbName\":null},{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"INACTIVE\",\"dbName\":null},{\"name\":\"OUT_OF_STOCK\",\"dbName\":null},{\"name\":\"PREORDER\",\"dbName\":null}],\"dbName\":null},\"productsource\":{\"values\":[{\"name\":\"MANUAL\",\"dbName\":null},{\"name\":\"IMPORT_1688\",\"dbName\":null},{\"name\":\"TABLE_IMPORT\",\"dbName\":null}],\"dbName\":null},\"stockstatus\":{\"values\":[{\"name\":\"IN_STOCK\",\"dbName\":null},{\"name\":\"LOW_STOCK\",\"dbName\":null},{\"name\":\"OUT_OF_STOCK\",\"dbName\":null}],\"dbName\":null},\"cartitemstatus\":{\"values\":[{\"name\":\"VALID\",\"dbName\":null},{\"name\":\"INVALID\",\"dbName\":null}],\"dbName\":null},\"importtaskstatus\":{\"values\":[{\"name\":\"PENDING\",\"dbName\":null},{\"name\":\"RUNNING\",\"dbName\":null},{\"name\":\"COMPLETED\",\"dbName\":null},{\"name\":\"FAILED\",\"dbName\":null},{\"name\":\"QUEUED\",\"dbName\":null},{\"name\":\"RATE_LIMITED\",\"dbName\":null},{\"name\":\"PARTIAL_SUCCESS\",\"dbName\":null},{\"name\":\"RETRY_PENDING\",\"dbName\":null}],\"dbName\":null},\"materialtype\":{\"values\":[{\"name\":\"GOLD_14K\",\"dbName\":null},{\"name\":\"GOLD_18K\",\"dbName\":null},{\"name\":\"SILVER_925\",\"dbName\":null},{\"name\":\"GOLD_PLATED\",\"dbName\":null},{\"name\":\"ROSE_GOLD\",\"dbName\":null},{\"name\":\"WHITE_GOLD\",\"dbName\":null},{\"name\":\"PEARL\",\"dbName\":null},{\"name\":\"GEMSTONE\",\"dbName\":null}],\"dbName\":null},\"gemstoneType\":{\"values\":[{\"name\":\"DIAMOND\",\"dbName\":null},{\"name\":\"ZIRCON\",\"dbName\":null},{\"name\":\"PEARL\",\"dbName\":null},{\"name\":\"COLOR_GEM\",\"dbName\":null},{\"name\":\"NONE\",\"dbName\":null}],\"dbName\":null},\"jewelryproducttype\":{\"values\":[{\"name\":\"RING\",\"dbName\":null},{\"name\":\"NECKLACE\",\"dbName\":null},{\"name\":\"EARRING\",\"dbName\":null},{\"name\":\"BRACELET\",\"dbName\":null},{\"name\":\"ANKLET\",\"dbName\":null},{\"name\":\"SET\",\"dbName\":null},{\"name\":\"MENS_JEWELRY\",\"dbName\":null},{\"name\":\"GIFT_BOX\",\"dbName\":null},{\"name\":\"CUSTOM_ENGRAVING\",\"dbName\":null}],\"dbName\":null},\"sitesettingtype\":{\"values\":[{\"name\":\"PROMO_BAR\",\"dbName\":null},{\"name\":\"HERO_BANNER\",\"dbName\":null},{\"name\":\"CATEGORY_BANNER\",\"dbName\":null},{\"name\":\"HOT_MATERIAL\",\"dbName\":null},{\"name\":\"LOOKBOOK\",\"dbName\":null},{\"name\":\"TRUST_BADGE\",\"dbName\":null},{\"name\":\"HOT_SEARCH\",\"dbName\":null},{\"name\":\"FOOTER_LINK\",\"dbName\":null},{\"name\":\"FLOAT_CONTACT\",\"dbName\":null},{\"name\":\"HOMEPAGE_POSTER\",\"dbName\":null},{\"name\":\"HOME_SECTION\",\"dbName\":null},{\"name\":\"STATIC_COPY\",\"dbName\":null},{\"name\":\"EMAIL_TEMPLATE\",\"dbName\":null},{\"name\":\"PAYMENT_METHOD\",\"dbName\":null},{\"name\":\"CURRENCY_SETTING\",\"dbName\":null},{\"name\":\"EXCHANGE_RATE\",\"dbName\":null},{\"name\":\"SHIPPING_TEMPLATE\",\"dbName\":null},{\"name\":\"TAX_RULE\",\"dbName\":null},{\"name\":\"ROLE_PERMISSION\",\"dbName\":null},{\"name\":\"HOME_BRAND_SECTION\",\"dbName\":null},{\"name\":\"HOME_REVIEW_SECTION\",\"dbName\":null},{\"name\":\"HOME_FEATURED_KEYWORDS\",\"dbName\":null},{\"name\":\"FRONTEND_SCENE_SLOT\",\"dbName\":null}],\"dbName\":null},\"keywordgrouptype\":{\"values\":[{\"name\":\"BRAND\",\"dbName\":null},{\"name\":\"NEW_ARRIVAL\",\"dbName\":null},{\"name\":\"PROMOTION\",\"dbName\":null},{\"name\":\"GENERAL\",\"dbName\":null}],\"dbName\":null},\"keywordscenearea\":{\"values\":[{\"name\":\"LEFT_NAV\",\"dbName\":null},{\"name\":\"RECOMMENDATION\",\"dbName\":null},{\"name\":\"BOTH\",\"dbName\":null}],\"dbName\":null},\"homerecommendzonetype\":{\"values\":[{\"name\":\"PRODUCT\",\"dbName\":null},{\"name\":\"CATEGORY\",\"dbName\":null},{\"name\":\"SIDE_NAV\",\"dbName\":null}],\"dbName\":null},\"wishlistitemstatus\":{\"values\":[{\"name\":\"ACTIVE\",\"dbName\":null},{\"name\":\"MOVED_TO_CART\",\"dbName\":null}],\"dbName\":null},\"orderstatus\":{\"values\":[{\"name\":\"PENDING_PAYMENT\",\"dbName\":null},{\"name\":\"PAID\",\"dbName\":null},{\"name\":\"PROCESSING\",\"dbName\":null},{\"name\":\"SHIPPED\",\"dbName\":null},{\"name\":\"DELIVERED\",\"dbName\":null},{\"name\":\"CANCELLED\",\"dbName\":null},{\"name\":\"REFUNDED\",\"dbName\":null}],\"dbName\":null},\"ordershipmethod\":{\"values\":[{\"name\":\"STANDARD\",\"dbName\":null},{\"name\":\"EXPRESS\",\"dbName\":null}],\"dbName\":null},\"paymentmethodtype\":{\"values\":[{\"name\":\"PAYPAL\",\"dbName\":null},{\"name\":\"BANK_TRANSFER\",\"dbName\":null},{\"name\":\"STRIPE\",\"dbName\":null},{\"name\":\"CREDIT_CARD\",\"dbName\":null}],\"dbName\":null},\"reviewstatus\":{\"values\":[{\"name\":\"PUBLISHED\",\"dbName\":null},{\"name\":\"HIDDEN\",\"dbName\":null},{\"name\":\"PENDING\",\"dbName\":null}],\"dbName\":null},\"promotiontype\":{\"values\":[{\"name\":\"FLASH_SALE\",\"dbName\":null},{\"name\":\"COUPON\",\"dbName\":null},{\"name\":\"NEW_CUSTOMER\",\"dbName\":null},{\"name\":\"HOLIDAY\",\"dbName\":null},{\"name\":\"FULL_REDUCTION\",\"dbName\":null},{\"name\":\"PERCENTAGE_DISCOUNT\",\"dbName\":null},{\"name\":\"BUY_X_GET_Y\",\"dbName\":null}],\"dbName\":null},\"ticketstatus\":{\"values\":[{\"name\":\"OPEN\",\"dbName\":null},{\"name\":\"REPLIED\",\"dbName\":null},{\"name\":\"RESOLVED\",\"dbName\":null},{\"name\":\"CLOSED\",\"dbName\":null}],\"dbName\":null},\"customorderstatus\":{\"values\":[{\"name\":\"PENDING_CONFIRMATION\",\"dbName\":null},{\"name\":\"IN_PRODUCTION\",\"dbName\":null},{\"name\":\"READY_TO_SHIP\",\"dbName\":null},{\"name\":\"SHIPPED\",\"dbName\":null},{\"name\":\"COMPLETED\",\"dbName\":null}],\"dbName\":null}},\"types\":{}}")
 defineDmmfProperty(exports.Prisma, config.runtimeDataModel)
 config.engineWasm = undefined
 config.compilerWasm = undefined

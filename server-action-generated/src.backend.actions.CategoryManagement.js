@@ -687,7 +687,7 @@ var searchKeywordGroupProducts = (0, import_action_utils.requireRole)([import_ac
     const sortedProducts = relationScope === "LINKED" ? [...products].sort((a, b) => {
       const weightDiff = (linkedSortWeightMap.get(b.id) ?? 0) - (linkedSortWeightMap.get(a.id) ?? 0);
       if (weightDiff !== 0) return weightDiff;
-      return b.createdAt.getTime() - a.createdAt.getTime();
+      return (b.createdAt ? new Date(b.createdAt).getTime() : 0) - (a.createdAt ? new Date(a.createdAt).getTime() : 0);
     }) : products;
     return {
       list: sortedProducts.map((item) => {

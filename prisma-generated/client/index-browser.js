@@ -125,7 +125,6 @@ exports.Prisma.SysuserScalarFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
-  passwordPlain: 'passwordPlain',
   email: 'email',
   role: 'role',
   status: 'status',
@@ -138,6 +137,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   countryName: 'countryName',
   purchaseCount: 'purchaseCount',
   adminNote: 'adminNote',
+  customerType: 'customerType',
   ringSizeUs: 'ringSizeUs',
   ringSizeEu: 'ringSizeEu',
   braceletSize: 'braceletSize',
@@ -833,6 +833,23 @@ exports.Prisma.KeywordgroupproductScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.SuffixconfigScalarFieldEnum = {
+  id: 'id',
+  suffixName: 'suffixName',
+  sortWeight: 'sortWeight',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BrandaliasScalarFieldEnum = {
+  id: 'id',
+  alias: 'alias',
+  standardName: 'standardName',
+  sortWeight: 'sortWeight',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -867,7 +884,6 @@ exports.Prisma.sysuserOrderByRelevanceFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
-  passwordPlain: 'passwordPlain',
   email: 'email',
   username: 'username',
   avatarUrl: 'avatarUrl',
@@ -877,6 +893,7 @@ exports.Prisma.sysuserOrderByRelevanceFieldEnum = {
   countryCode: 'countryCode',
   countryName: 'countryName',
   adminNote: 'adminNote',
+  customerType: 'customerType',
   ringSizeUs: 'ringSizeUs',
   ringSizeEu: 'ringSizeEu',
   braceletSize: 'braceletSize'
@@ -1290,9 +1307,21 @@ exports.Prisma.keywordgroupproductOrderByRelevanceFieldEnum = {
   keywordGroupId: 'keywordGroupId',
   productId: 'productId'
 };
+
+exports.Prisma.suffixconfigOrderByRelevanceFieldEnum = {
+  id: 'id',
+  suffixName: 'suffixName'
+};
+
+exports.Prisma.brandaliasOrderByRelevanceFieldEnum = {
+  id: 'id',
+  alias: 'alias',
+  standardName: 'standardName'
+};
 exports.userrole = exports.$Enums.userrole = {
   CUSTOMER: 'CUSTOMER',
-  ADMIN: 'ADMIN'
+  ADMIN: 'ADMIN',
+  SUB_ADMIN: 'SUB_ADMIN'
 };
 
 exports.userstatus = exports.$Enums.userstatus = {
@@ -1522,7 +1551,9 @@ exports.Prisma.ModelName = {
   categorybanner: 'categorybanner',
   product_category_relations: 'product_category_relations',
   product_keyword_relations: 'product_keyword_relations',
-  keywordgroupproduct: 'keywordgroupproduct'
+  keywordgroupproduct: 'keywordgroupproduct',
+  suffixconfig: 'suffixconfig',
+  brandalias: 'brandalias'
 };
 
 /**

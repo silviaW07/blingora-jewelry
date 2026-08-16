@@ -2,7 +2,7 @@
 
 import prisma from '@/tools/prisma'
 import { requireRole, UserRole, withResult } from '@/backend/action_utils'
-import { invalidateBrandAliasCache } from '@/backend/lib/brandAlias'
+import { invalidateBrandAliasCache, DEFAULT_BRAND_ALIASES } from '@/backend/lib/brandAlias'
 
 export interface BrandAliasItem {
   id: string
@@ -31,13 +31,12 @@ export interface BrandAliasMutationOutput {
 }
 
 /** 首次访问且表为空时预置默认映射，保证行为不回退。 */
-const DEFAULT_BRAND_ALIAS_PRESETS: Array<{ alias: string; standard: string; weight: number }> = [
-  { alias: '路易威登', standard: 'Louis Vuitton', weight: 50 },
-  { alias: '蔻C', standard: 'Coach', weight: 40 },
-  { alias: '蔻家', standard: 'Coach', weight: 30 },
-  { alias: '古驰', standard: 'Gucci', weight: 20 },
-  { alias: 'LV', standard: 'Louis Vuitton', weight: 10 },
-]
+const DEFAULT_BRAND_ALIAS_PRESETS: Array<{ alias: string; standard: string; weight: number }> =
+  DEFAULT_BRAND_ALIASES.map(rule => ({
+    alias: rule.alias,
+    standard: rule.standard,
+    weight: Math.max(10, String(rule.alias).length * 10),
+  }))
 
 const normalizeAliasText = (raw: unknown): string => String(raw ?? '').trim()
 
@@ -67,6 +66,23 @@ export const listBrandAliases = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN]
         skipDuplicates: true,
       })
       invalidateBrandAliasCache()
+    } else {
+      const existing = await prisma.brandalias.findMany({ select: { alias: true } })
+      const have = new Set(existing.map(row => String(row.alias || '').trim().toLowerCase()))
+      const missing = DEFAULT_BRAND_ALIAS_PRESETS.filter(
+        preset => !have.has(String(preset.alias).trim().toLowerCase()),
+      )
+      if (missing.length > 0) {
+        await prisma.brandalias.createMany({
+          data: missing.map(preset => ({
+            alias: preset.alias,
+            standardName: preset.standard,
+            sortWeight: preset.weight,
+          })),
+          skipDuplicates: true,
+        })
+        invalidateBrandAliasCache()
+      }
     }
     const rows = await prisma.brandalias.findMany({
       orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],

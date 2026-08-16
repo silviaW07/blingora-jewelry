@@ -808,7 +808,7 @@ const mapActiveProductToItem = (
     sku_count: skuCount,
     first_sku_id: defaultSku ? defaultSku.id : '',
     first_sku_price_rmb: priceRmb,
-    created_at_timestamp: product.createdAt.getTime(),
+    created_at_timestamp: product.createdAt ? new Date(product.createdAt).getTime() : 0,
     sort_weight: product.sortWeight,
     brand_category_id: product.brandCategoryId,
     brand_category_name: product.brandCategory?.name || null,

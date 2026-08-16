@@ -209,7 +209,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       has_discount: hasDiscount,
       sku_count: skuCount,
       first_sku_id: defaultSku ? defaultSku.id : '',
-      created_at_timestamp: p.createdAt.getTime(),
+      created_at_timestamp: p.createdAt ? new Date(p.createdAt).getTime() : 0,
       sort_weight: p.sortWeight
     }
   })

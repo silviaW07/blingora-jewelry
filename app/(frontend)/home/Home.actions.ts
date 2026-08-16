@@ -407,7 +407,7 @@ export const getHomeFeaturedProducts = withResult(
         if (b.product.ratingAverage !== a.product.ratingAverage) {
           return b.product.ratingAverage - a.product.ratingAverage
         }
-        return b.product.createdAt.getTime() - a.product.createdAt.getTime()
+        return (b.product.createdAt ? new Date(b.product.createdAt).getTime() : 0) - (a.product.createdAt ? new Date(a.product.createdAt).getTime() : 0)
       })
       .slice(0, 8)
       .map(item => item.product)

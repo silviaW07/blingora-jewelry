@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { GripVertical, Plus, Edit2, Copy, Trash2, ChevronLeft, ChevronRight, AlertCircle, Package, Layers, Settings2, Monitor, Smartphone, Search, Upload, ImagePlus } from 'lucide-react';
+import { GripVertical, Plus, Edit2, Copy, Trash2, ChevronLeft, ChevronRight, AlertCircle, Package, Layers, Settings2, Monitor, Smartphone, Search, Upload, ImagePlus, X } from 'lucide-react';
 import type { HomeRecommendZoneManagementState, HomeRecommendZoneManagementHandlers } from '@/backend/hooks/useHomeRecommendZoneManagement';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import EditableImg from '@/@base/EditableImg';
 import type { ZoneType } from '@/backend/actions/HomeRecommendZoneManagement';
 import { cn } from '@/lib/utils';
+import { buildCategoryCascadeTree, type CategoryCascadeOption } from '@/backend/components/CategoryCascadeSelect';
 interface Props {
   state: HomeRecommendZoneManagementState;
   handlers: HomeRecommendZoneManagementHandlers;
@@ -109,6 +110,109 @@ const DisplayImageUploadZone = ({
   )
 }
 
+function ProductZoneCategoryTreeSelect({
+  categories,
+  keyword,
+  existingIds,
+  selectedIds,
+  onToggle,
+}: {
+  categories: Array<{ id: string; name: string; level: number; parentId?: string | null; parentName?: string | null; imageUrl?: string | null }>
+  keyword: string
+  existingIds: string[]
+  selectedIds: string[]
+  onToggle: (item: { id: string; name: string; level: number; imageUrl: string | null; parentName: string | null }, checked: boolean) => void
+}) {
+  const query = keyword.trim().toLowerCase()
+  const tree = React.useMemo(() => {
+    const options: CategoryCascadeOption[] = categories.map((item) => ({
+      category_id: item.id,
+      category_name: item.name,
+      parent_id: item.parentId,
+      level: item.level,
+      parent_name: item.parentName,
+    }))
+    return buildCategoryCascadeTree(options, { forImportL1: false })
+  }, [categories])
+
+  const visibleTree = React.useMemo(() => {
+    if (!query) return tree
+    return tree.flatMap((node) => {
+      const l1Hit = node.category_name.toLowerCase().includes(query)
+      const children = node.children.filter((child) => child.category_name.toLowerCase().includes(query))
+      if (l1Hit) return [node]
+      if (children.length > 0) return [{ ...node, children }]
+      return []
+    })
+  }, [tree, query])
+
+  if (visibleTree.length === 0) {
+    return <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">未检索到相关类目</div>
+  }
+
+  return (
+    <div className="max-h-[420px] overflow-auto rounded-md border">
+      {visibleTree.map((node) => {
+        const l1Existing = existingIds.includes(node.category_id)
+        const l1Selected = selectedIds.includes(node.category_id)
+        return (
+          <div key={node.category_id} className="border-b last:border-b-0">
+            <label className={cn('flex items-center gap-2 px-3 py-2 text-sm', l1Existing && 'opacity-60')}>
+              <Checkbox
+                checked={l1Existing || l1Selected}
+                disabled={l1Existing}
+                onCheckedChange={(checked) =>
+                  onToggle(
+                    {
+                      id: node.category_id,
+                      name: node.category_name,
+                      level: node.level || 1,
+                      imageUrl: null,
+                      parentName: null,
+                    },
+                    !!checked,
+                  )
+                }
+              />
+              <span className="font-medium">{node.category_name}</span>
+              <span className="text-[10px] text-muted-foreground">一级</span>
+            </label>
+            {node.children.map((child) => {
+              const existing = existingIds.includes(child.category_id)
+              const selected = selectedIds.includes(child.category_id)
+              return (
+                <label
+                  key={child.category_id}
+                  className={cn('flex items-center gap-2 py-1.5 pl-10 pr-3 text-sm', existing && 'opacity-60')}
+                >
+                  <Checkbox
+                    checked={existing || selected}
+                    disabled={existing}
+                    onCheckedChange={(checked) =>
+                      onToggle(
+                        {
+                          id: child.category_id,
+                          name: child.category_name,
+                          level: child.level || 2,
+                          imageUrl: null,
+                          parentName: node.category_name,
+                        },
+                        !!checked,
+                      )
+                    }
+                  />
+                  <span>{child.category_name}</span>
+                  <span className="text-[10px] text-muted-foreground">二级</span>
+                </label>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export const HomeRecommendZoneManagementView = ({
   state,
   handlers
@@ -118,8 +222,15 @@ export const HomeRecommendZoneManagementView = ({
   const modalTotalPages = Math.ceil(state.modalTotal / 10);
 
   // 计算选择器当前页全选状态
-  const modalPageItems = state.drawerFormData.zoneType === 'PRODUCT' ? state.modalProducts : state.modalCategories;
-  const existingIdsInDrawer = state.drawerItems.map((i, index) => i.entityId);
+  const isProductZone = state.drawerFormData.zoneType === 'PRODUCT';
+  const productZoneCategoryItems = isProductZone
+    ? state.drawerItems.filter((item) => item.itemKind !== 'PRODUCT' && item.status !== 'DRAFT')
+    : [];
+  const productZoneDraftItems = isProductZone
+    ? state.drawerItems.filter((item) => item.itemKind === 'PRODUCT' || item.status === 'DRAFT')
+    : [];
+  const modalPageItems = state.modalCategories;
+  const existingIdsInDrawer = state.drawerItems.map((i) => i.entityId);
   const selectablePageItems = modalPageItems.filter(item => !existingIdsInDrawer.includes(item.id));
   const isAllModalSelected = selectablePageItems.length > 0 && selectablePageItems.every(item => state.modalSelectedItems.some(si => si.id === item.id));
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id="homerecommendzonemanagementview-r32790c31de4dc1cf-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
@@ -355,7 +466,7 @@ export const HomeRecommendZoneManagementView = ({
                 <div className="space-y-4" data-api-unique-id="homerecommendzonemanagementview-r4d08411dddb68364-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                   <div className="flex items-center justify-between border-b pb-2" data-api-unique-id="homerecommendzonemanagementview-r093d2c1ffe4737c4-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                     <div className="flex items-center gap-2 text-sm font-bold text-foreground" data-api-unique-id="homerecommendzonemanagementview-r914a39c5c37bc006-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                      内容明细 <Badge variant="secondary" className="rounded-full px-2 py-0 h-5 min-w-[20px] justify-center" data-api-unique-id="homerecommendzonemanagementview-raeee06c5b2a53935-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">{state.drawerItems.length}</Badge>
+                      内容明细 <Badge variant="secondary" className="rounded-full px-2 py-0 h-5 min-w-[20px] justify-center" data-api-unique-id="homerecommendzonemanagementview-raeee06c5b2a53935-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">{isProductZone ? productZoneCategoryItems.length : state.drawerItems.length}</Badge>
                     </div>
                     <div className="flex items-center gap-2">
                       {state.drawerFormData.zoneType === 'PRODUCT' && state.selectedDraftIds.length > 0 ? (
@@ -371,7 +482,7 @@ export const HomeRecommendZoneManagementView = ({
                       ) : null}
                       <Button size="sm" variant="outline" onClick={handlers.onOpenSelector} className="h-8 text-xs border-dashed border-primary text-primary hover:bg-primary/5 hover:text-primary-foreground" data-api-unique-id="homerecommendzonemanagementview-r19daad9cda353c3c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                         <Plus className="mr-1 h-3 w-3" data-api-unique-id="homerecommendzonemanagementview-r2912b354637b4f98-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" /> 
-                        {state.drawerFormData.zoneType === 'PRODUCT' ? '添加商品' : state.drawerFormData.zoneType === 'SIDE_NAV' ? '添加导航类目' : '添加类目'}
+                        {state.drawerFormData.zoneType === 'PRODUCT' ? '添加类目' : state.drawerFormData.zoneType === 'SIDE_NAV' ? '添加导航类目' : '添加类目'}
                       </Button>
                     </div>
                   </div>
@@ -384,16 +495,43 @@ export const HomeRecommendZoneManagementView = ({
                     </Alert> : null}
 
                   {state.drawerFormData.zoneType === 'PRODUCT' ? (
-                    <DisplayImageUploadZone
-                      compact
-                      loading={state.draftUploadLoading}
-                      onUpload={(files) => { void handlers.onUploadDisplayImages(files) }}
-                    />
+                    <div className="space-y-3">
+                      {productZoneCategoryItems.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {productZoneCategoryItems.map((item) => {
+                            const index = state.drawerItems.findIndex((row) => row.entityId === item.entityId)
+                            return (
+                              <span
+                                key={item.entityId}
+                                className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 py-1 pl-3 pr-1 text-sm"
+                              >
+                                <span className="max-w-[220px] truncate">{item.name}</span>
+                                <button
+                                  type="button"
+                                  className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => handlers.onDrawerItemRemove(index)}
+                                  aria-label={`移除 ${item.name}`}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">尚未选择类目。点击「添加类目」后，前台将展示这些类目下全部已上架商品。</p>
+                      )}
+                      <DisplayImageUploadZone
+                        compact
+                        loading={state.draftUploadLoading}
+                        onUpload={(files) => { void handlers.onUploadDisplayImages(files) }}
+                      />
+                    </div>
                   ) : null}
 
-                  {state.drawerItems.length === 0 ? <div className="h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 bg-secondary/20 border-muted" data-api-unique-id="homerecommendzonemanagementview-r5eaebfc3261f9e8d-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
+                  {(isProductZone ? productZoneCategoryItems.length + productZoneDraftItems.length === 0 : state.drawerItems.length === 0) ? <div className="h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 bg-secondary/20 border-muted" data-api-unique-id="homerecommendzonemanagementview-r5eaebfc3261f9e8d-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                       <p className="text-sm text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rf931a82f0d8f4336-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">暂无内容，请点击上方按钮添加，或拖拽图片到上传区</p>
-                    </div> : <div className="border rounded-md overflow-hidden bg-background" data-api-unique-id="homerecommendzonemanagementview-r7aa8e807b6faf5dc-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
+                    </div> : isProductZone && productZoneDraftItems.length === 0 ? null : <div className="border rounded-md overflow-hidden bg-background" data-api-unique-id="homerecommendzonemanagementview-r7aa8e807b6faf5dc-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                       <Table data-api-unique-id="homerecommendzonemanagementview-r0f2c6dae745f034e-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                         <TableHeader className="bg-secondary/30" data-api-unique-id="homerecommendzonemanagementview-r80587fbfefcad104-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                           <TableRow className="h-9" data-api-unique-id="homerecommendzonemanagementview-ref33f0320fa3b465-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
@@ -416,7 +554,9 @@ export const HomeRecommendZoneManagementView = ({
                           </TableRow>
                         </TableHeader>
                         <TableBody data-api-unique-id="homerecommendzonemanagementview-r971356630b494bfd-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                          {state.drawerItems.map((item, index) => <TableRow key={item.entityId} draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; handlers.onDrawerItemDragStart(index) }} onDragEnter={() => handlers.onDrawerItemDragEnter(index)} onDragEnd={() => { void handlers.onDrawerItemDragEnd(); }} onDragOver={e => e.preventDefault()} className="group h-12 cursor-grab active:cursor-grabbing" data-api-unique-id="homerecommendzonemanagementview-r287fd8a1a11e0b6c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" data-api-in-loop="1">
+                          {(isProductZone ? productZoneDraftItems : state.drawerItems).map((item) => {
+                            const index = state.drawerItems.findIndex((row) => row.entityId === item.entityId)
+                            return <TableRow key={item.entityId} draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; handlers.onDrawerItemDragStart(index) }} onDragEnter={() => handlers.onDrawerItemDragEnter(index)} onDragEnd={() => { void handlers.onDrawerItemDragEnd(); }} onDragOver={e => e.preventDefault()} className="group h-12 cursor-grab active:cursor-grabbing" data-api-unique-id="homerecommendzonemanagementview-r287fd8a1a11e0b6c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" data-api-in-loop="1">
                               {state.drawerFormData.zoneType === 'PRODUCT' ? (
                                 <TableCell className="w-[40px]">
                                   {item.status === 'DRAFT' ? (
@@ -460,7 +600,8 @@ export const HomeRecommendZoneManagementView = ({
                                   <Trash2 className="h-3.5 w-3.5" data-api-unique-id="homerecommendzonemanagementview-r5b548fc4926f7304-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" data-api-in-loop="1" />
                                 </Button>
                               </TableCell>
-                            </TableRow>)}
+                            </TableRow>
+                          })}
                         </TableBody>
                       </Table>
                     </div>}
@@ -508,23 +649,20 @@ export const HomeRecommendZoneManagementView = ({
           <DialogHeader className="px-6 py-4 border-b" data-api-unique-id="homerecommendzonemanagementview-r496fe75bb9e34088-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
             <DialogTitle className="text-lg font-header font-bold flex items-center gap-2" data-api-unique-id="homerecommendzonemanagementview-rdee4958e7657a0b6-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
               {state.drawerFormData.zoneType === 'PRODUCT' ? <Package className="h-5 w-5" data-api-unique-id="homerecommendzonemanagementview-r3ef95d5fd6ea2a36-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" /> : <Layers className="h-5 w-5" data-api-unique-id="homerecommendzonemanagementview-rb08949ceef8f5a46-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />}
-              {state.drawerFormData.zoneType === 'PRODUCT' ? '选择推荐商品' : state.drawerFormData.zoneType === 'SIDE_NAV' ? '选择侧边导航类目' : '选择推荐类目'}
+              {state.drawerFormData.zoneType === 'PRODUCT' ? '选择展示类目' : state.drawerFormData.zoneType === 'SIDE_NAV' ? '选择侧边导航类目' : '选择推荐类目'}
             </DialogTitle>
           </DialogHeader>
 
           {state.drawerFormData.zoneType === 'PRODUCT' ? (
-            <div className="border-b px-6 py-4">
-              <DisplayImageUploadZone
-                loading={state.draftUploadLoading}
-                onUpload={(files) => { void handlers.onUploadDisplayImages(files) }}
-              />
-            </div>
+            <p className="border-b px-6 py-3 text-xs text-muted-foreground">
+              可勾选一级或二级类目，支持多选。保存后前台按这些类目动态拉取已上架商品。
+            </p>
           ) : null}
 
           <div className="px-6 py-4 bg-secondary/20 flex items-center gap-3" data-api-unique-id="homerecommendzonemanagementview-ra3fb634d97f2f3f0-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
             <div className="relative flex-1" data-api-unique-id="homerecommendzonemanagementview-rdfdb4541f7961af1-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-r00939ff619e25db2-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />
-              <Input placeholder={state.drawerFormData.zoneType === 'PRODUCT' ? '搜索名称或商品编码...' : state.drawerFormData.zoneType === 'SIDE_NAV' ? '搜索一级或二级类目名称...' : '搜索类目名称...'} value={state.modalKeyword} onChange={e => handlers.onModalKeywordChange(e.target.value)} onCompositionStart={() => isComposingRef.current = true} onCompositionEnd={() => {
+              <Input placeholder={state.drawerFormData.zoneType === 'SIDE_NAV' ? '搜索一级或二级类目名称...' : '搜索类目名称...'} value={state.modalKeyword} onChange={e => handlers.onModalKeywordChange(e.target.value)} onCompositionStart={() => isComposingRef.current = true} onCompositionEnd={() => {
               isComposingRef.current = false;
             }} onKeyDown={e => {
               if (e.key === 'Enter' && !isComposingRef.current) {
@@ -532,26 +670,24 @@ export const HomeRecommendZoneManagementView = ({
               }
             }} className="pl-9 h-10 border-border focus-visible:ring-primary bg-background" data-api-unique-id="homerecommendzonemanagementview-ra09d6762e2b55557-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />
             </div>
-            
-            {state.drawerFormData.zoneType === 'PRODUCT' && <Select value={state.modalCategoryIdFilter} onValueChange={handlers.onModalCategoryFilterChange} data-api-unique-id="homerecommendzonemanagementview-r4dbc8eea554e2949-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                <SelectTrigger className="w-[220px] h-10 bg-background border-border" data-api-unique-id="homerecommendzonemanagementview-rd84c703826cfe24d-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                  <SelectValue placeholder="全部分类" data-api-unique-id="homerecommendzonemanagementview-rb36c7352948ea7c9-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />
-                </SelectTrigger>
-                <SelectContent className="rounded-md" data-api-unique-id="homerecommendzonemanagementview-r866b0e86d9c16a81-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-                  <SelectItem value="all" data-api-unique-id="homerecommendzonemanagementview-rce76c5bad1b9e858-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">全部分类</SelectItem>
-                  {state.modalFilterCategories.map((c, index) => <SelectItem key={c.id} value={c.id} className="rounded-sm" data-api-unique-id="homerecommendzonemanagementview-r3e1a8d627c77411c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" data-api-in-loop="1">
-                      {c.parentName ? `${c.parentName} > ` : ''}{c.name}
-                    </SelectItem>)}
-                </SelectContent>
-              </Select>}
-            
             <Button onClick={handlers.onModalSearch} disabled={state.modalLoading} className="h-10 px-6" data-api-unique-id="homerecommendzonemanagementview-r3d08c2542f8a1bd8-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
               搜索
             </Button>
           </div>
 
           <div className="flex-1 overflow-auto px-6 py-2" data-api-unique-id="homerecommendzonemanagementview-rf458047ad5c2022b-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-            {state.modalLoading ? <div className="h-64 flex items-center justify-center text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rcac8f96f124c44c9-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">数据加载中...</div> : selectablePageItems.length === 0 && existingIdsInDrawer.length >= modalPageItems.length && modalPageItems.length > 0 ? <div className="h-64 flex items-center justify-center flex-col gap-2" data-api-unique-id="homerecommendzonemanagementview-r5c35905767e7d349-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
+            {state.modalLoading ? (
+              <div className="h-64 flex items-center justify-center text-muted-foreground">数据加载中...</div>
+            ) : isProductZone ? (
+              <ProductZoneCategoryTreeSelect
+                categories={state.modalCategories}
+                keyword={state.modalKeyword}
+                existingIds={existingIdsInDrawer}
+                selectedIds={state.modalSelectedItems.map((item) => item.id)}
+                onToggle={(item, checked) => handlers.onModalToggleSelect(item as any, checked)}
+              />
+            ) : selectablePageItems.length === 0 && existingIdsInDrawer.length >= modalPageItems.length && modalPageItems.length > 0 ? (
+              <div className="h-64 flex items-center justify-center flex-col gap-2">
                  <AlertCircle className="h-8 w-8 text-muted-foreground/30" data-api-unique-id="homerecommendzonemanagementview-r846eb25335793f7d-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />
                  <p className="text-sm text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-r95d47660171edcc6-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">该页数据均已在已选列表中</p>
                </div> : modalPageItems.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rec3a54162843a35c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">未检索到相关结果</div> : <Table className="relative" data-api-unique-id="homerecommendzonemanagementview-rbd2ef0bb2d98ab21-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
@@ -600,7 +736,7 @@ export const HomeRecommendZoneManagementView = ({
 
           <div className="px-6 py-4 border-t bg-secondary/5 flex justify-between items-center" data-api-unique-id="homerecommendzonemanagementview-r4f3f5de59b131432-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
             <div className="flex items-center gap-4" data-api-unique-id="homerecommendzonemanagementview-rcfcbef9f8c2fb25a-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
-              {state.modalTotal > 0 && <div className="flex items-center gap-1.5" data-api-unique-id="homerecommendzonemanagementview-r9b15b66903d9bb31-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
+              {state.modalTotal > 0 && !isProductZone && <div className="flex items-center gap-1.5" data-api-unique-id="homerecommendzonemanagementview-r9b15b66903d9bb31-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                   <Button variant="outline" size="icon" disabled={state.modalPage <= 1} onClick={() => handlers.onModalPageChange(state.modalPage - 1)} className="h-8 w-8 p-0 border-border" data-api-unique-id="homerecommendzonemanagementview-rb90a4faefdf85ed5-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                     <ChevronLeft className="h-4 w-4" data-api-unique-id="homerecommendzonemanagementview-r9d797997a3a0fad5-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />
                   </Button>
@@ -625,16 +761,6 @@ export const HomeRecommendZoneManagementView = ({
               </Button>
             </div>
           </div>
-          {state.drawerFormData.zoneType === 'PRODUCT' ? <div className="border-t bg-accent/5 px-6 py-4" data-controller-name="商品集合快捷创建区" data-api-unique-id='homerecommendzonemanagementview-r097e2aa36378e3c2-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView'>
-              <div className="space-y-3 rounded-xl border border-accent/20 bg-background/80 p-4" data-api-unique-id='homerecommendzonemanagementview-rc9af20828221be0a-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView'>
-                <div className="space-y-1" data-api-unique-id='homerecommendzonemanagementview-r22b585d39d4962c7-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView'>
-                  <Label className="text-xs font-bold uppercase tracking-wider text-accent" data-api-unique-id='homerecommendzonemanagementview-rc3d4343a12b0efd5-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView'>将当前所选商品保存为新商品集合（可选）</Label>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground" data-api-unique-id='homerecommendzonemanagementview-rc19195a5ed886cae-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView'>输入集合名称后，保存专区时会自动创建并绑定永久集合；留空则只保存当前自定义列表。</p>
-                </div>
-                <Input value={state.modalCollectionName} onChange={e => handlers.onDrawerFieldChange('collectionName', e.target.value)} placeholder="例如：七夕饰品精选" className="border-accent/30 bg-background px-3 focus-visible:ring-accent" data-api-unique-id='homerecommendzonemanagementview-re12590a67979007e-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView' />
-                <p className="text-[11px] text-muted-foreground" data-api-unique-id='homerecommendzonemanagementview-r0329fe8b6a325adc-s2152852823' data-api-unique-page-name='src/backend/components/HomeRecommendZoneManagementView'>{state.modalCollectionName.trim() ? '当前已填写集合名称，保存专区后会创建或更新永久集合。' : '当前未填写集合名称，保存专区后仅保留专区内的临时商品列表。'}</p>
-              </div>
-            </div> : null}
         </DialogContent>
       </Dialog>
     </div>;

@@ -222,11 +222,50 @@ export const getHomeRecommendZones = async (input?: {
         ),
     ),
   )
+  const productZoneSourceCategoryIds = Array.from(
+    new Set(
+      zones
+        .filter((zone) => zone.zoneType === 'PRODUCT')
+        .flatMap((zone) =>
+          zone.items
+            .map((item) => item.categoryId || (item.entityType === 'CATEGORY' ? item.category?.id : null) || null)
+            .filter((id): id is string => Boolean(id)),
+        ),
+    ),
+  )
+  const productZoneChildCategories =
+    productZoneSourceCategoryIds.length > 0
+      ? await prisma.category.findMany({
+          where: {
+            parentId: { in: productZoneSourceCategoryIds },
+            status: 'ACTIVE',
+          },
+          select: { id: true, parentId: true },
+        })
+      : []
+  const productZoneExpandMap = new Map<string, Set<string>>()
+  for (const categoryId of productZoneSourceCategoryIds) {
+    productZoneExpandMap.set(categoryId, new Set([categoryId]))
+  }
+  for (const child of productZoneChildCategories) {
+    if (!child.parentId) continue
+    const bucket = productZoneExpandMap.get(child.parentId) || new Set([child.parentId])
+    bucket.add(child.id)
+    productZoneExpandMap.set(child.parentId, bucket)
+  }
+  const productZoneQueryIds = Array.from(
+    new Set([
+      ...productZoneSourceCategoryIds,
+      ...productZoneChildCategories.map((item) => item.id),
+    ]),
+  )
+  const fetchCategoryIds = Array.from(new Set([...categoryZoneCategoryIds, ...productZoneQueryIds]))
   const maxLatestPerCategory = Math.max(
     DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT,
     ...zones
       .filter((zone) => zone.zoneType === 'CATEGORY')
       .map((zone) => normalizePcCols(zone.pcCols)),
+    productZoneSourceCategoryIds.length > 0 ? 80 : 0,
   )
   const productCountByCategoryId = new Map<string, number>()
   const loadProductCounts = async () => {
@@ -259,8 +298,8 @@ export const getHomeRecommendZones = async (input?: {
 
   const latestProductsByCategoryId = new Map<string, HomeRecommendProductCard[]>()
 
-  if (categoryZoneCategoryIds.length > 0) {
-    const latestTake = Math.min(180, Math.max(24, categoryZoneCategoryIds.length * maxLatestPerCategory * 3))
+  if (fetchCategoryIds.length > 0) {
+    const latestTake = Math.min(400, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)))
     const [, latestCandidates] = await Promise.all([
       loadProductCounts(),
       prisma.product.findMany({
@@ -268,9 +307,9 @@ export const getHomeRecommendZones = async (input?: {
         status: 'ACTIVE',
         mainImageUrl: { not: '' },
         OR: [
-          { categoryId: { in: categoryZoneCategoryIds } },
-          { brandCategoryId: { in: categoryZoneCategoryIds } },
-          { relationCategories: { some: { categoryId: { in: categoryZoneCategoryIds } } } },
+          { categoryId: { in: fetchCategoryIds } },
+          { brandCategoryId: { in: fetchCategoryIds } },
+          { relationCategories: { some: { categoryId: { in: fetchCategoryIds } } } },
         ],
         skus: { some: {} },
       },
@@ -438,14 +477,14 @@ export const getHomeRecommendZones = async (input?: {
 
     for (const product of latestCandidates) {
       const linkedCategoryIds = new Set<string>()
-      if (product.categoryId && categoryZoneCategoryIds.includes(product.categoryId)) {
+      if (product.categoryId && fetchCategoryIds.includes(product.categoryId)) {
         linkedCategoryIds.add(product.categoryId)
       }
-      if (product.brandCategoryId && categoryZoneCategoryIds.includes(product.brandCategoryId)) {
+      if (product.brandCategoryId && fetchCategoryIds.includes(product.brandCategoryId)) {
         linkedCategoryIds.add(product.brandCategoryId)
       }
       for (const relation of product.relationCategories) {
-        if (categoryZoneCategoryIds.includes(relation.categoryId)) {
+        if (fetchCategoryIds.includes(relation.categoryId)) {
           linkedCategoryIds.add(relation.categoryId)
         }
       }
@@ -469,7 +508,10 @@ export const getHomeRecommendZones = async (input?: {
         zone.zoneType === 'CATEGORY'
           ? Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, normalizePcCols(zone.pcCols))
           : DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT
-      const items = zone.items.reduce<Array<HomeRecommendProductCard | HomeRecommendCategoryCard | HomeRecommendSideNavItem>>((acc, item) => {
+      let items = zone.items.reduce<Array<HomeRecommendProductCard | HomeRecommendCategoryCard | HomeRecommendSideNavItem>>((acc, item) => {
+        if (zone.zoneType === 'PRODUCT' && item.entityType === 'CATEGORY') {
+          return acc
+        }
         if (item.entityType === 'PRODUCT') {
           const product = item.product
           if (!product || (product.status !== 'ACTIVE' && product.status !== 'DRAFT')) {
@@ -654,6 +696,35 @@ export const getHomeRecommendZones = async (input?: {
 
         return acc
       }, [])
+
+      if (zone.zoneType === 'PRODUCT') {
+        const selectedCategoryIds = zone.items
+          .map((item) => item.categoryId || (item.entityType === 'CATEGORY' ? item.category?.id : null))
+          .filter((id): id is string => Boolean(id))
+        const productItems = items.filter(
+          (item): item is HomeRecommendProductCard => item.entityType === 'PRODUCT',
+        )
+        if (selectedCategoryIds.length > 0) {
+          const seen = new Set(productItems.map((item) => item.productId))
+          const dynamicProducts: HomeRecommendProductCard[] = []
+          for (const categoryId of selectedCategoryIds) {
+            const queryIds = productZoneExpandMap.get(categoryId) || new Set([categoryId])
+            for (const queryId of queryIds) {
+              for (const card of latestProductsByCategoryId.get(queryId) || []) {
+                if (seen.has(card.productId)) continue
+                seen.add(card.productId)
+                dynamicProducts.push({
+                  ...card,
+                  itemId: `zone-${zone.id}-${card.productId}`,
+                })
+              }
+            }
+          }
+          items = [...productItems, ...dynamicProducts]
+        } else {
+          items = productItems
+        }
+      }
 
       // 激活专区即使暂无有效明细也保留，保证绿灯专区数量与前台区块一致
       return {
@@ -985,7 +1056,7 @@ const mapActiveProductToItem = (
     sku_count: skuCount,
     first_sku_id: defaultSku ? defaultSku.id : '',
     first_sku_price_rmb: priceRmb,
-    created_at_timestamp: product.createdAt.getTime(),
+    created_at_timestamp: product.createdAt ? new Date(product.createdAt).getTime() : 0,
     sort_weight: product.sortWeight,
     brand_category_id: product.brandCategoryId,
     brand_category_name: product.brandCategory?.name || null,
@@ -1310,10 +1381,17 @@ const resolveComingDayFromProduct = (product: ComingSoonProductRow) => {
     }
   }
   const anchor = product.publishedAt || product.createdAt
+  if (!anchor) {
+    return {
+      key: toDateKey(new Date()),
+      label: toDateLabel(new Date()),
+      anchorMs: Date.now(),
+    }
+  }
   return {
     key: toDateKey(anchor),
     label: toDateLabel(anchor),
-    anchorMs: anchor.getTime(),
+    anchorMs: anchor instanceof Date ? anchor.getTime() : new Date(anchor).getTime(),
   }
 }
 

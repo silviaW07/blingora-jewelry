@@ -420,6 +420,16 @@ type ResolvedCategoryContext = {
   categoryIdsForQuery: string[]
 }
 
+const hasCategoryParentId = (parentId?: string | null) => {
+  const text = String(parentId || '').trim()
+  return text.length > 0 && text !== '0'
+}
+
+const isStorefrontLevel1 = (cat: { level?: number | null; parentId?: string | null }) =>
+  !hasCategoryParentId(cat.parentId) && Number(cat.level) !== 2
+
+const isStorefrontLevel2 = (cat: { parentId?: string | null }) => hasCategoryParentId(cat.parentId)
+
 const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCategoryContext> => {
   if (!categoryId) {
     return {
@@ -451,8 +461,7 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     }
   }
 
-  // L1 = level 1 or root (no parent). Expand to all ACTIVE direct L2 children.
-  const isL1 = currentCategory.level === 1 || !currentCategory.parentId
+  const isL1 = isStorefrontLevel1(currentCategory)
   if (isL1) {
     const descendants = await prisma.category.findMany({
       where: {
@@ -613,8 +622,10 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
     ]
   })
 
-  const mainCategories = categories.filter(cat => cat.level === 1 && !cat.isBrandCategory && cat.navConfig?.isVisible !== false)
-  const childCategories = categories.filter(cat => cat.level === 2 && !cat.isBrandCategory)
+  const mainCategories = categories.filter(
+    cat => isStorefrontLevel1(cat) && !cat.isBrandCategory && cat.navConfig?.isVisible !== false,
+  )
+  const childCategories = categories.filter(cat => isStorefrontLevel2(cat) && !cat.isBrandCategory)
   const brandCategories = categories.filter(cat => cat.isBrandCategory)
 
   return {
@@ -1149,7 +1160,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       sku_count: skuCount,
       first_sku_id: defaultSku ? defaultSku.id : '',
       first_sku_price_rmb: priceRmb,
-      created_at_timestamp: p.createdAt.getTime(),
+      created_at_timestamp: p.createdAt ? new Date(p.createdAt).getTime() : 0,
       sort_weight: p.sortWeight,
       brand_category_id: p.brandCategoryId,
       brand_category_name: p.brandCategory

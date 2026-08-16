@@ -13,7 +13,6 @@ import {
   updateRecommendZoneStatus,
   batchUpdateZoneSortWeight,
   batchUpdateZoneItemSortWeight,
-  getSelectableProducts,
   getSelectableCategories,
   createDraftDisplayProducts,
   deleteDraftDisplayProducts,
@@ -236,14 +235,13 @@ export const useHomeRecommendZoneManagement = (): {
     setModalLoading(true)
     try {
       if (drawerFormData.zoneType === 'PRODUCT') {
-        const data = await getSelectableProducts({
-          keyword: modalKeyword,
-          categoryId: modalCategoryIdFilter === 'all' ? undefined : modalCategoryIdFilter,
-          page: modalPage,
-          pageSize: 10
+        const data = await getSelectableCategories({
+          page: 1,
+          pageSize: 500,
         })
-        setModalProducts(data.list)
+        setModalCategories(data.list)
         setModalTotal(data.total)
+        setModalProducts([])
       } else {
         const data = await getSelectableCategories({
           keyword: modalKeyword,
@@ -263,18 +261,6 @@ export const useHomeRecommendZoneManagement = (): {
   useEffect(() => {
     fetchModalData()
   }, [fetchModalData])
-
-  useEffect(() => {
-    const fetchFilter = async () => {
-      if (selectorOpen && drawerFormData.zoneType === 'PRODUCT') {
-        try {
-          const data = await getSelectableCategories({ page: 1, pageSize: 100 })
-          setModalFilterCategories(data.list)
-        } catch (e: unknown) {}
-      }
-    }
-    fetchFilter()
-  }, [selectorOpen, drawerFormData.zoneType])
 
   // --- Handlers 实现 ---
   const handlers: HomeRecommendZoneManagementHandlers = {
@@ -429,12 +415,24 @@ export const useHomeRecommendZoneManagement = (): {
         const baseSortWeight = drawerItems.length * 10
         const formattedItems = drawerItems.map((item, index) => ({
           entityId: item.entityId,
-          sortWeight: baseSortWeight - index * 10
+          sortWeight: baseSortWeight - index * 10,
+          itemKind:
+            'itemKind' in item && (item.itemKind === 'PRODUCT' || item.itemKind === 'CATEGORY')
+              ? item.itemKind
+              : drawerFormData.zoneType === 'PRODUCT'
+                ? item.status === 'DRAFT'
+                  ? 'PRODUCT'
+                  : 'CATEGORY'
+                : undefined,
         }))
+        const categoryIds = formattedItems
+          .filter((item) => item.itemKind !== 'PRODUCT')
+          .map((item) => item.entityId)
         const payload = {
           ...drawerFormData,
           collectionName: drawerFormData.zoneType === 'PRODUCT' ? modalCollectionName.trim() : '',
-          items: formattedItems
+          items: formattedItems,
+          categoryIds: drawerFormData.zoneType === 'PRODUCT' ? categoryIds : undefined,
         }
         if (editingId) {
           await updateRecommendZone({ id: editingId, ...payload })
@@ -569,8 +567,17 @@ export const useHomeRecommendZoneManagement = (): {
       if (checked) {
         let newItem: ZoneDetailContentItem | SideNavCategoryItem
         if (drawerFormData.zoneType === 'PRODUCT') {
-          const p = item as SelectableProductItem
-          newItem = { id: p.id, entityId: p.id, name: p.name, codeOrSku: p.productCode, imageUrl: p.mainImageUrl, status: 'ACTIVE', sortWeight: 0 }
+          const c = item as SelectableCategoryItem
+          newItem = {
+            id: c.id,
+            entityId: c.id,
+            name: c.name,
+            codeOrSku: c.parentName ? `${c.parentName} / ${c.name}` : c.name,
+            imageUrl: c.imageUrl,
+            status: 'ACTIVE',
+            sortWeight: 0,
+            itemKind: 'CATEGORY',
+          }
         } else {
           const c = item as SelectableCategoryItem
           const baseCategoryItem = {
@@ -598,14 +605,23 @@ export const useHomeRecommendZoneManagement = (): {
       }
     },
     onModalToggleAll: (checked) => {
-      const pageItems = drawerFormData.zoneType === 'PRODUCT' ? modalProducts : modalCategories
+      const pageItems = modalCategories
       const existingIds = drawerItems.map(i => i.entityId)
       const selectablePageItems = pageItems.filter(item => !existingIds.includes(item.id))
       if (checked) {
         const toAdd = selectablePageItems.filter(p => !modalSelectedItems.some(si => si.id === p.id)).map(p => {
           if (drawerFormData.zoneType === 'PRODUCT') {
-            const pi = p as SelectableProductItem
-            return { id: pi.id, entityId: pi.id, name: pi.name, codeOrSku: pi.productCode, imageUrl: pi.mainImageUrl, status: 'ACTIVE', sortWeight: 0 }
+            const ci = p as SelectableCategoryItem
+            return {
+              id: ci.id,
+              entityId: ci.id,
+              name: ci.name,
+              codeOrSku: ci.parentName ? `${ci.parentName} / ${ci.name}` : ci.name,
+              imageUrl: ci.imageUrl,
+              status: 'ACTIVE',
+              sortWeight: 0,
+              itemKind: 'CATEGORY' as const,
+            }
           } else {
             const ci = p as SelectableCategoryItem
             const baseCategoryItem = { id: ci.id, entityId: ci.id, name: ci.name, codeOrSku: '-', imageUrl: ci.imageUrl, status: 'ACTIVE', sortWeight: 0 }

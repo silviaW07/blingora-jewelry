@@ -248,6 +248,16 @@ export type product_keyword_relations = $Result.DefaultSelection<Prisma.$product
  * 
  */
 export type keywordgroupproduct = $Result.DefaultSelection<Prisma.$keywordgroupproductPayload>
+/**
+ * Model suffixconfig
+ * 商品标题后缀预设（“批量加后缀”下拉框数据源，支持自定义 CRUD）
+ */
+export type suffixconfig = $Result.DefaultSelection<Prisma.$suffixconfigPayload>
+/**
+ * Model brandalias
+ * 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD
+ */
+export type brandalias = $Result.DefaultSelection<Prisma.$brandaliasPayload>
 
 /**
  * Enums
@@ -255,7 +265,8 @@ export type keywordgroupproduct = $Result.DefaultSelection<Prisma.$keywordgroupp
 export namespace $Enums {
   export const userrole: {
   CUSTOMER: 'CUSTOMER',
-  ADMIN: 'ADMIN'
+  ADMIN: 'ADMIN',
+  SUB_ADMIN: 'SUB_ADMIN'
 };
 
 export type userrole = (typeof userrole)[keyof typeof userrole]
@@ -1187,6 +1198,26 @@ export class PrismaClient<
     * ```
     */
   get keywordgroupproduct(): Prisma.keywordgroupproductDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.suffixconfig`: Exposes CRUD operations for the **suffixconfig** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Suffixconfigs
+    * const suffixconfigs = await prisma.suffixconfig.findMany()
+    * ```
+    */
+  get suffixconfig(): Prisma.suffixconfigDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.brandalias`: Exposes CRUD operations for the **brandalias** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Brandaliases
+    * const brandaliases = await prisma.brandalias.findMany()
+    * ```
+    */
+  get brandalias(): Prisma.brandaliasDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -1674,7 +1705,9 @@ export namespace Prisma {
     categorybanner: 'categorybanner',
     product_category_relations: 'product_category_relations',
     product_keyword_relations: 'product_keyword_relations',
-    keywordgroupproduct: 'keywordgroupproduct'
+    keywordgroupproduct: 'keywordgroupproduct',
+    suffixconfig: 'suffixconfig',
+    brandalias: 'brandalias'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1693,7 +1726,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct"
+      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -4799,6 +4832,138 @@ export namespace Prisma {
           }
         }
       }
+      suffixconfig: {
+        payload: Prisma.$suffixconfigPayload<ExtArgs>
+        fields: Prisma.suffixconfigFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.suffixconfigFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.suffixconfigFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>
+          }
+          findFirst: {
+            args: Prisma.suffixconfigFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.suffixconfigFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>
+          }
+          findMany: {
+            args: Prisma.suffixconfigFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>[]
+          }
+          create: {
+            args: Prisma.suffixconfigCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>
+          }
+          createMany: {
+            args: Prisma.suffixconfigCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.suffixconfigDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>
+          }
+          update: {
+            args: Prisma.suffixconfigUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>
+          }
+          deleteMany: {
+            args: Prisma.suffixconfigDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.suffixconfigUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.suffixconfigUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$suffixconfigPayload>
+          }
+          aggregate: {
+            args: Prisma.SuffixconfigAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateSuffixconfig>
+          }
+          groupBy: {
+            args: Prisma.suffixconfigGroupByArgs<ExtArgs>
+            result: $Utils.Optional<SuffixconfigGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.suffixconfigCountArgs<ExtArgs>
+            result: $Utils.Optional<SuffixconfigCountAggregateOutputType> | number
+          }
+        }
+      }
+      brandalias: {
+        payload: Prisma.$brandaliasPayload<ExtArgs>
+        fields: Prisma.brandaliasFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.brandaliasFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.brandaliasFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>
+          }
+          findFirst: {
+            args: Prisma.brandaliasFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.brandaliasFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>
+          }
+          findMany: {
+            args: Prisma.brandaliasFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>[]
+          }
+          create: {
+            args: Prisma.brandaliasCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>
+          }
+          createMany: {
+            args: Prisma.brandaliasCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.brandaliasDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>
+          }
+          update: {
+            args: Prisma.brandaliasUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>
+          }
+          deleteMany: {
+            args: Prisma.brandaliasDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.brandaliasUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.brandaliasUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$brandaliasPayload>
+          }
+          aggregate: {
+            args: Prisma.BrandaliasAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateBrandalias>
+          }
+          groupBy: {
+            args: Prisma.brandaliasGroupByArgs<ExtArgs>
+            result: $Utils.Optional<BrandaliasGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.brandaliasCountArgs<ExtArgs>
+            result: $Utils.Optional<BrandaliasCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -4942,6 +5107,8 @@ export namespace Prisma {
     product_category_relations?: product_category_relationsOmit
     product_keyword_relations?: product_keyword_relationsOmit
     keywordgroupproduct?: keywordgroupproductOmit
+    suffixconfig?: suffixconfigOmit
+    brandalias?: brandaliasOmit
   }
 
   /* Types for Logging */
@@ -5959,7 +6126,6 @@ export namespace Prisma {
     id: string | null
     account: string | null
     password: string | null
-    passwordPlain: string | null
     email: string | null
     role: $Enums.userrole | null
     status: $Enums.userstatus | null
@@ -5972,6 +6138,7 @@ export namespace Prisma {
     countryName: string | null
     purchaseCount: number | null
     adminNote: string | null
+    customerType: string | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -5984,7 +6151,6 @@ export namespace Prisma {
     id: string | null
     account: string | null
     password: string | null
-    passwordPlain: string | null
     email: string | null
     role: $Enums.userrole | null
     status: $Enums.userstatus | null
@@ -5997,6 +6163,7 @@ export namespace Prisma {
     countryName: string | null
     purchaseCount: number | null
     adminNote: string | null
+    customerType: string | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6009,7 +6176,6 @@ export namespace Prisma {
     id: number
     account: number
     password: number
-    passwordPlain: number
     email: number
     role: number
     status: number
@@ -6022,6 +6188,7 @@ export namespace Prisma {
     countryName: number
     purchaseCount: number
     adminNote: number
+    customerType: number
     ringSizeUs: number
     ringSizeEu: number
     braceletSize: number
@@ -6046,7 +6213,6 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
-    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6059,6 +6225,7 @@ export namespace Prisma {
     countryName?: true
     purchaseCount?: true
     adminNote?: true
+    customerType?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6071,7 +6238,6 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
-    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6084,6 +6250,7 @@ export namespace Prisma {
     countryName?: true
     purchaseCount?: true
     adminNote?: true
+    customerType?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6096,7 +6263,6 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
-    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6109,6 +6275,7 @@ export namespace Prisma {
     countryName?: true
     purchaseCount?: true
     adminNote?: true
+    customerType?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6210,7 +6377,6 @@ export namespace Prisma {
     id: string
     account: string
     password: string
-    passwordPlain: string | null
     email: string
     role: $Enums.userrole
     status: $Enums.userstatus
@@ -6223,6 +6389,7 @@ export namespace Prisma {
     countryName: string | null
     purchaseCount: number
     adminNote: string | null
+    customerType: string
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6256,7 +6423,6 @@ export namespace Prisma {
     id?: boolean
     account?: boolean
     password?: boolean
-    passwordPlain?: boolean
     email?: boolean
     role?: boolean
     status?: boolean
@@ -6269,6 +6435,7 @@ export namespace Prisma {
     countryName?: boolean
     purchaseCount?: boolean
     adminNote?: boolean
+    customerType?: boolean
     ringSizeUs?: boolean
     ringSizeEu?: boolean
     braceletSize?: boolean
@@ -6297,7 +6464,6 @@ export namespace Prisma {
     id?: boolean
     account?: boolean
     password?: boolean
-    passwordPlain?: boolean
     email?: boolean
     role?: boolean
     status?: boolean
@@ -6310,6 +6476,7 @@ export namespace Prisma {
     countryName?: boolean
     purchaseCount?: boolean
     adminNote?: boolean
+    customerType?: boolean
     ringSizeUs?: boolean
     ringSizeEu?: boolean
     braceletSize?: boolean
@@ -6320,7 +6487,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
+  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
   export type sysuserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     carts?: boolean | sysuser$cartsArgs<ExtArgs>
     importTasks?: boolean | sysuser$importTasksArgs<ExtArgs>
@@ -6355,10 +6522,6 @@ export namespace Prisma {
       id: string
       account: string
       password: string
-      /**
-       * * 明文密码（仅供后台客服协助；登录仍校验 password 哈希）
-       */
-      passwordPlain: string | null
       email: string
       role: $Enums.userrole
       status: $Enums.userstatus
@@ -6371,6 +6534,7 @@ export namespace Prisma {
       countryName: string | null
       purchaseCount: number
       adminNote: string | null
+      customerType: string
       ringSizeUs: string | null
       ringSizeEu: string | null
       braceletSize: string | null
@@ -6762,7 +6926,6 @@ export namespace Prisma {
     readonly id: FieldRef<"sysuser", 'String'>
     readonly account: FieldRef<"sysuser", 'String'>
     readonly password: FieldRef<"sysuser", 'String'>
-    readonly passwordPlain: FieldRef<"sysuser", 'String'>
     readonly email: FieldRef<"sysuser", 'String'>
     readonly role: FieldRef<"sysuser", 'userrole'>
     readonly status: FieldRef<"sysuser", 'userstatus'>
@@ -6775,6 +6938,7 @@ export namespace Prisma {
     readonly countryName: FieldRef<"sysuser", 'String'>
     readonly purchaseCount: FieldRef<"sysuser", 'Int'>
     readonly adminNote: FieldRef<"sysuser", 'String'>
+    readonly customerType: FieldRef<"sysuser", 'String'>
     readonly ringSizeUs: FieldRef<"sysuser", 'String'>
     readonly ringSizeEu: FieldRef<"sysuser", 'String'>
     readonly braceletSize: FieldRef<"sysuser", 'String'>
@@ -56114,6 +56278,1849 @@ export namespace Prisma {
 
 
   /**
+   * Model suffixconfig
+   */
+
+  export type AggregateSuffixconfig = {
+    _count: SuffixconfigCountAggregateOutputType | null
+    _avg: SuffixconfigAvgAggregateOutputType | null
+    _sum: SuffixconfigSumAggregateOutputType | null
+    _min: SuffixconfigMinAggregateOutputType | null
+    _max: SuffixconfigMaxAggregateOutputType | null
+  }
+
+  export type SuffixconfigAvgAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type SuffixconfigSumAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type SuffixconfigMinAggregateOutputType = {
+    id: string | null
+    suffixName: string | null
+    sortWeight: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type SuffixconfigMaxAggregateOutputType = {
+    id: string | null
+    suffixName: string | null
+    sortWeight: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type SuffixconfigCountAggregateOutputType = {
+    id: number
+    suffixName: number
+    sortWeight: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type SuffixconfigAvgAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type SuffixconfigSumAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type SuffixconfigMinAggregateInputType = {
+    id?: true
+    suffixName?: true
+    sortWeight?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type SuffixconfigMaxAggregateInputType = {
+    id?: true
+    suffixName?: true
+    sortWeight?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type SuffixconfigCountAggregateInputType = {
+    id?: true
+    suffixName?: true
+    sortWeight?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type SuffixconfigAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which suffixconfig to aggregate.
+     */
+    where?: suffixconfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of suffixconfigs to fetch.
+     */
+    orderBy?: suffixconfigOrderByWithRelationInput | suffixconfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: suffixconfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` suffixconfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` suffixconfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned suffixconfigs
+    **/
+    _count?: true | SuffixconfigCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: SuffixconfigAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: SuffixconfigSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: SuffixconfigMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: SuffixconfigMaxAggregateInputType
+  }
+
+  export type GetSuffixconfigAggregateType<T extends SuffixconfigAggregateArgs> = {
+        [P in keyof T & keyof AggregateSuffixconfig]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateSuffixconfig[P]>
+      : GetScalarType<T[P], AggregateSuffixconfig[P]>
+  }
+
+
+
+
+  export type suffixconfigGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: suffixconfigWhereInput
+    orderBy?: suffixconfigOrderByWithAggregationInput | suffixconfigOrderByWithAggregationInput[]
+    by: SuffixconfigScalarFieldEnum[] | SuffixconfigScalarFieldEnum
+    having?: suffixconfigScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: SuffixconfigCountAggregateInputType | true
+    _avg?: SuffixconfigAvgAggregateInputType
+    _sum?: SuffixconfigSumAggregateInputType
+    _min?: SuffixconfigMinAggregateInputType
+    _max?: SuffixconfigMaxAggregateInputType
+  }
+
+  export type SuffixconfigGroupByOutputType = {
+    id: string
+    suffixName: string
+    sortWeight: number
+    createdAt: Date
+    updatedAt: Date
+    _count: SuffixconfigCountAggregateOutputType | null
+    _avg: SuffixconfigAvgAggregateOutputType | null
+    _sum: SuffixconfigSumAggregateOutputType | null
+    _min: SuffixconfigMinAggregateOutputType | null
+    _max: SuffixconfigMaxAggregateOutputType | null
+  }
+
+  type GetSuffixconfigGroupByPayload<T extends suffixconfigGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<SuffixconfigGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof SuffixconfigGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], SuffixconfigGroupByOutputType[P]>
+            : GetScalarType<T[P], SuffixconfigGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type suffixconfigSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    suffixName?: boolean
+    sortWeight?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["suffixconfig"]>
+
+
+
+  export type suffixconfigSelectScalar = {
+    id?: boolean
+    suffixName?: boolean
+    sortWeight?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type suffixconfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "suffixName" | "sortWeight" | "createdAt" | "updatedAt", ExtArgs["result"]["suffixconfig"]>
+
+  export type $suffixconfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "suffixconfig"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      suffixName: string
+      sortWeight: number
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["suffixconfig"]>
+    composites: {}
+  }
+
+  type suffixconfigGetPayload<S extends boolean | null | undefined | suffixconfigDefaultArgs> = $Result.GetResult<Prisma.$suffixconfigPayload, S>
+
+  type suffixconfigCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<suffixconfigFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: SuffixconfigCountAggregateInputType | true
+    }
+
+  export interface suffixconfigDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['suffixconfig'], meta: { name: 'suffixconfig' } }
+    /**
+     * Find zero or one Suffixconfig that matches the filter.
+     * @param {suffixconfigFindUniqueArgs} args - Arguments to find a Suffixconfig
+     * @example
+     * // Get one Suffixconfig
+     * const suffixconfig = await prisma.suffixconfig.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends suffixconfigFindUniqueArgs>(args: SelectSubset<T, suffixconfigFindUniqueArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Suffixconfig that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {suffixconfigFindUniqueOrThrowArgs} args - Arguments to find a Suffixconfig
+     * @example
+     * // Get one Suffixconfig
+     * const suffixconfig = await prisma.suffixconfig.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends suffixconfigFindUniqueOrThrowArgs>(args: SelectSubset<T, suffixconfigFindUniqueOrThrowArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Suffixconfig that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {suffixconfigFindFirstArgs} args - Arguments to find a Suffixconfig
+     * @example
+     * // Get one Suffixconfig
+     * const suffixconfig = await prisma.suffixconfig.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends suffixconfigFindFirstArgs>(args?: SelectSubset<T, suffixconfigFindFirstArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Suffixconfig that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {suffixconfigFindFirstOrThrowArgs} args - Arguments to find a Suffixconfig
+     * @example
+     * // Get one Suffixconfig
+     * const suffixconfig = await prisma.suffixconfig.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends suffixconfigFindFirstOrThrowArgs>(args?: SelectSubset<T, suffixconfigFindFirstOrThrowArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Suffixconfigs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {suffixconfigFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Suffixconfigs
+     * const suffixconfigs = await prisma.suffixconfig.findMany()
+     * 
+     * // Get first 10 Suffixconfigs
+     * const suffixconfigs = await prisma.suffixconfig.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const suffixconfigWithIdOnly = await prisma.suffixconfig.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends suffixconfigFindManyArgs>(args?: SelectSubset<T, suffixconfigFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Suffixconfig.
+     * @param {suffixconfigCreateArgs} args - Arguments to create a Suffixconfig.
+     * @example
+     * // Create one Suffixconfig
+     * const Suffixconfig = await prisma.suffixconfig.create({
+     *   data: {
+     *     // ... data to create a Suffixconfig
+     *   }
+     * })
+     * 
+     */
+    create<T extends suffixconfigCreateArgs>(args: SelectSubset<T, suffixconfigCreateArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Suffixconfigs.
+     * @param {suffixconfigCreateManyArgs} args - Arguments to create many Suffixconfigs.
+     * @example
+     * // Create many Suffixconfigs
+     * const suffixconfig = await prisma.suffixconfig.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends suffixconfigCreateManyArgs>(args?: SelectSubset<T, suffixconfigCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Suffixconfig.
+     * @param {suffixconfigDeleteArgs} args - Arguments to delete one Suffixconfig.
+     * @example
+     * // Delete one Suffixconfig
+     * const Suffixconfig = await prisma.suffixconfig.delete({
+     *   where: {
+     *     // ... filter to delete one Suffixconfig
+     *   }
+     * })
+     * 
+     */
+    delete<T extends suffixconfigDeleteArgs>(args: SelectSubset<T, suffixconfigDeleteArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Suffixconfig.
+     * @param {suffixconfigUpdateArgs} args - Arguments to update one Suffixconfig.
+     * @example
+     * // Update one Suffixconfig
+     * const suffixconfig = await prisma.suffixconfig.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends suffixconfigUpdateArgs>(args: SelectSubset<T, suffixconfigUpdateArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Suffixconfigs.
+     * @param {suffixconfigDeleteManyArgs} args - Arguments to filter Suffixconfigs to delete.
+     * @example
+     * // Delete a few Suffixconfigs
+     * const { count } = await prisma.suffixconfig.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends suffixconfigDeleteManyArgs>(args?: SelectSubset<T, suffixconfigDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Suffixconfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {suffixconfigUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Suffixconfigs
+     * const suffixconfig = await prisma.suffixconfig.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends suffixconfigUpdateManyArgs>(args: SelectSubset<T, suffixconfigUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Suffixconfig.
+     * @param {suffixconfigUpsertArgs} args - Arguments to update or create a Suffixconfig.
+     * @example
+     * // Update or create a Suffixconfig
+     * const suffixconfig = await prisma.suffixconfig.upsert({
+     *   create: {
+     *     // ... data to create a Suffixconfig
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Suffixconfig we want to update
+     *   }
+     * })
+     */
+    upsert<T extends suffixconfigUpsertArgs>(args: SelectSubset<T, suffixconfigUpsertArgs<ExtArgs>>): Prisma__suffixconfigClient<$Result.GetResult<Prisma.$suffixconfigPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Suffixconfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {suffixconfigCountArgs} args - Arguments to filter Suffixconfigs to count.
+     * @example
+     * // Count the number of Suffixconfigs
+     * const count = await prisma.suffixconfig.count({
+     *   where: {
+     *     // ... the filter for the Suffixconfigs we want to count
+     *   }
+     * })
+    **/
+    count<T extends suffixconfigCountArgs>(
+      args?: Subset<T, suffixconfigCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], SuffixconfigCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Suffixconfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SuffixconfigAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends SuffixconfigAggregateArgs>(args: Subset<T, SuffixconfigAggregateArgs>): Prisma.PrismaPromise<GetSuffixconfigAggregateType<T>>
+
+    /**
+     * Group by Suffixconfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {suffixconfigGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends suffixconfigGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: suffixconfigGroupByArgs['orderBy'] }
+        : { orderBy?: suffixconfigGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, suffixconfigGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetSuffixconfigGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the suffixconfig model
+   */
+  readonly fields: suffixconfigFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for suffixconfig.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__suffixconfigClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the suffixconfig model
+   */
+  interface suffixconfigFieldRefs {
+    readonly id: FieldRef<"suffixconfig", 'String'>
+    readonly suffixName: FieldRef<"suffixconfig", 'String'>
+    readonly sortWeight: FieldRef<"suffixconfig", 'Int'>
+    readonly createdAt: FieldRef<"suffixconfig", 'DateTime'>
+    readonly updatedAt: FieldRef<"suffixconfig", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * suffixconfig findUnique
+   */
+  export type suffixconfigFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * Filter, which suffixconfig to fetch.
+     */
+    where: suffixconfigWhereUniqueInput
+  }
+
+  /**
+   * suffixconfig findUniqueOrThrow
+   */
+  export type suffixconfigFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * Filter, which suffixconfig to fetch.
+     */
+    where: suffixconfigWhereUniqueInput
+  }
+
+  /**
+   * suffixconfig findFirst
+   */
+  export type suffixconfigFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * Filter, which suffixconfig to fetch.
+     */
+    where?: suffixconfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of suffixconfigs to fetch.
+     */
+    orderBy?: suffixconfigOrderByWithRelationInput | suffixconfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for suffixconfigs.
+     */
+    cursor?: suffixconfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` suffixconfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` suffixconfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of suffixconfigs.
+     */
+    distinct?: SuffixconfigScalarFieldEnum | SuffixconfigScalarFieldEnum[]
+  }
+
+  /**
+   * suffixconfig findFirstOrThrow
+   */
+  export type suffixconfigFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * Filter, which suffixconfig to fetch.
+     */
+    where?: suffixconfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of suffixconfigs to fetch.
+     */
+    orderBy?: suffixconfigOrderByWithRelationInput | suffixconfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for suffixconfigs.
+     */
+    cursor?: suffixconfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` suffixconfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` suffixconfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of suffixconfigs.
+     */
+    distinct?: SuffixconfigScalarFieldEnum | SuffixconfigScalarFieldEnum[]
+  }
+
+  /**
+   * suffixconfig findMany
+   */
+  export type suffixconfigFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * Filter, which suffixconfigs to fetch.
+     */
+    where?: suffixconfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of suffixconfigs to fetch.
+     */
+    orderBy?: suffixconfigOrderByWithRelationInput | suffixconfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing suffixconfigs.
+     */
+    cursor?: suffixconfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` suffixconfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` suffixconfigs.
+     */
+    skip?: number
+    distinct?: SuffixconfigScalarFieldEnum | SuffixconfigScalarFieldEnum[]
+  }
+
+  /**
+   * suffixconfig create
+   */
+  export type suffixconfigCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * The data needed to create a suffixconfig.
+     */
+    data: XOR<suffixconfigCreateInput, suffixconfigUncheckedCreateInput>
+  }
+
+  /**
+   * suffixconfig createMany
+   */
+  export type suffixconfigCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many suffixconfigs.
+     */
+    data: suffixconfigCreateManyInput | suffixconfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * suffixconfig update
+   */
+  export type suffixconfigUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * The data needed to update a suffixconfig.
+     */
+    data: XOR<suffixconfigUpdateInput, suffixconfigUncheckedUpdateInput>
+    /**
+     * Choose, which suffixconfig to update.
+     */
+    where: suffixconfigWhereUniqueInput
+  }
+
+  /**
+   * suffixconfig updateMany
+   */
+  export type suffixconfigUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update suffixconfigs.
+     */
+    data: XOR<suffixconfigUpdateManyMutationInput, suffixconfigUncheckedUpdateManyInput>
+    /**
+     * Filter which suffixconfigs to update
+     */
+    where?: suffixconfigWhereInput
+    /**
+     * Limit how many suffixconfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * suffixconfig upsert
+   */
+  export type suffixconfigUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * The filter to search for the suffixconfig to update in case it exists.
+     */
+    where: suffixconfigWhereUniqueInput
+    /**
+     * In case the suffixconfig found by the `where` argument doesn't exist, create a new suffixconfig with this data.
+     */
+    create: XOR<suffixconfigCreateInput, suffixconfigUncheckedCreateInput>
+    /**
+     * In case the suffixconfig was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<suffixconfigUpdateInput, suffixconfigUncheckedUpdateInput>
+  }
+
+  /**
+   * suffixconfig delete
+   */
+  export type suffixconfigDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+    /**
+     * Filter which suffixconfig to delete.
+     */
+    where: suffixconfigWhereUniqueInput
+  }
+
+  /**
+   * suffixconfig deleteMany
+   */
+  export type suffixconfigDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which suffixconfigs to delete
+     */
+    where?: suffixconfigWhereInput
+    /**
+     * Limit how many suffixconfigs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * suffixconfig without action
+   */
+  export type suffixconfigDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the suffixconfig
+     */
+    select?: suffixconfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the suffixconfig
+     */
+    omit?: suffixconfigOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model brandalias
+   */
+
+  export type AggregateBrandalias = {
+    _count: BrandaliasCountAggregateOutputType | null
+    _avg: BrandaliasAvgAggregateOutputType | null
+    _sum: BrandaliasSumAggregateOutputType | null
+    _min: BrandaliasMinAggregateOutputType | null
+    _max: BrandaliasMaxAggregateOutputType | null
+  }
+
+  export type BrandaliasAvgAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type BrandaliasSumAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type BrandaliasMinAggregateOutputType = {
+    id: string | null
+    alias: string | null
+    standardName: string | null
+    sortWeight: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BrandaliasMaxAggregateOutputType = {
+    id: string | null
+    alias: string | null
+    standardName: string | null
+    sortWeight: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BrandaliasCountAggregateOutputType = {
+    id: number
+    alias: number
+    standardName: number
+    sortWeight: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type BrandaliasAvgAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type BrandaliasSumAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type BrandaliasMinAggregateInputType = {
+    id?: true
+    alias?: true
+    standardName?: true
+    sortWeight?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BrandaliasMaxAggregateInputType = {
+    id?: true
+    alias?: true
+    standardName?: true
+    sortWeight?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BrandaliasCountAggregateInputType = {
+    id?: true
+    alias?: true
+    standardName?: true
+    sortWeight?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type BrandaliasAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which brandalias to aggregate.
+     */
+    where?: brandaliasWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of brandaliases to fetch.
+     */
+    orderBy?: brandaliasOrderByWithRelationInput | brandaliasOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: brandaliasWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` brandaliases from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` brandaliases.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned brandaliases
+    **/
+    _count?: true | BrandaliasCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: BrandaliasAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: BrandaliasSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: BrandaliasMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: BrandaliasMaxAggregateInputType
+  }
+
+  export type GetBrandaliasAggregateType<T extends BrandaliasAggregateArgs> = {
+        [P in keyof T & keyof AggregateBrandalias]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateBrandalias[P]>
+      : GetScalarType<T[P], AggregateBrandalias[P]>
+  }
+
+
+
+
+  export type brandaliasGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: brandaliasWhereInput
+    orderBy?: brandaliasOrderByWithAggregationInput | brandaliasOrderByWithAggregationInput[]
+    by: BrandaliasScalarFieldEnum[] | BrandaliasScalarFieldEnum
+    having?: brandaliasScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: BrandaliasCountAggregateInputType | true
+    _avg?: BrandaliasAvgAggregateInputType
+    _sum?: BrandaliasSumAggregateInputType
+    _min?: BrandaliasMinAggregateInputType
+    _max?: BrandaliasMaxAggregateInputType
+  }
+
+  export type BrandaliasGroupByOutputType = {
+    id: string
+    alias: string
+    standardName: string
+    sortWeight: number
+    createdAt: Date
+    updatedAt: Date
+    _count: BrandaliasCountAggregateOutputType | null
+    _avg: BrandaliasAvgAggregateOutputType | null
+    _sum: BrandaliasSumAggregateOutputType | null
+    _min: BrandaliasMinAggregateOutputType | null
+    _max: BrandaliasMaxAggregateOutputType | null
+  }
+
+  type GetBrandaliasGroupByPayload<T extends brandaliasGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<BrandaliasGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof BrandaliasGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], BrandaliasGroupByOutputType[P]>
+            : GetScalarType<T[P], BrandaliasGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type brandaliasSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    alias?: boolean
+    standardName?: boolean
+    sortWeight?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["brandalias"]>
+
+
+
+  export type brandaliasSelectScalar = {
+    id?: boolean
+    alias?: boolean
+    standardName?: boolean
+    sortWeight?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type brandaliasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "alias" | "standardName" | "sortWeight" | "createdAt" | "updatedAt", ExtArgs["result"]["brandalias"]>
+
+  export type $brandaliasPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "brandalias"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      alias: string
+      standardName: string
+      sortWeight: number
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["brandalias"]>
+    composites: {}
+  }
+
+  type brandaliasGetPayload<S extends boolean | null | undefined | brandaliasDefaultArgs> = $Result.GetResult<Prisma.$brandaliasPayload, S>
+
+  type brandaliasCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<brandaliasFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: BrandaliasCountAggregateInputType | true
+    }
+
+  export interface brandaliasDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['brandalias'], meta: { name: 'brandalias' } }
+    /**
+     * Find zero or one Brandalias that matches the filter.
+     * @param {brandaliasFindUniqueArgs} args - Arguments to find a Brandalias
+     * @example
+     * // Get one Brandalias
+     * const brandalias = await prisma.brandalias.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends brandaliasFindUniqueArgs>(args: SelectSubset<T, brandaliasFindUniqueArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Brandalias that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {brandaliasFindUniqueOrThrowArgs} args - Arguments to find a Brandalias
+     * @example
+     * // Get one Brandalias
+     * const brandalias = await prisma.brandalias.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends brandaliasFindUniqueOrThrowArgs>(args: SelectSubset<T, brandaliasFindUniqueOrThrowArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Brandalias that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {brandaliasFindFirstArgs} args - Arguments to find a Brandalias
+     * @example
+     * // Get one Brandalias
+     * const brandalias = await prisma.brandalias.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends brandaliasFindFirstArgs>(args?: SelectSubset<T, brandaliasFindFirstArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Brandalias that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {brandaliasFindFirstOrThrowArgs} args - Arguments to find a Brandalias
+     * @example
+     * // Get one Brandalias
+     * const brandalias = await prisma.brandalias.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends brandaliasFindFirstOrThrowArgs>(args?: SelectSubset<T, brandaliasFindFirstOrThrowArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Brandaliases that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {brandaliasFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Brandaliases
+     * const brandaliases = await prisma.brandalias.findMany()
+     * 
+     * // Get first 10 Brandaliases
+     * const brandaliases = await prisma.brandalias.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const brandaliasWithIdOnly = await prisma.brandalias.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends brandaliasFindManyArgs>(args?: SelectSubset<T, brandaliasFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Brandalias.
+     * @param {brandaliasCreateArgs} args - Arguments to create a Brandalias.
+     * @example
+     * // Create one Brandalias
+     * const Brandalias = await prisma.brandalias.create({
+     *   data: {
+     *     // ... data to create a Brandalias
+     *   }
+     * })
+     * 
+     */
+    create<T extends brandaliasCreateArgs>(args: SelectSubset<T, brandaliasCreateArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Brandaliases.
+     * @param {brandaliasCreateManyArgs} args - Arguments to create many Brandaliases.
+     * @example
+     * // Create many Brandaliases
+     * const brandalias = await prisma.brandalias.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends brandaliasCreateManyArgs>(args?: SelectSubset<T, brandaliasCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Brandalias.
+     * @param {brandaliasDeleteArgs} args - Arguments to delete one Brandalias.
+     * @example
+     * // Delete one Brandalias
+     * const Brandalias = await prisma.brandalias.delete({
+     *   where: {
+     *     // ... filter to delete one Brandalias
+     *   }
+     * })
+     * 
+     */
+    delete<T extends brandaliasDeleteArgs>(args: SelectSubset<T, brandaliasDeleteArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Brandalias.
+     * @param {brandaliasUpdateArgs} args - Arguments to update one Brandalias.
+     * @example
+     * // Update one Brandalias
+     * const brandalias = await prisma.brandalias.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends brandaliasUpdateArgs>(args: SelectSubset<T, brandaliasUpdateArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Brandaliases.
+     * @param {brandaliasDeleteManyArgs} args - Arguments to filter Brandaliases to delete.
+     * @example
+     * // Delete a few Brandaliases
+     * const { count } = await prisma.brandalias.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends brandaliasDeleteManyArgs>(args?: SelectSubset<T, brandaliasDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Brandaliases.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {brandaliasUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Brandaliases
+     * const brandalias = await prisma.brandalias.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends brandaliasUpdateManyArgs>(args: SelectSubset<T, brandaliasUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Brandalias.
+     * @param {brandaliasUpsertArgs} args - Arguments to update or create a Brandalias.
+     * @example
+     * // Update or create a Brandalias
+     * const brandalias = await prisma.brandalias.upsert({
+     *   create: {
+     *     // ... data to create a Brandalias
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Brandalias we want to update
+     *   }
+     * })
+     */
+    upsert<T extends brandaliasUpsertArgs>(args: SelectSubset<T, brandaliasUpsertArgs<ExtArgs>>): Prisma__brandaliasClient<$Result.GetResult<Prisma.$brandaliasPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Brandaliases.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {brandaliasCountArgs} args - Arguments to filter Brandaliases to count.
+     * @example
+     * // Count the number of Brandaliases
+     * const count = await prisma.brandalias.count({
+     *   where: {
+     *     // ... the filter for the Brandaliases we want to count
+     *   }
+     * })
+    **/
+    count<T extends brandaliasCountArgs>(
+      args?: Subset<T, brandaliasCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], BrandaliasCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Brandalias.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BrandaliasAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends BrandaliasAggregateArgs>(args: Subset<T, BrandaliasAggregateArgs>): Prisma.PrismaPromise<GetBrandaliasAggregateType<T>>
+
+    /**
+     * Group by Brandalias.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {brandaliasGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends brandaliasGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: brandaliasGroupByArgs['orderBy'] }
+        : { orderBy?: brandaliasGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, brandaliasGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetBrandaliasGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the brandalias model
+   */
+  readonly fields: brandaliasFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for brandalias.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__brandaliasClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the brandalias model
+   */
+  interface brandaliasFieldRefs {
+    readonly id: FieldRef<"brandalias", 'String'>
+    readonly alias: FieldRef<"brandalias", 'String'>
+    readonly standardName: FieldRef<"brandalias", 'String'>
+    readonly sortWeight: FieldRef<"brandalias", 'Int'>
+    readonly createdAt: FieldRef<"brandalias", 'DateTime'>
+    readonly updatedAt: FieldRef<"brandalias", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * brandalias findUnique
+   */
+  export type brandaliasFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * Filter, which brandalias to fetch.
+     */
+    where: brandaliasWhereUniqueInput
+  }
+
+  /**
+   * brandalias findUniqueOrThrow
+   */
+  export type brandaliasFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * Filter, which brandalias to fetch.
+     */
+    where: brandaliasWhereUniqueInput
+  }
+
+  /**
+   * brandalias findFirst
+   */
+  export type brandaliasFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * Filter, which brandalias to fetch.
+     */
+    where?: brandaliasWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of brandaliases to fetch.
+     */
+    orderBy?: brandaliasOrderByWithRelationInput | brandaliasOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for brandaliases.
+     */
+    cursor?: brandaliasWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` brandaliases from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` brandaliases.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of brandaliases.
+     */
+    distinct?: BrandaliasScalarFieldEnum | BrandaliasScalarFieldEnum[]
+  }
+
+  /**
+   * brandalias findFirstOrThrow
+   */
+  export type brandaliasFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * Filter, which brandalias to fetch.
+     */
+    where?: brandaliasWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of brandaliases to fetch.
+     */
+    orderBy?: brandaliasOrderByWithRelationInput | brandaliasOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for brandaliases.
+     */
+    cursor?: brandaliasWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` brandaliases from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` brandaliases.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of brandaliases.
+     */
+    distinct?: BrandaliasScalarFieldEnum | BrandaliasScalarFieldEnum[]
+  }
+
+  /**
+   * brandalias findMany
+   */
+  export type brandaliasFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * Filter, which brandaliases to fetch.
+     */
+    where?: brandaliasWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of brandaliases to fetch.
+     */
+    orderBy?: brandaliasOrderByWithRelationInput | brandaliasOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing brandaliases.
+     */
+    cursor?: brandaliasWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` brandaliases from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` brandaliases.
+     */
+    skip?: number
+    distinct?: BrandaliasScalarFieldEnum | BrandaliasScalarFieldEnum[]
+  }
+
+  /**
+   * brandalias create
+   */
+  export type brandaliasCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * The data needed to create a brandalias.
+     */
+    data: XOR<brandaliasCreateInput, brandaliasUncheckedCreateInput>
+  }
+
+  /**
+   * brandalias createMany
+   */
+  export type brandaliasCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many brandaliases.
+     */
+    data: brandaliasCreateManyInput | brandaliasCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * brandalias update
+   */
+  export type brandaliasUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * The data needed to update a brandalias.
+     */
+    data: XOR<brandaliasUpdateInput, brandaliasUncheckedUpdateInput>
+    /**
+     * Choose, which brandalias to update.
+     */
+    where: brandaliasWhereUniqueInput
+  }
+
+  /**
+   * brandalias updateMany
+   */
+  export type brandaliasUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update brandaliases.
+     */
+    data: XOR<brandaliasUpdateManyMutationInput, brandaliasUncheckedUpdateManyInput>
+    /**
+     * Filter which brandaliases to update
+     */
+    where?: brandaliasWhereInput
+    /**
+     * Limit how many brandaliases to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * brandalias upsert
+   */
+  export type brandaliasUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * The filter to search for the brandalias to update in case it exists.
+     */
+    where: brandaliasWhereUniqueInput
+    /**
+     * In case the brandalias found by the `where` argument doesn't exist, create a new brandalias with this data.
+     */
+    create: XOR<brandaliasCreateInput, brandaliasUncheckedCreateInput>
+    /**
+     * In case the brandalias was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<brandaliasUpdateInput, brandaliasUncheckedUpdateInput>
+  }
+
+  /**
+   * brandalias delete
+   */
+  export type brandaliasDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+    /**
+     * Filter which brandalias to delete.
+     */
+    where: brandaliasWhereUniqueInput
+  }
+
+  /**
+   * brandalias deleteMany
+   */
+  export type brandaliasDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which brandaliases to delete
+     */
+    where?: brandaliasWhereInput
+    /**
+     * Limit how many brandaliases to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * brandalias without action
+   */
+  export type brandaliasDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the brandalias
+     */
+    select?: brandaliasSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the brandalias
+     */
+    omit?: brandaliasOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -56131,7 +58138,6 @@ export namespace Prisma {
     id: 'id',
     account: 'account',
     password: 'password',
-    passwordPlain: 'passwordPlain',
     email: 'email',
     role: 'role',
     status: 'status',
@@ -56144,6 +58150,7 @@ export namespace Prisma {
     countryName: 'countryName',
     purchaseCount: 'purchaseCount',
     adminNote: 'adminNote',
+    customerType: 'customerType',
     ringSizeUs: 'ringSizeUs',
     ringSizeEu: 'ringSizeEu',
     braceletSize: 'braceletSize',
@@ -56980,6 +58987,29 @@ export namespace Prisma {
   export type KeywordgroupproductScalarFieldEnum = (typeof KeywordgroupproductScalarFieldEnum)[keyof typeof KeywordgroupproductScalarFieldEnum]
 
 
+  export const SuffixconfigScalarFieldEnum: {
+    id: 'id',
+    suffixName: 'suffixName',
+    sortWeight: 'sortWeight',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type SuffixconfigScalarFieldEnum = (typeof SuffixconfigScalarFieldEnum)[keyof typeof SuffixconfigScalarFieldEnum]
+
+
+  export const BrandaliasScalarFieldEnum: {
+    id: 'id',
+    alias: 'alias',
+    standardName: 'standardName',
+    sortWeight: 'sortWeight',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type BrandaliasScalarFieldEnum = (typeof BrandaliasScalarFieldEnum)[keyof typeof BrandaliasScalarFieldEnum]
+
+
   export const SortOrder: {
     asc: 'asc',
     desc: 'desc'
@@ -57032,7 +59062,6 @@ export namespace Prisma {
     id: 'id',
     account: 'account',
     password: 'password',
-    passwordPlain: 'passwordPlain',
     email: 'email',
     username: 'username',
     avatarUrl: 'avatarUrl',
@@ -57042,6 +59071,7 @@ export namespace Prisma {
     countryCode: 'countryCode',
     countryName: 'countryName',
     adminNote: 'adminNote',
+    customerType: 'customerType',
     ringSizeUs: 'ringSizeUs',
     ringSizeEu: 'ringSizeEu',
     braceletSize: 'braceletSize'
@@ -57597,6 +59627,23 @@ export namespace Prisma {
   export type keywordgroupproductOrderByRelevanceFieldEnum = (typeof keywordgroupproductOrderByRelevanceFieldEnum)[keyof typeof keywordgroupproductOrderByRelevanceFieldEnum]
 
 
+  export const suffixconfigOrderByRelevanceFieldEnum: {
+    id: 'id',
+    suffixName: 'suffixName'
+  };
+
+  export type suffixconfigOrderByRelevanceFieldEnum = (typeof suffixconfigOrderByRelevanceFieldEnum)[keyof typeof suffixconfigOrderByRelevanceFieldEnum]
+
+
+  export const brandaliasOrderByRelevanceFieldEnum: {
+    id: 'id',
+    alias: 'alias',
+    standardName: 'standardName'
+  };
+
+  export type brandaliasOrderByRelevanceFieldEnum = (typeof brandaliasOrderByRelevanceFieldEnum)[keyof typeof brandaliasOrderByRelevanceFieldEnum]
+
+
   /**
    * Field references
    */
@@ -57829,7 +59876,6 @@ export namespace Prisma {
     id?: StringFilter<"sysuser"> | string
     account?: StringFilter<"sysuser"> | string
     password?: StringFilter<"sysuser"> | string
-    passwordPlain?: StringNullableFilter<"sysuser"> | string | null
     email?: StringFilter<"sysuser"> | string
     role?: EnumuserroleFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusFilter<"sysuser"> | $Enums.userstatus
@@ -57842,6 +59888,7 @@ export namespace Prisma {
     countryName?: StringNullableFilter<"sysuser"> | string | null
     purchaseCount?: IntFilter<"sysuser"> | number
     adminNote?: StringNullableFilter<"sysuser"> | string | null
+    customerType?: StringFilter<"sysuser"> | string
     ringSizeUs?: StringNullableFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableFilter<"sysuser"> | string | null
     braceletSize?: StringNullableFilter<"sysuser"> | string | null
@@ -57867,7 +59914,6 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
-    passwordPlain?: SortOrderInput | SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -57880,6 +59926,7 @@ export namespace Prisma {
     countryName?: SortOrderInput | SortOrder
     purchaseCount?: SortOrder
     adminNote?: SortOrderInput | SortOrder
+    customerType?: SortOrder
     ringSizeUs?: SortOrderInput | SortOrder
     ringSizeEu?: SortOrderInput | SortOrder
     braceletSize?: SortOrderInput | SortOrder
@@ -57910,7 +59957,6 @@ export namespace Prisma {
     OR?: sysuserWhereInput[]
     NOT?: sysuserWhereInput | sysuserWhereInput[]
     password?: StringFilter<"sysuser"> | string
-    passwordPlain?: StringNullableFilter<"sysuser"> | string | null
     role?: EnumuserroleFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusFilter<"sysuser"> | $Enums.userstatus
     username?: StringFilter<"sysuser"> | string
@@ -57922,6 +59968,7 @@ export namespace Prisma {
     countryName?: StringNullableFilter<"sysuser"> | string | null
     purchaseCount?: IntFilter<"sysuser"> | number
     adminNote?: StringNullableFilter<"sysuser"> | string | null
+    customerType?: StringFilter<"sysuser"> | string
     ringSizeUs?: StringNullableFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableFilter<"sysuser"> | string | null
     braceletSize?: StringNullableFilter<"sysuser"> | string | null
@@ -57947,7 +59994,6 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
-    passwordPlain?: SortOrderInput | SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -57960,6 +60006,7 @@ export namespace Prisma {
     countryName?: SortOrderInput | SortOrder
     purchaseCount?: SortOrder
     adminNote?: SortOrderInput | SortOrder
+    customerType?: SortOrder
     ringSizeUs?: SortOrderInput | SortOrder
     ringSizeEu?: SortOrderInput | SortOrder
     braceletSize?: SortOrderInput | SortOrder
@@ -57982,7 +60029,6 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"sysuser"> | string
     account?: StringWithAggregatesFilter<"sysuser"> | string
     password?: StringWithAggregatesFilter<"sysuser"> | string
-    passwordPlain?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     email?: StringWithAggregatesFilter<"sysuser"> | string
     role?: EnumuserroleWithAggregatesFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusWithAggregatesFilter<"sysuser"> | $Enums.userstatus
@@ -57995,6 +60041,7 @@ export namespace Prisma {
     countryName?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     purchaseCount?: IntWithAggregatesFilter<"sysuser"> | number
     adminNote?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
+    customerType?: StringWithAggregatesFilter<"sysuser"> | string
     ringSizeUs?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     braceletSize?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
@@ -62434,11 +64481,125 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"keywordgroupproduct"> | Date | string
   }
 
+  export type suffixconfigWhereInput = {
+    AND?: suffixconfigWhereInput | suffixconfigWhereInput[]
+    OR?: suffixconfigWhereInput[]
+    NOT?: suffixconfigWhereInput | suffixconfigWhereInput[]
+    id?: StringFilter<"suffixconfig"> | string
+    suffixName?: StringFilter<"suffixconfig"> | string
+    sortWeight?: IntFilter<"suffixconfig"> | number
+    createdAt?: DateTimeFilter<"suffixconfig"> | Date | string
+    updatedAt?: DateTimeFilter<"suffixconfig"> | Date | string
+  }
+
+  export type suffixconfigOrderByWithRelationInput = {
+    id?: SortOrder
+    suffixName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _relevance?: suffixconfigOrderByRelevanceInput
+  }
+
+  export type suffixconfigWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    suffixName?: string
+    AND?: suffixconfigWhereInput | suffixconfigWhereInput[]
+    OR?: suffixconfigWhereInput[]
+    NOT?: suffixconfigWhereInput | suffixconfigWhereInput[]
+    sortWeight?: IntFilter<"suffixconfig"> | number
+    createdAt?: DateTimeFilter<"suffixconfig"> | Date | string
+    updatedAt?: DateTimeFilter<"suffixconfig"> | Date | string
+  }, "id" | "suffixName">
+
+  export type suffixconfigOrderByWithAggregationInput = {
+    id?: SortOrder
+    suffixName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: suffixconfigCountOrderByAggregateInput
+    _avg?: suffixconfigAvgOrderByAggregateInput
+    _max?: suffixconfigMaxOrderByAggregateInput
+    _min?: suffixconfigMinOrderByAggregateInput
+    _sum?: suffixconfigSumOrderByAggregateInput
+  }
+
+  export type suffixconfigScalarWhereWithAggregatesInput = {
+    AND?: suffixconfigScalarWhereWithAggregatesInput | suffixconfigScalarWhereWithAggregatesInput[]
+    OR?: suffixconfigScalarWhereWithAggregatesInput[]
+    NOT?: suffixconfigScalarWhereWithAggregatesInput | suffixconfigScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"suffixconfig"> | string
+    suffixName?: StringWithAggregatesFilter<"suffixconfig"> | string
+    sortWeight?: IntWithAggregatesFilter<"suffixconfig"> | number
+    createdAt?: DateTimeWithAggregatesFilter<"suffixconfig"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"suffixconfig"> | Date | string
+  }
+
+  export type brandaliasWhereInput = {
+    AND?: brandaliasWhereInput | brandaliasWhereInput[]
+    OR?: brandaliasWhereInput[]
+    NOT?: brandaliasWhereInput | brandaliasWhereInput[]
+    id?: StringFilter<"brandalias"> | string
+    alias?: StringFilter<"brandalias"> | string
+    standardName?: StringFilter<"brandalias"> | string
+    sortWeight?: IntFilter<"brandalias"> | number
+    createdAt?: DateTimeFilter<"brandalias"> | Date | string
+    updatedAt?: DateTimeFilter<"brandalias"> | Date | string
+  }
+
+  export type brandaliasOrderByWithRelationInput = {
+    id?: SortOrder
+    alias?: SortOrder
+    standardName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _relevance?: brandaliasOrderByRelevanceInput
+  }
+
+  export type brandaliasWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    alias?: string
+    AND?: brandaliasWhereInput | brandaliasWhereInput[]
+    OR?: brandaliasWhereInput[]
+    NOT?: brandaliasWhereInput | brandaliasWhereInput[]
+    standardName?: StringFilter<"brandalias"> | string
+    sortWeight?: IntFilter<"brandalias"> | number
+    createdAt?: DateTimeFilter<"brandalias"> | Date | string
+    updatedAt?: DateTimeFilter<"brandalias"> | Date | string
+  }, "id" | "alias">
+
+  export type brandaliasOrderByWithAggregationInput = {
+    id?: SortOrder
+    alias?: SortOrder
+    standardName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: brandaliasCountOrderByAggregateInput
+    _avg?: brandaliasAvgOrderByAggregateInput
+    _max?: brandaliasMaxOrderByAggregateInput
+    _min?: brandaliasMinOrderByAggregateInput
+    _sum?: brandaliasSumOrderByAggregateInput
+  }
+
+  export type brandaliasScalarWhereWithAggregatesInput = {
+    AND?: brandaliasScalarWhereWithAggregatesInput | brandaliasScalarWhereWithAggregatesInput[]
+    OR?: brandaliasScalarWhereWithAggregatesInput[]
+    NOT?: brandaliasScalarWhereWithAggregatesInput | brandaliasScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"brandalias"> | string
+    alias?: StringWithAggregatesFilter<"brandalias"> | string
+    standardName?: StringWithAggregatesFilter<"brandalias"> | string
+    sortWeight?: IntWithAggregatesFilter<"brandalias"> | number
+    createdAt?: DateTimeWithAggregatesFilter<"brandalias"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"brandalias"> | Date | string
+  }
+
   export type sysuserCreateInput = {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -62451,6 +64612,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -62476,7 +64638,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -62489,6 +64650,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -62514,7 +64676,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62527,6 +64688,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62552,7 +64714,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62565,6 +64726,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62590,7 +64752,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -62603,6 +64764,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -62617,7 +64779,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62630,6 +64791,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62644,7 +64806,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -62657,6 +64818,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67604,6 +69766,125 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type suffixconfigCreateInput = {
+    id?: string
+    suffixName: string
+    sortWeight?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type suffixconfigUncheckedCreateInput = {
+    id?: string
+    suffixName: string
+    sortWeight?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type suffixconfigUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    suffixName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type suffixconfigUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    suffixName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type suffixconfigCreateManyInput = {
+    id?: string
+    suffixName: string
+    sortWeight?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type suffixconfigUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    suffixName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type suffixconfigUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    suffixName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type brandaliasCreateInput = {
+    id?: string
+    alias: string
+    standardName: string
+    sortWeight?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type brandaliasUncheckedCreateInput = {
+    id?: string
+    alias: string
+    standardName: string
+    sortWeight?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type brandaliasUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    alias?: StringFieldUpdateOperationsInput | string
+    standardName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type brandaliasUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    alias?: StringFieldUpdateOperationsInput | string
+    standardName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type brandaliasCreateManyInput = {
+    id?: string
+    alias: string
+    standardName: string
+    sortWeight?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type brandaliasUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    alias?: StringFieldUpdateOperationsInput | string
+    standardName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type brandaliasUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    alias?: StringFieldUpdateOperationsInput | string
+    standardName?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -67619,6 +69900,20 @@ export namespace Prisma {
     not?: NestedStringFilter<$PrismaModel> | string
   }
 
+  export type EnumuserroleFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
+  }
+
+  export type EnumuserstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
+  }
+
   export type StringNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -67632,20 +69927,6 @@ export namespace Prisma {
     endsWith?: string | StringFieldRefInput<$PrismaModel>
     search?: string
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
-  }
-
-  export type EnumuserroleFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
-  }
-
-  export type EnumuserstatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
   }
 
   export type IntFilter<$PrismaModel = never> = {
@@ -67829,7 +70110,6 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
-    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -67842,6 +70122,7 @@ export namespace Prisma {
     countryName?: SortOrder
     purchaseCount?: SortOrder
     adminNote?: SortOrder
+    customerType?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -67860,7 +70141,6 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
-    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -67873,6 +70153,7 @@ export namespace Prisma {
     countryName?: SortOrder
     purchaseCount?: SortOrder
     adminNote?: SortOrder
+    customerType?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -67885,7 +70166,6 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
-    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -67898,6 +70178,7 @@ export namespace Prisma {
     countryName?: SortOrder
     purchaseCount?: SortOrder
     adminNote?: SortOrder
+    customerType?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -67928,24 +70209,6 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: string | StringFieldRefInput<$PrismaModel> | null
-    in?: string[] | null
-    notIn?: string[] | null
-    lt?: string | StringFieldRefInput<$PrismaModel>
-    lte?: string | StringFieldRefInput<$PrismaModel>
-    gt?: string | StringFieldRefInput<$PrismaModel>
-    gte?: string | StringFieldRefInput<$PrismaModel>
-    contains?: string | StringFieldRefInput<$PrismaModel>
-    startsWith?: string | StringFieldRefInput<$PrismaModel>
-    endsWith?: string | StringFieldRefInput<$PrismaModel>
-    search?: string
-    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedStringNullableFilter<$PrismaModel>
-    _max?: NestedStringNullableFilter<$PrismaModel>
-  }
-
   export type EnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
     equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
     in?: $Enums.userrole[]
@@ -67964,6 +70227,24 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumuserstatusFilter<$PrismaModel>
     _max?: NestedEnumuserstatusFilter<$PrismaModel>
+  }
+
+  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    search?: string
+    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedStringNullableFilter<$PrismaModel>
+    _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
   export type IntWithAggregatesFilter<$PrismaModel = never> = {
@@ -71573,6 +73854,85 @@ export namespace Prisma {
     sortWeight?: SortOrder
   }
 
+  export type suffixconfigOrderByRelevanceInput = {
+    fields: suffixconfigOrderByRelevanceFieldEnum | suffixconfigOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type suffixconfigCountOrderByAggregateInput = {
+    id?: SortOrder
+    suffixName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type suffixconfigAvgOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
+  export type suffixconfigMaxOrderByAggregateInput = {
+    id?: SortOrder
+    suffixName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type suffixconfigMinOrderByAggregateInput = {
+    id?: SortOrder
+    suffixName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type suffixconfigSumOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
+  export type brandaliasOrderByRelevanceInput = {
+    fields: brandaliasOrderByRelevanceFieldEnum | brandaliasOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type brandaliasCountOrderByAggregateInput = {
+    id?: SortOrder
+    alias?: SortOrder
+    standardName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type brandaliasAvgOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
+  export type brandaliasMaxOrderByAggregateInput = {
+    id?: SortOrder
+    alias?: SortOrder
+    standardName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type brandaliasMinOrderByAggregateInput = {
+    id?: SortOrder
+    alias?: SortOrder
+    standardName?: SortOrder
+    sortWeight?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type brandaliasSumOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
   export type cartCreateNestedManyWithoutAccountInput = {
     create?: XOR<cartCreateWithoutAccountInput, cartUncheckedCreateWithoutAccountInput> | cartCreateWithoutAccountInput[] | cartUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
@@ -71731,16 +74091,16 @@ export namespace Prisma {
     set?: string
   }
 
-  export type NullableStringFieldUpdateOperationsInput = {
-    set?: string | null
-  }
-
   export type EnumuserroleFieldUpdateOperationsInput = {
     set?: $Enums.userrole
   }
 
   export type EnumuserstatusFieldUpdateOperationsInput = {
     set?: $Enums.userstatus
+  }
+
+  export type NullableStringFieldUpdateOperationsInput = {
+    set?: string | null
   }
 
   export type IntFieldUpdateOperationsInput = {
@@ -75226,6 +77586,20 @@ export namespace Prisma {
     not?: NestedStringFilter<$PrismaModel> | string
   }
 
+  export type NestedEnumuserroleFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
+  }
+
+  export type NestedEnumuserstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
+  }
+
   export type NestedStringNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -75239,20 +77613,6 @@ export namespace Prisma {
     endsWith?: string | StringFieldRefInput<$PrismaModel>
     search?: string
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
-  }
-
-  export type NestedEnumuserroleFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
-  }
-
-  export type NestedEnumuserstatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
   }
 
   export type NestedIntFilter<$PrismaModel = never> = {
@@ -75306,6 +77666,26 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
+  export type NestedEnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleWithAggregatesFilter<$PrismaModel> | $Enums.userrole
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumuserroleFilter<$PrismaModel>
+    _max?: NestedEnumuserroleFilter<$PrismaModel>
+  }
+
+  export type NestedEnumuserstatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusWithAggregatesFilter<$PrismaModel> | $Enums.userstatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumuserstatusFilter<$PrismaModel>
+    _max?: NestedEnumuserstatusFilter<$PrismaModel>
+  }
+
   export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -75333,26 +77713,6 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
-  }
-
-  export type NestedEnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleWithAggregatesFilter<$PrismaModel> | $Enums.userrole
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumuserroleFilter<$PrismaModel>
-    _max?: NestedEnumuserroleFilter<$PrismaModel>
-  }
-
-  export type NestedEnumuserstatusWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusWithAggregatesFilter<$PrismaModel> | $Enums.userstatus
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumuserstatusFilter<$PrismaModel>
-    _max?: NestedEnumuserstatusFilter<$PrismaModel>
   }
 
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
@@ -79752,7 +82112,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -79765,6 +82124,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -79789,7 +82149,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -79802,6 +82161,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -79882,7 +82242,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -79895,6 +82254,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -79919,7 +82279,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -79932,6 +82291,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -80452,7 +82812,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80465,6 +82824,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -80489,7 +82849,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80502,6 +82861,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -80634,7 +82994,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -80647,6 +83006,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -80671,7 +83031,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -80684,6 +83043,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -80777,7 +83137,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80790,6 +83149,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -80814,7 +83174,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -80827,6 +83186,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -81069,7 +83429,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81082,6 +83441,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -81106,7 +83466,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81119,6 +83478,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -81292,7 +83652,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81305,6 +83664,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -81329,7 +83689,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81342,6 +83701,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -81456,7 +83816,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81469,6 +83828,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -81493,7 +83853,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81506,6 +83865,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -81546,7 +83906,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81559,6 +83918,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -81583,7 +83943,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -81596,6 +83955,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -81779,7 +84139,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81792,6 +84151,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -81816,7 +84176,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -81829,6 +84188,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83795,7 +86155,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83808,6 +86167,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -83832,7 +86192,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83845,6 +86204,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -84115,7 +86475,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -84128,6 +86487,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -84152,7 +86512,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -84165,6 +86524,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85100,7 +87460,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85113,6 +87472,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85137,7 +87497,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85150,6 +87509,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85408,7 +87768,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85421,6 +87780,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85445,7 +87805,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85458,6 +87817,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85557,7 +87917,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85570,6 +87929,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85594,7 +87954,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -85607,6 +87966,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85902,7 +88262,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85915,6 +88274,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85939,7 +88299,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -85952,6 +88311,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86249,7 +88609,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -86262,6 +88621,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86286,7 +88646,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -86299,6 +88658,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86339,7 +88699,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -86352,6 +88711,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86376,7 +88736,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -86389,6 +88748,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87453,7 +89813,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87466,6 +89825,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87490,7 +89850,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87503,6 +89862,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87568,7 +89928,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87581,6 +89940,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87605,7 +89965,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87618,6 +89977,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87673,7 +90033,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87686,6 +90045,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87710,7 +90070,6 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
-    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87723,6 +90082,7 @@ export namespace Prisma {
     countryName?: string | null
     purchaseCount?: number
     adminNote?: string | null
+    customerType?: string
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87763,7 +90123,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87776,6 +90135,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87800,7 +90160,6 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
-    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87813,6 +90172,7 @@ export namespace Prisma {
     countryName?: NullableStringFieldUpdateOperationsInput | string | null
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
