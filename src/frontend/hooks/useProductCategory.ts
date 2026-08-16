@@ -27,7 +27,8 @@ import {
   getCategoryTopPromotion,
   resolveCategoryRouteKey,
 } from '@/frontend/actions/ProductCategory'
-import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
+import { loadCategoryListCached, peekCachedCategoryList, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
+import type { StorefrontBootstrap } from '@/frontend/types/storefrontBootstrap'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
@@ -314,7 +315,7 @@ export interface ProductCategoryHandlers {
   handleBrandQuickFilterToggle: (brandId: string) => void
 }
 
-export const useProductCategory = (): {
+export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
   state: ProductCategoryState
   handlers: ProductCategoryHandlers
 } => {
@@ -366,10 +367,16 @@ export const useProductCategory = (): {
     min: routeParams.minPrice || '',
     max: routeParams.maxPrice || ''
   })
-  const [categories, setCategories] = useState<CategoryItem[]>(() => peekCachedCategoryList() || [])
+  const [categories, setCategories] = useState<CategoryItem[]>(() => {
+    if (bootstrap?.categories?.length) {
+      seedCategoryListCache(bootstrap.categories, getClientPreferredLang())
+      return bootstrap.categories
+    }
+    return peekCachedCategoryList() || []
+  })
   const [categoryDetail, setCategoryDetail] = useState<CategoryDetail | null>(null)
   const [currentCategoryLevel, setCurrentCategoryLevel] = useState<number | null>(routeParams.categoryId ? null : 1)
-  const [posters, setPosters] = useState<CategoryPosterItem[]>([])
+  const [posters, setPosters] = useState<CategoryPosterItem[]>(() => bootstrap?.posters || [])
   const [sideNavZones, setSideNavZones] = useState<ProductCategorySideNavZone[]>([])
   const [leftNavKeywordGroups, setLeftNavKeywordGroups] = useState<ProductCategoryKeywordGroup[]>([])
   const [recommendationKeywordGroups, setRecommendationKeywordGroups] = useState<ProductCategoryKeywordGroup[]>([])
@@ -381,7 +388,9 @@ export const useProductCategory = (): {
   const [availableBrandFilters, setAvailableBrandFilters] = useState<BrandCategoryItem[]>([])
   const [isLoadingBrandFilters, setIsLoadingBrandFilters] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
-  const [isLoadingCategories, setIsLoadingCategories] = useState(() => !(peekCachedCategoryList()?.length))
+  const [isLoadingCategories, setIsLoadingCategories] = useState(
+    () => !(bootstrap?.categories?.length || peekCachedCategoryList()?.length),
+  )
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [localeTick, setLocaleTick] = useState(0)
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([])

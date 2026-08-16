@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
-import { loadCategoryListCached } from '@/frontend/utils/categoryListCache'
+import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
   type CategoryItem,
@@ -100,12 +100,22 @@ function collectMobileCategoryBrands(
  * Mobile categories: left L1 + right circle L2.
  * Bottom brand row uses normal document flow (not fixed/sticky).
  */
-export default function MobileCategoriesView() {
+export default function MobileCategoriesView({
+  initialCategories,
+}: {
+  initialCategories?: CategoryItem[]
+}) {
   const router = useRouter()
   const { t, i18n } = useTranslation()
-  const [categories, setCategories] = useState<CategoryItem[]>([])
-  const [activeId, setActiveId] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState<CategoryItem[]>(() => {
+    if (initialCategories?.length) {
+      seedCategoryListCache(initialCategories, 'en')
+      return initialCategories
+    }
+    return []
+  })
+  const [activeId, setActiveId] = useState(() => initialCategories?.[0]?.category_id || '')
+  const [loading, setLoading] = useState(() => !(initialCategories?.length))
   const [months, setMonths] = useState<DailyNewArrivalMonthCard[]>([])
   const [loadingMonths, setLoadingMonths] = useState(false)
   const [brands, setBrands] = useState<BrandEntry[]>([])

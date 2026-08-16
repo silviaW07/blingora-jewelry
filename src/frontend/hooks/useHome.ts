@@ -18,7 +18,9 @@ import { buildLast6Months, formatMonthLabel } from '@/frontend/utils/dailyNewArr
 import {
   loadHomeRecommendZonesCached,
   peekCachedHomeRecommendZones,
+  seedHomeRecommendZonesCache,
 } from '@/frontend/utils/homeRecommendZonesCache';
+import type { StorefrontBootstrap } from '@/frontend/types/storefrontBootstrap';
 
 export type {
   ProductCategoryBannerItem as HomeBannerItem,
@@ -78,17 +80,22 @@ type HomeRecommendProductCard = Extract<HomeRecommendZoneSection['items'][number
 const isHotSideNavZone = (zone: { title: string; zoneType?: string }) =>
   zone.title.trim().toLowerCase() === 'hot'
 
-export const useHome = (): { state: HomeState; handlers: HomeHandlers } => {
-  const { state, handlers } = useProductCategory()
+export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeState; handlers: HomeHandlers } => {
+  const { state, handlers } = useProductCategory(bootstrap)
   const router = useRouter()
   const searchParams = useSearchParams()
   const userSession = useUserSession()
   const { openAuthModal } = useCustomerAuthModal()
   const [recommendZones, setRecommendZones] = useState<HomeRecommendZoneSection[]>(() => {
+    if (bootstrap?.recommendZones?.length) {
+      seedHomeRecommendZonesCache(bootstrap.recommendZones, getClientPreferredLang())
+      return bootstrap.recommendZones
+    }
     if (typeof window === 'undefined') return []
     return peekCachedHomeRecommendZones(getClientPreferredLang()) || []
   })
   const [isLoadingRecommendZones, setIsLoadingRecommendZones] = useState(() => {
+    if (bootstrap?.recommendZones?.length) return false
     if (typeof window === 'undefined') return true
     return !(peekCachedHomeRecommendZones(getClientPreferredLang())?.length)
   })

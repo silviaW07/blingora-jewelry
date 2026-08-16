@@ -3,6 +3,7 @@ import {
   type CategoryItem,
   type GetCategoryListOutput,
 } from '@/frontend/actions/ProductCategory'
+import { fetchStorefrontBootstrap } from '@/frontend/utils/storefrontBootstrapClient'
 
 type CacheEntry = {
   lang: string
@@ -41,6 +42,17 @@ function writeSession(entry: CacheEntry) {
   }
 }
 
+export function seedCategoryListCache(list: CategoryItem[], lang = 'en') {
+  if (!Array.isArray(list) || list.length === 0) return
+  const entry: CacheEntry = {
+    lang: String(lang || 'en').trim() || 'en',
+    list,
+    fetchedAt: Date.now(),
+  }
+  cache = entry
+  writeSession(entry)
+}
+
 export function peekCachedCategoryList(lang?: string): CategoryItem[] | null {
   const normalized = String(lang || '').trim()
   if (cache) {
@@ -71,9 +83,14 @@ export async function loadCategoryListCached(lang: string): Promise<CategoryItem
   }
 
   inflightLang = normalized
-  inflight = getCategoryList({ lang: normalized })
-    .then((res: GetCategoryListOutput) => {
-      const list = Array.isArray(res.list) ? res.list : []
+  inflight = fetchStorefrontBootstrap(normalized)
+    .then((boot) => {
+      if (boot?.categories?.length) return boot.categories
+      return getCategoryList({ lang: normalized }).then((res: GetCategoryListOutput) =>
+        Array.isArray(res.list) ? res.list : [],
+      )
+    })
+    .then((list) => {
       cache = { lang: normalized, list, fetchedAt: Date.now() }
       writeSession(cache)
       return list

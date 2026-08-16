@@ -1,4 +1,5 @@
 import { getHomeRecommendZones } from '@/frontend/actions/Home'
+import { fetchStorefrontBootstrap } from '@/frontend/utils/storefrontBootstrapClient'
 
 /** Mirrors HomeRecommendZoneSection without importing the type from 'use server' module. */
 type HomeRecommendZoneSection = Awaited<
@@ -43,6 +44,17 @@ function writeSession(entry: CacheEntry) {
   }
 }
 
+export function seedHomeRecommendZonesCache(zones: HomeRecommendZoneSection[], lang = 'en') {
+  if (!Array.isArray(zones) || zones.length === 0) return
+  const entry: CacheEntry = {
+    lang: String(lang || 'en').trim() || 'en',
+    zones,
+    fetchedAt: Date.now(),
+  }
+  cache = entry
+  writeSession(entry)
+}
+
 export function peekCachedHomeRecommendZones(lang?: string): HomeRecommendZoneSection[] | null {
   const normalized = String(lang || '').trim()
   if (cache) {
@@ -74,9 +86,14 @@ export async function loadHomeRecommendZonesCached(lang: string): Promise<HomeRe
   }
 
   inflightLang = normalized
-  inflight = getHomeRecommendZones({ lang: normalized })
-    .then((res) => {
-      const zones = Array.isArray(res.zones) ? res.zones : []
+  inflight = fetchStorefrontBootstrap(normalized)
+    .then((boot) => {
+      if (boot?.recommendZones?.length) return boot.recommendZones
+      return getHomeRecommendZones({ lang: normalized }).then((res) =>
+        Array.isArray(res.zones) ? res.zones : [],
+      )
+    })
+    .then((zones) => {
       cache = { lang: normalized, zones, fetchedAt: Date.now() }
       writeSession(cache)
       return zones
