@@ -2,13 +2,23 @@
 export function hardNavigate(href: string) {
   if (typeof window === 'undefined') return
   const next = String(href || '').trim() || '/'
-  window.location.assign(next)
+  window.location.href = next
 }
 
 export function onHardNavClick(href: string) {
-  return (event: { preventDefault: () => void; stopPropagation: () => void }) => {
-    event.preventDefault()
-    event.stopPropagation()
+  return (event: {
+    preventDefault?: () => void
+    stopPropagation?: () => void
+    metaKey?: boolean
+    ctrlKey?: boolean
+    shiftKey?: boolean
+    altKey?: boolean
+    button?: number
+  }) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    if (typeof event.button === 'number' && event.button !== 0) return
+    event.preventDefault?.()
+    event.stopPropagation?.()
     hardNavigate(href)
   }
 }

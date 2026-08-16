@@ -77,8 +77,14 @@ export default function AccountProfileView() {
   }, [t])
 
   useEffect(() => {
+    if (!session._hasHydrated) return
+    if (!String(session.token || '').trim()) {
+      setLoading(false)
+      setProfile(null)
+      return
+    }
     void load()
-  }, [load])
+  }, [load, session._hasHydrated, session.token])
 
   const handleUploadAvatar = async (file: File | null) => {
     if (!file) return
@@ -123,7 +129,20 @@ export default function AccountProfileView() {
 
   return (
     <AccountShell title={t('accountProfile.title')} description={t('accountProfile.description')}>
-      {loading || !profile ? (
+      {!String(session.token || '').trim() && session._hasHydrated ? (
+        <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-[#7a756c]">
+          <p>{t('accountProfile.loginHint', { defaultValue: 'Sign in to view your account.' })}</p>
+          <Button
+            type="button"
+            className="rounded-full bg-[#111] px-5 text-white"
+            onClick={() => {
+              window.location.href = `/customerlogin/?redirect=${encodeURIComponent('/account/profile/')}`
+            }}
+          >
+            {t('auth.login', { defaultValue: 'Log in' })}
+          </Button>
+        </div>
+      ) : loading || !profile ? (
         <div className="flex min-h-[120px] items-center justify-center gap-2 text-sm text-[#7a756c] md:min-h-[240px]">
           <Loader2 className="size-4 animate-spin" />
           {t('accountProfile.loading')}

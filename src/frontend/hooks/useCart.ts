@@ -18,6 +18,7 @@ import {
   getRecommendedProducts
 } from '@/frontend/actions/Cart'
 import { toast } from 'sonner'
+import { useUserSession } from '@/tools/FrontendSession'
 
 // Export States
 export interface CartState {
@@ -96,9 +97,25 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
   }, [])
 
   useEffect(() => {
-    Promise.all([loadCartData(), loadRecommended()]).finally(() => {
+    const token = String(useUserSession.getState().token || '').trim()
+    if (!token) {
       setLoading(false)
-    })
+      return
+    }
+    let cancelled = false
+    const safety = window.setTimeout(() => {
+      if (!cancelled) setLoading(false)
+    }, 8000)
+    Promise.all([loadCartData(), loadRecommended()])
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+        window.clearTimeout(safety)
+      })
+    return () => {
+      cancelled = true
+      window.clearTimeout(safety)
+    }
   }, [loadCartData, loadRecommended])
 
   useEffect(() => {

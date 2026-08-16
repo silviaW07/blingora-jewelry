@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
+import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { loadHomeRecommendZonesCached } from '@/frontend/utils/homeRecommendZonesCache'
 import { pickComingSoonRecommendZone } from '@/frontend/utils/recommendZoneDisplay'
 import {
@@ -64,6 +65,10 @@ export default function MobileComingView() {
     let cancelled = false
     setLoading(true)
 
+    const safety = window.setTimeout(() => {
+      if (!cancelled) setLoading(false)
+    }, 8000)
+
     loadHomeRecommendZonesCached(lang)
       .then((zones) => {
         if (cancelled) return
@@ -116,10 +121,12 @@ export default function MobileComingView() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
+        window.clearTimeout(safety)
       })
 
     return () => {
       cancelled = true
+      window.clearTimeout(safety)
     }
   }, [lang, dateChips])
 
@@ -150,6 +157,7 @@ export default function MobileComingView() {
       className="mobile-coming-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
       data-controller-name="移动端Coming推荐专区"
     >
+      <MobileStorefrontHeader />
       <div className="mobile-coming-page__body">
         <div className="px-1 pt-1 pb-1">
           <h1 className="px-1 text-base font-semibold tracking-tight text-[#1f1a14]">{zoneTitle}</h1>

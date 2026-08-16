@@ -1850,6 +1850,9 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   border: 0;
   background: transparent;
   text-align: center;
+  text-decoration: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-categories-grid__icon {
@@ -1926,6 +1929,9 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   border: 0;
   background: transparent;
   text-align: center;
+  text-decoration: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-categories-brands__icon {

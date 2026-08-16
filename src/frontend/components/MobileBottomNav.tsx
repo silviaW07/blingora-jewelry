@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, LayoutGrid, Sparkles, ShoppingCart, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -62,7 +61,7 @@ export function MobileBottomNav() {
           const Icon = tab.icon
           return (
             <li key={tab.key} className="min-w-0 flex-1">
-              <Link
+              <a
                 href={tab.href}
                 className={cn('mobile-bottom-nav__item', active && 'is-active')}
                 aria-current={active ? 'page' : undefined}
@@ -70,7 +69,7 @@ export function MobileBottomNav() {
               >
                 <Icon className="size-5 shrink-0" strokeWidth={active ? 2.4 : 1.9} />
                 <span className="truncate">{labels[tab.key]}</span>
-              </Link>
+              </a>
             </li>
           )
         })}

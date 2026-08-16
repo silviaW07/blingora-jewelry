@@ -2,13 +2,14 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { AccountProfile } from '@/frontend/route-params'
 
 export default function AccountIndexPage() {
-  const router = useRouter()
   useEffect(() => {
-    router.replace(AccountProfile.path)
-  }, [router])
-  return null
+    window.location.replace('/account/profile/')
+  }, [])
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center bg-[#FFF5F5] text-sm text-[#7a7468]">
+      Loading account…
+    </div>
+  )
 }

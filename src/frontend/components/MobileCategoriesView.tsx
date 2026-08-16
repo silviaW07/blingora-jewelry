@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, hardNavigate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
   type CategoryItem,
@@ -32,6 +32,7 @@ type CircleEntry = {
   imageUrl?: string | null
   /** Circle initials when no image (months / text) */
   initials?: string
+  href?: string
   onClick: () => void
 }
 
@@ -228,10 +229,17 @@ export default function MobileCategoriesView({
       return months.map((m) => {
         const short = m.label || formatMonthLabel(m.year, m.month)
         const monthAbbr = short.split(/\s+/)[0] || short.slice(0, 3)
+        const params = new URLSearchParams()
+        params.set('dailyMonth', m.monthKey)
+        const slug = String(active.category_slug || '').trim()
+        const href = slug
+          ? `/category/${encodeURIComponent(slug)}/?${params.toString()}`
+          : `/?${params.toString()}&categoryId=${encodeURIComponent(active.category_id)}`
         return {
           key: m.monthKey,
           label: short,
           initials: monthAbbr.slice(0, 3),
+          href,
           onClick: () => openDailyMonth(m.monthKey),
         }
       })
@@ -244,6 +252,7 @@ export default function MobileCategoriesView({
         label: translateCatalogLabel(t, child.category_name),
         imageUrl: child.image_url,
         initials: child.category_name.slice(0, 1).toUpperCase(),
+        href: categoryHref(child.category_slug, child.category_id),
         onClick: () => openCategory(child.category_id, child.category_slug),
       }))
     }
@@ -255,6 +264,7 @@ export default function MobileCategoriesView({
         label: translateCatalogLabel(t, brand.category_name),
         imageUrl: brand.image_url,
         initials: brand.category_name.slice(0, 1).toUpperCase(),
+        href: categoryHref(brand.category_slug, brand.category_id),
         onClick: () => openCategory(brand.category_id, brand.category_slug),
       }))
     }
@@ -265,6 +275,7 @@ export default function MobileCategoriesView({
         label: translateCatalogLabel(t, active.category_name),
         imageUrl: active.image_url,
         initials: active.category_name.slice(0, 1).toUpperCase(),
+        href: categoryHref(active.category_slug, active.category_id),
         onClick: () => openCategory(active.category_id, active.category_slug),
       },
     ]
@@ -323,11 +334,14 @@ export default function MobileCategoriesView({
               data-controller-name="移动端分类圆形入口网格"
             >
               {circleEntries.map((entry) => (
-                <button
+                <a
                   key={entry.key}
-                  type="button"
+                  href={entry.href || '#'}
                   className="mobile-categories-grid__item"
-                  onClick={entry.onClick}
+                  onClick={entry.href ? onHardNavClick(entry.href) : (event) => {
+                    event.preventDefault()
+                    entry.onClick()
+                  }}
                 >
                   <span className="mobile-categories-grid__icon">
                     {entry.imageUrl ? (
@@ -345,7 +359,7 @@ export default function MobileCategoriesView({
                     )}
                   </span>
                   <span className="mobile-categories-grid__label">{entry.label}</span>
-                </button>
+                </a>
               ))}
             </div>
           )}
@@ -366,11 +380,11 @@ export default function MobileCategoriesView({
             {brands.map((brand) => {
               const label = translateCatalogLabel(t, brand.name)
               return (
-                <button
+                <a
                   key={brand.id}
-                  type="button"
+                  href={categoryHref(brand.slug, brand.id)}
                   className="mobile-categories-brands__item"
-                  onClick={() => openCategory(brand.id, brand.slug)}
+                  onClick={onHardNavClick(categoryHref(brand.slug, brand.id))}
                 >
                   <span className="mobile-categories-brands__icon">
                     {brand.imageUrl ? (
@@ -388,7 +402,7 @@ export default function MobileCategoriesView({
                     )}
                   </span>
                   <span className="mobile-categories-brands__label">{label}</span>
-                </button>
+                </a>
               )
             })}
           </div>
