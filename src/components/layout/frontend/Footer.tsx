@@ -33,7 +33,7 @@ export default function Footer() {
 
   return (
     <footer
-      className={`mt-auto w-full relative overflow-hidden border-t bg-white ${BORDER} ${TEXT_PRIMARY}`}
+      className={`site-footer mt-auto w-full relative overflow-hidden border-t bg-white ${BORDER} ${TEXT_PRIMARY}`}
       style={{ background: '#ffffff' }}
       data-controller-name="全站页脚"
     >
@@ -166,13 +166,13 @@ export default function Footer() {
             </DecorateText>
             <div className={`flex flex-col gap-3 text-sm ${TEXT_SECONDARY}`}>
               <div className="flex items-start gap-2.5">
-                <MapPin className="size-4 shrink-0 mt-0.5 text-primary" />
+                <MapPin width={16} height={16} className="shrink-0 mt-0.5 text-primary" />
                 <DecorateText propKey="footer_address" as="span">
                   {t('footer.address')}
                 </DecorateText>
               </div>
               <div className="flex items-center gap-2.5">
-                <Mail className="size-4 shrink-0 text-primary" />
+                <Mail width={16} height={16} className="shrink-0 text-primary" />
                 <DecorateText
                   propKey="footer_email"
                   href="mailto:support@yourglobaltrade.com"
@@ -182,7 +182,7 @@ export default function Footer() {
                 </DecorateText>
               </div>
               <div className="flex items-center gap-2.5">
-                <Phone className="size-4 shrink-0 text-primary" />
+                <Phone width={16} height={16} className="shrink-0 text-primary" />
                 <DecorateText
                   propKey="footer_phone"
                   href="tel:+8618966047623"

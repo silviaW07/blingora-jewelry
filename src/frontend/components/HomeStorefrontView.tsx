@@ -52,6 +52,7 @@ import { MobileHomeStorefrontView } from '@/frontend/components/MobileHomeStoref
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder';
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid';
+import { syncNarrowHtmlClass } from '@/frontend/utils/isNarrowViewport';
 import { useTranslation } from 'react-i18next';
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n';
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider';
@@ -400,11 +401,20 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   const [viewport, setViewport] = useState<'mobile' | 'desktop' | null>(null)
 
   useEffect(() => {
-    const mql = window.matchMedia('(max-width: 767px)')
-    const apply = () => setViewport(mql.matches ? 'mobile' : 'desktop')
+    const apply = () => {
+      const narrow = syncNarrowHtmlClass()
+      setViewport(narrow ? 'mobile' : 'desktop')
+    }
     apply()
+    const mql = window.matchMedia('(max-width: 767px)')
     mql.addEventListener('change', apply)
-    return () => mql.removeEventListener('change', apply)
+    window.addEventListener('resize', apply)
+    window.visualViewport?.addEventListener('resize', apply)
+    return () => {
+      mql.removeEventListener('change', apply)
+      window.removeEventListener('resize', apply)
+      window.visualViewport?.removeEventListener('resize', apply)
+    }
   }, [])
 
   const {
@@ -917,17 +927,14 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
     <>
     {/* Mount only the active viewport once known — avoids double React trees on mobile. */}
     {viewport !== 'desktop' ? (
-    <div className={viewport === null ? 'md:hidden' : undefined}>
+    <div data-home-layout="mobile">
       <MobileHomeStorefrontView state={state} handlers={handlers} />
     </div>
     ) : null}
     {viewport !== 'mobile' ? (
     <div
-      className={
-        viewport === null
-          ? 'hidden bg-[#FFF5F5] text-[#111111] md:block'
-          : 'bg-[#FFF5F5] text-[#111111]'
-      }
+      data-home-layout="desktop"
+      className="bg-[#FFF5F5] text-[#111111]"
       data-controller-name="首页独立站陈列布局"
     >
       {/* 第 1 层：Logo / 搜索 + 目录导航 */}

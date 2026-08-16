@@ -61,7 +61,12 @@ export default function RootLayout({
       color: 'rgba(0, 0, 0, 0.85)'
     }}>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '!function(){try{var w=Math.min(screen.width||9999,innerWidth||9999,(visualViewport&&visualViewport.width)||9999);document.documentElement.classList.toggle("is-narrow",w<768);}catch(e){}}();',
+          }}
+        />
         {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}
         <meta name="referrer" content="no-referrer" />
         {/* Self-hosted Outfit (see app/(frontend)/theme-style.css @font-face) — no Google Fonts runtime */}

@@ -58,7 +58,7 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
                   <PageErrorBoundary onGoBack={handleGoBack}>{children}</PageErrorBoundary>
                 </main>
                 {showFooter ? (
-                  <div className={isStorefrontHome ? undefined : 'hidden md:block'}>
+                  <div className={isStorefrontHome ? undefined : 'storefront-footer-desktop-only hidden md:block'}>
                     <Footer />
                   </div>
                 ) : null}
