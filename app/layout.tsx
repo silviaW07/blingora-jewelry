@@ -55,6 +55,7 @@ export default function RootLayout({
     <html
       lang="en"
       translate="no"
+      suppressHydrationWarning
       className={`notranslate ${header.variable} ${body.variable} ${display.variable}`}
       style={{
       backgroundColor: '#fff',
@@ -64,7 +65,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              '!function(){try{var w=Math.min(screen.width||9999,innerWidth||9999,(visualViewport&&visualViewport.width)||9999);document.documentElement.classList.toggle("is-narrow",w<768);}catch(e){}}();',
+              '!function(){try{var d=document.documentElement,mq=window.matchMedia&&window.matchMedia("(max-width: 767px)").matches,w=Math.min(screen.width||9999,innerWidth||9999,(visualViewport&&visualViewport.width)||9999);d.classList.toggle("is-narrow",!!(mq||w<768));}catch(e){}}();',
           }}
         />
         {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}

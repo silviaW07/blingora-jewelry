@@ -16,7 +16,10 @@ import type {
 } from '@/frontend/actions/Home'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
-import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
+import {
+  isComingSoonRecommendZoneTitle,
+  limitRecommendZoneItems,
+} from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
 import { categoryHref, onHardNavClick, productHref } from '@/frontend/utils/hardNavigate'
 
@@ -107,6 +110,10 @@ const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
 }
 
 const MOBILE_SQUIRCLE_MAX = 8
+const MOBILE_COMING_SOON_COLS = 5
+const MOBILE_COMING_SOON_ROWS = 3
+const MOBILE_COMING_SOON_MAX = MOBILE_COMING_SOON_COLS * MOBILE_COMING_SOON_ROWS
+
 const MobileSquircleStrip = ({
   count,
   children,
@@ -135,6 +142,39 @@ const MobileSquircleStrip = ({
     </div>
   )
 }
+
+const isDateLikeComingName = (name?: string | null) =>
+  /^20\d{2}[-/.]/.test(String(name || '').trim())
+
+const zoneLooksLikeComingSoon = (zone: HomeRecommendZoneSectionType) => {
+  if (isComingSoonRecommendZoneTitle(zone.title)) return true
+  const products = (Array.isArray(zone.items) ? zone.items : []).filter(
+    (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
+  )
+  if (products.length < 3) return false
+  const dated = products.filter(
+    (item) => isDateLikeComingName(item.productName) || isDateLikeComingName(item.rawProductName),
+  )
+  return dated.length * 2 >= products.length
+}
+
+const MobileComingSoonGrid = ({ children }: { children: React.ReactNode }) => (
+  <div
+    className="mobile-zone-squircle-grid"
+    data-coming-soon-grid="1"
+    data-controller-name="移动端coming soon网格"
+    style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${MOBILE_COMING_SOON_COLS}, minmax(0, 1fr))`,
+      columnGap: '0.4rem',
+      rowGap: '0.55rem',
+      width: '100%',
+      maxWidth: '100%',
+    }}
+  >
+    {children}
+  </div>
+)
 
 type RecommendZoneProductCardProps = {
   item: RecommendProductCard
@@ -301,13 +341,21 @@ const renderMobileSquircleContent = (
   t: ReturnType<typeof useTranslation>['t'],
   limitDisplay = true,
 ) => {
+  const isComingSoon = zoneLooksLikeComingSoon(zone)
+  const sourceItems = Array.isArray(zone.items) ? zone.items : []
   const limitedItems = (
-    limitDisplay
-      ? limitRecommendZoneItems(zone, zone.items)
-      : Array.isArray(zone.items)
-        ? zone.items
-        : []
-  ).slice(0, MOBILE_SQUIRCLE_MAX)
+    isComingSoon
+      ? sourceItems
+      : limitDisplay
+        ? limitRecommendZoneItems(zone, sourceItems)
+        : sourceItems
+  ).slice(0, isComingSoon ? MOBILE_COMING_SOON_MAX : MOBILE_SQUIRCLE_MAX)
+  const wrapSquircleItems = (count: number, children: React.ReactNode) =>
+    isComingSoon ? (
+      <MobileComingSoonGrid>{children}</MobileComingSoonGrid>
+    ) : (
+      <MobileSquircleStrip count={count}>{children}</MobileSquircleStrip>
+    )
   if (zone.zoneType === 'PRODUCT') {
     const productItems = limitedItems.filter(
       (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
@@ -319,11 +367,11 @@ const renderMobileSquircleContent = (
         </div>
       )
     }
-    return (
-      <MobileSquircleStrip count={productItems.length}>
-        {productItems.map((item) => {
-          const href = productHref(item.productId)
-          return (
+    return wrapSquircleItems(
+      productItems.length,
+      productItems.map((item) => {
+        const href = productHref(item.productId)
+        return (
           <a
             key={item.itemId}
             href={href}
@@ -358,9 +406,8 @@ const renderMobileSquircleContent = (
               </DecorateText>
             </span>
           </a>
-          )
-        })}
-      </MobileSquircleStrip>
+        )
+      }),
     )
   }
 
@@ -375,43 +422,42 @@ const renderMobileSquircleContent = (
         </div>
       )
     }
-    return (
-      <MobileSquircleStrip count={categoryItems.length}>
-        {categoryItems.map((item) => {
-          const displayName = translateCatalogLabel(t, item.categoryName)
-          const imageSrc = resolveCategoryCardSrc(item.imageUrl)
-          const shelfFallback = resolveCategoryCardFallback(item)
-          return (
-            <a
-              key={item.itemId}
-              href={categoryHref(item.categorySlug, item.categoryId)}
-              className="mobile-zone-squircle"
-              onClick={onHardNavClick(categoryHref(item.categorySlug, item.categoryId))}
-              data-controller-name="移动端推荐类目图标"
-            >
-              <span className="mobile-zone-squircle__media">
-                <EditableImg
-                  propKey={`home-recommend-category-m-${item.categoryId}`}
-                  src={imageSrc}
-                  alt={displayName}
-                  keywords={undefined}
-                  disableKeywordSearch
-                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
-                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
-                  loading="lazy"
-                  orientation="square"
-                  className="mobile-zone-squircle__img h-full w-full object-cover"
-                />
-              </span>
-              <span className="mobile-zone-squircle__label">
-                <DecorateText propKey={`home_category_card_name_${item.categoryId}`} as="span">
-                  {displayName}
-                </DecorateText>
-              </span>
-            </a>
-          )
-        })}
-      </MobileSquircleStrip>
+    return wrapSquircleItems(
+      categoryItems.length,
+      categoryItems.map((item) => {
+        const displayName = translateCatalogLabel(t, item.categoryName)
+        const imageSrc = resolveCategoryCardSrc(item.imageUrl)
+        const shelfFallback = resolveCategoryCardFallback(item)
+        return (
+          <a
+            key={item.itemId}
+            href={categoryHref(item.categorySlug, item.categoryId)}
+            className="mobile-zone-squircle"
+            onClick={onHardNavClick(categoryHref(item.categorySlug, item.categoryId))}
+            data-controller-name="移动端推荐类目图标"
+          >
+            <span className="mobile-zone-squircle__media">
+              <EditableImg
+                propKey={`home-recommend-category-m-${item.categoryId}`}
+                src={imageSrc}
+                alt={displayName}
+                keywords={undefined}
+                disableKeywordSearch
+                fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
+                slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
+                loading="lazy"
+                orientation="square"
+                className="mobile-zone-squircle__img h-full w-full object-cover"
+              />
+            </span>
+            <span className="mobile-zone-squircle__label">
+              <DecorateText propKey={`home_category_card_name_${item.categoryId}`} as="span">
+                {displayName}
+              </DecorateText>
+            </span>
+          </a>
+        )
+      }),
     )
   }
 
@@ -552,17 +598,34 @@ export const HomeRecommendZoneSection = ({
     >
       <div
         className={cn(
-          'flex items-center justify-between',
+          'home-zone-section__head flex flex-nowrap items-center justify-between',
           isMobileSquircle ? 'mb-2.5 gap-3' : 'mb-5 gap-4',
         )}
+        style={
+          isMobileSquircle
+            ? {
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'nowrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+              }
+            : undefined
+        }
       >
-        <div className={cn('flex min-w-0 flex-1 items-center', isMobileSquircle ? 'gap-3' : 'gap-4')}>
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 items-center overflow-hidden',
+            isMobileSquircle ? 'gap-3' : 'gap-4',
+          )}
+        >
           <DecorateText
             propKey={`home_zone_title_${zone.zoneId}`}
             as={HeadingTag}
             className={cn(
               isMobileSquircle
-                ? 'home-zone-section__title--mobile text-[0.875rem] font-semibold tracking-[0.02em] text-[#3a322a]'
+                ? 'home-zone-section__title--mobile min-w-0 text-[0.875rem] font-semibold tracking-[0.02em] text-[#3a322a]'
                 : cn(
                     headingAs === 'h1' ? 'text-[34px]' : 'text-[28px]',
                     'font-semibold tracking-[0.02em] text-[#4a4137]',
@@ -578,7 +641,7 @@ export const HomeRecommendZoneSection = ({
           isMobileSquircle ? (
             <a
               href={`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`}
-              className="inline-flex shrink-0 items-center gap-0.5 text-[0.8125rem] font-semibold text-[#4a4137] no-underline"
+              className="home-zone-section__view-all ml-auto inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[0.8125rem] font-semibold text-[#4a4137] no-underline"
               onClick={onHardNavClick(`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`)}
             >
               <span>{t('common.viewAll', { defaultValue: 'View All' })}</span>
@@ -587,7 +650,7 @@ export const HomeRecommendZoneSection = ({
           ) : (
           <button
             type="button"
-            className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#4a4137] transition hover:text-[#111111]"
+            className="home-zone-section__view-all ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-semibold text-[#4a4137] transition hover:text-[#111111]"
             onClick={() => onViewAll?.(zone.zoneId)}
           >
             <span>{t('common.viewAll', { defaultValue: 'View All' })}</span>

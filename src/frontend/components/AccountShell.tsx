@@ -83,12 +83,13 @@ export function AccountShell({
       className="mobile-account-page min-h-screen bg-[#FFF5F5]"
       data-controller-name="客户个人中心"
     >
-      <div className="hidden md:block">
+      <div className="hidden md:block" data-storefront-chrome="desktop">
         <StorefrontStickyHeader />
       </div>
 
       <header
         className="mobile-account-topbar sticky top-0 z-40 border-b border-[#f0dede] bg-[#FFF5F5]/95 backdrop-blur md:hidden"
+        data-storefront-chrome="mobile"
         data-controller-name="移动端个人中心顶栏"
       >
         <div className="flex h-11 items-center gap-1.5 px-2.5 sm:h-12 sm:px-3">
