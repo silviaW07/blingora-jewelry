@@ -690,7 +690,11 @@ export const HomeRecommendZoneManagementView = ({
               <div className="h-64 flex items-center justify-center flex-col gap-2">
                  <AlertCircle className="h-8 w-8 text-muted-foreground/30" data-api-unique-id="homerecommendzonemanagementview-r846eb25335793f7d-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView" />
                  <p className="text-sm text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-r95d47660171edcc6-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">该页数据均已在已选列表中</p>
-               </div> : modalPageItems.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rec3a54162843a35c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">未检索到相关结果</div> : <Table className="relative" data-api-unique-id="homerecommendzonemanagementview-rbd2ef0bb2d98ab21-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
+              </div>
+            ) : modalPageItems.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-muted-foreground" data-api-unique-id="homerecommendzonemanagementview-rec3a54162843a35c-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">未检索到相关结果</div>
+            ) : (
+              <Table className="relative" data-api-unique-id="homerecommendzonemanagementview-rbd2ef0bb2d98ab21-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                 <TableHeader className="bg-background sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)]" data-api-unique-id="homerecommendzonemanagementview-r9c5b111037896d3b-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                   <TableRow className="hover:bg-transparent" data-api-unique-id="homerecommendzonemanagementview-r8935ad4dc1d809d7-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
                     <TableHead className="w-[50px]" data-api-unique-id="homerecommendzonemanagementview-rfa85972209070b3a-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
@@ -731,7 +735,8 @@ export const HomeRecommendZoneManagementView = ({
                       </TableRow>;
               })}
                 </TableBody>
-              </Table>}
+              </Table>
+            )}
           </div>
 
           <div className="px-6 py-4 border-t bg-secondary/5 flex justify-between items-center" data-api-unique-id="homerecommendzonemanagementview-r4f3f5de59b131432-s2152852823" data-api-unique-page-name="src/backend/components/HomeRecommendZoneManagementView">
