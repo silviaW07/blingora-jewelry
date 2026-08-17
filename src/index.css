@@ -1381,6 +1381,62 @@ html.is-narrow .guest-price-placeholder {
   pointer-events: auto !important;
 }
 
+html.is-narrow .guest-price-placeholder {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline;
+  width: auto !important;
+  height: auto !important;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #f254a6 !important;
+  font-weight: 600;
+  text-align: left;
+}
+
+html.is-narrow .home-product-card-cart-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 2rem !important;
+  height: 2rem !important;
+  min-width: 2rem !important;
+  max-width: 2rem !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 9999px !important;
+  border: 1px solid #ebe7de !important;
+  background: #fff !important;
+  color: #111 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  touch-action: manipulation;
+}
+
+html.is-narrow .listing-results-kicker {
+  display: none !important;
+}
+
+html.is-narrow [data-slot='select-trigger'] {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 2.25rem !important;
+}
+
+html.is-narrow [data-slot='select-value'] {
+  display: flex !important;
+  height: auto !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}
+
 /* Chrome blows up aspect-ratio + 1200px images and zooms the whole page out. */
 html.is-narrow .home-product-card .home-product-card-media {
   width: 100% !important;
@@ -1395,10 +1451,19 @@ html.is-narrow .home-product-card img {
   max-width: 100% !important;
 }
 
-html.is-narrow [data-controller-name='分类页整体布局'] h2 {
+html.is-narrow [data-controller-name='分类页整体布局'] h2,
+html.is-narrow [data-controller-name='分类商品展示区'] h2,
+html.is-narrow .category-listing-title {
   font-size: 1.125rem !important;
   letter-spacing: 0.02em !important;
   line-height: 1.3 !important;
+}
+
+html.is-narrow [data-controller-name='商品结果内容区'],
+html.is-narrow [data-controller-name='分类商品展示区'],
+html.is-narrow [data-controller-name='商品结果区'] {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 html.is-narrow [data-controller-name='商品结果展示区'] > div {
@@ -1474,7 +1539,6 @@ html.is-narrow .storefront-main-with-mobile-nav {
 html.is-narrow [class*='md:hidden'] {
   display: block !important;
   pointer-events: auto !important;
-  height: auto !important;
   visibility: visible !important;
 }
 

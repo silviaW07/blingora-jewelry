@@ -53,6 +53,7 @@ import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder';
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid';
 import { syncNarrowHtmlClass } from '@/frontend/utils/isNarrowViewport';
+import { useChromeActivate } from '@/frontend/utils/hardNavigate';
 import { useTranslation } from 'react-i18next';
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n';
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider';
@@ -178,6 +179,13 @@ const DesktopRecommendZoneProductCard = ({
 
   const priceToShow = currentOption?.price ?? item.priceMin ?? item.price
   const originalPriceToShow = currentOption?.originalPrice ?? item.originalPrice
+  const addToCartEvents = useChromeActivate(() => {
+    if (showOptions && currentSkuId) {
+      void handlers.handleAddRecommendProductSkuToCart(item, currentSkuId)
+      return
+    }
+    void handlers.handleAddRecommendProductToCart(item)
+  })
 
   return (
     <article
@@ -280,13 +288,7 @@ const DesktopRecommendZoneProductCard = ({
             <Button
               type="button"
               className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
-              onClick={() => {
-                if (showOptions && currentSkuId) {
-                  void handlers.handleAddRecommendProductSkuToCart(item, currentSkuId)
-                  return
-                }
-                void handlers.handleAddRecommendProductToCart(item)
-              }}
+              {...addToCartEvents}
             >
               <ShoppingCart className="mr-2 size-4" />
               <DecorateText propKey="home_add_to_cart_label" as="span">
@@ -1212,7 +1214,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       <ArrowLeft className="size-3.5 shrink-0" />
                       <span>{t('common.backToHome')}</span>
                     </button>
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]">{t('product.resultsTitle')}</p>
+                      <p className="listing-results-kicker text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]">{t('product.resultsTitle')}</p>
                   </div>
                   <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-[0.08em] text-[#111111]">{currentCategoryName}</h2>
                   <p className="mt-1 text-sm text-[#6f6a62]">

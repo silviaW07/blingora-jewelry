@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ProductCategory, ProductDetail, RecommendZone } from '@/frontend/route-params';
+import { openStorefrontLogin } from '@/frontend/utils/hardNavigate';
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { useUserSession } from '@/tools/FrontendSession';
 import {
@@ -371,7 +372,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     }
 
     if (!userSession.token?.trim()) {
-      openAuthModal('login')
+      openStorefrontLogin(openAuthModal)
       return
     }
 
@@ -399,7 +400,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     }
 
     if (!userSession.token?.trim()) {
-      openAuthModal('login')
+      openStorefrontLogin(openAuthModal)
       return
     }
 
@@ -419,7 +420,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
 
   const handleAddLinkedCategoryProductToCart = async (item: HomeLinkedCategoryProduct) => {
     if (!userSession.token?.trim()) {
-      openAuthModal('login')
+      openStorefrontLogin(openAuthModal)
       return
     }
 

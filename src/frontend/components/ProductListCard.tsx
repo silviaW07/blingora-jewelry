@@ -11,7 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -92,6 +92,7 @@ export const ProductListCard = ({
     setPreviewImage(item.main_image_url?.trim() || thumbnails[0] || '')
   }, [item.product_id, item.main_image_url])
 
+  const detailHref = productHref(item.product_id)
   const goToDetail = () => {
     writeProductDetailPreview({
       id: item.product_id,
@@ -100,8 +101,15 @@ export const ProductListCard = ({
     })
     onNavigate(item.product_id)
   }
-  const goToDetailEvents = useChromeActivate(goToDetail)
   const addToCartEvents = useChromeActivate(() => onAddToCart(item))
+  const handleDetailNav = (event: React.MouseEvent | React.PointerEvent) => {
+    writeProductDetailPreview({
+      id: item.product_id,
+      name: item.product_name,
+      image: previewImage || item.main_image_url || '',
+    })
+    onHardNavClick(detailHref)(event)
+  }
 
   const prefetchDetail = () => {
     prefetchProductDetail(item.product_id)
@@ -134,40 +142,42 @@ export const ProductListCard = ({
 
   return (
     <article
-      role="link"
-      tabIndex={0}
-      aria-label={item.product_name}
       className={cn(
-        'home-product-card group flex h-full cursor-pointer flex-col overflow-visible transition duration-200',
+        'home-product-card group flex h-full flex-col overflow-visible transition duration-200',
         'hover:opacity-95',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20',
         className,
       )}
       data-controller-name={controllerName}
-      onClick={goToDetailEvents.onClick}
-      onPointerUp={goToDetailEvents.onPointerUp}
       onPointerEnter={prefetchDetail}
-      onFocus={prefetchDetail}
-      onKeyDown={handleCardKeyDown}
     >
-      <div className="home-product-card-media relative aspect-square w-full shrink-0 overflow-hidden">
-        <OptimizedProductImage
-          src={previewImage || item.main_image_url}
-          alt={item.product_name}
-          sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-          imageWidth={1200}
-          priority={priority}
-        />
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-1 px-2 pb-2 pt-2 sm:px-2.5 sm:pb-2.5 sm:pt-2">
+      <a
+        href={detailHref}
+        aria-label={item.product_name}
+        className="home-product-card-link block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+        onClick={handleDetailNav}
+        onPointerUp={handleDetailNav}
+        onFocus={prefetchDetail}
+        onKeyDown={handleCardKeyDown}
+      >
+        <div className="home-product-card-media relative aspect-square w-full shrink-0 overflow-hidden">
+          <OptimizedProductImage
+            src={previewImage || item.main_image_url}
+            alt={item.product_name}
+            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
+            imageWidth={1200}
+            priority={priority}
+          />
+        </div>
         <h3
-          className="w-full truncate text-left text-sm font-medium leading-5 text-[#111111]"
+          className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] sm:px-2.5"
           style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
           title={item.product_name}
         >
           {item.product_name}
         </h3>
+      </a>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-1 px-2 pb-2 sm:px-2.5 sm:pb-2.5">
 
         {isDraft ? (
           <p className="truncate text-xs leading-4 text-[#8b8477]">{t('product.preview')}</p>
@@ -250,12 +260,11 @@ export const ProductListCard = ({
             <button
               type="button"
               aria-label={t('product.addToCart')}
-              className="relative z-[2] inline-flex size-8 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
+              className="home-product-card-cart-btn relative z-[2] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
               {...addToCartEvents}
             >
-              <span className="sr-only">{t('product.addToCart')}</span>
-              <ShoppingCart className="size-3.5" />
-              <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" />
+              <ShoppingCart className="size-3.5" aria-hidden />
+              <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
             </button>
           </div>
         ) : null}

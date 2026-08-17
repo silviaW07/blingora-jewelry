@@ -175,7 +175,7 @@ export const ProductCategoryView = ({
                         <ChevronLeft className="size-3.5 shrink-0" />
                         <span>{t('common.backToHome')}</span>
                       </button>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]" data-api-unique-id='productcategoryview-r10650503c96d0b4c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{t('product.resultsTitle')}</p>
+                      <p className="listing-results-kicker text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]" data-api-unique-id='productcategoryview-r10650503c96d0b4c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{t('product.resultsTitle')}</p>
                     </div>
                     <h2 className="category-listing-title mt-1 text-[1.125rem] font-semibold leading-tight tracking-[0.04em] text-[#111111] md:text-[28px] md:tracking-[0.08em]" data-api-unique-id='productcategoryview-reacb97979b8103a0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{currentCategoryName}</h2>
                     <p className="mt-1 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r84fca975fe17aa7b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>

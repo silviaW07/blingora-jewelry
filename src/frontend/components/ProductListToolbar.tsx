@@ -170,7 +170,7 @@ export function ProductListToolbar({
         >
           <SelectTrigger
             size="sm"
-            className="h-9 min-w-[148px] rounded-full border-[#e6e0d5] bg-[#faf8f3] px-4 text-sm text-[#111111] shadow-none focus-visible:border-[#111111] focus-visible:ring-[#111111]/15"
+            className="h-9 w-full min-w-0 rounded-full border-[#e6e0d5] bg-[#faf8f3] px-4 text-sm text-[#111111] shadow-none focus-visible:border-[#111111] focus-visible:ring-[#111111]/15 sm:w-auto sm:min-w-[148px]"
           >
             <SelectValue placeholder={t('product.sortBy')} />
           </SelectTrigger>

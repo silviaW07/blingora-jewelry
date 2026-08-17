@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { useUserSession } from '@/tools/FrontendSession'
 import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { useTranslation } from 'react-i18next'
-import { useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { openStorefrontLogin, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { cn } from '@/lib/utils'
 
 /**
@@ -36,13 +36,7 @@ export function GuestPricePlaceholder({ className, compact = false }: GuestPrice
   const { t } = useTranslation()
   const authModal = useOptionalCustomerAuthModal()
   const openLogin = useChromeActivate(() => {
-    if (authModal?.openAuthModal) {
-      authModal.openAuthModal('login')
-      return
-    }
-    if (typeof window !== 'undefined') {
-      window.location.assign('/customerlogin/')
-    }
+    openStorefrontLogin(authModal?.openAuthModal)
   })
 
   return (

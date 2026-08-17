@@ -64,7 +64,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              '!function(){try{var d=document.documentElement,ua=navigator.userAgent||"",uaMobile=/Android|iPhone|iPod|Mobile/i.test(ua),mq=window.matchMedia&&window.matchMedia("(max-width: 767px)").matches,w=Math.min(screen.width||9999,innerWidth||9999,(visualViewport&&visualViewport.width)||9999);var n=!!(mq||w<768||(uaMobile&&(screen.width||9999)<900));d.classList.toggle("is-narrow",n);if(n){d.style.overflowX="hidden";d.style.maxWidth="100%";}}catch(e){}}();',
+              '!function(){try{var d=document.documentElement,ua=navigator.userAgent||"",uaMobile=/Android|iPhone|iPod|Mobile|iPad|IEMobile|Opera Mini/i.test(ua),mq=window.matchMedia&&window.matchMedia("(max-width: 767px)").matches,w=Math.min(screen.width||9999,innerWidth||9999,(visualViewport&&visualViewport.width)||9999);var n=!!(mq||w<768||uaMobile);d.classList.toggle("is-narrow",n);if(n){d.style.overflowX="hidden";d.style.maxWidth="100%";}}catch(e){}}();',
           }}
         />
         {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}

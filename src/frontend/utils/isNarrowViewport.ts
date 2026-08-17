@@ -1,12 +1,21 @@
-/** Chrome on phones often uses a ~980px CSS viewport; screen.width stays ~360. */
+/** Chrome on phones often uses a ~980px CSS viewport; screen.width may also lie. */
+
+function isMobileUserAgent(win: Window): boolean {
+  const ua = String(win.navigator?.userAgent || '')
+  if (/Android|webOS|iPhone|iPod|Mobile|IEMobile|Opera Mini/i.test(ua)) return true
+  // iPadOS 13+ reports as Macintosh + touch
+  if (/iPad/i.test(ua)) return true
+  if ((win.navigator.maxTouchPoints || 0) > 1 && /Macintosh/i.test(ua)) return true
+  return false
+}
+
 export function isNarrowViewport(win: Window = window): boolean {
+  if (isMobileUserAgent(win)) return true
   const screenW = win.screen?.width || 9999
   const inner = win.innerWidth || 9999
   const visual = win.visualViewport?.width || 9999
   const mq = win.matchMedia('(max-width: 767px)').matches
-  const ua = String(win.navigator?.userAgent || '')
-  const uaMobile = /Android|iPhone|iPod|Mobile/i.test(ua)
-  return mq || Math.min(screenW, inner, visual) < 768 || (uaMobile && screenW < 900)
+  return mq || Math.min(screenW, inner, visual) < 768
 }
 
 export function syncNarrowHtmlClass(win: Window = window): boolean {

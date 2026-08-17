@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useLocalWishlist } from '@/frontend/hooks/useLocalWishlist'
 import { useUserSession } from '@/tools/FrontendSession'
 import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
-import { useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { openStorefrontLogin, useChromeActivate } from '@/frontend/utils/hardNavigate'
 
 type WishlistHeartButtonProps = {
   productId: string
@@ -42,7 +42,7 @@ export const WishlistHeartButton = ({
 
   const handleToggle = () => {
     if (requireAuth && !userSession.token?.trim()) {
-      authModal?.openAuthModal('login')
+      openStorefrontLogin(authModal?.openAuthModal)
       return
     }
 

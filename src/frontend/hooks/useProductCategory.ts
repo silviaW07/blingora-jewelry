@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { toast } from 'sonner'
 import { Home, ProductCategory, ProductDetail, Cart } from '@/frontend/route-params'
+import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
 import { useUserSession, UserSession } from '@/tools/FrontendSession'
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { getClientPreferredLang } from '@/frontend/i18n'
@@ -1274,7 +1275,7 @@ export const useProductCategory = (
 
   const handleNavigateToWishlist = useCallback(() => {
     if (!userSession.token?.trim()) {
-      openAuthModal('login')
+      openStorefrontLogin(openAuthModal)
       return
     }
     router.push('/wishlist')
@@ -1282,14 +1283,14 @@ export const useProductCategory = (
 
   const handleNavigateToCart = useCallback(() => {
     if (!userSession.token?.trim()) {
-      openAuthModal('login')
+      openStorefrontLogin(openAuthModal)
       return
     }
     Cart.navigateTo(router)
   }, [openAuthModal, router, userSession.token])
 
   const handleNavigateToLogin = useCallback(() => {
-    openAuthModal('login')
+    openStorefrontLogin(openAuthModal)
   }, [openAuthModal])
 
   const handleNavigateToRegister = useCallback(() => {
@@ -1603,7 +1604,7 @@ export const useProductCategory = (
 
   const handleAddToCart = async (item: ProductCardItem) => {
     if (!userSession.token?.trim()) {
-      openAuthModal('login')
+      openStorefrontLogin(openAuthModal)
       return
     }
 

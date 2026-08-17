@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useRef } from 'react'
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
+
+export const CUSTOMER_LOGIN_HREF = '/customerlogin/'
 
 let lastHardNav = { href: '', at: 0 }
 
@@ -60,7 +63,7 @@ export function productHref(productId: string) {
 
 /**
  * Chrome Android often drops `click` on nested buttons (parent card steals it).
- * Fire the same action on pointerup + click, once per tap.
+ * Fire on pointerdown (same as Categories L1), then ignore the following pointerup/click.
  */
 export function useChromeActivate(handler: () => void) {
   const fn = useRef(handler)
@@ -74,7 +77,20 @@ export function useChromeActivate(handler: () => void) {
     last.current = now
     fn.current()
   }, [])
-  return { onPointerUp: run, onClick: run }
+  return { onPointerDown: run, onPointerUp: run, onClick: run }
+}
+
+/** Guest login: phones jump to the login page (Radix dialog often never paints on Chrome). */
+export function openStorefrontLogin(openModal?: (tab?: 'login' | 'register') => void) {
+  if (typeof window !== 'undefined' && isNarrowViewport()) {
+    hardNavigate(CUSTOMER_LOGIN_HREF)
+    return
+  }
+  if (openModal) {
+    openModal('login')
+    return
+  }
+  if (typeof window !== 'undefined') hardNavigate(CUSTOMER_LOGIN_HREF)
 }
 
 export function orderDetailHref(orderId: string) {
