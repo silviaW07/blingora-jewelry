@@ -11,5 +11,10 @@ export const revalidate = 300
 
 export default async function CategoriesPage() {
   const bootstrap = await loadStorefrontBootstrap()
-  return <MobileCategoriesView initialCategories={bootstrap.categories} />
+  return (
+    <MobileCategoriesView
+      initialCategories={bootstrap.categories}
+      initialRecommendZones={bootstrap.recommendZones}
+    />
+  )
 }

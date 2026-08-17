@@ -1802,6 +1802,7 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
 }
 
 .mobile-categories-layout {
+  position: relative;
   display: flex;
   align-items: stretch;
   margin-top: 0;
@@ -1809,11 +1810,44 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   border-top: 1px solid #ebe6db;
 }
 
+/* Visually hidden radios — must stay in DOM for :checked ~ pane switching (no :has). */
+.mobile-categories-radio {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mobile-categories-panels {
+  flex: 1;
+  min-width: 0;
+  order: 2;
+  background: #fff;
+}
+
+.mobile-categories-pane {
+  display: none;
+  padding: 0.9rem 0.85rem 1.25rem;
+}
+
+.mobile-categories-pane.is-active {
+  display: block;
+}
+
 .mobile-categories-rail {
   width: 6.75rem;
   flex-shrink: 0;
   position: relative;
   z-index: 2;
+  order: 1;
   background: #f4f0e8;
   border-right: 1px solid #ebe6db;
   touch-action: manipulation;
@@ -2127,6 +2161,35 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   .mobile-product-grid--brand {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* Chrome phones (~980px CSS viewport): keep the two-column category shelf full width. */
+html.is-narrow .mobile-categories-layout {
+  max-width: none !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+html.is-narrow .mobile-categories-rail {
+  width: 6.75rem !important;
+}
+
+html.is-narrow .mobile-categories-brands {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+}
+
+html.is-narrow .mobile-categories-page {
+  padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* ===== Mobile storefront: banner, recommend squircles, unified type ===== */
