@@ -11,6 +11,15 @@ export function isNarrowViewport(win: Window = window): boolean {
 
 export function syncNarrowHtmlClass(win: Window = window): boolean {
   const narrow = isNarrowViewport(win)
-  win.document.documentElement.classList.toggle('is-narrow', narrow)
+  const root = win.document.documentElement
+  root.classList.toggle('is-narrow', narrow)
+  if (narrow) {
+    root.style.overflowX = 'hidden'
+    root.style.maxWidth = '100%'
+    if (win.document.body) {
+      win.document.body.style.overflowX = 'hidden'
+      win.document.body.style.maxWidth = '100%'
+    }
+  }
   return narrow
 }

@@ -79,7 +79,7 @@ export const ProductCategoryView = ({
       queryState.stockStatus.length > 0,
   );
   const hasBrowseChrome = Boolean(activeBanner) || recommendationFloors.length > 0;
-  return <main className="min-h-screen bg-[#FFF5F5] text-[#111111]" data-controller-name="分类页整体布局" data-api-unique-id='productcategoryview-r3cbcd43ae04fc8af-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+  return <main className="min-h-screen max-w-full overflow-x-hidden bg-[#FFF5F5] text-[#111111]" data-controller-name="分类页整体布局" data-api-unique-id='productcategoryview-r3cbcd43ae04fc8af-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
       <StorefrontResponsiveHeader isHome={false} />
 
       {!showProductResults ? hasBrowseChrome ? <section className="storefront-container py-6" data-controller-name="首页分类浏览与横幅联动区" data-api-unique-id='productcategoryview-r220efc53b28f746c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
@@ -159,8 +159,8 @@ export const ProductCategoryView = ({
 
           <section className="space-y-6" data-controller-name="商品结果展示区" data-api-unique-id='productcategoryview-r81884d5ddb85b4ab-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
               <div className="rounded-[36px] bg-white px-5 py-5 shadow-[0_18px_55px_-42px_rgba(0,0,0,0.4)] sm:px-6 lg:px-8" data-api-unique-id='productcategoryview-r8d0e44f2c72aff49-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                <div className="flex flex-col gap-4 border-b border-[#ece7dc] pb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6" data-api-unique-id='productcategoryview-r54d4d55ec42aabc8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                  <div className="min-w-0 shrink" data-api-unique-id='productcategoryview-ra6f6136bd984af62-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                <div className="category-listing-head flex flex-col gap-4 border-b border-[#ece7dc] pb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6" data-api-unique-id='productcategoryview-r54d4d55ec42aabc8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  <div className="min-w-0 w-full shrink" data-api-unique-id='productcategoryview-ra6f6136bd984af62-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     <div className="flex flex-wrap items-center gap-4">
                       <button
                         type="button"
@@ -177,12 +177,10 @@ export const ProductCategoryView = ({
                       </button>
                       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]" data-api-unique-id='productcategoryview-r10650503c96d0b4c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{t('product.resultsTitle')}</p>
                     </div>
-                    <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-[0.08em] text-[#111111]" data-api-unique-id='productcategoryview-reacb97979b8103a0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{currentCategoryName}</h2>
+                    <h2 className="category-listing-title mt-1 text-[1.125rem] font-semibold leading-tight tracking-[0.04em] text-[#111111] md:text-[28px] md:tracking-[0.08em]" data-api-unique-id='productcategoryview-reacb97979b8103a0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{currentCategoryName}</h2>
                     <p className="mt-1 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r84fca975fe17aa7b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                       {isLoadingProducts && products.length === 0
                         ? t('product.loading')
-                        : isSecondaryCategoryResults
-                        ? t('product.totalCountSecondary', { count: totalCount })
                         : t('product.totalCount', { count: totalCount })}
                     </p>
                     {selectedStockStatuses.length > 0 ? <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r6414cea585b640ff-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
@@ -191,7 +189,7 @@ export const ProductCategoryView = ({
                   </div>
 
                   <ProductListToolbar
-                    className="w-full shrink-0 sm:w-auto sm:justify-end"
+                    className="w-full min-w-0 shrink-0 sm:w-auto sm:justify-end"
                     minPrice={queryState.minPrice}
                     maxPrice={queryState.maxPrice}
                     sortBy={queryState.sortBy}
@@ -206,7 +204,7 @@ export const ProductCategoryView = ({
                   />
                 </div>
 
-                {isLoadingProducts && products.length === 0 ? <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-api-unique-id='productcategoryview-skeleton-grid' data-api-unique-page-name='src/frontend/components/ProductCategoryView' aria-busy="true" aria-label={t('product.loading')}>
+                {isLoadingProducts && products.length === 0 ? <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5" data-api-unique-id='productcategoryview-skeleton-grid' data-api-unique-page-name='src/frontend/components/ProductCategoryView' aria-busy="true" aria-label={t('product.loading')}>
                     {Array.from({ length: 10 }).map((_, index) => (
                       <div key={`product-skeleton-${index}`} className="animate-pulse space-y-3">
                         <div className="aspect-[3/4] min-h-[160px] rounded-[24px] bg-[#ebe7de]" />
@@ -214,7 +212,7 @@ export const ProductCategoryView = ({
                         <div className="h-3 w-1/2 rounded-full bg-[#ebe7de]" />
                       </div>
                     ))}
-                  </div> : products.length > 0 ? <div className={`storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${isLoadingProducts ? 'opacity-60 transition-opacity' : ''}`} data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  </div> : products.length > 0 ? <div className={`storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 ${isLoadingProducts ? 'opacity-60 transition-opacity' : ''}`} data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     {products.map((item, index) => <ProductListCard key={item.product_id} item={item} imagePropKey={`category-product-${item.product_id}`} onNavigate={handlers.handleNavigateToDetail} onAddToCart={handlers.handleAddToCart} onAddToWishlist={handlers.handleAddToWishlist} controllerName={isSecondaryCategoryResults ? '二级类目商品图片名称卡片' : '分类商品信息卡片'} priority={index < 4} />)}
                   </div> : <div className="mt-6 rounded-[28px] border border-dashed border-[#ddd6c8] bg-[#faf8f3] px-6 py-14 text-center" data-api-unique-id='productcategoryview-rf8e519298f81db85-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#ebe7de] text-[#111111]" data-api-unique-id='productcategoryview-re1ac063fbce010dd-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>

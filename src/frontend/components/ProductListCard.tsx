@@ -221,7 +221,10 @@ export const ProductListCard = ({
                   <OptimizedProductImage
                     src={url}
                     alt=""
-                    className="pointer-events-none"
+                    fill={false}
+                    width={24}
+                    height={24}
+                    className="pointer-events-none h-full w-full"
                     sizes="48px"
                     imageWidth={240}
                   />

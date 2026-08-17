@@ -59,8 +59,8 @@ export function OptimizedProductImage({
 
   // Visible immediately — Chrome mobile often never fires React onLoad, so opacity-0 stayed blank.
   const imgClass = fill
-    ? cn('absolute inset-0 h-full w-full object-cover', className)
-    : cn('object-cover', className)
+    ? cn('absolute inset-0 h-full w-full max-w-full object-cover', className)
+    : cn('max-w-full object-cover', className)
 
   return (
     <>

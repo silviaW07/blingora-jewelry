@@ -1147,7 +1147,7 @@
   display: block;
   width: 100% !important;
   height: 100% !important;
-  max-width: none;
+  max-width: 100% !important;
   aspect-ratio: auto !important;
   object-fit: cover !important;
   object-position: center center;
@@ -1334,6 +1334,94 @@ input:-webkit-autofill:active {
 }
 
 /* Chrome phones often use a ~980px CSS viewport. html.is-narrow is set from screen.width. */
+html.is-narrow,
+html.is-narrow body {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+html.is-narrow .storefront-container,
+html.is-narrow .site-shell,
+html.is-narrow .storefront-shell {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  box-sizing: border-box;
+}
+
+html.is-narrow .storefront-main-with-mobile-nav {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+html.is-narrow .storefront-product-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.625rem !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+html.is-narrow .home-product-card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Chrome blows up aspect-ratio + 1200px images and zooms the whole page out. */
+html.is-narrow .home-product-card .home-product-card-media {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 0 !important;
+  padding-bottom: 100% !important;
+  aspect-ratio: auto !important;
+  overflow: hidden !important;
+}
+
+html.is-narrow .home-product-card img {
+  max-width: 100% !important;
+}
+
+html.is-narrow [data-controller-name='分类页整体布局'] h2 {
+  font-size: 1.125rem !important;
+  letter-spacing: 0.02em !important;
+  line-height: 1.3 !important;
+}
+
+html.is-narrow [data-controller-name='商品结果展示区'] > div {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  background: transparent !important;
+}
+
+html.is-narrow [data-controller-name='商品列表筛选排序工具栏'] {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+html.is-narrow .category-listing-head {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+html.is-narrow .mobile-sf-header,
+html.is-narrow [data-storefront-chrome='mobile'] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
 html.is-narrow [data-home-layout='desktop'],
 html.is-narrow [data-storefront-chrome='desktop'],
 html.is-narrow .storefront-footer-desktop-only {
