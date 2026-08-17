@@ -21,9 +21,9 @@ export function Providers({
     }
     apply()
     const mql = window.matchMedia('(max-width: 1023px)')
-    const phone = window.matchMedia('(max-device-width: 512px)')
+    const desktop = window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)')
     mql.addEventListener('change', apply)
-    phone.addEventListener('change', apply)
+    desktop.addEventListener('change', apply)
     window.addEventListener('resize', apply)
     window.visualViewport?.addEventListener('resize', apply)
     const t0 = window.setTimeout(apply, 0)
@@ -31,7 +31,7 @@ export function Providers({
     const t2 = window.setTimeout(apply, 250)
     return () => {
       mql.removeEventListener('change', apply)
-      phone.removeEventListener('change', apply)
+      desktop.removeEventListener('change', apply)
       window.removeEventListener('resize', apply)
       window.visualViewport?.removeEventListener('resize', apply)
       window.clearTimeout(t0)

@@ -2234,6 +2234,11 @@ html.is-narrow [class~='hidden'][class*='lg:grid'] {
   }
 }
 
+html.is-narrow .site-footer .grid,
+html.is-narrow .site-footer__features {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
 html.is-narrow .site-footer .storefront-container {
   padding-top: 1.5rem !important;
   padding-bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 1rem) !important;

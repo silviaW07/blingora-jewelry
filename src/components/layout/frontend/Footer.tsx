@@ -37,7 +37,7 @@ export default function Footer() {
       style={{ background: '#ffffff' }}
       data-controller-name="全站页脚"
     >
-      <div className="storefront-container py-12 md:py-16 relative z-10">
+      <div className="storefront-container py-12 lg:py-16 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
           <div className="lg:col-span-5 flex flex-col gap-6">
             <div className="flex flex-col gap-3">

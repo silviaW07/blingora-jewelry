@@ -13,14 +13,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUserSession } from '@/tools/FrontendSession'
-import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import {
   AccountAddresses,
   AccountOrders,
   AccountProfile,
   Wishlist,
 } from '@/frontend/route-params'
-import { customerLoginHref, hardNavigate } from '@/frontend/utils/hardNavigate'
+import { hardNavigate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 type Props = {
@@ -52,7 +51,6 @@ export function CustomerAccountMenu({
   const { t } = useTranslation()
   const router = useRouter()
   const session = useUserSession()
-  const { openAuthModal } = useCustomerAuthModal()
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -98,7 +96,7 @@ export function CustomerAccountMenu({
   const go = (path: string) => {
     setOpen(false)
     if (!isLoggedIn) {
-      openAuthModal('login')
+      hardNavigate('/account/profile/')
       return
     }
     hardNavigate(path.endsWith('/') ? path : `${path}/`)
@@ -127,13 +125,7 @@ export function CustomerAccountMenu({
             : 'inline-flex h-14 shrink-0 items-center gap-2 rounded-full border border-[#d8d4ca] bg-white px-4 text-sm font-semibold text-[#111111] shadow-sm transition hover:border-[#111111] hover:bg-[#f7f4ee]',
           className,
         )}
-        onClick={() => {
-          const returnTo =
-            typeof window === 'undefined'
-              ? '/'
-              : `${window.location.pathname}${window.location.search}`
-          hardNavigate(customerLoginHref(returnTo))
-        }}
+        onClick={() => hardNavigate('/account/profile/')}
         aria-label={resolvedGuestLabel}
       >
         <UserCircle2 className={isIcon ? 'size-5' : 'size-4'} />

@@ -1,10 +1,8 @@
 const NARROW_MQ = '(max-width: 1023px)'
 const PHONE_DEVICE_MQ = '(max-device-width: 512px)'
+/** Real desktop: wide + mouse. Chrome phones fail this even in "desktop site". */
+const DESKTOP_MQ = '(min-width: 1024px) and (hover: hover) and (pointer: fine)'
 
-/**
- * CSS pixel width of the device screen (not the layout viewport).
- * Some Chrome Android builds report screen.width in physical pixels.
- */
 function cssScreenWidth(win: Window): number {
   const sw = win.screen?.width || 0
   const dpr = win.devicePixelRatio || 1
@@ -28,11 +26,6 @@ function viewportContent(win: Window): string {
 
 let viewportObserver: MutationObserver | null = null
 
-/**
- * Chrome on phones often ignores width=device-width and lays out at ~980 or
- * "desktop site" 1024–1280. Pin the layout viewport to the screen CSS width
- * so Tailwind lg: and the mobile tree actually match other mobile browsers.
- */
 export function lockStorefrontViewport(win: Window = window): void {
   const doc = win.document
   const head = doc.head || doc.documentElement
@@ -59,15 +52,19 @@ export function lockStorefrontViewport(win: Window = window): void {
 }
 
 /**
- * Shared layout breakpoint for every browser. No UA sniffing.
- * Phone screens stay mobile even when the layout viewport is inflated.
+ * Mobile unless this is clearly a desktop computer.
+ * Chrome phones (including desktop-site / ~980px) stay on the mobile tree.
  */
 export function isNarrowViewport(win: Window = window): boolean {
+  if (win.matchMedia?.(DESKTOP_MQ).matches) return false
   if (win.matchMedia?.(NARROW_MQ).matches) return true
   if ((win.innerWidth || 9999) < 1024) return true
   const visual = win.visualViewport?.width
   if (visual && visual < 1024) return true
-  return isPhoneScreen(win)
+  if (isPhoneScreen(win)) return true
+  // Touch phone/tablet with an inflated layout viewport.
+  if (win.matchMedia?.('(pointer: coarse)').matches) return true
+  return false
 }
 
 export function syncNarrowHtmlClass(win: Window = window): boolean {

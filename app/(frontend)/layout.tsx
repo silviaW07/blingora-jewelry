@@ -45,17 +45,17 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
   const showFooter = !isFullscreen
 
   return (
-    <FrontendAuthGuard>
-      <I18nProvider>
+    <I18nProvider>
+      <CustomerAuthModalProvider>
         <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col notranslate" translate="no">
-            <CustomerAuthModalProvider>
-              {/* 401 → open CustomerAuthModal (no bottom 初始化登录账号 sheet) */}
               <AuthExpiredDialog />
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
                   <Suspense fallback={<div className="min-h-[40vh] bg-[#FFF5F5] px-4 py-10 text-center text-sm text-[#7a7468]">Loading…</div>}>
-                    <PageErrorBoundary onGoBack={handleGoBack}>{children}</PageErrorBoundary>
+                    <PageErrorBoundary onGoBack={handleGoBack}>
+                      <FrontendAuthGuard>{children}</FrontendAuthGuard>
+                    </PageErrorBoundary>
                   </Suspense>
                 </main>
                 {showFooter ? (
@@ -68,9 +68,8 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               </DecorateModeProvider>
               <CustomerAuthModal />
               <CustomerAuthModalDecorateBridge />
-            </CustomerAuthModalProvider>
         </div>
-      </I18nProvider>
-    </FrontendAuthGuard>
+      </CustomerAuthModalProvider>
+    </I18nProvider>
   )
 }
