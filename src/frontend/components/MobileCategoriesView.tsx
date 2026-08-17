@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
 import {
@@ -359,9 +359,8 @@ export default function MobileCategoriesView({
                     {circles.map((entry) => (
                       <a
                         key={entry.key}
-                        href={entry.href}
+                        {...hardNavProps(entry.href)}
                         className="mobile-categories-grid__item"
-                        onClick={onHardNavClick(entry.href)}
                       >
                         <span className="mobile-categories-grid__icon">
                           {entry.imageUrl ? (
@@ -408,8 +407,7 @@ export default function MobileCategoriesView({
               return (
                 <a
                   key={brand.id}
-                  href={categoryHref(brand.slug, brand.id)}
-                  onClick={onHardNavClick(categoryHref(brand.slug, brand.id))}
+                  {...hardNavProps(categoryHref(brand.slug, brand.id))}
                   className="mobile-categories-brands__item"
                 >
                   <span className="mobile-categories-brands__icon">

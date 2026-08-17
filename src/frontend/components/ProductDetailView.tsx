@@ -34,7 +34,11 @@ import {
 } from '@/frontend/i18n/productSpecTranslate';
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
-import { cn } from '@/lib/utils';
+
+/** Local helper — production webpack left `cn` as a free global and crashed the PDP. */
+function cn(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(' ')
+}
 
 const PRODUCT_STATUS_I18N: Record<ProductStatus, string> = {
   DRAFT: 'product.statusDraft',

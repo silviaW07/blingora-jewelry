@@ -15,7 +15,7 @@ import {
 } from '@/frontend/actions/AccountCenter'
 import type { CustomerOrderItem, CustomerOrderSummary } from '../actions/AccountCenter'
 import { AccountOrderDetail } from '@/frontend/route-params'
-import { hardNavigate, onHardNavClick, orderPayHref, productHref } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, hardNavProps, orderPayHref, productHref } from '@/frontend/utils/hardNavigate'
 
 export default function AccountOrderDetailView() {
   const searchParams = useClientSearchParams()
@@ -84,8 +84,7 @@ export default function AccountOrderDetailView() {
   return (
     <AccountShell title={t('accountOrders.detailTitle')} description={t('accountOrders.detailDescription')}>
       <a
-        href="/account/orders/"
-        onClick={onHardNavClick('/account/orders/')}
+        {...hardNavProps('/account/orders/')}
         className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-[#2f2a24] hover:text-[#f254a6]"
       >
         <ArrowLeft className="size-4" />
@@ -114,8 +113,7 @@ export default function AccountOrderDetailView() {
               <Badge variant="outline">{t(`accountOrders.statuses.${order.status}`)}</Badge>
               {order.status === 'PENDING_PAYMENT' ? (
                 <a
-                  href={orderPayHref(order.orderId)}
-                  onClick={onHardNavClick(orderPayHref(order.orderId))}
+                  {...hardNavProps(orderPayHref(order.orderId))}
                   className="inline-flex h-10 items-center rounded-full bg-[#f254a6] px-4 text-sm font-medium text-white hover:bg-[#df3f91]"
                 >
                   {t('accountOrders.payNow')}

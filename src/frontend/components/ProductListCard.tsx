@@ -11,7 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -143,16 +143,15 @@ export const ProductListCard = ({
       onPointerEnter={prefetchDetail}
     >
       <a
-        href={detailHref}
+        {...hardNavProps(detailHref)}
         aria-label={item.product_name}
         className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-        onClick={(event) => {
+        onPointerDown={() => {
           writeProductDetailPreview({
             id: item.product_id,
             name: item.product_name,
             image: previewImage || item.main_image_url || '',
           })
-          onHardNavClick(detailHref)(event)
         }}
         onFocus={prefetchDetail}
         onKeyDown={handleCardKeyDown}

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
-import { onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { hardNavProps } from '@/frontend/utils/hardNavigate'
 
 type StorefrontBrandMarkProps = {
   className?: string
@@ -61,8 +61,7 @@ export function StorefrontBrandMark({
 
   return (
     <a
-      href="/"
-      onClick={onHardNavClick('/')}
+      {...hardNavProps('/')}
       className={markClass}
       aria-label={ariaLabel}
       data-controller-name="站点品牌标识"

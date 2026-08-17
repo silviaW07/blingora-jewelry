@@ -1,6 +1,6 @@
 ﻿'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { ProductDetail, Cart } from '@/frontend/route-params'
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
@@ -124,26 +124,30 @@ export interface ProductDetailHandlers {
   setActiveImage: (url: string) => void;
 }
 
-export const useProductDetail = (): {
+export const useProductDetail = (seed?: {
+  productId?: string
+  slug?: string
+  decorate?: boolean
+  initialProduct?: ProductDetailData | null
+}): {
   state: ProductDetailState;
   handlers: ProductDetailHandlers;
 } => {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const { productId, slug } = useMemo(() => ProductDetail.getParams(searchParams), [searchParams])
-  const isDecorateMode = searchParams.get('decorate') === '1'
+  const productId = String(seed?.productId || '').trim()
+  const slug = String(seed?.slug || '').trim()
+  const isDecorateMode = Boolean(seed?.decorate)
   const session = useUserSession()
   const { openAuthModal } = useCustomerAuthModal()
-  // Keep SSR/client first paint identical — apply memory cache inside fetchProduct.
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !seed?.initialProduct)
   const [error, setError] = useState<string | null>(null)
-  const [product, setProduct] = useState<ProductDetailData | null>(null)
+  const [product, setProduct] = useState<ProductDetailData | null>(() => seed?.initialProduct || null)
   const [relatedProducts, setRelatedProducts] = useState<RelatedProductItem[]>([])
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({})
   const [selectedSku, setSelectedSku] = useState<ProductSkuData | null>(null)
   const [quantity, setQuantity] = useState<number>(1)
   const [skuQuantities, setSkuQuantities] = useState<Record<string, number>>({})
-  const [activeImage, setActiveImage] = useState<string>('')
+  const [activeImage, setActiveImage] = useState<string>(() => seed?.initialProduct?.mainImageUrl || '')
   const [submitting, setSubmitting] = useState(false)
   const [manualColorValue, setManualColorValue] = useState<string | null>(null)
   const [manualSizeSkuId, setManualSizeSkuId] = useState<string | null>(null)
@@ -153,6 +157,8 @@ export const useProductDetail = (): {
   })
   const highlightTimerRef = useRef<number | null>(null)
   const skuQuantitiesRef = useRef<Record<string, number>>({})
+  const productRef = useRef<ProductDetailData | null>(product)
+  productRef.current = product
 
   const triggerSelectionHighlight = useCallback((next: SelectionHighlight) => {
     setSelectionHighlight(next)
@@ -174,11 +180,7 @@ export const useProductDetail = (): {
           const preview = await getDecoratePreviewProduct()
 
           if (preview?.productId) {
-            const nextParams = new URLSearchParams(searchParams.toString())
-            nextParams.set('decorate', '1')
-            nextParams.set('productId', preview.productId)
-            nextParams.delete('slug')
-            router.replace(`${ProductDetail.path}?${nextParams.toString()}`)
+            router.replace(`${ProductDetail.path}?decorate=1&productId=${encodeURIComponent(preview.productId)}`)
             return
           }
 
@@ -220,16 +222,20 @@ export const useProductDetail = (): {
         return
       }
 
-      setLoading(true)
+      const hasVisibleProduct =
+        Boolean(productRef.current?.id) &&
+        ((productId && productRef.current.id === productId) || (!productId && Boolean(slug)))
+      if (!hasVisibleProduct) {
+        setLoading(true)
+        setProduct(null)
+        setRelatedProducts([])
+        setActiveImage('')
+      }
       setError(null)
-      setProduct(null)
-      setRelatedProducts([])
-      setActiveImage('')
       const data = await getProductDetail({ productId, slug, lang })
       writeCachedProductDetail(data.product, lang, slug)
       setProduct(data.product)
       setActiveImage(data.product.mainImageUrl)
-      // Unblock first paint — related products must not hold the full-page spinner
       setLoading(false)
 
       void getRelatedProducts({
@@ -246,7 +252,17 @@ export const useProductDetail = (): {
       setError(err.message || 'Failed to load product')
       setLoading(false)
     }
-  }, [isDecorateMode, productId, router, searchParams, slug])
+  }, [isDecorateMode, productId, router, slug])
+
+  useEffect(() => {
+    if (seed?.initialProduct) {
+      writeCachedProductDetail(
+        seed.initialProduct,
+        typeof window !== 'undefined' ? getClientPreferredLang() : 'en',
+        slug,
+      )
+    }
+  }, [seed?.initialProduct, slug])
 
   useEffect(() => {
     fetchProduct()

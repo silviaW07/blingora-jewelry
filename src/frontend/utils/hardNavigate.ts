@@ -4,6 +4,13 @@ import { useCallback, useRef } from 'react'
 
 export const CUSTOMER_LOGIN_HREF = '/customerlogin/'
 
+/** Put on storefront <a> tags. A capture listener in app/layout.tsx full-page jumps. */
+export const HARD_NAV_ATTR = 'data-hard-nav'
+
+export function hardNavProps(href: string) {
+  return { href, 'data-hard-nav': '' as const }
+}
+
 let lastHardNav = { href: '', at: 0 }
 
 /** Full-page jump — bypass Next client router (Chrome mobile often swallows Link clicks). */
@@ -25,6 +32,7 @@ export function hardNavigate(href: string) {
   }
 }
 
+/** For <button> / non-anchor only. Do not combine with data-hard-nav on the same <a>. */
 export function onHardNavClick(href: string) {
   return (event: {
     currentTarget?: { tagName?: string }
@@ -37,11 +45,7 @@ export function onHardNavClick(href: string) {
     button?: number
   }) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-    // Chrome touch pointerup often reports button === -1. Only skip real
-    // non-primary mouse buttons (middle/right).
     if (typeof event.button === 'number' && event.button > 0) return
-    // Next intercepts same-origin <a> for client routing; Chrome mobile often
-    // never finishes that transition (blank Account / dead Categories).
     event.preventDefault?.()
     event.stopPropagation?.()
     hardNavigate(href)

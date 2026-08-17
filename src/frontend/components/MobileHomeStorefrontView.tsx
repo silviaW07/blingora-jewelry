@@ -25,7 +25,7 @@ import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefit
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
-import { categoryHref, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
 
 interface Props {
   state: HomeState
@@ -118,13 +118,12 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   ) => (
     <a
       key={key}
-      href={href}
+      {...hardNavProps(href)}
       data-active={isActive}
       className={cn(
         'mobile-home__chip relative shrink-0 py-2 text-[0.8125rem] font-semibold tracking-[0.02em] transition-colors',
         isActive ? 'text-[#f254a6]' : 'text-[#3a3a3a]',
       )}
-      onClick={onHardNavClick(href)}
     >
       <span className="whitespace-nowrap">{label}</span>
       {isActive ? (

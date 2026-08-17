@@ -21,7 +21,7 @@ import {
   limitRecommendZoneItems,
 } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { categoryHref, onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -378,15 +378,14 @@ const renderMobileSquircleContent = (
         return (
           <a
             key={item.itemId}
-            href={href}
+            {...hardNavProps(href)}
             className="mobile-zone-squircle"
-            onClick={(event) => {
+            onPointerDown={() => {
               writeProductDetailPreview({
                 id: item.productId,
                 name: item.productName,
                 image: item.imageUrl || '',
               })
-              onHardNavClick(href)(event)
             }}
             onPointerEnter={() => prefetchProductDetail(item.productId)}
             data-controller-name="移动端推荐商品图标"
@@ -435,9 +434,8 @@ const renderMobileSquircleContent = (
         return (
           <a
             key={item.itemId}
-            href={categoryHref(item.categorySlug, item.categoryId)}
+            {...hardNavProps(categoryHref(item.categorySlug, item.categoryId))}
             className="mobile-zone-squircle"
-            onClick={onHardNavClick(categoryHref(item.categorySlug, item.categoryId))}
             data-controller-name="移动端推荐类目图标"
           >
             <span className="mobile-zone-squircle__media">
@@ -644,9 +642,8 @@ export const HomeRecommendZoneSection = ({
         {showViewAll && (zone.zoneType === 'PRODUCT' || zone.zoneType === 'CATEGORY') ? (
           isMobileSquircle ? (
             <a
-              href={`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`}
+              {...hardNavProps(`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`)}
               className="home-zone-section__view-all ml-auto inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[0.8125rem] font-semibold text-[#4a4137] no-underline"
-              onClick={onHardNavClick(`/zone/?zoneId=${encodeURIComponent(zone.zoneId)}`)}
             >
               <span>{t('common.viewAll', { defaultValue: 'View All' })}</span>
               <ChevronRight className="size-3.5" />

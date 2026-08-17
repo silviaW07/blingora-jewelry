@@ -29,14 +29,42 @@ function DialogOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return <DialogPrimitive.Overlay data-slot="dialog-overlay" className={cn("data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-[400] bg-black/50", className)} {...props} />;
 }
+const isPortaledOverlayTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest(
+      '[data-slot="popover-content"], [data-slot="select-content"], [data-slot="dropdown-menu-content"]',
+    ),
+  )
+}
+
 function DialogContent({
   className,
   children,
+  onPointerDownOutside,
+  onFocusOutside,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
-      <DialogPrimitive.Content data-slot="dialog-content" className={cn("bg-background  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%]  grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border z-[400] p-6 shadow-lg duration-200 ", className, 'overflow-auto max-h-full ')} {...props}>
+      <DialogPrimitive.Content
+        data-slot="dialog-content"
+        className={cn("bg-background  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%]  grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border z-[400] p-6 shadow-lg duration-200 ", className, 'overflow-auto max-h-full ')}
+        onPointerDownOutside={(event) => {
+          if (isPortaledOverlayTarget(event.target)) event.preventDefault()
+          onPointerDownOutside?.(event)
+        }}
+        onFocusOutside={(event) => {
+          if (isPortaledOverlayTarget(event.target)) event.preventDefault()
+          onFocusOutside?.(event)
+        }}
+        onInteractOutside={(event) => {
+          if (isPortaledOverlayTarget(event.target)) event.preventDefault()
+          onInteractOutside?.(event)
+        }}
+        {...props}
+      >
         {children}
       </DialogPrimitive.Content>
     </DialogPortal>;

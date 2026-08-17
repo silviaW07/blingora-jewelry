@@ -8,7 +8,7 @@ import { ChevronLeft, Heart, MapPin, Package, Settings, UserCircle2 } from 'luci
 import { cn } from '@/lib/utils'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
-import { hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { useUserSession } from '@/tools/FrontendSession'
 import {
@@ -167,8 +167,7 @@ export function AccountShell({
                 return (
                   <a
                     key={item.path}
-                    href={item.href}
-                    onClick={onHardNavClick(item.href)}
+                    {...hardNavProps(item.href)}
                     className={cn(
                       'inline-flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[0.75rem] font-medium transition sm:gap-2 sm:rounded-[12px] sm:px-3 sm:py-2 sm:text-[0.8125rem] md:rounded-[16px] md:px-3 md:py-2.5 md:text-sm',
                       active

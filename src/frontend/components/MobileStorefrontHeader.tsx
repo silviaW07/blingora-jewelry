@@ -24,7 +24,7 @@ import {
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
-import { hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { useTranslation } from 'react-i18next'
 
@@ -170,8 +170,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
         </div>
 
         <a
-          href="/categories/"
-          onClick={onHardNavClick('/categories/')}
+          {...hardNavProps('/categories/')}
           className="mobile-sf-header__icon-btn"
           aria-label={t('nav.categories', { defaultValue: 'Categories' })}
         >

@@ -259,7 +259,7 @@ export function CategoryCascadeSelect({
         align="start"
         side="bottom"
         collisionPadding={16}
-        className={cn('z-[70] w-auto p-0 overflow-hidden', className)}
+        className={cn('z-[500] pointer-events-auto w-auto p-0 overflow-hidden', className)}
         onOpenAutoFocus={e => {
           e.preventDefault()
           searchInputRef.current?.focus()

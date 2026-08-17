@@ -26,7 +26,7 @@ import type {
 } from '../actions/AccountCenter'
 import {
   hardNavigate,
-  onHardNavClick,
+  hardNavProps,
   orderDetailHref,
   orderPayHref,
 } from '@/frontend/utils/hardNavigate'
@@ -174,8 +174,7 @@ export default function AccountOrdersView() {
                   <TableRow key={order.orderId} className="hover:bg-[#fffafa]">
                     <TableCell className={`${CELL} whitespace-nowrap`}>
                       <a
-                        href={detailHref}
-                        onClick={onHardNavClick(detailHref)}
+                        {...hardNavProps(detailHref)}
                         className="font-semibold text-[#0055FF] underline-offset-4 hover:underline"
                       >
                         {order.orderNo}
@@ -214,8 +213,7 @@ export default function AccountOrdersView() {
                       <div className="flex flex-wrap items-center justify-end gap-2 pr-1">
                         {canPay ? (
                           <a
-                            href={payHref}
-                            onClick={onHardNavClick(payHref)}
+                            {...hardNavProps(payHref)}
                             className="inline-flex h-8 shrink-0 items-center rounded-full bg-[#f254a6] px-3 text-sm font-medium text-white hover:bg-[#df3f91]"
                           >
                             {t('accountOrders.payNow')}

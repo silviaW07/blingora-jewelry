@@ -1620,7 +1620,14 @@ html.is-narrow [data-storefront-chrome='mobile'] {
 html.is-narrow .mobile-bottom-nav {
   display: block !important;
   pointer-events: auto !important;
-  z-index: 200 !important;
+  isolation: isolate;
+  z-index: 2147483000 !important;
+}
+
+html.is-narrow .mobile-home,
+html.is-narrow .home-zone-section--mobile-squircle {
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 html.is-narrow [data-slot='dialog-overlay'][data-state='open'] {
@@ -2027,7 +2034,8 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   font-weight: 600;
   letter-spacing: 0.02em;
   text-decoration: none;
-  transition: color 0.15s ease, background 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-bottom-nav__item.is-active {
