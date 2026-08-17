@@ -147,7 +147,7 @@ export function AccountShell({
       </header>
 
       <div className="account-shell-wrap px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-8">
-        <div className="mb-6 hidden lg:block">
+        <div className="mb-6 hidden lg:block" data-storefront-chrome="desktop">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8a8073]">
             {t('accountShell.sectionLabel')}
           </p>
@@ -155,7 +155,7 @@ export function AccountShell({
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f6558]">{description}</p>
         </div>
 
-        <div className="mb-1.5 lg:hidden">
+        <div className="mb-1.5 lg:hidden" data-storefront-chrome="mobile">
           <h1 className="text-[0.9375rem] font-semibold tracking-tight text-[#1f1a14] sm:text-base">
             {title}
           </h1>
