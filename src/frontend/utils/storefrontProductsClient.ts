@@ -15,7 +15,7 @@ export async function fetchCategoryShelfProducts(input: {
   params.set('sort_by', 'NEWEST')
 
   const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), 6000)
+  const timer = window.setTimeout(() => controller.abort(), 12000)
   try {
     const res = await fetch(`/api/storefront/products?${params.toString()}`, {
       credentials: 'same-origin',

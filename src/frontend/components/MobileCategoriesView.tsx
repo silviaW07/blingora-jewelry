@@ -175,8 +175,10 @@ export default function MobileCategoriesView({
   const loadProducts = useCallback(
     (cat: CategoryItem) => {
       const id = cat.category_id
-      if (!id || fetchedRef.current.has(`${lang}:${id}`)) return
-      fetchedRef.current.add(`${lang}:${id}`)
+      if (!id) return
+      const key = `${lang}:${id}`
+      if (fetchedRef.current.has(key)) return
+      fetchedRef.current.add(key)
       setLoadingById((prev) => ({ ...prev, [id]: true }))
       const daily = isDailyNewArrivalCategoryName(cat.category_name)
       fetchCategoryShelfProducts({
@@ -185,8 +187,14 @@ export default function MobileCategoriesView({
         lang,
       })
         .then((list) => {
-          if (list.length === 0) return
+          if (list.length === 0) {
+            fetchedRef.current.delete(key)
+            return
+          }
           setProductsById((prev) => ({ ...prev, [id]: list }))
+        })
+        .catch(() => {
+          fetchedRef.current.delete(key)
         })
         .finally(() => {
           setLoadingById((prev) => ({ ...prev, [id]: false }))
@@ -196,9 +204,8 @@ export default function MobileCategoriesView({
   )
 
   useEffect(() => {
-    const active = categories.find((c) => c.category_id === activeId) || categories[0]
-    if (active) loadProducts(active)
-  }, [activeId, categories, loadProducts])
+    categories.slice(0, 4).forEach((cat) => loadProducts(cat))
+  }, [categories, loadProducts])
 
   const activateCategory = (categoryId: string) => {
     if (!categoryId) return
