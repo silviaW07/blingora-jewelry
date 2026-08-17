@@ -34,6 +34,7 @@ import {
 } from '@/frontend/i18n/productSpecTranslate';
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
+import { cn } from '@/lib/utils';
 
 const PRODUCT_STATUS_I18N: Record<ProductStatus, string> = {
   DRAFT: 'product.statusDraft',

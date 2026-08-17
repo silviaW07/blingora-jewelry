@@ -37,7 +37,9 @@ export function onHardNavClick(href: string) {
     button?: number
   }) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-    if (typeof event.button === 'number' && event.button !== 0) return
+    // Chrome touch pointerup often reports button === -1. Only skip real
+    // non-primary mouse buttons (middle/right).
+    if (typeof event.button === 'number' && event.button > 0) return
     // Next intercepts same-origin <a> for client routing; Chrome mobile often
     // never finishes that transition (blank Account / dead Categories).
     event.preventDefault?.()

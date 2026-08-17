@@ -102,14 +102,6 @@ export const ProductListCard = ({
     onNavigate(item.product_id)
   }
   const addToCartEvents = useChromeActivate(() => onAddToCart(item))
-  const handleDetailNav = (event: React.MouseEvent | React.PointerEvent) => {
-    writeProductDetailPreview({
-      id: item.product_id,
-      name: item.product_name,
-      image: previewImage || item.main_image_url || '',
-    })
-    onHardNavClick(detailHref)(event)
-  }
 
   const prefetchDetail = () => {
     prefetchProductDetail(item.product_id)
@@ -154,8 +146,14 @@ export const ProductListCard = ({
         href={detailHref}
         aria-label={item.product_name}
         className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-        onClick={handleDetailNav}
-        onPointerUp={handleDetailNav}
+        onClick={(event) => {
+          writeProductDetailPreview({
+            id: item.product_id,
+            name: item.product_name,
+            image: previewImage || item.main_image_url || '',
+          })
+          onHardNavClick(detailHref)(event)
+        }}
         onFocus={prefetchDetail}
         onKeyDown={handleCardKeyDown}
       >
