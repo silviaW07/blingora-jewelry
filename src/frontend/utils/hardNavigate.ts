@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useRef } from 'react'
-import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 
 export const CUSTOMER_LOGIN_HREF = '/customerlogin/'
 
@@ -80,12 +79,8 @@ export function useChromeActivate(handler: () => void) {
   return { onPointerDown: run, onPointerUp: run, onClick: run }
 }
 
-/** Guest login: phones jump to the login page (Radix dialog often never paints on Chrome). */
+/** Guest login: always prefer the in-page modal (same as other browsers). */
 export function openStorefrontLogin(openModal?: (tab?: 'login' | 'register') => void) {
-  if (typeof window !== 'undefined' && isNarrowViewport()) {
-    hardNavigate(CUSTOMER_LOGIN_HREF)
-    return
-  }
   if (openModal) {
     openModal('login')
     return

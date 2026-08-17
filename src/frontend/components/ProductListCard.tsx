@@ -11,7 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { CUSTOMER_LOGIN_HREF, onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -257,28 +257,15 @@ export const ProductListCard = ({
                 onToggle={(favorited) => onAddToWishlist(item, favorited)}
               />
             ) : null}
-            {canViewPrice ? (
-              <button
-                type="button"
-                aria-label={t('product.addToCart')}
-                className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-                {...addToCartEvents}
-              >
-                <ShoppingCart className="size-3.5" aria-hidden />
-                <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
-              </button>
-            ) : (
-              <a
-                href={CUSTOMER_LOGIN_HREF}
-                aria-label={t('product.addToCart')}
-                className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] no-underline"
-                onClick={onHardNavClick(CUSTOMER_LOGIN_HREF)}
-                onPointerDown={onHardNavClick(CUSTOMER_LOGIN_HREF)}
-              >
-                <ShoppingCart className="size-3.5" aria-hidden />
-                <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
-              </a>
-            )}
+            <button
+              type="button"
+              aria-label={t('product.addToCart')}
+              className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
+              {...addToCartEvents}
+            >
+              <ShoppingCart className="size-3.5" aria-hidden />
+              <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
+            </button>
           </div>
         ) : null}
       </div>

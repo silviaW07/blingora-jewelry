@@ -25,7 +25,7 @@ import {
   StorePrice,
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder';
-import { cn } from '@/lib/utils';
+import { useChromeActivate } from '@/frontend/utils/hardNavigate';
 import { useTranslation } from 'react-i18next';
 import { translateColorName, translateAttributeValue } from '@/frontend/i18n/catalogLabels';
 import {
@@ -188,6 +188,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     getSkuLineQuantity,
     resolveLineMinOrderQty,
   } = handlers;
+  const addToCartEvents = useChromeActivate(() => {
+    void handleAddToCart()
+  })
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -858,7 +861,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           : 'cursor-not-allowed bg-[#c8c8c8] hover:bg-[#c8c8c8]',
                       )}
                       disabled={!canAddToCart || submitting}
-                      onClick={() => void handleAddToCart()}
+                      {...addToCartEvents}
                     >
                       <ShoppingCart className="mr-2 size-4" />
                       {submitting

@@ -1,7 +1,9 @@
 ﻿'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProductDetail, Cart, CustomerLogin } from '@/frontend/route-params'
+import { ProductDetail, Cart } from '@/frontend/route-params'
+import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
+import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
 import { useUserSession } from '@/tools/FrontendSession'
 import { toast } from "sonner"
 import type {
@@ -131,6 +133,7 @@ export const useProductDetail = (): {
   const { productId, slug } = useMemo(() => ProductDetail.getParams(searchParams), [searchParams])
   const isDecorateMode = searchParams.get('decorate') === '1'
   const session = useUserSession()
+  const { openAuthModal } = useCustomerAuthModal()
   // Keep SSR/client first paint identical — apply memory cache inside fetchProduct.
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -434,12 +437,8 @@ export const useProductDetail = (): {
   )
 
   const redirectToLogin = useCallback(() => {
-    toast.info('Please sign in to add to cart')
-    let returnPath = ProductDetail.path
-    if (productId) returnPath += `?productId=${productId}`
-    else if (slug) returnPath += `?slug=${slug}`
-    CustomerLogin.navigateToWithReturn(router, { returnTo: returnPath })
-  }, [productId, slug, router])
+    openStorefrontLogin(openAuthModal)
+  }, [openAuthModal])
 
   const resolveSkuForColorAndSize = useCallback(
     (sourceSku: ProductSkuData, colorValue: string) => {
