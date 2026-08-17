@@ -5,16 +5,20 @@ import { useTranslation } from 'react-i18next'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate, onHardNavClick, productHref } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
+  getProductList,
   type CategoryItem,
+  type ProductItem,
   type SideNavZoneSection,
 } from '@/frontend/actions/ProductCategory'
 import {
   getDailyNewArrivalCalendar,
+  getDailyNewArrivalProducts,
   type DailyNewArrivalMonthCard,
 } from '@/frontend/actions/Home'
+import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
 import {
@@ -47,10 +51,6 @@ type BrandEntry = {
  * Dedupes by category_id; prefers image_url from brand_options.
  * Same collection pattern as MobileBrandView, plus image preference.
  */
-function cssEsc(value: string) {
-  return String(value).replace(/([^a-zA-Z0-9_-])/g, '\\$1')
-}
-
 function collectMobileCategoryBrands(
   list: CategoryItem[],
   zones: SideNavZoneSection[],
@@ -121,6 +121,8 @@ export default function MobileCategoriesView({
   const [months, setMonths] = useState<DailyNewArrivalMonthCard[]>([])
   const [loadingMonths, setLoadingMonths] = useState(false)
   const [brands, setBrands] = useState<BrandEntry[]>([])
+  const [products, setProducts] = useState<ProductItem[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(false)
 
   const lang = normalizeLocale(
     i18n.language || (typeof window !== 'undefined' ? readStoredLocale() : 'en'),
@@ -207,6 +209,53 @@ export default function MobileCategoriesView({
     }
   }, [isNewTab, lang])
 
+  useEffect(() => {
+    if (!active) {
+      setProducts([])
+      setLoadingProducts(false)
+      return
+    }
+    let cancelled = false
+    let settled = false
+    setLoadingProducts(true)
+    const safety =
+      typeof window !== 'undefined'
+        ? window.setTimeout(() => {
+            if (cancelled || settled) return
+            settled = true
+            setLoadingProducts(false)
+          }, 8000)
+        : undefined
+    const request = isDailyNewArrivalCategoryName(active.category_name)
+      ? getDailyNewArrivalProducts({ page: 1, page_size: 24, lang })
+      : getProductList({
+          category_id: active.category_id,
+          page: 1,
+          page_size: 24,
+          sort_by: 'NEWEST',
+          lang,
+        })
+    request
+      .then((res) => {
+        if (cancelled || settled) return
+        setProducts(Array.isArray(res.list) ? res.list : [])
+      })
+      .catch(() => {
+        if (cancelled || settled) return
+        setProducts([])
+      })
+      .finally(() => {
+        if (cancelled || settled) return
+        settled = true
+        if (safety) window.clearTimeout(safety)
+        setLoadingProducts(false)
+      })
+    return () => {
+      cancelled = true
+      if (safety) window.clearTimeout(safety)
+    }
+  }, [active, lang])
+
   const fallbackMonths = useMemo(
     () =>
       buildLast6Months().map((m) => ({
@@ -278,14 +327,8 @@ export default function MobileCategoriesView({
     ]
   }
 
-  const paneCss = useMemo(() => {
-    if (categories.length === 0) return '.mc-pane{display:none}'
-    const rules = categories.map((cat) => {
-      const id = cssEsc(cat.category_id)
-      return `.mobile-categories-page:has(#mc-l1-${id}:checked) .mc-pane-${id}{display:block}`
-    })
-    return `.mc-pane{display:none}${rules.join('')}`
-  }, [categories])
+  const circleEntries = active ? circlesForCategory(active) : []
+  const viewMoreHref = active ? categoryHref(active.category_slug, active.category_id) : '/'
 
   const showBrandZone = !loading && brands.length > 0
 
@@ -294,10 +337,8 @@ export default function MobileCategoriesView({
       className="mobile-categories-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
       data-controller-name="移动端分类页-自然滚动+底部品牌区"
     >
-      <style dangerouslySetInnerHTML={{ __html: paneCss }} />
       <MobileStorefrontHeader />
 
-      {/* L1 radios + L2 panes: CSS :has() so Chrome does not need JS click */}
       <div className="mobile-categories-layout">
         <aside className="mobile-categories-rail" aria-label={t('common.categories')}>
           {loading && categories.length === 0 ? (
@@ -305,76 +346,93 @@ export default function MobileCategoriesView({
           ) : (
             categories.map((cat) => {
               const selected = cat.category_id === active?.category_id
-              const rid = `mc-l1-${cat.category_id}`
               return (
-                <label
+                <button
                   key={cat.category_id}
-                  htmlFor={rid}
+                  type="button"
                   className={cn('mobile-categories-rail__item', selected && 'is-active')}
+                  onClick={() => setActiveId(cat.category_id)}
                 >
-                  <input
-                    id={rid}
-                    type="radio"
-                    name="mc-l1"
-                    className="sr-only"
-                    defaultChecked={cat.category_id === (activeId || categories[0]?.category_id)}
-                    onChange={() => setActiveId(cat.category_id)}
-                  />
                   {translateCatalogLabel(t, cat.category_name)}
-                </label>
+                </button>
               )
             })
           )}
         </aside>
 
         <section className="mobile-categories-panel">
-          {categories.map((cat) => {
-            const entries = circlesForCategory(cat)
-            const pane = `mc-pane mc-pane-${cat.category_id}`
-            return (
-              <div key={cat.category_id} className={pane}>
-                <h1 className="mobile-categories-panel__title">
-                  {translateCatalogLabel(t, cat.category_name)}
-                </h1>
-                {entries.length === 0 ? (
-                  <p className="mt-6 text-center text-sm text-[#8a8073]">
-                    {t('mobile.noRecommendedCategories', { defaultValue: 'No categories yet' })}
-                  </p>
-                ) : (
-                  <div
-                    className="mobile-categories-grid"
-                    data-controller-name="移动端分类圆形入口网格"
-                  >
-                    {entries.map((entry) => (
-                      <a
-                        key={entry.key}
-                        href={entry.href || categoryHref(null, cat.category_id)}
-                        className="mobile-categories-grid__item"
-                        onClick={onHardNavClick(entry.href || categoryHref(null, cat.category_id))}
-                      >
-                        <span className="mobile-categories-grid__icon">
-                          {entry.imageUrl ? (
-                            <OptimizedProductImage
-                              src={entry.imageUrl}
-                              alt={entry.label}
-                              sizes="72px"
-                              imageWidth={160}
-                              className="rounded-full"
-                            />
-                          ) : (
-                            <span className="mobile-categories-grid__initials" aria-hidden>
-                              {entry.initials || entry.label.slice(0, 1)}
-                            </span>
-                          )}
-                        </span>
-                        <span className="mobile-categories-grid__label">{entry.label}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          <h1 className="mobile-categories-panel__title">
+            {active ? translateCatalogLabel(t, active.category_name) : t('common.categories')}
+          </h1>
+
+          {circleEntries.length > 0 ? (
+            <div
+              className="mobile-categories-grid"
+              data-controller-name="移动端分类圆形入口网格"
+            >
+              {circleEntries.map((entry) => (
+                <a
+                  key={entry.key}
+                  href={entry.href || viewMoreHref}
+                  className="mobile-categories-grid__item"
+                  onClick={onHardNavClick(entry.href || viewMoreHref)}
+                >
+                  <span className="mobile-categories-grid__icon">
+                    {entry.imageUrl ? (
+                      <OptimizedProductImage
+                        src={entry.imageUrl}
+                        alt={entry.label}
+                        sizes="72px"
+                        imageWidth={160}
+                        className="rounded-full"
+                      />
+                    ) : (
+                      <span className="mobile-categories-grid__initials" aria-hidden>
+                        {entry.initials || entry.label.slice(0, 1)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="mobile-categories-grid__label">{entry.label}</span>
+                </a>
+              ))}
+            </div>
+          ) : null}
+
+          {loadingProducts ? (
+            <div className="mobile-product-grid mt-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="mobile-product-skeleton" />
+              ))}
+            </div>
+          ) : products.length > 0 ? (
+            <div className="mobile-product-grid mt-4">
+              {products.map((item, index) => (
+                <ProductListCard
+                  key={item.product_id}
+                  item={item}
+                  imagePropKey={`cat-product-${item.product_id}`}
+                  className="mobile-product-card"
+                  onNavigate={(id) => hardNavigate(productHref(id))}
+                  onAddToCart={(product) => hardNavigate(productHref(product.product_id || item.product_id))}
+                  priority={index < 4}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-6 text-center text-sm text-[#8a8073]">
+              {t('mobile.noBrandProducts', { defaultValue: 'No products in this category yet' })}
+            </p>
+          )}
+
+          {active && products.length > 0 ? (
+            <a
+              href={viewMoreHref}
+              onClick={onHardNavClick(viewMoreHref)}
+              className="mt-4 block text-center text-sm font-semibold text-[#333]"
+            >
+              {t('mobile.viewMore', { defaultValue: 'View more' })}
+            </a>
+          ) : null}
         </section>
       </div>
 

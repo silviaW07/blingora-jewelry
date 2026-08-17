@@ -117,7 +117,7 @@ export default function CheckoutView({ state, handlers }: Props) {
 
   const handlePlaceOrder = async () => {
     if (!checkoutAddress) {
-      toast.error(t('checkout.saveAddressFirst', { defaultValue: '请先保存收货地址' }))
+      toast.error(t('checkout.saveAddressFirst', { defaultValue: 'Please fill in your shipping address' }))
       return
     }
     if (!selectedChannelId || selectedShippingFee == null) {

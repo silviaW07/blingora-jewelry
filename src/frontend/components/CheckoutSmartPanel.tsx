@@ -303,7 +303,7 @@ export function CheckoutSmartPanel({
   const [smartText, setSmartText] = useState('')
   const [form, setForm] = useState<CheckoutAddressForm>({ ...EMPTY_CHECKOUT_ADDRESS })
   const [confirmed, setConfirmed] = useState(false)
-  const [isEditingAddress, setIsEditingAddress] = useState(true)
+  const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [shippingOptions, setShippingOptions] = useState<CheckoutShippingOption[]>([])
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [loadingChannels, setLoadingChannels] = useState(false)
@@ -321,7 +321,7 @@ export function CheckoutSmartPanel({
       cleanSpaces(form.addressLine1),
   )
   const addressComplete = useMemo(() => isCheckoutAddressComplete(form), [form])
-  const addressReady = confirmed && addressComplete && !isEditingAddress
+  const addressReady = addressComplete
 
   const applyCanonicalAddress = (
     nextForm: CheckoutAddressForm,
@@ -331,7 +331,7 @@ export function CheckoutSmartPanel({
     if (options?.addressId) {
       hydratedAddressRef.current = options.addressId
     }
-    if (options?.confirm && isCheckoutAddressComplete(nextForm)) {
+    if (options?.confirm && (isCheckoutAddressComplete(nextForm) || Boolean(options.addressId))) {
       setConfirmed(true)
       setIsEditingAddress(false)
       notifyParentReady(true)
@@ -370,7 +370,6 @@ export function CheckoutSmartPanel({
   const updateForm = (patch: Partial<CheckoutAddressForm>) => {
     userEditedRef.current = true
     setForm((prev) => ({ ...prev, ...patch }))
-    resetAddressFlow()
   }
 
   const loadShippingOptions = async (country: string, weightKg: number) => {
@@ -415,7 +414,10 @@ export function CheckoutSmartPanel({
         if (cancelled) return
         // React Strict Mode 会先 cleanup；请求完成后再标记，避免跳过第二次 hydration
         autofillIdentityRef.current = identity
-        if (!result?.address) return
+        if (!result?.address) {
+          setIsEditingAddress(true)
+          return
+        }
         if (userEditedRef.current) return
 
         const latest = result.address
@@ -447,12 +449,20 @@ export function CheckoutSmartPanel({
   }, [token, userId])
 
   useEffect(() => {
-    if (!addressReady) {
-      shippingRequestRef.current += 1
-      return
-    }
-    void loadShippingOptions(form.country, Math.max(0, Number(totalWeightKg) || 0))
-  }, [addressReady, form.country, totalWeightKg])
+    const country = form.country || 'United States'
+    void loadShippingOptions(country, Math.max(0, Number(totalWeightKg) || 0))
+  }, [form.country, totalWeightKg])
+
+  useEffect(() => {
+    if (!addressComplete) return
+    setConfirmed(true)
+    notifyParentReady(true)
+    onConfirmAddress?.({
+      channelId: selectedChannelId,
+      address: form,
+      shippingFee: null,
+    })
+  }, [addressComplete, form, selectedChannelId])
 
   const applySmartParse = (value: string, options?: { notify?: boolean }) => {
     userEditedRef.current = true
@@ -462,7 +472,6 @@ export function CheckoutSmartPanel({
     }
     const parsed = parseSmartAddressText(value)
     setForm(parsed)
-    resetAddressFlow()
     if (
       options?.notify &&
       (
@@ -522,7 +531,6 @@ export function CheckoutSmartPanel({
   const handleEditAddress = () => {
     if (disabled) return
     setIsEditingAddress(true)
-    notifyParentReady(false)
   }
 
   const handleSelectChannel = (option: CheckoutShippingOption) => {
@@ -546,7 +554,7 @@ export function CheckoutSmartPanel({
     .map((part) => String(part ?? '').trim())
     .filter(Boolean)
     .join(', ')
-  const formCollapsed = confirmed && !isEditingAddress
+  const formCollapsed = !isEditingAddress && showAddressSummary
 
   return (
     <div className="space-y-3" data-controller-name="智能单页结账面板">
@@ -570,7 +578,7 @@ export function CheckoutSmartPanel({
                 {form.phone ? ` / ${form.phone}` : ''}
               </p>
               <p className="text-xs leading-5 text-[#64748B]">
-                地址：{addressSummaryLine || '—'}
+                {addressSummaryLine || '—'}
               </p>
               <p className="pt-0.5 text-[11px] font-medium text-[#f254a6]">{t('checkout.clickEditAddress')}</p>
             </div>
@@ -767,17 +775,16 @@ export function CheckoutSmartPanel({
             <Truck className="size-3.5 text-[#f254a6]" />
           </div>
           <SectionGuideTitle propKey="checkout_channel_section_title">
-            选择渠道
+            {t('checkout.shippingMethods', { defaultValue: 'Shipping methods' })}
           </SectionGuideTitle>
         </div>
 
-        {!addressReady ? (
+        {loadingChannels ? (
           <div className="rounded-[10px] border border-[#e8e8e8] bg-[#fafafa] px-3 py-3 text-sm text-[#94A3B8]">
-            {t('checkout.saveAddressFirst')}
-          </div>
-        ) : loadingChannels ? (
-          <div className="rounded-[10px] border border-[#e8e8e8] bg-[#fafafa] px-3 py-3 text-sm text-[#94A3B8]">
-            正在加载 {form.country} 可用物流...
+            {t('checkout.loadingChannels', {
+              defaultValue: 'Loading shipping options for {{country}}…',
+              country: form.country,
+            })}
           </div>
         ) : shippingOptions.length === 0 ? (
           <div className="rounded-[10px] border border-[#e8e8e8] bg-[#fafafa] px-3 py-3 text-sm text-[#94A3B8]">
@@ -791,14 +798,14 @@ export function CheckoutSmartPanel({
                 <button
                   key={item.channelId}
                   type="button"
-                  disabled={disabled || isEditingAddress}
+                  disabled={disabled}
                   onClick={() => handleSelectChannel(item)}
                   className={cn(
                     'flex items-center justify-between rounded-[10px] border px-3 py-2.5 text-left transition',
                     active
                       ? 'border-[#f254a6] bg-[#fff5f8]'
                       : 'border-[#e8e8e8] bg-white hover:border-[#f0dede]',
-                    (disabled || isEditingAddress) && 'cursor-not-allowed opacity-60',
+                    (disabled) && 'cursor-not-allowed opacity-60',
                   )}
                 >
                   <div>
