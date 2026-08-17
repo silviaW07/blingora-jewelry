@@ -21,6 +21,7 @@ import {
   Wishlist,
 } from '@/frontend/route-params'
 import { hardNavigate } from '@/frontend/utils/hardNavigate'
+import { useTranslation } from 'react-i18next'
 
 type Props = {
   className?: string
