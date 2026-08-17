@@ -18,6 +18,9 @@ const CATEGORY_ALIASES: Record<string, string> = {
   'daily new arrival': 'nav.daily_new',
   'daily new arrivals': 'nav.daily_new',
   newarrival: 'nav.daily_new',
+  coming: 'nav.coming',
+  'coming soon': 'nav.coming',
+  即将上新: 'nav.coming',
   jewelry: 'nav.jewelry',
   jewellery: 'nav.jewelry',
   珠宝: 'nav.jewelry',
@@ -190,8 +193,9 @@ export function translateAttributeValue(t: TFunction, raw?: string | null): stri
   let translated = asColor || value
   // 35码 / 36.5码 → 35 / 36.5 so size rows never keep a trailing 码.
   translated = translated.replace(/(\d+(?:\.\d+)?)\s*码/g, '$1')
-  // 1688 "配 Gift Box+礼袋" leftover 配 prefix
-  translated = translated.replace(/^配\s*/, 'With ')
-  translated = translated.replace(/\s*\+\s*/g, ' + ')
+  translated = translated
+    .replace(/(^|[,/+\s])配(?=\s|[A-Za-z\u4e00-\u9fff])/g, '$1With ')
+    .replace(/^配\s*/, 'With ')
+    .replace(/\s*\+\s*/g, ' + ')
   return translated.replace(/\s+/g, ' ').trim()
 }

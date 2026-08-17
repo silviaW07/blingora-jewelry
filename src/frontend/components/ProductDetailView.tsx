@@ -42,6 +42,12 @@ function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
+function imageIdentity(url?: string | null): string {
+  const raw = String(url || '').trim()
+  if (!raw) return ''
+  return raw.split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase()
+}
+
 const PRODUCT_STATUS_I18N: Record<ProductStatus, string> = {
   DRAFT: 'product.statusDraft',
   ACTIVE: 'product.statusActive',
@@ -319,7 +325,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   const colorSwatches = useMemo(() => {
     if (!product || !colorAttributeGroup) return []
 
-    return colorAttributeGroup.values
+    const mapped = colorAttributeGroup.values
       .map((value) => {
         const skusForColor = product.skus.filter(
           (sku) => getSkuAttributeValue(sku, colorAttributeGroup.name) === value,
@@ -332,11 +338,25 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           ? {
               value,
               sku: representativeSku,
-              imageUrl: representativeSku.imageUrl || '',
+              imageUrl: representativeSku.imageUrl || product.mainImageUrl || '',
             }
           : null
       })
       .filter((item): item is { value: string; sku: typeof product.skus[number]; imageUrl: string } => Boolean(item))
+
+    const seenValue = new Set<string>()
+    const seenImage = new Set<string>()
+    const unique: typeof mapped = []
+    for (const swatch of mapped) {
+      const valueKey = String(swatch.value || '').trim().toLowerCase()
+      if (!valueKey || seenValue.has(valueKey)) continue
+      const imgKey = imageIdentity(swatch.imageUrl)
+      if (imgKey && seenImage.has(imgKey)) continue
+      seenValue.add(valueKey)
+      if (imgKey) seenImage.add(imgKey)
+      unique.push(swatch)
+    }
+    return unique
   }, [product, colorAttributeGroup])
 
   // 预热主图尺寸(960)，让点击颜色后左侧大图秒出（缩略图只有 200 宽、URL 不同不会命中）
@@ -471,21 +491,19 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
     return (
       <div key={row.key} className="product-sku-row">
-        <div className="product-sku-main">
-          <span className="product-sku-name" title={modelLabel}>
-            {modelLabel}
-          </span>
-          <span className="product-sku-price">
-            {canViewPrice ? (
-              <>
-                <span className="product-sku-price-prefix">{priceParts.prefix}</span>
-                <span className="product-sku-price-num">{priceParts.amount}</span>
-              </>
-            ) : (
-              <GuestPricePlaceholder compact className="product-sku-guest-price" />
-            )}
-          </span>
-        </div>
+        <span className="product-sku-name" title={modelLabel}>
+          {modelLabel}
+        </span>
+        <span className="product-sku-price">
+          {canViewPrice ? (
+            <>
+              <span className="product-sku-price-prefix">{priceParts.prefix}</span>
+              <span className="product-sku-price-num">{priceParts.amount}</span>
+            </>
+          ) : (
+            <GuestPricePlaceholder compact className="product-sku-guest-price" />
+          )}
+        </span>
 
         <SkuQtyStepper
           qty={qty}

@@ -5,7 +5,7 @@
  * Order: chrome → search → L1 chips → banner → services → recommend zones
  */
 import React, { useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,7 +23,7 @@ import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
 import { ListingPageHead } from '@/frontend/components/ListingPageHead'
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
-import { isStorefrontHomeContentZone } from '@/frontend/utils/recommendZoneDisplay'
+import { isStorefrontHomeContentZone, isComingSoonRecommendZoneTitle } from '@/frontend/utils/recommendZoneDisplay'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
@@ -52,6 +52,7 @@ const isDefaultHomeQueryState = (state: HomeState) => {
 
 export function MobileHomeStorefrontView({ state, handlers }: Props) {
   const router = useRouter()
+  const pathname = usePathname() || '/'
   const { t } = useTranslation()
   const {
     posters,
@@ -78,7 +79,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   const isDefaultHomeState = isDefaultHomeQueryState(state)
   const activeBanner = posters[activeBannerIndex] || null
 
-  /** PRODUCT + CATEGORY zones; coming-soon / dated buyer-show strips stay on Coming. */
+  /** PRODUCT + CATEGORY zones, including the Coming directory. */
   const contentZones = useMemo(
     () => recommendZones.filter((z) => isStorefrontHomeContentZone(z)),
     [recommendZones],
@@ -110,6 +111,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   }
 
   const isHomeChipActive = isDefaultHomeState
+  const isComingChipActive = pathname.startsWith('/coming')
 
   const renderChipButton = (
     key: string,
@@ -141,7 +143,15 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       <div className="mobile-home__chips mb-3 border-b border-[#ebe4d8] bg-[#f7f4f0]">
         <div className="mobile-home__chips-row">
           {renderChipButton('home', t('nav.home'), isHomeChipActive, '/')}
-          {categories.map((category) => {
+          {renderChipButton(
+            'coming',
+            t('nav.coming', { defaultValue: 'Coming' }),
+            isComingChipActive,
+            '/coming/',
+          )}
+          {categories
+            .filter((category) => !isComingSoonRecommendZoneTitle(category.category_name))
+            .map((category) => {
             const isActive =
               queryState.categoryId === category.category_id ||
               category.children.some((c) => c.category_id === queryState.categoryId) ||

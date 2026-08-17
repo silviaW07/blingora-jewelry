@@ -50,12 +50,16 @@ export function zoneLooksLikeComingSoon(zone: RecommendZoneLayout): boolean {
   return dated * 2 >= names.length
 }
 
+/** 首页可展示的内容专区：类目/商品目录，含 Coming 目录；买家秀与无名日期条仍排除。 */
 export function isStorefrontHomeContentZone(zone: RecommendZoneLayout): boolean {
   const type = String(zone.zoneType || '')
   if (type !== 'PRODUCT' && type !== 'CATEGORY') return false
-  if (zoneLooksLikeComingSoon(zone)) return false
   const title = String(zone.title || '')
   if (/买家秀/.test(title)) return false
+  // Official Coming directory stays on the home page.
+  if (isComingSoonRecommendZoneTitle(zone.title)) return true
+  // Untitled dated product dumps belong on the Coming page only.
+  if (type === 'PRODUCT' && zoneLooksLikeComingSoon(zone)) return false
   return true
 }
 export function isComingSoonRecommendZoneTitle(title: string | null | undefined): boolean {
@@ -64,7 +68,12 @@ export function isComingSoonRecommendZoneTitle(title: string | null | undefined)
     .toLowerCase()
     .replace(/[\s/_-]+/g, '')
   if (!key) return false
-  return key === 'comingsoon' || key.includes('comingsoon')
+  return (
+    key === 'coming' ||
+    key === 'comingsoon' ||
+    key.includes('comingsoon') ||
+    key === '即将上新'
+  )
 }
 
 export function pickComingSoonRecommendZone<T extends RecommendZoneLayout>(

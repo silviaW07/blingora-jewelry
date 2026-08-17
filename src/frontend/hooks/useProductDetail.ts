@@ -314,10 +314,13 @@ export const useProductDetail = (seed?: {
     product.skus?.forEach(sku => {
       sku.attributeJson?.forEach(attr => {
         if (attr.name && attr.value) {
-          if (!attrMap.has(attr.name)) {
-            attrMap.set(attr.name, new Set())
+          const name = String(attr.name).trim()
+          const value = String(attr.value).trim()
+          if (!name || !value) continue
+          if (!attrMap.has(name)) {
+            attrMap.set(name, new Set())
           }
-          attrMap.get(attr.name)!.add(attr.value)
+          attrMap.get(name)!.add(value)
         }
       })
     })
@@ -390,14 +393,23 @@ export const useProductDetail = (seed?: {
 
   const sortedGallery = useMemo(() => {
     if (!product) return []
+    const identity = (url?: string | null) =>
+      String(url || '').trim().split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase()
     const mainImg: GalleryItem = { url: product.mainImageUrl, sort: -1 }
-    const seen = new Set<string>([product.mainImageUrl])
+    const seen = new Set<string>([identity(product.mainImageUrl)].filter(Boolean))
     const extraImgs = (product.galleryJson || [])
-      .filter(item => item.url && !seen.has(item.url))
+      .filter((item) => {
+        const key = identity(item.url)
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
       .sort((a, b) => (a.sort || 0) - (b.sort || 0))
     for (const sku of product.skus || []) {
-      if (sku.imageUrl && !seen.has(sku.imageUrl)) {
-        seen.add(sku.imageUrl)
+      if (!sku.imageUrl) continue
+      const key = identity(sku.imageUrl)
+      if (key && !seen.has(key)) {
+        seen.add(key)
         extraImgs.push({ url: sku.imageUrl, sort: 999 })
       }
     }

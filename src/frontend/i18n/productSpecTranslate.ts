@@ -162,7 +162,12 @@ export function translateProductSpecValue(
   const raw = String(value || '').trim()
   if (!raw) return ''
   if (!isColorOrStyleSpecField(label) && !isSizeSpecField(label)) return raw
-  return translateColorStyleText(raw, t)
+  const translated = translateColorStyleText(raw, t)
+  return translated
+    .replace(/(^|[,/])\s*配(?=\s|[A-Za-z])/g, '$1With ')
+    .replace(/\s*\+\s*/g, ' + ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /** Translate Description field labels (颜色/尺码/材质 …). */
