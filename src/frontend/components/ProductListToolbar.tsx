@@ -3,13 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Slider } from '@/components/ui/slider'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import type { BrandCategoryItem, SortByEnum } from '@/frontend/actions/ProductCategory'
 import { BrandQuickFilter } from '@/frontend/components/BrandQuickFilter'
 import { cn } from '@/lib/utils'
@@ -66,7 +59,6 @@ const toCommittedRange = (
   max: number,
   boundMax: number,
 ): [number | undefined, number | undefined] => {
-  // Full-left min → no lower bound; max always capped at boundMax (strict 0–boundMax USD)
   const nextMin = min <= PRICE_SLIDER_MIN ? undefined : min
   const nextMax = max >= boundMax ? boundMax : max
   return [nextMin, nextMax]
@@ -123,11 +115,11 @@ export function ProductListToolbar({
 
   return (
     <div
-      className={cn('flex flex-wrap items-end justify-end gap-x-4 gap-y-3', className)}
+      className={cn('listing-toolbar flex flex-wrap items-end justify-end gap-x-4 gap-y-3', className)}
       data-controller-name="商品列表筛选排序工具栏"
     >
       {showBrandFilter ? (
-        <div className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-[min(100%,420px)]">
+        <div className="listing-toolbar__brands min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-[min(100%,420px)]">
           <div className="mb-1.5 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
           <BrandQuickFilter
             brands={brandOptions}
@@ -141,7 +133,7 @@ export function ProductListToolbar({
         </div>
       ) : null}
 
-      <div className="w-full min-w-0 sm:w-[200px] sm:shrink-0">
+      <div className="listing-toolbar__price w-full min-w-0 sm:w-[200px] sm:shrink-0">
         <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-[#6f6a62]">
           <span className="font-medium text-[#3f3a34]">{t('product.priceRange')}</span>
         </div>
@@ -154,7 +146,7 @@ export function ProductListToolbar({
             if (!Array.isArray(value) || value.length < 2) return
             commitRange([value[0], value[1]])
           }}
-          className="w-full [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-3.5 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
+          className="listing-price-slider w-full [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-3.5 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
           aria-label={t('product.priceRange')}
         />
         <p className="mt-1.5 text-[11px] text-[#6f6a62] tabular-nums">
@@ -162,30 +154,22 @@ export function ProductListToolbar({
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="hidden text-sm text-[#6f6a62] sm:inline">{t('product.sortBy')}</span>
-        <Select
+      <div className="listing-toolbar__sort flex w-full min-w-0 shrink-0 items-center gap-2 sm:w-auto">
+        <label className="sr-only" htmlFor="listing-sort-native">
+          {t('product.sortBy')}
+        </label>
+        <select
+          id="listing-sort-native"
+          className="listing-sort-native"
           value={activeSort}
-          onValueChange={(value) => onSortChange(value as SortByEnum)}
+          onChange={(event) => onSortChange(event.target.value as SortByEnum)}
         >
-          <SelectTrigger
-            size="sm"
-            className="h-9 w-full min-w-0 rounded-full border-[#e6e0d5] bg-[#faf8f3] px-4 text-sm text-[#111111] shadow-none focus-visible:border-[#111111] focus-visible:ring-[#111111]/15 sm:w-auto sm:min-w-[148px]"
-          >
-            <SelectValue placeholder={t('product.sortBy')} />
-          </SelectTrigger>
-          <SelectContent className="rounded-2xl border-[#e6e0d5] bg-white shadow-[0_16px_40px_-18px_rgba(17,17,17,0.28)]">
-            {SORT_OPTIONS.map((option) => (
-              <SelectItem
-                key={option.value}
-                value={option.value}
-                className="rounded-xl text-sm text-[#111111] focus:bg-[#f5f4ef] focus:text-[#111111]"
-              >
-                {t(option.labelKey)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.labelKey)}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   )

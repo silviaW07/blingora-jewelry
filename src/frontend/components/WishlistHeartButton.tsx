@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useLocalWishlist } from '@/frontend/hooks/useLocalWishlist'
 import { useUserSession } from '@/tools/FrontendSession'
 import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
-import { openStorefrontLogin, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { CUSTOMER_LOGIN_HREF, onHardNavClick, openStorefrontLogin, useChromeActivate } from '@/frontend/utils/hardNavigate'
 
 type WishlistHeartButtonProps = {
   productId: string
@@ -53,25 +53,45 @@ export const WishlistHeartButton = ({
     const next = toggle()
     onToggle?.(next, productId)
   }
+  const needsLogin = requireAuth && !userSession.token?.trim()
   const toggleEvents = useChromeActivate(handleToggle)
+  const heartClassName = cn(
+    'inline-flex items-center justify-center rounded-md transition-colors',
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20',
+    favorited
+      ? 'text-[#e11d48] hover:bg-[#fff1f2]'
+      : 'text-[#8b8477] hover:bg-[#f7f4ee] hover:text-[#111111]',
+    className,
+  )
+  const label =
+    ariaLabel ||
+    (favorited
+      ? `Remove from wishlist${productName ? `: ${productName}` : ''}`
+      : `Add to wishlist${productName ? `: ${productName}` : ''}`)
+
+  if (needsLogin) {
+    return (
+      <a
+        href={CUSTOMER_LOGIN_HREF}
+        className={cn(heartClassName, 'no-underline')}
+        aria-label={label}
+        onClick={onHardNavClick(CUSTOMER_LOGIN_HREF)}
+        onPointerDown={onHardNavClick(CUSTOMER_LOGIN_HREF)}
+      >
+        <Heart
+          className={cn(favorited ? 'fill-current' : 'fill-none', iconClassName)}
+          style={{ width: size, height: size }}
+          strokeWidth={strokeWidth}
+        />
+      </a>
+    )
+  }
 
   return (
     <button
       type="button"
-      className={cn(
-        'inline-flex items-center justify-center rounded-md transition-colors',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20',
-        favorited
-          ? 'text-[#e11d48] hover:bg-[#fff1f2]'
-          : 'text-[#8b8477] hover:bg-[#f7f4ee] hover:text-[#111111]',
-        className,
-      )}
-      aria-label={
-        ariaLabel ||
-        (favorited
-          ? `Remove from wishlist${productName ? `: ${productName}` : ''}`
-          : `Add to wishlist${productName ? `: ${productName}` : ''}`)
-      }
+      className={heartClassName}
+      aria-label={label}
       aria-pressed={favorited}
       {...toggleEvents}
     >

@@ -11,7 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { CUSTOMER_LOGIN_HREF, onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -153,7 +153,7 @@ export const ProductListCard = ({
       <a
         href={detailHref}
         aria-label={item.product_name}
-        className="home-product-card-link block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+        className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
         onClick={handleDetailNav}
         onPointerUp={handleDetailNav}
         onFocus={prefetchDetail}
@@ -169,8 +169,8 @@ export const ProductListCard = ({
           />
         </div>
         <h3
-          className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] sm:px-2.5"
-          style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
+          className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
+          style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', color: '#111111', textDecoration: 'none' }}
           title={item.product_name}
         >
           {item.product_name}
@@ -250,22 +250,35 @@ export const ProductListCard = ({
         ) : null}
 
         {!isDraft ? (
-          <div className="home-product-card-actions mt-auto flex items-center justify-end gap-1.5 pt-1">
+          <div className="home-product-card-actions mt-1 flex shrink-0 items-center justify-end gap-1.5 pt-1">
             {onAddToWishlist ? (
               <WishlistHeartButton
                 productId={item.product_id}
                 onToggle={(favorited) => onAddToWishlist(item, favorited)}
               />
             ) : null}
-            <button
-              type="button"
-              aria-label={t('product.addToCart')}
-              className="home-product-card-cart-btn relative z-[2] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-              {...addToCartEvents}
-            >
-              <ShoppingCart className="size-3.5" aria-hidden />
-              <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
-            </button>
+            {canViewPrice ? (
+              <button
+                type="button"
+                aria-label={t('product.addToCart')}
+                className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
+                {...addToCartEvents}
+              >
+                <ShoppingCart className="size-3.5" aria-hidden />
+                <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
+              </button>
+            ) : (
+              <a
+                href={CUSTOMER_LOGIN_HREF}
+                aria-label={t('product.addToCart')}
+                className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] no-underline"
+                onClick={onHardNavClick(CUSTOMER_LOGIN_HREF)}
+                onPointerDown={onHardNavClick(CUSTOMER_LOGIN_HREF)}
+              >
+                <ShoppingCart className="size-3.5" aria-hidden />
+                <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
+              </a>
+            )}
           </div>
         ) : null}
       </div>
