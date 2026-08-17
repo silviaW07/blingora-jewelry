@@ -557,7 +557,13 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   };
 
   return withStorefrontHeader(
-      <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
+      <div
+        className={cn(
+          'product-detail-page bg-[#FFF5F5] text-[#111111]',
+          useTwoLevelLayout && 'product-detail-page--two-level',
+        )}
+        data-controller-name="B2B商品详情布局"
+      >
       {!isPurchasable ? (
         <div className="border-b border-[#e5e5e5] bg-[#fff7ed] px-4 py-3 text-center text-sm font-medium text-[#9a3412]">
           {t('product.unavailable', { status: t(PRODUCT_STATUS_I18N[product.status]) })}
@@ -632,10 +638,10 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         onClick={() => item.url && setActiveImage(item.url)}
                       >
                         <OptimizedProductImage
+                          fill={false}
                           src={item.url}
                           alt=""
-                          className="size-full"
-                          sizes="56px"
+                          className="aspect-square h-auto w-full object-cover"
                           imageWidth={160}
                         />
                       </button>
@@ -721,9 +727,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           selectionHighlight.size && 'animate-shake-x border-2 border-red-500 ring-2 ring-red-200 p-1',
                         )}
                       >
-                        <div className="mb-2 flex items-center justify-between text-sm">
+                        <div className="product-size-options-head mb-2 text-sm">
                           <span className="font-semibold text-[#111]">{specListTitle}</span>
-                          <span className="text-[#888]">{specListRows.length} {t('common.options')}</span>
+                          <span className="product-size-options-count">
+                            {specListRows.length} {t('common.options')}
+                          </span>
                         </div>
                         {!isColorSelected ? (
                           <p className="mb-2 text-xs text-rose-600">
@@ -743,9 +751,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </div>
                   ) : (
                     <div className="rounded-[8px]">
-                      <div className="mb-2 flex items-center justify-between text-sm">
+                      <div className="product-size-options-head mb-2 text-sm">
                         <span className="font-semibold text-[#111]">{specListTitle}</span>
-                        <span className="text-[#888]">{specListRows.length} {t('common.options')}</span>
+                        <span className="product-size-options-count">
+                          {specListRows.length} {t('common.options')}
+                        </span>
                       </div>
                       <div className="product-sku-list max-h-[420px] overflow-y-auto">
                         {specListRows.map((row) => renderSpecRow(row))}
@@ -784,13 +794,10 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </div>
                   ) : null}
 
-                  <div className="rounded-[2px] border border-[#ececec] bg-[#fafafa] px-3 py-3">
-                    <div className="flex items-start gap-2 text-sm text-[#333]">
-                      <Truck className="mt-0.5 size-4 shrink-0 text-[#666]" />
-                      <div>
-                        <p className="font-semibold text-[#111]">Delivery</p>
-                        <p className="mt-1 text-[#555]">Prepare time: 3-5 days</p>
-                      </div>
+                  <div className="product-detail-delivery rounded-[2px] border border-[#ececec] bg-[#fafafa] px-3 py-3">
+                    <div className="flex items-center gap-2 text-sm text-[#333]">
+                      <Truck className="size-4 shrink-0 text-[#666]" />
+                      <p>Delivery / Prepare time: 3-5 days</p>
                     </div>
                   </div>
 
