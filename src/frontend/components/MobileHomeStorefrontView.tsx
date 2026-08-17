@@ -23,6 +23,7 @@ import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
 import { ListingPageHead } from '@/frontend/components/ListingPageHead'
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { isStorefrontHomeContentZone } from '@/frontend/utils/recommendZoneDisplay'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
@@ -77,9 +78,9 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   const isDefaultHomeState = isDefaultHomeQueryState(state)
   const activeBanner = posters[activeBannerIndex] || null
 
-  /** PRODUCT + CATEGORY zones keep individual titles (e.g. 包包) */
+  /** PRODUCT + CATEGORY zones; coming-soon / dated buyer-show strips stay on Coming. */
   const contentZones = useMemo(
-    () => recommendZones.filter((z) => z.zoneType === 'PRODUCT' || z.zoneType === 'CATEGORY'),
+    () => recommendZones.filter((z) => isStorefrontHomeContentZone(z)),
     [recommendZones],
   )
 

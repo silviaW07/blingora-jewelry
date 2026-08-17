@@ -99,7 +99,7 @@ export default function Footer() {
               <DecorateText
                 propKey="footer_social_instagram"
                 href="https://www.instagram.com/yourglobaltrade"
-                className={ICON_SOFT}
+                className={`${ICON_SOFT} site-footer__lg-only`}
               >
                 <Instagram className="size-4" />
               </DecorateText>
@@ -135,7 +135,7 @@ export default function Footer() {
                   {t('footer.linkCatalog')}
                 </DecorateText>
               </li>
-              <li className="flex items-center gap-2">
+              <li className="site-footer__lg-only flex items-center gap-2">
                 <span className="size-1.5 rounded-full bg-primary" />
                 <DecorateText
                   propKey="footer_link_logistics"
@@ -144,7 +144,7 @@ export default function Footer() {
                   {t('footer.linkLogistics')}
                 </DecorateText>
               </li>
-              <li className="flex items-center gap-2">
+              <li className="site-footer__lg-only flex items-center gap-2">
                 <span className="size-1.5 rounded-full bg-primary" />
                 <DecorateText
                   propKey="footer_link_payments"
@@ -156,7 +156,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div className="lg:col-span-4 flex flex-col gap-4">
+          <div className="site-footer__lg-only lg:col-span-4 flex flex-col gap-4">
             <DecorateText
               propKey="footer_consult_title"
               as="h3"
@@ -227,7 +227,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className={`site-footer__features grid grid-cols-1 gap-6 py-8 my-8 border-y ${BORDER}`}>
+        <div className={`site-footer__features site-footer__lg-only grid grid-cols-1 gap-6 py-8 my-8 border-y ${BORDER}`}>
           <div className="flex items-center gap-3">
             <div className="size-10 rounded flex items-center justify-center shrink-0 border border-transparent bg-primary/15 text-primary">
               <ShieldCheck className="size-5" />

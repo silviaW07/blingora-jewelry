@@ -17,8 +17,8 @@ import type {
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
 import {
-  isComingSoonRecommendZoneTitle,
   limitRecommendZoneItems,
+  zoneLooksLikeComingSoon,
 } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
 import { categoryHref, hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
@@ -141,21 +141,6 @@ const MobileSquircleStrip = ({
       {children}
     </div>
   )
-}
-
-const isDateLikeComingName = (name?: string | null) =>
-  /^20\d{2}[-/.]/.test(String(name || '').trim())
-
-const zoneLooksLikeComingSoon = (zone: HomeRecommendZoneSectionType) => {
-  if (isComingSoonRecommendZoneTitle(zone.title)) return true
-  const products = (Array.isArray(zone.items) ? zone.items : []).filter(
-    (item): item is RecommendProductCard => item.entityType === 'PRODUCT',
-  )
-  if (products.length < 3) return false
-  const dated = products.filter(
-    (item) => isDateLikeComingName(item.productName) || isDateLikeComingName(item.rawProductName),
-  )
-  return dated.length * 2 >= products.length
 }
 
 const MobileComingSoonGrid = ({ children }: { children: React.ReactNode }) => (

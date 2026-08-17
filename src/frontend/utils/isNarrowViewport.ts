@@ -53,17 +53,20 @@ export function lockStorefrontViewport(win: Window = window): void {
 
 /**
  * Mobile unless this is clearly a desktop computer.
- * Chrome phones (including desktop-site / ~980px) stay on the mobile tree.
+ * Chrome phones (including "desktop site" / ~980–1280px + pointer:fine) stay
+ * on the one mobile storefront — never a second desktop tree.
  */
 export function isNarrowViewport(win: Window = window): boolean {
+  if (isPhoneScreen(win)) return true
+  if (win.matchMedia?.(PHONE_DEVICE_MQ).matches) return true
+  const touchPoints = Number(win.navigator?.maxTouchPoints || 0)
+  const coarse = Boolean(win.matchMedia?.('(pointer: coarse)').matches)
+  if (coarse || touchPoints > 0) return true
   if (win.matchMedia?.(DESKTOP_MQ).matches) return false
   if (win.matchMedia?.(NARROW_MQ).matches) return true
   if ((win.innerWidth || 9999) < 1024) return true
   const visual = win.visualViewport?.width
   if (visual && visual < 1024) return true
-  if (isPhoneScreen(win)) return true
-  // Touch phone/tablet with an inflated layout viewport.
-  if (win.matchMedia?.('(pointer: coarse)').matches) return true
   return false
 }
 

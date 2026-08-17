@@ -2071,6 +2071,23 @@ html.is-narrow [data-storefront-chrome='mobile'] {
   pointer-events: auto !important;
 }
 
+@media (pointer: coarse) and (max-width: 1280px) {
+  [data-home-layout='desktop'],
+  [data-storefront-chrome='desktop'],
+  .storefront-desktop-chrome {
+    display: none !important;
+  }
+
+  [data-home-layout='mobile'],
+  [data-storefront-chrome='mobile'] {
+    display: block !important;
+  }
+
+  .site-footer__lg-only {
+    display: none !important;
+  }
+}
+
 html.is-narrow .mobile-bottom-nav {
   display: block !important;
   pointer-events: auto !important;
@@ -2536,6 +2553,10 @@ html.is-narrow .storefront-footer-desktop-only {
   html:not(.is-narrow) .site-footer__features {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+html.is-narrow .site-footer__lg-only {
+  display: none !important;
 }
 
 html.is-narrow .site-footer .grid,

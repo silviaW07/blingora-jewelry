@@ -102,8 +102,9 @@
     "noComingProducts": "该日暂无预告商品"
   },
   "home": {
-    "zone_popular_jewelry": "流行饰品",
-    "zone_bag_picks": "包包推荐"
+    "zone_popular_jewelry": "Popular Jewelry",
+    "zone_bag_picks": "Bag Picks",
+    "buyer_show": "Buyer show"
   },
   "color": {
     "coffee": "咖啡色",

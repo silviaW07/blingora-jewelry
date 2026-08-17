@@ -48,6 +48,9 @@ const CATEGORY_ALIASES: Record<string, string> = {
   'bag picks': 'home.zone_bag_picks',
   'bag recommendations': 'home.zone_bag_picks',
   'bags recommend': 'home.zone_bag_picks',
+  买家秀: 'home.buyer_show',
+  'buyer show': 'home.buyer_show',
+  'buyer shows': 'home.buyer_show',
 }
 
 /** 颜色名称别名 → i18n key（中英均可命中） */
@@ -184,5 +187,11 @@ export function translateAttributeValue(t: TFunction, raw?: string | null): stri
   if (!value) return ''
   // Reuse the color-value path first (color.wordMap + aliases), then compounds.
   const asColor = translateColorName(t, value)
-  return asColor || value
+  let translated = asColor || value
+  // 35码 / 36.5码 → 35 / 36.5 so size rows never keep a trailing 码.
+  translated = translated.replace(/(\d+(?:\.\d+)?)\s*码/g, '$1')
+  // 1688 "配 Gift Box+礼袋" leftover 配 prefix
+  translated = translated.replace(/^配\s*/, 'With ')
+  translated = translated.replace(/\s*\+\s*/g, ' + ')
+  return translated.replace(/\s+/g, ' ').trim()
 }

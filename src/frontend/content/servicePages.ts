@@ -39,7 +39,7 @@ export const SERVICE_PAGE_CONFIGS: ServicePageConfig[] = [
   },
   {
     slug: 'buyer-show',
-    title: '买家秀',
+    title: 'Buyer show',
     description: 'Real purchase stories, use cases, and product showcases from actual buyers.',
     iconSrc: '/service-icons/buyer-show.svg',
     heroEyebrow: 'Customer stories',

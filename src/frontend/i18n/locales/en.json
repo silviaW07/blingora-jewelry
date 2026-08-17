@@ -104,7 +104,8 @@
   },
   "home": {
     "zone_popular_jewelry": "Popular Jewelry",
-    "zone_bag_picks": "Bag Picks"
+    "zone_bag_picks": "Bag Picks",
+    "buyer_show": "Buyer show"
   },
   "color": {
     "coffee": "Coffee",
@@ -298,8 +299,8 @@
     }
   },
   "footer": {
-    "brandName": "Global Cross-border Store",
-    "brandDesc": "One-stop global e-commerce solution. Import quality 1688 sourcing, smart listing, and inventory management to connect Chinese manufacturing with worldwide buyers.",
+    "brandName": "SourcingJewelry Store",
+    "brandDesc": "One-stop global e-commerce solution.",
     "promiseTitle": "Business Promise",
     "promiseDesc": "Authentic sourcing · Global logistics · Platform-level payment security",
     "quickLinks": "Quick Links & Services",

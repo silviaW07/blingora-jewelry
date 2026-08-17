@@ -44,6 +44,7 @@ import { StorefrontBrandNavList } from '@/frontend/components/StorefrontBrandNav
 import { StorefrontFloatingSideNav } from '@/frontend/components/StorefrontFloatingSideNav';
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival';
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav';
+import { isStorefrontHomeContentZone } from '@/frontend/utils/recommendZoneDisplay';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
 import { ListingPageHead } from '@/frontend/components/ListingPageHead';
@@ -610,9 +611,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
           }));
 
   // 激活的商品/类目专区全量展示；顺序沿用接口返回的列表顺序，不按权重重排
-  const contentZones = recommendZones.filter(
-    (zone) => zone.zoneType === 'PRODUCT' || zone.zoneType === 'CATEGORY',
-  );
+  const contentZones = recommendZones.filter((zone) => isStorefrontHomeContentZone(zone));
 
   const handleSideNavClick = (categoryId: string, categorySlug?: string | null) => {
     handlers.handleNavigateRecommendCategory(categoryId, categorySlug);

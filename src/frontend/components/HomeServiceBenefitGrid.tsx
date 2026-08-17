@@ -13,6 +13,8 @@ import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
 import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages'
 import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefitKeys'
+import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 const serviceBenefitItems = SERVICE_PAGE_CONFIGS.map((cfg) => ({
@@ -32,6 +34,7 @@ export function HomeServiceBenefitGrid({
   gridControllerName = '首页服务权益网格',
 }: Props) {
   const { getPatch } = useDecorateMode()
+  const { t } = useTranslation()
 
   return (
     <div
@@ -79,7 +82,7 @@ export function HomeServiceBenefitGrid({
                   as="h2"
                   className="home-service-card__title"
                 >
-                  {item.title}
+                  {translateCatalogLabel(t, item.title) || item.title}
                 </DecorateText>
                 <DecorateText
                   propKey={keys.desc}

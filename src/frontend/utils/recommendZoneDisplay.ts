@@ -33,7 +33,31 @@ export function limitRecommendZoneItems<T>(
   return items.length > limit ? items.slice(0, limit) : items
 }
 
-/** 匹配后台「coming soon」推荐专区标题（大小写/空格不敏感）。 */
+/** 首页不展示 coming soon / 日期商品条（那些只放 Coming 页）。 */
+export function zoneLooksLikeComingSoon(zone: RecommendZoneLayout): boolean {
+  if (isComingSoonRecommendZoneTitle(zone.title)) return true
+  const items = Array.isArray(zone.items) ? zone.items : []
+  const names = items
+    .map((item) => {
+      const row = item as { productName?: string; rawProductName?: string }
+      return String(row.rawProductName || row.productName || '').trim()
+    })
+    .filter(Boolean)
+  if (names.length < 3) return false
+  const dated = names.filter(
+    (name) => isDateKeyProductName(name) || /^20\d{2}[-/.]/.test(name),
+  ).length
+  return dated * 2 >= names.length
+}
+
+export function isStorefrontHomeContentZone(zone: RecommendZoneLayout): boolean {
+  const type = String(zone.zoneType || '')
+  if (type !== 'PRODUCT' && type !== 'CATEGORY') return false
+  if (zoneLooksLikeComingSoon(zone)) return false
+  const title = String(zone.title || '')
+  if (/买家秀/.test(title)) return false
+  return true
+}
 export function isComingSoonRecommendZoneTitle(title: string | null | undefined): boolean {
   const key = String(title || '')
     .trim()
