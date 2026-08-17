@@ -410,13 +410,20 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
     }
     apply()
     const mql = window.matchMedia('(max-width: 1023px)')
+    const phone = window.matchMedia('(max-device-width: 512px)')
     mql.addEventListener('change', apply)
+    phone.addEventListener('change', apply)
     window.addEventListener('resize', apply)
     window.visualViewport?.addEventListener('resize', apply)
+    const t0 = window.setTimeout(apply, 0)
+    const t1 = window.setTimeout(apply, 250)
     return () => {
       mql.removeEventListener('change', apply)
+      phone.removeEventListener('change', apply)
       window.removeEventListener('resize', apply)
       window.visualViewport?.removeEventListener('resize', apply)
+      window.clearTimeout(t0)
+      window.clearTimeout(t1)
     }
   }, [])
 

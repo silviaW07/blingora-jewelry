@@ -230,7 +230,7 @@
   margin-top: 0.5rem;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   html,
   body {
     overflow-x: hidden;
@@ -393,7 +393,7 @@
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   .storefront-container,
   .site-shell,
   .storefront-shell {
@@ -715,7 +715,7 @@
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   .product-detail-page .product-color-swatch-list {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -893,7 +893,7 @@
   background: transparent;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   .floating-side-nav {
     display: none;
   }
@@ -1002,7 +1002,7 @@
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   .home-hero-fullbleed {
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
@@ -1398,7 +1398,7 @@
     padding-right: var(--storefront-gutter, 1.25rem);
   }
 
-  @media (max-width: 1023px) {
+  @media (max-width: 1023px), (max-device-width: 512px) {
     .container {
       max-width: none;
       padding-left: var(--storefront-gutter-sm, 0.75rem);
@@ -1485,7 +1485,7 @@ html.is-narrow body {
   overflow-x: hidden !important;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   html,
   body {
     width: 100%;
@@ -1822,7 +1822,7 @@ html.is-narrow .customer-auth-dialog[data-state='open'] {
   border-radius: 24px !important;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   [data-slot='dialog-content'][data-state='open'],
   .customer-auth-dialog[data-state='open'] {
     position: fixed !important;
@@ -2214,7 +2214,7 @@ html.is-narrow .home-service-cards {
   gap: 10px !important;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   .storefront-main-with-mobile-nav {
     padding-bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
@@ -3055,7 +3055,7 @@ img.home-service-card__icon-img {
 }
 
 /* ----- Mobile only (<1024): equal 2×2 grid, aligned with page gutters ----- */
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   /*
    * Stay inside parent `.mobile-home__services.px-3` (same gutters as banner / zones).
    * 2 equal columns + stretch → four cards same width/height; icon+text row vertically centered.
@@ -3396,7 +3396,7 @@ html.is-narrow .home-zone-section__view-all {
   font-size: 0.8125rem !important;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (max-device-width: 512px) {
   /* Global mobile storefront type: ~13px base + softened dark text */
   .mobile-home,
   .mobile-sf-header,

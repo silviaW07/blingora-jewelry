@@ -14,20 +14,29 @@ export function Providers({
   }, []);
 
   // Re-apply after hydration: React resets <html className>.
-  // is-narrow follows max-width: 1023px (same viewport for every browser).
+  // Also re-lock viewport — Chrome phones often keep a ~980 desktop layout width.
   useLayoutEffect(() => {
     const apply = () => {
       syncNarrowHtmlClass()
     }
     apply()
     const mql = window.matchMedia('(max-width: 1023px)')
+    const phone = window.matchMedia('(max-device-width: 512px)')
     mql.addEventListener('change', apply)
+    phone.addEventListener('change', apply)
     window.addEventListener('resize', apply)
     window.visualViewport?.addEventListener('resize', apply)
+    const t0 = window.setTimeout(apply, 0)
+    const t1 = window.setTimeout(apply, 50)
+    const t2 = window.setTimeout(apply, 250)
     return () => {
       mql.removeEventListener('change', apply)
+      phone.removeEventListener('change', apply)
       window.removeEventListener('resize', apply)
       window.visualViewport?.removeEventListener('resize', apply)
+      window.clearTimeout(t0)
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
     }
   }, [])
 
