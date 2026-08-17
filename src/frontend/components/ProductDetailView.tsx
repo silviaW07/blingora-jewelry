@@ -52,6 +52,59 @@ interface Props {
   handlers: ProductDetailHandlers;
 }
 
+function ColorSwatchButton({
+  colorLabel,
+  previewUrl,
+  isSelected,
+  isPurchasable,
+  priority,
+  onSelect,
+  onPreheat,
+}: {
+  colorLabel: string
+  previewUrl: string
+  isSelected: boolean
+  isPurchasable: boolean
+  priority: boolean
+  onSelect: () => void
+  onPreheat: () => void
+}) {
+  const activate = useChromeActivate(onSelect)
+  return (
+    <button
+      type="button"
+      disabled={!isPurchasable}
+      aria-pressed={isSelected}
+      aria-label={colorLabel}
+      data-selected={isSelected ? 'true' : 'false'}
+      className={cn(
+        'product-color-swatch group',
+        isSelected && 'is-selected',
+        !isPurchasable && 'is-disabled',
+      )}
+      onMouseEnter={onPreheat}
+      onContextMenu={(event) => event.preventDefault()}
+      {...activate}
+    >
+      <span className="product-color-swatch-label" aria-hidden={!isSelected}>
+        {colorLabel}
+      </span>
+      <span className="product-color-swatch-frame">
+        {previewUrl ? (
+          <OptimizedProductImage
+            fill={false}
+            src={previewUrl}
+            alt=""
+            className="pointer-events-none aspect-square h-auto w-full object-cover"
+            imageWidth={200}
+            priority={priority}
+          />
+        ) : null}
+      </span>
+    </button>
+  )
+}
+
 const withStorefrontHeader = (content: React.ReactNode) => (
   <div className="min-h-screen bg-[#FFF5F5]" data-controller-name="商品详情页布局">
     <StorefrontResponsiveHeader />
@@ -540,12 +593,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 </div>
 
                 <div className="product-detail-main-image">
-                  <div className="relative w-full overflow-hidden rounded-[2px] bg-[#f3f3f3]">
+                  <div className="product-detail-main-stage">
                     <OptimizedProductImage
                       fill={false}
                       src={activeImage || product.mainImageUrl}
                       alt={product.name}
-                      className="aspect-square h-auto w-full object-cover"
+                      className="product-detail-main-stage-img"
                       imageWidth={1600}
                       priority
                     />
@@ -647,45 +700,18 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             : t('common.color')}
                         </div>
                         <div className="product-color-swatch-list">
-                          {colorSwatches.map((swatch, swatchIndex) => {
-                            const isSelected = manualColorValue === swatch.value
-                            const previewUrl = swatch.imageUrl || product.mainImageUrl || ''
-                            const colorLabel = translateColorName(t, swatch.value)
-                            return (
-                              <button
-                                key={swatch.value}
-                                type="button"
-                                disabled={!isPurchasable}
-                                aria-pressed={isSelected}
-                                aria-label={colorLabel}
-                                data-selected={isSelected ? 'true' : 'false'}
-                                className={cn(
-                                  'product-color-swatch group',
-                                  isSelected && 'is-selected',
-                                  !isPurchasable && 'is-disabled',
-                                )}
-                                onMouseEnter={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
-                                onTouchStart={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
-                                onClick={() => handleColorSelect(swatch.value, swatch.imageUrl)}
-                              >
-                                <span className="product-color-swatch-label" aria-hidden={!isSelected}>
-                                  {colorLabel}
-                                </span>
-                                <span className="product-color-swatch-frame">
-                                  {previewUrl ? (
-                                    <OptimizedProductImage
-                                      fill={false}
-                                      src={previewUrl}
-                                      alt={colorLabel}
-                                      className="pointer-events-none aspect-square h-auto w-full object-cover"
-                                      imageWidth={200}
-                                      priority={swatchIndex < 4}
-                                    />
-                                  ) : null}
-                                </span>
-                              </button>
-                            )
-                          })}
+                          {colorSwatches.map((swatch, swatchIndex) => (
+                            <ColorSwatchButton
+                              key={swatch.value}
+                              colorLabel={translateColorName(t, swatch.value)}
+                              previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
+                              isSelected={manualColorValue === swatch.value}
+                              isPurchasable={isPurchasable}
+                              priority={swatchIndex < 4}
+                              onSelect={() => handleColorSelect(swatch.value, swatch.imageUrl)}
+                              onPreheat={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
+                            />
+                          ))}
                         </div>
                       </div>
 

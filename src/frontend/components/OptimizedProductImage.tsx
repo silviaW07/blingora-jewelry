@@ -75,8 +75,10 @@ export function OptimizedProductImage({
         className={imgClass}
         loading="eager"
         decoding="async"
+        draggable={false}
         fetchPriority={priority ? 'high' : 'auto'}
         referrerPolicy="no-referrer"
+        onContextMenu={(event) => event.preventDefault()}
         onError={handleError}
       />
     </>

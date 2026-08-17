@@ -1,10 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import { useUserSession } from '@/tools/FrontendSession'
-import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { useTranslation } from 'react-i18next'
-import { openStorefrontLogin, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { customerLoginHref, hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
 import { cn } from '@/lib/utils'
 
 /**
@@ -30,27 +30,33 @@ type GuestPricePlaceholderProps = {
 }
 
 /**
- * Clickable “Login to view price” — opens the customer auth modal when available.
+ * Real link — Chrome Android often never fires button/modal handlers on this page.
  */
 export function GuestPricePlaceholder({ className, compact = false }: GuestPricePlaceholderProps) {
   const { t } = useTranslation()
-  const authModal = useOptionalCustomerAuthModal()
-  const openLogin = useChromeActivate(() => {
-    openStorefrontLogin(authModal?.openAuthModal)
-  })
+  const pathname = usePathname() || '/'
+  const href = customerLoginHref(pathname)
 
   return (
-    <button
-      type="button"
+    <a
       className={cn(
-        'guest-price-placeholder relative z-[2] text-left font-semibold text-[#f254a6] transition hover:text-[#e44798] hover:underline',
+        'guest-price-placeholder relative z-[2] inline-block py-1 text-left font-semibold text-[#f254a6] underline-offset-2 hover:text-[#e44798] hover:underline',
         compact ? 'text-xs leading-4 sm:text-sm' : 'text-sm leading-5 sm:text-base',
         className,
       )}
-      {...openLogin}
+      {...hardNavProps(href)}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const returnTo =
+          typeof window === 'undefined'
+            ? pathname
+            : `${window.location.pathname}${window.location.search}`
+        hardNavigate(customerLoginHref(returnTo))
+      }}
     >
       {t('product.loginToViewPrice', { defaultValue: 'Login to view price' })}
-    </button>
+    </a>
   )
 }
 

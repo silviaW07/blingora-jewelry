@@ -20,7 +20,7 @@ import {
   AccountProfile,
   Wishlist,
 } from '@/frontend/route-params'
-import { hardNavigate } from '@/frontend/utils/hardNavigate'
+import { customerLoginHref, hardNavigate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 type Props = {
@@ -127,7 +127,13 @@ export function CustomerAccountMenu({
             : 'inline-flex h-14 shrink-0 items-center gap-2 rounded-full border border-[#d8d4ca] bg-white px-4 text-sm font-semibold text-[#111111] shadow-sm transition hover:border-[#111111] hover:bg-[#f7f4ee]',
           className,
         )}
-        onClick={() => openAuthModal('login')}
+        onClick={() => {
+          const returnTo =
+            typeof window === 'undefined'
+              ? '/'
+              : `${window.location.pathname}${window.location.search}`
+          hardNavigate(customerLoginHref(returnTo))
+        }}
         aria-label={resolvedGuestLabel}
       >
         <UserCircle2 className={isIcon ? 'size-5' : 'size-4'} />
