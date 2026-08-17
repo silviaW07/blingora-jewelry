@@ -31,11 +31,43 @@ export async function GET(request: Request) {
   const lang = url.searchParams.get('lang') || 'en'
   const daily = url.searchParams.get('daily') === '1'
   const search = String(url.searchParams.get('search') || '').trim()
-  const categoryId = String(url.searchParams.get('category_id') || '').trim()
+  const slug = String(url.searchParams.get('slug') || '').trim()
+  let categoryId = String(url.searchParams.get('category_id') || '').trim()
   const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1)
   const pageSize = Math.min(24, Math.max(1, Number(url.searchParams.get('page_size') || 24) || 24))
 
   try {
+    if (!categoryId && slug && !daily && !search) {
+      const tree = await rpcAction<{ list?: Array<{
+        category_id?: string
+        category_slug?: string | null
+        children?: Array<{ category_id?: string; category_slug?: string | null }>
+        brand_options?: Array<{ category_id?: string; category_slug?: string | null }>
+      }> }>('src.frontend.actions.ProductCategory.getCategoryList', [{ lang }])
+      const needle = slug.toLowerCase()
+      const matchId = (item?: { category_id?: string; category_slug?: string | null } | null) => {
+        if (!item) return ''
+        if (String(item.category_id || '') === slug) return String(item.category_id)
+        if (String(item.category_slug || '').trim().toLowerCase() === needle) {
+          return String(item.category_id || '')
+        }
+        return ''
+      }
+      for (const cat of tree.list || []) {
+        categoryId = matchId(cat)
+        if (categoryId) break
+        for (const child of cat.children || []) {
+          categoryId = matchId(child)
+          if (categoryId) break
+        }
+        if (categoryId) break
+        for (const brand of cat.brand_options || []) {
+          categoryId = matchId(brand)
+          if (categoryId) break
+        }
+        if (categoryId) break
+      }
+    }
     const data = daily
       ? await rpcAction<{ list?: unknown }>(
           'src.frontend.actions.Home.getDailyNewArrivalProducts',

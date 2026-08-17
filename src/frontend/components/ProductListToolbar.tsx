@@ -141,7 +141,7 @@ export function ProductListToolbar({
         </div>
       ) : null}
 
-      <div className="w-[160px] shrink-0 sm:w-[200px]">
+      <div className="w-full min-w-0 sm:w-[200px] sm:shrink-0">
         <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-[#6f6a62]">
           <span className="font-medium text-[#3f3a34]">{t('product.priceRange')}</span>
         </div>
@@ -157,10 +157,9 @@ export function ProductListToolbar({
           className="w-full [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-3.5 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
           aria-label={t('product.priceRange')}
         />
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[#6f6a62] tabular-nums">
-          <span>{formatUsd(range[0])}</span>
-          <span>{formatUsd(range[1])}</span>
-        </div>
+        <p className="mt-1.5 text-[11px] text-[#6f6a62] tabular-nums">
+          {formatUsd(range[0])} – {formatUsd(range[1])}
+        </p>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

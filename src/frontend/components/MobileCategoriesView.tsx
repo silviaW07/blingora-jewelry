@@ -10,6 +10,7 @@ import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
 import {
   buildCategoryPreviewProducts,
+  findZoneItemImage,
   type ShelfProductCard,
 } from '@/frontend/utils/categoryPreviewProducts'
 import type { CategoryItem, SideNavZoneSection } from '@/frontend/actions/ProductCategory'
@@ -262,10 +263,14 @@ export default function MobileCategoriesView({
 
     const children = cat.children || []
     if (children.length > 0) {
-      return children.map((child) => ({
+      const parentProducts = productsById[cat.category_id] || []
+      return children.map((child, index) => ({
         key: child.category_id,
         label: translateCatalogLabel(t, child.category_name),
-        imageUrl: child.image_url,
+        imageUrl:
+          child.image_url ||
+          findZoneItemImage(child.category_id, initialRecommendZones || []) ||
+          parentProducts[index]?.main_image_url,
         initials: child.category_name.slice(0, 1).toUpperCase(),
         href: categoryHref(child.category_slug, child.category_id),
       }))
@@ -276,7 +281,7 @@ export default function MobileCategoriesView({
       return brandOpts.map((brand) => ({
         key: brand.category_id,
         label: translateCatalogLabel(t, brand.category_name),
-        imageUrl: brand.image_url,
+        imageUrl: brand.image_url || findZoneItemImage(brand.category_id, initialRecommendZones || []),
         initials: brand.category_name.slice(0, 1).toUpperCase(),
         href: categoryHref(brand.category_slug, brand.category_id),
       }))
@@ -286,7 +291,7 @@ export default function MobileCategoriesView({
       {
         key: cat.category_id,
         label: translateCatalogLabel(t, cat.category_name),
-        imageUrl: cat.image_url,
+        imageUrl: cat.image_url || findZoneItemImage(cat.category_id, initialRecommendZones || []),
         initials: cat.category_name.slice(0, 1).toUpperCase(),
         href: categoryHref(cat.category_slug, cat.category_id),
       },

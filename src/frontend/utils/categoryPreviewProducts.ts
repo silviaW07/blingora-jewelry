@@ -138,6 +138,27 @@ export function buildCategoryPreviewProducts(
   return result
 }
 
+export function findZoneItemImage(categoryId: string, zones: ZoneLike[] | null | undefined): string | null {
+  const id = String(categoryId || '').trim()
+  if (!id) return null
+  for (const zone of Array.isArray(zones) ? zones : []) {
+    for (const item of zone.items || []) {
+      if (item.entityType === 'CATEGORY' && String(item.categoryId || '') === id) {
+        const self = String(item.imageUrl || item.main_image_url || '').trim()
+        if (self) return self
+        const latest = item.latestProducts?.[0]
+        const fromLatest = String(latest?.imageUrl || latest?.main_image_url || '').trim()
+        if (fromLatest) return fromLatest
+      }
+      if ((item.entityType === 'PRODUCT' || item.productId) && String(item.categoryId || '') === id) {
+        const url = String(item.imageUrl || item.main_image_url || '').trim()
+        if (url) return url
+      }
+    }
+  }
+  return null
+}
+
 export function slimProductCards(list: unknown): ShelfProductCard[] {
   if (!Array.isArray(list)) return []
   const out: ShelfProductCard[] = []

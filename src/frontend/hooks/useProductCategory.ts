@@ -928,11 +928,44 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
       return
     }
 
-    // /category/[slug] 尚未解析出 categoryId 时，禁止无过滤拉取，避免短暂/长期展示全站商品
-    if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId) {
+    // /category/[slug]: fetch by slug immediately so Chrome is not stuck on
+    // "Loading products..." while resolveCategoryRouteKey hangs.
+    if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId && !queryState.searchKeyword) {
       setIsLoadingProducts(true)
-      // Keep previous products during soft nav; do not blank the grid while slug resolves
-      return
+      const lang = getCurrentLang()
+      let cancelled = false
+      let settled = false
+      const safety = window.setTimeout(() => {
+        if (cancelled || settled) return
+        settled = true
+        setIsLoadingProducts(false)
+      }, 8000)
+      fetchCategoryShelfProducts({
+        slug: routeCategorySlug,
+        lang,
+        page: queryState.page,
+        pageSize: 24,
+      })
+        .then((list) => {
+          if (cancelled || settled) return
+          setProducts(list as ProductItem[])
+          setTotalCount(list.length)
+        })
+        .catch(() => {
+          if (cancelled || settled) return
+          setProducts([])
+          setTotalCount(0)
+        })
+        .finally(() => {
+          if (cancelled || settled) return
+          settled = true
+          window.clearTimeout(safety)
+          setIsLoadingProducts(false)
+        })
+      return () => {
+        cancelled = true
+        window.clearTimeout(safety)
+      }
     }
 
     // Home default stream: skip getProductList (up to 2000 rows) — zones/posters cover the UI

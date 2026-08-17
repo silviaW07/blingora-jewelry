@@ -2,6 +2,7 @@ import { slimProductCards, type ShelfProductCard } from '@/frontend/utils/catego
 
 export async function fetchCategoryShelfProducts(input: {
   categoryId?: string
+  slug?: string
   daily?: boolean
   search?: string
   lang?: string
@@ -12,6 +13,7 @@ export async function fetchCategoryShelfProducts(input: {
   const params = new URLSearchParams()
   if (input.daily) params.set('daily', '1')
   if (input.search) params.set('search', input.search)
+  if (input.slug) params.set('slug', input.slug)
   if (!input.daily && input.categoryId) params.set('category_id', input.categoryId)
   params.set('page', String(Math.max(1, input.page || 1)))
   params.set('page_size', String(Math.min(48, Math.max(1, input.pageSize || 24))))
