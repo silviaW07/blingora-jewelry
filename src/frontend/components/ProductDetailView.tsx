@@ -105,6 +105,56 @@ function ColorSwatchButton({
   )
 }
 
+function SkuQtyStepper({
+  qty,
+  disabledDec,
+  disabledInc,
+  onDec,
+  onInc,
+  decTitle,
+  incTitle,
+  decreaseLabel,
+  increaseLabel,
+}: {
+  qty: number
+  disabledDec: boolean
+  disabledInc: boolean
+  onDec: () => void
+  onInc: () => void
+  decTitle?: string
+  incTitle?: string
+  decreaseLabel: string
+  increaseLabel: string
+}) {
+  const dec = useChromeActivate(onDec)
+  const inc = useChromeActivate(onInc)
+  return (
+    <div className="product-sku-stepper">
+      <button
+        type="button"
+        className="product-sku-stepper-btn"
+        disabled={disabledDec}
+        aria-label={decreaseLabel}
+        title={decTitle}
+        {...dec}
+      >
+        <Minus className="size-3.5" />
+      </button>
+      <span className="product-sku-stepper-qty">{qty}</span>
+      <button
+        type="button"
+        className="product-sku-stepper-btn"
+        disabled={disabledInc}
+        aria-label={increaseLabel}
+        title={incTitle}
+        {...inc}
+      >
+        <Plus className="size-3.5" />
+      </button>
+    </div>
+  )
+}
+
 const withStorefrontHeader = (content: React.ReactNode) => (
   <div className="min-h-screen bg-[#FFF5F5]" data-controller-name="商品详情页布局">
     <StorefrontResponsiveHeader />
@@ -417,8 +467,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const priceParts = formatUsdParts(sku.price)
     const rawModelLabel = specLabel || sku.variantLabel || sku.skuCode
     const modelLabel = translateAttributeValue(t, rawModelLabel) || rawModelLabel
-    const canUseStepper = Boolean(isPurchasable) && isColorSelected
-    // 单规格：数量锁在起订量，减号在下限时禁用；混批：可减到 0 取消该行
     const canDecrease = supportsMixedBatch ? qty > 0 : qty > lineMoq
 
     return (
@@ -439,38 +487,26 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           </span>
         </div>
 
-        <div className="product-sku-stepper">
-          <button
-            type="button"
-            className="product-sku-stepper-btn"
-            disabled={!canUseStepper || !canDecrease}
-            aria-label={t('product.decreaseQty')}
-            title={
-              !isColorSelected
-                ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' })
-                : !supportsMixedBatch && qty > 0 && qty <= lineMoq
-                  ? t('product.moqFloorHint', {
-                      defaultValue: 'Quantity cannot be lower than MOQ',
-                      qty: lineMoq,
-                    })
-                  : undefined
-            }
-            onClick={() => void handleSkuQuantityChange(sku.id, 'dec')}
-          >
-            <Minus className="size-3.5" />
-          </button>
-          <span className="product-sku-stepper-qty">{qty}</span>
-          <button
-            type="button"
-            className="product-sku-stepper-btn"
-            disabled={!canUseStepper || qty >= 9999 || sku.stockStatus === 'OUT_OF_STOCK'}
-            aria-label={t('product.increaseQty')}
-            title={!isColorSelected ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' }) : undefined}
-            onClick={() => void handleSkuQuantityChange(sku.id, 'inc')}
-          >
-            <Plus className="size-3.5" />
-          </button>
-        </div>
+        <SkuQtyStepper
+          qty={qty}
+          disabledDec={!isPurchasable || !canDecrease}
+          disabledInc={!isPurchasable || qty >= 9999 || sku.stockStatus === 'OUT_OF_STOCK'}
+          onDec={() => void handleSkuQuantityChange(sku.id, 'dec')}
+          onInc={() => void handleSkuQuantityChange(sku.id, 'inc')}
+          decreaseLabel={t('product.decreaseQty')}
+          increaseLabel={t('product.increaseQty')}
+          decTitle={
+            !isColorSelected
+              ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' })
+              : !supportsMixedBatch && qty > 0 && qty <= lineMoq
+                ? t('product.moqFloorHint', {
+                    defaultValue: 'Quantity cannot be lower than MOQ',
+                    qty: lineMoq,
+                  })
+                : undefined
+          }
+          incTitle={!isColorSelected ? t('product.selectColorFirst', { defaultValue: 'Please select a color first' }) : undefined}
+        />
       </div>
     )
   }

@@ -91,13 +91,11 @@ export function useChromeActivate(handler: () => void) {
   return { onPointerDown: run, onPointerUp: run, onClick: run }
 }
 
-/** Guest login: always prefer the in-page modal (same as other browsers). */
-export function openStorefrontLogin(openModal?: (tab?: 'login' | 'register') => void) {
-  if (openModal) {
-    openModal('login')
-    return
-  }
-  if (typeof window !== 'undefined') hardNavigate(CUSTOMER_LOGIN_HREF)
+/** Guest login: full-page login/register. Dialogs do not show on Chrome Android. */
+export function openStorefrontLogin(_openModal?: (tab?: 'login' | 'register') => void) {
+  if (typeof window === 'undefined') return
+  const returnTo = `${window.location.pathname}${window.location.search}`
+  hardNavigate(customerLoginHref(returnTo))
 }
 
 export function orderDetailHref(orderId: string) {

@@ -561,6 +561,15 @@ export const useProductDetail = (seed?: {
     setQuantity(0)
   }
 
+  useEffect(() => {
+    if (!product || product.status !== 'ACTIVE' || !colorAttribute) return
+    const first = colorAttribute.values.find((value) => String(value || '').trim())
+    if (!first) return
+    handleColorSelect(first)
+    // Default the first color so quantity +/- works on the first tap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, colorAttribute])
+
   const handleSizeSelect = (sku: ProductSkuData) => {
     if (product?.status !== 'ACTIVE') return
 

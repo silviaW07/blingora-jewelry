@@ -146,7 +146,7 @@ export function ProductListToolbar({
             if (!Array.isArray(value) || value.length < 2) return
             commitRange([value[0], value[1]])
           }}
-          className="listing-price-slider w-full [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-3.5 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
+          className="listing-price-slider w-full overflow-visible [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
           aria-label={t('product.priceRange')}
         />
         <p className="mt-1.5 text-[11px] text-[#6f6a62] tabular-nums">
