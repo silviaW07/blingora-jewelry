@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, hardNavigate, onHardNavClick, productHref } from '@/frontend/utils/hardNavigate'
+import { categoryHref, onHardNavClick } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
 import {
@@ -14,7 +14,6 @@ import {
   type ShelfProductCard,
 } from '@/frontend/utils/categoryPreviewProducts'
 import type { CategoryItem, SideNavZoneSection } from '@/frontend/actions/ProductCategory'
-import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
 import {
@@ -119,8 +118,6 @@ export default function MobileCategoriesView({
   const [productsById, setProductsById] = useState<Record<string, ShelfProductCard[]>>(() =>
     buildCategoryPreviewProducts(initialCategories || [], initialRecommendZones || []),
   )
-  const [loadingById, setLoadingById] = useState<Record<string, boolean>>({})
-  const [readyById, setReadyById] = useState<Record<string, boolean>>({})
   const fetchedRef = useRef<Set<string>>(new Set())
   const layoutRef = useRef<HTMLDivElement | null>(null)
 
@@ -182,7 +179,6 @@ export default function MobileCategoriesView({
       const key = `${lang}:${id}`
       if (fetchedRef.current.has(key)) return
       fetchedRef.current.add(key)
-      setLoadingById((prev) => ({ ...prev, [id]: true }))
       const daily = isDailyNewArrivalCategoryName(cat.category_name)
       fetchCategoryShelfProducts({
         categoryId: daily ? undefined : id,
@@ -198,10 +194,6 @@ export default function MobileCategoriesView({
         })
         .catch(() => {
           fetchedRef.current.delete(key)
-        })
-        .finally(() => {
-          setLoadingById((prev) => ({ ...prev, [id]: false }))
-          setReadyById((prev) => ({ ...prev, [id]: true }))
         })
     },
     [lang],
@@ -303,7 +295,7 @@ export default function MobileCategoriesView({
   return (
     <div
       className="mobile-categories-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
-      data-controller-name="移动端分类页-一级即出二级与商品"
+      data-controller-name="移动端分类页-一级即出二级"
     >
       <MobileStorefrontHeader />
 
@@ -348,9 +340,6 @@ export default function MobileCategoriesView({
         <div className="mobile-categories-panels">
           {categories.map((cat, index) => {
             const circles = circlesForCategory(cat)
-            const products = productsById[cat.category_id] || []
-            const loadingProducts = products.length === 0 && !readyById[cat.category_id]
-            const viewMoreHref = categoryHref(cat.category_slug, cat.category_id)
             return (
               <section
                 key={cat.category_id}
@@ -393,45 +382,11 @@ export default function MobileCategoriesView({
                       </a>
                     ))}
                   </div>
-                ) : null}
-
-                {loadingProducts ? (
-                  <div className="mobile-product-grid mt-4">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="mobile-product-skeleton" />
-                    ))}
-                  </div>
-                ) : products.length > 0 ? (
-                  <div className="mobile-product-grid mt-4">
-                    {products.map((item, productIndex) => (
-                      <ProductListCard
-                        key={item.product_id}
-                        item={item}
-                        imagePropKey={`cat-product-${item.product_id}`}
-                        className="mobile-product-card"
-                        onNavigate={(id) => hardNavigate(productHref(id))}
-                        onAddToCart={(product) =>
-                          hardNavigate(productHref(product.product_id || item.product_id))
-                        }
-                        priority={productIndex < 4}
-                      />
-                    ))}
-                  </div>
                 ) : (
                   <p className="mt-6 text-center text-sm text-[#8a8073]">
-                    {t('product.emptyCategory', { defaultValue: 'No products in this category' })}
+                    {t('mobile.noRecommendedCategories', { defaultValue: 'No categories yet' })}
                   </p>
                 )}
-
-                {products.length > 0 ? (
-                  <a
-                    href={viewMoreHref}
-                    onClick={onHardNavClick(viewMoreHref)}
-                    className="mt-4 block text-center text-sm font-semibold text-[#333]"
-                  >
-                    {t('mobile.viewMore', { defaultValue: 'View more' })}
-                  </a>
-                ) : null}
               </section>
             )
           })}
