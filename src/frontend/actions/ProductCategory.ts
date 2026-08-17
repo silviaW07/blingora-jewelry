@@ -1374,9 +1374,21 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   }
 
   const searchTokens = tokenizeProductSearch(input.search_keyword)
-  // Broader take when searching so translated English titles are not truncated away
-  // before the in-memory fuzzy filter runs.
-  const listTake = searchTokens.length > 0 ? 5000 : 2000
+  const searchQuery = String(input.search_keyword || '').trim()
+  // Push search into SQL so Chrome mobile is not stuck on a 5000-row in-memory scan.
+  if (searchQuery) {
+    const like = { contains: searchQuery }
+    const searchClause = {
+      OR: [
+        { name: like },
+        { shortDescription: like },
+      ],
+    }
+    dbWhere.AND = [
+      ...(Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [dbWhere.AND] : []),
+      searchClause,
+    ]
+  }
 
   // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个商品拖回
   // detailText / detailContentJson / galleryJson 等大字段。
@@ -1453,16 +1465,16 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     },
   }
 
-  // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
-  // 直接用 SQL orderBy + skip/take 分页 + count()，只回本页数据，避免一次拉 2000 条全量再 JS 过滤。
-  // 其余场景（搜索、价格排序、价格区间/折扣/库存筛选）仍走下方原逻辑，结果零回归。
+  // 快速路径：无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
+  // 直接用 SQL orderBy + skip/take 分页 + count()。搜索已写入 dbWhere，可走同一路径。
   const canPushdownPaginate =
-    searchTokens.length === 0 &&
     input.min_price === undefined &&
     input.max_price === undefined &&
     !input.has_discount &&
     !(input.stock_status && input.stock_status.length > 0) &&
     (input.sort_by === undefined || input.sort_by === 'NEWEST' || input.sort_by === 'POPULARITY')
+
+  const listTake = searchTokens.length > 0 ? 800 : 2000
 
   if (canPushdownPaginate) {
     const orderBy =

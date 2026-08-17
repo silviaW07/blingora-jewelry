@@ -1838,10 +1838,6 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   padding: 0.9rem 0.85rem 1.25rem;
 }
 
-.mobile-categories-pane.is-active {
-  display: block;
-}
-
 .mobile-categories-rail {
   width: 6.75rem;
   flex-shrink: 0;

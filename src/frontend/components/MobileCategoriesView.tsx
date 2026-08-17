@@ -119,7 +119,9 @@ export default function MobileCategoriesView({
     buildCategoryPreviewProducts(initialCategories || [], initialRecommendZones || []),
   )
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({})
+  const [readyById, setReadyById] = useState<Record<string, boolean>>({})
   const fetchedRef = useRef<Set<string>>(new Set())
+  const layoutRef = useRef<HTMLDivElement | null>(null)
 
   const lang = normalizeLocale(
     i18n.language || (typeof window !== 'undefined' ? readStoredLocale() : 'en'),
@@ -198,14 +200,38 @@ export default function MobileCategoriesView({
         })
         .finally(() => {
           setLoadingById((prev) => ({ ...prev, [id]: false }))
+          setReadyById((prev) => ({ ...prev, [id]: true }))
         })
     },
     [lang],
   )
 
   useEffect(() => {
-    categories.slice(0, 4).forEach((cat) => loadProducts(cat))
+    let index = 0
+    let timer: number | undefined
+    const tick = () => {
+      if (index >= categories.length) return
+      loadProducts(categories[index])
+      index += 1
+      timer = window.setTimeout(tick, 50)
+    }
+    tick()
+    return () => {
+      if (timer) window.clearTimeout(timer)
+    }
   }, [categories, loadProducts])
+
+  useEffect(() => {
+    const root = layoutRef.current
+    if (!root) return
+    const onChange = (event: Event) => {
+      const target = event.target as HTMLInputElement | null
+      if (!target || target.name !== 'mobile-cat-rail') return
+      activateCategory(target.value)
+    }
+    root.addEventListener('change', onChange, true)
+    return () => root.removeEventListener('change', onChange, true)
+  })
 
   const activateCategory = (categoryId: string) => {
     if (!categoryId) return
@@ -278,7 +304,7 @@ export default function MobileCategoriesView({
 
       <style dangerouslySetInnerHTML={{ __html: paneCss(Math.max(categories.length, 1)) }} />
 
-      <div className="mobile-categories-layout">
+      <div className="mobile-categories-layout" ref={layoutRef}>
         {categories.map((cat, index) => (
           <input
             key={`radio-${cat.category_id}`}
@@ -304,6 +330,7 @@ export default function MobileCategoriesView({
                   'mobile-categories-rail__item',
                   cat.category_id === activeId && 'is-active',
                 )}
+                onPointerDown={() => activateCategory(cat.category_id)}
                 onPointerUp={() => activateCategory(cat.category_id)}
                 onClick={() => activateCategory(cat.category_id)}
               >
@@ -317,15 +344,12 @@ export default function MobileCategoriesView({
           {categories.map((cat, index) => {
             const circles = circlesForCategory(cat)
             const products = productsById[cat.category_id] || []
-            const loadingProducts = Boolean(loadingById[cat.category_id]) && products.length === 0
+            const loadingProducts = products.length === 0 && !readyById[cat.category_id]
             const viewMoreHref = categoryHref(cat.category_slug, cat.category_id)
             return (
               <section
                 key={cat.category_id}
-                className={cn(
-                  'mobile-categories-pane',
-                  cat.category_id === activeId && 'is-active',
-                )}
+                className="mobile-categories-pane"
                 data-i={String(index)}
                 data-category-id={cat.category_id}
               >
@@ -390,7 +414,7 @@ export default function MobileCategoriesView({
                   </div>
                 ) : (
                   <p className="mt-6 text-center text-sm text-[#8a8073]">
-                    {t('mobile.noBrandProducts', { defaultValue: 'No products in this category yet' })}
+                    {t('product.emptyCategory', { defaultValue: 'No products in this category' })}
                   </p>
                 )}
 

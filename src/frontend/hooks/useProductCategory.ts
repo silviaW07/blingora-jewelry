@@ -21,12 +21,12 @@ import {
   getCategoryPosterList,
   getKeywordGroupList,
   getKeywordList,
-  getProductList,
   getAvailableBrandFilters,
   addToCart,
   getCategoryTopPromotion,
   resolveCategoryRouteKey,
 } from '@/frontend/actions/ProductCategory'
+import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
 import { loadCategoryListCached, peekCachedCategoryList, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
 import type { StorefrontBootstrap } from '@/frontend/types/storefrontBootstrap'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
@@ -946,48 +946,42 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
     setIsLoadingProducts(true)
     // Keep prior product cards visible while fetching — avoids empty flash on category change
     const lang = getCurrentLang()
+    let cancelled = false
     let settled = false
-    const safety = typeof window !== 'undefined'
-      ? window.setTimeout(() => {
-          if (settled) return
-          settled = true
-          setIsLoadingProducts(false)
-        }, 8000)
-      : undefined
-    getProductList({
-      category_id: queryState.categoryId || undefined,
-      brand_category_id: queryState.brandCategoryId || undefined,
-      keyword_id: queryState.keywordId || undefined,
-      keyword_group_id: queryState.keywordGroupId || undefined,
-      search_keyword: queryState.searchKeyword || undefined,
-      stock_status: queryState.stockStatus.length > 0 ? queryState.stockStatus : undefined,
-      sort_by: queryState.sortBy,
-      page: queryState.page,
-      page_size: queryState.pageSize,
-      min_price: queryState.minPrice,
-      max_price: queryState.maxPrice,
-      has_discount: queryState.hasDiscount,
-      min_rating: queryState.minRating,
+    const safety = window.setTimeout(() => {
+      if (cancelled || settled) return
+      settled = true
+      setIsLoadingProducts(false)
+    }, 8000)
+    fetchCategoryShelfProducts({
+      categoryId: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
+      search: queryState.searchKeyword || undefined,
       lang,
+      page: queryState.page,
+      pageSize: Math.min(24, queryState.pageSize || 24),
     })
-      .then((res) => {
-        if (settled) return
-        setProducts(res.list)
-        setTotalCount(res.total)
+      .then((list) => {
+        if (cancelled || settled) return
+        setProducts(list as ProductItem[])
+        setTotalCount(list.length)
       })
       .catch((err: any) => {
-        if (settled) return
+        if (cancelled || settled) return
         setProducts([])
         setTotalCount(0)
         toast.error(err.message)
       })
       .finally(() => {
-        if (settled) return
+        if (cancelled || settled) return
         settled = true
-        if (safety) window.clearTimeout(safety)
+        window.clearTimeout(safety)
         setIsLoadingProducts(false)
       })
-  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
+    return () => {
+      cancelled = true
+      window.clearTimeout(safety)
+    }
+  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick])
 
   useEffect(() => {
     if (isDailyNewArrivalMode) {

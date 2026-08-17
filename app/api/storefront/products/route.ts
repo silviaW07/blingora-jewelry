@@ -30,6 +30,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const lang = url.searchParams.get('lang') || 'en'
   const daily = url.searchParams.get('daily') === '1'
+  const search = String(url.searchParams.get('search') || '').trim()
   const categoryId = String(url.searchParams.get('category_id') || '').trim()
   const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1)
   const pageSize = Math.min(24, Math.max(1, Number(url.searchParams.get('page_size') || 24) || 24))
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
           [
             {
               category_id: categoryId || undefined,
+              search_keyword: search || undefined,
               page,
               page_size: pageSize,
               sort_by: 'NEWEST',
