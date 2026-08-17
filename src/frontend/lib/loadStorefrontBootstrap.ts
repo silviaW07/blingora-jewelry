@@ -22,8 +22,14 @@ async function rpcAction<T>(actionName: string, args: unknown[] = []): Promise<T
   return (raw?.json ?? raw) as T
 }
 
+const bootstrapCache = new Map<string, { at: number; data: StorefrontBootstrap }>()
+const BOOTSTRAP_TTL_MS = 60_000
+
 export async function loadStorefrontBootstrap(lang = 'en'): Promise<StorefrontBootstrap> {
   const normalized = String(lang || 'en').trim() || 'en'
+  const cached = bootstrapCache.get(normalized)
+  if (cached && Date.now() - cached.at < BOOTSTRAP_TTL_MS) return cached.data
+
   const [categories, posters, recommendZones] = await Promise.all([
     rpcAction<{ list?: StorefrontBootstrap['categories'] }>(
       'src.frontend.actions.ProductCategory.getCategoryList',
@@ -53,5 +59,7 @@ export async function loadStorefrontBootstrap(lang = 'en'): Promise<StorefrontBo
         return []
       }),
   ])
-  return { categories, posters, recommendZones }
+  const data = { categories, posters, recommendZones }
+  bootstrapCache.set(normalized, { at: Date.now(), data })
+  return data
 }

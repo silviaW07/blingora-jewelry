@@ -1,9 +1,16 @@
 // {"router": "/category/[slug]", "id": "f02b", "en_name": "CategoryBySlug"}
 import CategoryBySlugClient from './CategoryBySlugClient'
+import { loadStorefrontBootstrap } from '@/frontend/lib/loadStorefrontBootstrap'
+import {
+  loadStorefrontProducts,
+  resolveCategoryIdFromTree,
+  shelfCardsToProductItems,
+} from '@/frontend/lib/loadStorefrontProducts'
+import { buildCategoryPreviewProducts } from '@/frontend/utils/categoryPreviewProducts'
 
 /**
  * Pre-render every active category slug at build time (SSG + ISR).
- * `dynamicParams = true` still allows new slugs after deploy without rebuild.
+ * HTML includes product cards so Chrome mobile does not wait on client RPC.
  */
 export const dynamic = 'force-static'
 export const dynamicParams = true
@@ -23,13 +30,38 @@ export async function generateStaticParams() {
       })
       .filter((item) => Boolean(item.slug))
 
-    // Ensure the segment always has at least one path so the route compiles.
     return params.length > 0 ? params : [{ slug: '_' }]
   } catch {
     return [{ slug: '_' }]
   }
 }
 
-export default function CategoryBySlugPage() {
-  return <CategoryBySlugClient />
+export default async function CategoryBySlugPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug: rawSlug } = await params
+  const slug = decodeURIComponent(String(rawSlug || '').trim())
+  const bootstrap = await loadStorefrontBootstrap()
+  const categoryId = resolveCategoryIdFromTree(bootstrap.categories, slug)
+  const loaded = await loadStorefrontProducts({
+    slug,
+    categoryId,
+    categoryTree: bootstrap.categories,
+    pageSize: 24,
+  })
+  let list = loaded.list
+  if (list.length === 0 && (loaded.categoryId || categoryId)) {
+    const preview = buildCategoryPreviewProducts(bootstrap.categories, bootstrap.recommendZones)
+    list = preview[loaded.categoryId || categoryId] || []
+  }
+
+  return (
+    <CategoryBySlugClient
+      bootstrap={bootstrap}
+      initialCategoryId={loaded.categoryId || categoryId}
+      initialProducts={shelfCardsToProductItems(list)}
+    />
+  )
 }

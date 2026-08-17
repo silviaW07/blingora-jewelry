@@ -209,7 +209,7 @@ export const ProductCategoryView = ({
                 {isLoadingProducts && products.length === 0 ? <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-api-unique-id='productcategoryview-skeleton-grid' data-api-unique-page-name='src/frontend/components/ProductCategoryView' aria-busy="true" aria-label={t('product.loading')}>
                     {Array.from({ length: 10 }).map((_, index) => (
                       <div key={`product-skeleton-${index}`} className="animate-pulse space-y-3">
-                        <div className="aspect-[3/4] rounded-[24px] bg-[#ebe7de]" />
+                        <div className="aspect-[3/4] min-h-[160px] rounded-[24px] bg-[#ebe7de]" />
                         <div className="h-3 w-3/4 rounded-full bg-[#ebe7de]" />
                         <div className="h-3 w-1/2 rounded-full bg-[#ebe7de]" />
                       </div>

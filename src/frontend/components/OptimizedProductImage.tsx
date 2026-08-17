@@ -36,12 +36,10 @@ export function OptimizedProductImage({
   const raw = String(src || '').trim()
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
-  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     setAttempt(0)
     setFailed(false)
-    setLoaded(false)
   }, [src, imageWidth])
 
   const displaySrc =
@@ -59,17 +57,14 @@ export function OptimizedProductImage({
     setFailed(true)
   }
 
+  // Visible immediately — Chrome mobile often never fires React onLoad, so opacity-0 stayed blank.
   const imgClass = fill
-    ? cn(
-        'absolute inset-0 h-full w-full object-cover transition-opacity duration-200',
-        loaded ? 'opacity-100' : 'opacity-0',
-        className,
-      )
-    : cn('object-cover', loaded ? 'opacity-100' : 'opacity-0', className)
+    ? cn('absolute inset-0 h-full w-full object-cover', className)
+    : cn('object-cover', className)
 
   return (
     <>
-      {fill && !loaded ? <div className="absolute inset-0 bg-[#f0ebe3]" aria-hidden /> : null}
+      {fill ? <div className="absolute inset-0 bg-[#f0ebe3]" aria-hidden /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={`${attempt}-${displaySrc}`}
@@ -78,11 +73,10 @@ export function OptimizedProductImage({
         width={fill ? undefined : width || imageWidth}
         height={fill ? undefined : height || imageWidth}
         className={imgClass}
-        loading={priority ? 'eager' : 'eager'}
+        loading="eager"
         decoding="async"
         fetchPriority={priority ? 'high' : 'auto'}
         referrerPolicy="no-referrer"
-        onLoad={() => setLoaded(true)}
         onError={handleError}
       />
     </>

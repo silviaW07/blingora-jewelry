@@ -1216,7 +1216,9 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   </div>
                   <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-[0.08em] text-[#111111]">{currentCategoryName}</h2>
                   <p className="mt-1 text-sm text-[#6f6a62]">
-                    {isLoadingProducts ? t('product.loadingShort') : t('product.totalCount', { count: totalCount })}
+                    {isLoadingProducts && products.length === 0
+                      ? t('product.loadingShort')
+                      : t('product.totalCount', { count: totalCount })}
                     {isSecondaryCategoryResults
                       ? t('product.secondaryCategoryNote')
                       : queryState.categoryId
@@ -1241,12 +1243,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                 />
               </div>
 
-              {isLoadingProducts ? (
-                <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-sm text-[#7a756c]">
-                  <Loader2 className="size-6 animate-spin" />
-                  {t('product.loading')}
-                </div>
-              ) : products.length > 0 ? (
+              {products.length > 0 ? (
                 <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {products.map((item, index) => (
                     <ProductListCard
@@ -1260,6 +1257,11 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       priority={index < 4}
                     />
                   ))}
+                </div>
+              ) : isLoadingProducts ? (
+                <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-sm text-[#7a756c]">
+                  <Loader2 className="size-6 animate-spin" />
+                  {t('product.loading')}
                 </div>
               ) : (
                 <div className="mt-6 border-b border-[#ececec] px-2 py-14 text-center">

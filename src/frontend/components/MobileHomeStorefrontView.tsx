@@ -338,7 +338,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 {currentCategoryName}
               </h2>
               <p className="mt-1 text-[0.875rem] text-[#6f6a62]">
-                {isLoadingProducts
+                {isLoadingProducts && products.length === 0
                   ? t('product.loadingShort')
                   : t('product.totalCount', { count: totalCount })}
               </p>
@@ -356,12 +356,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 onBrandExpandToggle={handlers.handleToggleBrandExpand}
                 isLoadingBrands={state.isLoadingBrandFilters}
               />
-              {isLoadingProducts ? (
-                <div className="mt-8 flex flex-col items-center gap-2 text-[0.875rem] text-[#7a756c]">
-                  <Loader2 className="size-5 animate-spin" />
-                  {t('product.loading')}
-                </div>
-              ) : products.length > 0 ? (
+              {products.length > 0 ? (
                 <div className="storefront-product-grid mt-4 grid grid-cols-2 gap-2.5">
                   {products.map((item, index) => (
                     <ProductListCard
@@ -377,6 +372,11 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       priority={index < 4}
                     />
                   ))}
+                </div>
+              ) : isLoadingProducts ? (
+                <div className="mt-8 flex flex-col items-center gap-2 text-[0.875rem] text-[#7a756c]">
+                  <Loader2 className="size-5 animate-spin" />
+                  {t('product.loading')}
                 </div>
               ) : (
                 <div className="mt-10 flex flex-col items-center text-center">

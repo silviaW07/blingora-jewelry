@@ -136,16 +136,25 @@ function findCategoryIdInTree(
 ): string {
   const normalized = String(slugOrId || '').trim()
   if (!normalized) return ''
+  const needle = normalized.toLowerCase()
+  const matchId = (item?: { category_id?: string; category_slug?: string | null } | null) => {
+    if (!item) return ''
+    if (String(item.category_id || '') === normalized) return String(item.category_id)
+    if (String(item.category_slug || '').trim().toLowerCase() === needle) {
+      return String(item.category_id || '')
+    }
+    return ''
+  }
   for (const cat of list) {
-    if (cat.category_id === normalized) return cat.category_id
-    if (String(cat.category_slug || '').trim() === normalized) return cat.category_id
+    const self = matchId(cat)
+    if (self) return self
     for (const child of cat.children || []) {
-      if (child.category_id === normalized) return child.category_id
-      if (String(child.category_slug || '').trim() === normalized) return child.category_id
+      const id = matchId(child)
+      if (id) return id
     }
     for (const brand of cat.brand_options || []) {
-      if (brand.category_id === normalized) return brand.category_id
-      if (String(brand.category_slug || '').trim() === normalized) return brand.category_id
+      const id = matchId(brand)
+      if (id) return id
     }
   }
   return ''
@@ -315,7 +324,16 @@ export interface ProductCategoryHandlers {
   handleBrandQuickFilterToggle: (brandId: string) => void
 }
 
-export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
+export type ProductCategoryListingSeed = {
+  categoryId?: string
+  products?: ProductItem[]
+  totalCount?: number
+}
+
+export const useProductCategory = (
+  bootstrap?: StorefrontBootstrap | null,
+  listingSeed?: ProductCategoryListingSeed | null,
+): {
   state: ProductCategoryState
   handlers: ProductCategoryHandlers
 } => {
@@ -337,14 +355,16 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
   )
 
   const [queryState, setQueryState] = useState(() => {
-    // Warm-start categoryId from nav cache so product listing mode starts immediately
-    // (avoids flashing the empty-banner home shell while slug resolves).
+    // Warm-start categoryId from SSR seed / nav cache so listing HTML is not empty.
     const slugOnMount = parseCategorySlugFromPathname(pathname)
     const cachedId = slugOnMount
-      ? findCategoryIdInTree(peekCachedCategoryList() || [], slugOnMount)
+      ? findCategoryIdInTree(
+          bootstrap?.categories?.length ? bootstrap.categories : peekCachedCategoryList() || [],
+          slugOnMount,
+        )
       : ''
     const categoryId = slugOnMount
-      ? cachedId
+      ? (listingSeed?.categoryId || cachedId)
       : (routeParams.categoryId || '')
 
     return {
@@ -384,14 +404,24 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
   const [activeRecommendationGroupId, setActiveRecommendationGroupId] = useState('')
   const [leftNavKeywords, setLeftNavKeywords] = useState<ProductCategoryKeywordItem[]>([])
   const [recommendationKeywords, setRecommendationKeywords] = useState<ProductCategoryKeywordItem[]>([])
-  const [products, setProducts] = useState<ProductCardItem[]>([])
+  const [products, setProducts] = useState<ProductCardItem[]>(() =>
+    Array.isArray(listingSeed?.products) ? listingSeed.products : [],
+  )
+  const productsRef = useRef<ProductCardItem[]>(
+    Array.isArray(listingSeed?.products) ? listingSeed.products : [],
+  )
+  productsRef.current = products
   const [availableBrandFilters, setAvailableBrandFilters] = useState<BrandCategoryItem[]>([])
   const [isLoadingBrandFilters, setIsLoadingBrandFilters] = useState(false)
-  const [totalCount, setTotalCount] = useState(0)
+  const [totalCount, setTotalCount] = useState(
+    () => listingSeed?.totalCount ?? listingSeed?.products?.length ?? 0,
+  )
   const [isLoadingCategories, setIsLoadingCategories] = useState(
     () => !(bootstrap?.categories?.length || peekCachedCategoryList()?.length),
   )
-  const [isLoadingProducts, setIsLoadingProducts] = useState(true)
+  const [isLoadingProducts, setIsLoadingProducts] = useState(
+    () => !(listingSeed?.products && listingSeed.products.length > 0),
+  )
   const [localeTick, setLocaleTick] = useState(0)
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([])
   const [isBrandExpanded, setIsBrandExpanded] = useState(false)
@@ -514,13 +544,18 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
   // Switch /category/[slug]: reset listing filters when the slug segment changes.
   useEffect(() => {
     if (!isCategorySlugRoute) return
-    setQueryState((prev) => ({
-      ...prev,
-      page: 1,
-      brandCategoryId: '',
-      keywordId: '',
-      keywordGroupId: '',
-    }))
+    setQueryState((prev) => {
+      if (prev.page === 1 && !prev.brandCategoryId && !prev.keywordId && !prev.keywordGroupId) {
+        return prev
+      }
+      return {
+        ...prev,
+        page: 1,
+        brandCategoryId: '',
+        keywordId: '',
+        keywordGroupId: '',
+      }
+    })
   }, [isCategorySlugRoute, routeCategorySlug])
 
   // Apply categoryId from nav tree as soon as slug (or cached tree) is known —
@@ -896,7 +931,7 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
   useEffect(() => {
     if (isDailyNewArrivalMode) {
       // New / 每日上新：独立时间窗查询，不走分类 ID 过滤
-      setIsLoadingProducts(true)
+      if (productsRef.current.length === 0) setIsLoadingProducts(true)
       const lang = getCurrentLang()
       const dailyMonth = searchParams.get('dailyMonth') || ''
       const [yearText, monthText] = dailyMonth.split('-')
@@ -931,7 +966,7 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
     // /category/[slug]: fetch by slug immediately so Chrome is not stuck on
     // "Loading products..." while resolveCategoryRouteKey hangs.
     if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId && !queryState.searchKeyword) {
-      setIsLoadingProducts(true)
+      if (productsRef.current.length === 0) setIsLoadingProducts(true)
       const lang = getCurrentLang()
       let cancelled = false
       let settled = false
@@ -976,8 +1011,8 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
       return
     }
 
-    setIsLoadingProducts(true)
-    // Keep prior product cards visible while fetching — avoids empty flash on category change
+    // Keep prior / SSR cards visible — never blank the grid while a refetch hangs.
+    if (productsRef.current.length === 0) setIsLoadingProducts(true)
     const lang = getCurrentLang()
     let cancelled = false
     let settled = false
