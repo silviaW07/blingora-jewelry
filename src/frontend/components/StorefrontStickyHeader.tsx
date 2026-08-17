@@ -5,7 +5,8 @@
  * 可在首页以外页面复用；分类操作统一跳回首页 `/`
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -77,7 +78,7 @@ type StorefrontStickyHeaderProps = {
 export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) => {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
   const { t, i18n } = useTranslation()
   const switchLocale = useSwitchAppLocale()
   const { preferredLocale } = useUserSession()

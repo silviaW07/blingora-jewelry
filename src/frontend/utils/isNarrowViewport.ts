@@ -4,7 +4,9 @@ export function isNarrowViewport(win: Window = window): boolean {
   const inner = win.innerWidth || 9999
   const visual = win.visualViewport?.width || 9999
   const mq = win.matchMedia('(max-width: 767px)').matches
-  return mq || Math.min(screenW, inner, visual) < 768
+  const ua = String(win.navigator?.userAgent || '')
+  const uaMobile = /Android|iPhone|iPod|Mobile/i.test(ua)
+  return mq || Math.min(screenW, inner, visual) < 768 || (uaMobile && screenW < 900)
 }
 
 export function syncNarrowHtmlClass(win: Window = window): boolean {

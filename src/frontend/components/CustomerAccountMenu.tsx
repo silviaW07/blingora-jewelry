@@ -20,7 +20,7 @@ import {
   AccountProfile,
   Wishlist,
 } from '@/frontend/route-params'
-import { useTranslation } from 'react-i18next'
+import { hardNavigate } from '@/frontend/utils/hardNavigate'
 
 type Props = {
   className?: string
@@ -100,13 +100,13 @@ export function CustomerAccountMenu({
       openAuthModal('login')
       return
     }
-    router.push(path)
+    hardNavigate(path.endsWith('/') ? path : `${path}/`)
   }
 
   /** 心愿单存在浏览器本地，未登录也可查看点过爱心的商品 */
   const goWishlist = () => {
     setOpen(false)
-    router.push(Wishlist.path)
+    hardNavigate(Wishlist.path.endsWith('/') ? Wishlist.path : `${Wishlist.path}/`)
   }
 
   const handleLogout = () => {

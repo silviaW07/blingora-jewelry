@@ -2,11 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2 } from 'lucide-react'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, hardNavigate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import {
   type CategoryItem,
@@ -48,6 +47,10 @@ type BrandEntry = {
  * Dedupes by category_id; prefers image_url from brand_options.
  * Same collection pattern as MobileBrandView, plus image preference.
  */
+function cssEsc(value: string) {
+  return String(value).replace(/([^a-zA-Z0-9_-])/g, '\\$1')
+}
+
 function collectMobileCategoryBrands(
   list: CategoryItem[],
   zones: SideNavZoneSection[],
@@ -204,48 +207,41 @@ export default function MobileCategoriesView({
     }
   }, [isNewTab, lang])
 
-  const openCategory = (id: string, slug?: string | null) => {
-    hardNavigate(categoryHref(slug, id))
-  }
+  const fallbackMonths = useMemo(
+    () =>
+      buildLast6Months().map((m) => ({
+        year: m.year,
+        month: m.month,
+        monthKey: m.monthKey,
+        label: formatMonthLabel(m.year, m.month),
+        productCount: 0,
+      })),
+    [],
+  )
 
-  /** Same URL shape as web month picker → product listing */
-  const openDailyMonth = (monthKey: string) => {
-    if (!active) return
-    const params = new URLSearchParams()
-    params.set('dailyMonth', monthKey)
-    const slug = String(active.category_slug || '').trim()
-    if (slug) {
-      hardNavigate(`/category/${encodeURIComponent(slug)}/?${params.toString()}`)
-      return
-    }
-    params.set('categoryId', active.category_id)
-    hardNavigate(`/?${params.toString()}`)
-  }
-
-  const circleEntries: CircleEntry[] = useMemo(() => {
-    if (!active) return []
-
-    if (isNewTab) {
-      return months.map((m) => {
+  const circlesForCategory = (cat: CategoryItem): CircleEntry[] => {
+    if (isDailyNewArrivalCategoryName(cat.category_name)) {
+      const list = months.length > 0 ? months : fallbackMonths
+      return list.map((m) => {
         const short = m.label || formatMonthLabel(m.year, m.month)
         const monthAbbr = short.split(/\s+/)[0] || short.slice(0, 3)
         const params = new URLSearchParams()
         params.set('dailyMonth', m.monthKey)
-        const slug = String(active.category_slug || '').trim()
+        const slug = String(cat.category_slug || '').trim()
         const href = slug
           ? `/category/${encodeURIComponent(slug)}/?${params.toString()}`
-          : `/?${params.toString()}&categoryId=${encodeURIComponent(active.category_id)}`
+          : `/?${params.toString()}&categoryId=${encodeURIComponent(cat.category_id)}`
         return {
           key: m.monthKey,
           label: short,
           initials: monthAbbr.slice(0, 3),
           href,
-          onClick: () => openDailyMonth(m.monthKey),
+          onClick: () => hardNavigate(href),
         }
       })
     }
 
-    const children = active.children || []
+    const children = cat.children || []
     if (children.length > 0) {
       return children.map((child) => ({
         key: child.category_id,
@@ -253,11 +249,11 @@ export default function MobileCategoriesView({
         imageUrl: child.image_url,
         initials: child.category_name.slice(0, 1).toUpperCase(),
         href: categoryHref(child.category_slug, child.category_id),
-        onClick: () => openCategory(child.category_id, child.category_slug),
+        onClick: () => hardNavigate(categoryHref(child.category_slug, child.category_id)),
       }))
     }
 
-    const brandOpts = active.brand_options || []
+    const brandOpts = cat.brand_options || []
     if (brandOpts.length > 0) {
       return brandOpts.map((brand) => ({
         key: brand.category_id,
@@ -265,22 +261,31 @@ export default function MobileCategoriesView({
         imageUrl: brand.image_url,
         initials: brand.category_name.slice(0, 1).toUpperCase(),
         href: categoryHref(brand.category_slug, brand.category_id),
-        onClick: () => openCategory(brand.category_id, brand.category_slug),
+        onClick: () => hardNavigate(categoryHref(brand.category_slug, brand.category_id)),
       }))
     }
 
+    const href = categoryHref(cat.category_slug, cat.category_id)
     return [
       {
-        key: active.category_id,
-        label: translateCatalogLabel(t, active.category_name),
-        imageUrl: active.image_url,
-        initials: active.category_name.slice(0, 1).toUpperCase(),
-        href: categoryHref(active.category_slug, active.category_id),
-        onClick: () => openCategory(active.category_id, active.category_slug),
+        key: cat.category_id,
+        label: translateCatalogLabel(t, cat.category_name),
+        imageUrl: cat.image_url,
+        initials: cat.category_name.slice(0, 1).toUpperCase(),
+        href,
+        onClick: () => hardNavigate(href),
       },
     ]
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- handlers close over latest active
-  }, [active, isNewTab, months, t])
+  }
+
+  const paneCss = useMemo(() => {
+    if (categories.length === 0) return '.mc-pane{display:none}'
+    const rules = categories.map((cat) => {
+      const id = cssEsc(cat.category_id)
+      return `.mobile-categories-page:has(#mc-l1-${id}:checked) .mc-pane-${id}{display:block}`
+    })
+    return `.mc-pane{display:none}${rules.join('')}`
+  }, [categories])
 
   const showBrandZone = !loading && brands.length > 0
 
@@ -289,9 +294,10 @@ export default function MobileCategoriesView({
       className="mobile-categories-page min-h-screen bg-[#f7f4ee] text-[#4a4a4a]"
       data-controller-name="移动端分类页-自然滚动+底部品牌区"
     >
+      <style dangerouslySetInnerHTML={{ __html: paneCss }} />
       <MobileStorefrontHeader />
 
-      {/* L1 + L2: normal document flow — no min-height trap / independent scroll */}
+      {/* L1 radios + L2 panes: CSS :has() so Chrome does not need JS click */}
       <div className="mobile-categories-layout">
         <aside className="mobile-categories-rail" aria-label={t('common.categories')}>
           {loading && categories.length === 0 ? (
@@ -299,67 +305,76 @@ export default function MobileCategoriesView({
           ) : (
             categories.map((cat) => {
               const selected = cat.category_id === active?.category_id
+              const rid = `mc-l1-${cat.category_id}`
               return (
-                <button
+                <label
                   key={cat.category_id}
-                  type="button"
+                  htmlFor={rid}
                   className={cn('mobile-categories-rail__item', selected && 'is-active')}
-                  onPointerUp={() => setActiveId(cat.category_id)}
-                  onClick={() => setActiveId(cat.category_id)}
                 >
+                  <input
+                    id={rid}
+                    type="radio"
+                    name="mc-l1"
+                    className="sr-only"
+                    defaultChecked={cat.category_id === (activeId || categories[0]?.category_id)}
+                    onChange={() => setActiveId(cat.category_id)}
+                  />
                   {translateCatalogLabel(t, cat.category_name)}
-                </button>
+                </label>
               )
             })
           )}
         </aside>
 
         <section className="mobile-categories-panel">
-          <h1 className="mobile-categories-panel__title">
-            {active
-              ? translateCatalogLabel(t, active.category_name)
-              : t('common.categories')}
-          </h1>
-
-          {isNewTab && loadingMonths ? (
-            <div className="mt-8 flex justify-center text-[#8b8477]">
-              <Loader2 className="size-5 animate-spin" />
-            </div>
-          ) : circleEntries.length === 0 ? (
-            <p className="mt-6 text-center text-sm text-[#8a8073]">
-              {t('mobile.noRecommendedCategories', { defaultValue: 'No categories yet' })}
-            </p>
-          ) : (
-            <div
-              className="mobile-categories-grid"
-              data-controller-name="移动端分类圆形入口网格"
-            >
-              {circleEntries.map((entry) => (
-                <a
-                  key={entry.key}
-                  href={entry.href || categoryHref(null, active?.category_id)}
-                  className="mobile-categories-grid__item"
-                >
-                  <span className="mobile-categories-grid__icon">
-                    {entry.imageUrl ? (
-                      <OptimizedProductImage
-                        src={entry.imageUrl}
-                        alt={entry.label}
-                        sizes="72px"
-                        imageWidth={160}
-                        className="rounded-full"
-                      />
-                    ) : (
-                      <span className="mobile-categories-grid__initials" aria-hidden>
-                        {entry.initials || entry.label.slice(0, 1)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="mobile-categories-grid__label">{entry.label}</span>
-                </a>
-              ))}
-            </div>
-          )}
+          {categories.map((cat) => {
+            const entries = circlesForCategory(cat)
+            const pane = `mc-pane mc-pane-${cat.category_id}`
+            return (
+              <div key={cat.category_id} className={pane}>
+                <h1 className="mobile-categories-panel__title">
+                  {translateCatalogLabel(t, cat.category_name)}
+                </h1>
+                {entries.length === 0 ? (
+                  <p className="mt-6 text-center text-sm text-[#8a8073]">
+                    {t('mobile.noRecommendedCategories', { defaultValue: 'No categories yet' })}
+                  </p>
+                ) : (
+                  <div
+                    className="mobile-categories-grid"
+                    data-controller-name="移动端分类圆形入口网格"
+                  >
+                    {entries.map((entry) => (
+                      <a
+                        key={entry.key}
+                        href={entry.href || categoryHref(null, cat.category_id)}
+                        className="mobile-categories-grid__item"
+                        onClick={onHardNavClick(entry.href || categoryHref(null, cat.category_id))}
+                      >
+                        <span className="mobile-categories-grid__icon">
+                          {entry.imageUrl ? (
+                            <OptimizedProductImage
+                              src={entry.imageUrl}
+                              alt={entry.label}
+                              sizes="72px"
+                              imageWidth={160}
+                              className="rounded-full"
+                            />
+                          ) : (
+                            <span className="mobile-categories-grid__initials" aria-hidden>
+                              {entry.initials || entry.label.slice(0, 1)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="mobile-categories-grid__label">{entry.label}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </section>
       </div>
 
@@ -380,6 +395,7 @@ export default function MobileCategoriesView({
                 <a
                   key={brand.id}
                   href={categoryHref(brand.slug, brand.id)}
+                  onClick={onHardNavClick(categoryHref(brand.slug, brand.id))}
                   className="mobile-categories-brands__item"
                 >
                   <span className="mobile-categories-brands__icon">

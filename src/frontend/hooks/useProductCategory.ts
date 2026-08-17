@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { usePathname } from 'next/navigation'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { toast } from 'sonner'
 import { Home, ProductCategory, ProductDetail, Cart } from '@/frontend/route-params'
 import { useUserSession, UserSession } from '@/tools/FrontendSession'
@@ -323,7 +323,7 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
   const router = useRouter()
   const pathname = usePathname()
   const isMobile = useIsMobile()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
   const routeParams = useMemo(() => ProductCategory.getParams(searchParams), [searchParams])
   const userSession = useUserSession() as UserSession
   const { role, username } = userSession
@@ -946,6 +946,14 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
     setIsLoadingProducts(true)
     // Keep prior product cards visible while fetching — avoids empty flash on category change
     const lang = getCurrentLang()
+    let settled = false
+    const safety = typeof window !== 'undefined'
+      ? window.setTimeout(() => {
+          if (settled) return
+          settled = true
+          setIsLoadingProducts(false)
+        }, 8000)
+      : undefined
     getProductList({
       category_id: queryState.categoryId || undefined,
       brand_category_id: queryState.brandCategoryId || undefined,
@@ -963,15 +971,22 @@ export const useProductCategory = (bootstrap?: StorefrontBootstrap | null): {
       lang,
     })
       .then((res) => {
+        if (settled) return
         setProducts(res.list)
         setTotalCount(res.total)
       })
       .catch((err: any) => {
+        if (settled) return
         setProducts([])
         setTotalCount(0)
         toast.error(err.message)
       })
-      .finally(() => setIsLoadingProducts(false))
+      .finally(() => {
+        if (settled) return
+        settled = true
+        if (safety) window.clearTimeout(safety)
+        setIsLoadingProducts(false)
+      })
   }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
 
   useEffect(() => {

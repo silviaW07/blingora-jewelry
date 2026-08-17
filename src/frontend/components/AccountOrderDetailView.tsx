@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,7 +18,7 @@ import { AccountOrderDetail } from '@/frontend/route-params'
 import { hardNavigate, onHardNavClick, orderPayHref, productHref } from '@/frontend/utils/hardNavigate'
 
 export default function AccountOrderDetailView() {
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
   const { t, i18n } = useTranslation()
   const { orderId } = AccountOrderDetail.getParams(searchParams)
   const [order, setOrder] = useState<CustomerOrderSummary | null>(null)

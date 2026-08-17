@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ArrowLeft, Loader2 } from 'lucide-react'
@@ -13,7 +14,7 @@ import { AccountOrderPay, AccountOrders } from '@/frontend/route-params'
 
 export default function AccountOrderPayView() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const searchParams = useClientSearchParams()
   const { t } = useTranslation()
 
   const { orderId } = useMemo(() => AccountOrderPay.getParams(searchParams), [searchParams])

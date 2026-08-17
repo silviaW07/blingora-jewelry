@@ -54,7 +54,7 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">
-                  <Suspense fallback={<div className="min-h-[40vh] bg-[#FFF5F5]" aria-hidden />}>
+                  <Suspense fallback={<div className="min-h-[40vh] bg-[#FFF5F5] px-4 py-10 text-center text-sm text-[#7a7468]">Loading…</div>}>
                     <PageErrorBoundary onGoBack={handleGoBack}>{children}</PageErrorBoundary>
                   </Suspense>
                 </main>

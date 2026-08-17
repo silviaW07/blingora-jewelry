@@ -86,6 +86,12 @@ export default function AccountProfileView() {
     void load()
   }, [load, session._hasHydrated, session.token])
 
+  useEffect(() => {
+    if (session._hasHydrated) return
+    const timer = window.setTimeout(() => setLoading(false), 1600)
+    return () => window.clearTimeout(timer)
+  }, [session._hasHydrated])
+
   const handleUploadAvatar = async (file: File | null) => {
     if (!file) return
     setUploading(true)
@@ -129,14 +135,14 @@ export default function AccountProfileView() {
 
   return (
     <AccountShell title={t('accountProfile.title')} description={t('accountProfile.description')}>
-      {!String(session.token || '').trim() && session._hasHydrated ? (
+      {!String(session.token || '').trim() && (session._hasHydrated || !loading) ? (
         <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-[#7a756c]">
           <p>{t('accountProfile.loginHint', { defaultValue: 'Sign in to view your account.' })}</p>
           <Button
             type="button"
             className="rounded-full bg-[#111] px-5 text-white"
             onClick={() => {
-              window.location.href = `/customerlogin/?redirect=${encodeURIComponent('/account/profile/')}`
+              window.location.href = `/customerlogin/?returnTo=${encodeURIComponent('/account/profile/')}`
             }}
           >
             {t('auth.login', { defaultValue: 'Log in' })}

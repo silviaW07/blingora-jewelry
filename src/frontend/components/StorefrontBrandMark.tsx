@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
+import { onHardNavClick } from '@/frontend/utils/hardNavigate'
 
 type StorefrontBrandMarkProps = {
   className?: string
@@ -59,11 +59,16 @@ export function StorefrontBrandMark({
     className,
   )
 
-  // Soft-nav home — prefer Link over full reload
   return (
-    <Link href="/" className={markClass} aria-label={ariaLabel} data-controller-name="站点品牌标识" prefetch>
+    <a
+      href="/"
+      onClick={onHardNavClick('/')}
+      className={markClass}
+      aria-label={ariaLabel}
+      data-controller-name="站点品牌标识"
+    >
       {content}
-    </Link>
+    </a>
   )
 }
 

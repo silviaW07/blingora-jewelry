@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
 import { hardNavigate, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { useUserSession } from '@/tools/FrontendSession'
 import {
   AccountAddresses,
@@ -70,6 +71,15 @@ export function AccountShell({
     },
   ]
 
+  const [showDesktopHeader, setShowDesktopHeader] = useState(false)
+
+  useEffect(() => {
+    const apply = () => setShowDesktopHeader(!isNarrowViewport())
+    apply()
+    window.addEventListener('resize', apply)
+    return () => window.removeEventListener('resize', apply)
+  }, [])
+
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       window.history.back()
@@ -83,9 +93,11 @@ export function AccountShell({
       className="mobile-account-page min-h-screen bg-[#FFF5F5]"
       data-controller-name="客户个人中心"
     >
-      <div className="hidden md:block" data-storefront-chrome="desktop">
-        <StorefrontStickyHeader />
-      </div>
+      {showDesktopHeader ? (
+        <div className="hidden md:block" data-storefront-chrome="desktop">
+          <StorefrontStickyHeader />
+        </div>
+      ) : null}
 
       <header
         className="mobile-account-topbar sticky top-0 z-40 border-b border-[#f0dede] bg-[#FFF5F5]/95 backdrop-blur md:hidden"

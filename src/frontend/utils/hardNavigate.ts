@@ -21,9 +21,8 @@ export function onHardNavClick(href: string) {
   }) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     if (typeof event.button === 'number' && event.button !== 0) return
-    const tag = String(event.currentTarget?.tagName || '').toUpperCase()
-    // Native <a href> must keep default navigation on Chrome mobile.
-    if (tag === 'A') return
+    // Next intercepts same-origin <a> for client routing; Chrome mobile often
+    // never finishes that transition (blank Account / dead Categories).
     event.preventDefault?.()
     event.stopPropagation?.()
     hardNavigate(href)

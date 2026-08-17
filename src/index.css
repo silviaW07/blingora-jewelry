@@ -1836,7 +1836,8 @@ html.is-narrow [class~='hidden'][class*='md:grid'] {
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
 }
 
-.mobile-categories-rail__item.is-active {
+.mobile-categories-rail__item.is-active,
+.mobile-categories-rail__item:has(input:checked) {
   background: #fff;
   border-left-color: #333333;
   color: #333333;
