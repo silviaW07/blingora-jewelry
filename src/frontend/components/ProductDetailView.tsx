@@ -434,7 +434,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 <span className="product-sku-price-num">{priceParts.amount}</span>
               </>
             ) : (
-              <GuestPricePlaceholder compact className="product-sku-price-num" />
+              <GuestPricePlaceholder compact className="product-sku-guest-price" />
             )}
           </span>
         </div>
@@ -557,13 +557,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   };
 
   return withStorefrontHeader(
-      <div
-        className={cn(
-          'product-detail-page bg-[#FFF5F5] text-[#111111]',
-          useTwoLevelLayout && 'product-detail-page--two-level',
-        )}
-        data-controller-name="B2B商品详情布局"
-      >
+      <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
       {!isPurchasable ? (
         <div className="border-b border-[#e5e5e5] bg-[#fff7ed] px-4 py-3 text-center text-sm font-medium text-[#9a3412]">
           {t('product.unavailable', { status: t(PRODUCT_STATUS_I18N[product.status]) })}
