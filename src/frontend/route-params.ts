@@ -159,10 +159,15 @@ export const ProductDetail = {
       return result;
     };
   })(),
-  navigateToById: (router: AppRouterInstance, params: { productId: string }) => {
+  navigateToById: (_router: AppRouterInstance, params: { productId: string }) => {
     const productId = (params.productId || '').trim()
     if (!productId) return
-    router.push(buildUrl(ProductDetail.path, { productId }).split('#')[0])
+    const href = `/productdetail/?productId=${encodeURIComponent(productId)}`
+    if (typeof window !== 'undefined') {
+      window.location.assign(href)
+      return
+    }
+    _router.push(href)
   },
   navigateToBySlug: (router: AppRouterInstance, params: { slug: string }) => {
     const slug = (params.slug || '').trim()

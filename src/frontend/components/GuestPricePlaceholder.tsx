@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { useUserSession } from '@/tools/FrontendSession'
 import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { useTranslation } from 'react-i18next'
+import { useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { cn } from '@/lib/utils'
 
 /**
@@ -34,26 +35,25 @@ type GuestPricePlaceholderProps = {
 export function GuestPricePlaceholder({ className, compact = false }: GuestPricePlaceholderProps) {
   const { t } = useTranslation()
   const authModal = useOptionalCustomerAuthModal()
+  const openLogin = useChromeActivate(() => {
+    if (authModal?.openAuthModal) {
+      authModal.openAuthModal('login')
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.location.assign('/customerlogin/')
+    }
+  })
 
   return (
     <button
       type="button"
       className={cn(
-        'guest-price-placeholder text-left font-semibold text-[#f254a6] transition hover:text-[#e44798] hover:underline',
+        'guest-price-placeholder relative z-[2] text-left font-semibold text-[#f254a6] transition hover:text-[#e44798] hover:underline',
         compact ? 'text-xs leading-4 sm:text-sm' : 'text-sm leading-5 sm:text-base',
         className,
       )}
-      onClick={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        if (authModal?.openAuthModal) {
-          authModal.openAuthModal('login')
-          return
-        }
-        if (typeof window !== 'undefined') {
-          window.location.assign('/customerlogin/')
-        }
-      }}
+      {...openLogin}
     >
       {t('product.loginToViewPrice', { defaultValue: 'Login to view price' })}
     </button>

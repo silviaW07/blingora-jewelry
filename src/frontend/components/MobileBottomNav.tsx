@@ -64,6 +64,7 @@ export function MobileBottomNav() {
               <a
                 href={tab.href}
                 onClick={onHardNavClick(tab.href)}
+                onPointerUp={onHardNavClick(tab.href)}
                 className={cn('mobile-bottom-nav__item', active && 'is-active')}
                 aria-current={active ? 'page' : undefined}
               >

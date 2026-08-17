@@ -11,6 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
+import { useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -99,6 +100,8 @@ export const ProductListCard = ({
     })
     onNavigate(item.product_id)
   }
+  const goToDetailEvents = useChromeActivate(goToDetail)
+  const addToCartEvents = useChromeActivate(() => onAddToCart(item))
 
   const prefetchDetail = () => {
     prefetchProductDetail(item.product_id)
@@ -135,13 +138,14 @@ export const ProductListCard = ({
       tabIndex={0}
       aria-label={item.product_name}
       className={cn(
-        'home-product-card group flex h-full cursor-pointer flex-col overflow-hidden transition duration-200',
+        'home-product-card group flex h-full cursor-pointer flex-col overflow-visible transition duration-200',
         'hover:opacity-95',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20',
         className,
       )}
       data-controller-name={controllerName}
-      onClick={goToDetail}
+      onClick={goToDetailEvents.onClick}
+      onPointerUp={goToDetailEvents.onPointerUp}
       onPointerEnter={prefetchDetail}
       onFocus={prefetchDetail}
       onKeyDown={handleCardKeyDown}
@@ -199,6 +203,7 @@ export const ProductListCard = ({
             role="list"
             aria-label={t('common.colorPreview')}
             onClick={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
           >
             {thumbnails.map((url, index) => {
               const isActive = previewImage === url
@@ -235,7 +240,7 @@ export const ProductListCard = ({
         ) : null}
 
         {!isDraft ? (
-          <div className="mt-auto flex items-center justify-end gap-1.5 pt-1">
+          <div className="home-product-card-actions mt-auto flex items-center justify-end gap-1.5 pt-1">
             {onAddToWishlist ? (
               <WishlistHeartButton
                 productId={item.product_id}
@@ -245,8 +250,8 @@ export const ProductListCard = ({
             <button
               type="button"
               aria-label={t('product.addToCart')}
-              className="relative inline-flex size-8 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-              onClick={(event) => stopAnd(event, () => onAddToCart(item))}
+              className="relative z-[2] inline-flex size-8 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
+              {...addToCartEvents}
             >
               <span className="sr-only">{t('product.addToCart')}</span>
               <ShoppingCart className="size-3.5" />

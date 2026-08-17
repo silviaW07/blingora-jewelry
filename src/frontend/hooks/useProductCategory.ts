@@ -1607,7 +1607,8 @@ export const useProductCategory = (
       return
     }
 
-    if (item.sku_count > 1) {
+    const skuId = String(item.first_sku_id || '').trim()
+    if (!skuId || item.sku_count > 1) {
       ProductDetail.navigateToById(router, { productId: item.product_id })
       return
     }

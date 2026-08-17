@@ -21,7 +21,7 @@ import {
   limitRecommendZoneItems,
 } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { categoryHref, onHardNavClick, productHref } from '@/frontend/utils/hardNavigate'
+import { categoryHref, onHardNavClick, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -211,17 +211,26 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
     })
     handlers.handleNavigateRecommendProduct(item.productId)
   }
+  const openProductEvents = useChromeActivate(openProduct)
+  const addToCartEvents = useChromeActivate(() => {
+    if (showOptions && selectedSkuId) {
+      void handlers.handleAddRecommendProductSkuToCart(item, selectedSkuId)
+    } else {
+      void handlers.handleAddRecommendProductToCart(item)
+    }
+  })
 
   return (
     <article
       key={item.itemId}
-      className="home-product-card group flex h-full flex-col overflow-hidden p-0 transition"
+      className="home-product-card group flex h-full flex-col overflow-visible p-0 transition"
       data-controller-name="首页推荐专区商品卡片"
     >
       <button
         type="button"
         className="home-product-card-media relative block w-full shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-        onClick={openProduct}
+        onClick={openProductEvents.onClick}
+        onPointerUp={openProductEvents.onPointerUp}
         onPointerEnter={() => prefetchProductDetail(item.productId)}
       >
         <EditableImg
@@ -242,7 +251,8 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         <button
           type="button"
           className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
-          onClick={openProduct}
+          onClick={openProductEvents.onClick}
+        onPointerUp={openProductEvents.onPointerUp}
           onPointerEnter={() => prefetchProductDetail(item.productId)}
           data-api-bind-info={`productItems-${index}-productName`}
           data-api-map-var-name="item"
@@ -314,14 +324,8 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
           ) : (
             <Button
               type="button"
-              className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
-              onClick={() => {
-                if (showOptions && selectedSkuId) {
-                  void handlers.handleAddRecommendProductSkuToCart(item, selectedSkuId)
-                } else {
-                  void handlers.handleAddRecommendProductToCart(item)
-                }
-              }}
+              className="relative z-[3] rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
+              {...addToCartEvents}
             >
               <ShoppingCart className="mr-2 size-4" />
               <DecorateText propKey="home_add_to_cart_label" as="span">

@@ -1127,6 +1127,7 @@
   box-shadow: 0 1px 3px rgba(17, 17, 17, 0.06) !important;
   background: #ffffff !important;
   height: 100%;
+  overflow: visible !important;
 }
 
 /* 主图固定 1:1：裁剪铺满，覆盖 EditableImg 默认 inline aspect-ratio:16/9 */
@@ -1370,6 +1371,14 @@ html.is-narrow .home-product-card {
   min-width: 0 !important;
   max-width: 100% !important;
   width: 100% !important;
+  overflow: visible !important;
+}
+
+html.is-narrow .home-product-card-actions,
+html.is-narrow .guest-price-placeholder {
+  position: relative;
+  z-index: 3;
+  pointer-events: auto !important;
 }
 
 /* Chrome blows up aspect-ratio + 1200px images and zooms the whole page out. */
