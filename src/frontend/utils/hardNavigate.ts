@@ -4,6 +4,12 @@ import { useCallback, useRef } from 'react'
 
 export const CUSTOMER_LOGIN_HREF = '/customerlogin/'
 
+export function customerLoginHref(returnTo?: string) {
+  const next = String(returnTo || '').trim()
+  if (!next) return CUSTOMER_LOGIN_HREF
+  return `/customerlogin/?returnTo=${encodeURIComponent(next)}`
+}
+
 /** Put on storefront <a> tags. A capture listener in app/layout.tsx full-page jumps. */
 export const HARD_NAV_ATTR = 'data-hard-nav'
 

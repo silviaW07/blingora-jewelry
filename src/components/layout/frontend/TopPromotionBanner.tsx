@@ -120,7 +120,7 @@ export default function TopPromotionBanner() {
     <>
       {/* Mobile: slim strip (~32px); text truly centered, countdown absolute so it doesn't shift copy */}
       <div
-        className="top-promo-mobile sticky top-0 z-50 w-full md:hidden"
+        className="top-promo-mobile sticky top-0 z-50 w-full lg:hidden"
         data-controller-name="站点顶部促销横幅"
         style={{
           backgroundColor: softMobileBg(backgroundColor),
@@ -147,7 +147,7 @@ export default function TopPromotionBanner() {
 
       {/* Desktop: original presentation */}
       <div
-        className="sticky top-0 z-50 hidden w-full md:block"
+        className="sticky top-0 z-50 hidden w-full lg:block"
         data-controller-name="站点顶部促销横幅"
         style={{ backgroundColor, color: textColor }}
       >

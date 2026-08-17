@@ -148,7 +148,7 @@ export default function WishlistView() {
 
   return (
     <>
-      <div className="hidden md:block" data-storefront-chrome="desktop">
+      <div className="hidden lg:block" data-storefront-chrome="desktop">
         <StorefrontStickyHeader />
         <main className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6">
           <div className="mb-6 flex items-end justify-between gap-3">
@@ -168,7 +168,7 @@ export default function WishlistView() {
         </main>
       </div>
 
-      <div className="md:hidden" data-storefront-chrome="mobile">
+      <div className="lg:hidden" data-storefront-chrome="mobile">
         <AccountShell title={t('nav.wishlist')} description={t('wishlist.description')}>
           {body}
         </AccountShell>

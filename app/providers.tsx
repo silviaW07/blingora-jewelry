@@ -13,14 +13,14 @@ export function Providers({
     window.alert = toast.info;
   }, []);
 
-  // Re-apply after hydration: React resets <html className> and drops is-narrow.
-  // Homepage used to re-set it; other routes did not, so Chrome ~980px hid mobile pages.
+  // Re-apply after hydration: React resets <html className>.
+  // is-narrow follows max-width: 1023px (same viewport for every browser).
   useLayoutEffect(() => {
     const apply = () => {
       syncNarrowHtmlClass()
     }
     apply()
-    const mql = window.matchMedia('(max-width: 767px)')
+    const mql = window.matchMedia('(max-width: 1023px)')
     mql.addEventListener('change', apply)
     window.addEventListener('resize', apply)
     window.visualViewport?.addEventListener('resize', apply)

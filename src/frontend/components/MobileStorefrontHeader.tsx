@@ -25,7 +25,6 @@ import {
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
 import { hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
-import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = () => (
@@ -273,25 +272,14 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
 
 /** Mobile unified header + desktop sticky (not for cart/account) */
 export function StorefrontResponsiveHeader({ isHome }: { isHome?: boolean }) {
-  const [showDesktop, setShowDesktop] = useState(false)
-
-  useEffect(() => {
-    const apply = () => setShowDesktop(!isNarrowViewport())
-    apply()
-    window.addEventListener('resize', apply)
-    return () => window.removeEventListener('resize', apply)
-  }, [])
-
   return (
     <>
-      <div className="md:hidden" data-storefront-chrome="mobile">
+      <div className="lg:hidden" data-storefront-chrome="mobile">
         <MobileStorefrontHeader />
       </div>
-      {showDesktop ? (
-        <div className="hidden md:block" data-storefront-chrome="desktop">
-          <StorefrontStickyHeader isHome={isHome} />
-        </div>
-      ) : null}
+      <div className="hidden lg:block" data-storefront-chrome="desktop">
+        <StorefrontStickyHeader isHome={isHome} />
+      </div>
     </>
   )
 }

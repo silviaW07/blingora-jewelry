@@ -1,21 +1,13 @@
-/** Chrome on phones often uses a ~980px CSS viewport; screen.width may also lie. */
+const NARROW_MQ = '(max-width: 1023px)'
 
-function isMobileUserAgent(win: Window): boolean {
-  const ua = String(win.navigator?.userAgent || '')
-  if (/Android|webOS|iPhone|iPod|Mobile|IEMobile|Opera Mini/i.test(ua)) return true
-  // iPadOS 13+ reports as Macintosh + touch
-  if (/iPad/i.test(ua)) return true
-  if ((win.navigator.maxTouchPoints || 0) > 1 && /Macintosh/i.test(ua)) return true
-  return false
-}
-
+/**
+ * Shared layout breakpoint for every browser.
+ * 1023px covers phones that still report ~980 CSS pixels after viewport lock.
+ * Do not sniff UA.
+ */
 export function isNarrowViewport(win: Window = window): boolean {
-  if (isMobileUserAgent(win)) return true
-  const screenW = win.screen?.width || 9999
-  const inner = win.innerWidth || 9999
-  const visual = win.visualViewport?.width || 9999
-  const mq = win.matchMedia('(max-width: 767px)').matches
-  return mq || Math.min(screenW, inner, visual) < 768
+  if (win.matchMedia?.(NARROW_MQ).matches) return true
+  return (win.innerWidth || 9999) < 1024
 }
 
 export function syncNarrowHtmlClass(win: Window = window): boolean {
@@ -28,6 +20,13 @@ export function syncNarrowHtmlClass(win: Window = window): boolean {
     if (win.document.body) {
       win.document.body.style.overflowX = 'hidden'
       win.document.body.style.maxWidth = '100%'
+    }
+  } else {
+    root.style.removeProperty('overflow-x')
+    root.style.removeProperty('max-width')
+    if (win.document.body) {
+      win.document.body.style.removeProperty('overflow-x')
+      win.document.body.style.removeProperty('max-width')
     }
   }
   return narrow

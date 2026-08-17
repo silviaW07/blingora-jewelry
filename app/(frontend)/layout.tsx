@@ -59,7 +59,7 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
                   </Suspense>
                 </main>
                 {showFooter ? (
-                  <div className={isStorefrontHome ? undefined : 'storefront-footer-desktop-only hidden md:block'}>
+                  <div className={isStorefrontHome ? undefined : 'storefront-footer-desktop-only hidden lg:block'}>
                     <Footer />
                   </div>
                 ) : null}

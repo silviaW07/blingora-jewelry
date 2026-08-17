@@ -15,6 +15,19 @@ import {
  */
 export const PRODUCT_SPEC_COLOR_STYLE_KEYWORDS: readonly string[] = PRODUCT_KEYWORD_ORDER
 
+const SIZE_FIELD_KEYS = new Set(
+  [
+    '尺码',
+    '鞋码',
+    '尺寸',
+    '码数',
+    '规格',
+    'size',
+    'sizing',
+    'spec',
+  ].map((k) => normalizeSpecFieldKey(k)),
+)
+
 const COLOR_STYLE_FIELD_KEYS = new Set(
   [
     '颜色',
@@ -133,9 +146,13 @@ export function translateColorStyleText(text: string | null | undefined, t: TFun
   return joinTranslatedPieces(pieces)
 }
 
+export function isSizeSpecField(label: string | null | undefined): boolean {
+  const normalized = normalizeSpecFieldKey(label)
+  return Boolean(normalized) && SIZE_FIELD_KEYS.has(normalized)
+}
+
 /**
- * Translate a Description / 规格参数 cell value when the field is color/style/material.
- * Size and other whitelist fields pass through unchanged.
+ * Translate a Description / 规格参数 cell value for color/style/material/size fields.
  */
 export function translateProductSpecValue(
   label: string | null | undefined,
@@ -144,7 +161,7 @@ export function translateProductSpecValue(
 ): string {
   const raw = String(value || '').trim()
   if (!raw) return ''
-  if (!isColorOrStyleSpecField(label)) return raw
+  if (!isColorOrStyleSpecField(label) && !isSizeSpecField(label)) return raw
   return translateColorStyleText(raw, t)
 }
 
@@ -154,10 +171,13 @@ const SPEC_FIELD_LABEL_KEYS: Record<string, string> = {
   color: 'common.color',
   colour: 'common.color',
   尺码: 'common.size',
+  鞋码: 'common.size',
   尺寸: 'common.size',
+  码数: 'common.size',
   规格: 'productSpec.fields.spec',
   size: 'common.size',
   sizing: 'common.size',
+  spec: 'productSpec.fields.spec',
   材质: 'productSpec.fields.material',
   材料: 'productSpec.fields.material',
   面料: 'productSpec.fields.fabric',

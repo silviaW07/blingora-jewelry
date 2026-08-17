@@ -94,13 +94,13 @@ export function AccountShell({
       data-controller-name="客户个人中心"
     >
       {showDesktopHeader ? (
-        <div className="hidden md:block" data-storefront-chrome="desktop">
+        <div className="hidden lg:block" data-storefront-chrome="desktop">
           <StorefrontStickyHeader />
         </div>
       ) : null}
 
       <header
-        className="mobile-account-topbar sticky top-0 z-40 border-b border-[#f0dede] bg-[#FFF5F5]/95 backdrop-blur md:hidden"
+        className="mobile-account-topbar sticky top-0 z-40 border-b border-[#f0dede] bg-[#FFF5F5]/95 backdrop-blur lg:hidden"
         data-storefront-chrome="mobile"
         data-controller-name="移动端个人中心顶栏"
       >
@@ -139,7 +139,7 @@ export function AccountShell({
       </header>
 
       <div className="account-shell-wrap px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-8">
-        <div className="mb-6 hidden md:block">
+        <div className="mb-6 hidden lg:block">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8a8073]">
             {t('accountShell.sectionLabel')}
           </p>
@@ -147,7 +147,7 @@ export function AccountShell({
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f6558]">{description}</p>
         </div>
 
-        <div className="mb-1.5 md:hidden">
+        <div className="mb-1.5 lg:hidden">
           <h1 className="text-[0.9375rem] font-semibold tracking-tight text-[#1f1a14] sm:text-base">
             {title}
           </h1>

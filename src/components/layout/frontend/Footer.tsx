@@ -227,7 +227,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className={`grid grid-cols-1 sm:grid-cols-3 gap-6 py-8 my-8 border-y ${BORDER}`}>
+        <div className={`site-footer__features grid grid-cols-1 gap-6 py-8 my-8 border-y ${BORDER}`}>
           <div className="flex items-center gap-3">
             <div className="size-10 rounded flex items-center justify-center shrink-0 border border-transparent bg-primary/15 text-primary">
               <ShieldCheck className="size-5" />

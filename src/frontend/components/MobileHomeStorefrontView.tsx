@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Mobile-only home stream (md:hidden). Desktop keeps HomeStorefrontView layout.
+ * Mobile-only home stream. Desktop keeps HomeStorefrontView layout.
  * Order: chrome → search → L1 chips → banner → services → recommend zones
  */
 import React, { useMemo, useRef } from 'react'

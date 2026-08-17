@@ -409,7 +409,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
       setViewport(narrow ? 'mobile' : 'desktop')
     }
     apply()
-    const mql = window.matchMedia('(max-width: 767px)')
+    const mql = window.matchMedia('(max-width: 1023px)')
     mql.addEventListener('change', apply)
     window.addEventListener('resize', apply)
     window.visualViewport?.addEventListener('resize', apply)

@@ -3,7 +3,7 @@
 /**
  * Home service benefit cards (Shipping / Payment / Buyer show / Why choose us).
  * Shared by desktop + mobile storefront — static display, no navigation links.
- * Layout/sizing fully split in CSS: desktop `@media (min-width: 768px)`, mobile `max-width: 767px`.
+ * Layout/sizing fully split in CSS: desktop `@media (min-width: 1024px)`, mobile `max-width: 1023px`.
  * Single DOM tree so decorate propKeys (title/desc/icon/card) stay unique.
  */
 import React from 'react'

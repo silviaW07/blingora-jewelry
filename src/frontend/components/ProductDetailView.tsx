@@ -26,6 +26,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder';
 import { useChromeActivate } from '@/frontend/utils/hardNavigate';
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport';
 import { useTranslation } from 'react-i18next';
 import { translateColorName, translateAttributeValue } from '@/frontend/i18n/catalogLabels';
 import {
@@ -217,8 +218,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
     return colorAttributeGroup.values
       .map((value) => {
-        const skusForColor = product.skus.filter((sku) =>
-          sku.attributeJson?.some((attr) => attr.name === colorAttributeGroup.name && attr.value === value),
+        const skusForColor = product.skus.filter(
+          (sku) => getSkuAttributeValue(sku, colorAttributeGroup.name) === value,
         )
         // 优先取该颜色下带独立缩略图的 SKU，避免回落到无图 SKU 再误用主图
         const representativeSku =
@@ -246,20 +247,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     img.src = proxied;
   }, []);
 
-  const [showDesktopThumbs, setShowDesktopThumbs] = useState(false)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const apply = () => setShowDesktopThumbs(mq.matches)
-    apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
-  }, [])
-
-  // 空闲时预热少量颜色大图；手机只预热 2 张，避免和主图抢带宽
   useEffect(() => {
     if (typeof window === 'undefined' || colorSwatches.length === 0) return
-    const isNarrow = window.matchMedia('(max-width: 1023px)').matches
+    const isNarrow = isNarrowViewport()
     const urls = colorSwatches.slice(0, isNarrow ? 2 : 6).map((s) => s.imageUrl).filter(Boolean)
     if (urls.length === 0) return
     const run = () => urls.forEach((u) => preheatMainImage(u))
@@ -292,7 +282,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     )
   }
 
-  /** Unique size/spec rows: resolve SKU by selected color when available. */
+  /** One row per size/spec. Color is chosen in the swatch grid, not duplicated here. */
   const specListRows = useMemo(() => {
     if (!product) return [] as Array<{ key: string; label: string; sku: ProductSkuData }>
 
@@ -302,7 +292,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const isPlaceholderSpec = (value?: string | null) =>
       /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
 
-    // 仅颜色商品：未选色不列 Options；选中后只展示当前颜色一行（切换色块即换价）
+    // Color-only: wait for a swatch, then a single row for that color.
     if (colorName && !sizeName) {
       if (!manualColorValue) return []
       const matched =
@@ -318,16 +308,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       ]
     }
 
-    const labelCounts = new Map<string, number>()
-    const byKey = new Map<
-      string,
-      {
-        orderLabel: string
-        displayLabel: string
-        sku: ProductSkuData
-      }
-    >()
-
     const computeLabelForSku = (sku: ProductSkuData): string => {
       const fromSize = sizeName ? getSkuAttributeValue(sku, sizeName) : ''
       if (fromSize && !isPlaceholderSpec(fromSize)) return fromSize
@@ -340,48 +320,30 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       return isPlaceholderSpec(label) ? defaultLabel : label
     }
 
-    for (const sku of product.skus) {
-      if (manualColorValue && colorName) {
-        const colorVal = getSkuAttributeValue(sku, colorName)
-        if (colorVal !== manualColorValue) continue
+    const byKey = new Map<
+      string,
+      {
+        orderLabel: string
+        displayLabel: string
+        sku: ProductSkuData
       }
-      const label = computeLabelForSku(sku)
-      if (!label) continue
-      labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
-    }
-
-    // When no color selected but color+size exist, still list every unique size across the product
-    if (!manualColorValue && colorName && sizeName) {
-      byKey.clear()
-      labelCounts.clear()
-      for (const sku of product.skus) {
-        const label = getSkuAttributeValue(sku, sizeName)
-        if (!label || isPlaceholderSpec(label)) continue
-        labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
-      }
-    }
+    >()
 
     for (const sku of product.skus) {
       if (manualColorValue && colorName) {
-        const colorVal = getSkuAttributeValue(sku, colorName)
-        if (colorVal !== manualColorValue) continue
+        if (getSkuAttributeValue(sku, colorName) !== manualColorValue) continue
       }
 
       const orderLabel =
-        !manualColorValue && colorName && sizeName
-          ? getSkuAttributeValue(sku, sizeName) || ''
+        sizeName && (!manualColorValue || colorName)
+          ? getSkuAttributeValue(sku, sizeName) || computeLabelForSku(sku)
           : computeLabelForSku(sku)
 
-      if (!orderLabel || (sizeName && isPlaceholderSpec(orderLabel) && !manualColorValue)) continue
+      if (!orderLabel || isPlaceholderSpec(orderLabel)) continue
 
-      const isDuplicateLabel = (labelCounts.get(orderLabel) || 0) > 1
-      const dedupeKey = isDuplicateLabel ? `${orderLabel}__${sku.id}` : orderLabel
-      const displayLabel = isDuplicateLabel ? `${orderLabel} (${formatUsd(sku.price)})` : orderLabel
-
-      // If label is unique, keep the first representative SKU for that label.
-      // If duplicated, dedupeKey includes sku.id => each real SKU remains visible.
-      if (!byKey.has(dedupeKey)) {
-        byKey.set(dedupeKey, { orderLabel, displayLabel, sku })
+      const key = orderLabel.trim()
+      if (!byKey.has(key)) {
+        byKey.set(key, { orderLabel: key, displayLabel: key, sku })
       }
     }
 
@@ -554,9 +516,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           {/* ===== 主图区 ===== */}
           <section className="product-detail-gallery" data-controller-name="详情主图区">
             <div className="rounded-[4px] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-4">
-              <div className="flex gap-3">
-                {showDesktopThumbs ? (
-                <div className="hidden w-[4.5rem] shrink-0 flex-col gap-2 lg:flex">
+              <div className="product-detail-gallery-stage">
+                <div className="product-detail-thumbs-desktop">
                   {gallery.slice(0, 6).map((item, index) => (
                     <button
                       key={`${item.url}-${index}`}
@@ -577,21 +538,20 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </button>
                   ))}
                 </div>
-                ) : null}
 
-                <div className="relative min-w-0 flex-1">
-                  <div className="relative aspect-square w-full overflow-hidden rounded-[2px] bg-[#f3f3f3]">
+                <div className="product-detail-main-image">
+                  <div className="relative w-full overflow-hidden rounded-[2px] bg-[#f3f3f3]">
                     <OptimizedProductImage
+                      fill={false}
                       src={activeImage || product.mainImageUrl}
                       alt={product.name}
-                      className="size-full"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      className="aspect-square h-auto w-full object-cover"
                       imageWidth={1600}
                       priority
                     />
                     <button
                       type="button"
-                      className="absolute left-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
+                      className="absolute left-2 top-1/2 z-[1] flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
                       onClick={() => shiftGallery(-1)}
                       aria-label={t('product.prevImage')}
                     >
@@ -599,7 +559,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </button>
                     <button
                       type="button"
-                      className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
+                      className="absolute right-2 top-1/2 z-[1] flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
                       onClick={() => shiftGallery(1)}
                       aria-label={t('product.nextImage')}
                     >
@@ -607,7 +567,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </button>
                   </div>
 
-                  <div className="mt-2 grid grid-cols-4 gap-1.5 lg:hidden">
+                  <div className="product-detail-thumbs-mobile">
                     {gallery.slice(0, 8).map((item, index) => (
                       <button
                         key={`m-${item.url}-${index}`}
@@ -714,12 +674,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                 <span className="product-color-swatch-frame">
                                   {previewUrl ? (
                                     <OptimizedProductImage
+                                      fill={false}
                                       src={previewUrl}
                                       alt={colorLabel}
-                                      className="pointer-events-none"
-                                      sizes="88px"
+                                      className="pointer-events-none aspect-square h-auto w-full object-cover"
                                       imageWidth={200}
-                                      priority={swatchIndex < 2}
+                                      priority={swatchIndex < 4}
                                     />
                                   ) : null}
                                 </span>
