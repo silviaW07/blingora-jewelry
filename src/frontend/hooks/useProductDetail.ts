@@ -306,24 +306,7 @@ export const useProductDetail = (seed?: {
     document.body.scrollTop = 0
   }, [loading, productId, slug])
 
-  useEffect(() => {
-    if (!product) return
-
-    setSelectedSku(null)
-    setSelectedAttributes({})
-    setManualColorValue(null)
-    setManualSizeSkuId(null)
-    setQuantity(1)
-    setSelectionHighlight({ color: false, size: false })
-
-    const qtyMap: Record<string, number> = {}
-    product.skus.forEach((sku) => {
-      qtyMap[sku.id] = 0
-    })
-    skuQuantitiesRef.current = qtyMap
-    setSkuQuantities(qtyMap)
-    setActiveImage(product.mainImageUrl)
-  }, [product])
+  const productIdKey = product?.id || ''
 
   const availableAttributes = useMemo(() => {
     if (!product) return []
@@ -373,6 +356,37 @@ export const useProductDetail = (seed?: {
   }, [availableAttributes])
 
   const requiresColorAndSize = Boolean(colorAttribute && sizeAttribute)
+
+  useEffect(() => {
+    if (!product) return
+
+    setSelectedSku(null)
+    setSelectedAttributes({})
+    setManualSizeSkuId(null)
+    setQuantity(1)
+    setSelectionHighlight({ color: false, size: false })
+
+    const qtyMap: Record<string, number> = {}
+    product.skus.forEach((sku) => {
+      qtyMap[sku.id] = 0
+    })
+    skuQuantitiesRef.current = qtyMap
+    setSkuQuantities(qtyMap)
+    setActiveImage(product.mainImageUrl)
+
+    const first = colorAttribute?.values.find((value) => String(value || '').trim()) || null
+    setManualColorValue(first)
+    if (first && colorAttribute) {
+      setSelectedAttributes({ [colorAttribute.name]: first })
+      const matchedSkus = product.skus.filter((sku) =>
+        sku.attributeJson?.some((attr) => attr.name === colorAttribute.name && attr.value === first),
+      )
+      const primary = matchedSkus.find((sku) => Boolean(sku.imageUrl)) || matchedSkus[0] || null
+      if (primary?.imageUrl) setActiveImage(primary.imageUrl)
+    }
+    // colorAttribute is derived from this product; productIdKey is the reset key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productIdKey])
 
   const sortedGallery = useMemo(() => {
     if (!product) return []
@@ -521,7 +535,7 @@ export const useProductDetail = (seed?: {
   )
 
   const handleColorSelect = (value: string, imageUrl?: string | null) => {
-    if (product?.status !== 'ACTIVE' || !colorAttribute) return
+    if (!product || !colorAttribute) return
 
     setManualColorValue(value)
     setManualSizeSkuId(null)
@@ -560,15 +574,6 @@ export const useProductDetail = (seed?: {
 
     setQuantity(0)
   }
-
-  useEffect(() => {
-    if (!product || product.status !== 'ACTIVE' || !colorAttribute) return
-    const first = colorAttribute.values.find((value) => String(value || '').trim())
-    if (!first) return
-    handleColorSelect(first)
-    // Default the first color so quantity +/- works on the first tap.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product, colorAttribute])
 
   const handleSizeSelect = (sku: ProductSkuData) => {
     if (product?.status !== 'ACTIVE') return

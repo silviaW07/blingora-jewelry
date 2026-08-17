@@ -118,7 +118,10 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
   }
 
   return (
-    <section className="guest-auth-screen min-h-[100dvh] bg-[#FFF5F5] px-4 py-6 pb-[calc(var(--mobile-nav-height,3.75rem)+1.5rem)]">
+    <section
+      className="guest-auth-screen min-h-[100dvh] bg-[#FFF5F5] px-4 py-6 pb-[calc(var(--mobile-nav-height,3.75rem)+1.5rem)]"
+      data-controller-name="客户登录入口"
+    >
       <div className="mx-auto w-full max-w-[560px] overflow-hidden rounded-[24px] border border-[#E2E8F0] bg-white">
         <div className="space-y-3 border-b border-[#E2E8F0] px-5 pb-5 pt-6 text-left sm:px-6">
           <h2 className="pr-4 text-2xl font-bold tracking-tight text-[#0F172A]">

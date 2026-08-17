@@ -11,6 +11,8 @@ import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
 import { hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { useUserSession } from '@/tools/FrontendSession'
+import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen'
+import { isStorefrontGuestSession } from '@/frontend/components/GuestPricePlaceholder'
 import {
   AccountAddresses,
   AccountOrders,
@@ -79,6 +81,12 @@ export function AccountShell({
     window.addEventListener('resize', apply)
     return () => window.removeEventListener('resize', apply)
   }, [])
+
+  const path = String(pathname || '').toLowerCase()
+  const isAccountRoute = path.includes('/account')
+  if (isAccountRoute && isStorefrontGuestSession(session)) {
+    return <GuestAuthScreen initialTab="register" />
+  }
 
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {

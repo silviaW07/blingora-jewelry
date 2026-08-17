@@ -7,6 +7,8 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AccountShell } from '@/frontend/components/AccountShell'
+import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen'
+import { isStorefrontGuestSession } from '@/frontend/components/GuestPricePlaceholder'
 import { useUserSession } from '@/tools/FrontendSession'
 import { upload_project_file } from '@/tools/tools'
 import {
@@ -133,22 +135,13 @@ export default function AccountProfileView() {
   const fieldInputClass =
     'mobile-account-field__input h-9 min-w-0 w-full max-w-none border-[#e8e2d8] bg-white text-[0.8125rem] whitespace-nowrap shadow-none focus-visible:ring-[#d8d0c4] md:h-10 md:text-[0.875rem]'
 
+  if (isStorefrontGuestSession(session)) {
+    return <GuestAuthScreen initialTab="register" />
+  }
+
   return (
     <AccountShell title={t('accountProfile.title')} description={t('accountProfile.description')}>
-      {!String(session.token || '').trim() && (session._hasHydrated || !loading) ? (
-        <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-[#7a756c]">
-          <p>{t('accountProfile.loginHint', { defaultValue: 'Sign in to view your account.' })}</p>
-          <Button
-            type="button"
-            className="rounded-full bg-[#111] px-5 text-white"
-            onClick={() => {
-              window.location.href = `/customerlogin/?returnTo=${encodeURIComponent('/account/profile/')}`
-            }}
-          >
-            {t('auth.login', { defaultValue: 'Log in' })}
-          </Button>
-        </div>
-      ) : loading || !profile ? (
+      {loading || !profile ? (
         <div className="flex min-h-[120px] items-center justify-center gap-2 text-sm text-[#7a756c] md:min-h-[240px]">
           <Loader2 className="size-4 animate-spin" />
           {t('accountProfile.loading')}

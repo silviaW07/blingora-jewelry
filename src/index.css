@@ -750,18 +750,53 @@
   border-color: #c4c4c4;
 }
 
-/* Selected: thin pink glow. No rotating conic — Chrome Android clips/zeros that overlay. */
+@keyframes product-color-swatch-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* Selected: pink flowing ring (same on Chrome / Safari / others).
+ * Frame keeps a fixed 88px box; the spinning layer is centered, not inset:-50%
+ * (that overlay used to collapse the thumb on Chrome Android). */
 .product-color-swatch.is-selected .product-color-swatch-frame {
   border: 2px solid #f254a6;
-  box-shadow: 0 0 0 1px rgba(242, 84, 166, 0.35), 0 0 8px rgba(242, 84, 166, 0.4);
-  padding: 0;
+  box-shadow: 0 0 0 1px rgba(242, 84, 166, 0.4), 0 0 10px rgba(242, 84, 166, 0.45);
   overflow: hidden;
+  isolation: isolate;
   background: #fff;
 }
 
 .product-color-swatch.is-selected .product-color-swatch-frame::before {
-  content: none;
-  display: none;
+  content: '';
+  display: block;
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 220%;
+  height: 220%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    #f254a6 0deg,
+    #ffd6ea 90deg,
+    #f254a6 180deg,
+    #c81e6a 270deg,
+    #f254a6 360deg
+  );
+  animation: product-color-swatch-spin 1.4s linear infinite;
+  pointer-events: none;
+}
+
+.product-color-swatch.is-selected .product-color-swatch-frame > *,
+.product-color-swatch.is-selected .product-color-swatch-frame img {
+  z-index: 1 !important;
+  inset: 3px !important;
+  border-radius: 2px;
 }
 
 .product-color-swatch.is-disabled {
@@ -1114,6 +1149,98 @@
 
 .storefront-home-back-link:hover {
   color: #6b7280;
+}
+
+.listing-page-head {
+  min-width: 0;
+  width: 100%;
+}
+
+.listing-page-head__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.listing-page-head__back {
+  align-self: center;
+  margin-top: 0;
+  padding: 0.1rem 0.05rem;
+  font-size: 0.75rem;
+}
+
+.listing-page-head__title {
+  margin: 0;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  color: #111111;
+}
+
+.listing-page-head__count {
+  color: #9a948a;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.listing-page-head__note {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: #8b8477;
+}
+
+.listing-toolbar__price-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.listing-toolbar__price-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  min-height: 0;
+}
+
+.listing-toolbar__price-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #6f6a62;
+  white-space: nowrap;
+}
+
+.listing-toolbar__price-values {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  color: #6f6a62;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  html:not(.is-narrow) .listing-page-head__title {
+    font-size: 1.75rem;
+    letter-spacing: 0.06em;
+  }
+
+  html:not(.is-narrow) .listing-page-head__count {
+    font-size: 0.875rem;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -1748,7 +1875,8 @@ html.is-narrow [data-controller-name='商品列表筛选排序工具栏'] {
   justify-content: flex-start !important;
   width: 100% !important;
   max-width: 100% !important;
-  gap: 0.4rem !important;
+  gap: 0.25rem !important;
+  margin-top: 0.1rem !important;
 }
 
 html.is-narrow .listing-toolbar__price,
@@ -1761,6 +1889,26 @@ html.is-narrow .listing-toolbar__brands {
 
 html.is-narrow .listing-toolbar__price {
   overflow: visible !important;
+}
+
+html.is-narrow .listing-toolbar__price-cluster {
+  gap: 0.08rem !important;
+  overflow: visible !important;
+}
+
+html.is-narrow .listing-toolbar__price-meta {
+  margin: 0 !important;
+  min-height: 0 !important;
+}
+
+html.is-narrow .listing-toolbar__price-label {
+  font-size: 0.625rem !important;
+  font-weight: 500;
+  color: #8b8477 !important;
+}
+
+html.is-narrow .listing-toolbar__price-values {
+  font-size: 0.6875rem !important;
 }
 
 html.is-narrow .listing-price-slider,
@@ -1829,14 +1977,6 @@ html.is-narrow .home-product-card img {
   max-width: 100% !important;
 }
 
-html.is-narrow [data-controller-name='分类页整体布局'] h2,
-html.is-narrow [data-controller-name='分类商品展示区'] h2,
-html.is-narrow .category-listing-title {
-  font-size: 1.125rem !important;
-  letter-spacing: 0.02em !important;
-  line-height: 1.3 !important;
-}
-
 html.is-narrow [data-controller-name='商品结果内容区'],
 html.is-narrow [data-controller-name='分类商品展示区'],
 html.is-narrow [data-controller-name='商品结果区'] {
@@ -1874,8 +2014,31 @@ html.is-narrow .category-listing-head {
   flex-direction: column !important;
   align-items: stretch !important;
   width: 100% !important;
-  gap: 0.4rem !important;
-  padding-bottom: 0.6rem !important;
+  gap: 0.2rem !important;
+  padding-bottom: 0.35rem !important;
+  margin: 0 !important;
+}
+
+html.is-narrow .listing-page-head__row {
+  gap: 0.15rem 0.4rem !important;
+}
+
+html.is-narrow .listing-page-head__title,
+html.is-narrow [data-controller-name='分类页整体布局'] h2,
+html.is-narrow [data-controller-name='分类商品展示区'] h2,
+html.is-narrow .category-listing-title {
+  font-size: 1rem !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.25 !important;
+}
+
+html.is-narrow .listing-page-head__note {
+  display: none !important;
+}
+
+html.is-narrow .listing-results-section {
+  padding-top: 0.15rem !important;
+  padding-bottom: 0.25rem !important;
 }
 
 html.is-narrow .storefront-home-back-link {
@@ -1883,7 +2046,7 @@ html.is-narrow .storefront-home-back-link {
 }
 
 html.is-narrow .storefront-product-grid {
-  margin-top: 0.75rem !important;
+  margin-top: 0.5rem !important;
 }
 
 html.is-narrow .mobile-sf-header,
@@ -2127,6 +2290,21 @@ html.is-narrow .product-detail-page .product-detail-buy-actions button {
   min-height: 2.75rem;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.guest-auth-screen {
+  display: block;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  min-height: 70vh;
+  box-sizing: border-box;
+}
+
+html.is-narrow .guest-auth-screen {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 html.is-narrow [data-controller-name='客户登录入口'] {

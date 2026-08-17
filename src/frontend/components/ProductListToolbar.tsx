@@ -115,12 +115,12 @@ export function ProductListToolbar({
 
   return (
     <div
-      className={cn('listing-toolbar flex flex-wrap items-end justify-end gap-x-4 gap-y-3', className)}
+      className={cn('listing-toolbar flex flex-wrap items-end justify-end gap-x-4 gap-y-2', className)}
       data-controller-name="商品列表筛选排序工具栏"
     >
       {showBrandFilter ? (
         <div className="listing-toolbar__brands min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-[min(100%,420px)]">
-          <div className="mb-1.5 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
+          <div className="mb-1 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
           <BrandQuickFilter
             brands={brandOptions}
             selectedBrandId={selectedBrandId}
@@ -134,24 +134,26 @@ export function ProductListToolbar({
       ) : null}
 
       <div className="listing-toolbar__price w-full min-w-0 sm:w-[200px] sm:shrink-0">
-        <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-[#6f6a62]">
-          <span className="font-medium text-[#3f3a34]">{t('product.priceRange')}</span>
+        <div className="listing-toolbar__price-cluster">
+          <div className="listing-toolbar__price-meta">
+            <span className="listing-toolbar__price-label">{t('product.priceRange')}</span>
+            <p className="listing-toolbar__price-values">
+              {formatUsd(range[0])} – {formatUsd(range[1])}
+            </p>
+          </div>
+          <Slider
+            min={PRICE_SLIDER_MIN}
+            max={boundMax}
+            step={1}
+            value={range}
+            onValueChange={(value) => {
+              if (!Array.isArray(value) || value.length < 2) return
+              commitRange([value[0], value[1]])
+            }}
+            className="listing-price-slider w-full overflow-visible [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
+            aria-label={t('product.priceRange')}
+          />
         </div>
-        <Slider
-          min={PRICE_SLIDER_MIN}
-          max={boundMax}
-          step={1}
-          value={range}
-          onValueChange={(value) => {
-            if (!Array.isArray(value) || value.length < 2) return
-            commitRange([value[0], value[1]])
-          }}
-          className="listing-price-slider w-full overflow-visible [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
-          aria-label={t('product.priceRange')}
-        />
-        <p className="mt-1.5 text-[11px] text-[#6f6a62] tabular-nums">
-          {formatUsd(range[0])} – {formatUsd(range[1])}
-        </p>
       </div>
 
       <div className="listing-toolbar__sort flex w-full min-w-0 shrink-0 items-center gap-2 sm:w-auto">

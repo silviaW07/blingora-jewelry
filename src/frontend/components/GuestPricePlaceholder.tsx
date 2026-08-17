@@ -7,20 +7,30 @@ import { useTranslation } from 'react-i18next'
 import { customerLoginHref, hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
 import { cn } from '@/lib/utils'
 
+export function isStorefrontGuestSession(session: {
+  token?: string | null
+  user_id?: string | null
+} | null | undefined): boolean {
+  return !String(session?.token || '').trim() || !String(session?.user_id || '').trim()
+}
+
+export function useIsStorefrontGuest(): boolean {
+  const token = useUserSession((s) => s.token)
+  const userId = useUserSession((s) => s.user_id)
+  return isStorefrontGuestSession({ token, user_id: userId })
+}
+
 /**
  * Guest cannot see storefront prices until they have a real customer session.
  * Default to hidden before persist rehydration to avoid flashing USD prices.
  */
 export function useCanViewStorePrice(): boolean {
   const session = useUserSession()
-  const token = String(session?.token || '').trim()
-  const userId = String(session?.user_id || '').trim()
   const hydrated = Boolean((session as { _hasHydrated?: boolean })?._hasHydrated)
 
   // Until localStorage session is ready, never reveal prices.
   if (!hydrated) return false
-  if (!token || !userId) return false
-  return true
+  return !isStorefrontGuestSession(session)
 }
 
 type GuestPricePlaceholderProps = {

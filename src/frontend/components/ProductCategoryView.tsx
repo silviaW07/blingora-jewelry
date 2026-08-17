@@ -9,6 +9,7 @@ import type { ProductCategoryState, ProductCategoryHandlers, ProductCategoryBann
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { StorefrontPagination } from '@/frontend/components/StorefrontPagination';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
+import { ListingPageHead } from '@/frontend/components/ListingPageHead';
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
 import { useTranslation } from 'react-i18next';
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels';
@@ -159,31 +160,23 @@ export const ProductCategoryView = ({
 
           <section className="space-y-6" data-controller-name="商品结果展示区" data-api-unique-id='productcategoryview-r81884d5ddb85b4ab-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
               <div className="rounded-[36px] bg-white px-5 py-5 shadow-[0_18px_55px_-42px_rgba(0,0,0,0.4)] sm:px-6 lg:px-8" data-api-unique-id='productcategoryview-r8d0e44f2c72aff49-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                <div className="category-listing-head flex flex-col gap-4 border-b border-[#ece7dc] pb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6" data-api-unique-id='productcategoryview-r54d4d55ec42aabc8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                <div className="category-listing-head flex flex-col gap-2 border-b border-[#ece7dc] pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:pb-5" data-api-unique-id='productcategoryview-r54d4d55ec42aabc8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                   <div className="min-w-0 w-full shrink" data-api-unique-id='productcategoryview-ra6f6136bd984af62-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <button
-                        type="button"
-                        className="storefront-home-back-link shrink-0"
-                        data-controller-name="返回首页入口"
-                        onClick={(event) => {
-                          event.preventDefault()
-                          handlers.handleClearAllFilters()
-                          router.push('/')
-                        }}
-                      >
-                        <ChevronLeft className="size-3.5 shrink-0" />
-                        <span>{t('common.backToHome')}</span>
-                      </button>
-                      <p className="listing-results-kicker text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]" data-api-unique-id='productcategoryview-r10650503c96d0b4c-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{t('product.resultsTitle')}</p>
-                    </div>
-                    <h2 className="category-listing-title mt-1 text-[1.125rem] font-semibold leading-tight tracking-[0.04em] text-[#111111] md:text-[28px] md:tracking-[0.08em]" data-api-unique-id='productcategoryview-reacb97979b8103a0-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{currentCategoryName}</h2>
-                    <p className="mt-1 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r84fca975fe17aa7b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                      {isLoadingProducts && products.length === 0
-                        ? t('product.loading')
-                        : t('product.totalCount', { count: totalCount })}
-                    </p>
-                    {selectedStockStatuses.length > 0 ? <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r6414cea585b640ff-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                    <ListingPageHead
+                      title={currentCategoryName}
+                      countText={
+                        isLoadingProducts && products.length === 0
+                          ? t('product.loading')
+                          : `(${t('product.totalCount', { count: totalCount })})`
+                      }
+                      backLabel={t('common.backToHome')}
+                      onBack={(event) => {
+                        event.preventDefault()
+                        handlers.handleClearAllFilters()
+                        router.push('/')
+                      }}
+                    />
+                    {selectedStockStatuses.length > 0 ? <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r6414cea585b640ff-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                       <span className="rounded-full border border-[#e6e0d5] bg-[#faf8f3] px-4 py-2" data-api-unique-id='productcategoryview-r4c9c835c0e945511-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{selectedStockStatuses.map((status) => stockStatusLabels[status]).join(' · ')}</span>
                     </div> : null}
                   </div>

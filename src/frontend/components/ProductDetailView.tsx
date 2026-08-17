@@ -74,7 +74,6 @@ function ColorSwatchButton({
   return (
     <button
       type="button"
-      disabled={!isPurchasable}
       aria-pressed={isSelected}
       aria-label={colorLabel}
       data-selected={isSelected ? 'true' : 'false'}
@@ -751,7 +750,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                               key={swatch.value}
                               colorLabel={translateColorName(t, swatch.value)}
                               previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
-                              isSelected={manualColorValue === swatch.value}
+                              isSelected={
+                                String(manualColorValue || '').trim() === String(swatch.value || '').trim()
+                              }
                               isPurchasable={isPurchasable}
                               priority={swatchIndex < 4}
                               onSelect={() => handleColorSelect(swatch.value, swatch.imageUrl)}

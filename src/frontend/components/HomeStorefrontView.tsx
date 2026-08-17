@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import EditableImg from '@/@base/EditableImg';
 import {
-  ArrowLeft,
   Camera,
   ChevronDown,
   ChevronLeft,
@@ -47,6 +46,7 @@ import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
+import { ListingPageHead } from '@/frontend/components/ListingPageHead';
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection';
 import { MobileHomeStorefrontView } from '@/frontend/components/MobileHomeStorefrontView';
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
@@ -1205,36 +1205,28 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
             className="scroll-mt-4 py-6"
             data-controller-name="分类商品展示区"
           >
-            <div className="bg-transparent px-0 py-5">
-              <div className="flex flex-col gap-4 border-b border-[#ece7dc] pb-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-                <div className="min-w-0 shrink">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <button
-                      type="button"
-                      className="storefront-home-back-link shrink-0"
-                      data-controller-name="返回首页入口"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        goHomeFromListing();
-                      }}
-                    >
-                      <ArrowLeft className="size-3.5 shrink-0" />
-                      <span>{t('common.backToHome')}</span>
-                    </button>
-                      <p className="listing-results-kicker text-xs font-semibold uppercase tracking-[0.24em] text-[#8b8477]">{t('product.resultsTitle')}</p>
-                  </div>
-                  <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-[0.08em] text-[#111111]">{currentCategoryName}</h2>
-                  <p className="mt-1 text-sm text-[#6f6a62]">
-                    {isLoadingProducts && products.length === 0
+            <div className="bg-transparent px-0 py-2 sm:py-5">
+              <div className="category-listing-head flex flex-col gap-2 border-b border-[#ece7dc] pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:pb-5">
+                <ListingPageHead
+                  title={currentCategoryName}
+                  countText={
+                    isLoadingProducts && products.length === 0
                       ? t('product.loadingShort')
-                      : t('product.totalCount', { count: totalCount })}
-                    {isSecondaryCategoryResults
+                      : `(${t('product.totalCount', { count: totalCount })})`
+                  }
+                  backLabel={t('common.backToHome')}
+                  onBack={(event) => {
+                    event.preventDefault();
+                    goHomeFromListing();
+                  }}
+                  note={
+                    isSecondaryCategoryResults
                       ? t('product.secondaryCategoryNote')
                       : queryState.categoryId
                         ? t('product.includesSubcategories')
-                        : ''}
-                  </p>
-                </div>
+                        : null
+                  }
+                />
 
                 <ProductListToolbar
                   className="w-full shrink-0 sm:w-auto sm:justify-end"

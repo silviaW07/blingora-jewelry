@@ -7,7 +7,6 @@
 import React, { useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -21,6 +20,7 @@ import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHe
 import { HomeRecommendZoneSection as RecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection'
 import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
+import { ListingPageHead } from '@/frontend/components/ListingPageHead'
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
@@ -324,25 +324,19 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               )}
             </section>
           ) : (
-            <section ref={categoryProductsRef} className="scroll-mt-4 py-4">
-              <button
-                type="button"
-                className="mb-3 inline-flex items-center gap-1.5 text-[0.875rem] font-semibold text-[#444]"
-                onClick={goHomeClear}
-              >
-                <ArrowLeft className="size-3.5" />
-                {t('common.backToHome')}
-              </button>
-              <h2 className="text-[0.9375rem] font-semibold leading-tight text-[#333]">
-                {currentCategoryName}
-              </h2>
-              <p className="mt-1 text-[0.875rem] text-[#6f6a62]">
-                {isLoadingProducts && products.length === 0
-                  ? t('product.loadingShort')
-                  : t('product.totalCount', { count: totalCount })}
-              </p>
+            <section ref={categoryProductsRef} className="listing-results-section scroll-mt-4 py-1.5">
+              <ListingPageHead
+                title={currentCategoryName}
+                countText={
+                  isLoadingProducts && products.length === 0
+                    ? t('product.loadingShort')
+                    : `(${t('product.totalCount', { count: totalCount })})`
+                }
+                backLabel={t('common.backToHome')}
+                onBack={goHomeClear}
+              />
               <ProductListToolbar
-                className="mt-3 w-full"
+                className="mt-1.5 w-full"
                 minPrice={queryState.minPrice}
                 maxPrice={queryState.maxPrice}
                 sortBy={queryState.sortBy}
@@ -356,7 +350,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 isLoadingBrands={state.isLoadingBrandFilters}
               />
               {products.length > 0 ? (
-                <div className="storefront-product-grid mt-4 grid grid-cols-2 gap-2.5">
+                <div className="storefront-product-grid mt-3 grid grid-cols-2 gap-2.5">
                   {products.map((item, index) => (
                     <ProductListCard
                       key={item.product_id}

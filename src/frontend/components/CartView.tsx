@@ -22,6 +22,8 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { computeCheckoutTotals, formatUsd, sumCartWeightGram } from '@/shared/checkoutSummary';
 import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService';
+import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen';
+import { useIsStorefrontGuest } from '@/frontend/components/GuestPricePlaceholder';
 import {
   buildWhatsAppUrl,
   readCustomerServiceLocal,
@@ -79,6 +81,7 @@ export const CartView = ({
 }: Props) => {
   const { t } = useTranslation();
   const router = useRouter();
+  const guest = useIsStorefrontGuest();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [checkoutAddress, setCheckoutAddress] = useState<CheckoutAddressForm | null>(null);
@@ -187,6 +190,10 @@ export const CartView = ({
 
   const pinkCheckboxClass =
     'size-5 rounded-[6px] border-2 border-[#ffc0cb] bg-white shadow-none data-[state=checked]:border-[#f254a6] data-[state=checked]:bg-[#f254a6] data-[state=checked]:text-white focus-visible:ring-[#f254a6]/30';
+
+  if (guest) {
+    return <GuestAuthScreen initialTab="register" />;
+  }
 
   return <>
     <CheckoutTopBar />
