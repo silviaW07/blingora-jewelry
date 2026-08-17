@@ -242,6 +242,63 @@
   margin-top: 0.5rem;
 }
 
+.product-detail-main-carousel {
+  display: none;
+}
+
+.product-detail-carousel {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #f3f3f3;
+}
+
+.product-detail-carousel__viewport {
+  width: 100%;
+  overflow: hidden;
+  touch-action: pan-x;
+}
+
+.product-detail-carousel__container {
+  display: flex;
+}
+
+.product-detail-carousel__slide {
+  position: relative;
+  flex: 0 0 100%;
+  min-width: 0;
+  line-height: 0;
+}
+
+.product-detail-carousel__img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.product-detail-carousel__fraction {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
 .product-detail-thumbs-mobile > * {
   position: relative !important;
   width: 100% !important;
@@ -313,6 +370,23 @@
     height: auto !important;
     aspect-ratio: 1 / 1;
     object-fit: cover !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .product-detail-main-carousel {
+    display: block;
+  }
+
+  .product-detail-main-stage--desktop,
+  .product-detail-thumbs-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  html:not(.is-narrow) .product-detail-main-carousel {
+    display: none !important;
   }
 }
 
@@ -1989,9 +2063,21 @@ html.is-narrow .product-detail-main-stage-img {
   object-fit: cover !important;
 }
 
+html.is-narrow .product-detail-main-carousel {
+  display: block !important;
+}
+
+html.is-narrow .product-detail-main-stage--desktop,
 html.is-narrow .product-detail-thumbs-mobile {
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  display: none !important;
+}
+
+html.is-narrow .product-detail-carousel__img {
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+  object-fit: cover !important;
 }
 
 html.is-narrow .product-sku-row {

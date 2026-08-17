@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
+import { ProductDetailImageCarousel } from '@/frontend/components/ProductDetailImageCarousel';
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -629,7 +630,16 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 </div>
 
                 <div className="product-detail-main-image">
-                  <div className="product-detail-main-stage">
+                  <div className="product-detail-main-carousel">
+                    <ProductDetailImageCarousel
+                      items={gallery}
+                      activeUrl={activeImage || product.mainImageUrl}
+                      onActiveChange={setActiveImage}
+                      alt={product.name}
+                    />
+                  </div>
+
+                  <div className="product-detail-main-stage product-detail-main-stage--desktop">
                     <OptimizedProductImage
                       fill={false}
                       src={activeImage || product.mainImageUrl}
