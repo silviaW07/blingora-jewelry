@@ -275,7 +275,17 @@ export default function MobileCategoriesView({
     const children = cat.children || []
     if (children.length > 0) {
       const parentProducts = productsById[cat.category_id] || []
-      return children.map((child, index) => ({
+      const allEntry: CircleEntry = {
+        key: `${cat.category_id}-all`,
+        label: t('common.all', { defaultValue: 'All' }),
+        imageUrl: cat.image_url || findZoneItemImage(cat.category_id, initialRecommendZones || []) || parentProducts[0]?.main_image_url,
+        initials: (cat.category_name || '').slice(0, 1).toUpperCase(),
+        href: categoryHref(cat.category_slug, cat.category_id),
+      }
+
+      return [
+        allEntry,
+        ...children.map((child, index) => ({
         key: child.category_id,
         label: translateCatalogLabel(t, child.category_name),
         imageUrl:
@@ -284,7 +294,8 @@ export default function MobileCategoriesView({
           parentProducts[index]?.main_image_url,
         initials: child.category_name.slice(0, 1).toUpperCase(),
         href: categoryHref(child.category_slug, child.category_id),
-      }))
+      })),
+      ]
     }
 
     const brandOpts = cat.brand_options || []

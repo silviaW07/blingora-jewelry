@@ -954,7 +954,7 @@ export const useProductCategory = (
         if (cancelled || settled) return
         settled = true
         setIsLoadingProducts(false)
-      }, 8000)
+      }, 20000)
 
       getDailyNewArrivalProducts({
         year,
@@ -997,7 +997,7 @@ export const useProductCategory = (
         if (cancelled || settled) return
         settled = true
         setIsLoadingProducts(false)
-      }, 8000)
+      }, 20000)
       fetchCategoryShelfProducts({
         slug: routeCategorySlug,
         lang,
@@ -1043,7 +1043,7 @@ export const useProductCategory = (
       if (cancelled || settled) return
       settled = true
       setIsLoadingProducts(false)
-    }, 8000)
+    }, 20000)
     fetchCategoryShelfProducts({
       categoryId: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
       slug:
@@ -1380,7 +1380,13 @@ export const useProductCategory = (
     }
 
     if (target.startsWith('/')) {
-      router.push(target)
+      // Chrome Android may intercept SPA navigation on full-tap overlays.
+      // Use native navigation for consistency with other browsers.
+      if (typeof window !== 'undefined') {
+        window.location.assign(target)
+      } else {
+        router.push(target)
+      }
       return
     }
 

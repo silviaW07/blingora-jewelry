@@ -845,8 +845,23 @@
   opacity: 0;
 }
 
-.product-color-swatch.is-disabled.is-selected .product-color-swatch-label {
-  opacity: 1;
+.product-color-swatch-name {
+  display: none;
+}
+
+.product-color-picker__trigger {
+  display: none;
+}
+
+.product-color-picker__chevron {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.product-color-picker__chevron.is-open {
+  transform: rotate(180deg);
 }
 
 @media (min-width: 1024px) {
@@ -897,6 +912,85 @@
 
   .product-detail-page .product-color-swatch-label {
     display: none !important;
+  }
+
+  .product-detail-page .product-color-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .product-detail-page .product-color-picker__heading {
+    display: none;
+  }
+
+  .product-detail-page .product-color-picker__trigger {
+    appearance: none;
+    -webkit-appearance: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: min(22.5rem, calc(100% - 1.5rem));
+    min-height: 2.75rem;
+    margin: 0 auto;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid #e6e0d5;
+    border-radius: 999px;
+    background: #fff;
+    color: #111;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .product-detail-page .product-color-picker:not(.is-open) .product-color-picker__panel {
+    display: none;
+  }
+
+  .product-detail-page .product-color-picker.is-open .product-color-swatch-list {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: min(22.5rem, calc(100% - 1.5rem));
+    max-height: calc(5 * 3.25rem);
+    margin: 0.5rem auto 0;
+    padding: 0.25rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 1px solid #ebe7de;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .product-detail-page .product-color-picker .product-color-swatch {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    height: 3.25rem;
+    gap: 0.65rem;
+    padding: 0 0.45rem;
+  }
+
+  .product-detail-page .product-color-picker .product-color-swatch-frame {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .product-detail-page .product-color-picker .product-color-swatch-name {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #333;
   }
 
   .product-detail-page .product-color-swatch,
@@ -2490,6 +2584,111 @@ html.is-narrow .product-color-swatch-label {
   display: none !important;
 }
 
+html.is-narrow .product-color-picker {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+html.is-narrow .product-color-picker__heading {
+  display: none !important;
+}
+
+html.is-narrow .product-color-picker__trigger {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: min(22.5rem, calc(100% - 1.5rem));
+  min-height: 2.75rem;
+  margin: 0 auto;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid #e6e0d5 !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  color: #111 !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+html.is-narrow .product-color-picker__trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.is-narrow .product-color-picker:not(.is-open) .product-color-picker__panel {
+  display: none !important;
+}
+
+html.is-narrow .product-color-picker.is-open .product-color-picker__panel,
+html.is-narrow .product-detail-page .product-color-picker.is-open .product-color-swatch-list {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  width: min(22.5rem, calc(100% - 1.5rem)) !important;
+  max-height: calc(5 * 3.25rem) !important;
+  margin: 0.5rem auto 0 !important;
+  padding: 0.25rem !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  border: 1px solid #ebe7de;
+  border-radius: 12px;
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.is-narrow .product-color-picker .product-color-swatch {
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  height: 3.25rem !important;
+  min-height: 3.25rem !important;
+  max-height: 3.25rem !important;
+  gap: 0.65rem;
+  padding: 0 0.45rem !important;
+  border-radius: 8px;
+}
+
+html.is-narrow .product-color-picker .product-color-swatch.is-selected {
+  background: #faf7f2;
+}
+
+html.is-narrow .product-color-picker .product-color-swatch-frame {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  min-width: 2.5rem !important;
+  min-height: 2.5rem !important;
+}
+
+html.is-narrow .product-color-picker .product-color-swatch-name {
+  display: block !important;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #333;
+  text-align: left;
+}
+
+html.is-narrow .product-sku-list {
+  max-height: calc(5 * 3.35rem) !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
 html.is-narrow .product-detail-page .product-color-swatch-list {
   padding-top: 0.35rem !important;
 }
@@ -3000,6 +3199,8 @@ html.is-narrow .home-service-cards {
 }
 
 .mobile-bottom-nav__item {
+  appearance: none !important;
+  -webkit-appearance: none !important;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3008,12 +3209,15 @@ html.is-narrow .home-service-cards {
   width: 100%;
   min-height: 3.15rem;
   padding: 0.2rem 0.15rem;
+  border: 0 !important;
   border-radius: 0.75rem;
+  background: transparent !important;
   color: #7a7468;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-decoration: none;
+  pointer-events: auto !important;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }

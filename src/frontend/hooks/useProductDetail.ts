@@ -555,8 +555,13 @@ export const useProductDetail = (seed?: {
     setSelectionHighlight({ color: false, size: false })
     // 混批：切换颜色时保留其他颜色已选数量
 
+    const sameAttr = (left?: string | null, right?: string | null) =>
+      String(left || '').trim().toLowerCase() === String(right || '').trim().toLowerCase()
+
     const matchedSkus = product.skus.filter((sku) =>
-      sku.attributeJson?.some((attr) => attr.name === colorAttribute.name && attr.value === value),
+      sku.attributeJson?.some(
+        (attr) => sameAttr(attr.name, colorAttribute.name) && sameAttr(attr.value, value),
+      ),
     )
     const primary =
       matchedSkus.find((sku) => Boolean(sku.imageUrl)) || matchedSkus[0] || null
@@ -848,7 +853,13 @@ export const useProductDetail = (seed?: {
         image: related.mainImageUrl,
       })
     }
-    ProductDetail.navigateToById(router, { productId: id })
+    // Chrome Android intercepts button onClick for navigation — use location.assign directly
+    const href = `/productdetail/?productId=${encodeURIComponent(id)}`
+    if (typeof window !== 'undefined') {
+      window.location.assign(href)
+    } else {
+      ProductDetail.navigateToById(router, { productId: id })
+    }
   }
 
   return {

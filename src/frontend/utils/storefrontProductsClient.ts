@@ -21,7 +21,9 @@ export async function fetchCategoryShelfProducts(input: {
   params.set('sort_by', 'NEWEST')
 
   const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), 12000)
+  // Chrome Android (especially behind VPN / slow DNS) may take >12s to return.
+  // Keep longer so UI doesn't settle early with an empty list.
+  const timer = window.setTimeout(() => controller.abort(), 20000)
   try {
     const res = await fetch(`/api/storefront/products?${params.toString()}`, {
       cache: 'no-store',

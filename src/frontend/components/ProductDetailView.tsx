@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useCallback, useState } from 'react';
+import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertTriangle,
-  ChevronLeft,
+  ChevronDown,
   ChevronRight,
   Minus,
   PackageSearch,
@@ -113,6 +113,7 @@ function ColorSwatchButton({
           />
         ) : null}
       </span>
+      {colorLabel ? <span className="product-color-swatch-name">{colorLabel}</span> : null}
     </button>
   )
 }
@@ -220,6 +221,9 @@ const isSizeAttributeName = (name?: string | null) => {
   )
 }
 
+const attrEquals = (a?: string | null, b?: string | null) =>
+  String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+
 const getSkuAttributeValue = (
   sku: {
     attributeJson?: Array<{ name?: string | null; value?: string | null }> | null
@@ -229,7 +233,8 @@ const getSkuAttributeValue = (
   attributeName?: string | null,
 ) => {
   if (!attributeName) return ''
-  const attrValue = sku.attributeJson?.find((attr) => attr.name === attributeName)?.value || ''
+  const attrValue =
+    sku.attributeJson?.find((attr) => attrEquals(attr.name, attributeName))?.value || ''
   if (attrValue) return attrValue
   if (isSizeAttributeName(attributeName)) {
     const stored = String(sku.sizeLabel || '').trim()
@@ -317,6 +322,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     getSkuLineQuantity,
     resolveLineMinOrderQty,
   } = handlers;
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -328,6 +334,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     gallery.findIndex((item) => item.url === activeImage),
   );
 
+  // Important: main stage must follow the same `gallery` source as the thumbnails.
+  // On some records `product.mainImageUrl` is empty while `sortedGallery` is populated,
+  // which makes `activeImage || product.mainImageUrl` render a blank grey block.
+  const activeUrl = gallery[activeIndex]?.url || activeImage || product.mainImageUrl || '';
+
   const colorAttributeGroup = colorAttribute
   const sizeAttributeGroup = sizeAttribute
 
@@ -338,8 +349,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
     const mapped = colorAttributeGroup.values
       .map((value) => {
-        const skusForColor = product.skus.filter(
-          (sku) => getSkuAttributeValue(sku, colorAttributeGroup.name) === value,
+        const skusForColor = product.skus.filter((sku) =>
+          attrEquals(getSkuAttributeValue(sku, colorAttributeGroup.name), value),
         )
         // 优先取该颜色下带独立缩略图的 SKU，避免回落到无图 SKU 再误用主图
         const representativeSku =
@@ -369,6 +380,17 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     }
     return unique
   }, [product, colorAttributeGroup])
+
+  const autoColorKeyRef = useRef('')
+  useEffect(() => {
+    const productId = String(product?.id || '')
+    if (!productId || !colorSwatches.length || String(manualColorValue || '').trim()) return
+    if (autoColorKeyRef.current === productId) return
+    autoColorKeyRef.current = productId
+    const first = colorSwatches[0]
+    if (!first) return
+    handleColorSelect(first.value, first.imageUrl)
+  }, [product?.id, colorSwatches, handleColorSelect, manualColorValue])
 
   // 预热主图尺寸(960)，让点击颜色后左侧大图秒出（缩略图只有 200 宽、URL 不同不会命中）
   const preheatMainImage = useCallback((url?: string | null) => {
@@ -430,7 +452,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     if (colorName && !sizeName) {
       if (!manualColorValue) return []
       const matched =
-        product.skus.find((sku) => getSkuAttributeValue(sku, colorName) === manualColorValue) || null
+        product.skus.find((sku) =>
+          attrEquals(getSkuAttributeValue(sku, colorName), manualColorValue),
+        ) || null
       if (!matched) return []
       return [
         {
@@ -465,7 +489,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
     for (const sku of product.skus) {
       if (manualColorValue && colorName) {
-        if (getSkuAttributeValue(sku, colorName) !== manualColorValue) continue
+        if (!attrEquals(getSkuAttributeValue(sku, colorName), manualColorValue)) continue
       }
 
       const orderLabel =
@@ -661,7 +685,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                   <div className="product-detail-main-carousel">
                     <ProductDetailImageCarousel
                       items={gallery}
-                      activeUrl={activeImage || product.mainImageUrl}
+                      activeUrl={activeUrl}
                       onActiveChange={setActiveImage}
                       alt={product.name}
                     />
@@ -670,7 +694,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                   <div className="product-detail-main-stage product-detail-main-stage--desktop">
                     <OptimizedProductImage
                       fill={false}
-                      src={activeImage || product.mainImageUrl}
+                      src={activeUrl}
                       alt={product.name}
                       className="product-detail-main-stage-img"
                       imageWidth={1600}
@@ -764,16 +788,34 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     <div className="space-y-3">
                       <div
                         className={cn(
-                          'rounded-[8px] p-1 transition',
+                          'product-color-picker rounded-[8px] p-1 transition',
+                          colorPickerOpen && 'is-open',
                           selectionHighlight.color && 'animate-shake-x border-2 border-red-500 ring-2 ring-red-200',
                         )}
                       >
-                        <div className="mb-2 text-sm font-semibold text-[#111]">
+                        <div className="product-color-picker__heading mb-2 text-sm font-semibold text-[#111]">
                           {manualColorValue
                             ? `${t('common.color')}: ${translateColorName(t, manualColorValue)}`
                             : t('common.color')}
                         </div>
-                        <div className="product-color-swatch-list">
+                        <button
+                          type="button"
+                          className="product-color-picker__trigger"
+                          aria-expanded={colorPickerOpen}
+                          data-no-hard-nav=""
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setColorPickerOpen((open) => !open)
+                          }}
+                        >
+                          <span>
+                            {manualColorValue
+                              ? `${t('common.color')}: ${translateColorName(t, manualColorValue)}`
+                              : t('product.selectColor', { defaultValue: 'Select color' })}
+                          </span>
+                          <ChevronDown className={cn('product-color-picker__chevron', colorPickerOpen && 'is-open')} />
+                        </button>
+                        <div className="product-color-swatch-list product-color-picker__panel">
                           {colorSwatches.map((swatch, swatchIndex) => (
                             <ColorSwatchButton
                               key={swatch.value}
@@ -784,13 +826,22 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                               }
                               isPurchasable={isPurchasable}
                               priority={swatchIndex < 4}
-                              onSelect={() => handleColorSelect(swatch.value, swatch.imageUrl)}
+                              onSelect={() => {
+                                handleColorSelect(swatch.value, swatch.imageUrl)
+                                setColorPickerOpen(false)
+                                // scroll buy-actions into view so user can see Add-to-Cart after picking color
+                                setTimeout(() => {
+                                  const el = document.querySelector('.product-detail-buy-actions')
+                                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                                }, 80)
+                              }}
                               onPreheat={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
                             />
                           ))}
                         </div>
                       </div>
 
+                      {isColorSelected ? (
                       <div
                         className={cn(
                           'rounded-[8px] transition',
@@ -803,12 +854,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             {specListRows.length} {t('common.options')}
                           </span>
                         </div>
-                        {!isColorSelected ? (
-                          <p className="mb-2 text-xs text-rose-600">
-                            {t('product.selectColorFirst', { defaultValue: 'Please select a color first' })}
-                          </p>
-                        ) : null}
-                        <div className="product-sku-list max-h-[420px] overflow-y-auto">
+                        <div className="product-sku-list">
                           {specListRows.length > 0 ? (
                             specListRows.map((row) => renderSpecRow(row))
                           ) : (
@@ -818,6 +864,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           )}
                         </div>
                       </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-[8px]">
@@ -977,16 +1024,20 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             </div>
           </section>
 
-          {relatedProducts.length > 0 ? (
+              {relatedProducts.length > 0 ? (
             <section className="product-detail-related mt-2 rounded-[4px] bg-white p-4 sm:p-5">
               <h2 className="text-base font-semibold text-[#111]">{t('common.relatedProducts')}</h2>
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 {relatedProducts.map((item) => (
-                  <button
+                  <a
                     key={item.id}
-                    type="button"
-                    className="overflow-hidden rounded-[2px] border border-[#ececec] text-left transition hover:border-[#111]"
-                    onClick={() => handleRelatedClick(item.id)}
+                    href={`/productdetail/?productId=${encodeURIComponent(item.id)}`}
+                    data-hard-nav=""
+                    className="block overflow-hidden rounded-[2px] border border-[#ececec] text-left transition hover:border-[#111]"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      handleRelatedClick(item.id)
+                    }}
                   >
                     <div className="relative aspect-square bg-[#f3f3f3]">
                       <OptimizedProductImage
@@ -1003,7 +1054,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         <p className="text-sm font-bold text-[#111]">{formatUsd(item.minPrice)}</p>
                       </StorePrice>
                     </div>
-                  </button>
+                  </a>
                 ))}
               </div>
             </section>

@@ -76,6 +76,15 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
 
   const categoryProductsRef = useRef<HTMLElement | null>(null)
 
+  // Banner swipe support (Chrome mobile often doesn't respond to overlay button clicks reliably).
+  // We detect a horizontal swipe and switch poster index; during swipe we block banner click.
+  const bannerTouchRef = useRef<{
+    startX: number
+    startY: number
+    isSwiping: boolean
+    endX: number
+  } | null>(null)
+
   const isDefaultHomeState = isDefaultHomeQueryState(state)
   const activeBanner = posters[activeBannerIndex] || null
 
@@ -174,13 +183,54 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
             className="mobile-home__banner mb-4 w-full px-3"
             data-controller-name="移动端全宽Banner"
           >
-            <div className="mobile-home__banner-shell relative w-full overflow-hidden rounded-xl bg-[#1a1a1a]">
+            <div
+              className="mobile-home__banner-shell relative w-full overflow-hidden rounded-xl bg-[#1a1a1a]"
+              onTouchStart={(e) => {
+                if (!posters.length) return
+                const t = e.touches[0]
+                bannerTouchRef.current = {
+                  startX: t.clientX,
+                  startY: t.clientY,
+                  isSwiping: false,
+                  endX: t.clientX,
+                }
+              }}
+              onTouchMove={(e) => {
+                const cur = bannerTouchRef.current
+                if (!cur) return
+                const t = e.touches[0]
+                const dx = t.clientX - cur.startX
+                const dy = t.clientY - cur.startY
+                // Decide swipe only for mostly horizontal gesture.
+                if (!cur.isSwiping && Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+                  cur.isSwiping = true
+                }
+                cur.endX = t.clientX
+              }}
+              onTouchEnd={() => {
+                const cur = bannerTouchRef.current
+                if (!cur || !cur.isSwiping || !posters.length) return
+                const dx = cur.endX - cur.startX
+                const absDx = Math.abs(dx)
+                const SWIPE_MIN = 48
+                if (absDx < SWIPE_MIN) return
+                const dir = dx < 0 ? 1 : -1 // left swipe -> next
+                handlers.handleBannerChange(activeBannerIndex + dir)
+              }}
+            >
               {activeBanner ? (
                 <>
                   <button
                     type="button"
                     className="mobile-home__banner-hit absolute inset-0 z-[1] block h-full w-full overflow-hidden"
-                    onClick={() => handlers.handleBannerClick(activeBanner)}
+                    onClick={(e) => {
+                      // If user swiped horizontally, prevent the subsequent click navigation.
+                      if (bannerTouchRef.current?.isSwiping) {
+                        e.preventDefault()
+                        return
+                      }
+                      handlers.handleBannerClick(activeBanner)
+                    }}
                     aria-label={activeBanner.title || 'Banner'}
                   >
                     <EditableImg

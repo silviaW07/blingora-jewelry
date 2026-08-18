@@ -13,8 +13,9 @@ import {
   isDateKeyProductName,
   toDateKeyInTimeZone,
 } from '@/frontend/utils/dailyNewArrival'
-import { hardNavigate, productHref } from '@/frontend/utils/hardNavigate'
+import { hardNavProps, hardNavigate, openStorefrontLogin, productHref } from '@/frontend/utils/hardNavigate'
 import { normalizeLocale, readStoredLocale } from '@/frontend/i18n'
+import { useUserSession } from '@/tools/FrontendSession'
 import { cn } from '@/lib/utils'
 import type { HomeRecommendZoneSection } from '@/frontend/actions/Home'
 
@@ -93,6 +94,7 @@ export default function MobileComingView({
   initialZones?: HomeRecommendZoneSection[]
 }) {
   const { t, i18n } = useTranslation()
+  const { token } = useUserSession()
   const dateChips = useMemo(() => buildLastNDays(10), [])
   const seeded = useMemo(() => comingProductsFromZones(initialZones), [initialZones])
   const [selectedDateKey, setSelectedDateKey] = useState(dateChips[0]?.date_key || '')
@@ -170,7 +172,10 @@ export default function MobileComingView({
   }, [products])
 
   const openProduct = (item: ComingProductCard) => {
-    if (!item.productId) return
+    if (!item.productId) {
+      if (!token) openStorefrontLogin()
+      return
+    }
     hardNavigate(productHref(item.productId))
   }
 
@@ -239,26 +244,49 @@ export default function MobileComingView({
                 : undefined
             }
           >
-            {visibleProducts.map((item) => (
+            {visibleProducts.map((item) => {
+              const href = item.productId ? productHref(item.productId) : ''
+              return (
               <article key={item.itemId} className="mobile-coming-product-card">
-                <button
-                  type="button"
-                  className="mobile-coming-product-card__media"
-                  onClick={() => openProduct(item)}
-                  aria-label={item.productName || zoneTitle}
-                >
-                  {item.imageUrl ? (
-                    <OptimizedProductImage
-                      src={item.imageUrl}
-                      alt={item.productName || zoneTitle}
-                      sizes="(max-width: 480px) 50vw, 33vw"
-                      imageWidth={800}
-                      className="object-cover"
-                    />
-                  ) : (
-                    <span className="mobile-coming-product-card__media-empty" aria-hidden />
-                  )}
-                </button>
+                {href ? (
+                  <a
+                    {...hardNavProps(href)}
+                    className="mobile-coming-product-card__media"
+                    aria-label={item.productName || zoneTitle}
+                    onClick={openProduct.bind(null, item)}
+                  >
+                    {item.imageUrl ? (
+                      <OptimizedProductImage
+                        src={item.imageUrl}
+                        alt={item.productName || zoneTitle}
+                        sizes="(max-width: 480px) 50vw, 33vw"
+                        imageWidth={800}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <span className="mobile-coming-product-card__media-empty" aria-hidden />
+                    )}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="mobile-coming-product-card__media"
+                    onClick={() => openProduct(item)}
+                    aria-label={item.productName || zoneTitle}
+                  >
+                    {item.imageUrl ? (
+                      <OptimizedProductImage
+                        src={item.imageUrl}
+                        alt={item.productName || zoneTitle}
+                        sizes="(max-width: 480px) 50vw, 33vw"
+                        imageWidth={800}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <span className="mobile-coming-product-card__media-empty" aria-hidden />
+                    )}
+                  </button>
+                )}
 
                 <div className="mobile-coming-product-card__heart">
                   <WishlistHeartButton
@@ -271,17 +299,28 @@ export default function MobileComingView({
                 </div>
 
                 {item.productName ? (
-                  <button
-                    type="button"
-                    className="mobile-coming-product-card__title"
-                    onClick={() => openProduct(item)}
-                    title={item.productName}
-                  >
-                    {item.productName}
-                  </button>
+                  href ? (
+                    <a
+                      {...hardNavProps(href)}
+                      className="mobile-coming-product-card__title"
+                      title={item.productName}
+                    >
+                      {item.productName}
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mobile-coming-product-card__title"
+                      onClick={() => openProduct(item)}
+                      title={item.productName}
+                    >
+                      {item.productName}
+                    </button>
+                  )
                 ) : null}
               </article>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

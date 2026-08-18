@@ -214,13 +214,18 @@ export const MobileCategories = {
 // ================================================================
 export const MobileBrand = {
   id: 'F02d',
-  path: '/coming',
+  path: '/brand',
   paramsMeta: {} as Record<string, ParamMeta>,
   getParams: (_sp: URLSearchParams) => ({}),
   navigateTo: (router: AppRouterInstance) => router.push(MobileBrand.path),
 }
 
-export const MobileComing = MobileBrand
+export const MobileComing = {
+  ...MobileBrand,
+  id: 'F02e',
+  path: '/coming',
+  navigateTo: (router: AppRouterInstance) => router.push('/coming'),
+}
 
 
 // ================================================================
