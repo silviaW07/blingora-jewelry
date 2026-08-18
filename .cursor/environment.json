@@ -1,0 +1,22 @@
+{
+  "name": "Blingora Storefront (Next.js + RPC + Prisma/MySQL)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "ports": [
+    { "name": "web", "port": 3000 },
+    { "name": "rpc", "port": 3100 }
+  ],
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "cd \"$(git rev-parse --show-toplevel)\"; set +H; set -a; [ -f .env ] && . ./.env; set +a; pnpm run dev:backend",
+      "description": "Express RPC backend on port 3100 (Prisma-backed server actions). Frontend /rpc calls proxy here."
+    },
+    {
+      "name": "frontend",
+      "command": "cd \"$(git rev-parse --show-toplevel)\"; set +H; set -a; [ -f .env ] && . ./.env; set +a; pnpm run gen_rpc && npx next dev --turbopack",
+      "description": "Next.js dev server on port 3000. Open http://localhost:3000 (storefront) and /dashboard (admin)."
+    }
+  ]
+}
