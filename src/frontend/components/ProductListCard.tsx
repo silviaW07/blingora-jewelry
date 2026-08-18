@@ -11,7 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { hardNavProps, productHref } from '@/frontend/utils/hardNavigate'
+import { hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -106,6 +106,7 @@ export const ProductListCard = ({
     event?.stopPropagation?.()
     onAddToCart(item)
   }
+  const addToCartEvents = useChromeActivate(() => addToCart())
 
   const prefetchDetail = () => {
     prefetchProductDetail(item.product_id)
@@ -269,14 +270,7 @@ export const ProductListCard = ({
               type="button"
               aria-label={t('product.addToCart')}
               className="home-product-card-cart-btn relative z-[5] inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-              onPointerDown={(event) => {
-                event.stopPropagation()
-                addToCart(event)
-              }}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-              }}
+              {...addToCartEvents}
             >
               <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
               <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />

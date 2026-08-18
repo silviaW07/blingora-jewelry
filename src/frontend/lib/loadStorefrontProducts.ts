@@ -94,12 +94,16 @@ export async function loadStorefrontProducts(input: {
   lang?: string
   slug?: string
   categoryId?: string
+  brandCategoryId?: string
   search?: string
   daily?: boolean
   page?: number
   pageSize?: number
+  sortBy?: string
+  minPrice?: number
+  maxPrice?: number
   categoryTree?: CategoryRef[]
-}): Promise<{ list: ShelfProductCard[]; categoryId: string }> {
+}): Promise<{ list: ShelfProductCard[]; categoryId: string; total: number }> {
   const lang = String(input.lang || 'en').trim() || 'en'
   const search = String(input.search || '').trim()
   const slug = String(input.slug || '').trim()
@@ -121,27 +125,36 @@ export async function loadStorefrontProducts(input: {
     }
 
     if (!daily && !search && !categoryId) {
-      return { list: [], categoryId: '' }
+      return { list: [], categoryId: '', total: 0 }
     }
 
     const data = daily
-      ? await rpcAction<{ list?: unknown }>('src.frontend.actions.Home.getDailyNewArrivalProducts', [
-          { page, page_size: pageSize, lang },
-        ])
-      : await rpcAction<{ list?: unknown }>('src.frontend.actions.ProductCategory.getProductList', [
-          {
-            category_id: categoryId || undefined,
-            search_keyword: search || undefined,
-            page,
-            page_size: pageSize,
-            sort_by: 'NEWEST',
-            lang,
-          },
-        ])
+      ? await rpcAction<{ list?: unknown; total?: number }>(
+          'src.frontend.actions.Home.getDailyNewArrivalProducts',
+          [{ page, page_size: pageSize, lang }],
+        )
+      : await rpcAction<{ list?: unknown; total?: number }>(
+          'src.frontend.actions.ProductCategory.getProductList',
+          [
+            {
+              category_id: categoryId || undefined,
+              brand_category_id: input.brandCategoryId || undefined,
+              search_keyword: search || undefined,
+              page,
+              page_size: pageSize,
+              sort_by: input.sortBy || 'NEWEST',
+              min_price: input.minPrice,
+              max_price: input.maxPrice,
+              lang,
+            },
+          ],
+        )
 
-    return { list: slimProductCards(data?.list), categoryId }
+    const list = slimProductCards(data?.list)
+    const total = typeof data?.total === 'number' ? data.total : list.length
+    return { list, categoryId, total }
   } catch (error) {
     console.error('[storefront-products]', error)
-    return { list: [], categoryId }
+    return { list: [], categoryId: '', total: 0 }
   }
 }

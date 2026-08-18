@@ -4,7 +4,7 @@
  * Mobile-only home stream. Desktop keeps HomeStorefrontView layout.
  * Order: chrome → search → L1 chips → banner → services → recommend zones
  */
-import React, { useMemo, useRef } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   ChevronLeft,
@@ -22,11 +22,13 @@ import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
 import { ListingPageHead } from '@/frontend/components/ListingPageHead'
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
+import { StorefrontBrandNavList } from '@/frontend/components/StorefrontBrandNavList'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { isStorefrontHomeContentZone, isComingSoonRecommendZoneTitle } from '@/frontend/utils/recommendZoneDisplay'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
-import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
 
 interface Props {
   state: HomeState
@@ -60,6 +62,8 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
     categories,
     recommendZones,
     isLoadingRecommendZones,
+    sideNavZones,
+    selectedRecommendCategoryId,
     queryState,
     products,
     isLoadingProducts,
@@ -87,11 +91,43 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
 
   const isDefaultHomeState = isDefaultHomeQueryState(state)
   const activeBanner = posters[activeBannerIndex] || null
+  const openBanner = useCallback(() => {
+    if (bannerTouchRef.current?.isSwiping) return
+    if (activeBanner) handlers.handleBannerClick(activeBanner)
+  }, [activeBanner, handlers])
+  const bannerOpenEvents = useChromeActivate(openBanner)
 
   /** PRODUCT + CATEGORY zones, including the Coming directory. */
   const contentZones = useMemo(
     () => recommendZones.filter((z) => isStorefrontHomeContentZone(z)),
     [recommendZones],
+  )
+  const hotSideNavZoneFromApi = useMemo(
+    () => pickBrandSideNavZone(sideNavZones, { requireSideNavType: false }),
+    [sideNavZones],
+  )
+  const hotSideNavZoneFromRecommend = useMemo(
+    () => pickBrandSideNavZone(recommendZones, { requireSideNavType: true }),
+    [recommendZones],
+  )
+  const sideNavItems = useMemo(
+    () =>
+      hotSideNavZoneFromApi && hotSideNavZoneFromApi.items.length > 0
+        ? hotSideNavZoneFromApi.items.map((item) => ({
+            id: item.category_id,
+            key: item.item_id,
+            label: item.category_name,
+            slug: item.category_slug,
+          }))
+        : (hotSideNavZoneFromRecommend?.items || [])
+            .filter((item): item is Extract<(typeof hotSideNavZoneFromRecommend.items)[number], { entityType: 'SIDE_NAV' }> => item.entityType === 'SIDE_NAV')
+            .map((item) => ({
+              id: item.categoryId,
+              key: item.itemId,
+              label: item.categoryName,
+              slug: item.categorySlug,
+            })),
+    [hotSideNavZoneFromApi, hotSideNavZoneFromRecommend],
   )
 
   const currentCategoryName = queryState.searchKeyword
@@ -209,13 +245,19 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               }}
               onTouchEnd={() => {
                 const cur = bannerTouchRef.current
-                if (!cur || !cur.isSwiping || !posters.length) return
-                const dx = cur.endX - cur.startX
-                const absDx = Math.abs(dx)
-                const SWIPE_MIN = 48
-                if (absDx < SWIPE_MIN) return
-                const dir = dx < 0 ? 1 : -1 // left swipe -> next
-                handlers.handleBannerChange(activeBannerIndex + dir)
+                if (!cur) return
+                if (cur.isSwiping && posters.length) {
+                  const dx = cur.endX - cur.startX
+                  const absDx = Math.abs(dx)
+                  const SWIPE_MIN = 48
+                  if (absDx >= SWIPE_MIN) {
+                    const dir = dx < 0 ? 1 : -1 // left swipe -> next
+                    handlers.handleBannerChange(activeBannerIndex + dir)
+                  }
+                }
+                window.setTimeout(() => {
+                  if (bannerTouchRef.current) bannerTouchRef.current.isSwiping = false
+                }, 320)
               }}
             >
               {activeBanner ? (
@@ -223,14 +265,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                   <button
                     type="button"
                     className="mobile-home__banner-hit absolute inset-0 z-[1] block h-full w-full overflow-hidden"
-                    onClick={(e) => {
-                      // If user swiped horizontally, prevent the subsequent click navigation.
-                      if (bannerTouchRef.current?.isSwiping) {
-                        e.preventDefault()
-                        return
-                      }
-                      handlers.handleBannerClick(activeBanner)
-                    }}
+                    {...bannerOpenEvents}
                     aria-label={activeBanner.title || 'Banner'}
                   >
                     <EditableImg
@@ -291,6 +326,32 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               )}
             </div>
           </section>
+
+          {sideNavItems.length > 0 ? (
+            <section
+              className="mobile-home__brands mb-3 px-3"
+              data-controller-name="移动端品牌目录"
+            >
+              <div className="rounded-2xl bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-[0.95rem] font-semibold text-[#111111]">
+                    {t('nav.brand', { defaultValue: 'Brand' })}
+                  </h2>
+                  <span className="text-[0.75rem] text-[#8a8073]">
+                    {sideNavItems.length}
+                  </span>
+                </div>
+                <StorefrontBrandNavList
+                  items={sideNavItems}
+                  activeId={queryState.categoryId || selectedRecommendCategoryId || null}
+                  onSelect={(categoryId, categorySlug) =>
+                    handlers.handleNavigateRecommendCategory(categoryId, categorySlug)
+                  }
+                  emptyText={t('mobile.noRecommendedCategories', { defaultValue: 'No categories yet' })}
+                />
+              </div>
+            </section>
+          ) : null}
 
           {/* 3. Service benefit cards — shared with desktop, static, icon+title+desc */}
           <section

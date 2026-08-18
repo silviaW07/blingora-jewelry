@@ -149,6 +149,7 @@ function ListingPriceSlider({
     <div
       ref={railRef}
       className="listing-price-slider"
+      data-no-hard-nav
       role="group"
       aria-label={ariaLabel}
       onPointerDown={(event) => {

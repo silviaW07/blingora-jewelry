@@ -238,6 +238,12 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
             value={searchKeyword}
             enterKeyHint="search"
             onChange={(e) => setSearchKeyword(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                handleSearchSubmit()
+              }
+            }}
           />
           <input
             ref={cameraInputRef}

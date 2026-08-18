@@ -204,7 +204,7 @@ export default function MobileCategoriesView({
         daily,
         lang,
       })
-        .then((list) => {
+        .then(({ list }) => {
           if (list.length === 0) {
             fetchedRef.current.delete(key)
             return

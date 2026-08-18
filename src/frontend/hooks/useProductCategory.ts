@@ -1003,11 +1003,15 @@ export const useProductCategory = (
         lang,
         page: queryState.page,
         pageSize: 24,
+        minPrice: queryState.minPrice,
+        maxPrice: queryState.maxPrice,
+        sortBy: queryState.sortBy,
+        brandCategoryId: queryState.brandCategoryId || undefined,
       })
-        .then((list) => {
+        .then(({ list, total }) => {
           if (cancelled || settled) return
           setProducts(list as ProductItem[])
-          setTotalCount(list.length)
+          setTotalCount(total)
         })
         .catch(() => {
           if (cancelled || settled) return
@@ -1054,11 +1058,15 @@ export const useProductCategory = (
       lang,
       page: queryState.page,
       pageSize: Math.min(24, queryState.pageSize || 24),
+      minPrice: queryState.minPrice,
+      maxPrice: queryState.maxPrice,
+      sortBy: queryState.sortBy,
+      brandCategoryId: queryState.brandCategoryId || undefined,
     })
-      .then((list) => {
+      .then(({ list, total }) => {
         if (cancelled || settled) return
         setProducts(list as ProductItem[])
-        setTotalCount(list.length)
+        setTotalCount(total)
       })
       .catch((err: any) => {
         if (cancelled || settled) return

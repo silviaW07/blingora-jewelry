@@ -11,6 +11,18 @@ export async function GET(request: Request) {
   const search = String(url.searchParams.get('search') || '').trim()
   const slug = String(url.searchParams.get('slug') || '').trim()
   const categoryId = String(url.searchParams.get('category_id') || '').trim()
+  const brandCategoryId = String(url.searchParams.get('brand_category_id') || '').trim()
+  const sortBy = String(url.searchParams.get('sort_by') || 'NEWEST').trim() || 'NEWEST'
+  const minPriceRaw = url.searchParams.get('min_price')
+  const maxPriceRaw = url.searchParams.get('max_price')
+  const minPrice =
+    minPriceRaw !== null && minPriceRaw !== '' && !Number.isNaN(Number(minPriceRaw))
+      ? Number(minPriceRaw)
+      : undefined
+  const maxPrice =
+    maxPriceRaw !== null && maxPriceRaw !== '' && !Number.isNaN(Number(maxPriceRaw))
+      ? Number(maxPriceRaw)
+      : undefined
   const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1)
   const pageSize = Math.min(24, Math.max(1, Number(url.searchParams.get('page_size') || 24) || 24))
 
@@ -20,11 +32,15 @@ export async function GET(request: Request) {
     search,
     slug,
     categoryId,
+    brandCategoryId,
+    sortBy,
+    minPrice,
+    maxPrice,
     page,
     pageSize,
   })
   return NextResponse.json(
-    { list: data.list },
+    { list: data.list, total: data.total },
     {
       headers: {
         'Cache-Control': 'private, no-store, max-age=0',

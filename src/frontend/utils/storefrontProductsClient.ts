@@ -2,23 +2,34 @@ import { slimProductCards, type ShelfProductCard } from '@/frontend/utils/catego
 
 export async function fetchCategoryShelfProducts(input: {
   categoryId?: string
+  brandCategoryId?: string
   slug?: string
   daily?: boolean
   search?: string
   lang?: string
   page?: number
   pageSize?: number
-}): Promise<ShelfProductCard[]> {
-  if (typeof window === 'undefined') return []
+  minPrice?: number
+  maxPrice?: number
+  sortBy?: string
+}): Promise<{ list: ShelfProductCard[]; total: number }> {
+  if (typeof window === 'undefined') return { list: [], total: 0 }
   const params = new URLSearchParams()
   if (input.daily) params.set('daily', '1')
   if (input.search) params.set('search', input.search)
   if (input.slug) params.set('slug', input.slug)
   if (!input.daily && input.categoryId) params.set('category_id', input.categoryId)
+  if (input.brandCategoryId) params.set('brand_category_id', input.brandCategoryId)
+  if (input.minPrice !== undefined && !Number.isNaN(input.minPrice)) {
+    params.set('min_price', String(input.minPrice))
+  }
+  if (input.maxPrice !== undefined && !Number.isNaN(input.maxPrice)) {
+    params.set('max_price', String(input.maxPrice))
+  }
   params.set('page', String(Math.max(1, input.page || 1)))
   params.set('page_size', String(Math.min(48, Math.max(1, input.pageSize || 24))))
   params.set('lang', String(input.lang || 'en'))
-  params.set('sort_by', 'NEWEST')
+  params.set('sort_by', String(input.sortBy || 'NEWEST'))
 
   const controller = new AbortController()
   // Chrome Android (especially behind VPN / slow DNS) may take >12s to return.
@@ -31,11 +42,13 @@ export async function fetchCategoryShelfProducts(input: {
       headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },
       signal: controller.signal,
     })
-    if (!res.ok) return []
-    const data = (await res.json()) as { list?: unknown }
-    return slimProductCards(data?.list)
+    if (!res.ok) return { list: [], total: 0 }
+    const data = (await res.json()) as { list?: unknown; total?: number }
+    const list = slimProductCards(data?.list)
+    const total = typeof data?.total === 'number' ? data.total : list.length
+    return { list, total }
   } catch {
-    return []
+    return { list: [], total: 0 }
   } finally {
     window.clearTimeout(timer)
   }
