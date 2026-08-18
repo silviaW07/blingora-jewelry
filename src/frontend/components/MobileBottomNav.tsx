@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Home, LayoutGrid, Sparkles, ShoppingCart, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { hardNavProps, onHardNavClick } from '@/frontend/utils/hardNavigate'
+import { hardNavProps } from '@/frontend/utils/hardNavigate'
 import { cn } from '@/lib/utils'
 
 const TABS = [
@@ -65,7 +65,6 @@ export function MobileBottomNav() {
                 {...hardNavProps(tab.href)}
                 className={cn('mobile-bottom-nav__item', active && 'is-active')}
                 aria-current={active ? 'page' : undefined}
-                onClick={onHardNavClick(tab.href)}
               >
                 <Icon className="size-5 shrink-0" strokeWidth={active ? 2.4 : 1.9} />
                 <span className="truncate">{labels[tab.key]}</span>

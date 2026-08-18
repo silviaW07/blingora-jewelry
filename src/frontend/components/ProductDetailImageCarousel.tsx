@@ -13,8 +13,8 @@ type Props = {
 }
 
 /**
- * One hero for Chrome + other phones.
- * Slide inner uses padding-bottom:100% (same as list cards) so the img is never 0×0.
+ * One square hero — same padding-box as list cards (Chrome cannot paint imgs in a
+ * 340-slide flex scroller). Swipe / color thumbs change the single visible image.
  */
 export function ProductDetailImageCarousel({
   items,
@@ -26,63 +26,73 @@ export function ProductDetailImageCarousel({
     () => items.filter((item): item is { url: string } => Boolean(item.url)),
     [items],
   )
-  const scrollerRef = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(0)
-  const activeUrlRef = useRef(activeUrl)
-  activeUrlRef.current = activeUrl
-  const onActiveChangeRef = useRef(onActiveChange)
-  onActiveChangeRef.current = onActiveChange
+  const indexRef = useRef(0)
+  indexRef.current = index
+  const startX = useRef<number | null>(null)
+  const startY = useRef(0)
 
-  const syncFromScroll = () => {
-    const el = scrollerRef.current
-    if (!el) return
-    const width = el.clientWidth || 1
-    const next = Math.max(0, Math.min(slides.length - 1, Math.round(el.scrollLeft / width)))
-    setIndex(next)
-    const url = slides[next]?.url
-    if (url && url !== activeUrlRef.current) onActiveChangeRef.current(url)
+  const goTo = (next: number) => {
+    if (slides.length === 0) return
+    const clamped = Math.max(0, Math.min(slides.length - 1, next))
+    setIndex(clamped)
+    const url = slides[clamped]?.url
+    if (url) onActiveChange(url)
   }
 
   useEffect(() => {
-    const el = scrollerRef.current
-    if (!el || !activeUrl || slides.length === 0) return
+    if (!activeUrl || slides.length === 0) return
     const target = slides.findIndex((item) => item.url === activeUrl)
-    if (target < 0) return
-    const width = el.clientWidth || 1
-    const left = target * width
-    if (Math.abs(el.scrollLeft - left) > 8) {
-      el.scrollTo({ left, behavior: 'auto' })
-    }
+    if (target < 0 || target === indexRef.current) return
     setIndex(target)
   }, [activeUrl, slides])
 
-  if (slides.length === 0) {
+  if (slides.length === 0 && !String(activeUrl || '').trim()) {
     return <div className="product-detail-carousel product-detail-carousel--empty" aria-hidden />
   }
 
+  const current = slides[index] || slides[0]
+  const heroUrl = String(activeUrl || '').trim() || current?.url || ''
+  const canSwipe = slides.length > 1
+
+  if (!heroUrl) {
+    return <div className="product-detail-carousel product-detail-carousel--empty" aria-hidden />
+  }
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canSwipe || event.button !== 0) return
+    startX.current = event.clientX
+    startY.current = event.clientY
+  }
+
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (startX.current == null) return
+    const dx = event.clientX - startX.current
+    const dy = event.clientY - startY.current
+    startX.current = null
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+    goTo(indexRef.current + (dx < 0 ? 1 : -1))
+  }
+
   return (
-    <div className="product-detail-carousel" aria-roledescription="carousel">
-      <div
-        className="product-detail-carousel__viewport"
-        ref={scrollerRef}
-        onScroll={syncFromScroll}
-      >
-        {slides.map((item, slideIndex) => (
-          <div className="product-detail-carousel__slide" key={`${item.url}-${slideIndex}`}>
-            <div className="product-detail-carousel__slide-inner">
-              <OptimizedProductImage
-                fill
-                src={item.url}
-                alt={alt}
-                className="product-detail-carousel__img"
-                imageWidth={1600}
-                priority={slideIndex === 0}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      {slides.length > 1 ? (
+    <div
+      className="product-detail-carousel"
+      aria-roledescription="carousel"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        startX.current = null
+      }}
+    >
+      <OptimizedProductImage
+        fill
+        src={heroUrl}
+        alt={alt}
+        className="product-detail-carousel__img"
+        imageWidth={960}
+        priority
+      />
+      {canSwipe ? (
         <div className="product-detail-carousel__fraction" aria-live="polite">
           {index + 1} / {slides.length}
         </div>

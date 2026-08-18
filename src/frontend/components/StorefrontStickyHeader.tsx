@@ -43,6 +43,7 @@ import { useTranslation } from 'react-i18next'
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n'
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
+import { hardNavigate, useChromeActivate } from '@/frontend/utils/hardNavigate'
 
 /** Pure storefront home only — listing queries / other paths enable CATEGORIES flyout. */
 export function isStorefrontHomePath(pathname: string | null, searchParams?: URLSearchParams | null) {
@@ -98,6 +99,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   const [localeTick, setLocaleTick] = useState(0)
 
   const localeMenuRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const topNavPanelRef = useRef<HTMLDivElement | null>(null)
   const floatingSideNavRef = useRef<HTMLDivElement | null>(null)
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -334,15 +336,18 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   )
 
   const handleHeaderSearchSubmit = useCallback(() => {
-    if (isSearchLoading) return
+    const keyword = String(searchInputRef.current?.value ?? searchKeyword).trim()
+    setSearchKeyword(keyword)
     setIsSearchLoading(true)
-    const keyword = searchKeyword.trim()
-    const params = new URLSearchParams()
-    if (keyword) {
-      params.set('search', keyword)
+    if (!keyword) {
+      hardNavigate('/')
+      return
     }
-    router.push(params.toString() ? `${ProductCategory.path}?${params.toString()}` : ProductCategory.path)
-  }, [isSearchLoading, router, searchKeyword])
+    const params = new URLSearchParams()
+    params.set('search', keyword)
+    hardNavigate(`/?${params.toString()}`)
+  }, [searchKeyword])
+  const headerSearchActivate = useChromeActivate(handleHeaderSearchSubmit)
 
   useEffect(() => {
     setIsSearchLoading(false)
@@ -382,29 +387,31 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                 data-controller-name="搜索栏与用户功能区"
               >
                 <div className="flex min-w-0 flex-1 justify-center">
-                  {/* Desktop search: wide capsule + black button — never reuse mobile max-w-[220px] */}
-                  <div className="storefront-desktop-search flex w-full max-w-[560px] items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)] xl:max-w-[640px]">
+                  <form
+                    className="storefront-desktop-search flex w-full max-w-[560px] items-center overflow-hidden rounded-full border border-[#1e1e1e] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.55)] xl:max-w-[640px]"
+                    action="/"
+                    method="get"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      handleHeaderSearchSubmit()
+                    }}
+                  >
                     <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 text-[#6b6b6b] sm:gap-3 sm:px-5">
                       <Camera className="size-4 shrink-0 sm:size-5" />
                       <Input
+                        ref={searchInputRef}
+                        name="search"
                         placeholder={t('common.pleaseInput')}
                         className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-base"
                         value={searchKeyword}
                         onChange={(event) => setSearchKeyword(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            handleHeaderSearchSubmit()
-                          }
-                        }}
                       />
                     </div>
                     <Button
-                      type="button"
-                      onClick={handleHeaderSearchSubmit}
-                      disabled={isSearchLoading}
+                      type="submit"
+                      {...headerSearchActivate}
                       aria-busy={isSearchLoading}
-                      className="h-10 min-w-[88px] rounded-none rounded-r-full bg-[#111111] px-4 text-sm font-semibold tracking-[0.08em] text-white hover:bg-[#262626] disabled:pointer-events-none disabled:opacity-80 sm:h-11 sm:min-w-[100px] sm:px-6"
+                      className="h-10 min-w-[88px] rounded-none rounded-r-full bg-[#111111] px-4 text-sm font-semibold tracking-[0.08em] text-white hover:bg-[#262626] sm:h-11 sm:min-w-[100px] sm:px-6"
                     >
                       {isSearchLoading ? (
                         <Loader2 className="mr-2 size-5 animate-spin" />
@@ -415,7 +422,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                         {t('common.search')}
                       </DecorateText>
                     </Button>
-                  </div>
+                  </form>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">

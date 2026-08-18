@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { CustomerRegister, CustomerLogin } from '@/frontend/route-params';
+import { useSearchParams } from 'next/navigation';
+import { hardNavigate } from '@/frontend/utils/hardNavigate';
 import { registerCustomer } from '@/frontend/actions/CustomerRegister';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { useUserSession } from '@/tools/FrontendSession';
@@ -38,9 +38,8 @@ export interface CustomerRegisterHandlers {
 }
 
 export const useCustomerRegister = (): { state: CustomerRegisterState, handlers: CustomerRegisterHandlers } => {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { returnTo } = CustomerRegister.getParams(searchParams);
+  const returnTo = String(searchParams.get('returnTo') || searchParams.get('redirect') || '').trim() || undefined
   const { set: setSession } = useUserSession();
 
   const [form, setForm] = useState<FormFields>({
@@ -98,11 +97,8 @@ export const useCustomerRegister = (): { state: CustomerRegisterState, handlers:
       });
 
       setIsSuccess(true);
-      if (returnTo) {
-        router.replace(decodeURIComponent(returnTo));
-      } else {
-        router.replace('/');
-      }
+      const target = returnTo ? decodeURIComponent(returnTo) : '/'
+      hardNavigate(target.startsWith('/') ? target : '/')
     } catch (error: any) {
       setGlobalError(error.message || '注册请求失败，请稍后重试');
     } finally {
@@ -112,9 +108,9 @@ export const useCustomerRegister = (): { state: CustomerRegisterState, handlers:
 
   const handleGoLogin = () => {
     if (returnTo) {
-      CustomerLogin.navigateToWithReturn(router, { returnTo });
+      hardNavigate(`/customerlogin/?returnTo=${encodeURIComponent(returnTo)}`)
     } else {
-      CustomerLogin.navigateToDefault(router);
+      hardNavigate('/customerlogin/')
     }
   };
 

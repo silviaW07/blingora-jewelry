@@ -140,7 +140,10 @@
       "season": "Season",
       "function": "Function",
       "soleProcess": "Sole process",
-      "spec": "Spec"
+      "spec": "Spec",
+      "innerLiner": "Inner liner",
+      "outerShell": "Outer shell",
+      "lidMaterial": "Lid material"
     },
     "colorKeywords": {
       "不锈钢": "Stainless Steel",

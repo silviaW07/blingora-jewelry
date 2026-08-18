@@ -20,6 +20,7 @@ import {
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
+import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 
 const COUNTRY_CODE_MAP: Record<string, string> = {
@@ -569,7 +570,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
           `Product “${resolveProductDisplayName(sku.product.name, (sku.product as any).translationsJson, 'en')}” is unavailable`,
         )
       }
-      if (sku.stock < quantity) {
+      if (!isStorefrontQtyAllowed(sku.stock, quantity)) {
         throw new Error(
           `Insufficient stock for “${resolveProductDisplayName(sku.product.name, (sku.product as any).translationsJson, 'en')}”`,
         )

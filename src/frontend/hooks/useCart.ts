@@ -144,6 +144,8 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
     try {
       await updateCartItemQuantity({ cartItemId, quantity: newQuantity })
       await loadCartData()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update quantity')
     } finally {
       setActionLoading(false)
     }

@@ -17,6 +17,7 @@ import { I18nProvider } from '@/frontend/i18n/I18nProvider'
 import '@/index.css'
 import './theme-style.css'
 import { AuthExpiredDialog } from '@/frontend/auth/rpc-auth'
+import { StorefrontNavBridge } from '@/frontend/components/StorefrontNavBridge'
 
 // 不需要导航栏和页脚的路径白名单（模板，后续可修改）
 const FULLSCREEN_PATHS = ['/customerlogin', '/customerregister']
@@ -49,6 +50,7 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
       <CustomerAuthModalProvider>
         <div className="font-sans min-h-screen bg-[#FFF5F5] flex flex-col notranslate" translate="no">
               <AuthExpiredDialog />
+              <StorefrontNavBridge />
               <DecorateModeProvider>
                 {showPromotionBanner ? <TopPromotionBanner /> : null}
                 <main className="flex-1 w-full min-h-0 storefront-main-with-mobile-nav">

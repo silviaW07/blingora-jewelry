@@ -16,8 +16,6 @@ import { OptimizedProductImage } from '@/frontend/components/OptimizedProductIma
 import type { CartState, CartHandlers } from '@/frontend/hooks/useCart';
 import { useQuantityControl } from '@/frontend/hooks/useCart';
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder';
-import { AccountOrders, Checkout, ProductDetail } from '@/frontend/route-params';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { computeCheckoutTotals, formatUsd, sumCartWeightGram } from '@/shared/checkoutSummary';
@@ -35,6 +33,9 @@ import {
   translateProductSpecLabel,
   translateProductSpecValue,
 } from '@/frontend/i18n/productSpecTranslate';
+import { buildPaypalPayUrl } from '@/shared/paypalPayUrl';
+import { storefrontQtyMax } from '@/shared/storefrontQty';
+import { hardNavigate, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate';
 
 interface Props {
   state: CartState;
@@ -55,6 +56,7 @@ const QuantityControl = ({
   disabled: boolean;
   onUpdate: (val: number) => void;
 }) => {
+  const qtyMax = storefrontQtyMax(max);
   const {
     val,
     handleMinus,
@@ -64,24 +66,26 @@ const QuantityControl = ({
     handleKeyDown,
     handleCompositionStart,
     handleCompositionEnd
-  } = useQuantityControl(initialValue, max, onUpdate);
-  return <fieldset disabled={disabled} className="mobile-cart-qty inline-flex h-8 items-center overflow-hidden bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-      <button type="button" onClick={handleMinus} disabled={disabled || Number(val) <= 1} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+  } = useQuantityControl(initialValue, qtyMax, onUpdate);
+  const minusEvents = useChromeActivate(handleMinus);
+  const plusEvents = useChromeActivate(handlePlus);
+  return <div role="group" aria-disabled={disabled} className="mobile-cart-qty inline-flex h-8 items-center overflow-hidden bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+      <button type="button" {...minusEvents} disabled={disabled || Number(val) <= 1} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
         <Minus className="size-3.5" data-api-unique-id='cartview-r2cdb4196d925e59d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
-      <Input type="text" value={val} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} className="h-full w-9 border-0 bg-transparent p-0 text-center font-body text-sm text-[#0F172A] focus-visible:outline-none focus-visible:ring-0 rounded-none" aria-label="Quantity" data-api-unique-id='cartview-r3985fe31fc48ad8b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
-      <button type="button" onClick={handlePlus} disabled={disabled || Number(val) >= max} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Increase quantity" data-api-unique-id='cartview-r97ac9a4c6c9b44cc-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+      <Input type="text" value={val} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} disabled={disabled} className="h-full w-9 border-0 bg-transparent p-0 text-center font-body text-sm text-[#0F172A] focus-visible:outline-none focus-visible:ring-0 rounded-none" aria-label="Quantity" data-api-unique-id='cartview-r3985fe31fc48ad8b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
+      <button type="button" {...plusEvents} disabled={disabled || Number(val) >= qtyMax} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Increase quantity" data-api-unique-id='cartview-r97ac9a4c6c9b44cc-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
         <Plus className="size-3.5" data-api-unique-id='cartview-rf62224822c3caf62-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
-    </fieldset>;
+    </div>;
 };
 export const CartView = ({
   state,
   handlers
 }: Props) => {
   const { t } = useTranslation();
-  const router = useRouter();
   const guest = useIsStorefrontGuest();
+  const goCheckout = useChromeActivate(() => hardNavigate('/checkout/'));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [checkoutAddress, setCheckoutAddress] = useState<CheckoutAddressForm | null>(null);
@@ -90,6 +94,7 @@ export const CartView = ({
   const [selectedChannelName, setSelectedChannelName] = useState<string | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [placedOrderNo, setPlacedOrderNo] = useState('');
+  const [placedAmount, setPlacedAmount] = useState(0);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [customerService, setCustomerService] = useState<CustomerServiceConfig>(() =>
@@ -132,6 +137,17 @@ export const CartView = ({
         placedOrderNo ? `Order #: ${placedOrderNo}` : undefined,
       ) || `https://wa.me/${DEFAULT_CUSTOMER_SERVICE_CONFIG.whatsappNumber}`,
     [customerService.whatsappNumber, placedOrderNo],
+  );
+
+  const paypalPayUrl = useMemo(
+    () =>
+      buildPaypalPayUrl({
+        baseLink: customerService.paypalLink,
+        amount: placedAmount,
+        currency: 'USD',
+        itemName: placedOrderNo ? `Order ${placedOrderNo}` : 'Order',
+      }),
+    [customerService.paypalLink, placedAmount, placedOrderNo],
   );
 
   const totalPieces = useMemo(
@@ -290,7 +306,7 @@ export const CartView = ({
                           <div className="relative flex items-start justify-center" data-api-unique-id='cartview-rf7a98182755d9be5-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                             <button
                               type="button"
-                              onClick={() => ProductDetail.navigateToById(router, { productId: item.productId })}
+                              onClick={() => hardNavigate(productHref(item.productId))}
                               className="mobile-cart-line__thumb relative aspect-square w-full max-w-[5.25rem] shrink-0 overflow-hidden bg-[#F1F5F9] cursor-pointer transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40 md:max-w-[96px]"
                               aria-label={item.productName}
                               data-api-unique-id='cartview-r5f1186b734437a3a-s3843595280'
@@ -321,7 +337,7 @@ export const CartView = ({
                                 <h3 className="mobile-cart-line__title font-header text-sm font-semibold leading-snug text-[#0F172A] md:text-base" data-api-unique-id='cartview-r64316e0eade6ddaa-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                   <button
                                     type="button"
-                                    onClick={() => ProductDetail.navigateToById(router, { productId: item.productId })}
+                                    onClick={() => hardNavigate(productHref(item.productId))}
                                     className="line-clamp-2 text-left transition-colors hover:text-[#f254a6] hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
                                   >
                                     {item.productName}
@@ -330,7 +346,7 @@ export const CartView = ({
                                 {item.skuAttributes && item.skuAttributes.length > 0 && <div className="flex flex-wrap gap-1" data-api-unique-id='cartview-r4f75d13364ec3762-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                     {item.skuAttributes.map((attr, index1) => <div key={index1} className="inline-flex max-w-full items-center bg-[#F1F5F9] px-1.5 py-0.5 font-body text-[11px] font-medium text-[#64748B] md:text-[10px] md:font-semibold md:uppercase md:tracking-[0.04em]" data-api-unique-id='cartview-r443a41401fde3abe-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                         <span className="mr-1 opacity-70" data-api-unique-id='cartview-r3ba08fd515f27b2a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' data-api-bind-info={`item.skuAttributes-${index1}-name`} data-api-map-var-name='attr'>{translateProductSpecLabel(attr.name, t)}:</span>
-                                        <span className="max-w-[120px] truncate text-[#0F172A] normal-case" data-api-unique-id='cartview-r34b8564756da5cab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' data-api-bind-info={`item.skuAttributes-${index1}-value`} data-api-map-var-name='attr'>{translateProductSpecValue(attr.name, attr.value, t)}</span>
+                                        <span className="min-w-0 max-w-full whitespace-normal break-words text-[#0F172A] normal-case" data-api-unique-id='cartview-r34b8564756da5cab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' data-api-bind-info={`item.skuAttributes-${index1}-value`} data-api-map-var-name='attr'>{translateProductSpecValue(attr.name, attr.value, t)}</span>
                                       </div>)}
                                   </div>}
                                 <p className="mobile-cart-line__price font-header text-sm font-bold text-[#0F172A]">
@@ -375,7 +391,7 @@ export const CartView = ({
                         state.isEmpty ||
                         state.items.every((item) => item.status === 'INVALID')
                       }
-                      onClick={() => Checkout.navigateTo(router)}
+                      {...goCheckout}
                       className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#f254a6] py-5 text-base font-bold text-white hover:bg-[#e44798] disabled:opacity-50"
                     >
                       <DecorateText propKey="cart_go_checkout_btn" as="span">
@@ -387,7 +403,7 @@ export const CartView = ({
                 </div>
               </div>
 
-              <div className="hidden xl:col-span-4 xl:sticky xl:top-[76px] xl:block" data-api-unique-id='cartview-r39276e9511f27071-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+              <div className="mobile-cart-desktop-summary hidden xl:col-span-4 xl:sticky xl:top-[76px] xl:block" data-api-unique-id='cartview-r39276e9511f27071-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                 {state.summary && <div className="flex max-h-[80vh] flex-col overflow-y-auto overscroll-contain rounded-[12px] border border-[#f0dede] bg-white xl:h-[80vh]" data-api-unique-id='cartview-rfe0b33b0e27d27a4-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                     <div className="space-y-3 px-4 py-3" data-api-unique-id='cartview-r51067957ab55614c-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                       <div className="flex items-start justify-between gap-2" data-api-unique-id='cartview-r93ff93501e254643-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
@@ -485,6 +501,7 @@ export const CartView = ({
                             })
 
                             setPlacedOrderNo(result.orderNo)
+                            setPlacedAmount(Number(result.totalAmount) || payableAmountValue)
                             setIsSuccessOpen(true)
 
                             // 后端已清空购物车，同步前端状态
@@ -577,9 +594,7 @@ export const CartView = ({
                 <button
                   key={prod.productId}
                   type="button"
-                  onClick={() =>
-                    ProductDetail.navigateToById(router, { productId: prod.productId })
-                  }
+                  onClick={() => hardNavigate(productHref(prod.productId))}
                   className="mobile-cart-recommend__card group flex cursor-pointer flex-col overflow-hidden rounded-[8px] border border-[#eaeaea] bg-white text-left transition hover:border-[#f0dede]"
                   data-api-unique-id="cartview-rc51a6facd67736f2-s3843595280"
                   data-api-unique-page-name="src/frontend/components/CartView"
@@ -681,6 +696,11 @@ export const CartView = ({
               <p className="font-body text-base font-semibold text-[#0F172A]">
                 Order #: {placedOrderNo || '—'}
               </p>
+              {placedAmount > 0 ? (
+                <p className="font-body text-lg font-bold text-[#111111]">
+                  US$ {placedAmount.toFixed(2)}
+                </p>
+              ) : null}
 
               <div className="w-full rounded-[14px] border border-[#e8e8e8] bg-[#fafafa] px-5 py-4 text-center">
                 <p className="font-body text-sm leading-7 text-[#475569]">
@@ -704,12 +724,16 @@ export const CartView = ({
 
               <Button
                 type="button"
-                className="h-10 rounded-[10px] bg-[#25D366] px-5 text-sm font-bold text-white hover:bg-[#1ebe5d]"
+                className="h-10 rounded-[10px] bg-[#0070ba] px-5 text-sm font-bold text-white hover:bg-[#005ea6]"
                 onClick={() => {
-                  window.open(whatsappOrderUrl, '_blank', 'noopener,noreferrer')
+                  if (paypalPayUrl) {
+                    window.open(paypalPayUrl, '_blank', 'noopener,noreferrer')
+                    return
+                  }
+                  toast.error('Please set a PayPal link in customer-service settings.')
                 }}
               >
-                Pay Now
+                Pay Now · PayPal
               </Button>
             </div>
 
@@ -719,7 +743,7 @@ export const CartView = ({
               className="h-11 w-full rounded-[10px] font-bold text-[#f254a6] hover:bg-[#fff0f5] hover:text-[#f254a6]"
               onClick={() => {
                 setIsSuccessOpen(false)
-                AccountOrders.navigateTo(router)
+                hardNavigate('/account/orders/')
               }}
             >
               <DecorateText propKey="checkout_success_view_orders_btn" as="span">{t('common.viewOrders')}</DecorateText>

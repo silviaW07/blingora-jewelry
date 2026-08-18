@@ -5,6 +5,8 @@ import {
   PRODUCT_KEYWORD_ES,
   PRODUCT_KEYWORD_ORDER,
   collapseRepeatedTitleWords,
+  containsChinese,
+  stripChineseFromTitle,
 } from '@/shared/productKeywordDictionary'
 
 /**
@@ -50,7 +52,9 @@ const CJK_EDGE = /[\u4e00-\u9fff]/
 /** True for Description fields whose values should keyword-translate. */
 export function isColorOrStyleSpecField(label: string | null | undefined): boolean {
   const normalized = normalizeSpecFieldKey(label)
-  return Boolean(normalized) && COLOR_STYLE_FIELD_KEYS.has(normalized)
+  if (!normalized) return false
+  if (COLOR_STYLE_FIELD_KEYS.has(normalized)) return true
+  return /材质|材料|面料|material|fabric|风格|款式|style|功能|function/.test(normalized)
 }
 
 /** Longest non-empty keyword at index — never first-in-list / never empty. */
@@ -97,8 +101,9 @@ function joinTranslatedPieces(pieces: string[]): string {
 
 function staticKeywordFallback(keyword: string, lng?: string | null): string {
   const code = String(lng || '').toLowerCase()
-  if (code.startsWith('es')) return PRODUCT_KEYWORD_ES[keyword] || keyword
-  if (code.startsWith('zh')) return keyword
+  if (code.startsWith('es')) {
+    return PRODUCT_KEYWORD_ES[keyword] || PRODUCT_KEYWORD_EN[keyword] || keyword
+  }
   return PRODUCT_KEYWORD_EN[keyword] || keyword
 }
 
@@ -123,10 +128,13 @@ export function translateColorStyleText(text: string | null | undefined, t: TFun
     if (keyword) {
       const i18nKey = `productSpec.colorKeywords.${keyword}`
       const translated = t(i18nKey)
-      const hit =
-        translated && translated !== i18nKey
+      let hit =
+        translated && translated !== i18nKey && !containsChinese(translated)
           ? translated
           : staticKeywordFallback(keyword, lng)
+      if (containsChinese(hit)) {
+        hit = PRODUCT_KEYWORD_EN[keyword] || hit
+      }
       const hitLen = keyword.length
       if (hitLen <= 0) {
         pieces.push(raw[i] || '')
@@ -161,13 +169,14 @@ export function translateProductSpecValue(
 ): string {
   const raw = String(value || '').trim()
   if (!raw) return ''
-  if (!isColorOrStyleSpecField(label) && !isSizeSpecField(label)) return raw
   const translated = translateColorStyleText(raw, t)
-  return translated
     .replace(/(^|[,/])\s*配(?=\s|[A-Za-z])/g, '$1With ')
     .replace(/\s*\+\s*/g, ' + ')
+    .replace(/\s*[，,]\s*/g, ', ')
     .replace(/\s+/g, ' ')
     .trim()
+  if (!containsChinese(translated)) return translated
+  return stripChineseFromTitle(translated)
 }
 
 /** Translate Description field labels (颜色/尺码/材质 …). */
@@ -199,6 +208,9 @@ const SPEC_FIELD_LABEL_KEYS: Record<string, string> = {
   功能: 'productSpec.fields.function',
   function: 'productSpec.fields.function',
   鞋底工艺: 'productSpec.fields.soleProcess',
+  内胆材质: 'productSpec.fields.innerLiner',
+  外壳材质: 'productSpec.fields.outerShell',
+  杯盖材质: 'productSpec.fields.lidMaterial',
 }
 
 export function translateProductSpecLabel(
@@ -208,7 +220,12 @@ export function translateProductSpecLabel(
   const raw = String(label || '').trim()
   if (!raw) return ''
   const key = SPEC_FIELD_LABEL_KEYS[raw] || SPEC_FIELD_LABEL_KEYS[raw.toLowerCase()]
-  if (!key) return raw
-  const translated = t(key)
-  return translated && translated !== key ? translated : raw
+  if (key) {
+    const translated = t(key)
+    if (translated && translated !== key && !containsChinese(translated)) return translated
+  }
+  const viaKeywords = translateColorStyleText(raw, t)
+  if (viaKeywords && !containsChinese(viaKeywords)) return viaKeywords
+  const stripped = stripChineseFromTitle(viaKeywords || raw)
+  return stripped || viaKeywords || raw
 }

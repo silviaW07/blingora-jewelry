@@ -8,7 +8,7 @@ import { ChevronLeft, Heart, MapPin, Package, Settings, UserCircle2 } from 'luci
 import { cn } from '@/lib/utils'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
-import { hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { useUserSession } from '@/tools/FrontendSession'
 import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen'
@@ -84,9 +84,6 @@ export function AccountShell({
 
   const path = String(pathname || '').toLowerCase()
   const isAccountRoute = path.includes('/account')
-  if (isAccountRoute && isStorefrontGuestSession(session)) {
-    return <GuestAuthScreen initialTab="register" />
-  }
 
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
@@ -94,6 +91,12 @@ export function AccountShell({
       return
     }
     hardNavigate('/')
+  }
+  const goBackEvents = useChromeActivate(goBack)
+  const goProfileEvents = useChromeActivate(() => hardNavigate(withSlash(AccountProfile.path)))
+
+  if (isAccountRoute && isStorefrontGuestSession(session)) {
+    return <GuestAuthScreen initialTab="register" />
   }
 
   return (
@@ -115,7 +118,7 @@ export function AccountShell({
         <div className="flex h-11 items-center gap-1.5 px-2.5 sm:h-12 sm:px-3">
           <button
             type="button"
-            onClick={goBack}
+            {...goBackEvents}
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[#1f1a14] active:bg-black/5"
             aria-label={t('accountShell.back')}
           >
@@ -131,7 +134,7 @@ export function AccountShell({
 
           <button
             type="button"
-            onClick={() => hardNavigate(withSlash(AccountProfile.path))}
+            {...goProfileEvents}
             className="relative inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e8e2d8] bg-[#f6f2ea] text-[0.7rem] font-bold text-[#1f1a14] active:bg-[#efe9df]"
             aria-label={t('accountShell.profileSettings')}
             title={t('accountShell.settings')}

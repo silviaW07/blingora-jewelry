@@ -396,6 +396,8 @@ export const useProductDetail = (seed?: {
       String(url || '').trim().split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase()
     const mainImg: GalleryItem = { url: product.mainImageUrl, sort: -1 }
     const seen = new Set<string>([identity(product.mainImageUrl)].filter(Boolean))
+    // Hero swipe = product photos only. Never dump every SKU image (can be 300+) —
+    // that saturates mobile browsers and the main image stays gray.
     const extraImgs = (product.galleryJson || [])
       .filter((item) => {
         const key = identity(item.url)
@@ -404,15 +406,8 @@ export const useProductDetail = (seed?: {
         return true
       })
       .sort((a, b) => (a.sort || 0) - (b.sort || 0))
-    for (const sku of product.skus || []) {
-      if (!sku.imageUrl) continue
-      const key = identity(sku.imageUrl)
-      if (key && !seen.has(key)) {
-        seen.add(key)
-        extraImgs.push({ url: sku.imageUrl, sort: 999 })
-      }
-    }
-    return [mainImg, ...extraImgs]
+      .slice(0, 12)
+    return [mainImg, ...extraImgs].filter((item) => String(item.url || '').trim())
   }, [product])
 
   const isPurchasable = product?.status === 'ACTIVE'
@@ -667,15 +662,33 @@ export const useProductDetail = (seed?: {
     const sourceSku = product.skus.find((item) => item.id === skuId)
     if (!sourceSku) return
 
-    // 有颜色规格时必须先选颜色
-    if (colorAttribute && !String(manualColorValue || '').trim()) {
+    const colorFromSku = colorAttribute
+      ? String(
+          sourceSku.attributeJson?.find((attr) => attr.name === colorAttribute.name)?.value || '',
+        ).trim()
+      : ''
+    const firstColor = colorAttribute
+      ? String(
+          product.skus
+            .map((item) => item.attributeJson?.find((attr) => attr.name === colorAttribute.name)?.value)
+            .find((value) => String(value || '').trim()) || '',
+        ).trim()
+      : ''
+    const colorValue = String(manualColorValue || '').trim() || colorFromSku || firstColor
+    if (colorAttribute && !colorValue) {
       toast.error('Please select a color')
       triggerSelectionHighlight({ color: true, size: false })
       return
     }
+    if (colorAttribute && colorValue && !String(manualColorValue || '').trim()) {
+      setManualColorValue(colorValue)
+    }
 
-    const resolved = resolveRowSku(sourceSku)
-    const sku = resolved.sku
+    const resolvedSku =
+      colorAttribute && colorValue
+        ? resolveSkuForColorAndSize(sourceSku, colorValue)
+        : sourceSku
+    const sku = resolvedSku
     const current = skuQuantitiesRef.current[sku.id] ?? skuQuantities[sku.id] ?? 0
     const moq = resolveSkuMinOrderQty({
       productMinOrderQty,
@@ -708,7 +721,7 @@ export const useProductDetail = (seed?: {
     }
 
     if (next > 0) {
-      syncSkuSelection(sku, resolved.colorValue)
+      syncSkuSelection(sku, colorValue)
       const merged = { ...skuQuantitiesRef.current, [sku.id]: next }
       skuQuantitiesRef.current = merged
       setSkuQuantities(merged)
@@ -725,7 +738,7 @@ export const useProductDetail = (seed?: {
       if (remaining) {
         const remainSku = product.skus.find((item) => item.id === remaining[0])
         if (remainSku) {
-          syncSkuSelection(remainSku, resolved.colorValue)
+          syncSkuSelection(remainSku, colorValue)
           setQuantity(remaining[1])
         }
       } else {

@@ -291,6 +291,7 @@ import {
   tokenizeProductSearch,
 } from '@/shared/productSearch'
 import { normalizePosterLinkUrl } from '@/shared/posterLink'
+import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
@@ -1893,7 +1894,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
       throw new Error('加购数量必须大于零')
     }
 
-    if (sku.stock < input.quantity) {
+    if (!isStorefrontQtyAllowed(sku.stock, input.quantity)) {
       throw new Error('商品库存不足')
     }
 

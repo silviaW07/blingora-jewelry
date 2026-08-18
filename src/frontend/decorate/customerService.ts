@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 
 /** 全站客服（WhatsApp）配置 —— 接入页面可视化装修 */
 
@@ -16,6 +17,11 @@ export type FloatAnchorY = 'top' | 'bottom'
 export type CustomerServiceConfig = {
   /** WhatsApp 号码：纯数字含国家码，如 8613500529627 */
   whatsappNumber: string
+  /**
+   * PayPal 收款入口：paypal.me/店铺名 或 PayPal 邮箱。
+   * 前台支付时会自动带上该笔订单金额，无需每次改链接。
+   */
+  paypalLink: string
   /** 是否显示全站悬浮按钮 */
   floatEnabled: boolean
   /** 悬浮图标尺寸（px） */
@@ -45,6 +51,7 @@ export const CUSTOMER_SERVICE_SETTING_TITLE = 'CUSTOMER_SERVICE_WHATSAPP'
 
 export const DEFAULT_CUSTOMER_SERVICE_CONFIG: CustomerServiceConfig = {
   whatsappNumber: '8613500529627',
+  paypalLink: '',
   floatEnabled: true,
   floatSize: 56,
   floatPosition: 'free',
@@ -172,6 +179,7 @@ export function normalizeCustomerServiceConfig(
   return {
     whatsappNumber:
       normalizeWhatsappNumber(merged.whatsappNumber) || DEFAULT_CUSTOMER_SERVICE_CONFIG.whatsappNumber,
+    paypalLink: String(merged.paypalLink || '').trim(),
     floatEnabled: Boolean(merged.floatEnabled),
     floatSize: clampFloatSize(Number(merged.floatSize)),
     ...anchors,
@@ -247,7 +255,7 @@ export function clampFloatPointInViewport(
 /** Mobile viewport: keep FAB bottom-right above bottom nav (ignore mid-screen drag coords). */
 export function isMobileStorefrontViewport(): boolean {
   if (typeof window === 'undefined') return false
-  return window.matchMedia('(max-width: 767px)').matches
+  return isNarrowViewport()
 }
 
 /**

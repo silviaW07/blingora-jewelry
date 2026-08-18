@@ -29,6 +29,7 @@ import {
   type CustomerServiceConfig,
   DEFAULT_CUSTOMER_SERVICE_CONFIG,
 } from '@/frontend/decorate/customerService'
+import { buildPaypalPayUrl } from '@/shared/paypalPayUrl'
 
 interface Props {
   state: CartState
@@ -48,6 +49,7 @@ export default function CheckoutView({ state, handlers }: Props) {
   const [selectedChannelName, setSelectedChannelName] = useState<string | null>(null)
   const [isSuccessOpen, setIsSuccessOpen] = useState(false)
   const [placedOrderNo, setPlacedOrderNo] = useState('')
+  const [placedAmount, setPlacedAmount] = useState(0)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [customerService, setCustomerService] = useState<CustomerServiceConfig>(() =>
     readCustomerServiceLocal(),
@@ -115,6 +117,17 @@ export default function CheckoutView({ state, handlers }: Props) {
     [customerService.whatsappNumber, placedOrderNo],
   )
 
+  const paypalPayUrl = useMemo(
+    () =>
+      buildPaypalPayUrl({
+        baseLink: customerService.paypalLink,
+        amount: placedAmount,
+        currency: 'USD',
+        itemName: placedOrderNo ? `Order ${placedOrderNo}` : 'Order',
+      }),
+    [customerService.paypalLink, placedAmount, placedOrderNo],
+  )
+
   const handlePlaceOrder = async () => {
     if (!checkoutAddress) {
       toast.error(t('checkout.saveAddressFirst', { defaultValue: 'Please fill in your shipping address' }))
@@ -151,6 +164,7 @@ export default function CheckoutView({ state, handlers }: Props) {
       })
 
       setPlacedOrderNo(result.orderNo)
+      setPlacedAmount(Number(result.totalAmount) || payableAmountValue)
       setIsSuccessOpen(true)
       await handlers.handleClearCartAfterOrder().catch(() => undefined)
       setAddressConfirmed(false)
@@ -272,6 +286,11 @@ export default function CheckoutView({ state, handlers }: Props) {
               <p className="font-body text-base font-semibold text-[#0F172A]">
                 Order #: {placedOrderNo || '—'}
               </p>
+              {placedAmount > 0 ? (
+                <p className="font-body text-lg font-bold text-[#111111]">
+                  US$ {placedAmount.toFixed(2)}
+                </p>
+              ) : null}
               <div className="w-full rounded-[14px] border border-[#e8e8e8] bg-[#fafafa] px-5 py-4 text-center">
                 <p className="font-body text-sm leading-7 text-[#475569]">
                   <DecorateText propKey="checkout_success_whatsapp_guide" as="span">
@@ -289,6 +308,19 @@ export default function CheckoutView({ state, handlers }: Props) {
                   <MessageCircle className="size-7" strokeWidth={2.25} />
                 </a>
               </div>
+              <Button
+                type="button"
+                className="h-11 w-full rounded-[10px] bg-[#0070ba] px-5 text-sm font-bold text-white hover:bg-[#005ea6]"
+                onClick={() => {
+                  if (paypalPayUrl) {
+                    window.open(paypalPayUrl, '_blank', 'noopener,noreferrer')
+                    return
+                  }
+                  toast.error('Please set a PayPal link in customer-service settings.')
+                }}
+              >
+                {t('accountOrders.payNow')} · PayPal
+              </Button>
             </div>
             <Button
               type="button"

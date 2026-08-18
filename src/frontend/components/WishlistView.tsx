@@ -17,7 +17,7 @@ import { useLocalWishlistIds } from '@/frontend/hooks/useLocalWishlist'
 import { getClientPreferredLang } from '@/frontend/i18n'
 import { ProductDetail } from '@/frontend/route-params'
 import { useUserSession } from '@/tools/FrontendSession'
-import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
+import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
 
 /**
  * 心愿单 / Love：读取本地收藏 ID，展示可点击的商品卡片。
@@ -26,7 +26,6 @@ export default function WishlistView() {
   const { t } = useTranslation()
   const router = useRouter()
   const session = useUserSession()
-  const { openAuthModal } = useCustomerAuthModal()
   const wishlistIds = useLocalWishlistIds()
   const [products, setProducts] = useState<ProductItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,7 +71,7 @@ export default function WishlistView() {
   const handleAddToCart = useCallback(
     async (item: ProductItem) => {
       if (!session.token?.trim()) {
-        openAuthModal('login')
+        openStorefrontLogin()
         return
       }
       if (item.sku_count > 1 || !item.first_sku_id) {
@@ -94,7 +93,7 @@ export default function WishlistView() {
         toast.error(err?.message || t('wishlist.addToCartFailed'))
       }
     },
-    [session.token, openAuthModal, handleNavigate, t],
+    [session.token, handleNavigate, t],
   )
 
   const handleWishlistToggle = useCallback(

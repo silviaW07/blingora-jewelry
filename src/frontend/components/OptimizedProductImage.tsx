@@ -73,10 +73,10 @@ export function OptimizedProductImage({
         width={fill ? undefined : width || imageWidth}
         height={fill ? undefined : height || imageWidth}
         className={imgClass}
-        loading="eager"
+        loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         draggable={false}
-        fetchPriority={priority ? 'high' : 'auto'}
+        fetchPriority={priority ? 'high' : 'low'}
         referrerPolicy="no-referrer"
         onContextMenu={(event) => event.preventDefault()}
         onError={handleError}

@@ -24,6 +24,7 @@ import {
   resolveEffectiveSkuMinOrderQty,
   resolveProductMinOrderQty,
 } from '@/shared/minOrderQty'
+import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 
 // ===== Enums =====
 /** 商品状态：草稿(DRAFT) | 上架(ACTIVE) | 下架(INACTIVE) */
@@ -710,7 +711,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
       throw new Error('该商品当前不可购买')
     }
-    if (input.quantity > sku.stock) {
+    if (!isStorefrontQtyAllowed(sku.stock, input.quantity)) {
       throw new Error('库存不足，请减少购买数量')
     }
 

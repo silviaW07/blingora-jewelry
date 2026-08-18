@@ -11,6 +11,15 @@ import { AccountShell } from '@/frontend/components/AccountShell'
 import { getCustomerOrderDetail } from '@/frontend/actions/AccountCenter'
 import type { CustomerOrderSummary } from '@/frontend/actions/AccountCenter'
 import { AccountOrderPay, AccountOrders } from '@/frontend/route-params'
+import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService'
+import {
+  DEFAULT_CUSTOMER_SERVICE_CONFIG,
+  readCustomerServiceLocal,
+  writeCustomerServiceLocal,
+  type CustomerServiceConfig,
+} from '@/frontend/decorate/customerService'
+import { buildPaypalPayUrl } from '@/shared/paypalPayUrl'
+import { formatUsd } from '@/shared/money'
 
 export default function AccountOrderPayView() {
   const router = useRouter()
@@ -20,6 +29,29 @@ export default function AccountOrderPayView() {
   const { orderId } = useMemo(() => AccountOrderPay.getParams(searchParams), [searchParams])
   const [loading, setLoading] = useState(false)
   const [order, setOrder] = useState<CustomerOrderSummary | null>(null)
+  const [customerService, setCustomerService] = useState<CustomerServiceConfig>(() =>
+    readCustomerServiceLocal(),
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    getCustomerServiceConfig()
+      .then((res) => {
+        if (cancelled) return
+        if (res.persisted) {
+          setCustomerService(res.config)
+          writeCustomerServiceLocal(res.config)
+        } else {
+          setCustomerService(readCustomerServiceLocal())
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerService(readCustomerServiceLocal())
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!orderId) return
@@ -42,6 +74,27 @@ export default function AccountOrderPayView() {
       cancelled = true
     }
   }, [orderId, t])
+
+  const paypalPayUrl = useMemo(
+    () =>
+      order
+        ? buildPaypalPayUrl({
+            baseLink: customerService.paypalLink || DEFAULT_CUSTOMER_SERVICE_CONFIG.paypalLink,
+            amount: Number(order.totalAmount) || 0,
+            currency: order.currencyCode || 'USD',
+            itemName: `Order ${order.orderNo}`,
+          })
+        : null,
+    [customerService.paypalLink, order],
+  )
+
+  const handlePay = () => {
+    if (!paypalPayUrl) {
+      toast.error('Please set a PayPal link in customer-service settings.')
+      return
+    }
+    window.open(paypalPayUrl, '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <AccountShell
@@ -74,20 +127,20 @@ export default function AccountOrderPayView() {
               <p className="mt-1 text-lg font-semibold text-[#1f1a14]">{order.orderNo}</p>
             </div>
 
-            <div className="rounded-xl bg-[#fbfaf7] p-4 text-sm text-[#6f6558]">
-              <p className="font-medium text-[#2f2a24]">{t('accountOrders.payNow')}</p>
-              <p className="mt-1">
-                This is a placeholder payment page for wiring later. It’s safe to navigate here from “My Orders”.
+            <div>
+              <p className="text-sm font-medium text-[#8a8073]">{t('accountOrders.payNow')}</p>
+              <p className="mt-1 text-2xl font-bold text-[#111111]">
+                {formatUsd(Number(order.totalAmount) || 0)}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Button
                 type="button"
-                className="rounded-full bg-[#f254a6] text-white hover:bg-[#df3f91]"
-                onClick={() => toast.message('Payment flow not wired yet.')}
+                className="rounded-full bg-[#0070ba] text-white hover:bg-[#005ea6]"
+                onClick={handlePay}
               >
-                {t('accountOrders.payNow')}
+                {t('accountOrders.payNow')} · PayPal
               </Button>
               <Button
                 type="button"
@@ -104,4 +157,3 @@ export default function AccountOrderPayView() {
     </AccountShell>
   )
 }
-

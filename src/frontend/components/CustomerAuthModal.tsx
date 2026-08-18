@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { registerCustomer } from '@/frontend/actions/CustomerRegister';
 import { useUserSession } from '@/tools/FrontendSession';
+import { redirectAfterStorefrontAuth } from '@/frontend/utils/hardNavigate';
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { DecorateInput } from '@/frontend/decorate/DecorateInput';
@@ -144,6 +145,7 @@ export function CustomerAuthModal() {
 
       toast.success(t('auth.loginSuccess'));
       closeAuthModal();
+      redirectAfterStorefrontAuth();
     } catch (error: unknown) {
       const message = sanitizeAuthErrorMessage(
         error instanceof Error ? error.message : null,
@@ -193,8 +195,9 @@ export function CustomerAuthModal() {
         role: 'CUSTOMER',
       });
 
-      // 注册即登录：直接关弹窗，不切回登录页、不额外弹成功提示
+      // 注册即登录：刷新页面让价格/账户与网页端一致
       closeAuthModal();
+      redirectAfterStorefrontAuth();
     } catch (error: unknown) {
       const message = sanitizeAuthErrorMessage(
         error instanceof Error ? error.message : null,

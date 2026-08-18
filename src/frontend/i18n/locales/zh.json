@@ -134,7 +134,10 @@
       "season": "季节",
       "function": "功能",
       "soleProcess": "鞋底工艺",
-      "spec": "规格"
+      "spec": "规格",
+      "innerLiner": "Inner liner",
+      "outerShell": "Outer shell",
+      "lidMaterial": "Lid material"
     },
     "colorKeywords": {
       "不锈钢": "不锈钢",

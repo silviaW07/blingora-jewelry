@@ -32,6 +32,7 @@ import {
   translateProductSpecValue,
 } from '@/frontend/i18n/productSpecTranslate';
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
+import { containsChinese } from '@/shared/productKeywordDictionary';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
 import { useChromeActivate } from '@/frontend/utils/hardNavigate';
 
@@ -159,7 +160,7 @@ function SkuQtyStepper({
         data-no-hard-nav=""
         {...decEvents}
       >
-        <Minus className="size-3.5 pointer-events-none" />
+        <Minus className="size-4 pointer-events-none" />
       </button>
       <span className="product-sku-stepper-qty">{qty}</span>
       <button
@@ -171,7 +172,7 @@ function SkuQtyStepper({
         data-no-hard-nav=""
         {...incEvents}
       >
-        <Plus className="size-3.5 pointer-events-none" />
+        <Plus className="size-4 pointer-events-none" />
       </button>
     </div>
   )
@@ -638,7 +639,16 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   }
 
   // Display filter only: keep customer-useful whitelist fields (see productSpecWhitelist)
-  const descriptionRows = filterDescriptionParamsByWhitelist(product.descriptionParams);
+  const descriptionRows = filterDescriptionParamsByWhitelist(product.descriptionParams)
+    .map((row) => ({
+      key: row.key,
+      label: translateProductSpecLabel(row.key, t),
+      value: translateProductSpecValue(row.key, row.value, t),
+    }))
+    .filter((row) => {
+      if (!row.label || !row.value) return false
+      return !containsChinese(row.label) && !containsChinese(row.value)
+    })
 
   return withStorefrontHeader(
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
@@ -934,33 +944,28 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
           {/* ===== 参数表（小屏在购买区下方） ===== */}
           <section className="product-detail-desc" data-controller-name="详情参数描述区">
-            <div className="rounded-[4px] bg-white p-4 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-5">
+            <div className="product-detail-spec-card">
               <h2 className="text-base font-semibold text-[#111111]">{t('product.description')}</h2>
-              <div className="mt-4 border-t border-[#ececec]">
-                {descriptionRows.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2">
-                    {descriptionRows.map((row, index) => (
-                      <div
-                        key={`${row.key}-${index}`}
-                        className="grid grid-cols-[minmax(5.5rem,7rem)_minmax(0,1fr)] border-b border-[#f0f0f0] text-sm"
-                      >
-                        <div className="bg-[#fafafa] px-3 py-2.5 font-medium text-[#666]">
-                          {translateProductSpecLabel(row.key, t)}
-                        </div>
-                        <div className="break-words px-3 py-2.5 text-[#222]">
-                          {translateProductSpecValue(row.key, row.value, t)}
-                        </div>
+              {descriptionRows.length > 0 ? (
+                <div className="product-detail-spec-table">
+                  {descriptionRows.map((row, index) => (
+                    <div key={`${row.key}-${index}`} className="product-detail-spec-cell">
+                      <div className="product-detail-spec-label">
+                        {row.label}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs text-[#8a8a8a]">
-                    {product.source === 'IMPORT_1688'
-                      ? t('product.noDescriptionParams')
-                      : t('product.noManualDescriptionParams')}
-                  </p>
-                )}
-              </div>
+                      <div className="product-detail-spec-value">
+                        {row.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-[#8a8a8a]">
+                  {product.source === 'IMPORT_1688'
+                    ? t('product.noDescriptionParams')
+                    : t('product.noManualDescriptionParams')}
+                </p>
+              )}
             </div>
           </section>
 

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { toast } from 'sonner'
 import { Home, ProductCategory, ProductDetail, Cart } from '@/frontend/route-params'
-import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
+import { openStorefrontLogin, openStorefrontRegister, notifyStorefrontUrl } from '@/frontend/utils/hardNavigate'
 import { useUserSession, UserSession } from '@/tools/FrontendSession'
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { getClientPreferredLang } from '@/frontend/i18n'
@@ -1215,6 +1215,8 @@ export const useProductCategory = (
     const qs = params.toString()
     const base = pathname || ProductCategory.path
     router.replace(qs ? `${base}?${qs}` : base, { scroll: false })
+    notifyStorefrontUrl()
+    if (typeof window !== 'undefined') window.setTimeout(notifyStorefrontUrl, 0)
   }, [closeTopNavHoverPanel, pathname, router, searchParams])
 
   const handleTopCategoryHoverChange = useCallback((categoryId: string | null) => {
@@ -1287,8 +1289,8 @@ export const useProductCategory = (
   }, [openAuthModal])
 
   const handleNavigateToRegister = useCallback(() => {
-    openAuthModal('register')
-  }, [openAuthModal])
+    openStorefrontRegister()
+  }, [])
 
   const handleToggleUserMenu = useCallback(() => {
     if (!userSession.token?.trim()) {

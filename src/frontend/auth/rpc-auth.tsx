@@ -4,11 +4,8 @@ import { useEffect } from 'react'
 import { useUserSession } from '@/tools/FrontendSession'
 import { create } from 'zustand'
 import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
+import { customerLoginHref, hardNavigate } from '@/frontend/utils/hardNavigate'
 
-// 登录路由：适配参数 login_route
-const LOGIN_ROUTE = '/customerlogin'
-
-// 401 触发信号（由 bridge 转发到 CustomerAuthModal）
 interface AuthDialogState {
   isOpen: boolean
   open: () => void
@@ -46,12 +43,12 @@ export function clearAuth(): void {
 export function handleUnauthorized(): void {
   clearAuth()
 
-  // 已经在登录页，不弹窗（用 includes 兼容 basePath 和尾部斜杠）
-  if (typeof window !== 'undefined' && window.location.pathname.includes(LOGIN_ROUTE)) {
-    return
-  }
+  if (typeof window === 'undefined') return
+  const path = window.location.pathname || '/'
+  if (/customerlogin|customerregister/i.test(path)) return
 
-  useAuthDialog.getState().open()
+  const returnTo = `${path}${window.location.search || ''}`
+  hardNavigate(customerLoginHref(returnTo))
 }
 
 /**

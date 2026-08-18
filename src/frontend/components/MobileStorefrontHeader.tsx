@@ -116,17 +116,17 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
   }, [isSearchLoading])
 
   const handleSearchSubmit = useCallback(() => {
-    const keyword = searchKeyword.trim()
+    const keyword = String(searchInputRef.current?.value ?? searchKeyword).trim()
+    setSearchKeyword(keyword)
+    setIsSearchLoading(true)
     if (!keyword) {
-      searchInputRef.current?.focus()
+      hardNavigate('/')
       return
     }
-    if (isSearchLoading) return
-    setIsSearchLoading(true)
     const params = new URLSearchParams()
     params.set('search', keyword)
     hardNavigate(`/?${params.toString()}`)
-  }, [isSearchLoading, searchKeyword])
+  }, [searchKeyword])
   const searchActivate = useChromeActivate(handleSearchSubmit)
 
   const handleCameraFile = (event: React.ChangeEvent<HTMLInputElement>) => {

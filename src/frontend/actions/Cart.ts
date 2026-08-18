@@ -101,6 +101,7 @@ import { pickFrontPricingCategoryCoeffs, resolveFrontRmbSellingPrice } from '@/s
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
+import { isStorefrontInStock, isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 
 const resolveProductMinOrderQty = (tradeInfoJson: unknown) => Math.max(1, Number((tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
 const resolveEffectiveSkuMinOrderQty = (productMinOrderQty: number, skuMinOrderQty: unknown) => {
@@ -280,7 +281,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       if (pStatus !== 'ACTIVE' || cStatus !== 'ACTIVE') {
         isValid = false
         invalidReason = 'Product or category unavailable'
-      } else if (stock < item.quantity) {
+      } else if (!isStorefrontInStock(stock)) {
         isValid = false
         invalidReason = 'Insufficient stock'
       } else if (item.quantity < effectiveSkuMinOrderQty) {
@@ -454,8 +455,8 @@ export const updateCartItemQuantity = requireRole([UserRole.CUSTOMER])(
       throw new Error('购物车条目不存在或无权访问')
     }
 
-    if (quantity > item.productSku.stock) {
-      throw new Error(`更新失败，库存不足（当前库存: ${item.productSku.stock}）`)
+    if (!isStorefrontQtyAllowed(item.productSku.stock, quantity)) {
+      throw new Error('This option is out of stock')
     }
 
     const siblingItems = await prisma.cartitem.findMany({
@@ -479,7 +480,7 @@ export const updateCartItemQuantity = requireRole([UserRole.CUSTOMER])(
     // 重新判定是否符合 VALID
     const isProductActive = item.product.status === 'ACTIVE'
     const isCategoryActive = item.product.category?.status === 'ACTIVE'
-    const newStatus: CartItemStatus = (isProductActive && isCategoryActive && item.productSku.stock >= quantity && quantity >= effectiveSkuMinOrderQty && nextProductQty >= productMinOrderQty) 
+    const newStatus: CartItemStatus = (isProductActive && isCategoryActive && isStorefrontQtyAllowed(item.productSku.stock, quantity) && quantity >= effectiveSkuMinOrderQty && nextProductQty >= productMinOrderQty) 
       ? 'VALID' 
       : 'INVALID'
 

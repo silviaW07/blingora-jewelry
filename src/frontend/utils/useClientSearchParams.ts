@@ -1,22 +1,26 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { useMemo, useSyncExternalStore } from 'react'
+
+function subscribe(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {}
+  window.addEventListener('popstate', onChange)
+  window.addEventListener('storefront:urlchange', onChange)
+  return () => {
+    window.removeEventListener('popstate', onChange)
+    window.removeEventListener('storefront:urlchange', onChange)
+  }
+}
+
+function getSearchSnapshot() {
+  return typeof window === 'undefined' ? '' : window.location.search.replace(/^\?/, '')
+}
 
 /**
  * Read `window.location.search` without Next `useSearchParams()`.
- * `useSearchParams` suspends the nearest Suspense boundary; on Chrome mobile
- * that boundary is the whole storefront page, so Account/Categories stay blank.
+ * Must update when only `?search=` changes (same pathname `/`).
  */
 export function useClientSearchParams(): URLSearchParams {
-  const pathname = usePathname()
-  const [query, setQuery] = useState(() =>
-    typeof window === 'undefined' ? '' : window.location.search.replace(/^\?/, ''),
-  )
-
-  useEffect(() => {
-    setQuery(window.location.search.replace(/^\?/, ''))
-  }, [pathname])
-
+  const query = useSyncExternalStore(subscribe, getSearchSnapshot, () => '')
   return useMemo(() => new URLSearchParams(query), [query])
 }

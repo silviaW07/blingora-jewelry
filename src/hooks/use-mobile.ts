@@ -1,19 +1,16 @@
-import * as React from "react"
+import * as React from 'react'
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 
-const MOBILE_BREAKPOINT = 768
-
+/** Same phone rule as the storefront — do not use innerWidth (Chrome Android is often ~980). */
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+  const [isMobile, setIsMobile] = React.useState(false)
 
   React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
+    const apply = () => setIsMobile(isNarrowViewport())
+    apply()
+    window.addEventListener('resize', apply)
+    return () => window.removeEventListener('resize', apply)
   }, [])
 
-  return !!isMobile
+  return isMobile
 }

@@ -135,7 +135,10 @@
       "season": "Temporada",
       "function": "Función",
       "soleProcess": "Proceso de suela",
-      "spec": "Especificación"
+      "spec": "Especificación",
+      "innerLiner": "Forro interior",
+      "outerShell": "Carcasa",
+      "lidMaterial": "Tapa"
     },
     "colorKeywords": {
       "不锈钢": "Acero inoxidable",

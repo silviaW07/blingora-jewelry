@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { loginCustomer } from '@/frontend/actions/CustomerLogin'
 import { registerCustomer } from '@/frontend/actions/CustomerRegister'
 import { useUserSession } from '@/tools/FrontendSession'
+import { redirectAfterStorefrontAuth, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { DecorateInput } from '@/frontend/decorate/DecorateInput'
 
@@ -28,7 +29,7 @@ interface RegisterForm {
  */
 export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab }) {
   const { t } = useTranslation()
-  const { set: setSession } = useUserSession()
+  const { set: setSession, token, user_id } = useUserSession()
   const [tab, setTab] = useState<Tab>(initialTab)
 
   const [loginAccount, setLoginAccount] = useState('')
@@ -51,8 +52,15 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
     setTab(initialTab)
   }, [initialTab])
 
-  const handleLoginSubmit = async (event: React.FormEvent) => {
-    event.preventDefault()
+  useEffect(() => {
+    if (!String(token || '').trim() || !String(user_id || '').trim()) return
+    if (typeof window === 'undefined') return
+    if (!/customerlogin|customerregister/i.test(window.location.pathname || '')) return
+    redirectAfterStorefrontAuth()
+  }, [token, user_id])
+
+  const handleLoginSubmit = async (event?: { preventDefault?: () => void }) => {
+    event?.preventDefault?.()
     if (!loginAccount.trim() || !loginPassword) {
       setLoginError(t('auth.loginRequired'))
       return
@@ -73,6 +81,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
         role: 'CUSTOMER',
       })
       toast.success(t('auth.loginSuccess'))
+      redirectAfterStorefrontAuth()
     } catch (error: unknown) {
       setLoginError(error instanceof Error ? error.message : t('auth.loginFailed'))
     } finally {
@@ -80,8 +89,12 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
     }
   }
 
-  const handleRegisterSubmit = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const handleRegisterSubmit = async (event?: { preventDefault?: () => void }) => {
+    event?.preventDefault?.()
+    if (!registerForm.sysuser_name.trim() || !registerForm.sysuser_email.trim() || !registerForm.sysuser_password) {
+      setRegisterError(t('auth.registerRequired', { defaultValue: 'Please fill in name, email, and password' }))
+      return
+    }
     setIsRegisterSubmitting(true)
     setRegisterError(null)
     try {
@@ -110,12 +123,23 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
         preferredLocale: sessionResult.preferred_locale || 'en',
         role: 'CUSTOMER',
       })
+      toast.success(t('auth.registerSuccess', { defaultValue: 'Account created' }))
+      redirectAfterStorefrontAuth()
     } catch (error: unknown) {
       setRegisterError(error instanceof Error ? error.message : t('auth.registerFailed'))
     } finally {
       setIsRegisterSubmitting(false)
     }
   }
+
+  const loginActivate = useChromeActivate(() => {
+    void handleLoginSubmit()
+  })
+  const registerActivate = useChromeActivate(() => {
+    void handleRegisterSubmit()
+  })
+  const tabLogin = useChromeActivate(() => setTab('login'))
+  const tabRegister = useChromeActivate(() => setTab('register'))
 
   return (
     <section
@@ -135,7 +159,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               <button
                 key={item}
                 type="button"
-                onClick={() => setTab(item)}
+                {...(item === 'login' ? tabLogin : tabRegister)}
                 className={cn('guest-auth-screen__tab', tab === item && 'is-active')}
               >
                 {item === 'login' ? t('auth.login') : t('auth.register')}
@@ -197,17 +221,19 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               </div>
               {loginError ? <p className="rounded-[12px] bg-[#FEF2F2] px-3 py-2 text-sm text-[#DC2626]">{loginError}</p> : null}
               <Button
-                type="submit"
-                disabled={isLoginSubmitting}
+                type="button"
+                aria-busy={isLoginSubmitting}
                 data-auto="submit"
+                data-no-hard-nav=""
                 className="h-12 w-full rounded-full bg-[#0055FF] text-base font-bold text-white hover:bg-[#0044CC]"
+                {...loginActivate}
               >
                 {isLoginSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {t('auth.login')}
               </Button>
               <p className="pt-1 text-center text-sm text-[#64748B]">
                 {t('auth.noAccount')}{' '}
-                <button type="button" onClick={() => setTab('register')} className="guest-auth-screen__text-btn">
+                <button type="button" {...tabRegister} className="guest-auth-screen__text-btn">
                   {t('auth.registerNow')}
                 </button>
               </p>
@@ -299,17 +325,19 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               </div>
               {registerError ? <p className="rounded-[12px] bg-[#FEF2F2] px-3 py-2 text-sm text-[#DC2626]">{registerError}</p> : null}
               <Button
-                type="submit"
-                disabled={isRegisterSubmitting}
+                type="button"
+                aria-busy={isRegisterSubmitting}
                 data-auto="submit"
+                data-no-hard-nav=""
                 className="h-12 w-full rounded-full bg-[#0055FF] text-base font-bold text-white hover:bg-[#0044CC]"
+                {...registerActivate}
               >
                 {isRegisterSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {t('auth.register')}
               </Button>
               <p className="pt-1 text-center text-sm text-[#64748B]">
                 {t('auth.hasAccount')}{' '}
-                <button type="button" onClick={() => setTab('login')} className="guest-auth-screen__text-btn">
+                <button type="button" {...tabLogin} className="guest-auth-screen__text-btn">
                   {t('auth.loginNow')}
                 </button>
               </p>

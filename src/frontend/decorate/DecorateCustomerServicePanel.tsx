@@ -60,6 +60,22 @@ export function DecorateCustomerServicePanel() {
             </p>
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="cs-paypal" className="text-xs font-semibold text-[#334155]">
+              PayPal 收款链接
+            </Label>
+            <Input
+              id="cs-paypal"
+              value={customerService.paypalLink}
+              placeholder="https://paypal.me/YourName 或 邮箱"
+              className="h-10"
+              onChange={(e) => updateCustomerService({ paypalLink: e.target.value.trim() })}
+            />
+            <p className="text-[11px] leading-5 text-[#64748B]">
+              填 paypal.me/店铺名即可。顾客点支付时，系统会自动加上该笔订单金额（例如 /88.50USD），不用每次改链接。
+            </p>
+          </div>
+
           <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e2e8f0] px-3 py-2.5">
             <div>
               <p className="text-xs font-semibold text-[#334155]">全站悬浮开关</p>
