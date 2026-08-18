@@ -202,6 +202,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               <Button
                 type="submit"
                 disabled={isLoginSubmitting}
+                data-auto="submit"
                 className="h-12 w-full rounded-full bg-[#0055FF] text-base font-bold text-white hover:bg-[#0044CC]"
               >
                 {isLoginSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -303,6 +304,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               <Button
                 type="submit"
                 disabled={isRegisterSubmitting}
+                data-auto="submit"
                 className="h-12 w-full rounded-full bg-[#0055FF] text-base font-bold text-white hover:bg-[#0044CC]"
               >
                 {isRegisterSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}

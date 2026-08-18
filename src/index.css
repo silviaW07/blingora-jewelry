@@ -2313,7 +2313,40 @@ html.is-narrow [data-controller-name='客户登录入口'] button {
   -webkit-appearance: none !important;
 }
 
-html.is-narrow [data-controller-name='客户登录入口'] [data-auto='submit'] {
+html.is-narrow [data-controller-name='客户登录入口'] form > .space-y-2,
+html.is-narrow .guest-auth-screen form > .space-y-2,
+html.is-narrow .guest-auth-screen form .grid > .space-y-2 {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.35rem !important;
+  width: 100% !important;
+}
+
+html.is-narrow [data-controller-name='客户登录入口'] form label,
+html.is-narrow .guest-auth-screen form label {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+html.is-narrow [data-controller-name='客户登录入口'] form input,
+html.is-narrow [data-controller-name='客户登录入口'] [data-slot='input'],
+html.is-narrow .guest-auth-screen form input,
+html.is-narrow .guest-auth-screen [data-slot='input'] {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+html.is-narrow .guest-auth-screen form .relative {
+  width: 100% !important;
+}
+
+html.is-narrow [data-controller-name='客户登录入口'] [data-auto='submit'],
+html.is-narrow .guest-auth-screen [data-auto='submit'] {
   background: #0055ff !important;
   color: #fff !important;
   border: 0 !important;
@@ -2389,16 +2422,14 @@ html.is-narrow .storefront-footer-desktop-only {
 }
 
 .mobile-sf-header__row {
-  height: 44px;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 12px;
+  display: none !important;
 }
 
 .mobile-sf-header__search-row {
-  justify-content: center;
-  gap: 10px;
-  padding: 2px 12px 10px;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px 10px;
 }
 
 .mobile-sf-header__wa,

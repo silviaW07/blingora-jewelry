@@ -1,20 +1,16 @@
 'use client'
 
 /**
- * Unified mobile storefront header (show with md:hidden / or only inside mobile pages).
- * Row1: WhatsApp · Logo · Categories
- * Row2: Globe · narrow Search · Account
- * Not used on Cart / Account pages.
+ * Compact mobile storefront header: WhatsApp · Globe · Search · Account.
+ * Categories live in the bottom nav. Not used on Cart / Account pages.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Camera, Globe, LayoutGrid, Loader2, Search } from 'lucide-react'
+import { Camera, Globe, Loader2, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { StorefrontBrandMark } from '@/frontend/components/StorefrontBrandMark'
 import { CustomerAccountMenu } from '@/frontend/components/CustomerAccountMenu'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
-import { ProductCategory } from '@/frontend/route-params'
 import { APP_LOCALES, normalizeLocale } from '@/frontend/i18n'
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider'
 import { useUserSession } from '@/tools/FrontendSession'
@@ -24,7 +20,7 @@ import {
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
-import { hardNavigate, hardNavProps } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = () => (
@@ -123,13 +119,13 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     const keyword = searchKeyword.trim()
     const params = new URLSearchParams()
     if (keyword) params.set('search', keyword)
-    /* ProductCategory.path === '/' — identical routing to desktop */
     hardNavigate(
       params.toString()
-        ? `${ProductCategory.path}?${params.toString()}`
-        : ProductCategory.path,
+        ? `/?${params.toString()}`
+        : '/',
     )
   }, [isSearchLoading, searchKeyword])
+  const searchActivate = useChromeActivate(handleSearchSubmit)
 
   const handleCameraFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -141,7 +137,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     setIsSearchLoading(true)
     const params = new URLSearchParams()
     params.set('search', keyword)
-    hardNavigate(`${ProductCategory.path}?${params.toString()}`)
+    hardNavigate(`/?${params.toString()}`)
   }
 
   return (
@@ -152,7 +148,13 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
       )}
       data-controller-name="移动端统一顶栏"
     >
-      <div className="mobile-sf-header__row">
+      <form
+        className="mobile-sf-header__search-row"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleSearchSubmit()
+        }}
+      >
         <a
           href={waHref}
           target="_blank"
@@ -164,20 +166,6 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
           <WhatsAppGlyph />
         </a>
 
-        <div className="mobile-sf-header__brand">
-          <StorefrontBrandMark compact ariaLabel={t('common.backToHome')} />
-        </div>
-
-        <a
-          {...hardNavProps('/categories/')}
-          className="mobile-sf-header__icon-btn"
-          aria-label={t('nav.categories', { defaultValue: 'Categories' })}
-        >
-          <LayoutGrid width={20} height={20} strokeWidth={2} />
-        </a>
-      </div>
-
-      <div className="mobile-sf-header__search-row">
         <div className="mobile-sf-header__locale" ref={localeMenuRef}>
           <button
             type="button"
@@ -220,11 +208,11 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
 
         <div className="mobile-sf-header__search">
           <button
-            type="button"
+            type="submit"
             className="mobile-sf-header__search-go"
             aria-label={t('common.search')}
-            onClick={handleSearchSubmit}
             disabled={isSearchLoading}
+            {...searchActivate}
           >
             {isSearchLoading ? (
               <Loader2 width={16} height={16} className="animate-spin" />
@@ -236,13 +224,8 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
             placeholder={t('common.pleaseInput')}
             className="mobile-sf-header__search-input h-9 min-w-0 flex-1 border-0 bg-transparent px-0 text-[0.875rem] shadow-none focus-visible:ring-0"
             value={searchKeyword}
+            enterKeyHint="search"
             onChange={(e) => setSearchKeyword(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleSearchSubmit()
-              }
-            }}
           />
           <input
             ref={cameraInputRef}
@@ -265,7 +248,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
         </div>
 
         <CustomerAccountMenu variant="icon" trigger="click" className="shrink-0" />
-      </div>
+      </form>
     </header>
   )
 }

@@ -7,6 +7,7 @@ import {
   shelfCardsToProductItems,
 } from '@/frontend/lib/loadStorefrontProducts'
 import { buildCategoryPreviewProducts } from '@/frontend/utils/categoryPreviewProducts'
+import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 
 /**
  * Pre-render every active category slug at build time (SSG + ISR).
@@ -45,11 +46,16 @@ export default async function CategoryBySlugPage({
   const slug = decodeURIComponent(String(rawSlug || '').trim())
   const bootstrap = await loadStorefrontBootstrap()
   const categoryId = resolveCategoryIdFromTree(bootstrap.categories, slug)
+  const slugAsName = slug.replace(/[-_]+/g, ' ')
+  const daily =
+    isDailyNewArrivalCategoryName(slug) ||
+    isDailyNewArrivalCategoryName(slugAsName)
   const loaded = await loadStorefrontProducts({
     slug,
     categoryId,
     categoryTree: bootstrap.categories,
     pageSize: 24,
+    daily,
   })
   let list = loaded.list
   if (list.length === 0 && (loaded.categoryId || categoryId)) {

@@ -1,12 +1,11 @@
-// {"router": "/customerregister", "id": "f06", "en_name": "CustomerRegister"}
-'use client';
+/**
+ * Full-page login / register — same card UI as GuestAuthScreen on Cart / Account.
+ * Chrome Android often never applies the in-page guest form styles on /customerregister.
+ */
+'use client'
 
-import { useCustomerRegister } from '@/frontend/hooks/useCustomerRegister';
-import CustomerRegisterView from '@/frontend/components/CustomerRegisterView';
+import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen'
+
 export default function CustomerRegisterPage() {
-  const {
-    state,
-    handlers
-  } = useCustomerRegister();
-  return <CustomerRegisterView state={state} handlers={handlers} />;
+  return <GuestAuthScreen initialTab="register" />
 }

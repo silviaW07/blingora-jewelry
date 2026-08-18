@@ -936,32 +936,54 @@ export const useProductCategory = (
       const lang = getCurrentLang()
       const dailyMonth = searchParams.get('dailyMonth') || ''
       const [yearText, monthText] = dailyMonth.split('-')
-      const year = Number(yearText)
-      const month = Number(monthText)
+      const parsedYear = Number(yearText)
+      const parsedMonth = Number(monthText)
       const hasMonth =
         Boolean(dailyMonth) &&
-        Number.isInteger(year) &&
-        Number.isInteger(month) &&
-        month >= 1 &&
-        month <= 12
+        Number.isInteger(parsedYear) &&
+        Number.isInteger(parsedMonth) &&
+        parsedMonth >= 1 &&
+        parsedMonth <= 12
+      const now = new Date()
+      const year = hasMonth ? parsedYear : now.getFullYear()
+      const month = hasMonth ? parsedMonth : now.getMonth() + 1
+
+      let cancelled = false
+      let settled = false
+      const safety = window.setTimeout(() => {
+        if (cancelled || settled) return
+        settled = true
+        setIsLoadingProducts(false)
+      }, 8000)
 
       getDailyNewArrivalProducts({
-        ...(hasMonth ? { year, month } : {}),
+        year,
+        month,
         page: queryState.page,
-        page_size: queryState.pageSize,
+        page_size: Math.min(24, queryState.pageSize || 24),
         lang,
       })
         .then((res) => {
+          if (cancelled || settled) return
           setProducts(Array.isArray(res.list) ? res.list : [])
           setTotalCount(res.total || 0)
         })
         .catch((err: any) => {
+          if (cancelled || settled) return
           setProducts([])
           setTotalCount(0)
           toast.error(err.message || 'Failed to load new arrivals')
         })
-        .finally(() => setIsLoadingProducts(false))
-      return
+        .finally(() => {
+          if (cancelled || settled) return
+          settled = true
+          window.clearTimeout(safety)
+          setIsLoadingProducts(false)
+        })
+      return () => {
+        cancelled = true
+        window.clearTimeout(safety)
+      }
     }
 
     // /category/[slug]: fetch by slug immediately so Chrome is not stuck on
