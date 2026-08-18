@@ -25,9 +25,10 @@ export function ProductDetailImageCarousel({
   )
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: slides.length > 1,
-    align: 'start',
-    containScroll: false,
+    align: 'center',
+    containScroll: 'trimSnaps',
     dragFree: false,
+    watchDrag: true,
   })
   const [index, setIndex] = useState(0)
 
@@ -50,6 +51,25 @@ export function ProductDetailImageCarousel({
     }
   }, [emblaApi, syncFromApi])
 
+  /** Chrome often mounts while carousel was display:none — reInit once visible. */
+  useEffect(() => {
+    if (!emblaApi) return
+    const reInit = () => emblaApi.reInit()
+    reInit()
+    const raf = requestAnimationFrame(reInit)
+    const t1 = window.setTimeout(reInit, 120)
+    const t2 = window.setTimeout(reInit, 400)
+    window.addEventListener('resize', reInit)
+    window.visualViewport?.addEventListener('resize', reInit)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+      window.removeEventListener('resize', reInit)
+      window.visualViewport?.removeEventListener('resize', reInit)
+    }
+  }, [emblaApi, slides.length])
+
   useEffect(() => {
     if (!emblaApi || !activeUrl || slides.length === 0) return
     const target = slides.findIndex((item) => item.url === activeUrl)
@@ -68,14 +88,15 @@ export function ProductDetailImageCarousel({
         <div className="product-detail-carousel__container">
           {slides.map((item, slideIndex) => (
             <div className="product-detail-carousel__slide" key={`${item.url}-${slideIndex}`}>
-              <OptimizedProductImage
-                fill={false}
-                src={item.url}
-                alt={alt}
-                className="product-detail-carousel__img"
-                imageWidth={1600}
-                priority={slideIndex === 0}
-              />
+              <div className="product-detail-carousel__slide-inner">
+                <OptimizedProductImage
+                  src={item.url}
+                  alt={alt}
+                  className="product-detail-carousel__img"
+                  imageWidth={1600}
+                  priority={slideIndex === 0}
+                />
+              </div>
             </div>
           ))}
         </div>
