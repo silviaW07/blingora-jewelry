@@ -13,8 +13,8 @@ type Props = {
 }
 
 /**
- * One hero for Chrome + other phones. Images are in-flow (width 100% / height auto).
- * Do not use position:absolute inside a 0-height flex box — Chrome ~980px paints 0×0.
+ * One hero for Chrome + other phones.
+ * Slide inner uses padding-bottom:100% (same as list cards) so the img is never 0×0.
  */
 export function ProductDetailImageCarousel({
   items,
@@ -69,14 +69,16 @@ export function ProductDetailImageCarousel({
       >
         {slides.map((item, slideIndex) => (
           <div className="product-detail-carousel__slide" key={`${item.url}-${slideIndex}`}>
-            <OptimizedProductImage
-              fill={false}
-              src={item.url}
-              alt={alt}
-              className="product-detail-carousel__img"
-              imageWidth={1600}
-              priority={slideIndex === 0}
-            />
+            <div className="product-detail-carousel__slide-inner">
+              <OptimizedProductImage
+                fill
+                src={item.url}
+                alt={alt}
+                className="product-detail-carousel__img"
+                imageWidth={1600}
+                priority={slideIndex === 0}
+              />
+            </div>
           </div>
         ))}
       </div>

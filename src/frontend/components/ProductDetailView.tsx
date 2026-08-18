@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
@@ -86,7 +86,7 @@ function ColorSwatchButton({
       aria-label={colorLabel}
       data-selected={isSelected ? 'true' : 'false'}
       data-no-hard-nav=""
-      disabled={!isPurchasable}
+      aria-disabled={!isPurchasable}
       className={cn(
         'product-color-swatch group',
         isSelected && 'is-selected',
@@ -386,16 +386,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     return unique
   }, [product, colorAttributeGroup])
 
-  const autoColorKeyRef = useRef('')
   useEffect(() => {
-    const productId = String(product?.id || '')
-    if (!productId || !colorSwatches.length || String(manualColorValue || '').trim()) return
-    if (autoColorKeyRef.current === productId) return
-    autoColorKeyRef.current = productId
+    if (!colorSwatches.length || String(manualColorValue || '').trim()) return
     const first = colorSwatches[0]
     if (!first) return
     handleColorSelect(first.value, first.imageUrl)
-  }, [product?.id, colorSwatches, handleColorSelect, manualColorValue])
+  }, [colorSwatches, handleColorSelect, manualColorValue])
 
   // 预热主图尺寸(960)，让点击颜色后左侧大图秒出（缩略图只有 200 宽、URL 不同不会命中）
   const preheatMainImage = useCallback((url?: string | null) => {
@@ -778,7 +774,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         </div>
                       </div>
 
-                      {isColorSelected ? (
                       <div
                         className={cn(
                           'rounded-[8px] transition',
@@ -801,12 +796,13 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             specListRows.map((row) => renderSpecRow(row))
                           ) : (
                             <div className="px-2 py-8 text-center text-sm text-[#888]">
-                              {t('product.noOptions')}
+                              {isColorSelected
+                                ? t('product.noOptions')
+                                : t('product.selectColorFirst', { defaultValue: 'Please select a color first' })}
                             </div>
                           )}
                         </div>
                       </div>
-                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-[8px]">

@@ -9,7 +9,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Camera, Globe, LayoutGrid, Loader2, Search } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { StorefrontBrandMark } from '@/frontend/components/StorefrontBrandMark'
 import { CustomerAccountMenu } from '@/frontend/components/CustomerAccountMenu'
@@ -64,6 +63,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
 
   const localeMenuRef = useRef<HTMLDivElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentLocale = normalizeLocale(i18n.language || preferredLocale || 'en')
 
@@ -116,12 +116,16 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
   }, [isSearchLoading])
 
   const handleSearchSubmit = useCallback(() => {
+    const keyword = searchKeyword.trim()
+    if (!keyword) {
+      searchInputRef.current?.focus()
+      return
+    }
     if (isSearchLoading) return
     setIsSearchLoading(true)
-    const keyword = searchKeyword.trim()
     const params = new URLSearchParams()
-    if (keyword) params.set('search', keyword)
-    hardNavigate(params.toString() ? `/?${params.toString()}` : '/')
+    params.set('search', keyword)
+    hardNavigate(`/?${params.toString()}`)
   }, [isSearchLoading, searchKeyword])
   const searchActivate = useChromeActivate(handleSearchSubmit)
 
@@ -171,13 +175,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
         </a>
       </div>
 
-      <form
-        className="mobile-sf-header__search-row"
-        onSubmit={(event) => {
-          event.preventDefault()
-          handleSearchSubmit()
-        }}
-      >
+      <div className="mobile-sf-header__search-row">
         <div className="mobile-sf-header__locale" ref={localeMenuRef}>
           <button
             type="button"
@@ -218,12 +216,20 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
           ) : null}
         </div>
 
-        <div className="mobile-sf-header__search">
+        <form
+          className="mobile-sf-header__search"
+          action="/"
+          method="get"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleSearchSubmit()
+          }}
+        >
           <button
             type="submit"
             className="mobile-sf-header__search-go"
             aria-label={t('common.search')}
-            disabled={isSearchLoading}
+            data-no-hard-nav=""
             {...searchActivate}
           >
             {isSearchLoading ? (
@@ -232,18 +238,19 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
               <Search width={16} height={16} strokeWidth={2.2} />
             )}
           </button>
-          <Input
+          <input
+            ref={searchInputRef}
+            type="text"
+            name="search"
             placeholder={t('common.pleaseInput')}
-            className="mobile-sf-header__search-input h-9 min-w-0 flex-1 border-0 bg-transparent px-0 text-[0.875rem] shadow-none focus-visible:ring-0"
+            className="mobile-sf-header__search-input"
             value={searchKeyword}
             enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
             onChange={(e) => setSearchKeyword(e.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                handleSearchSubmit()
-              }
-            }}
           />
           <input
             ref={cameraInputRef}
@@ -263,10 +270,10 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
           >
             <Camera width={16} height={16} strokeWidth={2} />
           </button>
-        </div>
+        </form>
 
         <CustomerAccountMenu variant="icon" trigger="click" className="shrink-0" />
-      </form>
+      </div>
     </header>
   )
 }
