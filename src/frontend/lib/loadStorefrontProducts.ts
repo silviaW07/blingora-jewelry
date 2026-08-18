@@ -64,6 +64,36 @@ export function resolveCategoryIdFromTree(list: CategoryRef[] | undefined, slugO
   return ''
 }
 
+async function resolveCategoryIdForListing(input: {
+  slug?: string
+  categoryId?: string
+  lang: string
+  categoryTree?: CategoryRef[]
+}): Promise<string> {
+  const explicit = String(input.categoryId || '').trim()
+  if (explicit) return explicit
+
+  const slug = String(input.slug || '').trim()
+  if (!slug) return ''
+
+  const tree =
+    input.categoryTree ||
+    (
+      await rpcAction<{ list?: CategoryRef[] }>('src.frontend.actions.ProductCategory.getCategoryList', [
+        { lang: input.lang },
+      ])
+    ).list
+
+  const fromTree = resolveCategoryIdFromTree(tree, slug)
+  if (fromTree) return fromTree
+
+  const resolved = await rpcAction<{ categoryId?: string; categorySlug?: string | null }>(
+    'src.frontend.actions.ProductCategory.resolveCategoryRouteKey',
+    [{ routeKey: slug }],
+  )
+  return String(resolved?.categoryId || '').trim()
+}
+
 export function shelfCardsToProductItems(list: ShelfProductCard[]): ProductItem[] {
   return list.map((card) => ({
     product_id: card.product_id,
@@ -113,15 +143,13 @@ export async function loadStorefrontProducts(input: {
   let categoryId = String(input.categoryId || '').trim()
 
   try {
-    if (!categoryId && slug && !daily && !search) {
-      const tree =
-        input.categoryTree ||
-        (
-          await rpcAction<{ list?: CategoryRef[] }>('src.frontend.actions.ProductCategory.getCategoryList', [
-            { lang },
-          ])
-        ).list
-      categoryId = resolveCategoryIdFromTree(tree, slug)
+    if (!daily && !search) {
+      categoryId = await resolveCategoryIdForListing({
+        slug,
+        categoryId,
+        lang,
+        categoryTree: input.categoryTree,
+      })
     }
 
     if (!daily && !search && !categoryId) {

@@ -52,7 +52,13 @@ export function ProductDetailImageCarousel({
     setIndex(target)
   }, [activeUrl, slides])
 
-  if (slides.length === 0) return null
+  if (slides.length === 0) {
+    return (
+      <div className="product-detail-carousel product-detail-carousel--empty" aria-hidden>
+        <div className="product-detail-carousel__viewport" />
+      </div>
+    )
+  }
 
   return (
     <div className="product-detail-carousel" aria-roledescription="carousel">
@@ -61,21 +67,19 @@ export function ProductDetailImageCarousel({
         ref={scrollerRef}
         onScroll={syncFromScroll}
       >
-        <div className="product-detail-carousel__container">
-          {slides.map((item, slideIndex) => (
-            <div className="product-detail-carousel__slide" key={`${item.url}-${slideIndex}`}>
-              <div className="product-detail-carousel__slide-inner">
-                <OptimizedProductImage
-                  src={item.url}
-                  alt={alt}
-                  className="product-detail-carousel__img"
-                  imageWidth={1600}
-                  priority={slideIndex === 0}
-                />
-              </div>
+        {slides.map((item, slideIndex) => (
+          <div className="product-detail-carousel__slide" key={`${item.url}-${slideIndex}`}>
+            <div className="product-detail-carousel__slide-inner">
+              <OptimizedProductImage
+                src={item.url}
+                alt={alt}
+                className="product-detail-carousel__img"
+                imageWidth={1600}
+                priority={slideIndex === 0}
+              />
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
       {slides.length > 1 ? (
         <div className="product-detail-carousel__fraction" aria-live="polite">

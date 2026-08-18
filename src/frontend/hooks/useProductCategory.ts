@@ -434,6 +434,7 @@ export const useProductCategory = (
   const [hoveredTopCategoryId, setHoveredTopCategoryId] = useState<string | null>(null)
   const [expandedTopNavCategoryIds, setExpandedTopNavCategoryIds] = useState<string[]>([])
   const topNavHoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const productFetchGenRef = useRef(0)
 
   const clearTopNavHoverCloseTimer = useCallback(() => {
     if (topNavHoverCloseTimerRef.current) {
@@ -590,7 +591,7 @@ export const useProductCategory = (
   useEffect(() => {
     if (!isCategorySlugRoute) return
     if (!routeCategorySlug) return
-    if (isLoadingCategories) return
+    if (isLoadingCategories && categories.length === 0) return
 
     let cancelled = false
 
@@ -712,16 +713,27 @@ export const useProductCategory = (
       })
   }, [queryState.categoryId, localeTick])
 
+  const posterTrackKey = useMemo(
+    () => posters.map((poster) => poster.poster_id).join('\u0001'),
+    [posters],
+  )
+
   useEffect(() => {
     getCategoryPosterList({ category_id: selectedTopLevelCategoryId || undefined })
       .then((res) => {
-        setPosters(Array.isArray(res.list) ? res.list : [])
-        setActiveBannerIndex(0)
+        const next = Array.isArray(res.list) ? res.list : []
+        setPosters((prev) => {
+          const sameIds =
+            prev.length === next.length &&
+            prev.every((poster, index) => poster.poster_id === next[index]?.poster_id)
+          if (sameIds) return prev
+          queueMicrotask(() => setActiveBannerIndex(0))
+          return next
+        })
       })
       .catch(() => {
-        // Optional chrome — never block listing; hide banner area when empty
-        setPosters([])
-        setActiveBannerIndex(0)
+        // Keep SSR/bootstrap posters when the refresh fails (Chrome RPC timeouts).
+        setPosters((prev) => (prev.length ? prev : []))
       })
   }, [selectedTopLevelCategoryId])
 
@@ -845,16 +857,17 @@ export const useProductCategory = (
   }, [localeTick, isStorefrontHomePath])
 
   useEffect(() => {
-    if (posters.length <= 1) {
+    const count = posters.length
+    if (count <= 1) {
       return
     }
 
     const timer = window.setInterval(() => {
-      setActiveBannerIndex((prev) => (prev + 1) % posters.length)
+      setActiveBannerIndex((prev) => (prev + 1) % count)
     }, 4500)
 
     return () => window.clearInterval(timer)
-  }, [posters])
+  }, [posterTrackKey, posters.length])
 
   useEffect(() => {
     if (!isMobile) {
@@ -930,10 +943,36 @@ export const useProductCategory = (
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const shouldFetchListing =
+      isDailyNewArrivalMode ||
+      (isCategorySlugRoute && routeCategorySlug) ||
+      hasActiveListingQuery
+
+    if (!shouldFetchListing) {
+      setProducts([])
+      setTotalCount(0)
+      setIsLoadingProducts(false)
+      return
+    }
+
+    const gen = ++productFetchGenRef.current
+    if (productsRef.current.length === 0) setIsLoadingProducts(true)
+
+    const lang = getCurrentLang()
+    const safety = window.setTimeout(() => {
+      if (productFetchGenRef.current !== gen) return
+      setIsLoadingProducts(false)
+    }, 20000)
+
+    const finish = () => {
+      if (productFetchGenRef.current !== gen) return
+      window.clearTimeout(safety)
+      setIsLoadingProducts(false)
+    }
+
     if (isDailyNewArrivalMode) {
-      // New / 每日上新：独立时间窗查询，不走分类 ID 过滤
-      if (productsRef.current.length === 0) setIsLoadingProducts(true)
-      const lang = getCurrentLang()
       const dailyMonth = searchParams.get('dailyMonth') || ''
       const [yearText, monthText] = dailyMonth.split('-')
       const parsedYear = Number(yearText)
@@ -948,14 +987,6 @@ export const useProductCategory = (
       const year = hasMonth ? parsedYear : now.getFullYear()
       const month = hasMonth ? parsedMonth : now.getMonth() + 1
 
-      let cancelled = false
-      let settled = false
-      const safety = window.setTimeout(() => {
-        if (cancelled || settled) return
-        settled = true
-        setIsLoadingProducts(false)
-      }, 20000)
-
       getDailyNewArrivalProducts({
         year,
         month,
@@ -964,90 +995,23 @@ export const useProductCategory = (
         lang,
       })
         .then((res) => {
-          if (cancelled || settled) return
+          if (productFetchGenRef.current !== gen) return
           setProducts(Array.isArray(res.list) ? res.list : [])
           setTotalCount(res.total || 0)
         })
         .catch((err: any) => {
-          if (cancelled || settled) return
+          if (productFetchGenRef.current !== gen) return
           setProducts([])
           setTotalCount(0)
           toast.error(err.message || 'Failed to load new arrivals')
         })
-        .finally(() => {
-          if (cancelled || settled) return
-          settled = true
-          window.clearTimeout(safety)
-          setIsLoadingProducts(false)
-        })
+        .finally(finish)
+
       return () => {
-        cancelled = true
         window.clearTimeout(safety)
       }
     }
 
-    // /category/[slug]: fetch by slug immediately so Chrome is not stuck on
-    // "Loading products..." while resolveCategoryRouteKey hangs.
-    if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId && !queryState.searchKeyword) {
-      if (productsRef.current.length === 0) setIsLoadingProducts(true)
-      const lang = getCurrentLang()
-      let cancelled = false
-      let settled = false
-      const safety = window.setTimeout(() => {
-        if (cancelled || settled) return
-        settled = true
-        setIsLoadingProducts(false)
-      }, 20000)
-      fetchCategoryShelfProducts({
-        slug: routeCategorySlug,
-        lang,
-        page: queryState.page,
-        pageSize: 24,
-        minPrice: queryState.minPrice,
-        maxPrice: queryState.maxPrice,
-        sortBy: queryState.sortBy,
-        brandCategoryId: queryState.brandCategoryId || undefined,
-      })
-        .then(({ list, total }) => {
-          if (cancelled || settled) return
-          setProducts(list as ProductItem[])
-          setTotalCount(total)
-        })
-        .catch(() => {
-          if (cancelled || settled) return
-          setProducts([])
-          setTotalCount(0)
-        })
-        .finally(() => {
-          if (cancelled || settled) return
-          settled = true
-          window.clearTimeout(safety)
-          setIsLoadingProducts(false)
-        })
-      return () => {
-        cancelled = true
-        window.clearTimeout(safety)
-      }
-    }
-
-    // Home default stream: skip getProductList (up to 2000 rows) — zones/posters cover the UI
-    if (!hasActiveListingQuery) {
-      setProducts([])
-      setTotalCount(0)
-      setIsLoadingProducts(false)
-      return
-    }
-
-    // Keep prior / SSR cards visible — never blank the grid while a refetch hangs.
-    if (productsRef.current.length === 0) setIsLoadingProducts(true)
-    const lang = getCurrentLang()
-    let cancelled = false
-    let settled = false
-    const safety = window.setTimeout(() => {
-      if (cancelled || settled) return
-      settled = true
-      setIsLoadingProducts(false)
-    }, 20000)
     fetchCategoryShelfProducts({
       categoryId: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
       slug:
@@ -1064,27 +1028,22 @@ export const useProductCategory = (
       brandCategoryId: queryState.brandCategoryId || undefined,
     })
       .then(({ list, total }) => {
-        if (cancelled || settled) return
+        if (productFetchGenRef.current !== gen) return
         setProducts(list as ProductItem[])
         setTotalCount(total)
       })
       .catch((err: any) => {
-        if (cancelled || settled) return
+        if (productFetchGenRef.current !== gen) return
         setProducts([])
         setTotalCount(0)
         toast.error(err.message)
       })
-      .finally(() => {
-        if (cancelled || settled) return
-        settled = true
-        window.clearTimeout(safety)
-        setIsLoadingProducts(false)
-      })
+      .finally(finish)
+
     return () => {
-      cancelled = true
       window.clearTimeout(safety)
     }
-  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick])
+  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
 
   useEffect(() => {
     if (isDailyNewArrivalMode) {

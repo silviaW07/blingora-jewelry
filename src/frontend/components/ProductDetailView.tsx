@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertTriangle,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Minus,
@@ -36,6 +35,7 @@ import {
 } from '@/frontend/i18n/productSpecTranslate';
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
+import { useChromeActivate } from '@/frontend/utils/hardNavigate';
 
 /** Local helper — production webpack left `cn` as a free global and crashed the PDP. */
 function cn(...parts: Array<string | false | null | undefined>) {
@@ -76,6 +76,11 @@ function ColorSwatchButton({
   onSelect: () => void
   onPreheat: () => void
 }) {
+  const selectEvents = useChromeActivate(() => {
+    if (!isPurchasable) return
+    onSelect()
+  })
+
   return (
     <button
       type="button"
@@ -90,11 +95,8 @@ function ColorSwatchButton({
         !isPurchasable && 'is-disabled',
       )}
       onMouseEnter={onPreheat}
-      onClick={(event) => {
-        event.stopPropagation()
-        if (!isPurchasable) return
-        onSelect()
-      }}
+      onPointerEnter={onPreheat}
+      {...selectEvents}
       onContextMenu={(event) => event.preventDefault()}
     >
       {colorLabel ? (
@@ -323,7 +325,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     getSkuLineQuantity,
     resolveLineMinOrderQty,
   } = handlers;
-  const [colorPickerOpen, setColorPickerOpen] = useState(false)
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -789,56 +790,43 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     <div className="space-y-3">
                       <div
                         className={cn(
-                          'product-color-picker rounded-[8px] p-1 transition',
-                          colorPickerOpen && 'is-open',
-                          selectionHighlight.color && 'animate-shake-x border-2 border-red-500 ring-2 ring-red-200',
+                          'product-color-options transition',
+                          selectionHighlight.color && 'animate-shake-x border-2 border-red-500 ring-2 ring-red-200 p-1',
                         )}
                       >
-                        <div className="product-color-picker__heading mb-2 text-sm font-semibold text-[#111]">
-                          {manualColorValue
-                            ? `${t('common.color')}: ${translateColorName(t, manualColorValue)}`
-                            : t('common.color')}
-                        </div>
-                        <button
-                          type="button"
-                          className="product-color-picker__trigger"
-                          aria-expanded={colorPickerOpen}
-                          data-no-hard-nav=""
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setColorPickerOpen((open) => !open)
-                          }}
-                        >
-                          <span>
+                        <div className="product-size-options-head mb-2 text-sm">
+                          <span className="font-semibold text-[#111]">
                             {manualColorValue
                               ? `${t('common.color')}: ${translateColorName(t, manualColorValue)}`
-                              : t('product.selectColor', { defaultValue: 'Select color' })}
+                              : t('common.color')}
                           </span>
-                          <ChevronDown className={cn('product-color-picker__chevron', colorPickerOpen && 'is-open')} />
-                        </button>
-                        <div className="product-color-swatch-list product-color-picker__panel">
-                          {colorSwatches.map((swatch, swatchIndex) => (
-                            <ColorSwatchButton
-                              key={swatch.value}
-                              colorLabel={translateColorName(t, swatch.value)}
-                              previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
-                              isSelected={
-                                String(manualColorValue || '').trim() === String(swatch.value || '').trim()
-                              }
-                              isPurchasable={isPurchasable}
-                              priority={swatchIndex < 4}
-                              onSelect={() => {
-                                handleColorSelect(swatch.value, swatch.imageUrl)
-                                setColorPickerOpen(false)
-                                // scroll buy-actions into view so user can see Add-to-Cart after picking color
-                                setTimeout(() => {
-                                  const el = document.querySelector('.product-detail-buy-actions')
-                                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-                                }, 80)
-                              }}
-                              onPreheat={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
-                            />
-                          ))}
+                          <span className="product-size-options-count">
+                            {colorSwatches.length} {t('common.options')}
+                          </span>
+                        </div>
+                        <div className="product-color-grid-scroll">
+                          <div className="product-color-swatch-list">
+                            {colorSwatches.map((swatch, swatchIndex) => (
+                              <ColorSwatchButton
+                                key={swatch.value}
+                                colorLabel={translateColorName(t, swatch.value)}
+                                previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
+                                isSelected={
+                                  String(manualColorValue || '').trim() === String(swatch.value || '').trim()
+                                }
+                                isPurchasable={isPurchasable}
+                                priority={swatchIndex < 4}
+                                onSelect={() => {
+                                  handleColorSelect(swatch.value, swatch.imageUrl)
+                                  setTimeout(() => {
+                                    const el = document.querySelector('.product-detail-buy-actions')
+                                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                                  }, 80)
+                                }}
+                                onPreheat={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </div>
 

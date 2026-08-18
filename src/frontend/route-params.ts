@@ -111,19 +111,23 @@ export const ProductCategory = {
     params: { categoryId: string; categorySlug?: string | null },
   ) => {
     const slug = String(params.categorySlug || '').trim()
-    // 去掉首尾斜杠，避免 /category//foo 或 slug 自带路径前缀
     const normalizedSlug = slug.replace(/^\/+|\/+$/g, '')
+    let href = ProductCategory.path
     if (normalizedSlug) {
-      router.push(`/category/${encodeURIComponent(normalizedSlug)}`)
+      href = `/category/${encodeURIComponent(normalizedSlug)}/`
+    } else {
+      const categoryId = String(params.categoryId || '').trim()
+      if (!categoryId) {
+        href = ProductCategory.path
+      } else {
+        href = buildUrl(ProductCategory.path, { categoryId })
+      }
+    }
+    if (typeof window !== 'undefined') {
+      window.location.assign(href)
       return
     }
-    // 无 slug 时不要把 id 塞进 /category/[slug]（会导致「未找到对应分类」）
-    const categoryId = String(params.categoryId || '').trim()
-    if (!categoryId) {
-      router.push(ProductCategory.path)
-      return
-    }
-    router.push(buildUrl(ProductCategory.path, { categoryId }))
+    router.push(href)
   },
   navigateToFiltered: (router: AppRouterInstance, params: { categoryId: string; stockStatus: string; sortBy: string; page: string }) =>
     router.push(buildUrl(ProductCategory.path, params)),

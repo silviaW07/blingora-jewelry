@@ -45,18 +45,17 @@ export default async function CategoryBySlugPage({
   const { slug: rawSlug } = await params
   const slug = decodeURIComponent(String(rawSlug || '').trim())
   const bootstrap = await loadStorefrontBootstrap()
-  const categoryId = resolveCategoryIdFromTree(bootstrap.categories, slug)
   const slugAsName = slug.replace(/[-_]+/g, ' ')
   const daily =
     isDailyNewArrivalCategoryName(slug) ||
     isDailyNewArrivalCategoryName(slugAsName)
   const loaded = await loadStorefrontProducts({
     slug,
-    categoryId,
     categoryTree: bootstrap.categories,
     pageSize: 24,
     daily,
   })
+  const categoryId = loaded.categoryId || resolveCategoryIdFromTree(bootstrap.categories, slug)
   let list = loaded.list
   if (list.length === 0 && (loaded.categoryId || categoryId)) {
     const preview = buildCategoryPreviewProducts(bootstrap.categories, bootstrap.recommendZones)

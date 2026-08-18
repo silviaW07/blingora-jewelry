@@ -22,18 +22,13 @@ import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
 import { ListingPageHead } from '@/frontend/components/ListingPageHead'
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
-import { StorefrontBrandNavList } from '@/frontend/components/StorefrontBrandNavList'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
-import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { isStorefrontHomeContentZone, isComingSoonRecommendZoneTitle } from '@/frontend/utils/recommendZoneDisplay'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
-import { categoryHref, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
-
-interface Props {
-  state: HomeState
-  handlers: HomeHandlers
-}
+import { categoryHref, hardNavigate, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { isAbsoluteHttpUrl, normalizePosterLinkUrl } from '@/shared/posterLink'
+import type { HomeBannerItem } from '@/frontend/hooks/useHome'
 
 const isDefaultHomeQueryState = (state: HomeState) => {
   if (state.isDailyNewArrivalMode || state.selectedDailyNewArrivalMonthKey) return false
@@ -52,6 +47,34 @@ const isDefaultHomeQueryState = (state: HomeState) => {
   )
 }
 
+function BannerDotButton({
+  index,
+  active,
+  onSelect,
+}: {
+  index: number
+  active: boolean
+  onSelect: () => void
+}) {
+  const dotEvents = useChromeActivate(onSelect)
+  return (
+    <button
+      type="button"
+      className={cn(
+        'h-1.5 rounded-full transition-all',
+        active ? 'w-5 bg-white' : 'w-1.5 bg-white/40',
+      )}
+      {...dotEvents}
+      aria-label={`Banner ${index + 1}`}
+    />
+  )
+}
+
+interface Props {
+  state: HomeState
+  handlers: HomeHandlers
+}
+
 export function MobileHomeStorefrontView({ state, handlers }: Props) {
   const router = useRouter()
   const pathname = usePathname() || '/'
@@ -62,8 +85,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
     categories,
     recommendZones,
     isLoadingRecommendZones,
-    sideNavZones,
-    selectedRecommendCategoryId,
     queryState,
     products,
     isLoadingProducts,
@@ -90,44 +111,37 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   } | null>(null)
 
   const isDefaultHomeState = isDefaultHomeQueryState(state)
-  const activeBanner = posters[activeBannerIndex] || null
-  const openBanner = useCallback(() => {
-    if (bannerTouchRef.current?.isSwiping) return
-    if (activeBanner) handlers.handleBannerClick(activeBanner)
-  }, [activeBanner, handlers])
-  const bannerOpenEvents = useChromeActivate(openBanner)
+  const prevBannerEvents = useChromeActivate(() => handlers.handleBannerChange(activeBannerIndex - 1))
+  const nextBannerEvents = useChromeActivate(() => handlers.handleBannerChange(activeBannerIndex + 1))
+
+  const handleBannerLinkClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>, banner: HomeBannerItem) => {
+      if (bannerTouchRef.current?.isSwiping) {
+        event.preventDefault()
+        return
+      }
+      const target = normalizePosterLinkUrl(banner.link_url)
+      if (!target) {
+        event.preventDefault()
+        return
+      }
+      if (target.startsWith('/')) {
+        event.preventDefault()
+        hardNavigate(target)
+        return
+      }
+      if (isAbsoluteHttpUrl(target)) {
+        event.preventDefault()
+        window.location.href = target
+      }
+    },
+    [],
+  )
 
   /** PRODUCT + CATEGORY zones, including the Coming directory. */
   const contentZones = useMemo(
     () => recommendZones.filter((z) => isStorefrontHomeContentZone(z)),
     [recommendZones],
-  )
-  const hotSideNavZoneFromApi = useMemo(
-    () => pickBrandSideNavZone(sideNavZones, { requireSideNavType: false }),
-    [sideNavZones],
-  )
-  const hotSideNavZoneFromRecommend = useMemo(
-    () => pickBrandSideNavZone(recommendZones, { requireSideNavType: true }),
-    [recommendZones],
-  )
-  const sideNavItems = useMemo(
-    () =>
-      hotSideNavZoneFromApi && hotSideNavZoneFromApi.items.length > 0
-        ? hotSideNavZoneFromApi.items.map((item) => ({
-            id: item.category_id,
-            key: item.item_id,
-            label: item.category_name,
-            slug: item.category_slug,
-          }))
-        : (hotSideNavZoneFromRecommend?.items || [])
-            .filter((item): item is Extract<(typeof hotSideNavZoneFromRecommend.items)[number], { entityType: 'SIDE_NAV' }> => item.entityType === 'SIDE_NAV')
-            .map((item) => ({
-              id: item.categoryId,
-              key: item.itemId,
-              label: item.categoryName,
-              slug: item.categorySlug,
-            })),
-    [hotSideNavZoneFromApi, hotSideNavZoneFromRecommend],
   )
 
   const currentCategoryName = queryState.searchKeyword
@@ -260,28 +274,53 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 }, 320)
               }}
             >
-              {activeBanner ? (
+              {posters.length > 0 ? (
                 <>
-                  <button
-                    type="button"
-                    className="mobile-home__banner-hit absolute inset-0 z-[1] block h-full w-full overflow-hidden"
-                    {...bannerOpenEvents}
-                    aria-label={activeBanner.title || 'Banner'}
+                  <div
+                    className="mobile-home__banner-track absolute inset-0 z-[1] flex h-full w-full"
+                    style={{ transform: `translate3d(-${activeBannerIndex * 100}%, 0, 0)` }}
                   >
-                    <EditableImg
-                      propKey={`mobile-category-poster-${activeBanner.poster_id}`}
-                      src={activeBanner.image_url || undefined}
-                      keywords={activeBanner.image_url || activeBanner.title}
-                      alt={activeBanner.title || 'Banner'}
-                      className="mobile-home__banner-media absolute inset-0 h-full w-full object-cover"
-                    />
-                  </button>
+                    {posters.map((banner) => {
+                      const link = normalizePosterLinkUrl(banner.link_url)
+                      const slideMedia = (
+                        <EditableImg
+                          propKey={`mobile-category-poster-${banner.poster_id}`}
+                          src={banner.image_url || undefined}
+                          keywords={banner.image_url || banner.title}
+                          alt={banner.title || 'Banner'}
+                          className="mobile-home__banner-media absolute inset-0 h-full w-full object-cover"
+                        />
+                      )
+                      return (
+                        <div
+                          key={banner.poster_id}
+                          className="mobile-home__banner-slide relative h-full w-full shrink-0"
+                        >
+                          {link ? (
+                            <a
+                              href={link}
+                              data-no-hard-nav=""
+                              className="mobile-home__banner-hit absolute inset-0 block h-full w-full overflow-hidden"
+                              aria-label={banner.title || 'Banner'}
+                              onClick={(event) => handleBannerLinkClick(event, banner)}
+                            >
+                              {slideMedia}
+                            </a>
+                          ) : (
+                            <div className="mobile-home__banner-hit absolute inset-0 block h-full w-full overflow-hidden">
+                              {slideMedia}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                   {posters.length > 1 ? (
                     <>
                       <button
                         type="button"
                         className="absolute left-2 top-1/2 z-[2] flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111]"
-                        onClick={() => handlers.handleBannerChange(activeBannerIndex - 1)}
+                        {...prevBannerEvents}
                         aria-label="Previous banner"
                       >
                         <ChevronLeft className="size-4" />
@@ -289,22 +328,18 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       <button
                         type="button"
                         className="absolute right-2 top-1/2 z-[2] flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111]"
-                        onClick={() => handlers.handleBannerChange(activeBannerIndex + 1)}
+                        {...nextBannerEvents}
                         aria-label="Next banner"
                       >
                         <ChevronRight className="size-4" />
                       </button>
                       <div className="absolute bottom-2 left-1/2 z-[2] flex -translate-x-1/2 gap-1.5">
                         {posters.map((banner, index) => (
-                          <button
+                          <BannerDotButton
                             key={banner.poster_id}
-                            type="button"
-                            className={cn(
-                              'h-1.5 rounded-full transition-all',
-                              index === activeBannerIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/40',
-                            )}
-                            onClick={() => handlers.handleBannerChange(index)}
-                            aria-label={`Banner ${index + 1}`}
+                            index={index}
+                            active={index === activeBannerIndex}
+                            onSelect={() => handlers.handleBannerChange(index)}
                           />
                         ))}
                       </div>
@@ -326,32 +361,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               )}
             </div>
           </section>
-
-          {sideNavItems.length > 0 ? (
-            <section
-              className="mobile-home__brands mb-3 px-3"
-              data-controller-name="移动端品牌目录"
-            >
-              <div className="rounded-2xl bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-[0.95rem] font-semibold text-[#111111]">
-                    {t('nav.brand', { defaultValue: 'Brand' })}
-                  </h2>
-                  <span className="text-[0.75rem] text-[#8a8073]">
-                    {sideNavItems.length}
-                  </span>
-                </div>
-                <StorefrontBrandNavList
-                  items={sideNavItems}
-                  activeId={queryState.categoryId || selectedRecommendCategoryId || null}
-                  onSelect={(categoryId, categorySlug) =>
-                    handlers.handleNavigateRecommendCategory(categoryId, categorySlug)
-                  }
-                  emptyText={t('mobile.noRecommendedCategories', { defaultValue: 'No categories yet' })}
-                />
-              </div>
-            </section>
-          ) : null}
 
           {/* 3. Service benefit cards — shared with desktop, static, icon+title+desc */}
           <section
