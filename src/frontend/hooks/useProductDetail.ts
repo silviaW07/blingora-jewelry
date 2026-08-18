@@ -313,15 +313,14 @@ export const useProductDetail = (seed?: {
     const attrMap = new Map<string, Set<string>>()
     product.skus?.forEach(sku => {
       sku.attributeJson?.forEach(attr => {
-        if (attr.name && attr.value) {
-          const name = String(attr.name).trim()
-          const value = String(attr.value).trim()
-          if (!name || !value) continue
-          if (!attrMap.has(name)) {
-            attrMap.set(name, new Set())
-          }
-          attrMap.get(name)!.add(value)
+        if (!attr.name || !attr.value) return
+        const name = String(attr.name).trim()
+        const value = String(attr.value).trim()
+        if (!name || !value) return
+        if (!attrMap.has(name)) {
+          attrMap.set(name, new Set())
         }
+        attrMap.get(name)!.add(value)
       })
     })
 
