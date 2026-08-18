@@ -243,29 +243,29 @@
 }
 
 .product-detail-main-carousel {
-  display: block;
+  display: block !important;
   width: 100%;
 }
 
+/* In-flow square img. Absolute + % height was 0×0 at Chrome's ~980px width. */
 .product-detail-carousel {
   position: relative;
+  display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 2px;
   background: #f3f3f3;
 }
 
-.product-detail-carousel--empty .product-detail-carousel__viewport {
+.product-detail-carousel--empty {
   width: 100%;
-  height: 100%;
-  background: #f3f3f3;
+  height: 0;
+  padding-bottom: 100%;
 }
 
 .product-detail-carousel__viewport {
   display: flex;
   width: 100%;
-  height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
@@ -279,38 +279,34 @@
   display: none;
 }
 
-.product-detail-carousel__container {
-  display: none;
+.product-detail-carousel__container,
+.product-detail-carousel__slide-inner,
+.product-detail-carousel__frame {
+  display: contents;
 }
 
 .product-detail-carousel__slide {
-  position: relative;
   flex: 0 0 100%;
   width: 100%;
   min-width: 100%;
   max-width: 100%;
-  height: 100%;
   line-height: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-}
-
-.product-detail-carousel__slide-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
   background: #f3f3f3;
 }
 
-.product-detail-carousel__slide-inner > *,
-.product-detail-carousel__slide-inner img {
-  position: absolute !important;
-  inset: 0 !important;
+.product-detail-carousel__slide img,
+.product-detail-carousel__img {
+  position: static !important;
+  inset: auto !important;
+  display: block !important;
   width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
-  object-fit: cover;
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+  object-fit: cover !important;
+  background: #f3f3f3;
 }
 
 .product-detail-carousel__fraction {
@@ -422,7 +418,8 @@
 
 @media (min-width: 1024px) {
   html:not(.is-narrow) .product-detail-main-carousel {
-    display: none !important;
+    display: block !important;
+    width: 100%;
   }
 
   html:not(.is-narrow) .product-detail-gallery-stage {
@@ -604,27 +601,36 @@
   border-top: 1px solid #eeeeee;
 }
 
-/* Color 网格滑动框 — 结构与 Size options 一致 */
+/* Color 网格滑动框 — 高度跟行数走，最多 5 行后内部滚动 */
 .product-color-options {
   width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .product-color-grid-scroll {
+  --color-grid-row-h: 5.75rem;
+  --color-grid-row-gap: 0.75rem;
+  --color-grid-visible-rows: 5;
   width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: calc(
+    var(--color-grid-visible-rows) * var(--color-grid-row-h) +
+      (var(--color-grid-visible-rows) - 1) * var(--color-grid-row-gap)
+  );
+  margin: 0 auto;
   border-top: 1px solid #eeeeee;
   border-bottom: 1px solid #eeeeee;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
 }
 
-.product-color-grid-scroll::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+.product-color-grid-scroll.is-scrollable {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .product-sku-row {
@@ -701,23 +707,26 @@
   color: #111111;
 }
 
-/* 商品详情：颜色缩略图（上方标签 + 框内仅图片）
- * 固定约 5 行可视高度，超出纵向滚动（移动端 / 网页端一致） */
+/* 商品详情：颜色缩略图。容器高度 = 实际行数；最多 5 行 */
 .product-color-swatch-list {
   --color-swatch-size: 88px;
   --color-swatch-row-gap: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: min-content;
+  justify-content: center;
+  justify-items: center;
+  align-content: start;
+  column-gap: 0.5rem;
   row-gap: var(--color-swatch-row-gap);
-  overflow: visible;
+  width: 100%;
+  max-width: 22.5rem;
+  height: auto;
+  min-height: 0;
   max-height: none;
-  padding-top: 1.75rem;
-  padding-bottom: 0.5rem;
-  scrollbar-width: thin;
-  scrollbar-color: #d9d3c7 transparent;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+  margin: 0 auto;
+  overflow: visible;
+  padding: 0.5rem 0.25rem;
 }
 
 .product-color-swatch-list::-webkit-scrollbar {
@@ -901,15 +910,8 @@
 
   html:not(.is-narrow) .product-color-swatch-list {
     --color-swatch-size: 96px;
-    --color-swatch-visible-rows: 5;
-    column-gap: 1.125rem;
-    overflow-x: hidden;
-    overflow-y: auto;
-    max-height: calc(
-      var(--color-swatch-visible-rows) * var(--color-swatch-size)
-        + (var(--color-swatch-visible-rows) - 1) * var(--color-swatch-row-gap)
-        + 1.75rem + 0.5rem
-    );
+    --color-swatch-row-gap: 12px;
+    max-width: 24rem;
   }
 }
 
@@ -933,21 +935,31 @@
   }
 
   .product-detail-page .product-color-grid-scroll {
+    height: auto;
+    min-height: 0;
     max-height: calc(5 * 5.75rem + 4 * 0.75rem);
+    overflow: hidden;
+  }
+
+  .product-detail-page .product-color-grid-scroll.is-scrollable {
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .product-detail-page .product-color-swatch-list {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: min-content;
+    justify-items: center;
+    align-content: start;
     gap: 0.75rem 0.5rem;
     width: 100%;
-    max-width: 100%;
+    max-width: 22.5rem;
     margin: 0 auto;
-    padding: 0.85rem 0.25rem;
-    overflow: visible;
+    height: auto;
     max-height: none;
-    padding-top: 0.85rem;
-    padding-bottom: 0.85rem;
+    overflow: visible;
+    padding: 0.5rem 0.25rem;
   }
 
   .product-detail-page .product-color-swatch-label {
@@ -1028,6 +1040,10 @@
   border-radius: 9999px;
   background: #ffffff;
   box-sizing: border-box;
+  position: relative;
+  z-index: 6;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .product-sku-stepper-btn {
@@ -1046,9 +1062,13 @@
   color: #333333;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+  position: relative;
+  z-index: 7;
 }
 
-.product-sku-stepper-btn:disabled {
+.product-sku-stepper-btn[aria-disabled='true'] {
   opacity: 0.35;
   cursor: not-allowed;
 }
@@ -2440,22 +2460,32 @@ html.is-narrow .product-detail-main-stage-img {
 
 html.is-narrow .product-detail-main-carousel {
   display: block !important;
+  width: 100% !important;
 }
 
 html.is-narrow .product-detail-main-stage--desktop,
-html.is-narrow .product-detail-thumbs-mobile {
+html.is-narrow .product-detail-thumbs-mobile,
+html.is-narrow .product-detail-thumbs-desktop {
   display: none !important;
 }
 
 html.is-narrow .product-detail-carousel {
-  aspect-ratio: 1 / 1 !important;
+  display: block !important;
   width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: unset !important;
+}
+
+html.is-narrow .product-detail-carousel--empty {
+  height: 0 !important;
+  padding-bottom: 100% !important;
 }
 
 html.is-narrow .product-detail-carousel__viewport {
   display: flex !important;
   width: 100% !important;
-  height: 100% !important;
+  height: auto !important;
   overflow-x: auto !important;
   overflow-y: hidden !important;
   scroll-snap-type: x mandatory !important;
@@ -2463,30 +2493,28 @@ html.is-narrow .product-detail-carousel__viewport {
   pointer-events: auto !important;
 }
 
-html.is-narrow .product-detail-carousel__container {
-  display: none !important;
+html.is-narrow .product-detail-carousel__container,
+html.is-narrow .product-detail-carousel__slide-inner,
+html.is-narrow .product-detail-carousel__frame {
+  display: contents !important;
 }
 
 html.is-narrow .product-detail-carousel__slide {
   flex: 0 0 100% !important;
   width: 100% !important;
   min-width: 100% !important;
-  height: 100% !important;
+  height: auto !important;
 }
 
-html.is-narrow .product-detail-carousel__slide-inner {
-  width: 100% !important;
-  height: 100% !important;
-  padding-bottom: 0 !important;
-  aspect-ratio: unset !important;
-}
-
+html.is-narrow .product-detail-carousel__slide img,
 html.is-narrow .product-detail-carousel__img {
-  position: absolute !important;
-  inset: 0 !important;
+  position: static !important;
+  inset: auto !important;
+  display: block !important;
   width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
   object-fit: cover !important;
 }
 
@@ -2538,6 +2566,13 @@ html.is-narrow .product-sku-stepper {
   max-width: 6.75rem !important;
   justify-self: end !important;
   justify-content: space-between;
+  pointer-events: auto !important;
+  z-index: 6 !important;
+}
+
+html.is-narrow .product-sku-stepper-btn {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
 }
 
 html.is-narrow .product-detail-page .product-detail-gallery .rounded-\[4px\] {
@@ -2599,30 +2634,32 @@ html.is-narrow .product-color-options {
 }
 
 html.is-narrow .product-color-grid-scroll {
+  height: auto !important;
+  min-height: 0 !important;
   max-height: calc(5 * 5.75rem + 4 * 0.75rem) !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+  overflow: hidden !important;
 }
 
-html.is-narrow .product-color-grid-scroll::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+html.is-narrow .product-color-grid-scroll.is-scrollable {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 html.is-narrow .product-detail-page .product-color-swatch-list {
   display: grid !important;
   grid-template-columns: repeat(3, 1fr) !important;
+  grid-auto-rows: min-content !important;
   justify-content: center !important;
   justify-items: center !important;
+  align-content: start !important;
   column-gap: 0.5rem !important;
   row-gap: 0.75rem !important;
   width: 100% !important;
-  max-width: 100% !important;
+  max-width: 22.5rem !important;
   margin: 0 auto !important;
-  padding: 0.85rem 0.25rem !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0.5rem 0.25rem !important;
   overflow: visible !important;
   max-height: none !important;
 }
@@ -2659,19 +2696,22 @@ html.is-narrow .product-detail-page .product-color-swatch-name {
 }
 
 html.is-narrow .product-sku-list {
-  max-height: calc(5 * 3.35rem) !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch;
-}
-
-html.is-narrow .product-sku-list {
   display: block;
   position: relative;
   z-index: 2;
   width: 100%;
-  min-height: 70vh;
+  height: auto;
+  min-height: 0;
+  max-height: calc(5 * 3.35rem);
+  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
-  background: #fff5f5;
+  background: transparent;
+}
+
+html.is-narrow .product-sku-list.is-scrollable {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .guest-auth-screen__card {

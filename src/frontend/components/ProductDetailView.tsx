@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useCallback, useState, useRef } from 'react';
+import React, { useMemo, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProductDetailState, ProductDetailHandlers } from '@/frontend/hooks/useProductDetail';
 import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDetail';
@@ -11,8 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   Minus,
   PackageSearch,
   Plus,
@@ -142,38 +140,38 @@ function SkuQtyStepper({
   decreaseLabel: string
   increaseLabel: string
 }) {
+  const decEvents = useChromeActivate(() => {
+    if (disabledDec) return
+    onDec()
+  })
+  const incEvents = useChromeActivate(() => {
+    if (disabledInc) return
+    onInc()
+  })
   return (
-    <div className="product-sku-stepper">
+    <div className="product-sku-stepper" data-no-hard-nav="">
       <button
         type="button"
         className="product-sku-stepper-btn"
-        disabled={disabledDec}
+        aria-disabled={disabledDec}
         aria-label={decreaseLabel}
         title={decTitle}
         data-no-hard-nav=""
-        onClick={(event) => {
-          event.stopPropagation()
-          if (disabledDec) return
-          onDec()
-        }}
+        {...decEvents}
       >
-        <Minus className="size-3.5" />
+        <Minus className="size-3.5 pointer-events-none" />
       </button>
       <span className="product-sku-stepper-qty">{qty}</span>
       <button
         type="button"
         className="product-sku-stepper-btn"
-        disabled={disabledInc}
+        aria-disabled={disabledInc}
         aria-label={increaseLabel}
         title={incTitle}
         data-no-hard-nav=""
-        onClick={(event) => {
-          event.stopPropagation()
-          if (disabledInc) return
-          onInc()
-        }}
+        {...incEvents}
       >
-        <Plus className="size-3.5" />
+        <Plus className="size-3.5 pointer-events-none" />
       </button>
     </div>
   )
@@ -325,6 +323,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     getSkuLineQuantity,
     resolveLineMinOrderQty,
   } = handlers;
+
+  const addToCartEvents = useChromeActivate(() => {
+    if (submitting) return
+    void handleAddToCart()
+  })
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -641,12 +644,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   // Display filter only: keep customer-useful whitelist fields (see productSpecWhitelist)
   const descriptionRows = filterDescriptionParamsByWhitelist(product.descriptionParams);
 
-  const shiftGallery = (delta: number) => {
-    if (gallery.length === 0) return;
-    const next = (activeIndex + delta + gallery.length) % gallery.length;
-    if (gallery[next]?.url) setActiveImage(gallery[next].url!);
-  };
-
   return withStorefrontHeader(
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
       {!isPurchasable ? (
@@ -682,7 +679,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     </button>
                   ))}
                 </div>
-
                 <div className="product-detail-main-image">
                   <div className="product-detail-main-carousel">
                     <ProductDetailImageCarousel
@@ -691,55 +687,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       onActiveChange={setActiveImage}
                       alt={product.name}
                     />
-                  </div>
-
-                  <div className="product-detail-main-stage product-detail-main-stage--desktop">
-                    <OptimizedProductImage
-                      fill={false}
-                      src={activeUrl}
-                      alt={product.name}
-                      className="product-detail-main-stage-img"
-                      imageWidth={1600}
-                      priority
-                    />
-                    <button
-                      type="button"
-                      className="absolute left-2 top-1/2 z-[1] flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
-                      onClick={() => shiftGallery(-1)}
-                      aria-label={t('product.prevImage')}
-                    >
-                      <ChevronLeft className="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 z-[1] flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111] shadow"
-                      onClick={() => shiftGallery(1)}
-                      aria-label={t('product.nextImage')}
-                    >
-                      <ChevronRight className="size-4" />
-                    </button>
-                  </div>
-
-                  <div className="product-detail-thumbs-mobile">
-                    {gallery.slice(0, 8).map((item, index) => (
-                      <button
-                        key={`m-${item.url}-${index}`}
-                        type="button"
-                        className={cn(
-                          'relative aspect-square w-full overflow-hidden rounded-[2px] border bg-[#f3f3f3]',
-                          activeImage === item.url ? 'border-[#111111]' : 'border-transparent',
-                        )}
-                        onClick={() => item.url && setActiveImage(item.url)}
-                      >
-                        <OptimizedProductImage
-                          fill={false}
-                          src={item.url}
-                          alt=""
-                          className="aspect-square h-auto w-full object-cover"
-                          imageWidth={160}
-                        />
-                      </button>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -804,7 +751,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             {colorSwatches.length} {t('common.options')}
                           </span>
                         </div>
-                        <div className="product-color-grid-scroll">
+                        <div
+                          className={cn(
+                            'product-color-grid-scroll',
+                            colorSwatches.length > 15 && 'is-scrollable',
+                          )}
+                        >
                           <div className="product-color-swatch-list">
                             {colorSwatches.map((swatch, swatchIndex) => (
                               <ColorSwatchButton
@@ -818,10 +770,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                 priority={swatchIndex < 4}
                                 onSelect={() => {
                                   handleColorSelect(swatch.value, swatch.imageUrl)
-                                  setTimeout(() => {
-                                    const el = document.querySelector('.product-detail-buy-actions')
-                                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-                                  }, 80)
                                 }}
                                 onPreheat={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
                               />
@@ -843,7 +791,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             {specListRows.length} {t('common.options')}
                           </span>
                         </div>
-                        <div className="product-sku-list">
+                        <div
+                          className={cn(
+                            'product-sku-list',
+                            specListRows.length > 5 && 'is-scrollable',
+                          )}
+                        >
                           {specListRows.length > 0 ? (
                             specListRows.map((row) => renderSpecRow(row))
                           ) : (
@@ -863,7 +816,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           {specListRows.length} {t('common.options')}
                         </span>
                       </div>
-                      <div className="product-sku-list max-h-[420px] overflow-y-auto">
+                      <div
+                        className={cn(
+                          'product-sku-list',
+                          specListRows.length > 5 && 'is-scrollable',
+                        )}
+                      >
                         {specListRows.map((row) => renderSpecRow(row))}
                       </div>
                     </div>
@@ -964,10 +922,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       )}
                       aria-disabled={!canAddToCart || submitting}
                       data-no-hard-nav=""
-                      onClick={() => {
-                        if (submitting) return
-                        void handleAddToCart()
-                      }}
+                      {...addToCartEvents}
                     >
                       <ShoppingCart className="size-5 shrink-0" />
                       {submitting
