@@ -89,7 +89,7 @@ export function ProductDetailImageCarousel({
         src={heroUrl}
         alt={alt}
         className="product-detail-carousel__img"
-        imageWidth={960}
+        imageWidth={720}
         priority
       />
       {canSwipe ? (

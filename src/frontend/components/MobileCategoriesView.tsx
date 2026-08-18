@@ -419,49 +419,49 @@ export default function MobileCategoriesView({
               </section>
             )
           })}
+
+          {showBrandZone ? (
+            <section
+              className="mobile-categories-brands"
+              aria-label={t('nav.brand', { defaultValue: 'Brand' })}
+              data-controller-name="分类页右侧品牌展示区"
+            >
+              <h2 className="mobile-categories-brands__title">
+                {t('nav.brand', { defaultValue: 'Brand' })}
+              </h2>
+              <div className="mobile-categories-brands__grid">
+                {brands.map((brand) => {
+                  const label = translateCatalogLabel(t, brand.name)
+                  return (
+                    <a
+                      key={brand.id}
+                      {...hardNavProps(categoryHref(brand.slug, brand.id))}
+                      className="mobile-categories-brands__item"
+                    >
+                      <span className="mobile-categories-brands__icon">
+                        {brand.imageUrl ? (
+                          <OptimizedProductImage
+                            src={brand.imageUrl}
+                            alt={label}
+                            sizes="56px"
+                            imageWidth={120}
+                            className="rounded-full"
+                          />
+                        ) : (
+                          <span className="mobile-categories-brands__initials" aria-hidden>
+                            {brand.name.slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                      </span>
+                      <span className="mobile-categories-brands__label">{label}</span>
+                    </a>
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
-
-      {showBrandZone ? (
-        <section
-          className="mobile-categories-brands"
-          aria-label={t('nav.brand', { defaultValue: 'Brand' })}
-          data-controller-name="分类页底部品牌展示区"
-        >
-          <h2 className="mobile-categories-brands__title">
-            {t('nav.brand', { defaultValue: 'Brand' })}
-          </h2>
-          <div className="mobile-categories-brands__grid">
-            {brands.map((brand) => {
-              const label = translateCatalogLabel(t, brand.name)
-              return (
-                <a
-                  key={brand.id}
-                  {...hardNavProps(categoryHref(brand.slug, brand.id))}
-                  className="mobile-categories-brands__item"
-                >
-                  <span className="mobile-categories-brands__icon">
-                    {brand.imageUrl ? (
-                      <OptimizedProductImage
-                        src={brand.imageUrl}
-                        alt={label}
-                        sizes="56px"
-                        imageWidth={120}
-                        className="rounded-full"
-                      />
-                    ) : (
-                      <span className="mobile-categories-brands__initials" aria-hidden>
-                        {brand.name.slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
-                  <span className="mobile-categories-brands__label">{label}</span>
-                </a>
-              )
-            })}
-          </div>
-        </section>
-      ) : null}
     </div>
   )
 }

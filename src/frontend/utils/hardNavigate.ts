@@ -135,14 +135,13 @@ export function productHref(productId: string) {
 
 /**
  * Chrome Android often drops `click` on nested buttons (parent card steals it).
- * Fire on pointerdown (same as Categories L1), then ignore the following pointerup/click.
+ * Fire on pointerdown; do not preventDefault — that cancels the tap on Chrome.
  */
 export function useChromeActivate(handler: () => void) {
   const fn = useRef(handler)
   fn.current = handler
   const last = useRef(0)
-  const run = useCallback((event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
-    event?.preventDefault?.()
+  const run = useCallback((event?: { stopPropagation?: () => void }) => {
     event?.stopPropagation?.()
     const now = Date.now()
     if (now - last.current < 400) return

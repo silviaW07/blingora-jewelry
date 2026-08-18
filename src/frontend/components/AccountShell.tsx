@@ -180,7 +180,7 @@ export function AccountShell({
                     key={item.path}
                     {...hardNavProps(item.href)}
                     className={cn(
-                      'inline-flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[0.75rem] font-medium transition sm:gap-2 sm:rounded-[12px] sm:px-3 sm:py-2 sm:text-[0.8125rem] md:rounded-[16px] md:px-3 md:py-2.5 md:text-sm',
+                      'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[0.75rem] font-medium transition sm:gap-2 sm:rounded-[12px] sm:px-3 sm:py-2 sm:text-[0.8125rem] lg:rounded-[16px] lg:px-3 lg:py-2.5 lg:text-sm',
                       active
                         ? 'bg-[#111111] text-white'
                         : 'text-[#2f2a24] hover:bg-[#f6f2ea]',

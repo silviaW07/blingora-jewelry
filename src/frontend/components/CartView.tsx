@@ -69,7 +69,7 @@ const QuantityControl = ({
   } = useQuantityControl(initialValue, qtyMax, onUpdate);
   const minusEvents = useChromeActivate(handleMinus);
   const plusEvents = useChromeActivate(handlePlus);
-  return <div role="group" aria-disabled={disabled} className="mobile-cart-qty inline-flex h-8 items-center overflow-hidden bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+  return <div role="group" aria-disabled={disabled} className="mobile-cart-qty inline-flex h-8 items-center overflow-hidden rounded-full bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
       <button type="button" {...minusEvents} disabled={disabled || Number(val) <= 1} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
         <Minus className="size-3.5" data-api-unique-id='cartview-r2cdb4196d925e59d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
@@ -235,13 +235,13 @@ export const CartView = ({
                 <DecorateText propKey="cart_empty_continue_btn" as="span">{t('common.continueShopping')}</DecorateText>
               </Button>
             </div> : <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12 xl:gap-5" data-api-unique-id='cartview-r58a70c7c14e014c6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-              <div className="mobile-cart-list-shell flex max-h-none flex-col overflow-hidden rounded-[12px] border border-[#f0dede] bg-white p-3 sm:p-4 md:max-h-[80vh] xl:col-span-8 xl:h-[80vh]" data-api-unique-id='cartview-r3f22438c72796820-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+              <div className="mobile-cart-list-shell flex max-h-none flex-col overflow-hidden rounded-[12px] border border-[#f0dede] bg-white p-3 sm:p-4 xl:col-span-8 xl:h-[80vh]" data-api-unique-id='cartview-r3f22438c72796820-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                 <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-1" data-api-unique-id='cartview-r5e264d24a5bba2be-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                   <div className="flex items-center gap-2 min-w-0" data-api-unique-id='cartview-r80afdd634904788b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                     <h2 className="font-header text-lg font-bold text-[#0F172A] tracking-tight" data-api-unique-id='cartview-r480ac6e497713a5c-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                       <DecorateText propKey="cart_product_list_title" as="span">{t('checkout.productList')}</DecorateText>
                     </h2>
-                    <span className="inline-flex items-center bg-[#fff0f5] px-2 py-0.5 text-xs font-semibold text-[#f254a6]" data-api-unique-id='cartview-rf0d94b2603cf5a85-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+                    <span className="inline-flex items-center rounded-full bg-[#fff0f5] px-2 py-0.5 text-xs font-semibold text-[#f254a6]" data-api-unique-id='cartview-rf0d94b2603cf5a85-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
                       {totalPieces} pieces
                     </span>
                   </div>

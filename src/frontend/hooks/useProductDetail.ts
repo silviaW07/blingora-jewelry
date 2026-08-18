@@ -385,6 +385,10 @@ export const useProductDetail = (seed?: {
       )
       const primary = matchedSkus.find((sku) => Boolean(sku.imageUrl)) || matchedSkus[0] || null
       if (primary?.imageUrl) setActiveImage(primary.imageUrl)
+      if (primary) {
+        setSelectedSku(primary)
+        setManualSizeSkuId(primary.id)
+      }
     }
     // colorAttribute is derived from this product; productIdKey is the reset key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -464,13 +468,10 @@ export const useProductDetail = (seed?: {
   const isSizeSelected = !sizeAttribute || totalSelectedQty > 0 || Boolean(manualSizeSkuId)
 
   /**
-   * 颜色已选且至少有数量时即可点击加购；
-   * 未达起订量时在点击时弹出明确提示（便于展示「还差 X 件」）。
+   * Pink and tappable whenever the product is on sale.
+   * Qty 0 still adds MOQ; guests go to login. Never grey the button for qty=0.
    */
-  const canAddToCart = useMemo(
-    () => isPurchasable && isColorSelected && totalSelectedQty > 0,
-    [isPurchasable, isColorSelected, totalSelectedQty],
-  )
+  const canAddToCart = isPurchasable
 
   const redirectToLogin = useCallback(() => {
     openStorefrontLogin(openAuthModal)
@@ -758,42 +759,52 @@ export const useProductDetail = (seed?: {
     }
 
     if (colorAttribute && !String(manualColorValue || '').trim()) {
-      toast.error('Please select a color')
-      triggerSelectionHighlight({ color: true, size: false })
-      return
-    }
-
-    if (sizeAttribute && totalSelectedQty <= 0 && !manualSizeSkuId) {
-      toast.error('Please set size quantities first')
-      triggerSelectionHighlight({ color: false, size: true })
-      return
+      const firstColor =
+        colorAttribute.values.find((value) => String(value || '').trim()) || null
+      if (firstColor) {
+        setManualColorValue(firstColor)
+      } else {
+        toast.error('Please select a color')
+        triggerSelectionHighlight({ color: true, size: false })
+        return
+      }
     }
 
     let lines = Object.entries(skuQuantitiesRef.current).filter(([, qty]) => qty > 0)
 
-    // 已选中颜色+尺码但数量为 0 时，默认加购起订量（单规格保底）
-    if (lines.length === 0 && selectedSku) {
+    // Qty 0: add MOQ of the selected / first matching SKU (Chrome users often never tap +).
+    if (lines.length === 0) {
+      const colorValue = String(manualColorValue || '').trim()
+      const fallbackSku =
+        selectedSku ||
+        product?.skus.find((sku) => {
+          if (!colorAttribute || !colorValue) return true
+          return sku.attributeJson?.some(
+            (attr) => attr.name === colorAttribute.name && attr.value === colorValue,
+          )
+        }) ||
+        product?.skus[0] ||
+        null
+      if (!fallbackSku) {
+        toast.error('Please select a size')
+        if (sizeAttribute) triggerSelectionHighlight({ color: false, size: true })
+        return
+      }
       const moq = resolveSkuMinOrderQty({
         productMinOrderQty,
-        skuMinOrderQty: selectedSku.minOrderQty,
+        skuMinOrderQty: fallbackSku.minOrderQty,
         supportsMixedBatch,
       })
-      const qty = skuQtyCap(selectedSku) >= moq ? moq : 0
+      const qty = skuQtyCap(fallbackSku) >= moq ? moq : 0
       if (qty <= 0) {
         toast.error('This option is out of stock')
         return
       }
-      lines = [[selectedSku.id, qty]]
-      skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [selectedSku.id]: qty }
+      lines = [[fallbackSku.id, qty]]
+      skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [fallbackSku.id]: qty }
       setSkuQuantities({ ...skuQuantitiesRef.current })
-    }
-
-    if (lines.length === 0) {
-      toast.error('Please select a size')
-      if (sizeAttribute) {
-        triggerSelectionHighlight({ color: false, size: true })
-      }
-      return
+      setSelectedSku(fallbackSku)
+      setManualSizeSkuId(fallbackSku.id)
     }
 
     // 单规格：加购数量保底 Math.max(qty, moq)

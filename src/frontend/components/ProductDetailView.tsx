@@ -106,11 +106,10 @@ function ColorSwatchButton({
       <span className="product-color-swatch-frame">
         {previewUrl ? (
           <OptimizedProductImage
-            fill={false}
             src={previewUrl}
             alt=""
-            className="pointer-events-none aspect-square h-auto w-full object-cover"
-            imageWidth={200}
+            className="pointer-events-none"
+            imageWidth={160}
             priority={priority}
           />
         ) : null}
@@ -397,7 +396,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   // 预热主图尺寸(960)，让点击颜色后左侧大图秒出（缩略图只有 200 宽、URL 不同不会命中）
   const preheatMainImage = useCallback((url?: string | null) => {
     if (typeof window === 'undefined' || !url) return;
-    const proxied = toProxiedImageUrl(url, { width: 960 });
+    const proxied = toProxiedImageUrl(url, { width: 720 });
     if (!proxied) return;
     const img = new window.Image();
     img.decoding = 'async';
@@ -578,7 +577,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                   alt={detailPreview.name || ''}
                   className="size-full"
                   sizes="(max-width: 1024px) 100vw, 50vw"
-                  imageWidth={1600}
+                  imageWidth={720}
                   priority
                 />
                 <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/25 to-transparent pb-6">

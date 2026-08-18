@@ -188,9 +188,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       )}
     >
       <span className="whitespace-nowrap">{label}</span>
-      {isActive ? (
-        <span className="absolute bottom-0 left-1/2 h-0.5 w-[70%] -translate-x-1/2 rounded-full bg-[#f254a6]" />
-      ) : null}
     </a>
   )
 
