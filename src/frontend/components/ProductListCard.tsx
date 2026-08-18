@@ -11,7 +11,7 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { hardNavProps, productHref } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 export type ProductListCardItem = Pick<
@@ -101,7 +101,11 @@ export const ProductListCard = ({
     })
     onNavigate(item.product_id)
   }
-  const addToCartEvents = useChromeActivate(() => onAddToCart(item))
+  const addToCart = (event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    onAddToCart(item)
+  }
 
   const prefetchDetail = () => {
     prefetchProductDetail(item.product_id)
@@ -247,21 +251,35 @@ export const ProductListCard = ({
         ) : null}
 
         {!isDraft ? (
-          <div className="home-product-card-actions mt-1 flex shrink-0 items-center justify-end gap-1.5 pt-1">
+          <div
+            className="home-product-card-actions mt-1 flex shrink-0 items-center justify-end gap-2 pt-1"
+            data-no-hard-nav
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
             {onAddToWishlist ? (
               <WishlistHeartButton
                 productId={item.product_id}
                 onToggle={(favorited) => onAddToWishlist(item, favorited)}
+                className="size-9 shrink-0"
               />
             ) : null}
             <button
               type="button"
               aria-label={t('product.addToCart')}
-              className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-              {...addToCartEvents}
+              className="home-product-card-cart-btn relative z-[5] inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
+              onPointerDown={(event) => {
+                event.stopPropagation()
+                addToCart(event)
+              }}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+              }}
             >
-              <ShoppingCart className="size-3.5" aria-hidden />
-              <Plus className="absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
+              <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
+              <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
             </button>
           </div>
         ) : null}

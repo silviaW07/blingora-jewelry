@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Slider } from '@/components/ui/slider'
 import type { BrandCategoryItem, SortByEnum } from '@/frontend/actions/ProductCategory'
 import { BrandQuickFilter } from '@/frontend/components/BrandQuickFilter'
 import { cn } from '@/lib/utils'
@@ -62,6 +61,120 @@ const toCommittedRange = (
   const nextMin = min <= PRICE_SLIDER_MIN ? undefined : min
   const nextMax = max >= boundMax ? boundMax : max
   return [nextMin, nextMax]
+}
+
+/** Native thumbs + pointer capture. Radix Slider thumbs are invisible / un-draggable on Chrome Android. */
+function ListingPriceSlider({
+  min,
+  max,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  min: number
+  max: number
+  value: [number, number]
+  onChange: (next: [number, number]) => void
+  ariaLabel: string
+}) {
+  const railRef = useRef<HTMLDivElement>(null)
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const dragRef = useRef<'lo' | 'hi' | null>(null)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
+  const applyFromClientX = useCallback(
+    (clientX: number, which: 'lo' | 'hi') => {
+      const rail = railRef.current
+      if (!rail) return
+      const rect = rail.getBoundingClientRect()
+      const spanPx = rect.width
+      if (spanPx <= 0) return
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / spanPx))
+      const raw = Math.round(min + ratio * (max - min))
+      const [lo, hi] = valueRef.current
+      if (which === 'lo') onChangeRef.current([Math.min(raw, hi), hi])
+      else onChangeRef.current([lo, Math.max(raw, lo)])
+    },
+    [min, max],
+  )
+
+  const thumbFromClientX = (clientX: number): 'lo' | 'hi' => {
+    const rail = railRef.current
+    const [lo, hi] = valueRef.current
+    if (!rail) return 'lo'
+    const rect = rail.getBoundingClientRect()
+    const spanPx = rect.width || 1
+    const at = min + Math.min(1, Math.max(0, (clientX - rect.left) / spanPx)) * (max - min)
+    return Math.abs(at - lo) <= Math.abs(at - hi) ? 'lo' : 'hi'
+  }
+
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      if (!dragRef.current) return
+      applyFromClientX(event.clientX, dragRef.current)
+    }
+    const up = () => {
+      dragRef.current = null
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [applyFromClientX])
+
+  const onPointerDown = (which: 'lo' | 'hi' | 'rail') => (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button != null && event.button > 0) return
+    event.stopPropagation()
+    const next = which === 'rail' ? thumbFromClientX(event.clientX) : which
+    dragRef.current = next
+    applyFromClientX(event.clientX, next)
+  }
+
+  const span = Math.max(1, max - min)
+  const loPct = ((value[0] - min) / span) * 100
+  const hiPct = ((value[1] - min) / span) * 100
+
+  return (
+    <div
+      className="listing-price-slider"
+      role="group"
+      aria-label={ariaLabel}
+      onPointerDown={onPointerDown('rail')}
+    >
+      <div className="listing-price-slider__rail" ref={railRef}>
+        <div
+          className="listing-price-slider__fill"
+          style={{ left: `${loPct}%`, width: `${Math.max(0, hiPct - loPct)}%` }}
+        />
+      </div>
+      <button
+        type="button"
+        className="listing-price-slider__thumb"
+        style={{ left: `${loPct}%` }}
+        aria-label={`${ariaLabel} min`}
+        aria-valuemin={min}
+        aria-valuemax={value[1]}
+        aria-valuenow={value[0]}
+        onPointerDown={onPointerDown('lo')}
+      />
+      <button
+        type="button"
+        className="listing-price-slider__thumb"
+        style={{ left: `${hiPct}%` }}
+        aria-label={`${ariaLabel} max`}
+        aria-valuemin={value[0]}
+        aria-valuemax={max}
+        aria-valuenow={value[1]}
+        onPointerDown={onPointerDown('hi')}
+      />
+    </div>
+  )
 }
 
 export function ProductListToolbar({
@@ -141,17 +254,12 @@ export function ProductListToolbar({
               {formatUsd(range[0])} – {formatUsd(range[1])}
             </p>
           </div>
-          <Slider
+          <ListingPriceSlider
             min={PRICE_SLIDER_MIN}
             max={boundMax}
-            step={1}
             value={range}
-            onValueChange={(value) => {
-              if (!Array.isArray(value) || value.length < 2) return
-              commitRange([value[0], value[1]])
-            }}
-            className="listing-price-slider w-full overflow-visible [&_[data-slot=slider-track]]:h-1.5 [&_[data-slot=slider-track]]:bg-[#ebe7de] [&_[data-slot=slider-range]]:bg-[#111111] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#111111] [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-2 [&_[data-slot=slider-thumb]]:hover:ring-[#111111]/20 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-[#111111]/25"
-            aria-label={t('product.priceRange')}
+            onChange={commitRange}
+            ariaLabel={t('product.priceRange')}
           />
         </div>
       </div>

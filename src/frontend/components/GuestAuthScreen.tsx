@@ -122,7 +122,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
       className="guest-auth-screen min-h-[100dvh] bg-[#FFF5F5] px-4 py-6 pb-[calc(var(--mobile-nav-height,3.75rem)+1.5rem)]"
       data-controller-name="客户登录入口"
     >
-      <div className="mx-auto w-full max-w-[560px] overflow-hidden rounded-[24px] border border-[#E2E8F0] bg-white">
+      <div className="guest-auth-screen__card mx-auto w-full max-w-[560px] overflow-hidden rounded-[24px] border border-[#E2E8F0] bg-white">
         <div className="space-y-3 border-b border-[#E2E8F0] px-5 pb-5 pt-6 text-left sm:px-6">
           <h2 className="pr-4 text-2xl font-bold tracking-tight text-[#0F172A]">
             {tab === 'register' ? t('auth.createAccount') : t('auth.welcomeBack')}
@@ -130,16 +130,13 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
           <p className="text-sm text-[#64748B]">
             {tab === 'register' ? t('auth.registerDesc') : t('auth.loginDesc')}
           </p>
-          <div className="flex rounded-full bg-[#F1F5F9] p-1">
+          <div className="guest-auth-screen__tabs">
             {(['login', 'register'] as const).map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => setTab(item)}
-                className={cn(
-                  'flex-1 rounded-full px-4 py-2 text-sm font-semibold transition',
-                  tab === item ? 'bg-white text-[#0F172A] shadow-sm' : 'text-[#64748B]',
-                )}
+                className={cn('guest-auth-screen__tab', tab === item && 'is-active')}
               >
                 {item === 'login' ? t('auth.login') : t('auth.register')}
               </button>
@@ -173,7 +170,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
                 <Label htmlFor="guest-login-password" className="text-xs font-semibold uppercase tracking-[0.08em] text-[#0F172A]">
                   {t('auth.password')}
                 </Label>
-                <div className="relative">
+                <div className="guest-auth-screen__password">
                   <DecorateInput
                     propKey="auth_login_password_placeholder"
                     id="guest-login-password"
@@ -191,7 +188,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
                   <button
                     type="button"
                     onClick={() => setLoginShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B]"
+                    className="guest-auth-screen__eye"
                     aria-label={loginShowPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                   >
                     {loginShowPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
@@ -210,7 +207,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               </Button>
               <p className="pt-1 text-center text-sm text-[#64748B]">
                 {t('auth.noAccount')}{' '}
-                <button type="button" onClick={() => setTab('register')} className="font-semibold text-[#0055FF]">
+                <button type="button" onClick={() => setTab('register')} className="guest-auth-screen__text-btn">
                   {t('auth.registerNow')}
                 </button>
               </p>
@@ -275,7 +272,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
                   <Label htmlFor="guest-register-password" className="text-xs font-semibold uppercase tracking-[0.08em] text-[#0F172A]">
                     {t('auth.password')}
                   </Label>
-                  <div className="relative">
+                  <div className="guest-auth-screen__password">
                     <DecorateInput
                       propKey="register_password_placeholder"
                       id="guest-register-password"
@@ -292,7 +289,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
                     <button
                       type="button"
                       onClick={() => setRegisterShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B]"
+                      className="guest-auth-screen__eye"
                       aria-label={registerShowPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                     >
                       {registerShowPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
@@ -312,7 +309,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               </Button>
               <p className="pt-1 text-center text-sm text-[#64748B]">
                 {t('auth.hasAccount')}{' '}
-                <button type="button" onClick={() => setTab('login')} className="font-semibold text-[#0055FF]">
+                <button type="button" onClick={() => setTab('login')} className="guest-auth-screen__text-btn">
                   {t('auth.loginNow')}
                 </button>
               </p>

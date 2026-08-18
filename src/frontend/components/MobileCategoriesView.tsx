@@ -39,6 +39,15 @@ type BrandEntry = {
   imageUrl?: string | null
 }
 
+function sideNavZonesFromRecommend(zones: unknown[]): SideNavZoneSection[] {
+  return (Array.isArray(zones) ? zones : []).filter(
+    (zone): zone is SideNavZoneSection =>
+      typeof zone === 'object' &&
+      zone !== null &&
+      (zone as SideNavZoneSection).zoneType === 'SIDE_NAV',
+  )
+}
+
 function collectMobileCategoryBrands(
   list: CategoryItem[],
   zones: SideNavZoneSection[],
@@ -113,8 +122,15 @@ export default function MobileCategoriesView({
     return []
   })
   const [activeId, setActiveId] = useState(() => initialCategories?.[0]?.category_id || '')
-  const [loading, setLoading] = useState(() => !(initialCategories?.length))
-  const [brands, setBrands] = useState<BrandEntry[]>([])
+  const hasSeedCategories = Boolean(initialCategories?.length)
+  const [loading, setLoading] = useState(() => !hasSeedCategories)
+  const [brands, setBrands] = useState<BrandEntry[]>(() => {
+    if (!initialCategories?.length) return []
+    return collectMobileCategoryBrands(
+      initialCategories,
+      sideNavZonesFromRecommend(initialRecommendZones || []),
+    )
+  })
   const [productsById, setProductsById] = useState<Record<string, ShelfProductCard[]>>(() =>
     buildCategoryPreviewProducts(initialCategories || [], initialRecommendZones || []),
   )
@@ -127,7 +143,7 @@ export default function MobileCategoriesView({
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    if (!hasSeedCategories) setLoading(true)
 
     Promise.all([
       loadCategoryListCached(lang).catch(() => [] as CategoryItem[]),
@@ -135,19 +151,22 @@ export default function MobileCategoriesView({
     ])
       .then(([list, sideNav]) => {
         if (cancelled) return
-        setCategories(list)
-        setActiveId((prev) => {
-          if (prev && list.some((c) => c.category_id === prev)) return prev
-          return list[0]?.category_id || ''
-        })
-        setBrands(collectMobileCategoryBrands(list, sideNav || []))
-        setProductsById((prev) => {
-          const seeded = buildCategoryPreviewProducts(list, initialRecommendZones || [])
-          return { ...seeded, ...prev }
-        })
+        if (list.length > 0) {
+          setCategories(list)
+          setActiveId((prev) => {
+            if (prev && list.some((c) => c.category_id === prev)) return prev
+            return list[0]?.category_id || ''
+          })
+          const nextBrands = collectMobileCategoryBrands(list, sideNav || [])
+          setBrands((prev) => (nextBrands.length > 0 ? nextBrands : prev))
+          setProductsById((prev) => {
+            const seeded = buildCategoryPreviewProducts(list, initialRecommendZones || [])
+            return { ...seeded, ...prev }
+          })
+        }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && !hasSeedCategories) {
           setCategories([])
           setBrands([])
         }
@@ -159,7 +178,7 @@ export default function MobileCategoriesView({
     return () => {
       cancelled = true
     }
-  }, [lang, initialRecommendZones])
+  }, [lang, initialRecommendZones, hasSeedCategories])
 
   const fallbackMonths = useMemo(
     () =>
@@ -290,7 +309,7 @@ export default function MobileCategoriesView({
     ]
   }
 
-  const showBrandZone = !loading && brands.length > 0
+  const showBrandZone = brands.length > 0
 
   return (
     <div

@@ -24,8 +24,9 @@ export async function fetchCategoryShelfProducts(input: {
   const timer = window.setTimeout(() => controller.abort(), 12000)
   try {
     const res = await fetch(`/api/storefront/products?${params.toString()}`, {
+      cache: 'no-store',
       credentials: 'same-origin',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },
       signal: controller.signal,
     })
     if (!res.ok) return []

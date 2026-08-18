@@ -4,6 +4,8 @@ type Actions = typeof import('../../../../../src/backend/actions/ProductManageme
 
 export const getProductBindingMeta = (...args: Parameters<Actions["getProductBindingMeta"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getProductBindingMeta"]>>>("src.backend.actions.ProductManagement.getProductBindingMeta", ...args);
+export const listProductSupplierNames = (...args: Parameters<Actions["listProductSupplierNames"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["listProductSupplierNames"]>>>("src.backend.actions.ProductManagement.listProductSupplierNames", ...args);
 export const getCategoryOptions = (...args: Parameters<Actions["getCategoryOptions"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getCategoryOptions"]>>>("src.backend.actions.ProductManagement.getCategoryOptions", ...args);
 export const getProductList = (...args: Parameters<Actions["getProductList"]>) => 

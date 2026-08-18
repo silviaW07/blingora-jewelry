@@ -1046,6 +1046,10 @@ export const useProductCategory = (
     }, 8000)
     fetchCategoryShelfProducts({
       categoryId: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
+      slug:
+        !queryState.searchKeyword && isCategorySlugRoute
+          ? routeCategorySlug || undefined
+          : undefined,
       search: queryState.searchKeyword || undefined,
       lang,
       page: queryState.page,

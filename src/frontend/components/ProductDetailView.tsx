@@ -26,7 +26,6 @@ import {
   StorePrice,
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder';
-import { useChromeActivate } from '@/frontend/utils/hardNavigate';
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport';
 import { useTranslation } from 'react-i18next';
 import { translateColorName, translateAttributeValue } from '@/frontend/i18n/catalogLabels';
@@ -76,25 +75,32 @@ function ColorSwatchButton({
   onSelect: () => void
   onPreheat: () => void
 }) {
-  const activate = useChromeActivate(onSelect)
   return (
     <button
       type="button"
       aria-pressed={isSelected}
       aria-label={colorLabel}
       data-selected={isSelected ? 'true' : 'false'}
+      data-no-hard-nav=""
+      disabled={!isPurchasable}
       className={cn(
         'product-color-swatch group',
         isSelected && 'is-selected',
         !isPurchasable && 'is-disabled',
       )}
       onMouseEnter={onPreheat}
+      onClick={(event) => {
+        event.stopPropagation()
+        if (!isPurchasable) return
+        onSelect()
+      }}
       onContextMenu={(event) => event.preventDefault()}
-      {...activate}
     >
-      <span className="product-color-swatch-label" aria-hidden={!isSelected}>
-        {colorLabel}
-      </span>
+      {colorLabel ? (
+        <span className="product-color-swatch-label" aria-hidden={!isSelected}>
+          {colorLabel}
+        </span>
+      ) : null}
       <span className="product-color-swatch-frame">
         {previewUrl ? (
           <OptimizedProductImage
@@ -132,8 +138,6 @@ function SkuQtyStepper({
   decreaseLabel: string
   increaseLabel: string
 }) {
-  const dec = useChromeActivate(onDec)
-  const inc = useChromeActivate(onInc)
   return (
     <div className="product-sku-stepper">
       <button
@@ -142,7 +146,12 @@ function SkuQtyStepper({
         disabled={disabledDec}
         aria-label={decreaseLabel}
         title={decTitle}
-        {...dec}
+        data-no-hard-nav=""
+        onClick={(event) => {
+          event.stopPropagation()
+          if (disabledDec) return
+          onDec()
+        }}
       >
         <Minus className="size-3.5" />
       </button>
@@ -153,7 +162,12 @@ function SkuQtyStepper({
         disabled={disabledInc}
         aria-label={increaseLabel}
         title={incTitle}
-        {...inc}
+        data-no-hard-nav=""
+        onClick={(event) => {
+          event.stopPropagation()
+          if (disabledInc) return
+          onInc()
+        }}
       >
         <Plus className="size-3.5" />
       </button>
@@ -303,9 +317,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     getSkuLineQuantity,
     resolveLineMinOrderQty,
   } = handlers;
-  const addToCartEvents = useChromeActivate(() => {
-    void handleAddToCart()
-  })
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -909,24 +920,26 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         ) : null}
                       </div>
                     ) : null}
-                    <Button
+                    <button
                       type="button"
                       className={cn(
-                        'h-12 w-full rounded-[2px] text-base font-bold text-white transition',
-                        canAddToCart && !submitting
-                          ? 'bg-[#f254a6] hover:bg-[#e44798]'
-                          : 'cursor-not-allowed bg-[#c8c8c8] hover:bg-[#c8c8c8]',
+                        'product-detail-add-to-cart',
+                        (!canAddToCart || submitting) && 'is-disabled',
                       )}
-                      disabled={!canAddToCart || submitting}
-                      {...addToCartEvents}
+                      aria-disabled={!canAddToCart || submitting}
+                      data-no-hard-nav=""
+                      onClick={() => {
+                        if (submitting) return
+                        void handleAddToCart()
+                      }}
                     >
-                      <ShoppingCart className="mr-2 size-4" />
+                      <ShoppingCart className="size-5 shrink-0" />
                       {submitting
                         ? t('product.adding')
                         : totalSelectedQty > 0
                           ? t('product.addToCartQty', { qty: totalSelectedQty })
                           : t('product.addToCart')}
-                    </Button>
+                    </button>
                   </div>
                 </div>
             </div>

@@ -1,19 +1,26 @@
 const NARROW_MQ = '(max-width: 1023px)'
 const PHONE_DEVICE_MQ = '(max-device-width: 512px)'
-/** Real desktop: wide + mouse. Chrome phones fail this even in "desktop site". */
-const DESKTOP_MQ = '(min-width: 1024px) and (hover: hover) and (pointer: fine)'
 
-function cssScreenWidth(win: Window): number {
+/** CSS pixel width of the phone short side (not Chrome’s ~980 layout viewport). */
+export function cssScreenWidth(win: Window = window): number {
   const sw = win.screen?.width || 0
+  const sh = win.screen?.height || 0
   const dpr = win.devicePixelRatio || 1
-  if (sw > 540 && dpr > 1) return Math.round(sw / dpr)
-  return sw
+  let short = Math.min(sw, sh) || sw
+  if (short > 540 && dpr > 1) short = Math.round(short / dpr)
+  if (short >= 280 && short <= 540) return short
+  if (dpr > 1) {
+    const alt = Math.round((Math.min(sw, sh) || sw) / dpr)
+    if (alt >= 280 && alt <= 540) return alt
+  }
+  return short
 }
 
 export function isPhoneScreen(win: Window = window): boolean {
-  if (win.matchMedia?.(PHONE_DEVICE_MQ).matches) return true
   const cssW = cssScreenWidth(win)
-  return cssW >= 280 && cssW <= 540
+  if (cssW >= 280 && cssW <= 540) return true
+  if (win.matchMedia?.(PHONE_DEVICE_MQ).matches) return true
+  return false
 }
 
 function viewportContent(win: Window): string {
@@ -35,10 +42,16 @@ export function lockStorefrontViewport(win: Window = window): void {
     meta.setAttribute('name', 'viewport')
     head.insertBefore(meta, head.firstChild)
   }
-  const content = viewportContent(win)
-  if (meta.getAttribute('content') !== content) {
-    meta.setAttribute('content', content)
-    if (meta.parentNode) meta.parentNode.appendChild(meta)
+  const applyContent = () => {
+    const content = viewportContent(win)
+    if (meta.getAttribute('content') !== content) {
+      meta.setAttribute('content', content)
+      if (meta.parentNode) meta.parentNode.appendChild(meta)
+    }
+  }
+  applyContent()
+  if (isPhoneScreen(win) && (win.innerWidth || 0) > 540) {
+    applyContent()
   }
   if (!viewportObserver) {
     viewportObserver = new MutationObserver(() => {
@@ -52,21 +65,14 @@ export function lockStorefrontViewport(win: Window = window): void {
 }
 
 /**
- * Mobile unless this is clearly a desktop computer.
- * Chrome phones (including "desktop site" / ~980–1280px + pointer:fine) stay
- * on the one mobile storefront — never a second desktop tree.
+ * Same rule in every browser: phone screen → mobile layout.
+ * After viewport lock, Chrome’s innerWidth should match Safari (~360–430).
  */
 export function isNarrowViewport(win: Window = window): boolean {
+  lockStorefrontViewport(win)
   if (isPhoneScreen(win)) return true
-  if (win.matchMedia?.(PHONE_DEVICE_MQ).matches) return true
-  const touchPoints = Number(win.navigator?.maxTouchPoints || 0)
-  const coarse = Boolean(win.matchMedia?.('(pointer: coarse)').matches)
-  if (coarse || touchPoints > 0) return true
-  if (win.matchMedia?.(DESKTOP_MQ).matches) return false
   if (win.matchMedia?.(NARROW_MQ).matches) return true
   if ((win.innerWidth || 9999) < 1024) return true
-  const visual = win.visualViewport?.width
-  if (visual && visual < 1024) return true
   return false
 }
 
@@ -79,6 +85,7 @@ export function syncNarrowHtmlClass(win: Window = window): boolean {
     root.style.overflowX = 'hidden'
     root.style.maxWidth = '100%'
     root.style.width = '100%'
+    root.style.setProperty('-webkit-text-size-adjust', '100%')
     if (win.document.body) {
       win.document.body.style.overflowX = 'hidden'
       win.document.body.style.maxWidth = '100%'
@@ -87,6 +94,7 @@ export function syncNarrowHtmlClass(win: Window = window): boolean {
     root.style.removeProperty('overflow-x')
     root.style.removeProperty('max-width')
     root.style.removeProperty('width')
+    root.style.removeProperty('-webkit-text-size-adjust')
     if (win.document.body) {
       win.document.body.style.removeProperty('overflow-x')
       win.document.body.style.removeProperty('max-width')

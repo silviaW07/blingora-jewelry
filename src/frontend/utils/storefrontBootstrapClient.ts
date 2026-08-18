@@ -12,8 +12,9 @@ export async function fetchStorefrontBootstrap(lang: string): Promise<Storefront
   const abortTimer = window.setTimeout(() => controller.abort(), 4000)
   inflightLang = normalized
   inflight = fetch(`/api/storefront/bootstrap?lang=${encodeURIComponent(normalized)}`, {
+    cache: 'no-store',
     credentials: 'same-origin',
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },
     signal: controller.signal,
   })
     .then(async (res) => {

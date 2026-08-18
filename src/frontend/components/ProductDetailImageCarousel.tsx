@@ -51,7 +51,7 @@ export function ProductDetailImageCarousel({
     }
   }, [emblaApi, syncFromApi])
 
-  /** Chrome often mounts while carousel was display:none — reInit once visible. */
+  /** Chrome often mounts while carousel was display:none — reInit once it has a real size. */
   useEffect(() => {
     if (!emblaApi) return
     const reInit = () => emblaApi.reInit()
@@ -61,12 +61,21 @@ export function ProductDetailImageCarousel({
     const t2 = window.setTimeout(reInit, 400)
     window.addEventListener('resize', reInit)
     window.visualViewport?.addEventListener('resize', reInit)
+    const node = emblaApi.rootNode()
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            if ((node?.clientWidth || 0) > 0) reInit()
+          })
+        : null
+    if (node && ro) ro.observe(node)
     return () => {
       cancelAnimationFrame(raf)
       window.clearTimeout(t1)
       window.clearTimeout(t2)
       window.removeEventListener('resize', reInit)
       window.visualViewport?.removeEventListener('resize', reInit)
+      ro?.disconnect()
     }
   }, [emblaApi, slides.length])
 

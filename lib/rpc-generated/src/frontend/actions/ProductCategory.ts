@@ -2,6 +2,8 @@
 import { rpcCall } from '@/tools/rpc-client';
 type Actions = typeof import('../../../../../src/frontend/actions/ProductCategory');
 
+export const invalidateStorefrontCatalogCaches = (...args: Parameters<Actions["invalidateStorefrontCatalogCaches"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["invalidateStorefrontCatalogCaches"]>>>("src.frontend.actions.ProductCategory.invalidateStorefrontCatalogCaches", ...args);
 export const getCategoryList = (...args: Parameters<Actions["getCategoryList"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getCategoryList"]>>>("src.frontend.actions.ProductCategory.getCategoryList", ...args);
 export const resolveCategoryRouteKey = (...args: Parameters<Actions["resolveCategoryRouteKey"]>) => 
@@ -20,6 +22,8 @@ export const getCategorySideNavZones = (...args: Parameters<Actions["getCategory
   rpcCall<Awaited<ReturnType<Actions["getCategorySideNavZones"]>>>("src.frontend.actions.ProductCategory.getCategorySideNavZones", ...args);
 export const getProductList = (...args: Parameters<Actions["getProductList"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getProductList"]>>>("src.frontend.actions.ProductCategory.getProductList", ...args);
+export const getAvailableBrandFilters = (...args: Parameters<Actions["getAvailableBrandFilters"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getAvailableBrandFilters"]>>>("src.frontend.actions.ProductCategory.getAvailableBrandFilters", ...args);
 export const addToCart = (...args: Parameters<Actions["addToCart"]>) => 
   rpcCall<Awaited<ReturnType<Actions["addToCart"]>>>("src.frontend.actions.ProductCategory.addToCart", ...args);
 export const getWishlistProducts = (...args: Parameters<Actions["getWishlistProducts"]>) => 

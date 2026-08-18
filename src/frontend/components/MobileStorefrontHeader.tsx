@@ -1,14 +1,17 @@
 'use client'
 
 /**
- * Compact mobile storefront header: WhatsApp · Globe · Search · Account.
- * Categories live in the bottom nav. Not used on Cart / Account pages.
+ * Unified mobile storefront header.
+ * Row1: WhatsApp · Logo · Categories
+ * Row2: Globe · Search · Account
+ * Not used on Cart / Account pages.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Camera, Globe, Loader2, Search } from 'lucide-react'
+import { Camera, Globe, LayoutGrid, Loader2, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { StorefrontBrandMark } from '@/frontend/components/StorefrontBrandMark'
 import { CustomerAccountMenu } from '@/frontend/components/CustomerAccountMenu'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { APP_LOCALES, normalizeLocale } from '@/frontend/i18n'
@@ -20,7 +23,7 @@ import {
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
-import { hardNavigate, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = () => (
@@ -102,7 +105,6 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     setIsSearchLoading(false)
   }, [pathname])
 
-  /* Keep search box in sync with URL/query (same as desktop sticky header) */
   useEffect(() => {
     setSearchKeyword(initialKeyword || '')
   }, [initialKeyword])
@@ -119,11 +121,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     const keyword = searchKeyword.trim()
     const params = new URLSearchParams()
     if (keyword) params.set('search', keyword)
-    hardNavigate(
-      params.toString()
-        ? `/?${params.toString()}`
-        : '/',
-    )
+    hardNavigate(params.toString() ? `/?${params.toString()}` : '/')
   }, [isSearchLoading, searchKeyword])
   const searchActivate = useChromeActivate(handleSearchSubmit)
 
@@ -148,13 +146,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
       )}
       data-controller-name="移动端统一顶栏"
     >
-      <form
-        className="mobile-sf-header__search-row"
-        onSubmit={(event) => {
-          event.preventDefault()
-          handleSearchSubmit()
-        }}
-      >
+      <div className="mobile-sf-header__row">
         <a
           href={waHref}
           target="_blank"
@@ -166,6 +158,26 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
           <WhatsAppGlyph />
         </a>
 
+        <div className="mobile-sf-header__brand">
+          <StorefrontBrandMark compact ariaLabel={t('common.backToHome')} />
+        </div>
+
+        <a
+          {...hardNavProps('/categories/')}
+          className="mobile-sf-header__icon-btn"
+          aria-label={t('nav.categories', { defaultValue: 'Categories' })}
+        >
+          <LayoutGrid width={20} height={20} strokeWidth={2} />
+        </a>
+      </div>
+
+      <form
+        className="mobile-sf-header__search-row"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleSearchSubmit()
+        }}
+      >
         <div className="mobile-sf-header__locale" ref={localeMenuRef}>
           <button
             type="button"

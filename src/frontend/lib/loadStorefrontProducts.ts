@@ -120,6 +120,10 @@ export async function loadStorefrontProducts(input: {
       categoryId = resolveCategoryIdFromTree(tree, slug)
     }
 
+    if (!daily && !search && !categoryId) {
+      return { list: [], categoryId: '' }
+    }
+
     const data = daily
       ? await rpcAction<{ list?: unknown }>('src.frontend.actions.Home.getDailyNewArrivalProducts', [
           { page, page_size: pageSize, lang },

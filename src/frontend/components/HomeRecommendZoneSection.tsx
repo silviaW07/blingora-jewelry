@@ -109,7 +109,6 @@ const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
   return ''
 }
 
-const MOBILE_SQUIRCLE_MAX = 8
 const MOBILE_COMING_SOON_COLS = 5
 const MOBILE_COMING_SOON_ROWS = 3
 const MOBILE_COMING_SOON_MAX = MOBILE_COMING_SOON_COLS * MOBILE_COMING_SOON_ROWS
@@ -332,13 +331,11 @@ const renderMobileSquircleContent = (
 ) => {
   const isComingSoon = zoneLooksLikeComingSoon(zone)
   const sourceItems = Array.isArray(zone.items) ? zone.items : []
-  const limitedItems = (
-    isComingSoon
-      ? sourceItems
-      : limitDisplay
-        ? limitRecommendZoneItems(zone, sourceItems)
-        : sourceItems
-  ).slice(0, isComingSoon ? MOBILE_COMING_SOON_MAX : MOBILE_SQUIRCLE_MAX)
+  const limitedItems = isComingSoon
+    ? sourceItems.slice(0, MOBILE_COMING_SOON_MAX)
+    : limitDisplay
+      ? limitRecommendZoneItems(zone, sourceItems)
+      : sourceItems
   const wrapSquircleItems = (count: number, children: React.ReactNode) =>
     isComingSoon ? (
       <MobileComingSoonGrid>{children}</MobileComingSoonGrid>
