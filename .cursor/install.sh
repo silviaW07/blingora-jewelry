@@ -30,8 +30,10 @@ bind-address=127.0.0.1
 skip-name-resolve
 CNF
 
-sudo mkdir -p /var/run/mysqld
-sudo chown mysql:mysql /var/run/mysqld
+# mariadbd binds its socket in /run/mysqld; on some images /var/run is not a
+# symlink to /run, so create both.
+sudo mkdir -p /run/mysqld /var/run/mysqld
+sudo chown mysql:mysql /run/mysqld /var/run/mysqld
 
 echo "[install] 2/6 Initializing data directory (first build only)"
 if [ ! -f "$MARKER" ]; then
@@ -71,13 +73,10 @@ echo "[install] 3/6 Installing Node dependencies (pnpm)"
 pnpm install --frozen-lockfile
 
 echo "[install] 4/6 Generating Prisma client + Linux query engine into prisma-generated/client"
-# The committed prisma-generated/client only ships a Windows engine. Regenerate
-# it here (without mutating the tracked schema) so the Linux engine is present.
-GEN_SCHEMA="prisma/.cloud-agent-generate.prisma"
-sed -E 's|^([[:space:]]*)provider = "prisma-client-js"[[:space:]]*$|\1provider = "prisma-client-js"\n\1output = "../prisma-generated/client"\n\1binaryTargets = ["native"]|' \
-  prisma/schema.prisma > "$GEN_SCHEMA"
-npx prisma generate --schema "$GEN_SCHEMA"
-rm -f "$GEN_SCHEMA"
+# NOTE: prisma-generated/client is git-tracked and ships only a Windows engine,
+# so a fresh checkout reverts it. start.sh regenerates it per boot; this run is
+# for local/first-build convenience.
+bash .cursor/gen-prisma-client.sh
 
 echo "[install] 5/6 Applying latest schema + seeding data"
 export DATABASE_URL="${DB_URL}"
