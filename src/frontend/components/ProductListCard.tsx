@@ -160,7 +160,7 @@ export const ProductListCard = ({
         onFocus={prefetchDetail}
         onKeyDown={handleCardKeyDown}
       >
-        <div className="home-product-card-media relative aspect-square w-full shrink-0 overflow-hidden">
+        <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
           <OptimizedProductImage
             src={previewImage || item.main_image_url}
             alt={item.product_name}

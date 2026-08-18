@@ -59,7 +59,7 @@ export function peekCachedHomeRecommendZones(lang?: string): HomeRecommendZoneSe
   const normalized = String(lang || '').trim()
   if (cache) {
     if ((!normalized || cache.lang === normalized) && Date.now() - cache.fetchedAt <= TTL_MS) {
-      return cache.zones
+      return cache.zones.length > 0 ? cache.zones : null
     }
   }
   if (normalized) {
@@ -79,7 +79,7 @@ export function peekCachedHomeRecommendZones(lang?: string): HomeRecommendZoneSe
 export async function loadHomeRecommendZonesCached(lang: string): Promise<HomeRecommendZoneSection[]> {
   const normalized = String(lang || 'en').trim() || 'en'
   const fresh = peekCachedHomeRecommendZones(normalized)
-  if (fresh) return fresh
+  if (fresh && fresh.length > 0) return fresh
 
   if (inflight && inflightLang === normalized) {
     return inflight
@@ -94,6 +94,10 @@ export async function loadHomeRecommendZonesCached(lang: string): Promise<HomeRe
       )
     })
     .then((zones) => {
+      if (!Array.isArray(zones) || zones.length === 0) {
+        if (cache?.zones?.length) return cache.zones
+        return []
+      }
       cache = { lang: normalized, zones, fetchedAt: Date.now() }
       writeSession(cache)
       return zones

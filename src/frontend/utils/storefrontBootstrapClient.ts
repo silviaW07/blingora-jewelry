@@ -9,7 +9,7 @@ export async function fetchStorefrontBootstrap(lang: string): Promise<Storefront
   if (inflight && inflightLang === normalized) return inflight
 
   const controller = new AbortController()
-  const abortTimer = window.setTimeout(() => controller.abort(), 4000)
+  const abortTimer = window.setTimeout(() => controller.abort(), 12000)
   inflightLang = normalized
   inflight = fetch(`/api/storefront/bootstrap?lang=${encodeURIComponent(normalized)}`, {
     cache: 'no-store',

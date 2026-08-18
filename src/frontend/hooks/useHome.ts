@@ -162,7 +162,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
 
     loadHomeRecommendZonesCached(lang)
       .then((zones) => {
-        setRecommendZones(zones)
+        if (Array.isArray(zones) && zones.length > 0) setRecommendZones(zones)
       })
       .catch((err: any) => {
         // Keep previous zones on transient 502 — avoid empty homepage flash

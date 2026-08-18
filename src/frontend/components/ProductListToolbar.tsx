@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BrandCategoryItem, SortByEnum } from '@/frontend/actions/ProductCategory'
 import { BrandQuickFilter } from '@/frontend/components/BrandQuickFilter'
@@ -63,7 +63,7 @@ const toCommittedRange = (
   return [nextMin, nextMax]
 }
 
-/** Native thumbs + pointer capture. Radix Slider thumbs are invisible / un-draggable on Chrome Android. */
+/** Native range thumbs for paint; wrapper TouchEvents so Chrome Android can drag. */
 function ListingPriceSlider({
   min,
   max,
@@ -89,9 +89,8 @@ function ListingPriceSlider({
       const rail = railRef.current
       if (!rail) return
       const rect = rail.getBoundingClientRect()
-      const spanPx = rect.width
-      if (spanPx <= 0) return
-      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / spanPx))
+      if (rect.width <= 0) return
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
       const raw = Math.round(min + ratio * (max - min))
       const [lo, hi] = valueRef.current
       if (which === 'lo') onChangeRef.current([Math.min(raw, hi), hi])
@@ -100,78 +99,99 @@ function ListingPriceSlider({
     [min, max],
   )
 
-  const thumbFromClientX = (clientX: number): 'lo' | 'hi' => {
-    const rail = railRef.current
+  const whichFromClientX = (clientX: number): 'lo' | 'hi' => {
     const [lo, hi] = valueRef.current
+    const rail = railRef.current
     if (!rail) return 'lo'
     const rect = rail.getBoundingClientRect()
-    const spanPx = rect.width || 1
-    const at = min + Math.min(1, Math.max(0, (clientX - rect.left) / spanPx)) * (max - min)
+    const at =
+      min +
+      Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(1, rect.width))) * (max - min)
     return Math.abs(at - lo) <= Math.abs(at - hi) ? 'lo' : 'hi'
   }
 
+  const startAt = (clientX: number) => {
+    const next = whichFromClientX(clientX)
+    dragRef.current = next
+    applyFromClientX(clientX, next)
+  }
+
   useEffect(() => {
-    const move = (event: PointerEvent) => {
+    const moveTouch = (event: TouchEvent) => {
+      if (!dragRef.current || !event.touches[0]) return
+      event.preventDefault()
+      applyFromClientX(event.touches[0].clientX, dragRef.current)
+    }
+    const movePointer = (event: PointerEvent) => {
       if (!dragRef.current) return
       applyFromClientX(event.clientX, dragRef.current)
     }
     const up = () => {
       dragRef.current = null
     }
-    window.addEventListener('pointermove', move)
+    window.addEventListener('touchmove', moveTouch, { passive: false })
+    window.addEventListener('touchend', up)
+    window.addEventListener('touchcancel', up)
+    window.addEventListener('pointermove', movePointer)
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
     return () => {
-      window.removeEventListener('pointermove', move)
+      window.removeEventListener('touchmove', moveTouch)
+      window.removeEventListener('touchend', up)
+      window.removeEventListener('touchcancel', up)
+      window.removeEventListener('pointermove', movePointer)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
     }
   }, [applyFromClientX])
 
-  const onPointerDown = (which: 'lo' | 'hi' | 'rail') => (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button != null && event.button > 0) return
-    event.stopPropagation()
-    const next = which === 'rail' ? thumbFromClientX(event.clientX) : which
-    dragRef.current = next
-    applyFromClientX(event.clientX, next)
-  }
-
-  const span = Math.max(1, max - min)
-  const loPct = ((value[0] - min) / span) * 100
-  const hiPct = ((value[1] - min) / span) * 100
-
   return (
     <div
+      ref={railRef}
       className="listing-price-slider"
       role="group"
       aria-label={ariaLabel}
-      onPointerDown={onPointerDown('rail')}
+      onPointerDown={(event) => {
+        if (event.button != null && event.button > 0) return
+        event.stopPropagation()
+        startAt(event.clientX)
+      }}
+      onTouchStart={(event) => {
+        if (!event.touches[0]) return
+        event.stopPropagation()
+        startAt(event.touches[0].clientX)
+      }}
     >
-      <div className="listing-price-slider__rail" ref={railRef}>
+      <div className="listing-price-slider__rail">
         <div
           className="listing-price-slider__fill"
-          style={{ left: `${loPct}%`, width: `${Math.max(0, hiPct - loPct)}%` }}
+          style={{
+            left: `${((value[0] - min) / Math.max(1, max - min)) * 100}%`,
+            width: `${((value[1] - value[0]) / Math.max(1, max - min)) * 100}%`,
+          }}
         />
       </div>
-      <button
-        type="button"
-        className="listing-price-slider__thumb"
-        style={{ left: `${loPct}%` }}
-        aria-label={`${ariaLabel} min`}
-        aria-valuemin={min}
-        aria-valuemax={value[1]}
-        aria-valuenow={value[0]}
-        onPointerDown={onPointerDown('lo')}
+      <input
+        type="range"
+        className="listing-price-slider__native listing-price-slider__native--min"
+        min={min}
+        max={max}
+        step={1}
+        value={value[0]}
+        tabIndex={-1}
+        aria-hidden
+        readOnly
       />
-      <button
-        type="button"
-        className="listing-price-slider__thumb"
-        style={{ left: `${hiPct}%` }}
-        aria-label={`${ariaLabel} max`}
-        aria-valuemin={value[0]}
-        aria-valuemax={max}
-        aria-valuenow={value[1]}
-        onPointerDown={onPointerDown('hi')}
+      <input
+        type="range"
+        className="listing-price-slider__native listing-price-slider__native--max"
+        min={min}
+        max={max}
+        step={1}
+        value={value[1]}
+        tabIndex={-1}
+        aria-hidden
+        readOnly
       />
     </div>
   )

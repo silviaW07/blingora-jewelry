@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import useEmblaCarousel from 'embla-carousel-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 
 type GalleryItem = { url?: string | null }
@@ -23,77 +22,45 @@ export function ProductDetailImageCarousel({
     () => items.filter((item): item is { url: string } => Boolean(item.url)),
     [items],
   )
-  const [emblaRef, emblaApi] = useEmblaCarousel({
-    loop: slides.length > 1,
-    align: 'center',
-    containScroll: 'trimSnaps',
-    dragFree: false,
-    watchDrag: true,
-  })
+  const scrollerRef = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(0)
+  const activeUrlRef = useRef(activeUrl)
+  activeUrlRef.current = activeUrl
+  const onActiveChangeRef = useRef(onActiveChange)
+  onActiveChangeRef.current = onActiveChange
 
-  const syncFromApi = useCallback(() => {
-    if (!emblaApi) return
-    const next = emblaApi.selectedScrollSnap()
+  const syncFromScroll = () => {
+    const el = scrollerRef.current
+    if (!el) return
+    const width = el.clientWidth || 1
+    const next = Math.max(0, Math.min(slides.length - 1, Math.round(el.scrollLeft / width)))
     setIndex(next)
     const url = slides[next]?.url
-    if (url) onActiveChange(url)
-  }, [emblaApi, onActiveChange, slides])
+    if (url && url !== activeUrlRef.current) onActiveChangeRef.current(url)
+  }
 
   useEffect(() => {
-    if (!emblaApi) return
-    syncFromApi()
-    emblaApi.on('select', syncFromApi)
-    emblaApi.on('reInit', syncFromApi)
-    return () => {
-      emblaApi.off('select', syncFromApi)
-      emblaApi.off('reInit', syncFromApi)
-    }
-  }, [emblaApi, syncFromApi])
-
-  /** Chrome often mounts while carousel was display:none — reInit once it has a real size. */
-  useEffect(() => {
-    if (!emblaApi) return
-    const reInit = () => emblaApi.reInit()
-    reInit()
-    const raf = requestAnimationFrame(reInit)
-    const t1 = window.setTimeout(reInit, 120)
-    const t2 = window.setTimeout(reInit, 400)
-    window.addEventListener('resize', reInit)
-    window.visualViewport?.addEventListener('resize', reInit)
-    const node = emblaApi.rootNode()
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
-            if ((node?.clientWidth || 0) > 0) reInit()
-          })
-        : null
-    if (node && ro) ro.observe(node)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.clearTimeout(t1)
-      window.clearTimeout(t2)
-      window.removeEventListener('resize', reInit)
-      window.visualViewport?.removeEventListener('resize', reInit)
-      ro?.disconnect()
-    }
-  }, [emblaApi, slides.length])
-
-  useEffect(() => {
-    if (!emblaApi || !activeUrl || slides.length === 0) return
+    const el = scrollerRef.current
+    if (!el || !activeUrl || slides.length === 0) return
     const target = slides.findIndex((item) => item.url === activeUrl)
     if (target < 0) return
-    if (emblaApi.selectedScrollSnap() !== target) {
-      emblaApi.scrollTo(target)
-      setIndex(target)
+    const width = el.clientWidth || 1
+    const left = target * width
+    if (Math.abs(el.scrollLeft - left) > 8) {
+      el.scrollTo({ left, behavior: 'auto' })
     }
-  }, [activeUrl, emblaApi, slides])
+    setIndex(target)
+  }, [activeUrl, slides])
 
   if (slides.length === 0) return null
 
   return (
     <div className="product-detail-carousel" aria-roledescription="carousel">
-      <div className="product-detail-carousel__viewport" ref={emblaRef}>
+      <div
+        className="product-detail-carousel__viewport"
+        ref={scrollerRef}
+        onScroll={syncFromScroll}
+      >
         <div className="product-detail-carousel__container">
           {slides.map((item, slideIndex) => (
             <div className="product-detail-carousel__slide" key={`${item.url}-${slideIndex}`}>
