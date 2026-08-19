@@ -422,8 +422,7 @@ export const useProductDetail = (seed?: {
   )
   /** Soft qty cap for storefront — never expose admin numeric stock. */
   const STOREFRONT_QTY_CAP = 9999
-  const skuQtyCap = (sku: { stockStatus: string } | null | undefined) =>
-    sku && sku.stockStatus !== 'OUT_OF_STOCK' ? STOREFRONT_QTY_CAP : 0
+  const skuQtyCap = (_sku?: { stockStatus?: string } | null) => STOREFRONT_QTY_CAP
 
   const productMinOrderQty = product?.minOrderQty ?? 1
   /** 多 SKU 时可跨色/跨规格混批凑起订量 */
@@ -632,13 +631,8 @@ export const useProductDetail = (seed?: {
   )
 
   const getSkuLineQuantity = useCallback(
-    (skuId: string) => {
-      const sourceSku = product?.skus.find(item => item.id === skuId)
-      if (!sourceSku) return 0
-      const resolved = resolveRowSku(sourceSku)
-      return skuQuantitiesRef.current[resolved.sku.id] ?? skuQuantities[resolved.sku.id] ?? 0
-    },
-    [product, skuQuantities, resolveRowSku],
+    (skuId: string) => skuQuantitiesRef.current[skuId] ?? skuQuantities[skuId] ?? 0,
+    [skuQuantities],
   )
 
   const syncSkuSelection = useCallback(
@@ -690,7 +684,8 @@ export const useProductDetail = (seed?: {
         ? resolveSkuForColorAndSize(sourceSku, colorValue)
         : sourceSku
     const sku = resolvedSku
-    const current = skuQuantitiesRef.current[sku.id] ?? skuQuantities[sku.id] ?? 0
+    const qtyKey = sourceSku.id
+    const current = skuQuantitiesRef.current[qtyKey] ?? skuQuantities[qtyKey] ?? 0
     const moq = resolveSkuMinOrderQty({
       productMinOrderQty,
       skuMinOrderQty: sku.minOrderQty,
@@ -723,16 +718,16 @@ export const useProductDetail = (seed?: {
 
     if (next > 0) {
       syncSkuSelection(sku, colorValue)
-      const merged = { ...skuQuantitiesRef.current, [sku.id]: next }
+      const merged = { ...skuQuantitiesRef.current, [qtyKey]: next }
       skuQuantitiesRef.current = merged
       setSkuQuantities(merged)
       setQuantity(next)
       return
     }
 
-    skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [sku.id]: 0 }
-    setSkuQuantities((prev) => ({ ...prev, [sku.id]: 0 }))
-    if (manualSizeSkuId === sku.id || selectedSku?.id === sku.id) {
+    skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [qtyKey]: 0 }
+    setSkuQuantities((prev) => ({ ...prev, [qtyKey]: 0 }))
+    if (manualSizeSkuId === sku.id || selectedSku?.id === sku.id || manualSizeSkuId === qtyKey) {
       const remaining = Object.entries(skuQuantitiesRef.current).find(
         ([id, qty]) => id !== sku.id && qty > 0,
       )
@@ -758,10 +753,13 @@ export const useProductDetail = (seed?: {
       return
     }
 
-    if (colorAttribute && !String(manualColorValue || '').trim()) {
+    // Use a local color value — setState is async; Chrome users tap Add before state flushes.
+    let colorValue = String(manualColorValue || '').trim()
+    if (colorAttribute && !colorValue) {
       const firstColor =
         colorAttribute.values.find((value) => String(value || '').trim()) || null
       if (firstColor) {
+        colorValue = String(firstColor).trim()
         setManualColorValue(firstColor)
       } else {
         toast.error('Please select a color')
@@ -774,7 +772,6 @@ export const useProductDetail = (seed?: {
 
     // Qty 0: add MOQ of the selected / first matching SKU (Chrome users often never tap +).
     if (lines.length === 0) {
-      const colorValue = String(manualColorValue || '').trim()
       const fallbackSku =
         selectedSku ||
         product?.skus.find((sku) => {

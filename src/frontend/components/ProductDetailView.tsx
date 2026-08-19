@@ -140,14 +140,13 @@ function SkuQtyStepper({
   decreaseLabel: string
   increaseLabel: string
 }) {
-  const decEvents = useChromeActivate(() => {
-    if (disabledDec) return
-    onDec()
-  })
-  const incEvents = useChromeActivate(() => {
-    if (disabledInc) return
-    onInc()
-  })
+  const last = React.useRef(0)
+  const fire = (fn: () => void) => {
+    const now = Date.now()
+    if (now - last.current < 280) return
+    last.current = now
+    fn()
+  }
   return (
     <div className="product-sku-stepper" data-no-hard-nav="">
       <button
@@ -157,7 +156,17 @@ function SkuQtyStepper({
         aria-label={decreaseLabel}
         title={decTitle}
         data-no-hard-nav=""
-        {...decEvents}
+        onPointerUp={(event) => {
+          if (event.button !== 0) return
+          if (disabledDec) return
+          fire(onDec)
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (disabledDec) return
+          fire(onDec)
+        }}
       >
         <Minus className="size-4 pointer-events-none" />
       </button>
@@ -169,7 +178,17 @@ function SkuQtyStepper({
         aria-label={increaseLabel}
         title={incTitle}
         data-no-hard-nav=""
-        {...incEvents}
+        onPointerUp={(event) => {
+          if (event.button !== 0) return
+          if (disabledInc) return
+          fire(onInc)
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (disabledInc) return
+          fire(onInc)
+        }}
       >
         <Plus className="size-4 pointer-events-none" />
       </button>
@@ -324,10 +343,19 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     resolveLineMinOrderQty,
   } = handlers;
 
-  const addToCartEvents = useChromeActivate(() => {
-    if (submitting) return
-    void handleAddToCart()
-  })
+  const addToCartEvents = {
+    onPointerUp: (event: { button?: number }) => {
+      if (event.button && event.button !== 0) return
+      if (submitting) return
+      void handleAddToCart()
+    },
+    onClick: (event: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+      event.preventDefault?.()
+      event.stopPropagation?.()
+      if (submitting) return
+      void handleAddToCart()
+    },
+  }
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -544,7 +572,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
         <SkuQtyStepper
           qty={qty}
           disabledDec={!isPurchasable || !canDecrease}
-          disabledInc={!isPurchasable || qty >= 9999 || sku.stockStatus === 'OUT_OF_STOCK'}
+          disabledInc={!isPurchasable || qty >= 9999}
           onDec={() => void handleSkuQuantityChange(sku.id, 'dec')}
           onInc={() => void handleSkuQuantityChange(sku.id, 'inc')}
           decreaseLabel={t('product.decreaseQty')}
@@ -923,9 +951,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       type="button"
                       className={cn(
                         'product-detail-add-to-cart',
-                        (!canAddToCart || submitting) && 'is-disabled',
+                        submitting && 'is-disabled',
                       )}
-                      aria-disabled={!canAddToCart || submitting}
+                      aria-disabled={submitting}
                       data-no-hard-nav=""
                       {...addToCartEvents}
                     >
