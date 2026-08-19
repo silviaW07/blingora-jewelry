@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 declare global {
   interface Window {
@@ -131,6 +131,84 @@ export function productHref(productId: string) {
   const id = String(productId || '').trim()
   if (!id) return '/productdetail/'
   return `/productdetail/?productId=${encodeURIComponent(id)}`
+}
+
+type ReliableTapOptions = {
+  disabled?: boolean
+  debounceMs?: number
+}
+
+/**
+ * Chrome Android often drops React `click` / `pointerup` on PDP controls when the
+ * layout viewport is scaled (~980px). Native capture-phase touchend/pointerup is
+ * more reliable than synthetic handlers alone. Never call preventDefault on touch.
+ */
+export function useReliableTap<T extends HTMLElement = HTMLElement>(
+  handler: () => void,
+  { disabled = false, debounceMs = 320 }: ReliableTapOptions = {},
+) {
+  const handlerRef = useRef(handler)
+  handlerRef.current = handler
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
+  const lastFire = useRef(0)
+  const cleanupRef = useRef<(() => void) | null>(null)
+
+  const fire = useCallback(() => {
+    if (disabledRef.current) return
+    const now = Date.now()
+    if (now - lastFire.current < debounceMs) return
+    lastFire.current = now
+    handlerRef.current()
+  }, [debounceMs])
+
+  const ref = useCallback(
+    (node: T | null) => {
+      cleanupRef.current?.()
+      cleanupRef.current = null
+      if (!node) return
+
+      const onPointerDown = (event: PointerEvent) => {
+        if (disabledRef.current || event.button !== 0) return
+        event.stopPropagation()
+        try {
+          node.setPointerCapture(event.pointerId)
+        } catch {
+          /* ignore */
+        }
+        fire()
+      }
+
+      const onEnd = (event: Event) => {
+        if (disabledRef.current) return
+        event.stopPropagation()
+        fire()
+      }
+
+      node.addEventListener('pointerdown', onPointerDown, { capture: true })
+      node.addEventListener('pointerup', onEnd, { capture: true })
+      node.addEventListener('touchend', onEnd, { passive: true, capture: true })
+
+      cleanupRef.current = () => {
+        node.removeEventListener('pointerdown', onPointerDown, { capture: true })
+        node.removeEventListener('pointerup', onEnd, { capture: true })
+        node.removeEventListener('touchend', onEnd, { capture: true })
+      }
+    },
+    [fire],
+  )
+
+  useEffect(() => () => cleanupRef.current?.(), [])
+
+  const onClick = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation()
+      fire()
+    },
+    [fire],
+  )
+
+  return { ref, onClick }
 }
 
 /**

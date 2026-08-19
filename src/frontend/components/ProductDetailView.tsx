@@ -7,7 +7,7 @@ import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDe
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
 import { ProductDetailImageCarousel } from '@/frontend/components/ProductDetailImageCarousel';
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
-import { customerLoginHref } from '@/frontend/utils/hardNavigate';
+import { customerLoginHref, useReliableTap } from '@/frontend/utils/hardNavigate';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -70,18 +70,12 @@ function ColorSwatchButton({
   onSelect: () => void
   onPreheat: () => void
 }) {
-  const lastTap = React.useRef(0)
-  const fireSelect = () => {
-    if (!isPurchasable) return
-    const now = Date.now()
-    if (now - lastTap.current < 280) return
-    lastTap.current = now
-    onSelect()
-  }
+  const tap = useReliableTap<HTMLButtonElement>(onSelect, { disabled: !isPurchasable, debounceMs: 280 })
 
   return (
     <button
       type="button"
+      ref={tap.ref}
       aria-pressed={isSelected}
       aria-label={colorLabel}
       data-selected={isSelected ? 'true' : 'false'}
@@ -94,15 +88,7 @@ function ColorSwatchButton({
       )}
       onMouseEnter={onPreheat}
       onPointerEnter={onPreheat}
-      onPointerUp={(event) => {
-        if (event.button !== 0) return
-        fireSelect()
-      }}
-      onClick={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        fireSelect()
-      }}
+      onClick={tap.onClick}
       onContextMenu={(event) => event.preventDefault()}
     >
       {colorLabel ? (
@@ -147,40 +133,33 @@ function SkuQtyStepper({
   decreaseLabel: string
   increaseLabel: string
 }) {
-  const last = React.useRef(0)
-  const tap = (blocked: boolean, fn: () => void) => (event: React.SyntheticEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (blocked) return
-    const now = Date.now()
-    if (now - last.current < 350) return
-    last.current = now
-    fn()
-  }
+  const decTap = useReliableTap<HTMLButtonElement>(onDec, { disabled: disabledDec })
+  const incTap = useReliableTap<HTMLButtonElement>(onInc, { disabled: disabledInc })
+
   return (
     <div className="product-sku-stepper" data-no-hard-nav="">
       <button
         type="button"
+        ref={decTap.ref}
         className="product-sku-stepper-btn"
         aria-disabled={disabledDec}
         aria-label={decreaseLabel}
         title={decTitle}
         data-no-hard-nav=""
-        onTouchEnd={tap(disabledDec, onDec)}
-        onClick={tap(disabledDec, onDec)}
+        onClick={decTap.onClick}
       >
         <Minus className="size-4 pointer-events-none" />
       </button>
       <span className="product-sku-stepper-qty">{qty}</span>
       <button
         type="button"
+        ref={incTap.ref}
         className="product-sku-stepper-btn"
         aria-disabled={disabledInc}
         aria-label={increaseLabel}
         title={incTitle}
         data-no-hard-nav=""
-        onTouchEnd={tap(disabledInc, onInc)}
-        onClick={tap(disabledInc, onInc)}
+        onClick={incTap.onClick}
       >
         <Plus className="size-4 pointer-events-none" />
       </button>
@@ -324,8 +303,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     supportsMixedBatch,
     detailPreview,
   } = state;
-  const isColorSelected =
-    !colorAttribute || Boolean(String(manualColorValue || '').trim())
   const {
     handleSkuQuantityChange,
     handleColorSelect,
@@ -340,6 +317,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     if (submitting) return
     void handleAddToCart()
   }
+  const addToCartTap = useReliableTap<HTMLButtonElement>(fireAddToCart, { disabled: submitting })
 
   const gallery = useMemo(() => {
     const list = (sortedGallery || []).filter((item) => item.url);
@@ -438,6 +416,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   const displayedMinOrderQty = productMoq
   const selectedColorValue =
     String(manualColorValue || '').trim() || String(colorSwatches[0]?.value || '').trim()
+  const isColorSelected = !colorAttribute || Boolean(selectedColorValue)
 
   const renderMoqLabel = (qty: number, className?: string) => {
     const unit = qty > 1 ? t('common.pieces') : t('common.piece')
@@ -935,17 +914,14 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     {String(session?.token || '').trim() ? (
                     <button
                       type="button"
+                      ref={addToCartTap.ref}
                       className={cn(
                         'product-detail-add-to-cart',
                         submitting && 'is-disabled',
                       )}
                       aria-disabled={submitting}
                       data-no-hard-nav=""
-                      onPointerUp={(event) => {
-                        if (event.button !== 0) return
-                        fireAddToCart()
-                      }}
-                      onClick={fireAddToCart}
+                      onClick={addToCartTap.onClick}
                     >
                       <ShoppingCart className="size-5 pointer-events-none shrink-0" />
                       {submitting

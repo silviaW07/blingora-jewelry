@@ -33,7 +33,7 @@ export function lockStorefrontViewport(win: Window = window): void {
   const w = cssScreenWidth(win)
   if (w < 280 || w > 540) return
   const inner = win.innerWidth || 0
-  if (inner > 0 && inner <= 540) return
+  if (inner > 0 && inner <= 540 && Math.abs(inner - w) < 64) return
   const doc = win.document
   let meta = doc.querySelector('meta[name="viewport"]')
   if (!meta) {

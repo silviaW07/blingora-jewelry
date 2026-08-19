@@ -2613,6 +2613,13 @@ html.is-narrow .product-sku-row {
   row-gap: 0 !important;
   min-height: 3.25rem !important;
   padding: 0.7rem 0.1rem !important;
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+html.is-narrow .product-sku-row .product-sku-stepper {
+  position: relative !important;
+  z-index: 8 !important;
 }
 
 html.is-narrow .product-sku-name {
@@ -2871,6 +2878,8 @@ html.is-narrow .product-detail-page .product-color-swatch {
   margin: 0 !important;
   padding: 0 !important;
   gap: 0 !important;
+  position: relative !important;
+  z-index: 3 !important;
   pointer-events: auto !important;
   touch-action: manipulation !important;
 }
