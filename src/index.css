@@ -695,7 +695,7 @@
 /* 商品详情：颜色缩略图。手机横向滑动；桌面才折成网格。 */
 .product-color-swatch-list {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 8px;
   width: 100%;
@@ -703,11 +703,8 @@
   height: auto;
   min-height: 0;
   margin: 0;
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: visible;
   padding: 0.4rem 0.2rem 0.7rem;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
 
 .product-color-swatch-list::-webkit-scrollbar {
@@ -959,38 +956,38 @@
   }
 
   .product-detail-page .product-color-swatch-list {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    align-items: flex-start !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    align-items: start !important;
     gap: 8px !important;
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
     height: auto !important;
     max-height: none !important;
-    overflow-x: auto !important;
-    overflow-y: visible !important;
+    overflow: visible !important;
     padding: 0.4rem 0.2rem 0.7rem !important;
   }
 
   .product-detail-page .product-color-swatch {
     display: block;
-    flex: 0 0 6.25rem !important;
-    width: 6.25rem !important;
-    min-width: 6.25rem !important;
-    max-width: 6.25rem !important;
-    height: 6.25rem !important;
-    min-height: 6.25rem !important;
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0;
     padding: 0;
   }
 
   .product-detail-page .product-color-swatch-frame {
-    width: 6.25rem !important;
-    height: 6.25rem !important;
-    min-width: 6.25rem !important;
-    min-height: 6.25rem !important;
-    padding-bottom: 0 !important;
+    width: 100% !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    padding-bottom: 100% !important;
   }
 
   .product-detail-page .product-color-swatch-name {
@@ -2752,6 +2749,7 @@ html.is-narrow .product-detail-related .grid {
 }
 
 html.is-narrow .product-detail-page .product-detail-buy-actions button,
+html.is-narrow .product-detail-add-to-cart,
 .product-detail-add-to-cart {
   appearance: none !important;
   -webkit-appearance: none !important;
@@ -2760,6 +2758,8 @@ html.is-narrow .product-detail-page .product-detail-buy-actions button,
   justify-content: center !important;
   gap: 0.5rem !important;
   box-sizing: border-box !important;
+  position: relative;
+  z-index: 8;
   width: 100% !important;
   max-width: 100% !important;
   height: auto !important;
@@ -2775,8 +2775,10 @@ html.is-narrow .product-detail-page .product-detail-buy-actions button,
   font-weight: 700 !important;
   line-height: 1.2 !important;
   text-align: center;
+  text-decoration: none !important;
   cursor: pointer;
   touch-action: manipulation;
+  pointer-events: auto !important;
 }
 
 .product-detail-add-to-cart.is-disabled,
@@ -2842,9 +2844,9 @@ html.is-narrow .product-color-grid-scroll.is-scrollable {
 }
 
 html.is-narrow .product-detail-page .product-color-swatch-list {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  align-items: flex-start !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  align-items: start !important;
   gap: 8px !important;
   width: 100% !important;
   max-width: none !important;
@@ -2852,19 +2854,18 @@ html.is-narrow .product-detail-page .product-color-swatch-list {
   height: auto !important;
   min-height: 0 !important;
   padding: 0.4rem 0.2rem 0.7rem !important;
-  overflow-x: auto !important;
-  overflow-y: visible !important;
+  overflow: visible !important;
   max-height: none !important;
 }
 
 html.is-narrow .product-detail-page .product-color-swatch {
   display: block !important;
-  flex: 0 0 6.25rem !important;
-  width: 6.25rem !important;
-  min-width: 6.25rem !important;
-  max-width: 6.25rem !important;
-  height: 6.25rem !important;
-  min-height: 6.25rem !important;
+  flex: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
   gap: 0 !important;
@@ -2873,12 +2874,12 @@ html.is-narrow .product-detail-page .product-color-swatch {
 }
 
 html.is-narrow .product-detail-page .product-color-swatch-frame {
-  width: 6.25rem !important;
-  height: 6.25rem !important;
-  padding-bottom: 0 !important;
-  min-width: 6.25rem !important;
-  min-height: 6.25rem !important;
-  max-width: 6.25rem !important;
+  width: 100% !important;
+  height: 0 !important;
+  padding-bottom: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
 }
 
 html.is-narrow .product-detail-page .product-color-swatch-name {

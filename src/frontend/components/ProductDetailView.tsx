@@ -7,6 +7,7 @@ import type { ProductStatus, ProductSkuData } from '@/frontend/actions/ProductDe
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage';
 import { ProductDetailImageCarousel } from '@/frontend/components/ProductDetailImageCarousel';
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
+import { customerLoginHref } from '@/frontend/utils/hardNavigate';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -332,6 +333,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     sizeAttribute,
     manualColorValue,
     canAddToCart,
+    session,
     selectionHighlight,
     productMinOrderQty,
     supportsMixedBatch,
@@ -349,18 +351,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     resolveLineMinOrderQty,
   } = handlers;
 
-  const addToCartEvents = {
-    onPointerUp: (event: { button?: number }) => {
-      if (event.button && event.button !== 0) return
-      if (submitting) return
-      void handleAddToCart()
-    },
-    onClick: (event: { preventDefault?: () => void; stopPropagation?: () => void }) => {
-      event.preventDefault?.()
-      event.stopPropagation?.()
-      if (submitting) return
-      void handleAddToCart()
-    },
+  const fireAddToCart = () => {
+    if (submitting) return
+    void handleAddToCart()
   }
 
   const gallery = useMemo(() => {
@@ -458,6 +451,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     : t('product.specOptions')
   const productMoq = productMinOrderQty || product?.minOrderQty || 1
   const displayedMinOrderQty = productMoq
+  const selectedColorValue =
+    String(manualColorValue || '').trim() || String(colorSwatches[0]?.value || '').trim()
 
   const renderMoqLabel = (qty: number, className?: string) => {
     const unit = qty > 1 ? t('common.pieces') : t('common.piece')
@@ -483,20 +478,21 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const isPlaceholderSpec = (value?: string | null) =>
       /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
 
-    // Color-only: wait for a swatch, then a single row for that color.
+    // Color-only: one row for the selected (or first) color.
     if (colorName && !sizeName) {
-      if (!manualColorValue) return []
+      const colorValue = selectedColorValue
+      if (!colorValue) return []
       const matched =
         product.skus.find((sku) =>
-          attrEquals(getSkuAttributeValue(sku, colorName), manualColorValue),
+          attrEquals(getSkuAttributeValue(sku, colorName), colorValue),
         ) || null
       if (!matched) return []
       return [
         {
           key: matched.id,
-          label: manualColorValue,
+          label: colorValue,
           sku: matched,
-          orderLabel: manualColorValue,
+          orderLabel: colorValue,
         },
       ]
     }
@@ -507,7 +503,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       const label = getSpecDisplayLabel(sku, {
         sizeAttributeName: sizeName,
         colorAttributeName: colorName,
-        currentColorValue: manualColorValue || undefined,
+        currentColorValue: selectedColorValue || undefined,
         defaultLabel,
       })
       return isPlaceholderSpec(label) ? defaultLabel : label
@@ -523,12 +519,12 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     >()
 
     for (const sku of product.skus) {
-      if (manualColorValue && colorName) {
-        if (!attrEquals(getSkuAttributeValue(sku, colorName), manualColorValue)) continue
+      if (selectedColorValue && colorName) {
+        if (!attrEquals(getSkuAttributeValue(sku, colorName), selectedColorValue)) continue
       }
 
       const orderLabel =
-        sizeName && (!manualColorValue || colorName)
+        sizeName && (!selectedColorValue || colorName)
           ? getSkuAttributeValue(sku, sizeName) || computeLabelForSku(sku)
           : computeLabelForSku(sku)
 
@@ -548,7 +544,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
         orderLabel: v.orderLabel,
       }))
       .sort((a, b) => compareSizeLabels(a.orderLabel, b.orderLabel))
-  }, [product, colorAttributeGroup, sizeAttributeGroup, manualColorValue, t])
+  }, [product, colorAttributeGroup, sizeAttributeGroup, selectedColorValue, t])
 
   const renderSpecRow = (row: { key: string; label: string; sku: ProductSkuData }) => {
     const { sku, label: specLabel } = row
@@ -802,9 +798,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                 key={swatch.value}
                                 colorLabel={translateColorName(t, swatch.value)}
                                 previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
-                                isSelected={
-                                  String(manualColorValue || '').trim() === String(swatch.value || '').trim()
-                                }
+                                isSelected={attrEquals(selectedColorValue, swatch.value)}
                                 isPurchasable={isPurchasable}
                                 priority={swatchIndex < 4}
                                 onSelect={() => {
@@ -839,7 +833,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             specListRows.map((row) => renderSpecRow(row))
                           ) : (
                             <div className="px-2 py-8 text-center text-sm text-[#888]">
-                              {isColorSelected
+                              {selectedColorValue
                                 ? t('product.noOptions')
                                 : t('product.selectColorFirst', { defaultValue: 'Please select a color first' })}
                             </div>
@@ -953,6 +947,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         ) : null}
                       </div>
                     ) : null}
+                    {String(session?.token || '').trim() ? (
                     <button
                       type="button"
                       className={cn(
@@ -961,15 +956,33 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       )}
                       aria-disabled={submitting}
                       data-no-hard-nav=""
-                      {...addToCartEvents}
+                      onPointerUp={(event) => {
+                        if (event.button !== 0) return
+                        fireAddToCart()
+                      }}
+                      onClick={fireAddToCart}
                     >
-                      <ShoppingCart className="size-5 shrink-0" />
+                      <ShoppingCart className="size-5 pointer-events-none shrink-0" />
                       {submitting
                         ? t('product.adding')
                         : totalSelectedQty > 0
                           ? t('product.addToCartQty', { qty: totalSelectedQty })
                           : t('product.addToCart')}
                     </button>
+                    ) : (
+                    <a
+                      className="product-detail-add-to-cart"
+                      href={customerLoginHref(
+                        product?.id
+                          ? `/productdetail/?productId=${encodeURIComponent(product.id)}`
+                          : '/productdetail/',
+                      )}
+                      data-no-hard-nav=""
+                    >
+                      <ShoppingCart className="size-5 pointer-events-none shrink-0" />
+                      {t('product.addToCart')}
+                    </a>
+                    )}
                   </div>
                 </div>
             </div>

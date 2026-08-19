@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProductDetail, Cart } from '@/frontend/route-params'
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
-import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
+import { customerLoginHref, openStorefrontLogin } from '@/frontend/utils/hardNavigate'
 import { useUserSession } from '@/tools/FrontendSession'
 import { toast } from "sonner"
 import type {
@@ -749,6 +749,12 @@ export const useProductDetail = (seed?: {
     if (!isPurchasable || submitting) return
 
     if (!session.token) {
+      if (typeof window !== 'undefined') {
+        window.location.assign(
+          customerLoginHref(`${window.location.pathname}${window.location.search}`),
+        )
+        return
+      }
       redirectToLogin()
       return
     }
