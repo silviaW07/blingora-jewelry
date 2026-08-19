@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BrandCategoryItem, SortByEnum } from '@/frontend/actions/ProductCategory'
-import { BrandQuickFilter } from '@/frontend/components/BrandQuickFilter'
+import EditableImg from '@/@base/EditableImg'
+import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { cn } from '@/lib/utils'
 
 const PRICE_SLIDER_MIN = 0
@@ -198,6 +199,112 @@ function ListingPriceSlider({
   )
 }
 
+const DEFAULT_BRAND_VISIBLE = 10
+
+function ListingBrandCircles({
+  brands,
+  selectedBrandId = '',
+  onToggle,
+  isExpanded = false,
+  onExpandToggle,
+  visibleCount = DEFAULT_BRAND_VISIBLE,
+  isLoading = false,
+}: {
+  brands: BrandCategoryItem[]
+  selectedBrandId?: string
+  onToggle: (id: string) => void
+  isExpanded?: boolean
+  onExpandToggle?: () => void
+  visibleCount?: number
+  isLoading?: boolean
+}) {
+  const { t } = useTranslation()
+
+  if (isLoading && brands.length === 0) {
+    return (
+      <div className="flex flex-wrap items-start gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex flex-col items-center gap-1">
+            <div className="size-12 animate-pulse rounded-full bg-[#ebe7de]" />
+            <div className="h-2 w-10 animate-pulse rounded-full bg-[#ebe7de]" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (brands.length === 0) return null
+
+  const hasOverflow = brands.length > visibleCount
+  const visible = isExpanded ? brands : brands.slice(0, visibleCount)
+
+  return (
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-2" data-controller-name="商品列表品牌圆形筛选">
+      {visible.map((brand) => {
+        const isSelected = selectedBrandId === brand.category_id
+        const label = translateCatalogLabel(t, brand.category_name)
+        return (
+          <button
+            key={brand.category_id}
+            type="button"
+            aria-pressed={isSelected}
+            title={label}
+            onClick={() => onToggle(brand.category_id)}
+            className="group flex flex-col items-center gap-1 outline-none"
+          >
+            <span
+              className={cn(
+                'flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#faf8f3] transition-all',
+                isSelected
+                  ? 'border-[#111111] ring-2 ring-[#111111]/15'
+                  : 'border-[#e6e0d5] group-hover:border-[#9a948a]',
+              )}
+            >
+              {brand.image_url ? (
+                <EditableImg
+                  propKey={`listing-brand-circle-${brand.category_id}`}
+                  src={brand.image_url}
+                  keywords={brand.image_url}
+                  disableKeywordSearch
+                  alt={label}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <span className="px-0.5 text-center text-[10px] font-bold uppercase leading-none text-[#6f6a62]">
+                  {label.slice(0, 2)}
+                </span>
+              )}
+            </span>
+            <span
+              className={cn(
+                'w-14 truncate text-center text-[10px] leading-tight transition-colors',
+                isSelected ? 'font-semibold text-[#111111]' : 'text-[#6f6a62] group-hover:text-[#111111]',
+              )}
+            >
+              {label}
+            </span>
+          </button>
+        )
+      })}
+
+      {hasOverflow && onExpandToggle ? (
+        <button
+          type="button"
+          onClick={onExpandToggle}
+          className="group flex flex-col items-center gap-1 outline-none"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[#d8d4ca] text-base text-[#6f6a62] transition-colors group-hover:border-[#111111] group-hover:text-[#111111]">
+            {isExpanded ? '↑' : '···'}
+          </span>
+          <span className="w-14 truncate text-center text-[10px] leading-tight text-[#6f6a62] group-hover:text-[#111111]">
+            {isExpanded ? t('product.brandFilterCollapse') : t('product.brandFilterMore')}
+          </span>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function ProductListToolbar({
   minPrice,
   maxPrice,
@@ -255,7 +362,7 @@ export function ProductListToolbar({
       {showBrandFilter ? (
         <div className="listing-toolbar__brands min-w-0 w-full basis-full">
           <div className="mb-2 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
-          <BrandQuickFilter
+          <ListingBrandCircles
             brands={brandOptions}
             selectedBrandId={selectedBrandId}
             onToggle={onBrandToggle!}

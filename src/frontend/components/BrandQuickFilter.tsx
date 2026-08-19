@@ -33,12 +33,12 @@ export function BrandQuickFilter({
 
   if (isLoading && brands.length === 0) {
     return (
-      <div className={cn('flex min-w-0 flex-wrap items-center gap-3', className)}>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <div key={`brand-skeleton-${index}`} className="flex flex-col items-center gap-1">
-            <div className="size-12 animate-pulse rounded-full bg-[#ebe7de]" />
-            <div className="h-2.5 w-10 animate-pulse rounded-full bg-[#ebe7de]" />
-          </div>
+      <div className={cn('flex min-w-0 flex-wrap items-center gap-1.5', className)}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={`brand-skeleton-${index}`}
+            className="h-7 w-14 animate-pulse rounded-full bg-[#ebe7de]"
+          />
         ))}
       </div>
     )
@@ -53,7 +53,7 @@ export function BrandQuickFilter({
 
   return (
     <div
-      className={cn('flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2', className)}
+      className={cn('flex min-w-0 flex-wrap items-center gap-1.5', className)}
       data-controller-name="品牌快捷筛选"
     >
       {visibleBrands.map((brand) => {
@@ -66,36 +66,23 @@ export function BrandQuickFilter({
             aria-pressed={isSelected}
             title={label}
             onClick={() => onToggle(brand.category_id)}
-            className="group flex flex-col items-center gap-1 outline-none"
+            className={cn(
+              'inline-flex h-7 max-w-[120px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors',
+              isSelected
+                ? 'border-[#111111] bg-[#111111] text-white'
+                : 'border-[#e6e0d5] bg-[#faf8f3] text-[#3f3a34] hover:border-[#cfc8bb] hover:bg-white',
+            )}
           >
-            <span
-              className={cn(
-                'flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 transition-all',
-                isSelected
-                  ? 'border-[#111111] ring-2 ring-[#111111]/20'
-                  : 'border-[#e6e0d5] bg-[#faf8f3] group-hover:border-[#aaa49c]',
-              )}
-            >
-              {brand.image_url ? (
+            {brand.image_url ? (
+              <span className="relative size-4 shrink-0 overflow-hidden rounded-full bg-white">
                 <EditableImg
                   propKey={`brand-quick-filter-${brand.category_id}`}
                   keywords={brand.image_url || label}
                   className="size-full object-cover"
                 />
-              ) : (
-                <span className="text-[10px] font-bold uppercase text-[#6f6a62] leading-none text-center px-0.5">
-                  {label.slice(0, 2)}
-                </span>
-              )}
-            </span>
-            <span
-              className={cn(
-                'max-w-[56px] truncate text-center text-[10px] leading-tight transition-colors',
-                isSelected ? 'font-semibold text-[#111111]' : 'text-[#6f6a62] group-hover:text-[#111111]',
-              )}
-            >
-              {label}
-            </span>
+              </span>
+            ) : null}
+            <span className="truncate">{label}</span>
           </button>
         )
       })}
@@ -104,14 +91,9 @@ export function BrandQuickFilter({
         <button
           type="button"
           onClick={onExpandToggle}
-          className="flex flex-col items-center gap-1 outline-none group"
+          className="inline-flex h-7 shrink-0 items-center rounded-full border border-dashed border-[#d8d4ca] px-2.5 text-[11px] font-medium text-[#6f6a62] transition-colors hover:border-[#111111] hover:text-[#111111]"
         >
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[#d8d4ca] text-[11px] font-medium text-[#6f6a62] transition-colors group-hover:border-[#111111] group-hover:text-[#111111]">
-            {isExpanded ? '↑' : '···'}
-          </span>
-          <span className="max-w-[56px] truncate text-center text-[10px] leading-tight text-[#6f6a62] group-hover:text-[#111111]">
-            {isExpanded ? t('product.brandFilterCollapse') : t('product.brandFilterMore')}
-          </span>
+          {isExpanded ? t('product.brandFilterCollapse') : t('product.brandFilterMore')}
         </button>
       ) : null}
     </div>
