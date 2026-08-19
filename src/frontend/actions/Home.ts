@@ -228,7 +228,8 @@ export const getHomeRecommendZones = async (input?: {
         .filter((zone) => zone.zoneType === 'PRODUCT')
         .flatMap((zone) =>
           zone.items
-            .map((item) => item.categoryId || (item.entityType === 'CATEGORY' ? item.category?.id : null) || null)
+            .filter((item) => item.entityType === 'CATEGORY')
+            .map((item) => item.categoryId || item.category?.id || null)
             .filter((id): id is string => Boolean(id)),
         ),
     ),
@@ -260,12 +261,20 @@ export const getHomeRecommendZones = async (input?: {
     ]),
   )
   const fetchCategoryIds = Array.from(new Set([...categoryZoneCategoryIds, ...productZoneQueryIds]))
+  const maxProductZoneItemsPerCategory = productZoneSourceCategoryIds.length > 0
+    ? Math.max(
+        80,
+        ...zones
+          .filter((zone) => zone.zoneType === 'PRODUCT')
+          .map((zone) => normalizePcCols(zone.pcCols) * Math.max(2, (zone as { pcRows?: number }).pcRows ?? 2)),
+      )
+    : 0
   const maxLatestPerCategory = Math.max(
     DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT,
     ...zones
       .filter((zone) => zone.zoneType === 'CATEGORY')
       .map((zone) => normalizePcCols(zone.pcCols)),
-    productZoneSourceCategoryIds.length > 0 ? 80 : 0,
+    maxProductZoneItemsPerCategory,
   )
   const productCountByCategoryId = new Map<string, number>()
   const loadProductCounts = async () => {
@@ -299,7 +308,7 @@ export const getHomeRecommendZones = async (input?: {
   const latestProductsByCategoryId = new Map<string, HomeRecommendProductCard[]>()
 
   if (fetchCategoryIds.length > 0) {
-    const latestTake = Math.min(400, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)))
+    const latestTake = Math.min(800, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)))
     const [, latestCandidates] = await Promise.all([
       loadProductCounts(),
       prisma.product.findMany({
@@ -699,7 +708,8 @@ export const getHomeRecommendZones = async (input?: {
 
       if (zone.zoneType === 'PRODUCT') {
         const selectedCategoryIds = zone.items
-          .map((item) => item.categoryId || (item.entityType === 'CATEGORY' ? item.category?.id : null))
+          .filter((item) => item.entityType === 'CATEGORY')
+          .map((item) => item.categoryId || item.category?.id || null)
           .filter((id): id is string => Boolean(id))
         const productItems = items.filter(
           (item): item is HomeRecommendProductCard => item.entityType === 'PRODUCT',

@@ -620,14 +620,9 @@ export const updateRecommendZone = requireRole([UserRole.ADMIN])(
                 isActive: true,
               }
             })
-            if (payload.items.length > 0) {
-              await tx.homeRecommendCollectionItem.createMany({
-                data: payload.items.map(i => ({
-                  collectionId: collection.id,
-                  productId: i.entityId,
-                  sortWeight: i.sortWeight
-                }))
-              })
+            const colItems = toCollectionProductRows(collection.id, payload.zoneType, payload.items)
+            if (colItems.length > 0) {
+              await tx.homeRecommendCollectionItem.createMany({ data: colItems })
             }
             await tx.homeRecommendZone.update({
               where: { id: zone.id },
