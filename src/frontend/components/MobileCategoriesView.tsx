@@ -48,6 +48,18 @@ function sideNavZonesFromRecommend(zones: unknown[]): SideNavZoneSection[] {
   )
 }
 
+function paneCss(count: number) {
+  const n = Math.max(1, count)
+  const chunks: string[] = []
+  for (let i = 0; i < n; i += 1) {
+    chunks.push(
+      `#mc-i${i}:checked~.mobile-categories-rail label[for="mc-i${i}"]{background:#fff;border-left-color:#333;color:#333}`,
+      `#mc-i${i}:checked~.mobile-categories-panels .mobile-categories-pane[data-i="${i}"]{display:block!important}`,
+    )
+  }
+  return chunks.join('')
+}
+
 function collectMobileCategoryBrands(
   list: CategoryItem[],
   zones: SideNavZoneSection[],
@@ -306,6 +318,8 @@ export default function MobileCategoriesView({
     >
       <MobileStorefrontHeader />
 
+      <style dangerouslySetInnerHTML={{ __html: paneCss(Math.max(categories.length, 1)) }} />
+
       <div className="mobile-categories-layout" ref={layoutRef}>
         {categories.map((cat, index) => (
           <input
@@ -315,7 +329,7 @@ export default function MobileCategoriesView({
             type="radio"
             name="mobile-cat-rail"
             value={cat.category_id}
-            checked={cat.category_id === activeId}
+            defaultChecked={index === 0}
             onChange={() => activateCategory(cat.category_id)}
           />
         ))}
@@ -350,7 +364,7 @@ export default function MobileCategoriesView({
                 key={cat.category_id}
                 className={cn(
                   'mobile-categories-pane',
-                  cat.category_id === activeId && 'is-active',
+                  (cat.category_id === activeId || (!activeId && index === 0)) && 'is-active',
                 )}
                 data-i={String(index)}
                 data-category-id={cat.category_id}

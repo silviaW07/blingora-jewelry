@@ -3674,7 +3674,7 @@ html.is-narrow .home-service-cards {
 }
 
 .mobile-categories-pane.is-active {
-  display: block;
+  display: block !important;
 }
 
 .mobile-categories-rail {
