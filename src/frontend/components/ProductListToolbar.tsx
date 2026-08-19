@@ -253,8 +253,8 @@ export function ProductListToolbar({
       data-controller-name="商品列表筛选排序工具栏"
     >
       {showBrandFilter ? (
-        <div className="listing-toolbar__brands min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-[min(100%,420px)]">
-          <div className="mb-1 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
+        <div className="listing-toolbar__brands min-w-0 w-full basis-full">
+          <div className="mb-2 text-xs font-medium text-[#3f3a34]">{t('product.brandFilter')}</div>
           <BrandQuickFilter
             brands={brandOptions}
             selectedBrandId={selectedBrandId}
