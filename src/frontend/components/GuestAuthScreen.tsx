@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { loginCustomer } from '@/frontend/actions/CustomerLogin'
 import { registerCustomer } from '@/frontend/actions/CustomerRegister'
 import { useUserSession } from '@/tools/FrontendSession'
-import { redirectAfterStorefrontAuth, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { redirectAfterStorefrontAuth } from '@/frontend/utils/hardNavigate'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { DecorateInput } from '@/frontend/decorate/DecorateInput'
 
@@ -132,15 +132,6 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
     }
   }
 
-  const loginActivate = useChromeActivate(() => {
-    void handleLoginSubmit()
-  })
-  const registerActivate = useChromeActivate(() => {
-    void handleRegisterSubmit()
-  })
-  const tabLogin = useChromeActivate(() => setTab('login'))
-  const tabRegister = useChromeActivate(() => setTab('register'))
-
   return (
     <section
       className="guest-auth-screen min-h-[100dvh] bg-[#FFF5F5] px-4 py-6 pb-[calc(var(--mobile-nav-height,3.75rem)+1.5rem)]"
@@ -159,7 +150,8 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               <button
                 key={item}
                 type="button"
-                {...(item === 'login' ? tabLogin : tabRegister)}
+                data-no-hard-nav=""
+                onClick={() => setTab(item)}
                 className={cn('guest-auth-screen__tab', tab === item && 'is-active')}
               >
                 {item === 'login' ? t('auth.login') : t('auth.register')}
@@ -221,19 +213,24 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               </div>
               {loginError ? <p className="rounded-[12px] bg-[#FEF2F2] px-3 py-2 text-sm text-[#DC2626]">{loginError}</p> : null}
               <Button
-                type="button"
+                type="submit"
+                disabled={isLoginSubmitting}
                 aria-busy={isLoginSubmitting}
                 data-auto="submit"
                 data-no-hard-nav=""
                 className="h-12 w-full rounded-full bg-[#0055FF] text-base font-bold text-white hover:bg-[#0044CC]"
-                {...loginActivate}
               >
                 {isLoginSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {t('auth.login')}
               </Button>
               <p className="pt-1 text-center text-sm text-[#64748B]">
                 {t('auth.noAccount')}{' '}
-                <button type="button" {...tabRegister} className="guest-auth-screen__text-btn">
+                <button
+                  type="button"
+                  data-no-hard-nav=""
+                  onClick={() => setTab('register')}
+                  className="guest-auth-screen__text-btn"
+                >
                   {t('auth.registerNow')}
                 </button>
               </p>
@@ -325,19 +322,24 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               </div>
               {registerError ? <p className="rounded-[12px] bg-[#FEF2F2] px-3 py-2 text-sm text-[#DC2626]">{registerError}</p> : null}
               <Button
-                type="button"
+                type="submit"
+                disabled={isRegisterSubmitting}
                 aria-busy={isRegisterSubmitting}
                 data-auto="submit"
                 data-no-hard-nav=""
                 className="h-12 w-full rounded-full bg-[#0055FF] text-base font-bold text-white hover:bg-[#0044CC]"
-                {...registerActivate}
               >
                 {isRegisterSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {t('auth.register')}
               </Button>
               <p className="pt-1 text-center text-sm text-[#64748B]">
                 {t('auth.hasAccount')}{' '}
-                <button type="button" {...tabLogin} className="guest-auth-screen__text-btn">
+                <button
+                  type="button"
+                  data-no-hard-nav=""
+                  onClick={() => setTab('login')}
+                  className="guest-auth-screen__text-btn"
+                >
                   {t('auth.loginNow')}
                 </button>
               </p>

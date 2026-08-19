@@ -34,17 +34,11 @@ import {
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
 import { containsChinese } from '@/shared/productKeywordDictionary';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
-import { useChromeActivate } from '@/frontend/utils/hardNavigate';
+import { imageIdentity, imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl';
 
 /** Local helper — production webpack left `cn` as a free global and crashed the PDP. */
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
-}
-
-function imageIdentity(url?: string | null): string {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  return raw.split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase()
 }
 
 const PRODUCT_STATUS_I18N: Record<ProductStatus, string> = {
@@ -75,10 +69,14 @@ function ColorSwatchButton({
   onSelect: () => void
   onPreheat: () => void
 }) {
-  const selectEvents = useChromeActivate(() => {
+  const lastTap = React.useRef(0)
+  const fireSelect = () => {
     if (!isPurchasable) return
+    const now = Date.now()
+    if (now - lastTap.current < 280) return
+    lastTap.current = now
     onSelect()
-  })
+  }
 
   return (
     <button
@@ -95,7 +93,15 @@ function ColorSwatchButton({
       )}
       onMouseEnter={onPreheat}
       onPointerEnter={onPreheat}
-      {...selectEvents}
+      onPointerUp={(event) => {
+        if (event.button !== 0) return
+        fireSelect()
+      }}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        fireSelect()
+      }}
       onContextMenu={(event) => event.preventDefault()}
     >
       {colorLabel ? (
@@ -362,15 +368,15 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     return list.length > 0 ? list : product?.mainImageUrl ? [{ url: product.mainImageUrl }] : [];
   }, [sortedGallery, product?.mainImageUrl]);
 
-  const activeIndex = Math.max(
-    0,
-    gallery.findIndex((item) => item.url === activeImage),
-  );
+  const activeGalleryIndex = gallery.findIndex((item) => imageUrlsMatch(item.url, activeImage))
 
   // Important: main stage must follow the same `gallery` source as the thumbnails.
   // On some records `product.mainImageUrl` is empty while `sortedGallery` is populated,
   // which makes `activeImage || product.mainImageUrl` render a blank grey block.
-  const activeUrl = gallery[activeIndex]?.url || activeImage || product.mainImageUrl || '';
+  const activeUrl =
+    activeGalleryIndex >= 0
+      ? gallery[activeGalleryIndex]?.url || ''
+      : activeImage || product?.mainImageUrl || '';
 
   const colorAttributeGroup = colorAttribute
   const sizeAttributeGroup = sizeAttribute

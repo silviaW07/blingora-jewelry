@@ -94,18 +94,6 @@ function collectMobileCategoryBrands(
   return Array.from(brandMap.values())
 }
 
-function paneCss(count: number) {
-  const n = Math.max(1, count)
-  const chunks: string[] = []
-  for (let i = 0; i < n; i += 1) {
-    chunks.push(
-      `#mc-i${i}:checked~.mobile-categories-rail label[for="mc-i${i}"]{background:#fff;border-left-color:#333;color:#333}`,
-      `#mc-i${i}:checked~.mobile-categories-panels .mobile-categories-pane[data-i="${i}"]{display:block!important}`,
-    )
-  }
-  return chunks.join('')
-}
-
 export default function MobileCategoriesView({
   initialCategories,
   initialRecommendZones,
@@ -298,17 +286,6 @@ export default function MobileCategoriesView({
       ]
     }
 
-    const brandOpts = cat.brand_options || []
-    if (brandOpts.length > 0) {
-      return brandOpts.map((brand) => ({
-        key: brand.category_id,
-        label: translateCatalogLabel(t, brand.category_name),
-        imageUrl: brand.image_url || findZoneItemImage(brand.category_id, initialRecommendZones || []),
-        initials: brand.category_name.slice(0, 1).toUpperCase(),
-        href: categoryHref(brand.category_slug, brand.category_id),
-      }))
-    }
-
     return [
       {
         key: cat.category_id,
@@ -329,8 +306,6 @@ export default function MobileCategoriesView({
     >
       <MobileStorefrontHeader />
 
-      <style dangerouslySetInnerHTML={{ __html: paneCss(Math.max(categories.length, 1)) }} />
-
       <div className="mobile-categories-layout" ref={layoutRef}>
         {categories.map((cat, index) => (
           <input
@@ -340,7 +315,7 @@ export default function MobileCategoriesView({
             type="radio"
             name="mobile-cat-rail"
             value={cat.category_id}
-            defaultChecked={index === 0}
+            checked={cat.category_id === activeId}
             onChange={() => activateCategory(cat.category_id)}
           />
         ))}
@@ -373,7 +348,10 @@ export default function MobileCategoriesView({
             return (
               <section
                 key={cat.category_id}
-                className="mobile-categories-pane"
+                className={cn(
+                  'mobile-categories-pane',
+                  cat.category_id === activeId && 'is-active',
+                )}
                 data-i={String(index)}
                 data-category-id={cat.category_id}
               >
@@ -419,49 +397,49 @@ export default function MobileCategoriesView({
               </section>
             )
           })}
-
-          {showBrandZone ? (
-            <section
-              className="mobile-categories-brands"
-              aria-label={t('nav.brand', { defaultValue: 'Brand' })}
-              data-controller-name="分类页右侧品牌展示区"
-            >
-              <h2 className="mobile-categories-brands__title">
-                {t('nav.brand', { defaultValue: 'Brand' })}
-              </h2>
-              <div className="mobile-categories-brands__grid">
-                {brands.map((brand) => {
-                  const label = translateCatalogLabel(t, brand.name)
-                  return (
-                    <a
-                      key={brand.id}
-                      {...hardNavProps(categoryHref(brand.slug, brand.id))}
-                      className="mobile-categories-brands__item"
-                    >
-                      <span className="mobile-categories-brands__icon">
-                        {brand.imageUrl ? (
-                          <OptimizedProductImage
-                            src={brand.imageUrl}
-                            alt={label}
-                            sizes="56px"
-                            imageWidth={120}
-                            className="rounded-full"
-                          />
-                        ) : (
-                          <span className="mobile-categories-brands__initials" aria-hidden>
-                            {brand.name.slice(0, 1).toUpperCase()}
-                          </span>
-                        )}
-                      </span>
-                      <span className="mobile-categories-brands__label">{label}</span>
-                    </a>
-                  )
-                })}
-              </div>
-            </section>
-          ) : null}
         </div>
       </div>
+
+      {showBrandZone ? (
+        <section
+          className="mobile-categories-brands"
+          aria-label={t('nav.brand', { defaultValue: 'Brand' })}
+          data-controller-name="分类页底部品牌展示区"
+        >
+          <h2 className="mobile-categories-brands__title">
+            {t('nav.brand', { defaultValue: 'Brand' })}
+          </h2>
+          <div className="mobile-categories-brands__grid">
+            {brands.map((brand) => {
+              const label = translateCatalogLabel(t, brand.name)
+              return (
+                <a
+                  key={brand.id}
+                  {...hardNavProps(categoryHref(brand.slug, brand.id))}
+                  className="mobile-categories-brands__item"
+                >
+                  <span className="mobile-categories-brands__icon">
+                    {brand.imageUrl ? (
+                      <OptimizedProductImage
+                        src={brand.imageUrl}
+                        alt={label}
+                        sizes="56px"
+                        imageWidth={120}
+                        className="rounded-full"
+                      />
+                    ) : (
+                      <span className="mobile-categories-brands__initials" aria-hidden>
+                        {brand.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                  </span>
+                  <span className="mobile-categories-brands__label">{label}</span>
+                </a>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 }

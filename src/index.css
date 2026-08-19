@@ -259,7 +259,10 @@
   overflow: hidden;
   border-radius: 2px;
   background: #f3f3f3;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
+  pointer-events: auto;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .product-detail-carousel--empty {
@@ -2567,6 +2570,8 @@ html.is-narrow .product-detail-carousel {
   min-height: 0 !important;
   padding-bottom: 100% !important;
   overflow: hidden !important;
+  touch-action: pan-x pan-y !important;
+  pointer-events: auto !important;
 }
 
 html.is-narrow .product-detail-carousel--empty {
@@ -2801,7 +2806,23 @@ html.is-narrow .product-color-swatch.is-selected .product-color-swatch-frame {
 html.is-narrow .product-color-swatch.is-selected .product-color-swatch-frame::before {
   content: '';
   display: block;
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 220%;
+  height: 220%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    #f254a6 0deg,
+    #ffd6ea 90deg,
+    #f254a6 180deg,
+    #c81e6a 270deg,
+    #f254a6 360deg
+  );
   animation: product-color-swatch-spin 1.4s linear infinite;
+  pointer-events: none;
 }
 
 html.is-narrow .product-color-options {
@@ -2847,6 +2868,8 @@ html.is-narrow .product-detail-page .product-color-swatch {
   margin: 0 !important;
   padding: 0 !important;
   gap: 0 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
 }
 
 html.is-narrow .product-detail-page .product-color-swatch-frame {
@@ -3043,6 +3066,14 @@ html.is-narrow .guest-auth-screen [data-auto='submit'] {
   width: 100% !important;
   min-height: 3rem !important;
   font-weight: 700 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+html.is-narrow .guest-auth-screen__tab,
+html.is-narrow .guest-auth-screen__text-btn {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
 }
 
 html.is-narrow .storefront-desktop-chrome,
@@ -3642,6 +3673,10 @@ html.is-narrow .home-service-cards {
   padding: 0.9rem 0.85rem 1.25rem;
 }
 
+.mobile-categories-pane.is-active {
+  display: block;
+}
+
 .mobile-categories-rail {
   width: 6.75rem;
   flex-shrink: 0;
@@ -3755,13 +3790,14 @@ html.is-narrow .home-service-cards {
   -webkit-box-orient: vertical;
 }
 
-/* Brand grid sits in the right column beside the rail (screenshot 4). */
+/* Brand showcase — full-width below the rail + subcategory pane. */
 .mobile-categories-brands {
   position: static;
+  display: block;
   margin-top: 0;
-  padding: 0.9rem 0.85rem 1.25rem;
+  padding: 1rem 0.85rem 1.25rem;
   background: #fff;
-  border-top: 0;
+  border-top: 1px solid #ebe6db;
 }
 
 .mobile-categories-brands__title {
@@ -3775,7 +3811,7 @@ html.is-narrow .home-service-cards {
 .mobile-categories-brands__grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.75rem 0.35rem;
+  gap: 0.75rem 0.5rem;
 }
 
 .mobile-categories-brands__item {
@@ -3822,11 +3858,13 @@ html.is-narrow .home-service-cards {
   max-width: 100%;
   overflow: hidden;
   color: #3a3530;
-  font-size: 0.62rem;
+  font-size: 0.55rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.15;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .mobile-brand-page {
@@ -3983,6 +4021,10 @@ html.is-narrow .mobile-categories-page {
 
 html.is-narrow .mobile-categories-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+html.is-narrow .mobile-categories-pane.is-active {
+  display: block !important;
 }
 
 html.is-narrow .mobile-categories-brands {

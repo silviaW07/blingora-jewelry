@@ -146,3 +146,19 @@ export function toProxiedImageUrl(
     return raw
   }
 }
+
+/** Normalize image URLs so proxy / CDN variants still match the same asset. */
+export function imageIdentity(url?: string | null): string {
+  const raw = String(url || '').trim()
+  if (!raw) return ''
+  return raw.split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase()
+}
+
+export function imageUrlsMatch(a?: string | null, b?: string | null): boolean {
+  const left = imageIdentity(a)
+  const right = imageIdentity(b)
+  if (!left || !right) return false
+  if (left === right) return true
+  const basename = (value: string) => value.split('/').pop() || value
+  return basename(left) === basename(right)
+}

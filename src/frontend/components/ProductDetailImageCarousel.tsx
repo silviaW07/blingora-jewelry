@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
+import { imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl'
 
 type GalleryItem = { url?: string | null }
 
@@ -11,6 +12,8 @@ type Props = {
   onActiveChange: (url: string) => void
   alt: string
 }
+
+const SWIPE_MIN_PX = 40
 
 /**
  * One square hero — same padding-box as list cards (Chrome cannot paint imgs in a
@@ -29,8 +32,11 @@ export function ProductDetailImageCarousel({
   const [index, setIndex] = useState(0)
   const indexRef = useRef(0)
   indexRef.current = index
-  const startX = useRef<number | null>(null)
-  const startY = useRef(0)
+  const tracking = useRef<{ x: number; y: number; active: boolean }>({
+    x: 0,
+    y: 0,
+    active: false,
+  })
 
   const goTo = (next: number) => {
     if (slides.length === 0) return
@@ -42,7 +48,7 @@ export function ProductDetailImageCarousel({
 
   useEffect(() => {
     if (!activeUrl || slides.length === 0) return
-    const target = slides.findIndex((item) => item.url === activeUrl)
+    const target = slides.findIndex((item) => imageUrlsMatch(item.url, activeUrl))
     if (target < 0 || target === indexRef.current) return
     setIndex(target)
   }, [activeUrl, slides])
@@ -59,19 +65,47 @@ export function ProductDetailImageCarousel({
     return <div className="product-detail-carousel product-detail-carousel--empty" aria-hidden />
   }
 
+  const finishSwipe = (clientX: number, clientY: number) => {
+    if (!canSwipe || !tracking.current.active) return
+    tracking.current.active = false
+    const dx = clientX - tracking.current.x
+    const dy = clientY - tracking.current.y
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy)) return
+    goTo(indexRef.current + (dx < 0 ? 1 : -1))
+  }
+
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!canSwipe || event.button !== 0) return
-    startX.current = event.clientX
-    startY.current = event.clientY
+    tracking.current = { x: event.clientX, y: event.clientY, active: true }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      /* ignore */
+    }
   }
 
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (startX.current == null) return
-    const dx = event.clientX - startX.current
-    const dy = event.clientY - startY.current
-    startX.current = null
-    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
-    goTo(indexRef.current + (dx < 0 ? 1 : -1))
+    finishSwipe(event.clientX, event.clientY)
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!canSwipe || event.touches.length !== 1) return
+    tracking.current = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+      active: true,
+    }
+  }
+
+  const onTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.changedTouches[0]
+    if (!touch) return
+    finishSwipe(touch.clientX, touch.clientY)
   }
 
   return (
@@ -81,8 +115,10 @@ export function ProductDetailImageCarousel({
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => {
-        startX.current = null
+        tracking.current.active = false
       }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <OptimizedProductImage
         fill
