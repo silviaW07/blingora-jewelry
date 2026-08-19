@@ -2718,18 +2718,20 @@ export const batchBindProductCategories = requireRole([UserRole.ADMIN])(
     const linkedCategoryIds = Array.from(new Set(input.linked_category_ids.filter(Boolean)))
 
     // Append-only: keep primary categoryId untouched; only add missing relation rows.
+    let insertedCount = 0
     await prisma.$transaction(async tx => {
       const relationRows = buildRelationRows(productIds, linkedCategoryIds)
       if (relationRows.length > 0) {
-        await tx.product_category_relations.createMany({
+        const created = await tx.product_category_relations.createMany({
           data: relationRows.map(item => ({ productId: item.productId, categoryId: item.relationId })),
           skipDuplicates: true
         })
+        insertedCount = created.count
       }
     })
 
     invalidateStorefrontAfterCategoryBind()
-    return { success_count: productIds.length, fail_count: 0 }
+    return { success_count: insertedCount, fail_count: 0 }
   })
 )
 

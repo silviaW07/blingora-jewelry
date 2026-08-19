@@ -1440,6 +1440,67 @@ const syncKeywordGroupProducts = async (keywordGroupId: string, linkedProducts: 
   }
 }
 
+/** Primary categoryId + product_category_relations, deduped per category. */
+async function loadCategoryProductStats(categoryIds: string[]) {
+  const uniqueIds = Array.from(new Set(categoryIds.filter(Boolean)))
+  const countByCategoryId = new Map<string, number>()
+  const previewByCategoryId = new Map<string, CategoryPreviewProduct[]>()
+  if (uniqueIds.length === 0) {
+    return { countByCategoryId, previewByCategoryId }
+  }
+
+  const [primaryProducts, relationRows] = await Promise.all([
+    prisma.product.findMany({
+      where: { categoryId: { in: uniqueIds } },
+      select: { id: true, name: true, categoryId: true, sortWeight: true, createdAt: true },
+    }),
+    prisma.product_category_relations.findMany({
+      where: { categoryId: { in: uniqueIds } },
+      select: {
+        categoryId: true,
+        product: {
+          select: { id: true, name: true, sortWeight: true, createdAt: true },
+        },
+      },
+    }),
+  ])
+
+  type RankedProduct = CategoryPreviewProduct & { sortWeight: number; createdAt: Date }
+  const rankedByCategory = new Map<string, Map<string, RankedProduct>>()
+
+  const remember = (
+    categoryId: string,
+    product: { id: string; name: string; sortWeight: number; createdAt: Date },
+  ) => {
+    if (!rankedByCategory.has(categoryId)) rankedByCategory.set(categoryId, new Map())
+    rankedByCategory.get(categoryId)!.set(product.id, {
+      product_id: product.id,
+      product_name: product.name,
+      sortWeight: product.sortWeight,
+      createdAt: product.createdAt,
+    })
+  }
+
+  for (const product of primaryProducts) {
+    remember(product.categoryId, product)
+  }
+  for (const row of relationRows) {
+    remember(row.categoryId, row.product)
+  }
+
+  for (const categoryId of uniqueIds) {
+    const ranked = Array.from(rankedByCategory.get(categoryId)?.values() ?? [])
+    ranked.sort((a, b) => b.sortWeight - a.sortWeight || b.createdAt.getTime() - a.createdAt.getTime())
+    countByCategoryId.set(categoryId, ranked.length)
+    previewByCategoryId.set(
+      categoryId,
+      ranked.map(({ product_id, product_name }) => ({ product_id, product_name })),
+    )
+  }
+
+  return { countByCategoryId, previewByCategoryId }
+}
+
 export const getCategoryList = requireRole([UserRole.ADMIN])(
   withResult(async (input: GetCategoryListInput): Promise<GetCategoryListOutput> => {
     const { keyword, status, level, page = 1, page_size = 20 } = input
@@ -1524,37 +1585,24 @@ export const getCategoryList = requireRole([UserRole.ADMIN])(
       .filter(category => category.level === 1 && getCategoryKindFromRecord(category) === 'MAIN')
       .map(category => category.id)
 
-    const descendantProducts = mainTopLevelCategoryIds.length > 0
-      ? await prisma.productcategory.findMany({
-          where: {
-            categoryId: {
-              in: Array.from(childToParentMap.keys()),
-            },
-          },
-          select: {
-            categoryId: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: [{ product: { sortWeight: 'desc' } }, { product: { createdAt: 'desc' } }],
-        })
-      : []
+    const statsCategoryIds = Array.from(new Set([
+      ...categories.map(category => category.id),
+      ...Array.from(childToParentMap.keys()),
+    ]))
+    const { countByCategoryId, previewByCategoryId } = await loadCategoryProductStats(statsCategoryIds)
 
     const descendantProductMap = new Map<string, Map<string, CategoryPreviewProduct>>()
-    for (const item of descendantProducts) {
-      const parentId = childToParentMap.get(item.categoryId)
-      if (!parentId || !mainTopLevelCategoryIds.includes(parentId)) continue
+    for (const [childId, parentId] of childToParentMap.entries()) {
+      if (!mainTopLevelCategoryIds.includes(parentId)) continue
+      const childProducts = previewByCategoryId.get(childId) ?? []
+      if (childProducts.length === 0) continue
       if (!descendantProductMap.has(parentId)) {
         descendantProductMap.set(parentId, new Map())
       }
-      descendantProductMap.get(parentId)!.set(item.product.id, {
-        product_id: item.product.id,
-        product_name: item.product.name,
-      })
+      const bucket = descendantProductMap.get(parentId)!
+      for (const product of childProducts) {
+        bucket.set(product.product_id, product)
+      }
     }
 
     const posterConfigMap = new Map(posterConfigs.map(config => [config.category_id, config]))
@@ -1592,7 +1640,7 @@ export const getCategoryList = requireRole([UserRole.ADMIN])(
           price_coefficient: c.priceCoefficient != null ? Number(c.priceCoefficient) : null,
           category_display_config: categoryDisplayConfig,
           can_configure_poster: c.level === 1 && categoryKind === 'MAIN',
-          product_count: c._count.products,
+          product_count: countByCategoryId.get(c.id) ?? 0,
           child_count: categoryKind === 'MAIN' ? c._count.children : 0,
           descendant_product_count: descendantProductsForParent.length,
           descendant_product_preview: descendantProductsForParent,

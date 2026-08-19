@@ -3425,7 +3425,11 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         }
 
         const res = await batchBindProductCategories({ product_ids: targetProductIds, linked_category_ids: batchBindCategoryIds })
-        toast.success(`关联类目已批量追加绑定，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        if (res.success_count > 0) {
+          toast.success(`关联类目已批量追加绑定，新增 ${res.success_count} 条`)
+        } else {
+          toast.success('所选商品已全部关联到目标类目，无需重复绑定')
+        }
       } else if (confirmAction === 'UNBIND_CATEGORIES') {
         if (!batchUnbindCategoryIds.length) throw new Error('请至少选择一个要移除的类目')
         const pendingTargetIds = confirmTargetIds.filter((id) =>
