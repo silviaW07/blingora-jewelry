@@ -148,9 +148,12 @@ function SkuQtyStepper({
   increaseLabel: string
 }) {
   const last = React.useRef(0)
-  const fire = (fn: () => void) => {
+  const tap = (blocked: boolean, fn: () => void) => (event: React.SyntheticEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (blocked) return
     const now = Date.now()
-    if (now - last.current < 280) return
+    if (now - last.current < 350) return
     last.current = now
     fn()
   }
@@ -163,17 +166,8 @@ function SkuQtyStepper({
         aria-label={decreaseLabel}
         title={decTitle}
         data-no-hard-nav=""
-        onPointerUp={(event) => {
-          if (event.button !== 0) return
-          if (disabledDec) return
-          fire(onDec)
-        }}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          if (disabledDec) return
-          fire(onDec)
-        }}
+        onTouchEnd={tap(disabledDec, onDec)}
+        onClick={tap(disabledDec, onDec)}
       >
         <Minus className="size-4 pointer-events-none" />
       </button>
@@ -185,17 +179,8 @@ function SkuQtyStepper({
         aria-label={increaseLabel}
         title={incTitle}
         data-no-hard-nav=""
-        onPointerUp={(event) => {
-          if (event.button !== 0) return
-          if (disabledInc) return
-          fire(onInc)
-        }}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          if (disabledInc) return
-          fire(onInc)
-        }}
+        onTouchEnd={tap(disabledInc, onInc)}
+        onClick={tap(disabledInc, onInc)}
       >
         <Plus className="size-4 pointer-events-none" />
       </button>

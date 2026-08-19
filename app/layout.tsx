@@ -8,8 +8,12 @@ const siteTitle = process.env.NEXT_PUBLIC_SITE_TITLE ?? "外贸跨境电商独�
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover' as const,
 };
+
+const PHONE_VIEWPORT_BOOT = `!function(){try{var d=document.documentElement;function cssW(){var sw=screen.width||0,sh=screen.height||0,dpr=window.devicePixelRatio||1;var short=Math.min(sw,sh)||sw;if(short>540&&dpr>1)short=Math.round(short/dpr);if(short>=280&&short<=540)return short;if(dpr>1){var a=Math.round((Math.min(sw,sh)||sw)/dpr);if(a>=280&&a<=540)return a;}return short;}function isPhone(){var w=cssW();if(w>=280&&w<=540)return true;return !!(window.matchMedia&&window.matchMedia("(max-device-width: 512px)").matches);}function lockViewport(){if(!isPhone())return;var w=cssW();if(w<280||w>540)return;var inner=window.innerWidth||0;if(inner>0&&inner<=540)return;var meta=document.querySelector('meta[name="viewport"]');if(!meta){meta=document.createElement("meta");meta.setAttribute("name","viewport");(document.head||d).insertBefore(meta,(document.head||d).firstChild);}var next="width="+w+", initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover";if(meta.getAttribute("content")!==next)meta.setAttribute("content",next);}function apply(){lockViewport();var n=isPhone()||(window.innerWidth||0)<1024;d.classList.toggle("is-narrow",n);if(n){d.style.overflowX="hidden";d.style.maxWidth="100%";d.style.width="100%";d.style.webkitTextSizeAdjust="100%";}}apply();window.addEventListener("resize",apply);window.addEventListener("orientationchange",apply);window.addEventListener("pageshow",apply);function onEvt(e){var t=e.target;if(!t||!t.closest)return;if(t.closest("button,[data-no-hard-nav],input,select,textarea,label,.mobile-bottom-nav,.product-sku-stepper"))return;var a=t.closest("a[data-hard-nav]");if(!a||!a.href||!window.__storefrontNav)return;e.preventDefault();e.stopImmediatePropagation();window.__storefrontNav(a.href);}document.addEventListener("click",onEvt,true);}catch(e){}}();`;
 
 export const metadata = {
   title: siteTitle,
@@ -64,7 +68,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              '!function(){try{var d=document.documentElement;function cssW(){var sw=screen.width||0,sh=screen.height||0,dpr=window.devicePixelRatio||1;var short=Math.min(sw,sh)||sw;if(short>540&&dpr>1)short=Math.round(short/dpr);if(short>=280&&short<=540)return short;if(dpr>1){var a=Math.round((Math.min(sw,sh)||sw)/dpr);if(a>=280&&a<=540)return a;}return short;}function isPhone(){var w=cssW();if(w>=280&&w<=540)return true;return !!(window.matchMedia&&window.matchMedia("(max-device-width: 512px)").matches);}function apply(){var n=isPhone()||(window.innerWidth||0)<1024;d.classList.toggle("is-narrow",n);if(n){d.style.overflowX="hidden";d.style.maxWidth="100%";d.style.width="100%";d.style.webkitTextSizeAdjust="100%";}}apply();window.addEventListener("resize",apply);function onEvt(e){var t=e.target;if(!t||!t.closest)return;if(t.closest("button,[data-no-hard-nav],input,select,textarea,label"))return;var a=t.closest("a[data-hard-nav]");if(!a||!a.href||!window.__storefrontNav)return;e.preventDefault();e.stopImmediatePropagation();window.__storefrontNav(a.href);}document.addEventListener("click",onEvt,true);}catch(e){}}();',
+              PHONE_VIEWPORT_BOOT,
           }}
         />
         {/* alicdn/1688 returns 403 when Referer is our domain — required for overseas image load */}

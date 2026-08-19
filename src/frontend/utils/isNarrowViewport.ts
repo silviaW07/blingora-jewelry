@@ -23,8 +23,27 @@ export function isPhoneScreen(win: Window = window): boolean {
   return false
 }
 
-/** Kept for call sites; viewport meta is owned by Next and must not be rewritten. */
-export function lockStorefrontViewport(_win: Window = window): void {}
+/**
+ * Chrome Android often ignores width=device-width and keeps a 980px layout
+ * viewport. Touch then hits the wrong place (dead + buttons / bottom nav).
+ * Write an explicit CSS-pixel width so innerWidth matches the phone.
+ */
+export function lockStorefrontViewport(win: Window = window): void {
+  if (!isPhoneScreen(win)) return
+  const w = cssScreenWidth(win)
+  if (w < 280 || w > 540) return
+  const inner = win.innerWidth || 0
+  if (inner > 0 && inner <= 540) return
+  const doc = win.document
+  let meta = doc.querySelector('meta[name="viewport"]')
+  if (!meta) {
+    meta = doc.createElement('meta')
+    meta.setAttribute('name', 'viewport')
+    doc.head?.insertBefore(meta, doc.head.firstChild)
+  }
+  const next = `width=${w}, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover`
+  if (meta.getAttribute('content') !== next) meta.setAttribute('content', next)
+}
 
 /**
  * Phone screen or <1024 CSS px → mobile layout in every browser.
@@ -38,6 +57,7 @@ export function isNarrowViewport(win: Window = window): boolean {
 }
 
 export function syncNarrowHtmlClass(win: Window = window): boolean {
+  lockStorefrontViewport(win)
   const narrow = isNarrowViewport(win)
   const root = win.document.documentElement
   root.classList.toggle('is-narrow', narrow)

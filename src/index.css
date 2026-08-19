@@ -2649,19 +2649,21 @@ html.is-narrow .product-sku-guest-price {
 
 html.is-narrow .product-sku-stepper {
   grid-column: auto !important;
-  width: 7.5rem !important;
-  min-width: 7.5rem !important;
-  max-width: 7.5rem !important;
-  height: 2.5rem !important;
+  width: 8.5rem !important;
+  min-width: 8.5rem !important;
+  max-width: 8.5rem !important;
+  height: 2.75rem !important;
   justify-self: end !important;
   justify-content: space-between;
   pointer-events: auto !important;
-  z-index: 6 !important;
+  z-index: 8 !important;
 }
 
 html.is-narrow .product-sku-stepper-btn {
-  width: 2.25rem !important;
-  height: 2.25rem !important;
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  min-width: 2.75rem !important;
+  min-height: 2.75rem !important;
   pointer-events: auto !important;
   touch-action: manipulation !important;
 }
@@ -3086,8 +3088,11 @@ html.is-narrow [data-controller-name='分类导航CATEGORIES标识'] {
   visibility: hidden !important;
 }
 
-html.is-narrow .storefront-main-with-mobile-nav {
-  padding-bottom: calc(var(--mobile-nav-height, 3.75rem) + env(safe-area-inset-bottom, 0px) + 0.5rem);
+html.is-narrow,
+html.is-narrow body {
+  overflow-x: hidden !important;
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 /*
@@ -3106,6 +3111,14 @@ html.is-narrow .mobile-bottom-nav {
   display: block !important;
   pointer-events: auto !important;
   visibility: visible !important;
+  isolation: isolate;
+  z-index: 2147483000 !important;
+}
+
+html.is-narrow .mobile-bottom-nav a,
+html.is-narrow .mobile-bottom-nav__item {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
 }
 
 html.is-narrow [data-storefront-chrome='desktop'],

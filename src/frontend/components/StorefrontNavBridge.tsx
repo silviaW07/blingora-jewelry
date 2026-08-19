@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { notifyStorefrontUrl } from '@/frontend/utils/hardNavigate'
+import { lockStorefrontViewport } from '@/frontend/utils/isNarrowViewport'
 
 function toAppPath(href: string): string | null {
   try {
@@ -28,6 +29,7 @@ export function StorefrontNavBridge() {
   const router = useRouter()
 
   useEffect(() => {
+    lockStorefrontViewport()
     const nav = (href: string) => {
       const next = toAppPath(href)
       if (!next) {
@@ -41,6 +43,10 @@ export function StorefrontNavBridge() {
       router.push(next)
       notifyStorefrontUrl()
       window.setTimeout(notifyStorefrontUrl, 0)
+      window.setTimeout(() => {
+        const now = `${window.location.pathname}${window.location.search}`
+        if (!samePath(now, next)) window.location.assign(next)
+      }, 700)
     }
 
     window.__storefrontNav = nav
@@ -54,8 +60,14 @@ export function StorefrontNavBridge() {
       })
     }, 1200)
 
+    const relock = () => lockStorefrontViewport()
+    window.addEventListener('pageshow', relock)
+    window.addEventListener('orientationchange', relock)
+
     return () => {
       window.clearTimeout(later)
+      window.removeEventListener('pageshow', relock)
+      window.removeEventListener('orientationchange', relock)
       if (window.__storefrontNav === nav) delete window.__storefrontNav
     }
   }, [router])
