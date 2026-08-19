@@ -15,7 +15,7 @@ export interface StorefrontPaginationProps {
   totalPages?: number;
   onPageChange: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
-  /** 每页可选项，默认 [20, 40, 60, 80] */
+  /** 每页可选项，默认 [24, 48, 60, 96] */
   pageSizeOptions?: number[];
   className?: string;
 }
@@ -46,7 +46,7 @@ export const StorefrontPagination = ({
   totalPages,
   onPageChange,
   onPageSizeChange,
-  pageSizeOptions = [20, 40, 60, 80],
+  pageSizeOptions = [24, 48, 60, 96],
   className,
 }: StorefrontPaginationProps) => {
   const { t } = useTranslation();

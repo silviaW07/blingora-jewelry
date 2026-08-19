@@ -214,7 +214,7 @@ export const ProductCategoryView = ({
                     <h3 className="mt-4 text-lg font-semibold text-[#111111]" data-api-unique-id='productcategoryview-rfe3d71fe117bd8be-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{queryState.searchKeyword ? t('product.emptySearchTitle') : t('product.emptyCategoryTitle')}</h3>
                     <p className="mt-2 text-sm text-[#7a756c]" data-api-unique-id='productcategoryview-rf2517b47779e392b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{queryState.searchKeyword ? t('product.emptySearchHint', { keyword: queryState.searchKeyword }) : t('product.emptyCategoryFilterHint')}</p>
                   </div>}
-                {products.length > 0 && totalPages > 1 ? <StorefrontPagination page={queryState.page} pageSize={queryState.pageSize} total={totalCount} totalPages={totalPages} onPageChange={handleGoToPage} onPageSizeChange={handleChangePageSize} /> : null}
+                {products.length > 0 && totalPages > 1 ? <StorefrontPagination page={queryState.page} pageSize={queryState.pageSize} total={totalCount} totalPages={totalPages} onPageChange={handleGoToPage} /> : null}
               </div>
             </section>
         </div>
