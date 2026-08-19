@@ -1,9 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
-import { ChevronRight, ShoppingCart, Star } from 'lucide-react'
+import React from 'react'
+import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import EditableImg from '@/@base/EditableImg'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
@@ -15,7 +14,7 @@ import type {
   HomeRecommendZoneSection as HomeRecommendZoneSectionType,
 } from '@/frontend/actions/Home'
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton'
-import { StorePrice } from '@/frontend/components/GuestPricePlaceholder'
+import { GuestPlaceholder, StorePrice, useCanViewStorePrice } from '@/frontend/components/GuestPricePlaceholder'
 import {
   limitRecommendZoneItems,
   zoneLooksLikeComingSoon,
@@ -167,157 +166,109 @@ type RecommendZoneProductCardProps = {
   t: ReturnType<typeof useTranslation>['t']
 }
 
-const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZoneProductCardProps) => {
+const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCardProps) => {
   const isDraft = item.status === 'DRAFT'
-  const [selectedSkuId, setSelectedSkuId] = useState<string>(() => {
-    return (
-      (item.defaultSkuId || '') ||
-      (item.skuOptions?.[0]?.skuId || '') ||
-      ''
-    )
-  })
+  const canViewPrice = useCanViewStorePrice()
+  const href = productHref(item.productId)
 
-  const selectedOption =
-    item.skuOptions?.find((opt) => opt.skuId === selectedSkuId) ||
-    item.skuOptions?.[0] ||
-    null
-
-  const showOptions = !isDraft && item.skuOptions && item.skuOptions.length > 1
-
-  const priceToShow = selectedOption?.price ?? item.price
-  const originalPriceToShow = selectedOption?.originalPrice ?? item.originalPrice
-
-  const openProduct = () => {
+  const openProductEvents = useChromeActivate(() => {
     writeProductDetailPreview({
       id: item.productId,
       name: item.productName,
       image: item.imageUrl || '',
     })
     handlers.handleNavigateRecommendProduct(item.productId)
-  }
-  const openProductEvents = useChromeActivate(openProduct)
-  const addToCartEvents = useChromeActivate(() => {
-    if (showOptions && selectedSkuId) {
-      void handlers.handleAddRecommendProductSkuToCart(item, selectedSkuId)
-    } else {
-      void handlers.handleAddRecommendProductToCart(item)
-    }
   })
+  const addToCartEvents = useChromeActivate(() => {
+    void handlers.handleAddRecommendProductToCart(item)
+  })
+
+  const priceDisplay = (() => {
+    const p = item.priceMin ?? item.price
+    const pMax = item.priceMax
+    if (typeof p !== 'number') return null
+    const fmt = (n: number) => `US$ ${n.toFixed(2)}`
+    if (typeof pMax === 'number' && pMax > p) return `${fmt(p)}-${fmt(pMax)}`
+    return fmt(p)
+  })()
 
   return (
     <article
-      key={item.itemId}
-      className="home-product-card group flex h-full flex-col overflow-visible p-0 transition"
+      className="home-product-card group flex h-full flex-col overflow-visible transition duration-200 hover:opacity-95"
       data-controller-name="首页推荐专区商品卡片"
+      onPointerEnter={() => prefetchProductDetail(item.productId)}
     >
-      <button
-        type="button"
-        className="home-product-card-media relative block w-full shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+      <a
+        {...hardNavProps(href)}
+        aria-label={item.productName}
+        className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+        onPointerDown={() => {
+          writeProductDetailPreview({
+            id: item.productId,
+            name: item.productName,
+            image: item.imageUrl || '',
+          })
+        }}
         onClick={openProductEvents.onClick}
-        onPointerUp={openProductEvents.onPointerUp}
-        onPointerEnter={() => prefetchProductDetail(item.productId)}
       >
-        <EditableImg
-          propKey={`home-recommend-product-${item.productId}`}
-          src={item.imageUrl || undefined}
-          alt={item.productName}
-          keywords={item.imageUrl || undefined}
-          disableKeywordSearch
-          fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-          loading="lazy"
-          orientation="square"
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-          style={{ aspectRatio: '1 / 1' }}
-        />
-      </button>
-
-      <div className="flex flex-1 flex-col gap-2 px-2.5 pb-2.5 pt-2 sm:px-3 sm:pb-3">
-        <button
-          type="button"
-          className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
-          onClick={openProductEvents.onClick}
-        onPointerUp={openProductEvents.onPointerUp}
-          onPointerEnter={() => prefetchProductDetail(item.productId)}
-          data-api-bind-info={`productItems-${index}-productName`}
-          data-api-map-var-name="item"
+        <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
+          <EditableImg
+            propKey={`home-recommend-product-${item.productId}`}
+            src={item.imageUrl || undefined}
+            alt={item.productName}
+            keywords={item.imageUrl || undefined}
+            disableKeywordSearch
+            fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+            loading="lazy"
+            orientation="square"
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+            style={{ aspectRatio: '1 / 1' }}
+          />
+        </div>
+        <h3
+          className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
+          style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
+          title={item.productName}
         >
-          <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-            {item.productName}
-          </DecorateText>
-        </button>
+          {item.productName}
+        </h3>
+      </a>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-1 px-2 pb-2 sm:px-2.5 sm:pb-2.5">
+        {isDraft ? (
+          <p className="truncate text-xs leading-4 text-[#8b8477]">{t('product.preview')}</p>
+        ) : canViewPrice ? (
+          <p className="truncate text-base font-bold leading-5 text-[#111111]">
+            {priceDisplay ?? 'US$ --'}
+          </p>
+        ) : (
+          <GuestPlaceholder compact className="truncate" />
+        )}
 
         {!isDraft ? (
-          <div className="flex items-center gap-3 text-sm text-[#7a756c]">
-            <div className="flex items-center gap-1">{renderRatingStars(item.ratingAverage)}</div>
-            <span>{item.ratingAverage.toFixed(1)} / 5</span>
-            <span>({item.ratingCount})</span>
-          </div>
-        ) : null}
-
-        {showOptions ? (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {item.skuOptions.map((opt) => {
-              const isActive = opt.skuId === selectedSkuId
-              return (
-                <button
-                  key={opt.skuId}
-                  type="button"
-                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition ${
-                    isActive
-                      ? 'border-[#111111] bg-[#111111] text-white'
-                      : 'border-[#ebe7de] bg-white text-[#111111] hover:border-[#111111]'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedSkuId(opt.skuId)
-                  }}
-                  title={opt.label}
-                >
-                  <span className="truncate max-w-[90px]">{opt.label}</span>
-                  <span className="shrink-0">
-                    {typeof opt.price === 'number' ? `US$ ${opt.price.toFixed(2)}` : 'US$ --'}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        ) : null}
-
-        <div className="mt-auto flex items-end justify-between gap-3 pt-1">
-          {isDraft ? (
-            <div className="min-h-[40px] flex-1" aria-hidden="true" />
-          ) : (
-            <div>
-              <StorePrice className="text-2xl font-bold">
-                <p className="text-2xl font-bold text-[#111111]">{formatPrice(priceToShow)}</p>
-                {originalPriceToShow ? (
-                  <p className="mt-1 text-sm text-[#8b8477] line-through">{formatPrice(originalPriceToShow)}</p>
-                ) : null}
-              </StorePrice>
-            </div>
-          )}
-
-          {isDraft ? (
+          <div
+            className="home-product-card-actions mt-1 flex shrink-0 items-center justify-end gap-2 pt-1"
+            data-no-hard-nav=""
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
             <WishlistHeartButton
               productId={item.productId}
-              productName={item.productName}
-              className="size-10 rounded-full"
-              size={20}
               onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
+              className="size-9 shrink-0"
             />
-          ) : (
-            <Button
+            <button
               type="button"
-              className="relative z-[3] rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
+              aria-label={t('product.addToCart')}
+              className="home-product-card-cart-btn relative z-[5] inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
               {...addToCartEvents}
             >
-              <ShoppingCart className="mr-2 size-4" />
-              <DecorateText propKey="home_add_to_cart_label" as="span">
-                {t('product.addToCart', { defaultValue: 'Add to cart' })}
-              </DecorateText>
-            </Button>
-          )}
-        </div>
+              <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
+              <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
+            </button>
+          </div>
+        ) : null}
       </div>
     </article>
   )
