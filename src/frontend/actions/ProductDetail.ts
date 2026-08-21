@@ -382,6 +382,9 @@ export const getProductDetail = withResult(
           source: true,
           mainImageUrl: true,
           galleryJson: true,
+          shortDescription: true,
+          detailText: true,
+          detailContentJson: true,
           parameterJson: true,
           tradeInfoJson: true,
           translationsJson: true,
@@ -572,13 +575,18 @@ export const getProductDetail = withResult(
       source: String(product.source || ''),
       mainImageUrl: product.mainImageUrl,
       galleryJson: (product.galleryJson as object) as GalleryItem[],
-      shortDescription: translated?.shortDescription?.trim() || null,
-      detailText: null,
+      shortDescription:
+        translated?.shortDescription?.trim() ||
+        String((product as { shortDescription?: string | null }).shortDescription || '').trim() ||
+        null,
+      detailText: String((product as { detailText?: string | null }).detailText || '').trim() || null,
       sellingPointsJson: null,
-      detailContentJson: null,
-      parameterJson: null,
+      detailContentJson: product.detailContentJson
+        ? ((product.detailContentJson as object) as DetailContentItem[])
+        : null,
+      parameterJson,
       descriptionParams,
-      tradeInfoJson: null,
+      tradeInfoJson,
       faqJson: null,
       ratingAverage: product.ratingAverage,
       ratingCount: product.ratingCount,
