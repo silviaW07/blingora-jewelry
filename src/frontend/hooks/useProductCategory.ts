@@ -134,6 +134,13 @@ function findCategoryIdInTree(
     brand_options?: Array<{ category_id: string; category_slug: string | null }>
   }>,
   slugOrId: string,
+  recommendZones?: Array<{
+    items?: Array<{
+      entityType?: string
+      categoryId?: string
+      categorySlug?: string | null
+    }>
+  }> | null,
 ): string {
   const normalized = String(slugOrId || '').trim()
   if (!normalized) return ''
@@ -156,6 +163,16 @@ function findCategoryIdInTree(
     for (const brand of cat.brand_options || []) {
       const id = matchId(brand)
       if (id) return id
+    }
+  }
+  // 推荐区标签类目（Normal quality 等）：多重归类标签，不在货架导航树中
+  for (const zone of recommendZones || []) {
+    for (const item of zone.items || []) {
+      if (String(item.entityType || '').toUpperCase() !== 'CATEGORY') continue
+      if (String(item.categoryId || '') === normalized) return String(item.categoryId)
+      if (String(item.categorySlug || '').trim().toLowerCase() === needle) {
+        return String(item.categoryId || '')
+      }
     }
   }
   return ''
@@ -362,6 +379,7 @@ export const useProductCategory = (
       ? findCategoryIdInTree(
           bootstrap?.categories?.length ? bootstrap.categories : peekCachedCategoryList() || [],
           slugOnMount,
+          bootstrap?.recommendZones,
         )
       : ''
     const categoryId = slugOnMount
@@ -564,14 +582,14 @@ export const useProductCategory = (
   // do not wait for the async resolveCategoryRouteKey round-trip.
   useEffect(() => {
     if (!isCategorySlugRoute || !routeCategorySlug) return
-    const fromTree = findCategoryIdInTree(categories, routeCategorySlug)
+    const fromTree = findCategoryIdInTree(categories, routeCategorySlug, bootstrap?.recommendZones)
     if (!fromTree) return
     setQueryState((prev) => (prev.categoryId === fromTree ? prev : { ...prev, categoryId: fromTree }))
-  }, [isCategorySlugRoute, routeCategorySlug, categories])
+  }, [isCategorySlugRoute, routeCategorySlug, categories, bootstrap?.recommendZones])
 
   const resolveCategoryIdBySlug = useCallback((slug: string): string => {
-    return findCategoryIdInTree(categories, slug)
-  }, [categories])
+    return findCategoryIdInTree(categories, slug, bootstrap?.recommendZones)
+  }, [categories, bootstrap?.recommendZones])
 
   const resolveCategorySlugById = useCallback((categoryId: string): string => {
     const id = String(categoryId || '').trim()

@@ -114,7 +114,7 @@ export function resolveTableImportColorSpec(input: {
       if (packed.size) specs.push(packed.size)
       return
     }
-    if (!token || LOOKS_LIKE_PRICE_RE.test(token)) return
+    if (!token || (LOOKS_LIKE_PRICE_RE.test(token) && prefer !== 'spec')) return
     if (prefer === 'spec' || (prefer === 'auto' && DIMENSION_RE.test(token))) {
       specs.push(token)
       return

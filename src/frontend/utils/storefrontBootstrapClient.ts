@@ -3,15 +3,19 @@ import type { StorefrontBootstrap } from '@/frontend/types/storefrontBootstrap'
 let inflight: Promise<StorefrontBootstrap | null> | null = null
 let inflightLang = ''
 
-export async function fetchStorefrontBootstrap(lang: string): Promise<StorefrontBootstrap | null> {
+export async function fetchStorefrontBootstrap(
+  lang: string,
+  options?: { force?: boolean },
+): Promise<StorefrontBootstrap | null> {
   if (typeof window === 'undefined') return null
   const normalized = String(lang || 'en').trim() || 'en'
-  if (inflight && inflightLang === normalized) return inflight
+  if (!options?.force && inflight && inflightLang === normalized) return inflight
 
   const controller = new AbortController()
   const abortTimer = window.setTimeout(() => controller.abort(), 12000)
   inflightLang = normalized
-  inflight = fetch(`/api/storefront/bootstrap?lang=${encodeURIComponent(normalized)}`, {
+  const refresh = options?.force ? `&refresh=${Date.now()}` : ''
+  inflight = fetch(`/api/storefront/bootstrap?lang=${encodeURIComponent(normalized)}${refresh}`, {
     cache: 'no-store',
     credentials: 'same-origin',
     headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },

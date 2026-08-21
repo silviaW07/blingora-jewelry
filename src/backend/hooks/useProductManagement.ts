@@ -115,6 +115,30 @@ export interface BatchImportRowInput {
   spec: string
 }
 
+/** 勾选一级类目时带上树里紧随其后的全部子级（与后台 resolveCategoryFilterIds 一致） */
+function expandSelectedCategoryIdsWithDescendants(
+  selectedIds: string[],
+  options: Array<{ value: string; label: string }>,
+): string[] {
+  const selected = new Set(selectedIds.filter(Boolean))
+  if (!selected.size || !options.length) return Array.from(selected)
+  const depthOf = (label: string) => {
+    const match = String(label || '').match(/^　*/)
+    return match ? match[0].length : 0
+  }
+  const depths = options.map((opt) => depthOf(opt.label))
+  const out = new Set<string>(selected)
+  for (let i = 0; i < options.length; i += 1) {
+    if (!selected.has(options[i].value)) continue
+    const depth = depths[i]
+    for (let j = i + 1; j < options.length; j += 1) {
+      if (depths[j] <= depth) break
+      out.add(options[j].value)
+    }
+  }
+  return Array.from(out)
+}
+
 type ProductSkuFormItem = SkuItem & {
   usd_display_price?: number | null
   usd_display_original_price?: number | null
@@ -3200,9 +3224,11 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       void loadCategoryProductPreview(null)
     }
     if (action === 'UNBIND_CATEGORIES') {
-      setBatchUnbindCategoryIds([])
+      // 当前筛到某类目时，默认勾选该类目，避免「点了移除但弹窗里什么都没选」看起来没变化
+      const filteredId = filterCategoryId && filterCategoryId !== 'ALL' ? filterCategoryId : ''
+      setBatchUnbindCategoryIds(filteredId ? [filteredId] : [])
       setBatchBindCategoryIds([])
-      void loadCategoryProductPreview(null)
+      void loadCategoryProductPreview(filteredId || null)
     }
     if (action === 'BIND_KEYWORDS') {
       setBatchBindKeywordIds([])
@@ -3441,7 +3467,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
         if (usePendingScope) {
           if (!pendingTargetIds.length) throw new Error('请先勾选待上传商品')
-          const removeSet = new Set(batchUnbindCategoryIds)
+          const removeSet = new Set(
+            expandSelectedCategoryIdsWithDescendants(batchUnbindCategoryIds, bindingCategoryOptions),
+          )
           const edits = pendingTargetIds.map((itemId) => {
             const item = pendingImportQueue.find((row) => row.item_id === itemId)
             const primaryId = item?.item_targetCategoryId || null
@@ -3465,7 +3493,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         }
 
         const res = await batchUnbindProductCategories({ product_ids: targetProductIds, linked_category_ids: batchUnbindCategoryIds })
-        toast.success(`关联类目已批量移除，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        if (res.fail_count > 0) {
+          toast.error(`关联类目移除完成：成功 ${res.success_count}，失败 ${res.fail_count}`)
+        } else if (res.success_count === 0) {
+          toast.message('没有商品绑定了所选类目，无需移除')
+        } else {
+          toast.success(`关联类目已批量移除，成功: ${res.success_count}，失败: ${res.fail_count}`)
+        }
       } else if (confirmAction === 'BIND_KEYWORDS') {
         if (!batchBindKeywordIds.length) throw new Error('请至少选择一个关联关键词')
         const res = await batchBindProductKeywords({ product_ids: targetProductIds, linked_keyword_ids: batchBindKeywordIds })

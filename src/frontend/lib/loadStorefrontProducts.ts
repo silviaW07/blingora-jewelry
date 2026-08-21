@@ -11,6 +11,15 @@ type CategoryRef = {
   brand_options?: CategoryRef[]
 }
 
+/** 推荐区里的标签类目（如 Normal quality），不是货架子类目 */
+type RecommendZoneRef = {
+  items?: Array<{
+    entityType?: string
+    categoryId?: string
+    categorySlug?: string | null
+  }>
+}
+
 function rpcUrl() {
   const base = process.env.RPC_INTERNAL_URL || 'http://127.0.0.1:3100'
   return `${base.replace(/\/$/, '')}/rpc/${PROJECT_ID}/`
@@ -37,7 +46,11 @@ async function rpcAction<T>(actionName: string, args: unknown[] = []): Promise<T
   }
 }
 
-export function resolveCategoryIdFromTree(list: CategoryRef[] | undefined, slugOrId: string): string {
+export function resolveCategoryIdFromTree(
+  list: CategoryRef[] | undefined,
+  slugOrId: string,
+  recommendZones?: RecommendZoneRef[] | null,
+): string {
   const normalized = String(slugOrId || '').trim()
   if (!normalized) return ''
   const needle = normalized.toLowerCase()
@@ -61,6 +74,16 @@ export function resolveCategoryIdFromTree(list: CategoryRef[] | undefined, slugO
       if (id) return id
     }
   }
+  // 推荐标签类目：多重归类用，不进导航树；从推荐区卡片解析 slug → id
+  for (const zone of recommendZones || []) {
+    for (const item of zone.items || []) {
+      if (String(item.entityType || '').toUpperCase() !== 'CATEGORY') continue
+      if (String(item.categoryId || '') === normalized) return String(item.categoryId)
+      if (String(item.categorySlug || '').trim().toLowerCase() === needle) {
+        return String(item.categoryId || '')
+      }
+    }
+  }
   return ''
 }
 
@@ -69,6 +92,7 @@ async function resolveCategoryIdForListing(input: {
   categoryId?: string
   lang: string
   categoryTree?: CategoryRef[]
+  recommendZones?: RecommendZoneRef[] | null
 }): Promise<string> {
   const explicit = String(input.categoryId || '').trim()
   if (explicit) return explicit
@@ -84,7 +108,7 @@ async function resolveCategoryIdForListing(input: {
       ])
     ).list
 
-  const fromTree = resolveCategoryIdFromTree(tree, slug)
+  const fromTree = resolveCategoryIdFromTree(tree, slug, input.recommendZones)
   if (fromTree) return fromTree
 
   const resolved = await rpcAction<{ categoryId?: string; categorySlug?: string | null }>(
@@ -133,6 +157,7 @@ export async function loadStorefrontProducts(input: {
   minPrice?: number
   maxPrice?: number
   categoryTree?: CategoryRef[]
+  recommendZones?: RecommendZoneRef[] | null
 }): Promise<{ list: ShelfProductCard[]; categoryId: string; total: number }> {
   const lang = String(input.lang || 'en').trim() || 'en'
   const search = String(input.search || '').trim()
@@ -149,6 +174,7 @@ export async function loadStorefrontProducts(input: {
         categoryId,
         lang,
         categoryTree: input.categoryTree,
+        recommendZones: input.recommendZones,
       })
     }
 

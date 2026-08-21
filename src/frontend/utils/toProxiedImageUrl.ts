@@ -45,6 +45,33 @@ export function withAlicdnSize(url: string, width = 1200, quality = 90): string 
   return base
 }
 
+/** Aliyun OSS process: full ~200–800KB → w_400 ~20–40KB */
+export function withOssProcess(url: string, width = 640, quality = 80): string {
+  const raw = String(url || '').trim()
+  if (!raw) return raw
+  try {
+    const u = new URL(raw)
+    if (width <= 0) {
+      u.searchParams.delete('x-oss-process')
+      return u.toString()
+    }
+    const q = Math.min(95, Math.max(40, Math.round(quality)))
+    const w = Math.min(2000, Math.max(80, Math.round(width)))
+    u.searchParams.set(
+      'x-oss-process',
+      `image/resize,m_lfit,w_${w}/quality,q_${q}`,
+    )
+    return u.toString()
+  } catch {
+    return raw
+  }
+}
+
+function isAliyunOssHost(host: string): boolean {
+  const h = host.toLowerCase()
+  return h.endsWith('.aliyuncs.com') || h === 'aliyuncs.com'
+}
+
 /**
  * Normalize absolute same-origin proxy URLs
  * (`https://sourcingjewelry.com/img-proxy/...`) to a relative `/img-proxy/...`
@@ -75,7 +102,7 @@ function proxyPathForHost(host: string, pathname: string, search: string): strin
 }
 
 export type ProxiedImageOptions = {
-  /** Longest edge in px for alicdn resize (default 1200). Use 240 for thumbs, 1200 for cards, 1600 for detail hero. */
+  /** Longest edge in px for alicdn/OSS resize. Use 240 for thumbs, 400–640 for cards, 1200 for detail. */
   width?: number
   quality?: number
 }
@@ -87,8 +114,8 @@ const IMAGE_CDN_BASE = String(process.env.NEXT_PUBLIC_IMAGE_CDN_BASE || '')
 
 /**
  * Rewrite 1688 CDN URLs to same-origin nginx proxy + optional resize.
+ * Aliyun OSS (hspi.oss-*) gets x-oss-process resize (most product images).
  * If NEXT_PUBLIC_IMAGE_CDN_BASE is set, prefer R2/CDN path with the same key layout as /img-proxy.
- * Cache-friendly: resized URLs are distinct cache keys.
  */
 export function toProxiedImageUrl(
   url?: string | null,
@@ -121,6 +148,11 @@ export function toProxiedImageUrl(
     const u = new URL(raw, base)
     const host = u.hostname.toLowerCase()
 
+    // Old-shop / table-import images live on OSS US-West — must resize or list pages pull full JPEGs.
+    if (isAliyunOssHost(host)) {
+      return withOssProcess(u.toString(), width, Math.min(quality, 80))
+    }
+
     if (ALICDN_HOSTS.has(host) || host.endsWith('.alicdn.com')) {
       const sizedPath = withAlicdnSize(`${u.pathname}${u.search}`, width, quality)
       const sizedUrl = new URL(sizedPath, `https://${host}`)
@@ -151,7 +183,11 @@ export function toProxiedImageUrl(
 export function imageIdentity(url?: string | null): string {
   const raw = String(url || '').trim()
   if (!raw) return ''
-  return raw.split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase()
+  return raw
+    .split('#')[0]
+    .split('?')[0]
+    .replace(/\/+$/, '')
+    .toLowerCase()
 }
 
 export function imageUrlsMatch(a?: string | null, b?: string | null): boolean {

@@ -7,6 +7,7 @@ import {
   withResult,
   UserRole
 } from '@/backend/action_utils'
+import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 
 // ===== Enums =====
 
@@ -615,13 +616,11 @@ export const updateOrderRemark = requireRole([UserRole.ADMIN])(
   })
 )
 
-const USD_EXCHANGE_RATE = 6.5
-
-const toUsdAmount = (amount: number, currencyCode?: string | null) => {
+const toUsdAmount = (amount: number, currencyCode: string | null | undefined, usdExchangeRate: number) => {
   if (!Number.isFinite(amount)) return 0
   const code = String(currencyCode || 'USD').toUpperCase()
   if (code === 'USD') return Math.round(amount * 100) / 100
-  if (code === 'CNY' || code === 'RMB') return Math.round((amount / USD_EXCHANGE_RATE) * 100) / 100
+  if (code === 'CNY' || code === 'RMB') return toUsdFromCny(amount, usdExchangeRate)
   return Math.round(amount * 100) / 100
 }
 
@@ -642,55 +641,155 @@ async function tryFetchImageBuffer(url: string): Promise<{ buffer: Buffer; exten
   const normalized = String(url || '').trim()
   if (!normalized) return null
   try {
-    const res = await fetch(normalized, { cache: 'no-store' })
+    const requestUrl = normalized.startsWith('/')
+      ? new URL(
+          normalized,
+          process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://sourcingjewelry.com',
+        ).toString()
+      : normalized
+    const res = await fetch(requestUrl, { cache: 'no-store' })
     if (!res.ok) return null
-    const extension = inferExcelImageExtension(res.headers.get('content-type'), normalized)
-    if (!extension) return null
     const ab = await res.arrayBuffer()
-    return { buffer: Buffer.from(ab), extension }
+    const buffer = Buffer.from(ab)
+    const extension = inferExcelImageExtension(res.headers.get('content-type'), requestUrl)
+    if (!extension) return null
+    return { buffer, extension }
   } catch {
     return null
   }
+}
+
+const cleanExcelText = (value: unknown) => String(value ?? '').trim()
+const containsChinese = (value: string) => /[\u3400-\u9fff]/.test(value)
+
+function readProductTranslationName(value: unknown, lang: string): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+  const root = value as Record<string, unknown>
+  const languageValue = root[lang]
+  if (languageValue && typeof languageValue === 'object' && !Array.isArray(languageValue)) {
+    return cleanExcelText((languageValue as Record<string, unknown>).name)
+  }
+  return ''
+}
+
+function readPreviewProductName(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+  return cleanExcelText((value as Record<string, unknown>).name)
+}
+
+function resolveChineseExportProductName(params: {
+  productNameSnapshot?: string | null
+  product?: {
+    name?: string | null
+    translationsJson?: unknown
+    importTaskItems?: Array<{ parsedName?: string | null; previewDataJson?: unknown }>
+  } | null
+}): string {
+  const product = params.product
+  const candidates = [
+    readProductTranslationName(product?.translationsJson, 'zh'),
+    ...(product?.importTaskItems || []).flatMap((row) => [
+      cleanExcelText(row.parsedName),
+      readPreviewProductName(row.previewDataJson),
+    ]),
+    cleanExcelText(params.productNameSnapshot),
+    cleanExcelText(product?.name),
+  ].filter(Boolean)
+
+  return candidates.find(containsChinese) || candidates[0] || ''
+}
+
+function resolveSkuSpecification(params: {
+  attributeJson?: unknown
+  materialLabel?: string | null
+  sizeLabel?: string | null
+  itemMaterialLabel?: string | null
+  itemSizeLabel?: string | null
+}): string {
+  const attributes = Array.isArray(params.attributeJson)
+    ? params.attributeJson
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
+          const row = entry as Record<string, unknown>
+          const name = cleanExcelText(row.name || row.label || row.key)
+          const value = cleanExcelText(row.value || row.labelValue)
+          return value ? { name, value } : null
+        })
+        .filter((entry): entry is { name: string; value: string } => Boolean(entry))
+    : []
+
+  const colorPattern = /颜色|顏色|color|colour|款式|style/i
+  const sizePattern = /尺寸|尺码|規格|规格|size|length|长度|長度/i
+  const color = attributes.find((entry) => colorPattern.test(entry.name))?.value
+    || cleanExcelText(params.itemMaterialLabel)
+    || cleanExcelText(params.materialLabel)
+  const size = attributes.find((entry) => sizePattern.test(entry.name))?.value
+    || cleanExcelText(params.itemSizeLabel)
+    || cleanExcelText(params.sizeLabel)
+  const otherValues = attributes
+    .filter((entry) => !colorPattern.test(entry.name) && !sizePattern.test(entry.name))
+    .map((entry) => entry.value)
+
+  const values = [color, size, ...otherValues]
+    .map(cleanExcelText)
+    .filter((value, index, all) => Boolean(value) && all.indexOf(value) === index)
+  return values.join('-') || '默认规格'
 }
 
 async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrdersExcelOutput> {
   const orderIds = Array.from(new Set((orderIdsInput || []).filter(Boolean)))
   if (!orderIds.length) throw new Error('请至少选择一笔订单')
 
-  const orders = await prisma.orderrecord.findMany({
-    where: { id: { in: orderIds } },
-    include: {
-      items: {
-        include: {
-          product: {
-            select: {
-              id: true,
-              productCode: true,
-              mainImageUrl: true,
-              costPrice: true,
-              supplierName: true,
-              source: true,
-              name: true,
-              // product 表无 sourceUrl；1688 链接在 importtaskitem.sourceUrl
-              importTaskItems: {
-                select: { sourceUrl: true },
-                orderBy: { publishedAt: 'desc' },
-                take: 5,
+  const [usdExchangeRate, orders] = await Promise.all([
+    getUsdExchangeRate(prisma),
+    prisma.orderrecord.findMany({
+      where: { id: { in: orderIds } },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                productCode: true,
+                mainImageUrl: true,
+                costPrice: true,
+                supplierName: true,
+                source: true,
+                name: true,
+                translationsJson: true,
+                // product 表无 sourceUrl；1688 链接在 importtaskitem.sourceUrl
+                importTaskItems: {
+                  select: {
+                    sourceUrl: true,
+                    parsedName: true,
+                    previewDataJson: true,
+                  },
+                  orderBy: { publishedAt: 'desc' },
+                  take: 5,
+                },
               },
             },
-          },
-          productSku: {
-            select: {
-              skuCode: true,
-              price: true,
-              originalPrice: true,
+            productSku: {
+              select: {
+                skuCode: true,
+                imageUrl: true,
+                attributeJson: true,
+                materialLabel: true,
+                sizeLabel: true,
+                price: true,
+                originalPrice: true,
+              },
             },
           },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
+
+  if (!orders.length) {
+    throw new Error('未找到所选订单，请刷新列表后重试')
+  }
 
   const rows: OrderExcelExportRow[] = []
   for (const order of orders) {
@@ -698,11 +797,14 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
       const unitPrice = item.unitPrice.toNumber()
       const lineAmount = item.lineAmount.toNumber()
       const skuOriginal = item.productSku?.originalPrice != null ? Number(item.productSku.originalPrice) : null
-      const originalPriceUsd = toUsdAmount(skuOriginal ?? unitPrice, order.currencyCode)
+      // SKU price fields are always CNY; order item snapshots use the order currency.
+      const originalPriceUsd = skuOriginal != null
+        ? toUsdFromCny(skuOriginal, usdExchangeRate)
+        : toUsdAmount(unitPrice, order.currencyCode, usdExchangeRate)
       // 无独立折扣价时回退到原价
       const discountPriceUsd =
-        skuOriginal != null ? toUsdAmount(unitPrice, order.currencyCode) : originalPriceUsd
-      const totalPriceUsd = toUsdAmount(lineAmount, order.currencyCode)
+        skuOriginal != null ? toUsdAmount(unitPrice, order.currencyCode, usdExchangeRate) : originalPriceUsd
+      const totalPriceUsd = toUsdAmount(lineAmount, order.currencyCode, usdExchangeRate)
       const importSourceUrl =
         item.product?.importTaskItems?.find((row) => /1688\.com/i.test(String(row.sourceUrl || '')))?.sourceUrl ||
         item.product?.importTaskItems?.[0]?.sourceUrl ||
@@ -712,9 +814,15 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
 
       rows.push({
         productId: item.productId,
-        sku: item.skuCode || item.productSku?.skuCode || '',
-        spu: item.product?.productCode || '',
-        imageUrl: item.product?.mainImageUrl || '',
+        sku: resolveSkuSpecification({
+          attributeJson: item.productSku?.attributeJson,
+          materialLabel: item.productSku?.materialLabel,
+          sizeLabel: item.productSku?.sizeLabel,
+          itemMaterialLabel: item.materialLabel,
+          itemSizeLabel: item.sizeLabel,
+        }),
+        spu: item.product?.productCode || String(item.skuCode || '').split('-')[0] || '',
+        imageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl || '',
         originalPriceUsd,
         discountPriceUsd,
         quantity: item.quantity,
@@ -722,10 +830,84 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
         costPrice: item.product?.costPrice != null ? Number(item.product.costPrice) : null,
         supplierName: item.product?.supplierName || '',
         supplierUrl,
-        productName: item.productName || item.product?.name || '',
+        productName: resolveChineseExportProductName({
+          productNameSnapshot: item.productName,
+          product: item.product,
+        }),
         orderNo: order.orderNo,
       })
     }
+  }
+
+  if (!rows.length) {
+    // 常见：勾选了订单但明细为空 / 关联商品缺失导致 include 失败前被吞掉
+    // 再兜底用 orderitem 快照直查，避免导出只有表头的空表
+    const fallbackItems = await prisma.orderitem.findMany({
+      where: { orderId: { in: orderIds } },
+      include: {
+        order: { select: { orderNo: true, currencyCode: true } },
+        product: {
+          select: {
+            productCode: true,
+            mainImageUrl: true,
+            costPrice: true,
+            supplierName: true,
+            name: true,
+            translationsJson: true,
+          },
+        },
+        productSku: {
+          select: {
+            skuCode: true,
+            imageUrl: true,
+            attributeJson: true,
+            materialLabel: true,
+            sizeLabel: true,
+            price: true,
+            originalPrice: true,
+          },
+        },
+      },
+    })
+    for (const item of fallbackItems) {
+      const unitPrice = item.unitPrice.toNumber()
+      const lineAmount = item.lineAmount.toNumber()
+      const currency = item.order?.currencyCode || 'USD'
+      const skuOriginal = item.productSku?.originalPrice != null ? Number(item.productSku.originalPrice) : null
+      const originalPriceUsd = skuOriginal != null
+        ? toUsdFromCny(skuOriginal, usdExchangeRate)
+        : toUsdAmount(unitPrice, currency, usdExchangeRate)
+      const discountPriceUsd =
+        skuOriginal != null ? toUsdAmount(unitPrice, currency, usdExchangeRate) : originalPriceUsd
+      rows.push({
+        productId: item.productId,
+        sku: resolveSkuSpecification({
+          attributeJson: item.productSku?.attributeJson,
+          materialLabel: item.productSku?.materialLabel,
+          sizeLabel: item.productSku?.sizeLabel,
+          itemMaterialLabel: item.materialLabel,
+          itemSizeLabel: item.sizeLabel,
+        }),
+        spu: item.product?.productCode || String(item.skuCode || '').split('-')[0] || '',
+        imageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl || '',
+        originalPriceUsd,
+        discountPriceUsd,
+        quantity: item.quantity,
+        totalPriceUsd: toUsdAmount(lineAmount, currency, usdExchangeRate),
+        costPrice: item.product?.costPrice != null ? Number(item.product.costPrice) : null,
+        supplierName: item.product?.supplierName || '',
+        supplierUrl: '',
+        productName: resolveChineseExportProductName({
+          productNameSnapshot: item.productName,
+          product: item.product,
+        }),
+        orderNo: item.order?.orderNo || '',
+      })
+    }
+  }
+
+  if (!rows.length) {
+    throw new Error('所选订单没有可导出的商品明细（可能明细为空）。请换一笔有商品的订单再试。')
   }
 
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
@@ -750,7 +932,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
       '商品 ID': row.productId,
       SKU: row.sku,
       SPU: row.spu,
-      图片链接: row.imageUrl,
+      图片: row.imageUrl,
       '原价(美金)': row.originalPriceUsd,
       '折扣价(美金)': row.discountPriceUsd ?? row.originalPriceUsd,
       数量: row.quantity,
@@ -781,7 +963,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
     { header: '商品 ID', key: 'productId', width: 18 },
     { header: 'SKU', key: 'sku', width: 18 },
     { header: 'SPU', key: 'spu', width: 18 },
-    { header: '图片链接', key: 'image', width: 14 },
+    { header: '图片', key: 'image', width: 27 },
     { header: '__图片链接URL', key: 'imageUrlRaw', width: 40, hidden: true },
     { header: '原价(美金)', key: 'originalPriceUsd', width: 14 },
     { header: '折扣价(美金)', key: 'discountPriceUsd', width: 14 },
@@ -790,11 +972,17 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
     { header: '采购价', key: 'costPrice', width: 12 },
     { header: '供应商名称', key: 'supplierName', width: 18 },
     { header: '供应商链接', key: 'supplierUrl', width: 40 },
-    { header: '商品名称', key: 'productName', width: 40 },
+    { header: '商品名称（中文）', key: 'productName', width: 55 },
   ]
 
   const headerRow = worksheet.getRow(1)
-  headerRow.font = { bold: true }
+  headerRow.height = 28
+  headerRow.font = { bold: true, size: 12 }
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFD9D9D9' },
+  }
   headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
 
   for (const row of rows) {
@@ -820,24 +1008,28 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
   worksheet.getColumn(imageColIndex).alignment = { vertical: 'middle', horizontal: 'center' }
   worksheet.getColumn(imageUrlRawColIndex).hidden = true
 
-  // Embed thumbnails into the "图片链接" column.
+  // Embed procurement-sized SKU images into the "图片" column.
+  const imageIdByUrl = new Map<string, number>()
   for (let i = 0; i < rows.length; i++) {
     const rowNumber = i + 2 // 1-based row index; row 1 is header
     const excelRow = worksheet.getRow(rowNumber)
-    excelRow.height = 42
-    excelRow.alignment = { vertical: 'middle' }
+    excelRow.height = 132
+    excelRow.alignment = { vertical: 'middle', wrapText: true }
 
     const imageUrl = rows[i]?.imageUrl || ''
-    const img = await tryFetchImageBuffer(imageUrl)
-    if (!img) continue
-
-    const imageId = workbook.addImage({
-      buffer: img.buffer,
-      extension: img.extension,
-    })
+    let imageId = imageIdByUrl.get(imageUrl)
+    if (imageId == null) {
+      const img = await tryFetchImageBuffer(imageUrl)
+      if (!img) continue
+      imageId = workbook.addImage({
+        buffer: img.buffer,
+        extension: img.extension,
+      })
+      imageIdByUrl.set(imageUrl, imageId)
+    }
     worksheet.addImage(imageId, {
-      tl: { col: imageColIndex - 1 + 0.2, row: rowNumber - 1 + 0.15 },
-      ext: { width: 52, height: 52 },
+      tl: { col: imageColIndex - 1 + 0.08, row: rowNumber - 1 + 0.08 },
+      ext: { width: 168, height: 168 },
       editAs: 'oneCell',
     })
   }
@@ -848,7 +1040,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
 }
 
 /**
- * 导出订单明细 Excel（服务端生成；“图片链接”列优先内嵌缩略图）
+ * 导出订单明细 Excel（服务端生成；“图片”列优先内嵌 SKU 大图）
  */
 export const exportOrdersExcel = requireRole([UserRole.ADMIN])(
   withResult(async (input: ExportOrdersExcelInput): Promise<ExportOrdersExcelFileOutput> => {

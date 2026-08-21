@@ -52,10 +52,13 @@ export default async function CategoryBySlugPage({
   const loaded = await loadStorefrontProducts({
     slug,
     categoryTree: bootstrap.categories,
+    recommendZones: bootstrap.recommendZones,
     pageSize: 24,
     daily,
   })
-  const categoryId = loaded.categoryId || resolveCategoryIdFromTree(bootstrap.categories, slug)
+  const categoryId =
+    loaded.categoryId ||
+    resolveCategoryIdFromTree(bootstrap.categories, slug, bootstrap.recommendZones)
   let list = loaded.list
   if (list.length === 0 && (loaded.categoryId || categoryId)) {
     const preview = buildCategoryPreviewProducts(bootstrap.categories, bootstrap.recommendZones)

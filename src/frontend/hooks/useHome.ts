@@ -17,6 +17,7 @@ import {
 import type { ProductItem } from '@/frontend/actions/ProductCategory'
 import { buildLast6Months, formatMonthLabel } from '@/frontend/utils/dailyNewArrival'
 import {
+  HOME_RECOMMEND_ZONES_INVALIDATION_KEY,
   loadHomeRecommendZonesCached,
   peekCachedHomeRecommendZones,
   seedHomeRecommendZonesCache,
@@ -116,7 +117,12 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     if (typeof window === 'undefined') return
     const bump = () => setHomeLocaleTick((n) => n + 1)
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'app_preferred_locale') bump()
+      if (
+        event.key === 'app_preferred_locale' ||
+        event.key === HOME_RECOMMEND_ZONES_INVALIDATION_KEY
+      ) {
+        bump()
+      }
     }
     window.addEventListener('app-locale-changed', bump as EventListener)
     window.addEventListener('storage', onStorage)
@@ -160,7 +166,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     // Keep showing cached zones while refreshing — never flash empty on locale tick
     if (!cached?.length) setIsLoadingRecommendZones(true)
 
-    loadHomeRecommendZonesCached(lang)
+    loadHomeRecommendZonesCached(lang, { force: true })
       .then((zones) => {
         if (Array.isArray(zones) && zones.length > 0) setRecommendZones(zones)
       })

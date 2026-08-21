@@ -1383,6 +1383,9 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       OR: [
         { name: like },
         { shortDescription: like },
+        { productCode: like },
+        { slug: like },
+        { skus: { some: { skuCode: like } } },
       ],
     }
     dbWhere.AND = [
@@ -1397,6 +1400,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     id: true,
     slug: true,
     name: true,
+    productCode: true,
     mainImageUrl: true,
     shortDescription: true,
     translationsJson: true,
@@ -1577,6 +1581,8 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         p.name,
         displayName,
         p.shortDescription,
+        (p as { productCode?: string | null }).productCode,
+        (p as { slug?: string | null }).slug,
         p.brandCategory?.name,
         p.category?.name,
         p.category?.parent?.name,
@@ -1707,6 +1713,8 @@ export const getAvailableBrandFilters = withResult(
     const facetSelect = {
       id: true,
       name: true,
+      productCode: true,
+      slug: true,
       shortDescription: true,
       translationsJson: true,
       costPrice: true,
@@ -1794,6 +1802,8 @@ export const getAvailableBrandFilters = withResult(
           p.name,
           displayName,
           p.shortDescription,
+          (p as { productCode?: string | null }).productCode,
+          (p as { slug?: string | null }).slug,
           p.brandCategory?.name,
           p.category?.name,
           ...brandKeywords,

@@ -1438,6 +1438,38 @@ function pickPricingCategoryId(
   return ranked[0]?.category_id || null
 }
 
+/**
+ * After removing / rejecting Brand as primary: pick next usable category.
+ * Prefer non-brand L2, then non-brand L1. Never fall back onto Brand shelf.
+ */
+async function pickNextNonBrandPrimaryCategoryId(
+  tx: any,
+  candidateIds: string[],
+): Promise<string | null> {
+  const unique = Array.from(new Set(candidateIds.filter(Boolean)))
+  if (!unique.length) return null
+  const { categoryMap } = await getCategoryMetaMap(tx, unique)
+  const ranked = unique
+    .map(id => categoryMap.get(id))
+    .filter((meta): meta is CategoryMeta => Boolean(meta))
+    .filter(meta => !isBrandCategoryMeta(meta, categoryMap))
+    .filter(meta => !isAggregatePricingCategoryName(meta.name))
+    .filter(
+      meta =>
+        !isAttributeOrFilterCategory({
+          name: meta.name,
+          parentName: meta.parentId ? categoryMap.get(meta.parentId)?.name : null,
+        }),
+    )
+    .sort((a, b) => {
+      const levelA = Number(a.level) || 0
+      const levelB = Number(b.level) || 0
+      if (levelA !== levelB) return levelB - levelA
+      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN')
+    })
+  return ranked[0]?.id || null
+}
+
 async function getCategoryMetaMap(tx: any, categoryIds: string[]): Promise<{ categoryMap: Map<string, CategoryMeta>; resolveMainCategory: (categoryId: string | null) => CategoryMeta | null }> {
   const uniqueIds = Array.from(new Set(categoryIds.filter(Boolean)))
   const categoryMap = new Map<string, CategoryMeta>()
@@ -2735,10 +2767,21 @@ export const batchBindProductCategories = requireRole([UserRole.ADMIN])(
   })
 )
 
+async function expandCategoryIdsIncludingDescendants(categoryIds: string[]): Promise<string[]> {
+  const out = new Set<string>()
+  for (const id of Array.from(new Set(categoryIds.filter(Boolean)))) {
+    for (const cid of await resolveCategoryFilterIds(id)) out.add(cid)
+  }
+  return Array.from(out)
+}
+
 /**
- * 批量移除关联类目（仅删 product_category_relations）：
- * - 追加绑定的反向操作，不改写主分类 categoryId
- * - 若目标类目是商品主分类，则跳过该商品对该类目的移除
+ * 批量移除关联类目：
+ * - 勾选一级时同时移除其下全部二级（material → stainless steel 等）
+ * - 删除 product_category_relations
+ * - 若目标含 brandCategory，清空 brand 字段
+ * - 若目标含主类目 categoryId：改挂到剩余「非品牌」二级优先（再一级）；都没有则「未分类」
+ *   （不再保护主类目导致“移除失败/没变化”，也不再错误优先落到 Brand）
  */
 export const batchUnbindProductCategories = requireRole([UserRole.ADMIN])(
   withResult(async (input: BatchUnbindProductCategoriesInput): Promise<BatchOperateOutput> => {
@@ -2746,47 +2789,84 @@ export const batchUnbindProductCategories = requireRole([UserRole.ADMIN])(
     if (!input.linked_category_ids.length) throw new Error('请至少选择一个要移除的类目')
 
     const productIds = Array.from(new Set(input.product_ids.filter(Boolean)))
-    const linkedCategoryIds = Array.from(new Set(input.linked_category_ids.filter(Boolean)))
+    const linkedCategoryIds = await expandCategoryIdsIncludingDescendants(input.linked_category_ids)
 
     let success = 0
     let fail = 0
 
     for (const productId of productIds) {
       try {
-        await prisma.$transaction(async tx => {
+        const changed = await prisma.$transaction(async tx => {
           const product = await tx.product.findUnique({
             where: { id: productId },
             select: {
               id: true,
               categoryId: true,
-              brandCategoryId: true
-            }
+              brandCategoryId: true,
+              relationCategories: { select: { categoryId: true } },
+            },
           })
           if (!product) throw new Error('商品不存在')
 
-          // Primary categoryId is protected — never remove / reassign it here.
-          const removableCategoryIds = linkedCategoryIds.filter(id => id !== product.categoryId)
-          if (removableCategoryIds.length === 0) return
+          const removeSet = new Set(linkedCategoryIds)
+          const boundIds = new Set<string>()
+          if (product.categoryId) boundIds.add(product.categoryId)
+          if (product.brandCategoryId) boundIds.add(product.brandCategoryId)
+          for (const rel of product.relationCategories) {
+            if (rel.categoryId) boundIds.add(rel.categoryId)
+          }
+
+          const touching = linkedCategoryIds.some(id => boundIds.has(id))
+          if (!touching) return false
 
           await tx.product_category_relations.deleteMany({
             where: {
               productId,
-              categoryId: { in: removableCategoryIds }
-            }
+              categoryId: { in: linkedCategoryIds },
+            },
           })
 
-          if (product.brandCategoryId && removableCategoryIds.includes(product.brandCategoryId)) {
+          for (const id of linkedCategoryIds) boundIds.delete(id)
+
+          const data: {
+            categoryId?: string
+            brandCategoryId?: string | null
+            brandMatchKeyword?: string | null
+            autoBrandMatched?: boolean
+          } = {}
+
+          if (product.brandCategoryId && removeSet.has(product.brandCategoryId)) {
+            data.brandCategoryId = null
+            data.brandMatchKeyword = null
+            data.autoBrandMatched = false
+          }
+
+          if (product.categoryId && removeSet.has(product.categoryId)) {
+            const nextPrimary =
+              (await pickNextNonBrandPrimaryCategoryId(tx, Array.from(boundIds))) ||
+              (await ensureUncategorizedCategoryId(tx))
+            data.categoryId = nextPrimary
+            // Keep relation row for the new primary so list tags stay consistent
+            if (nextPrimary) {
+              await tx.product_category_relations.createMany({
+                data: [{ productId, categoryId: nextPrimary }],
+                skipDuplicates: true,
+              })
+            }
+          }
+
+          if (Object.keys(data).length > 0) {
             await tx.product.update({
               where: { id: productId },
-              data: {
-                brandCategoryId: null,
-                brandMatchKeyword: null,
-                autoBrandMatched: false
-              }
+              data,
             })
+            if (data.categoryId) {
+              await syncCartItemsValidState(tx, productId)
+            }
           }
+          return true
         })
-        success++
+        if (changed) success++
       } catch {
         fail++
       }
@@ -2898,15 +2978,17 @@ export const unbindProductCategory = requireRole([UserRole.ADMIN])(
       if (product.categoryId === categoryId) {
         const remaining = Array.from(boundIds)
         if (remaining.length > 0) {
-          const preferredBrand =
-            product.brandCategoryId &&
-            product.brandCategoryId !== categoryId &&
-            boundIds.has(product.brandCategoryId)
-              ? product.brandCategoryId
-              : null
-          data.categoryId = preferredBrand || remaining[0]
+          data.categoryId =
+            (await pickNextNonBrandPrimaryCategoryId(tx, remaining)) ||
+            (await ensureUncategorizedCategoryId(tx))
         } else {
           data.categoryId = await ensureUncategorizedCategoryId(tx)
+        }
+        if (data.categoryId) {
+          await tx.product_category_relations.createMany({
+            data: [{ productId, categoryId: data.categoryId }],
+            skipDuplicates: true,
+          })
         }
       }
 

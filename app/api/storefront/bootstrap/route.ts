@@ -5,11 +5,17 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 60
 
 export async function GET(request: Request) {
-  const lang = new URL(request.url).searchParams.get('lang') || 'en'
-  const data = await loadStorefrontBootstrap(lang)
+  const searchParams = new URL(request.url).searchParams
+  const lang = searchParams.get('lang') || 'en'
+  const force = searchParams.has('refresh')
+  const data = await loadStorefrontBootstrap(lang, {
+    force,
+  })
   return NextResponse.json(data, {
     headers: {
-      'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+      'Cache-Control': force
+        ? 'private, no-store, max-age=0'
+        : 'public, s-maxage=60, stale-while-revalidate=300',
     },
   })
 }

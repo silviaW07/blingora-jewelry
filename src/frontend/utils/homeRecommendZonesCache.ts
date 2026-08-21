@@ -19,6 +19,7 @@ let inflightLang = ''
 /** Short TTL — zones change infrequently; names refresh on next fetch. */
 const TTL_MS = 2 * 60 * 1000
 const STORAGE_KEY = 'sj.home-zones.v2'
+export const HOME_RECOMMEND_ZONES_INVALIDATION_KEY = 'sj.home-zones.invalidate'
 
 function readSession(lang: string): CacheEntry | null {
   if (typeof window === 'undefined') return null
@@ -55,6 +56,17 @@ export function seedHomeRecommendZonesCache(zones: HomeRecommendZoneSection[], l
   writeSession(entry)
 }
 
+export function broadcastHomeRecommendZonesChanged() {
+  if (typeof window === 'undefined') return
+  cache = null
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY)
+    window.localStorage.setItem(HOME_RECOMMEND_ZONES_INVALIDATION_KEY, String(Date.now()))
+  } catch {
+    // Storage may be unavailable in private mode.
+  }
+}
+
 export function peekCachedHomeRecommendZones(lang?: string): HomeRecommendZoneSection[] | null {
   const normalized = String(lang || '').trim()
   if (cache) {
@@ -76,17 +88,20 @@ export function peekCachedHomeRecommendZones(lang?: string): HomeRecommendZoneSe
  * Deduped home recommend-zone fetch (critical path for mobile + desktop home).
  * Keeps last good zones on failure so the stream does not flash empty.
  */
-export async function loadHomeRecommendZonesCached(lang: string): Promise<HomeRecommendZoneSection[]> {
+export async function loadHomeRecommendZonesCached(
+  lang: string,
+  options?: { force?: boolean },
+): Promise<HomeRecommendZoneSection[]> {
   const normalized = String(lang || 'en').trim() || 'en'
-  const fresh = peekCachedHomeRecommendZones(normalized)
+  const fresh = options?.force ? null : peekCachedHomeRecommendZones(normalized)
   if (fresh && fresh.length > 0) return fresh
 
-  if (inflight && inflightLang === normalized) {
+  if (!options?.force && inflight && inflightLang === normalized) {
     return inflight
   }
 
   inflightLang = normalized
-  inflight = fetchStorefrontBootstrap(normalized)
+  inflight = fetchStorefrontBootstrap(normalized, { force: options?.force })
     .then((boot) => {
       if (boot?.recommendZones?.length) return boot.recommendZones
       return getHomeRecommendZones({ lang: normalized }).then((res) =>

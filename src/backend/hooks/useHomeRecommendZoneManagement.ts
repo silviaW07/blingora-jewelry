@@ -28,6 +28,7 @@ import type {
 } from '@/backend/actions/HomeRecommendZoneManagement'
 import { toast } from 'sonner'
 import { upload_project_files } from '@/tools/tools'
+import { broadcastHomeRecommendZonesChanged } from '@/frontend/utils/homeRecommendZonesCache'
 
 export interface FormFields {
   title: string
@@ -275,6 +276,7 @@ export const useHomeRecommendZoneManagement = (): {
         const performCopy = async () => {
           try {
             await duplicateRecommendZone({ id })
+            broadcastHomeRecommendZonesChanged()
             toast.success('复制成功，已生成新专区')
             await fetchList()
           } catch (e: unknown) {
@@ -321,6 +323,7 @@ export const useHomeRecommendZoneManagement = (): {
       setDeleteLoading(true)
       try {
         await deleteRecommendZone(deletingId)
+        broadcastHomeRecommendZonesChanged()
         toast.success('删除成功')
         setDeleteOpen(false)
         fetchList()
@@ -334,6 +337,7 @@ export const useHomeRecommendZoneManagement = (): {
     onToggleStatus: async (id, currentStatus) => {
       try {
         await updateRecommendZoneStatus(id, !currentStatus)
+        broadcastHomeRecommendZonesChanged()
         toast.success('状态已更新')
         fetchList()
       } catch (e: unknown) {
@@ -343,6 +347,7 @@ export const useHomeRecommendZoneManagement = (): {
     onWeightBlur: async (id, weight) => {
       try {
         await batchUpdateZoneSortWeight({ updates: [{ id, sortWeight: weight }] })
+        broadcastHomeRecommendZonesChanged()
         toast.success('权重更新成功')
         fetchList()
       } catch (e: unknown) {
@@ -367,6 +372,7 @@ export const useHomeRecommendZoneManagement = (): {
 
         try {
           await batchUpdateZoneSortWeight({ updates })
+          broadcastHomeRecommendZonesChanged()
           toast.success('排序保存成功')
           fetchList()
         } catch (e: unknown) {
@@ -441,6 +447,7 @@ export const useHomeRecommendZoneManagement = (): {
           await createRecommendZone(payload)
           toast.success('新增成功')
         }
+        broadcastHomeRecommendZonesChanged()
         void fetchList()
         setDrawerOpen(false)
         setModalCollectionName('')
@@ -479,6 +486,7 @@ export const useHomeRecommendZoneManagement = (): {
           productIds: selectedDraftIds,
           zoneId: editingId,
         })
+        broadcastHomeRecommendZonesChanged()
         setDrawerItems((prev) => prev.filter((item) => !selectedDraftIds.includes(item.entityId)))
         setSelectedDraftIds([])
         toast.success(`已删除 ${res.deletedCount} 个草稿展示商品`)
@@ -534,6 +542,7 @@ export const useHomeRecommendZoneManagement = (): {
             sortWeight: item.sortWeight,
           })),
         })
+        broadcastHomeRecommendZonesChanged()
         toast.success('明细顺序已保存')
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : '明细排序保存失败')
@@ -690,6 +699,7 @@ export const useHomeRecommendZoneManagement = (): {
           zoneId: editingId,
           images: uploaded,
         })
+        broadcastHomeRecommendZonesChanged()
 
         setDrawerItems((prev) => {
           const existing = new Set(prev.map((item) => item.entityId))

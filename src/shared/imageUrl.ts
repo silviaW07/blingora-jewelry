@@ -111,6 +111,16 @@ export const optimizeCatalogImageUrl = (
       return url.toString()
     }
 
+    // 旧站/表格导入：hspi.oss-us-west-1 等 — 用 OSS 图片处理缩略，否则列表拉原图极慢
+    if (host.endsWith('.aliyuncs.com') || host === 'aliyuncs.com') {
+      const w = Math.min(2000, Math.max(80, Math.round(width)))
+      url.searchParams.set(
+        'x-oss-process',
+        `image/resize,m_lfit,w_${w}/quality,q_75`,
+      )
+      return url.toString()
+    }
+
     // autocoder / s3 生成图：无法在客户端转码，保持原链（应由业务侧上传压缩图）
     return text
   } catch {

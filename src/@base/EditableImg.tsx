@@ -166,7 +166,7 @@ const EditableImg = ({
         let cancelled = false;
         let settled = false;
         const img = new window.Image();
-        const proxied = toProxiedImageUrl(src, { width: 800 }) || src;
+        const proxied = toProxiedImageUrl(src, { width: 480 }) || src;
         const timer = window.setTimeout(() => {
             settled = true;
             img.onload = null;
@@ -178,7 +178,8 @@ const EditableImg = ({
             settled = true;
             window.clearTimeout(timer);
             setLoadAttempt(0);
-            setImageSrc(src);
+            // Keep the sized/proxied URL — switching back to raw OSS/alicdn originals makes list cards crawl.
+            setImageSrc(proxied);
         };
         img.onerror = () => {
             if (cancelled || settled) return;
@@ -318,7 +319,7 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: 800 }) || raw
+                const proxied = toProxiedImageUrl(raw, { width: 480 }) || raw
                 const useNativeImg =
                     shouldBypassImageOptimizer(proxied) ||
                     loadAttempt > 0 ||
