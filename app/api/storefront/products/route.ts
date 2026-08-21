@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { loadStorefrontBootstrap } from '@/frontend/lib/loadStorefrontBootstrap'
 import { loadStorefrontProducts } from '@/frontend/lib/loadStorefrontProducts'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,11 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1)
   const pageSize = Math.min(24, Math.max(1, Number(url.searchParams.get('page_size') || 24) || 24))
 
+  // Floating recommend tags (Normal quality / Below 13usd) are not in the nav tree;
+  // bootstrap.recommendZones lets slug → id resolve before RPC fallback.
+  const needsBootstrap = Boolean(slug && !categoryId && !daily && !search)
+  const bootstrap = needsBootstrap ? await loadStorefrontBootstrap(lang).catch(() => null) : null
+
   const data = await loadStorefrontProducts({
     lang,
     daily,
@@ -38,6 +44,8 @@ export async function GET(request: Request) {
     maxPrice,
     page,
     pageSize,
+    categoryTree: bootstrap?.categories,
+    recommendZones: bootstrap?.recommendZones,
   })
   return NextResponse.json(
     { list: data.list, total: data.total },

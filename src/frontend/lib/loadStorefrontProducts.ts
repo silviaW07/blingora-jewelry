@@ -75,9 +75,12 @@ export function resolveCategoryIdFromTree(
     }
   }
   // 推荐标签类目：多重归类用，不进导航树；从推荐区卡片解析 slug → id
+  // CATEGORY + SIDE_NAV 都可能挂类目；跳过纯商品卡
   for (const zone of recommendZones || []) {
     for (const item of zone.items || []) {
-      if (String(item.entityType || '').toUpperCase() !== 'CATEGORY') continue
+      const entity = String(item.entityType || '').toUpperCase()
+      if (entity === 'PRODUCT') continue
+      if (!item.categoryId && !item.categorySlug) continue
       if (String(item.categoryId || '') === normalized) return String(item.categoryId)
       if (String(item.categorySlug || '').trim().toLowerCase() === needle) {
         return String(item.categoryId || '')
