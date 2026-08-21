@@ -260,15 +260,15 @@ export default function MobileComingView({
                   ) : (
                     <span className="mobile-coming-product-card__media-empty" aria-hidden />
                   )}
-                </div>
-                <div className="mobile-coming-product-card__heart">
-                  <WishlistHeartButton
-                    productId={item.productId}
-                    productName={item.productName || zoneTitle}
-                    size={18}
-                    className="!rounded-full bg-white/95 p-1.5 shadow-sm"
-                    requireAuth
-                  />
+                  <div className="mobile-coming-product-card__heart">
+                    <WishlistHeartButton
+                      productId={item.productId}
+                      productName={item.productName || zoneTitle}
+                      size={18}
+                      className="coming-wishlist-heart"
+                      requireAuth
+                    />
+                  </div>
                 </div>
 
                 {item.productName ? (

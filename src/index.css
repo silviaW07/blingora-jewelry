@@ -1785,6 +1785,19 @@
   object-position: center center;
 }
 
+/* Coming wishlist chip: never stretch like a full-bleed media child */
+.home-product-card .home-product-card-media > .mobile-coming-product-card__heart {
+  inset: auto !important;
+  top: 0.45rem !important;
+  right: 0.45rem !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  z-index: 30 !important;
+}
+
 /* 顶部搜索框：大圆角胶囊 */
 [data-controller-name="搜索栏与用户功能区"] > div:first-child {
   border-radius: 24px !important;
@@ -2267,6 +2280,18 @@ html.is-narrow .home-product-card .home-product-card-media img {
   object-fit: cover !important;
 }
 
+html.is-narrow .home-product-card .home-product-card-media > .mobile-coming-product-card__heart {
+  inset: auto !important;
+  top: 0.45rem !important;
+  right: 0.45rem !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  z-index: 30 !important;
+}
+
 html.is-narrow .mobile-coming-product-card__media {
   position: relative !important;
   width: 100% !important;
@@ -2284,6 +2309,20 @@ html.is-narrow .mobile-coming-product-card__media img {
   height: 100% !important;
   max-width: none !important;
   object-fit: cover !important;
+}
+
+html.is-narrow .mobile-coming-product-card__media > .mobile-coming-product-card__heart,
+html.is-narrow .mobile-coming-product-card__heart {
+  position: absolute !important;
+  inset: auto !important;
+  top: 0.45rem !important;
+  right: 0.45rem !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 30 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
 }
 
 html.is-narrow [data-controller-name='商品结果内容区'],
@@ -3648,6 +3687,33 @@ html.is-narrow .home-service-cards {
   object-position: center center;
 }
 
+/* Heart must NOT inherit the full-bleed absolute media > * rule */
+.mobile-coming-product-card__media > .mobile-coming-product-card__heart,
+.mobile-coming-product-card__heart {
+  position: absolute !important;
+  inset: auto !important;
+  top: 0.45rem !important;
+  right: 0.45rem !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 30 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  display: block !important;
+  pointer-events: auto !important;
+}
+
+.mobile-coming-product-card__heart .coming-wishlist-heart {
+  width: 2rem !important;
+  height: 2rem !important;
+  border-radius: 9999px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 1px 4px rgba(17, 17, 17, 0.18) !important;
+  color: #111111 !important;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+}
+
 .mobile-coming-product-card__media-empty {
   display: block;
   width: 100%;
@@ -3655,14 +3721,6 @@ html.is-narrow .home-service-cards {
   background:
     radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.65), transparent 45%),
     linear-gradient(145deg, #efeae2, #e2dcd2);
-}
-
-.mobile-coming-product-card__heart {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.4rem;
-  z-index: 3;
-  pointer-events: auto;
 }
 
 @media (min-width: 480px) {
