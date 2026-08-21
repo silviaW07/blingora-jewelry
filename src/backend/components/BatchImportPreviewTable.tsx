@@ -43,7 +43,9 @@ export function BatchImportPreviewTable({ state, handlers }: Props) {
               const images = row.gallery_urls?.length
                 ? row.gallery_urls
                 : (row.main_image_url ? [row.main_image_url] : [])
-              const uploading = state.batchImportImageUploadingKey?.startsWith(`row-${index}`)
+              const uploading = (state.batchImportImageUploadingKeys || []).some(k =>
+                k === `row-${index}` || k.startsWith(`row-${index}-`),
+              )
               return (
                 <TableRow key={index}>
                   <TableCell>
@@ -107,11 +109,11 @@ export function BatchImportPreviewTable({ state, handlers }: Props) {
                         type="button"
                         className="flex h-14 w-14 flex-col items-center justify-center rounded border border-dashed border-slate-300 text-[10px] text-slate-500 hover:border-primary hover:text-primary"
                         title="上传多张图片"
-                        disabled={!!uploading}
+                        disabled={false}
                         onClick={() => fileInputRefs.current[`add-${index}`]?.click()}
                       >
                         <ImagePlus className="mb-0.5 h-4 w-4" />
-                        {uploading ? '上传中' : '上传'}
+                        {uploading ? '继续传' : '上传'}
                       </button>
                       <input
                         ref={el => { fileInputRefs.current[`add-${index}`] = el }}

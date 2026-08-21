@@ -598,6 +598,8 @@ export interface ProductManagementState {
   batchImportFileName: string
   batchImportParsing: boolean
   batchImportImageUploadingKey: string | null
+  /** Active batch-import image upload row keys (multiple rows can upload together). */
+  batchImportImageUploadingKeys: string[]
   /** Item ids currently uploading gallery images in background (may overlap). */
   pendingImportImageUploadingIds: string[]
   /** `${itemId}:${skuKey}` keys with in-flight color-image uploads. */
@@ -955,7 +957,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [batchImportSubmitting, setBatchImportSubmitting] = useState(false)
   const [batchImportFileName, setBatchImportFileName] = useState('')
   const [batchImportParsing, setBatchImportParsing] = useState(false)
-  const [batchImportImageUploadingKey, setBatchImportImageUploadingKey] = useState<string | null>(null)
+  /** Per-row batch-import image upload locks (multiple rows may upload in parallel). */
+  const [batchImportImageUploadingKeys, setBatchImportImageUploadingKeys] = useState<string[]>([])
+  /** @deprecated kept for UI that still reads singular key — first active row key or null */
+  const batchImportImageUploadingKey = batchImportImageUploadingKeys[0] || null
 
   const selectedProductIds = selectedIds.filter((id) => !isSkuSelectionId(id))
   const selectedSkuIds = selectedIds.filter(isSkuSelectionId).map(fromSkuSelectionId)
@@ -967,6 +972,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const pendingImportQueueRef = useRef<PendingImportQueueItem[]>([])
   const pendingImportGalleryPersistableRef = useRef<Map<string, string[]>>(new Map())
   const pendingImportGalleryPersistChainRef = useRef<Map<string, Promise<void>>>(new Map())
+  /** Shared low-concurrency upload pool so one product's many images don't starve others. */
+  const sharedImageUploadPoolRef = useRef<{
+    pending: Array<() => Promise<void>>
+    active: number
+    concurrency: number
+  }>({ pending: [], active: 0, concurrency: 2 })
   const [galleryUploadingIndex, setGalleryUploadingIndex] = useState<number | null>(null)
   const [featuredKeywords, setFeaturedKeywords] = useState<string[]>([])
   const [featuredKeywordInput, setFeaturedKeywordInput] = useState('')
@@ -1651,16 +1662,44 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     return url
   }
 
+  const pumpSharedImageUploadPool = () => {
+    const pool = sharedImageUploadPoolRef.current
+    while (pool.active < pool.concurrency && pool.pending.length) {
+      const job = pool.pending.shift()
+      if (!job) return
+      pool.active += 1
+      void job().finally(() => {
+        pool.active = Math.max(0, pool.active - 1)
+        pumpSharedImageUploadPool()
+      })
+    }
+  }
+
+  /** Enqueue a single-file upload onto the shared slow pool (does not block other products). */
+  const enqueueSharedImageUpload = <T,>(task: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      sharedImageUploadPoolRef.current.pending.push(async () => {
+        try {
+          resolve(await task())
+        } catch (error) {
+          reject(error)
+        }
+      })
+      pumpSharedImageUploadPool()
+    })
+
   const uploadImagesToProject = async (files: File[]) => {
     let lastToastAt = 0
     const result = await upload_project_files_detailed(files, {
-      concurrency: 4,
+      // Low concurrency + sequential for multi-select: keep admin UI usable while uploading.
+      concurrency: 2,
+      sequential: files.length > 1,
       onProgress: (done, total) => {
         if (total <= 1) return
         const now = Date.now()
-        if (done === total || now - lastToastAt > 800) {
+        if (done === total || now - lastToastAt > 1200) {
           lastToastAt = now
-          toast.message(`图片上传中 ${done}/${total}`)
+          toast.message(`图片上传中 ${done}/${total}（后台慢慢传，可继续给其它商品选图）`)
         }
       },
     })
@@ -3741,16 +3780,37 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const files = Array.from(event.target.files || [])
     event.target.value = ''
     if (files.length === 0) return
-    setBatchImportImageUploadingKey(`row-${index}`)
+    const rowKey = `row-${index}`
+    setBatchImportImageUploadingKeys(prev => (prev.includes(rowKey) ? prev : [...prev, rowKey]))
+    toast.message(`第 ${index + 1} 行已加入 ${files.length} 张，后台慢慢传，可继续给其它行选图`)
+    const uploaded: string[] = []
     try {
-      const uploaded = await uploadImagesToProject(files)
-      const current = batchImportRows[index]?.gallery_urls || []
-      syncBatchImportGallery(index, [...current, ...uploaded])
-      toast.success(`已上传 ${uploaded.length} 张图片`)
+      for (const file of files) {
+        try {
+          const url = await enqueueSharedImageUpload(() => uploadImageToProject(file))
+          uploaded.push(url)
+          setBatchImportRows(prev => {
+            const next = [...prev]
+            const row = next[index]
+            if (!row) return prev
+            const gallery = Array.from(new Set([...(row.gallery_urls || []), ...uploaded]))
+            next[index] = {
+              ...row,
+              gallery_urls: gallery,
+              main_image_url: gallery[0] || '',
+            }
+            return next
+          })
+        } catch (fileErr: any) {
+          toast.warning(`${file.name} 上传失败：${fileErr?.message || '网络异常'}`)
+        }
+      }
+      if (!uploaded.length) throw new Error('图片全部上传失败')
+      toast.success(`第 ${index + 1} 行已上传 ${uploaded.length}/${files.length} 张`)
     } catch (err: any) {
       toast.error(err.message || '图片上传失败')
     } finally {
-      setBatchImportImageUploadingKey(null)
+      setBatchImportImageUploadingKeys(prev => prev.filter(k => k !== rowKey))
     }
   }
 
@@ -3758,17 +3818,29 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    setBatchImportImageUploadingKey(`row-${rowIndex}-${imageIndex}`)
+    const rowKey = `row-${rowIndex}-${imageIndex}`
+    setBatchImportImageUploadingKeys(prev => (prev.includes(rowKey) ? prev : [...prev, rowKey]))
     try {
-      const fileUrl = await uploadImageToProject(file)
-      const current = [...(batchImportRows[rowIndex]?.gallery_urls || [])]
-      current[imageIndex] = fileUrl
-      syncBatchImportGallery(rowIndex, current)
+      const fileUrl = await enqueueSharedImageUpload(() => uploadImageToProject(file))
+      setBatchImportRows(prev => {
+        const next = [...prev]
+        const row = next[rowIndex]
+        if (!row) return prev
+        const current = [...(row.gallery_urls || [])]
+        current[imageIndex] = fileUrl
+        const unique = Array.from(new Set(current.map(url => url.trim()).filter(Boolean)))
+        next[rowIndex] = {
+          ...row,
+          gallery_urls: unique,
+          main_image_url: unique[0] || '',
+        }
+        return next
+      })
       toast.success('图片已替换')
     } catch (err: any) {
       toast.error(err.message || '图片替换失败')
     } finally {
-      setBatchImportImageUploadingKey(null)
+      setBatchImportImageUploadingKeys(prev => prev.filter(k => k !== rowKey))
     }
   }
 
@@ -3866,71 +3938,90 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const current = readPendingGalleryUrls(itemBeforeUpload)
     const previewUrls = files.map(file => URL.createObjectURL(file))
 
-    // Optimistic local thumbnails so operator can keep selecting more images.
+    // Optimistic local thumbnails so operator can keep selecting more images / other products.
     setPendingImportQueue(prev => prev.map(item =>
       item.item_id === itemId
         ? { ...item, item_galleryUrls: [...readPendingGalleryUrls(item), ...previewUrls] }
         : item,
     ))
     bumpPendingImportImageInflight(itemId, 1)
+    toast.message(`已加入 ${files.length} 张到上传队列，后台慢慢传；可继续给其它商品选图`)
 
-    try {
-      const uploaded = await uploadImagesToProject(files)
-      const itemNow =
-        pendingImportQueueRef.current.find(row => row.item_id === itemId) || itemBeforeUpload
-      let gallery = readPendingGalleryUrls(itemNow)
-      previewUrls.forEach((blob, index) => {
-        const real = uploaded[index]
-        const idx = gallery.indexOf(blob)
-        if (idx >= 0) {
-          if (real) gallery[idx] = real
-          else gallery.splice(idx, 1)
-        } else if (real) {
-          gallery.push(real)
-        }
-      })
-      gallery = gallery.filter(url => !previewUrls.includes(url))
-      const persistable = gallery.filter(url => !url.startsWith('blob:'))
-      if (persistable.length === 0) {
-        throw new Error(
-          uploaded.length === 0
-            ? '图片上传失败：服务器没有返回可用地址'
-            : '图片上传失败：没有成功写入的图片',
+    // Fire-and-forget: shared pool drains slowly across all products.
+    void (async () => {
+      const uploadedByPreview = new Map<string, string>()
+      let successCount = 0
+      try {
+        await Promise.all(
+          files.map((file, index) =>
+            enqueueSharedImageUpload(async () => {
+              const preview = previewUrls[index]
+              try {
+                const real = await uploadImageToProject(file)
+                uploadedByPreview.set(preview, real)
+                successCount += 1
+
+                setPendingImportQueue(prev => prev.map(item => {
+                  if (item.item_id !== itemId) return item
+                  const gallery = readPendingGalleryUrls(item).map(url =>
+                    url === preview ? real : url,
+                  )
+                  const persistable = gallery.filter(url => !url.startsWith('blob:'))
+                  const main = persistable[0] || item.item_mainImageUrl
+                  return {
+                    ...item,
+                    item_galleryUrls: gallery,
+                    item_mainImageUrl: main,
+                    item_parsedMainImageUrl: main,
+                  }
+                }))
+
+                const persistableNow = Array.from(
+                  new Set([
+                    ...current.filter(url => !url.startsWith('blob:')),
+                    ...Array.from(uploadedByPreview.values()),
+                  ]),
+                )
+                if (persistableNow.length) {
+                  await enqueuePersistPendingImportGallery(itemId, persistableNow, 'merge')
+                }
+              } catch (fileErr: any) {
+                setPendingImportQueue(prev => prev.map(item => {
+                  if (item.item_id !== itemId) return item
+                  return {
+                    ...item,
+                    item_galleryUrls: readPendingGalleryUrls(item).filter(url => url !== preview),
+                  }
+                }))
+                toast.warning(`${file.name} 上传失败：${fileErr?.message || '网络异常'}`)
+              }
+            }),
+          ),
         )
-      }
-      const main = persistable[0]
-      setPendingImportQueue(prev => prev.map(item =>
-        item.item_id === itemId
-          ? {
+
+        if (successCount > 0) {
+          toast.success(`已上传 ${successCount}/${files.length} 张图片`)
+        } else {
+          toast.error('图片上传失败：没有成功写入的图片')
+          setPendingImportQueue(prev => prev.map(item => {
+            if (item.item_id !== itemId) return item
+            const gallery = readPendingGalleryUrls(item).filter(url => !previewUrls.includes(url))
+            const main = gallery.find(url => !url.startsWith('blob:')) || gallery[0] || current[0] || null
+            return {
               ...item,
-              item_galleryUrls: persistable,
+              item_galleryUrls: gallery.length ? gallery : current,
               item_mainImageUrl: main,
               item_parsedMainImageUrl: main,
             }
-          : item,
-      ))
-      await enqueuePersistPendingImportGallery(itemId, persistable, 'merge')
-      toast.success(`已上传 ${persistable.length} 张图片`)
-    } catch (err: any) {
-      setPendingImportQueue(prev => prev.map(item => {
-        if (item.item_id !== itemId) return item
-        const gallery = readPendingGalleryUrls(item).filter(url => !previewUrls.includes(url))
-        const main = gallery.find(url => !url.startsWith('blob:')) || gallery[0] || current[0] || null
-        return {
-          ...item,
-          item_galleryUrls: gallery.length ? gallery : current,
-          item_mainImageUrl: main,
-          item_parsedMainImageUrl: main,
+          }))
         }
-      }))
-      toast.error(err.message || '图片上传失败')
-    } finally {
-      bumpPendingImportImageInflight(itemId, -1)
-      // Defer revoke so React can swap blob thumbnails to remote URLs first.
-      window.setTimeout(() => {
-        previewUrls.forEach(url => URL.revokeObjectURL(url))
-      }, 1500)
-    }
+      } finally {
+        bumpPendingImportImageInflight(itemId, -1)
+        window.setTimeout(() => {
+          previewUrls.forEach(url => URL.revokeObjectURL(url))
+        }, 1500)
+      }
+    })()
   }
 
   const replacePendingImportImage = async (itemId: string, imageIndex: number, event: ChangeEvent<HTMLInputElement>) => {
@@ -3939,7 +4030,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     if (!file) return
     bumpPendingImportImageInflight(itemId, 1)
     try {
-      const fileUrl = await uploadImageToProject(file)
+      const fileUrl = await enqueueSharedImageUpload(() => uploadImageToProject(file))
       const item =
         pendingImportQueueRef.current.find(row => row.item_id === itemId) ||
         pendingImportQueue.find(row => row.item_id === itemId)
@@ -3997,7 +4088,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const uploadKey = `${itemId}:${skuKey}`
     bumpPendingImportSkuImageInflight(uploadKey, 1)
     try {
-      const fileUrl = await uploadImageToProject(file)
+      const fileUrl = await enqueueSharedImageUpload(() => uploadImageToProject(file))
       await persistPendingImportSkuImage(itemId, skuKey, fileUrl)
       toast.success('颜色图已上传')
     } catch (err: any) {
@@ -4140,6 +4231,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       batchImportFileName,
       batchImportParsing,
       batchImportImageUploadingKey,
+      batchImportImageUploadingKeys,
       pendingImportImageUploadingIds,
       pendingImportSkuImageUploadingKeys,
       mainImageUploading,

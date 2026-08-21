@@ -271,6 +271,7 @@ function PendingImportTableRowsInner({
                 />
                 <div className="mt-1 text-[11px] text-slate-400">
                   主图轮播 · {(item.item_galleryUrls?.length || (item.item_mainImageUrl ? 1 : 0))} 张 · 可多选
+                  {state.pendingImportImageUploadingIds.includes(item.item_id) ? ' · 后台上传中' : ''}
                 </div>
               </div>
             </div>

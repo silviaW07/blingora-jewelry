@@ -418,6 +418,8 @@ export async function upload_image_files_detailed(
     projectId?: string
     concurrency?: number
     skipCompress?: boolean
+    /** Skip one giant multipart; upload each file separately (better for large multi-select). */
+    sequential?: boolean
     onProgress?: (done: number, total: number) => void
   },
 ): Promise<UploadImageBatchResult> {
@@ -425,12 +427,15 @@ export async function upload_image_files_detailed(
   if (!list.length) return { urls: [], failures: [] }
 
   const maxSize = 5 * 1024 * 1024
+  const concurrency = Math.max(1, options?.concurrency ?? 4)
+  const sequential = Boolean(options?.sequential) || list.length > 6
   let prepared = list
   if (!options?.skipCompress) {
     const { compressImageForUpload } = await import('./compress-image')
+    // Compress with the same low pool so other products can keep uploading.
     prepared = await mapPool(
       list,
-      Math.min(options?.concurrency ?? 4, 4),
+      Math.min(concurrency, sequential ? 2 : 4),
       async file => {
         try {
           return await compressImageForUpload(file)
@@ -451,18 +456,22 @@ export async function upload_image_files_detailed(
 
   options?.onProgress?.(0, list.length)
   const projectId = options?.projectId?.trim() || DEFAULT_PROJECT_ID
-  try {
-    const urls = await postBatchToUploadEndpoint(PRIMARY_UPLOAD_URL, prepared, projectId)
-    options?.onProgress?.(urls.length, list.length)
-    return { urls, failures: [] }
-  } catch (batchError) {
-    console.warn('[upload] batch request failed; retrying images individually', batchError)
+
+  // Large multi-select: avoid one huge multipart that stalls the whole admin UI/network.
+  if (!sequential) {
+    try {
+      const urls = await postBatchToUploadEndpoint(PRIMARY_UPLOAD_URL, prepared, projectId)
+      options?.onProgress?.(urls.length, list.length)
+      return { urls, failures: [] }
+    } catch (batchError) {
+      console.warn('[upload] batch request failed; retrying images individually', batchError)
+    }
   }
 
   let completed = 0
   const recovered = await mapPool(
     prepared,
-    options?.concurrency ?? 4,
+    sequential ? Math.min(concurrency, 2) : concurrency,
     async (file, index) => {
       let lastError: unknown = null
       for (let attempt = 0; attempt < 2; attempt += 1) {
