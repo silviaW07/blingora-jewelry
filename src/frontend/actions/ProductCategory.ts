@@ -1205,7 +1205,7 @@ function buildListCacheKey(input: GetProductListInput, lang: string): string {
     disc: input.has_discount ? 1 : 0,
     mr: input.min_rating ?? null,
     p: input.page || 1,
-    ps: input.page_size || 24,
+    ps: input.page_size || 60,
     lang,
   })
 }
@@ -1352,7 +1352,11 @@ function mapProductRecordToItem(
  */
 export const getProductList = withResult(async (input: GetProductListInput): Promise<GetProductListOutput> => {
   const page = input.page && input.page > 0 ? input.page : 1
-  const pageSize = input.page_size && input.page_size > 0 ? input.page_size : 24
+  // Cap at 60 so xl:grid-cols-5 pages fill evenly (12 rows)
+  const pageSize = Math.min(
+    60,
+    input.page_size && input.page_size > 0 ? input.page_size : 60,
+  )
   const lang = normalizeProductLang(input.lang)
 
   const cacheKey = buildListCacheKey(input, lang)
@@ -1375,22 +1379,24 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   }
 
   const searchTokens = tokenizeProductSearch(input.search_keyword)
-  const searchQuery = String(input.search_keyword || '').trim()
-  // Push search into SQL so Chrome mobile is not stuck on a 5000-row in-memory scan.
-  if (searchQuery) {
-    const like = { contains: searchQuery }
-    const searchClause = {
+  // Broad SQL prefilter (any token hits any field). Exact token-AND + EN titles
+  // in translationsJson are applied in-memory below — never require contiguous phrase.
+  if (searchTokens.length > 0) {
+    const tokenOr = (token: string) => ({
       OR: [
-        { name: like },
-        { shortDescription: like },
-        { productCode: like },
-        { slug: like },
-        { skus: { some: { skuCode: like } } },
+        { name: { contains: token } },
+        { shortDescription: { contains: token } },
+        { productCode: { contains: token } },
+        { slug: { contains: token } },
+        { skus: { some: { skuCode: { contains: token } } } },
+        { brandCategory: { name: { contains: token } } },
+        { category: { name: { contains: token } } },
+        { relationCategories: { some: { category: { name: { contains: token } } } } },
       ],
-    }
+    })
     dbWhere.AND = [
       ...(Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [dbWhere.AND] : []),
-      searchClause,
+      { OR: searchTokens.map(tokenOr) },
     ]
   }
 
@@ -1470,9 +1476,10 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     },
   }
 
-  // 快速路径：无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
-  // 直接用 SQL orderBy + skip/take 分页 + count()。搜索已写入 dbWhere，可走同一路径。
+  // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
+  // 直接用 SQL orderBy + skip/take。有搜索时必须走内存 token-AND（含 translationsJson）。
   const canPushdownPaginate =
+    searchTokens.length === 0 &&
     input.min_price === undefined &&
     input.max_price === undefined &&
     !input.has_discount &&

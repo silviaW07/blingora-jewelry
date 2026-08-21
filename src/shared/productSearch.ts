@@ -87,3 +87,31 @@ export function productMatchesSearchTokens(
   if (!corpus) return false
   return tokens.every((token) => corpus.includes(token))
 }
+
+/**
+ * Prisma where fragment for storefront search:
+ * each token must hit at least one field (AND of per-token ORs).
+ * Never requires the contiguous full phrase ("gucci bag" ≠ one LIKE).
+ */
+export function buildProductSearchWhereClause(
+  raw?: string | null,
+): Record<string, unknown> | null {
+  const tokens = tokenizeProductSearch(raw)
+  if (!tokens.length) return null
+
+  const tokenClause = (token: string) => ({
+    OR: [
+      { name: { contains: token } },
+      { shortDescription: { contains: token } },
+      { productCode: { contains: token } },
+      { slug: { contains: token } },
+      { skus: { some: { skuCode: { contains: token } } } },
+      { brandCategory: { name: { contains: token } } },
+      { category: { name: { contains: token } } },
+      { relationCategories: { some: { category: { name: { contains: token } } } } },
+    ],
+  })
+
+  if (tokens.length === 1) return tokenClause(tokens[0])
+  return { AND: tokens.map(tokenClause) }
+}

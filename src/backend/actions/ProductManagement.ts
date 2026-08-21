@@ -567,6 +567,14 @@ export interface BatchAppendTitleSuffixOutput {
   fail_count: number
 }
 
+export interface BatchRemoveTitleSuffixInput {
+  ids: string[]
+  /** Independent suffixes to strip from title end (same selection model as unbind categories) */
+  suffixes: string[]
+}
+
+export type BatchRemoveTitleSuffixOutput = BatchAppendTitleSuffixOutput
+
 export type CreatePendingImportTaskInput = CreateImportTaskInput
 export type CreatePendingImportTaskOutput = CreateImportTaskOutput
 export type StartPendingImportTaskInput = StartParseTaskInput
@@ -699,6 +707,7 @@ import {
 import {
   appendTitleSuffixIfMissing,
   normalizeTitleSuffix,
+  removeTitleSuffixesIfPresent,
   titleAlreadyHasSuffix,
 } from '@/shared/titleSuffix'
 import {
@@ -1852,7 +1861,8 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         })
     }
 
-    const { keyword, category_id, status, goods_status, status_filter, supplier_name, brand_keyword, page = 1, page_size = 20 } = input
+    const { keyword, category_id, status, goods_status, status_filter, supplier_name, brand_keyword, page = 1, page_size: rawPageSize = 30 } = input
+    const page_size = Math.min(100, Math.max(1, Math.floor(Number(rawPageSize) || 30)))
 
     const whereClause: any = {}
     const andConditions: any[] = []
@@ -3788,6 +3798,11 @@ function appendLiteralSuffixToCachedTitle(title: string, suffix: string): string
   return `${String(title || '').trimEnd()}${suffix}`
 }
 
+function removeLiteralSuffixesFromCachedTitle(title: string, suffixes: string[]): string {
+  const next = removeTitleSuffixesIfPresent(title, suffixes)
+  return next == null ? title : next
+}
+
 /**
  * 商品列表：批量在标题末尾加后缀（已有相同后缀则跳过）。
  * 仅改 name / translationsJson 标题，不改类目。
@@ -3899,6 +3914,133 @@ export const batchAppendPendingImportTitleSuffix = requireRole([UserRole.ADMIN])
                 : {}),
               ...(prevEs
                 ? { nameEs: appendLiteralSuffixToCachedTitle(prevEs, suffix) }
+                : {}),
+            } as any,
+          },
+        })
+        success += 1
+      } catch {
+        fail += 1
+      }
+    }
+
+    return { success_count: success, skip_count: skip, fail_count: fail }
+  }),
+)
+
+/**
+ * 商品列表：批量从标题末尾移除所选后缀（不含则跳过）。不改类目。
+ */
+export const batchRemoveProductTitleSuffix = requireRole([UserRole.ADMIN])(
+  withResult(async (input: BatchRemoveTitleSuffixInput): Promise<BatchRemoveTitleSuffixOutput> => {
+    const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
+    const suffixes = Array.from(
+      new Set((input.suffixes || []).map((item) => normalizeTitleSuffix(item)).filter(Boolean)),
+    )
+    if (ids.length === 0) throw new Error('请先勾选商品')
+    if (suffixes.length === 0) throw new Error('请至少选择一个要移除的后缀')
+
+    let success = 0
+    let skip = 0
+    let fail = 0
+
+    for (const productId of ids) {
+      try {
+        const product = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { id: true, name: true, translationsJson: true },
+        })
+        if (!product) {
+          fail += 1
+          continue
+        }
+
+        const nextName = removeTitleSuffixesIfPresent(product.name, suffixes)
+        if (!nextName) {
+          skip += 1
+          continue
+        }
+
+        const existingEn = getCachedEnglishTitle(null, product.translationsJson)
+        const existingEs = getCachedSpanishTitle(null, product.translationsJson)
+        const nextJson = mergeProductTitleTranslations(product.translationsJson, {
+          nameZh: nextName,
+          nameEn: existingEn ? removeLiteralSuffixesFromCachedTitle(existingEn, suffixes) : null,
+          nameEs: existingEs ? removeLiteralSuffixesFromCachedTitle(existingEs, suffixes) : null,
+        })
+
+        await prisma.product.update({
+          where: { id: productId },
+          data: {
+            name: nextName,
+            translationsJson: nextJson as any,
+          },
+        })
+        success += 1
+      } catch {
+        fail += 1
+      }
+    }
+
+    return { success_count: success, skip_count: skip, fail_count: fail }
+  }),
+)
+
+/**
+ * 待上传区：批量从 parsedName 末尾移除所选后缀（不含则跳过）。不改类目。
+ */
+export const batchRemovePendingImportTitleSuffix = requireRole([UserRole.ADMIN])(
+  withResult(async (input: BatchRemoveTitleSuffixInput): Promise<BatchRemoveTitleSuffixOutput> => {
+    const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
+    const suffixes = Array.from(
+      new Set((input.suffixes || []).map((item) => normalizeTitleSuffix(item)).filter(Boolean)),
+    )
+    if (ids.length === 0) throw new Error('请先勾选待上传商品')
+    if (suffixes.length === 0) throw new Error('请至少选择一个要移除的后缀')
+
+    let success = 0
+    let skip = 0
+    let fail = 0
+
+    for (const itemId of ids) {
+      try {
+        const item = await prisma.importtaskitem.findUnique({
+          where: { id: itemId },
+          select: {
+            id: true,
+            parsedName: true,
+            isPublished: true,
+            previewDataJson: true,
+          },
+        })
+        if (!item || item.isPublished) {
+          fail += 1
+          continue
+        }
+
+        const currentName = String(item.parsedName || '').trim()
+        const nextName = removeTitleSuffixesIfPresent(currentName, suffixes)
+        if (!nextName) {
+          skip += 1
+          continue
+        }
+
+        const preview = ((item.previewDataJson || {}) as Record<string, unknown>)
+        const prevEn = typeof preview.nameEn === 'string' ? preview.nameEn : ''
+        const prevEs = typeof preview.nameEs === 'string' ? preview.nameEs : ''
+
+        await prisma.importtaskitem.update({
+          where: { id: itemId },
+          data: {
+            parsedName: nextName,
+            previewDataJson: {
+              ...preview,
+              name: nextName,
+              ...(prevEn
+                ? { nameEn: removeLiteralSuffixesFromCachedTitle(prevEn, suffixes) }
+                : {}),
+              ...(prevEs
+                ? { nameEs: removeLiteralSuffixesFromCachedTitle(prevEs, suffixes) }
                 : {}),
             } as any,
           },

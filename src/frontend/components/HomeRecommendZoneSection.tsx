@@ -192,47 +192,72 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
     return fmt(p)
   })()
 
+  const media = (
+    <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
+      <EditableImg
+        propKey={`home-recommend-product-${item.productId}`}
+        src={item.imageUrl || undefined}
+        alt={item.productName}
+        keywords={item.imageUrl || undefined}
+        disableKeywordSearch
+        fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+        loading="lazy"
+        orientation="square"
+        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+        style={{ aspectRatio: '1 / 1' }}
+      />
+      {isDraft ? (
+        <div className="absolute right-2 top-2 z-[3]">
+          <WishlistHeartButton
+            productId={item.productId}
+            productName={item.productName}
+            onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
+            className="size-9 shrink-0 rounded-full bg-white/95 shadow-sm"
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+
+  const title = (
+    <h3
+      className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
+      style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
+      title={item.productName}
+    >
+      {item.productName}
+    </h3>
+  )
+
   return (
     <article
       className="home-product-card group flex h-full flex-col overflow-visible transition duration-200 hover:opacity-95"
       data-controller-name="首页推荐专区商品卡片"
-      onPointerEnter={() => prefetchProductDetail(item.productId)}
+      onPointerEnter={isDraft ? undefined : () => prefetchProductDetail(item.productId)}
     >
-      <a
-        {...hardNavProps(href)}
-        aria-label={item.productName}
-        className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-        onPointerDown={() => {
-          writeProductDetailPreview({
-            id: item.productId,
-            name: item.productName,
-            image: item.imageUrl || '',
-          })
-        }}
-        onClick={openProductEvents.onClick}
-      >
-        <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
-          <EditableImg
-            propKey={`home-recommend-product-${item.productId}`}
-            src={item.imageUrl || undefined}
-            alt={item.productName}
-            keywords={item.imageUrl || undefined}
-            disableKeywordSearch
-            fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-            loading="lazy"
-            orientation="square"
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-            style={{ aspectRatio: '1 / 1' }}
-          />
+      {isDraft ? (
+        <div className="block text-[#111111]">
+          {media}
+          {title}
         </div>
-        <h3
-          className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
-          style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
-          title={item.productName}
+      ) : (
+        <a
+          {...hardNavProps(href)}
+          aria-label={item.productName}
+          className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
+          onPointerDown={() => {
+            writeProductDetailPreview({
+              id: item.productId,
+              name: item.productName,
+              image: item.imageUrl || '',
+            })
+          }}
+          onClick={openProductEvents.onClick}
         >
-          {item.productName}
-        </h3>
-      </a>
+          {media}
+          {title}
+        </a>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2 pb-2 sm:px-2.5 sm:pb-2.5">
         {isDraft ? (
@@ -307,6 +332,46 @@ const renderMobileSquircleContent = (
     return wrapSquircleItems(
       productItems.length,
       productItems.map((item) => {
+        const isComingDraft = isComingSoon || item.status === 'DRAFT'
+        if (isComingDraft) {
+          return (
+            <div
+              key={item.itemId}
+              className="mobile-zone-squircle relative"
+              data-controller-name="移动端Coming推荐商品"
+            >
+              <span className="mobile-zone-squircle__media">
+                <EditableImg
+                  propKey={`home-recommend-product-m-${item.productId}`}
+                  src={item.imageUrl || undefined}
+                  alt={item.productName}
+                  keywords={item.imageUrl || undefined}
+                  disableKeywordSearch
+                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  loading="lazy"
+                  orientation="square"
+                  className="mobile-zone-squircle__img h-full w-full object-cover"
+                />
+                <span className="absolute right-1 top-1 z-[3]">
+                  <WishlistHeartButton
+                    productId={item.productId}
+                    productName={item.productName}
+                    size={16}
+                    className="!rounded-full bg-white/95 p-1.5 shadow-sm"
+                    onToggle={(favorited) =>
+                      handlers.handleAddRecommendProductToWishlist(item, favorited)
+                    }
+                  />
+                </span>
+              </span>
+              <span className="mobile-zone-squircle__label">
+                <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
+                  {item.productName}
+                </DecorateText>
+              </span>
+            </div>
+          )
+        }
         const href = productHref(item.productId)
         return (
           <a

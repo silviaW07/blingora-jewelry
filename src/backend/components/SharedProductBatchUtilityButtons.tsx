@@ -4,6 +4,7 @@ import React from 'react'
 import { Coins, DollarSign } from 'lucide-react'
 import { Button } from '@/backend/components/ui'
 import { BatchAppendTitleSuffixControl } from '@/backend/components/BatchAppendTitleSuffixControl'
+import { BatchRemoveTitleSuffixControl } from '@/backend/components/BatchRemoveTitleSuffixControl'
 
 export interface SharedProductBatchUtilityButtonsProps {
   /** Current tab selection count (products or pending) — never mix tabs */
@@ -13,6 +14,7 @@ export interface SharedProductBatchUtilityButtonsProps {
   onOpenWeightPrice: () => void
   onOpenMinOrderQty: () => void
   onConfirmTitleSuffix: (suffix: string) => Promise<void> | void
+  onConfirmRemoveTitleSuffix: (suffixes: string[]) => Promise<void> | void
 }
 
 /**
@@ -26,6 +28,7 @@ export function SharedProductBatchUtilityButtons({
   onOpenWeightPrice,
   onOpenMinOrderQty,
   onConfirmTitleSuffix,
+  onConfirmRemoveTitleSuffix,
 }: SharedProductBatchUtilityButtonsProps) {
   const noSelection = selectedCount <= 0 || disabled
 
@@ -56,6 +59,12 @@ export function SharedProductBatchUtilityButtons({
         loading={titleSuffixLoading}
         selectedCount={selectedCount}
         onConfirm={onConfirmTitleSuffix}
+      />
+      <BatchRemoveTitleSuffixControl
+        disabled={noSelection}
+        loading={titleSuffixLoading}
+        selectedCount={selectedCount}
+        onConfirm={onConfirmRemoveTitleSuffix}
       />
     </>
   )

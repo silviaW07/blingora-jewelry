@@ -1012,7 +1012,7 @@ export const useProductCategory = (
         year,
         month,
         page: queryState.page,
-        page_size: Math.min(24, queryState.pageSize || 24),
+        page_size: Math.min(60, queryState.pageSize || 60),
         lang,
       })
         .then((res) => {
@@ -1042,7 +1042,7 @@ export const useProductCategory = (
       search: queryState.searchKeyword || undefined,
       lang,
       page: queryState.page,
-      pageSize: Math.min(24, queryState.pageSize || 24),
+      pageSize: Math.min(60, queryState.pageSize || 60),
       minPrice: queryState.minPrice,
       maxPrice: queryState.maxPrice,
       sortBy: queryState.sortBy,

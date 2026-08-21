@@ -47,6 +47,8 @@ import {
   batchTranslateProductTitlesToSpanish,
   batchAppendProductTitleSuffix,
   batchAppendPendingImportTitleSuffix,
+  batchRemoveProductTitleSuffix,
+  batchRemovePendingImportTitleSuffix,
   updateProductStock,
   batchUpdateMinOrderQty,
   unbindProductCategory as unbindProductCategoryAction,
@@ -714,6 +716,7 @@ export interface ProductManagementHandlers {
   handleSelectAll: (checked: boolean) => void
   handleSelectRow: (id: string, checked: boolean) => void
   setCurrentPage: (page: number) => void
+  setPageSize: (size: number) => void
   handleOpenCreate: () => void
   handleOpenEdit: (id: string) => void
   setDrawerOpen: (open: boolean) => void
@@ -788,6 +791,7 @@ export interface ProductManagementHandlers {
   submitPendingImportTask: () => Promise<void>
   refreshPendingImportQueue: (options?: { silent?: boolean }) => Promise<void>
   setPendingImportPage: (page: number) => void
+  setPendingImportPageSize: (size: number) => void
   retryPendingImportActiveTask: () => Promise<void>
   handleSelectAllPendingImport: (checked: boolean) => void
   handleSelectPendingImportRow: (id: string, checked: boolean) => void
@@ -838,6 +842,8 @@ export interface ProductManagementHandlers {
   handleBatchTranslateTitlesToSpanish: () => Promise<void>
   handleBatchAppendTitleSuffix: (suffix: string) => Promise<void>
   handleBatchAppendPendingTitleSuffix: (suffix: string) => Promise<void>
+  handleBatchRemoveTitleSuffix: (suffixes: string[]) => Promise<void>
+  handleBatchRemovePendingTitleSuffix: (suffixes: string[]) => Promise<void>
   startProductStockEdit: (productId: string, stock: number) => void
   setProductStockEditingValue: (value: string) => void
   cancelProductStockEdit: () => void
@@ -920,7 +926,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState(30)
+  const PRODUCT_PAGE_SIZE_OPTIONS = [30, 50, 100] as const
+  const normalizeProductPageSize = (size: number) =>
+    (PRODUCT_PAGE_SIZE_OPTIONS as readonly number[]).includes(size) ? size : 30
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerMode, setDrawerMode] = useState<DrawerMode>('create')
   const [drawerLoading, setDrawerLoading] = useState(false)
@@ -1037,7 +1046,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportQueueTotal, setPendingImportQueueTotal] = useState(0)
   const [pendingImportQueueError, setPendingImportQueueError] = useState<string | null>(null)
   const [pendingImportPage, setPendingImportPage] = useState(1)
-  const pendingImportPageSize = 30
+  const [pendingImportPageSize, setPendingImportPageSize] = useState(30)
+  const PENDING_PAGE_SIZE_OPTIONS = [30, 50, 100] as const
+  const normalizePendingPageSize = (size: number) =>
+    (PENDING_PAGE_SIZE_OPTIONS as readonly number[]).includes(size) ? size : 30
   const [publishedImportMatch, setPublishedImportMatch] = useState<ProductListItem | null>(null)
   const [pendingImportSelectedIds, setPendingImportSelectedIds] = useState<string[]>([])
   const [pendingImportNowMs, setPendingImportNowMs] = useState(() => Date.now())
@@ -1265,7 +1277,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     } finally {
       setLoading(false)
     }
-  }, [params.name, params.categoryId, filterKeyword, filterManagementStatus, filterGoodsStatus, filterSupplierName, filterBrandKeyword, currentPage])
+  }, [params.name, params.categoryId, filterKeyword, filterManagementStatus, filterGoodsStatus, filterSupplierName, filterBrandKeyword, currentPage, pageSize])
 
   const applyPendingImportQueueResult = useCallback((result: ProductManagementPendingImportQueueOutput) => {
     setPendingImportActiveTask(result.activeTask || null)
@@ -1323,9 +1335,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   pendingImportQueueErrorRef.current = pendingImportQueueError
   pendingImportQueueRef.current = pendingImportQueue
 
-  const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number }) => {
+  const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number; page_size?: number }) => {
     const silent = options?.silent ?? false
     const page = Math.max(1, options?.page ?? pendingImportPageRef.current)
+    const pageSizeForFetch = Math.min(
+      100,
+      Math.max(1, Number(options?.page_size) || pendingImportPageSize),
+    )
     const fetchGen = ++pendingImportFetchGenRef.current
     if (silent) {
       setPendingImportRefreshing(true)
@@ -1336,7 +1352,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const result = await getPendingImportQueue(
         {
           page,
-          page_size: pendingImportPageSize,
+          page_size: pageSizeForFetch,
           // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
           skip_maintenance: true,
         } as any,
@@ -1392,6 +1408,20 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     pendingImportPageRef.current = next
     setPendingImportPage(next)
     void refreshPendingImportQueue({ silent: true, page: next })
+  }
+
+  const handleSetPageSize = (size: number) => {
+    const next = normalizeProductPageSize(size)
+    setPageSize(next)
+    setCurrentPage(1)
+  }
+
+  const handleSetPendingImportPageSize = (size: number) => {
+    const next = normalizePendingPageSize(size)
+    setPendingImportPageSize(next)
+    pendingImportPageRef.current = 1
+    setPendingImportPage(1)
+    void refreshPendingImportQueue({ silent: true, page: 1, page_size: next })
   }
 
   useEffect(() => {
@@ -3142,6 +3172,58 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const handleBatchRemoveTitleSuffix = async (suffixes: string[]) => {
+    if (titleSuffixRunning) return
+    const ids = selectedProductIds
+    if (ids.length === 0) {
+      toast.error('请先勾选商品')
+      return
+    }
+    if (!suffixes?.length) {
+      toast.error('请至少选择一个要移除的后缀')
+      return
+    }
+    setTitleSuffixRunning(true)
+    try {
+      const result = await batchRemoveProductTitleSuffix({ ids, suffixes })
+      toast.success(
+        `批量移除后缀完成：更新 ${result.success_count}，跳过 ${result.skip_count}，失败 ${result.fail_count}`,
+      )
+      await fetchList()
+    } catch (err: any) {
+      toast.error(err?.message || '批量移除后缀失败')
+      throw err
+    } finally {
+      setTitleSuffixRunning(false)
+    }
+  }
+
+  const handleBatchRemovePendingTitleSuffix = async (suffixes: string[]) => {
+    if (titleSuffixRunning) return
+    const ids = pendingImportSelectedIds
+    if (ids.length === 0) {
+      toast.error('请先勾选待上传商品')
+      return
+    }
+    if (!suffixes?.length) {
+      toast.error('请至少选择一个要移除的后缀')
+      return
+    }
+    setTitleSuffixRunning(true)
+    try {
+      const result = await batchRemovePendingImportTitleSuffix({ ids, suffixes })
+      toast.success(
+        `批量移除后缀完成：更新 ${result.success_count}，跳过 ${result.skip_count}，失败 ${result.fail_count}`,
+      )
+      await refreshPendingImportQueue({ silent: true })
+    } catch (err: any) {
+      toast.error(err?.message || '批量移除后缀失败')
+      throw err
+    } finally {
+      setTitleSuffixRunning(false)
+    }
+  }
+
   const startProductStockEdit = (productId: string, stock: number) => {
     setProductStockEditingId(productId)
     setProductStockEditingValue(String(stock ?? 0))
@@ -4319,6 +4401,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       handleSelectAll,
       handleSelectRow,
       setCurrentPage,
+      setPageSize: handleSetPageSize,
       handleOpenCreate,
       handleOpenEdit,
       setDrawerOpen,
@@ -4395,6 +4478,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       submitPendingImportTask,
       refreshPendingImportQueue,
       setPendingImportPage: handleSetPendingImportPage,
+      setPendingImportPageSize: handleSetPendingImportPageSize,
       retryPendingImportActiveTask,
       handleSelectAllPendingImport,
       handleSelectPendingImportRow,
@@ -4445,6 +4529,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       handleBatchTranslateTitlesToSpanish,
       handleBatchAppendTitleSuffix,
       handleBatchAppendPendingTitleSuffix,
+      handleBatchRemoveTitleSuffix,
+      handleBatchRemovePendingTitleSuffix,
       startProductStockEdit,
       setProductStockEditingValue,
       cancelProductStockEdit,

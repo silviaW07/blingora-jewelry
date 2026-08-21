@@ -84,6 +84,10 @@ export const batchAppendProductTitleSuffix = (...args: Parameters<Actions["batch
   rpcCall<Awaited<ReturnType<Actions["batchAppendProductTitleSuffix"]>>>("src.backend.actions.ProductManagement.batchAppendProductTitleSuffix", ...args);
 export const batchAppendPendingImportTitleSuffix = (...args: Parameters<Actions["batchAppendPendingImportTitleSuffix"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchAppendPendingImportTitleSuffix"]>>>("src.backend.actions.ProductManagement.batchAppendPendingImportTitleSuffix", ...args);
+export const batchRemoveProductTitleSuffix = (...args: Parameters<Actions["batchRemoveProductTitleSuffix"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchRemoveProductTitleSuffix"]>>>("src.backend.actions.ProductManagement.batchRemoveProductTitleSuffix", ...args);
+export const batchRemovePendingImportTitleSuffix = (...args: Parameters<Actions["batchRemovePendingImportTitleSuffix"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchRemovePendingImportTitleSuffix"]>>>("src.backend.actions.ProductManagement.batchRemovePendingImportTitleSuffix", ...args);
 export const updateProductStock = (...args: Parameters<Actions["updateProductStock"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateProductStock"]>>>("src.backend.actions.ProductManagement.updateProductStock", ...args);
 export const reclassifyPublishedProductsBySecondaryMatch = (...args: Parameters<Actions["reclassifyPublishedProductsBySecondaryMatch"]>) => 

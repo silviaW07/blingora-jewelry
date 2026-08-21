@@ -307,6 +307,7 @@ export const ProductManagementView = ({
         onOpenWeightPrice={() => handlers.openConfirmDialog('WEIGHT_PRICE', selectedProductIds)}
         onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.selectedIds)}
         onConfirmTitleSuffix={handlers.handleBatchAppendTitleSuffix}
+        onConfirmRemoveTitleSuffix={handlers.handleBatchRemoveTitleSuffix}
       />
       <Button variant="outline" size="sm" className="h-9 border-slate-200 shrink-0" disabled={!hasProductSelected} onClick={() => handlers.openConfirmDialog('DELETE', selectedProductIds)} data-api-unique-id='productmanagementview-r05e8a0586f9bdefb-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
         <Trash2 className="w-4 h-4 mr-2 shrink-0" data-api-unique-id='productmanagementview-r03ccea60e0274f2e-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量删除
@@ -407,6 +408,7 @@ export const ProductManagementView = ({
         onOpenWeightPrice={() => handlers.openConfirmDialog('WEIGHT_PRICE', state.pendingImportSelectedIds)}
         onOpenMinOrderQty={() => handlers.openConfirmDialog('MIN_ORDER_QTY', state.pendingImportSelectedIds)}
         onConfirmTitleSuffix={handlers.handleBatchAppendPendingTitleSuffix}
+        onConfirmRemoveTitleSuffix={handlers.handleBatchRemovePendingTitleSuffix}
       />
       <Button
         variant="outline"
@@ -601,6 +603,23 @@ export const ProductManagementView = ({
               <div className="flex items-center justify-between mt-6 px-2" data-api-unique-id='productmanagementview-r90e32b8cc04d23f2-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                 <div className="text-sm text-slate-500" data-api-unique-id='productmanagementview-r2863deb6f2f2e772-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>显示第 <span className="font-bold text-slate-700" data-api-unique-id='productmanagementview-re150b9a0b49b2f66-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.total === 0 ? 0 : (state.currentPage - 1) * state.pageSize + 1}</span> 到 <span className="font-bold text-slate-700" data-api-unique-id='productmanagementview-r34b5db4c2f20b681-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'> {Math.min(state.currentPage * state.pageSize, state.total)}</span> 条，共 <span className="font-bold text-slate-700" data-api-unique-id='productmanagementview-r4549ff34125fe7f1-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>{state.total}</span> 条商品记录</div>
                 <div className="flex items-center gap-2 flex-wrap justify-end" data-api-unique-id='productmanagementview-r39264338d35ea619-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                  <div className="flex items-center gap-2 mr-1">
+                    <span className="text-xs text-slate-500">每页</span>
+                    <Select
+                      value={String(state.pageSize)}
+                      onValueChange={(val) => handlers.setPageSize(Number(val))}
+                      disabled={state.loading}
+                    >
+                      <SelectTrigger className="h-9 w-[110px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30条/页</SelectItem>
+                        <SelectItem value="50">50条/页</SelectItem>
+                        <SelectItem value="100">100条/页</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <span className="text-xs text-slate-500 mr-1 tabular-nums">
                     第 {state.currentPage} / {Math.max(1, Math.ceil((state.total || 0) / Math.max(1, state.pageSize || 1)))} 页
                   </span>
@@ -772,9 +791,26 @@ export const ProductManagementView = ({
                   {state.pendingImportQueueTotal > 0 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t bg-white" data-api-unique-id='productmanagementview-rpending-pager-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
                       <div className="text-sm text-slate-500" data-api-unique-id='productmanagementview-rpending-pager-text-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-                        显示第 <span className="font-bold text-slate-700">{state.pendingImportQueueTotal === 0 ? 0 : (state.pendingImportPage - 1) * state.pendingImportPageSize + 1}</span> 到 <span className="font-bold text-slate-700">{Math.min(state.pendingImportPage * state.pendingImportPageSize, state.pendingImportQueueTotal)}</span> 条，共 <span className="font-bold text-slate-700">{state.pendingImportQueueTotal}</span> 条待上传条目（每页 {state.pendingImportPageSize} 条）
+                        显示第 <span className="font-bold text-slate-700">{state.pendingImportQueueTotal === 0 ? 0 : (state.pendingImportPage - 1) * state.pendingImportPageSize + 1}</span> 到 <span className="font-bold text-slate-700">{Math.min(state.pendingImportPage * state.pendingImportPageSize, state.pendingImportQueueTotal)}</span> 条，共 <span className="font-bold text-slate-700">{state.pendingImportQueueTotal}</span> 条待上传条目
                       </div>
                       <div className="flex items-center gap-2 flex-wrap justify-end" data-api-unique-id='productmanagementview-rpending-pager-btns-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+                        <div className="flex items-center gap-2 mr-1">
+                          <span className="text-xs text-slate-500">每页</span>
+                          <Select
+                            value={String(state.pendingImportPageSize)}
+                            onValueChange={(val) => handlers.setPendingImportPageSize(Number(val))}
+                            disabled={state.pendingImportQueueLoading}
+                          >
+                            <SelectTrigger className="h-9 w-[110px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="30">30条/页</SelectItem>
+                              <SelectItem value="50">50条/页</SelectItem>
+                              <SelectItem value="100">100条/页</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <span className="text-xs text-slate-500 mr-1 tabular-nums">
                           第 {state.pendingImportPage} / {state.pendingImportTotalPages} 页
                         </span>

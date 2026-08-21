@@ -3614,7 +3614,25 @@ html.is-narrow .home-service-cards {
   border: 0;
   background: #f0ebe3;
   overflow: hidden;
-  cursor: pointer;
+  cursor: default;
+}
+
+.mobile-coming-product-card__title {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.6rem 0.7rem;
+  border: 0;
+  background: transparent;
+  color: #333333;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
 }
 
 .mobile-coming-product-card__media > *,
@@ -3645,24 +3663,6 @@ html.is-narrow .home-service-cards {
   right: 0.4rem;
   z-index: 3;
   pointer-events: auto;
-}
-
-.mobile-coming-product-card__title {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 0.55rem 0.6rem 0.7rem;
-  border: 0;
-  background: transparent;
-  color: #333333;
-  font-size: 0.8125rem;
-  font-weight: 550;
-  line-height: 1.35;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
 }
 
 @media (min-width: 480px) {

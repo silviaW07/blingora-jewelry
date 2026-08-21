@@ -45,8 +45,12 @@ export function withAlicdnSize(url: string, width = 1200, quality = 90): string 
   return base
 }
 
-/** Aliyun OSS process: full ~200–800KB → w_400 ~20–40KB */
-export function withOssProcess(url: string, width = 640, quality = 80): string {
+/**
+ * Aliyun OSS process: full ~200–800KB → list thumbs stay small.
+ * Default w_640–720 + q_85 + light sharpen reads sharper on 2x screens
+ * without pulling full originals.
+ */
+export function withOssProcess(url: string, width = 720, quality = 85): string {
   const raw = String(url || '').trim()
   if (!raw) return raw
   try {
@@ -57,9 +61,10 @@ export function withOssProcess(url: string, width = 640, quality = 80): string {
     }
     const q = Math.min(95, Math.max(40, Math.round(quality)))
     const w = Math.min(2000, Math.max(80, Math.round(width)))
+    // Mild sharpen after resize — helps soft list thumbs on retina without big bytes.
     u.searchParams.set(
       'x-oss-process',
-      `image/resize,m_lfit,w_${w}/quality,q_${q}`,
+      `image/resize,m_lfit,w_${w}/quality,q_${q}/sharpen,80`,
     )
     return u.toString()
   } catch {
@@ -150,7 +155,7 @@ export function toProxiedImageUrl(
 
     // Old-shop / table-import images live on OSS US-West — must resize or list pages pull full JPEGs.
     if (isAliyunOssHost(host)) {
-      return withOssProcess(u.toString(), width, Math.min(quality, 80))
+      return withOssProcess(u.toString(), width, Math.min(quality, 85))
     }
 
     if (ALICDN_HOSTS.has(host) || host.endsWith('.alicdn.com')) {

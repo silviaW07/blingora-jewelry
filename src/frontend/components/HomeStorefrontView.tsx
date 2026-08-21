@@ -194,35 +194,67 @@ const DesktopRecommendZoneProductCard = ({
       data-controller-name="首页推荐专区商品卡片"
       key={item.itemId}
     >
-      <button
-        type="button"
-        className="block w-full overflow-hidden rounded-[24px] bg-[#f7f4ee] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
-        onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-      >
-        <EditableImg
-          propKey={`home-recommend-product-${item.productId}`}
-          src={item.imageUrl || undefined}
-          alt={item.productName}
-          keywords={item.imageUrl || undefined}
-          disableKeywordSearch
-          fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-          loading="lazy"
-          className="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-        />
-      </button>
-
-      <div className="mt-5 space-y-4">
+      {isDraft ? (
+        <div className="relative block w-full overflow-hidden rounded-[24px] bg-[#f7f4ee]">
+          <EditableImg
+            propKey={`home-recommend-product-${item.productId}`}
+            src={item.imageUrl || undefined}
+            alt={item.productName}
+            keywords={item.imageUrl || undefined}
+            disableKeywordSearch
+            fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+            loading="lazy"
+            className="aspect-[4/5] w-full object-cover"
+          />
+          <div className="absolute right-3 top-3 z-[3]">
+            <WishlistHeartButton
+              productId={item.productId}
+              productName={item.productName}
+              className="size-10 rounded-full bg-white/95 shadow-sm"
+              size={20}
+              onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
+            />
+          </div>
+        </div>
+      ) : (
         <button
           type="button"
-          className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
+          className="block w-full overflow-hidden rounded-[24px] bg-[#f7f4ee] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
           onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-          data-api-bind-info={`productItems-${index}-productName`}
-          data-api-map-var-name="item"
         >
-          <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-            {item.productName}
-          </DecorateText>
+          <EditableImg
+            propKey={`home-recommend-product-${item.productId}`}
+            src={item.imageUrl || undefined}
+            alt={item.productName}
+            keywords={item.imageUrl || undefined}
+            disableKeywordSearch
+            fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+            loading="lazy"
+            className="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+          />
         </button>
+      )}
+
+      <div className="mt-5 space-y-4">
+        {isDraft ? (
+          <p className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111]">
+            <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
+              {item.productName}
+            </DecorateText>
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
+            onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
+            data-api-bind-info={`productItems-${index}-productName`}
+            data-api-map-var-name="item"
+          >
+            <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
+              {item.productName}
+            </DecorateText>
+          </button>
+        )}
 
         {!isDraft ? (
           <div className="flex items-center gap-3 text-sm text-[#7a756c]">
@@ -277,15 +309,7 @@ const DesktopRecommendZoneProductCard = ({
             </div>
           )}
 
-          {isDraft ? (
-            <WishlistHeartButton
-              productId={item.productId}
-              productName={item.productName}
-              className="size-10 rounded-full"
-              size={20}
-              onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
-            />
-          ) : (
+          {isDraft ? null : (
             <Button
               type="button"
               className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"

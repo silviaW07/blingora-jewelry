@@ -25,7 +25,8 @@ export async function GET(request: Request) {
       ? Number(maxPriceRaw)
       : undefined
   const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1)
-  const pageSize = Math.min(24, Math.max(1, Number(url.searchParams.get('page_size') || 24) || 24))
+  // 5 columns × 12 rows = 60 fills the xl grid without a dangling last slot
+  const pageSize = Math.min(60, Math.max(1, Number(url.searchParams.get('page_size') || 60) || 60))
 
   // Floating recommend tags (Normal quality / Below 13usd) are not in the nav tree;
   // bootstrap.recommendZones lets slug → id resolve before RPC fallback.

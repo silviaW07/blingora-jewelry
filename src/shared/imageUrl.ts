@@ -116,7 +116,7 @@ export const optimizeCatalogImageUrl = (
       const w = Math.min(2000, Math.max(80, Math.round(width)))
       url.searchParams.set(
         'x-oss-process',
-        `image/resize,m_lfit,w_${w}/quality,q_75`,
+        `image/resize,m_lfit,w_${w}/quality,q_85/sharpen,80`,
       )
       return url.toString()
     }

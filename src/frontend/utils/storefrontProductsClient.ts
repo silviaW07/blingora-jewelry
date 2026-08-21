@@ -27,7 +27,7 @@ export async function fetchCategoryShelfProducts(input: {
     params.set('max_price', String(input.maxPrice))
   }
   params.set('page', String(Math.max(1, input.page || 1)))
-  params.set('page_size', String(Math.min(48, Math.max(1, input.pageSize || 24))))
+  params.set('page_size', String(Math.min(60, Math.max(1, input.pageSize || 60))))
   params.set('lang', String(input.lang || 'en'))
   params.set('sort_by', String(input.sortBy || 'NEWEST'))
 

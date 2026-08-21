@@ -167,7 +167,8 @@ export async function loadStorefrontProducts(input: {
   const slug = String(input.slug || '').trim()
   const daily = Boolean(input.daily)
   const page = Math.max(1, Number(input.page || 1) || 1)
-  const pageSize = Math.min(24, Math.max(1, Number(input.pageSize || 24) || 24))
+  // 5 columns × 12 rows = 60 fills the xl grid without a dangling last slot
+  const pageSize = Math.min(60, Math.max(1, Number(input.pageSize || 60) || 60))
   let categoryId = String(input.categoryId || '').trim()
 
   try {

@@ -53,7 +53,7 @@ export default async function CategoryBySlugPage({
     slug,
     categoryTree: bootstrap.categories,
     recommendZones: bootstrap.recommendZones,
-    pageSize: 24,
+    pageSize: 60,
     daily,
   })
   const categoryId =
