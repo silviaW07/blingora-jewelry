@@ -57,7 +57,8 @@ const formatListPrice = (price?: number | null, priceMax?: number | null) => {
 }
 
 /** Prefer SKU/color images; fall back to main image only when no variants exist. Cap to limit request fan-out. */
-const MAX_VARIANT_THUMBS = 6
+/** Cap swatch requests — each card was firing 6 extra img-proxy hits and starving main images. */
+const MAX_VARIANT_THUMBS = 4
 
 const resolveThumbnails = (item: ProductListCardItem) => {
   const fromVariants = (item.variant_thumbnails || []).filter((url) => Boolean(url?.trim()))
@@ -166,7 +167,8 @@ export const ProductListCard = ({
             src={previewImage || item.main_image_url}
             alt={item.product_name}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-            imageWidth={720}
+            imageWidth={480}
+            quality={80}
             priority={priority}
           />
         </div>
@@ -242,8 +244,9 @@ export const ProductListCard = ({
                     width={24}
                     height={24}
                     className="pointer-events-none h-full w-full"
-                    sizes="48px"
-                    imageWidth={240}
+                    sizes="24px"
+                    imageWidth={96}
+                    quality={75}
                   />
                 </button>
               )

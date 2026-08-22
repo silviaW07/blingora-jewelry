@@ -1264,7 +1264,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       onAddToCart={handlers.handleAddToCart}
                       onAddToWishlist={handlers.handleAddToWishlist}
                       controllerName={isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'}
-                      priority={index < 4}
+                      priority={index < 10}
                     />
                   ))}
                 </div>

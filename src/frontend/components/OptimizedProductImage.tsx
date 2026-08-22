@@ -16,6 +16,8 @@ type Props = {
   sizes?: string
   priority?: boolean
   imageWidth?: number
+  /** JPG quality for alicdn/OSS resize (default 90). Use 75–80 for list thumbs. */
+  quality?: number
 }
 
 /**
@@ -31,8 +33,9 @@ export function OptimizedProductImage({
   height,
   priority = false,
   imageWidth = 1200,
+  quality = 90,
 }: Props) {
-  const primary = toProxiedImageUrl(src, { width: imageWidth })
+  const primary = toProxiedImageUrl(src, { width: imageWidth, quality })
   const raw = String(src || '').trim()
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
@@ -40,10 +43,14 @@ export function OptimizedProductImage({
   useEffect(() => {
     setAttempt(0)
     setFailed(false)
-  }, [src, imageWidth])
+  }, [src, imageWidth, quality])
 
   const displaySrc =
-    attempt === 0 ? primary : attempt === 1 ? toProxiedImageUrl(src, { width: 0 }) || raw : raw
+    attempt === 0
+      ? primary
+      : attempt === 1
+        ? toProxiedImageUrl(src, { width: 0, quality }) || raw
+        : raw
 
   if ((!primary && !raw) || failed || !displaySrc) {
     return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
@@ -74,7 +81,7 @@ export function OptimizedProductImage({
         height={fill ? undefined : height || imageWidth}
         className={imgClass}
         loading={priority ? 'eager' : 'lazy'}
-        decoding="async"
+        decoding={priority ? 'sync' : 'async'}
         draggable={false}
         fetchPriority={priority ? 'high' : 'low'}
         referrerPolicy="no-referrer"

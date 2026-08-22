@@ -490,7 +490,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       controllerName={
                         isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'
                       }
-                      priority={index < 4}
+                      priority={index < 6}
                     />
                   ))}
                 </div>
