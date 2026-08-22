@@ -5286,6 +5286,7 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
 
   // 纯 ASCII 品牌词（Chanel/Gucci/LV…）：要求左右非字母数字邻居。
   // 标题常见「Chanel【钛钢】」「Chanel钛钢」「chanel 欧美」——品牌后直接接中文/符号仍算命中；
+  // 「2026 Gucci / 2026loewe」去空格后变 2026GUCCI——年份数字紧挨品牌也要算命中；
   // 但要避免短词误伤（LV⊂SALVATION）以及长词嵌在英文单词内部。
   const isAsciiToken = /^[A-Z0-9]+$/.test(normalizedToken)
   if (isAsciiToken) {
@@ -5296,7 +5297,11 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
       const before = idx === 0 ? '' : normalizedText[idx - 1]
       const afterIdx = idx + normalizedToken.length
       const after = afterIdx >= normalizedText.length ? '' : normalizedText[afterIdx]
-      const beforeOk = !before || !/[A-Z0-9]/.test(before)
+      const beforeOk =
+        !before ||
+        !/[A-Z0-9]/.test(before) ||
+        // 年份前缀：2026GUCCI / 2026LOEWE
+        /[0-9]/.test(before)
       const afterOk = !after || !/[A-Z0-9]/.test(after)
       if (beforeOk && afterOk) return true
       from = idx + 1

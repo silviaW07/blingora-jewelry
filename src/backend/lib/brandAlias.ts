@@ -18,6 +18,8 @@ export const DEFAULT_BRAND_ALIASES: BrandAliasRule[] = [
   { alias: '蔻驰', standard: 'Coach' },
   { alias: '寇驰', standard: 'Coach' },
   { alias: '古驰', standard: 'Gucci' },
+  { alias: '罗威', standard: 'Loewe' },
+  { alias: '罗威家', standard: 'Loewe' },
   { alias: 'LV', standard: 'Louis Vuitton' },
   { alias: '香奈儿', standard: 'Chanel' },
   { alias: '小香', standard: 'Chanel' },
