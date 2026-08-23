@@ -2013,7 +2013,15 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         stockStrategyStock: pendingImportTaskForm.stockStrategyStock ? Number(pendingImportTaskForm.stockStrategyStock) : undefined
       })
       await startPendingImportTaskForProductManagement({ taskId: created.taskId })
-      toast.success(`已创建 ${urls.length} 条 1688 采集任务，系统将异步抓取并回填待上传区`)
+      const createdCount = Number(created.createdCount ?? urls.length)
+      const skippedDuplicateCount = Number(created.skippedDuplicateCount ?? 0)
+      if (skippedDuplicateCount > 0) {
+        toast.success(
+          `已创建 ${createdCount} 条新链接采集任务；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
+        )
+      } else {
+        toast.success(`已创建 ${createdCount} 条 1688 采集任务，系统将异步抓取并回填待上传区`)
+      }
       setPendingImportDialogOpen(false)
       setPendingImportTaskForm(defaultPendingImportTaskForm())
       setActiveTab('pending_imports')

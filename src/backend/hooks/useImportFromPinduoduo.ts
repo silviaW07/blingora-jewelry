@@ -96,7 +96,15 @@ export function useImportFromPinduoduo(options: Options = {}) {
       setIsParsingTask(true)
       try {
         await startParseTask({ taskId: created.taskId })
-        toast.success('拼多多解析完成，请到待上传区核对')
+        const createdCount = Number(created.createdCount ?? 0)
+        const skippedDuplicateCount = Number(created.skippedDuplicateCount ?? 0)
+        if (skippedDuplicateCount > 0) {
+          toast.success(
+            `拼多多已解析 ${createdCount} 条；跳过 ${skippedDuplicateCount} 条重复链接，请到待上传区核对`,
+          )
+        } else {
+          toast.success('拼多多解析完成，请到待上传区核对')
+        }
         setCreateForm(defaultForm)
         options.onTaskCreated?.(created.taskId)
       } catch (error: any) {

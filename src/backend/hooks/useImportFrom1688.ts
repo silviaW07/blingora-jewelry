@@ -1088,7 +1088,15 @@ export const useImportFrom1688 = (
       setCreateFormCategoryWarning(null)
       setCreateForm(prev => ({ ...prev, urls: '' }))
       setPendingParseTaskId(res.taskId)
-      toast.success('链接已提交。请先在本机运行采集器，完成后再点「开始解析」')
+      const createdCount = Number(res.createdCount ?? 0)
+      const skippedDuplicateCount = Number(res.skippedDuplicateCount ?? 0)
+      if (skippedDuplicateCount > 0) {
+        toast.success(
+          `已提交 ${createdCount} 条新链接；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
+        )
+      } else {
+        toast.success('链接已提交。请先在本机运行采集器，完成后再点「开始解析」')
+      }
 
       if (embedded) {
         // Keep modal open so the operator can run the collector then click 开始解析.

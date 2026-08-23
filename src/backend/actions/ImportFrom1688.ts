@@ -313,6 +313,10 @@ export interface CreateImportTaskInput {
 
 export interface CreateImportTaskOutput {
   taskId: string
+  /** 实际新建并待解析的链接数 */
+  createdCount: number
+  /** 因历史已导入（同 offer/goods）而跳过的链接数 */
+  skippedDuplicateCount: number
 }
 
 export interface CreatePinduoduoImportTaskInput {
@@ -1029,6 +1033,94 @@ const formatSpecText = (attributes: Array<{ name: string; value: string }>, fall
 const extract1688OfferId = (sourceUrl?: string | null) => {
   const matched = String(sourceUrl || '').match(/offer\/(\d+)/i)
   return matched?.[1] || null
+}
+
+/** 归一化导入去重键：1688 按 offerId，拼多多按 goods_id（忽略 query/spm 差异） */
+const resolveImportLinkDedupeKey = (sourceUrl?: string | null): string | null => {
+  const offerId = extract1688OfferId(sourceUrl)
+  if (offerId) return `1688:${offerId}`
+  const goodsId = extractPinduoduoGoodsId(String(sourceUrl || ''))
+  if (goodsId) return `pdd:${goodsId}`
+  return null
+}
+
+/**
+ * 查库中已出现过的导入链接键（待上传 / 已发布均算重复）。
+ * contains 查询后再用精确 offer/goods 校验，避免 offer/123 误伤 offer/1234。
+ */
+const findExistingImportLinkKeys = async (
+  keys: string[],
+  options?: { excludeItemIds?: string[] },
+): Promise<Set<string>> => {
+  const uniqueKeys = Array.from(new Set(keys.filter(Boolean)))
+  const existing = new Set<string>()
+  if (!uniqueKeys.length) return existing
+
+  const offerIds = uniqueKeys.filter((key) => key.startsWith('1688:')).map((key) => key.slice(5))
+  const goodsIds = uniqueKeys.filter((key) => key.startsWith('pdd:')).map((key) => key.slice(4))
+  const orClauses: Array<{ sourceUrl: { contains: string } }> = [
+    ...offerIds.map((id) => ({ sourceUrl: { contains: `offer/${id}` } })),
+    ...goodsIds.map((id) => ({ sourceUrl: { contains: `goods_id=${id}` } })),
+  ]
+  if (!orClauses.length) return existing
+
+  const excludeItemIds = (options?.excludeItemIds || []).filter(Boolean)
+  const CHUNK = 40
+  for (let i = 0; i < orClauses.length; i += CHUNK) {
+    const chunk = orClauses.slice(i, i + CHUNK)
+    const rows = await prisma.importtaskitem.findMany({
+      where: {
+        OR: chunk,
+        ...(excludeItemIds.length ? { id: { notIn: excludeItemIds } } : {}),
+      },
+      select: { sourceUrl: true },
+    })
+    for (const row of rows) {
+      const key = resolveImportLinkDedupeKey(row.sourceUrl)
+      if (key && uniqueKeys.includes(key)) existing.add(key)
+    }
+  }
+  return existing
+}
+
+/** 本次粘贴内按 offer/goods 去重，并剔除库中已有的重复链接 */
+const filterFreshImportUrls = async (validUrls: string[]) => {
+  const freshUrls: string[] = []
+  const seenKeys = new Set<string>()
+  let skippedInBatch = 0
+  const candidateKeys: string[] = []
+
+  for (const url of validUrls) {
+    const key = resolveImportLinkDedupeKey(url)
+    if (!key) {
+      freshUrls.push(url)
+      continue
+    }
+    if (seenKeys.has(key)) {
+      skippedInBatch += 1
+      continue
+    }
+    seenKeys.add(key)
+    candidateKeys.push(key)
+    freshUrls.push(url)
+  }
+
+  const existingKeys = await findExistingImportLinkKeys(candidateKeys)
+  const acceptedUrls: string[] = []
+  let skippedExisting = 0
+  for (const url of freshUrls) {
+    const key = resolveImportLinkDedupeKey(url)
+    if (key && existingKeys.has(key)) {
+      skippedExisting += 1
+      continue
+    }
+    acceptedUrls.push(url)
+  }
+
+  return {
+    acceptedUrls,
+    skippedDuplicateCount: skippedInBatch + skippedExisting,
+  }
 }
 
 const decodeJsonLikeString = (value: unknown) =>
@@ -6807,6 +6899,16 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
       )
     }
 
+    // 历史已导入（同 offer/goods）或本次粘贴内重复：直接跳过，不建条目、不进入解析
+    const { acceptedUrls, skippedDuplicateCount } = await filterFreshImportUrls(validUrls)
+    if (acceptedUrls.length === 0) {
+      throw new Error(
+        skippedDuplicateCount > 0
+          ? `全部 ${skippedDuplicateCount} 条链接此前已导入或本次重复，已跳过，无需再次识别/解析`
+          : '没有可导入的新链接',
+      )
+    }
+
     let stockStrategyJson: any = null
     if (typeof input.stockStrategyStock === 'number') {
       stockStrategyJson = { type: 'fixed', stock: input.stockStrategyStock }
@@ -6820,7 +6922,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
           creatorId: userId,
           taskName,
           status: 'PENDING',
-          sourceLinkCount: validUrls.length,
+          sourceLinkCount: acceptedUrls.length,
           successCount: 0,
           failureCount: 0,
           progressPercent: 0,
@@ -6840,7 +6942,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
 
       // 1688：每条独立 URL → 一条独立 pending 父商品（不走表格产品编号合并）
       await tx.importtaskitem.createMany({
-        data: validUrls.map(url => ({
+        data: acceptedUrls.map(url => ({
           importTaskId: newTask.id,
           operatorId: userId,
           sourceUrl: url,
@@ -6856,7 +6958,11 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
       return newTask
     })
 
-    return { taskId: task.id }
+    return {
+      taskId: task.id,
+      createdCount: acceptedUrls.length,
+      skippedDuplicateCount,
+    }
   })
 )
 
@@ -6878,6 +6984,15 @@ export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
     const validUrls = httpUrls.filter(u => isPinduoduoProductUrl(u))
     if (validUrls.length === 0) {
       throw new Error('请粘贴有效的拼多多商品详情页链接（需包含 goods_id，如 https://mobile.yangkeduo.com/goods.html?goods_id=xxxx）')
+    }
+
+    const { acceptedUrls, skippedDuplicateCount } = await filterFreshImportUrls(validUrls)
+    if (acceptedUrls.length === 0) {
+      throw new Error(
+        skippedDuplicateCount > 0
+          ? `全部 ${skippedDuplicateCount} 条链接此前已导入或本次重复，已跳过，无需再次识别/解析`
+          : '没有可导入的新链接',
+      )
     }
 
     const markupRate =
@@ -6902,7 +7017,7 @@ export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
           creatorId: userId,
           taskName,
           status: 'PENDING',
-          sourceLinkCount: validUrls.length,
+          sourceLinkCount: acceptedUrls.length,
           successCount: 0,
           failureCount: 0,
           progressPercent: 0,
@@ -6922,7 +7037,7 @@ export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
       })
 
       await tx.importtaskitem.createMany({
-        data: validUrls.map(url => ({
+        data: acceptedUrls.map(url => ({
           importTaskId: newTask.id,
           operatorId: userId,
           sourceUrl: url,
@@ -6938,7 +7053,11 @@ export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
       return newTask
     })
 
-    return { taskId: task.id }
+    return {
+      taskId: task.id,
+      createdCount: acceptedUrls.length,
+      skippedDuplicateCount,
+    }
   })
 )
 
@@ -6993,6 +7112,16 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       `[startParseTask] task=${taskSnapshot.id} items=${taskSnapshot.items.length} cookieConfigured=${Boolean(cookieSnapshot)} cookieLen=${cookieSnapshot.length} hasMtopTk=${/_m_h5_tk=/.test(cookieSnapshot)} cwd=${process.cwd()}`,
     )
 
+    // 解析前再拦一层：任务内重复，或库中其它条目已采集/已发布的同 offer/goods，直接跳过抓取
+    const taskItemIds = taskSnapshot.items.map((row: { id: string }) => row.id)
+    const taskLinkKeys = taskSnapshot.items
+      .map((row: { sourceUrl?: string | null }) => resolveImportLinkDedupeKey(row.sourceUrl))
+      .filter((key: string | null): key is string => Boolean(key))
+    const existingLinkKeysElsewhere = await findExistingImportLinkKeys(taskLinkKeys, {
+      excludeItemIds: taskItemIds,
+    })
+    const seenDedupeKeysInTask = new Set<string>()
+
     for (let index = 0; index < taskSnapshot.items.length; index += 1) {
       if (isParseJobCancelled()) {
         console.warn(`[startParseTask] cancelled by user at index=${index} task=${taskSnapshot.id}`)
@@ -7019,6 +7148,25 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       }
 
       const item = taskSnapshot.items[index]
+      const sourceUrl = String(item.sourceUrl || '')
+      const dedupeKey = resolveImportLinkDedupeKey(sourceUrl)
+      if (dedupeKey) {
+        if (seenDedupeKeysInTask.has(dedupeKey) || existingLinkKeysElsewhere.has(dedupeKey)) {
+          await prisma.importtaskitem.update({
+            where: { id: item.id },
+            data: {
+              fetchStatus: 'FAILED' as any,
+              failureReason: '重复链接，已跳过识别/解析',
+              fetchFinishedAt: new Date(),
+            },
+          })
+          failureCount += 1
+          bumpParseJobProgress(index + 1, taskSnapshot.items.length)
+          continue
+        }
+        seenDedupeKeysInTask.add(dedupeKey)
+      }
+
       const fetchStartedAt = new Date()
 
       await prisma.importtaskitem.update({
@@ -7032,7 +7180,6 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       })
 
       try {
-        const sourceUrl = item.sourceUrl || ''
         const isPddUrl = isPinduoduoProductUrl(sourceUrl)
         const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
 
