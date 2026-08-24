@@ -1090,7 +1090,12 @@ export const useImportFrom1688 = (
       setPendingParseTaskId(res.taskId)
       const createdCount = Number(res.createdCount ?? 0)
       const skippedDuplicateCount = Number(res.skippedDuplicateCount ?? 0)
-      if (skippedDuplicateCount > 0) {
+      const categoryUrlCount = Number(res.categoryUrlCount ?? 0)
+      if (categoryUrlCount > 0) {
+        toast.success(
+          `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个店铺分类页）。请运行本机采集器展开分类并抓详情，再点「开始解析」`,
+        )
+      } else if (skippedDuplicateCount > 0) {
         toast.success(
           `已提交 ${createdCount} 条新链接；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
         )

@@ -253,8 +253,9 @@ export default function MobileComingView({
                       src={item.imageUrl}
                       alt={item.productName || zoneTitle}
                       sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-                      imageWidth={640}
-                      priority={index < 6}
+                      imageWidth={360}
+                      quality={72}
+                      priority={index < 4}
                       className="object-cover"
                     />
                   ) : (
@@ -266,7 +267,6 @@ export default function MobileComingView({
                       productName={item.productName || zoneTitle}
                       size={18}
                       className="coming-wishlist-heart"
-                      requireAuth
                     />
                   </div>
                 </div>

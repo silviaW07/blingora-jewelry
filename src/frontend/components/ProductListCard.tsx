@@ -167,8 +167,8 @@ export const ProductListCard = ({
             src={previewImage || item.main_image_url}
             alt={item.product_name}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-            imageWidth={480}
-            quality={80}
+            imageWidth={360}
+            quality={72}
             priority={priority}
           />
         </div>
@@ -240,13 +240,12 @@ export const ProductListCard = ({
                   <OptimizedProductImage
                     src={url}
                     alt=""
-                    fill={false}
-                    width={24}
-                    height={24}
-                    className="pointer-events-none h-full w-full"
-                    sizes="24px"
-                    imageWidth={96}
+                    fill
+                    className="pointer-events-none"
+                    sizes="48px"
+                    imageWidth={160}
                     quality={75}
+                    priority={priority && index < 2}
                   />
                 </button>
               )

@@ -155,7 +155,7 @@ export function translateColorName(t: TFunction, raw?: string | null): string {
     const record = dict as Record<string, unknown>
     const direct = record[value]
     const directTranslated = typeof direct === 'string' ? direct.trim() : ''
-    if (directTranslated) return directTranslated
+    if (directTranslated && !containsChinese(directTranslated)) return directTranslated
 
     // Force match with normalization: handle whitespace/fullwidth plus variants.
     const target = normalizeColorKey(value)
@@ -164,7 +164,7 @@ export function translateColorName(t: TFunction, raw?: string | null): string {
         if (!k) continue
         if (normalizeColorKey(k) !== target) continue
         const translated = typeof v === 'string' ? v.trim() : ''
-        if (translated) return translated
+        if (translated && !containsChinese(translated)) return translated
       }
     }
   }
@@ -174,16 +174,19 @@ export function translateColorName(t: TFunction, raw?: string | null): string {
   if (aliased && aliased !== value) return aliased
 
   // 3) Compound values (e.g. 豆沙色+礼盒 / 卡其色白+飞机盒): translate each known
-  //    CN token via the shared keyword dictionary + locale overrides, keep the
-  //    separators, and leave any unknown fragment as-is (never blank).
-  return translateColorStyleText(value, t)
+  //    CN token via the shared keyword dictionary + locale overrides.
+  // 4) Strip any leftover CJK so EN/ES storefront never shows Chinese in color labels.
+  const translated = translateColorStyleText(value, t)
+  if (!containsChinese(translated)) return translated
+  const stripped = stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim()
+  return stripped || translated
 }
 
 /**
  * Translate an arbitrary product attribute VALUE (size / spec / model label).
  * Shares the same compound CN→locale keyword logic as color values, so web and
  * mobile H5 render identical translations. Numeric sizes (35 / 均码 → One Size)
- * pass through the dictionary; unknown fragments stay untouched.
+ * pass through the dictionary; leftover CJK is stripped for EN/ES.
  */
 export function translateAttributeValue(t: TFunction, raw?: string | null): string {
   const value = String(raw || '').trim()
@@ -197,5 +200,7 @@ export function translateAttributeValue(t: TFunction, raw?: string | null): stri
     .replace(/(^|[,/+\s])配(?=\s|[A-Za-z\u4e00-\u9fff])/g, '$1With ')
     .replace(/^配\s*/, 'With ')
     .replace(/\s*\+\s*/g, ' + ')
-  return translated.replace(/\s+/g, ' ').trim()
+  translated = translated.replace(/\s+/g, ' ').trim()
+  if (!containsChinese(translated)) return translated
+  return stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim() || translated
 }

@@ -2012,10 +2012,18 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         costDeductionUsd: pendingImportTaskForm.costDeductionUsd ? Number(pendingImportTaskForm.costDeductionUsd) : undefined,
         stockStrategyStock: pendingImportTaskForm.stockStrategyStock ? Number(pendingImportTaskForm.stockStrategyStock) : undefined
       })
-      await startPendingImportTaskForProductManagement({ taskId: created.taskId })
       const createdCount = Number(created.createdCount ?? urls.length)
       const skippedDuplicateCount = Number(created.skippedDuplicateCount ?? 0)
-      if (skippedDuplicateCount > 0) {
+      const categoryUrlCount = Number(created.categoryUrlCount ?? 0)
+      // 分类页必须先本机展开，不能立刻解析（否则会标失败并把任务打成 FAILED）
+      if (categoryUrlCount === 0) {
+        await startPendingImportTaskForProductManagement({ taskId: created.taskId })
+      }
+      if (categoryUrlCount > 0) {
+        toast.success(
+          `已创建任务（含 ${categoryUrlCount} 个分类页）。请运行本机采集器展开并抓详情，完成后到导入工作台点「开始解析」`,
+        )
+      } else if (skippedDuplicateCount > 0) {
         toast.success(
           `已创建 ${createdCount} 条新链接采集任务；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
         )

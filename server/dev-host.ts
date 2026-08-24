@@ -1499,6 +1499,127 @@ app.post('/ingest/1688-html', express.json({ limit: '12mb' }), (req, res) => {
   res.status(200).json({ ok: true, offerId, bytes: html.length, inboxSize: offerHtmlInbox.size })
 })
 
+/**
+ * 本机采集器展开店铺分类页：用抽到的 offer 详情链接替换分类条目。
+ * body: { itemId, offerUrls: string[] }
+ */
+app.post('/ingest/1688-expand-category', express.json({ limit: '2mb' }), async (req, res) => {
+  if (!requireIngestToken(req, res)) return
+  try {
+    const prisma = (globalThis as any).__runtimePrisma
+    const itemId = String(req.body?.itemId || '').trim()
+    const rawOfferUrls = Array.isArray(req.body?.offerUrls) ? req.body.offerUrls : []
+    const offerUrls = Array.from(
+      new Set(
+        rawOfferUrls
+          .map((u: unknown) => String(u || '').trim())
+          .filter((u: string) => /1688\.com/i.test(u) && /\/offer\/\d+/i.test(u)),
+      ),
+    )
+
+    if (!itemId) {
+      res.status(400).json({ ok: false, error: '缺少 itemId' })
+      return
+    }
+    if (!offerUrls.length) {
+      res.status(400).json({ ok: false, error: '分类页未解析到任何商品 offer 链接' })
+      return
+    }
+
+    const categoryItem = await prisma.importtaskitem.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        importTaskId: true,
+        operatorId: true,
+        sourceUrl: true,
+        targetCategoryId: true,
+        goodsStatus: true,
+        importTask: { select: { id: true, defaultCategoryId: true, defaultStatus: true } },
+      },
+    })
+    if (!categoryItem) {
+      res.status(404).json({ ok: false, error: '分类条目不存在' })
+      return
+    }
+
+    // 去重：去掉库中已有的同 offer（分批 OR，避免超大分类页一次打爆查询）
+    const offerIds = offerUrls
+      .map((url: string) => url.match(/offer\/(\d+)/i)?.[1])
+      .filter(Boolean) as string[]
+    const existingIds = new Set<string>()
+    const BATCH = 80
+    for (let i = 0; i < offerIds.length; i += BATCH) {
+      const chunk = offerIds.slice(i, i + BATCH)
+      const existingRows = await prisma.importtaskitem.findMany({
+        where: {
+          OR: chunk.map((id: string) => ({ sourceUrl: { contains: `offer/${id}` } })),
+        },
+        select: { sourceUrl: true },
+        take: BATCH * 5,
+      })
+      for (const row of existingRows) {
+        const id = String(row.sourceUrl || '').match(/offer\/(\d+)/i)?.[1]
+        if (id) existingIds.add(id)
+      }
+    }
+    const freshUrls = offerUrls.filter((url: string) => {
+      const id = url.match(/offer\/(\d+)/i)?.[1]
+      return id ? !existingIds.has(id) : true
+    })
+
+    const result = await prisma.$transaction(async (tx: any) => {
+      await tx.importtaskitem.delete({ where: { id: itemId } })
+      if (freshUrls.length) {
+        await tx.importtaskitem.createMany({
+          data: freshUrls.map((url: string) => ({
+            importTaskId: categoryItem.importTaskId,
+            operatorId: categoryItem.operatorId,
+            sourceUrl: url,
+            isSelected: true,
+            fetchStatus: 'PENDING',
+            publishStatus: 'PENDING',
+            isPublished: false,
+            targetCategoryId:
+              categoryItem.targetCategoryId || categoryItem.importTask?.defaultCategoryId || null,
+            goodsStatus: categoryItem.goodsStatus || categoryItem.importTask?.defaultStatus || 'DRAFT',
+          })),
+        })
+      }
+      const remaining = await tx.importtaskitem.count({
+        where: { importTaskId: categoryItem.importTaskId },
+      })
+      await tx.importtask.update({
+        where: { id: categoryItem.importTaskId },
+        data: {
+          sourceLinkCount: remaining,
+          // 展开后恢复可采集/可解析，避免先前误点解析把任务打成 FAILED
+          status: 'PENDING',
+          finishedAt: null,
+          failureCount: 0,
+          progressPercent: 0,
+        },
+      })
+      return { created: freshUrls.length, skippedExisting: offerUrls.length - freshUrls.length, remaining }
+    })
+
+    console.log(
+      `[ingest] expanded category item=${itemId} offers=${offerUrls.length} created=${result.created} skipped=${result.skippedExisting}`,
+    )
+    res.status(200).json({
+      ok: true,
+      taskId: categoryItem.importTaskId,
+      categoryUrl: categoryItem.sourceUrl,
+      offerCount: offerUrls.length,
+      createdCount: result.created,
+      skippedExistingCount: result.skippedExisting,
+      offerUrls: freshUrls,
+    })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: (error as Error).message })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`[DEV] RPC Server running at http://localhost:${PORT}`)
   console.log(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)

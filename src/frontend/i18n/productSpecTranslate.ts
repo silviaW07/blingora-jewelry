@@ -151,7 +151,11 @@ export function translateColorStyleText(text: string | null | undefined, t: TFun
     i = j
   }
 
-  return joinTranslatedPieces(pieces)
+  const joined = joinTranslatedPieces(pieces)
+  // Storefront is EN/ES only — never leave untranslated CJK in color/style text.
+  if (!containsChinese(joined)) return joined
+  const stripped = stripChineseFromTitle(joined).replace(/\s+/g, ' ').trim()
+  return stripped || joined
 }
 
 export function isSizeSpecField(label: string | null | undefined): boolean {

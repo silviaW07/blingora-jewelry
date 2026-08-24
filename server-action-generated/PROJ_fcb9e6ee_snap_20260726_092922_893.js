@@ -86504,33 +86504,11 @@ function _interop_require_default(obj) {
         default: obj
     };
 }
-/** 首次访问且表为空时预置默认映射，保证行为不回退。 */ const DEFAULT_BRAND_ALIAS_PRESETS = [
-    {
-        alias: '路易威登',
-        standard: 'Louis Vuitton',
-        weight: 50
-    },
-    {
-        alias: '蔻C',
-        standard: 'Coach',
-        weight: 40
-    },
-    {
-        alias: '蔻家',
-        standard: 'Coach',
-        weight: 30
-    },
-    {
-        alias: '古驰',
-        standard: 'Gucci',
-        weight: 20
-    },
-    {
-        alias: 'LV',
-        standard: 'Louis Vuitton',
-        weight: 10
-    }
-];
+/** 首次访问且表为空时预置默认映射，保证行为不回退。 */ const DEFAULT_BRAND_ALIAS_PRESETS = _brandAlias.DEFAULT_BRAND_ALIASES.map((rule)=>({
+        alias: rule.alias,
+        standard: rule.standard,
+        weight: Math.max(10, String(rule.alias).length * 10)
+    }));
 const normalizeAliasText = (raw)=>String(raw !== null && raw !== void 0 ? raw : '').trim();
 const toItem = (row)=>({
         id: row.id,
@@ -86553,6 +86531,25 @@ const listBrandAliases = (0, _action_utils.requireRole)([
             skipDuplicates: true
         });
         (0, _brandAlias.invalidateBrandAliasCache)();
+    } else {
+        const existing = await _prisma.default.brandalias.findMany({
+            select: {
+                alias: true
+            }
+        });
+        const have = new Set(existing.map((row)=>String(row.alias || '').trim().toLowerCase()));
+        const missing = DEFAULT_BRAND_ALIAS_PRESETS.filter((preset)=>!have.has(String(preset.alias).trim().toLowerCase()));
+        if (missing.length > 0) {
+            await _prisma.default.brandalias.createMany({
+                data: missing.map((preset)=>({
+                        alias: preset.alias,
+                        standardName: preset.standard,
+                        sortWeight: preset.weight
+                    })),
+                skipDuplicates: true
+            });
+            (0, _brandAlias.invalidateBrandAliasCache)();
+        }
     }
     const rows = await _prisma.default.brandalias.findMany({
         orderBy: [
@@ -87796,6 +87793,82 @@ const syncKeywordGroupProducts = async (keywordGroupId, linkedProducts)=>{
         });
     }
 };
+/** Primary categoryId + product_category_relations, deduped per category. */ async function loadCategoryProductStats(categoryIds) {
+    const uniqueIds = Array.from(new Set(categoryIds.filter(Boolean)));
+    const countByCategoryId = new Map();
+    const previewByCategoryId = new Map();
+    if (uniqueIds.length === 0) {
+        return {
+            countByCategoryId,
+            previewByCategoryId
+        };
+    }
+    const [primaryProducts, relationRows] = await Promise.all([
+        _prisma.default.product.findMany({
+            where: {
+                categoryId: {
+                    in: uniqueIds
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                categoryId: true,
+                sortWeight: true,
+                createdAt: true
+            }
+        }),
+        _prisma.default.product_category_relations.findMany({
+            where: {
+                categoryId: {
+                    in: uniqueIds
+                }
+            },
+            select: {
+                categoryId: true,
+                product: {
+                    select: {
+                        id: true,
+                        name: true,
+                        sortWeight: true,
+                        createdAt: true
+                    }
+                }
+            }
+        })
+    ]);
+    const rankedByCategory = new Map();
+    const remember = (categoryId, product)=>{
+        if (!rankedByCategory.has(categoryId)) rankedByCategory.set(categoryId, new Map());
+        rankedByCategory.get(categoryId).set(product.id, {
+            product_id: product.id,
+            product_name: product.name,
+            sortWeight: product.sortWeight,
+            createdAt: product.createdAt
+        });
+    };
+    for (const product of primaryProducts){
+        remember(product.categoryId, product);
+    }
+    for (const row of relationRows){
+        remember(row.categoryId, row.product);
+    }
+    for (const categoryId of uniqueIds){
+        var _ref;
+        var _rankedByCategory_get;
+        const ranked = Array.from((_ref = (_rankedByCategory_get = rankedByCategory.get(categoryId)) === null || _rankedByCategory_get === void 0 ? void 0 : _rankedByCategory_get.values()) !== null && _ref !== void 0 ? _ref : []);
+        ranked.sort((a, b)=>b.sortWeight - a.sortWeight || b.createdAt.getTime() - a.createdAt.getTime());
+        countByCategoryId.set(categoryId, ranked.length);
+        previewByCategoryId.set(categoryId, ranked.map(({ product_id, product_name })=>({
+                product_id,
+                product_name
+            })));
+    }
+    return {
+        countByCategoryId,
+        previewByCategoryId
+    };
+}
 const getCategoryList = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
@@ -87929,45 +88002,24 @@ const getCategoryList = (0, _action_utils.requireRole)([
         }
     });
     const mainTopLevelCategoryIds = categories.filter((category)=>category.level === 1 && getCategoryKindFromRecord(category) === 'MAIN').map((category)=>category.id);
-    const descendantProducts = mainTopLevelCategoryIds.length > 0 ? await _prisma.default.productcategory.findMany({
-        where: {
-            categoryId: {
-                in: Array.from(childToParentMap.keys())
-            }
-        },
-        select: {
-            categoryId: true,
-            product: {
-                select: {
-                    id: true,
-                    name: true
-                }
-            }
-        },
-        orderBy: [
-            {
-                product: {
-                    sortWeight: 'desc'
-                }
-            },
-            {
-                product: {
-                    createdAt: 'desc'
-                }
-            }
-        ]
-    }) : [];
+    const statsCategoryIds = Array.from(new Set([
+        ...categories.map((category)=>category.id),
+        ...Array.from(childToParentMap.keys())
+    ]));
+    const { countByCategoryId, previewByCategoryId } = await loadCategoryProductStats(statsCategoryIds);
     const descendantProductMap = new Map();
-    for (const item of descendantProducts){
-        const parentId = childToParentMap.get(item.categoryId);
-        if (!parentId || !mainTopLevelCategoryIds.includes(parentId)) continue;
+    for (const [childId, parentId] of childToParentMap.entries()){
+        var _previewByCategoryId_get;
+        if (!mainTopLevelCategoryIds.includes(parentId)) continue;
+        const childProducts = (_previewByCategoryId_get = previewByCategoryId.get(childId)) !== null && _previewByCategoryId_get !== void 0 ? _previewByCategoryId_get : [];
+        if (childProducts.length === 0) continue;
         if (!descendantProductMap.has(parentId)) {
             descendantProductMap.set(parentId, new Map());
         }
-        descendantProductMap.get(parentId).set(item.product.id, {
-            product_id: item.product.id,
-            product_name: item.product.name
-        });
+        const bucket = descendantProductMap.get(parentId);
+        for (const product of childProducts){
+            bucket.set(product.product_id, product);
+        }
     }
     const posterConfigMap = new Map(posterConfigs.map((config)=>[
             config.category_id,
@@ -87980,7 +88032,7 @@ const getCategoryList = (0, _action_utils.requireRole)([
     });
     return {
         list: categories.map((c)=>{
-            var _ref, _categoryKeywordLinksMap_get;
+            var _ref, _categoryKeywordLinksMap_get, _countByCategoryId_get;
             var _descendantProductMap_get, _c_parent, _c_parent1;
             const categoryKind = getCategoryKindFromRecord(c);
             const descendantProductsForParent = c.level === 1 && categoryKind === 'MAIN' ? Array.from((_ref = (_descendantProductMap_get = descendantProductMap.get(c.id)) === null || _descendantProductMap_get === void 0 ? void 0 : _descendantProductMap_get.values()) !== null && _ref !== void 0 ? _ref : []) : [];
@@ -88005,7 +88057,7 @@ const getCategoryList = (0, _action_utils.requireRole)([
                 price_coefficient: c.priceCoefficient != null ? Number(c.priceCoefficient) : null,
                 category_display_config: categoryDisplayConfig,
                 can_configure_poster: c.level === 1 && categoryKind === 'MAIN',
-                product_count: c._count.products,
+                product_count: (_countByCategoryId_get = countByCategoryId.get(c.id)) !== null && _countByCategoryId_get !== void 0 ? _countByCategoryId_get : 0,
                 child_count: categoryKind === 'MAIN' ? c._count.children : 0,
                 descendant_product_count: descendantProductsForParent.length,
                 descendant_product_preview: descendantProductsForParent,
@@ -90071,13 +90123,10 @@ const updateRecommendZone = (0, _action_utils.requireRole)([
                             isActive: true
                         }
                     });
-                    if (payload.items.length > 0) {
+                    const colItems = toCollectionProductRows(collection.id, payload.zoneType, payload.items);
+                    if (colItems.length > 0) {
                         await tx.homeRecommendCollectionItem.createMany({
-                            data: payload.items.map((i)=>({
-                                    collectionId: collection.id,
-                                    productId: i.entityId,
-                                    sortWeight: i.sortWeight
-                                }))
+                            data: colItems
                         });
                     }
                     await tx.homeRecommendZone.update({
@@ -98309,6 +98358,7 @@ _export(exports, {
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(16532));
 const _action_utils = __webpack_require__(79153);
+const _exchangeRate = __webpack_require__(48511);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -98786,12 +98836,11 @@ const updateOrderRemark = (0, _action_utils.requireRole)([
         });
     });
 }));
-const USD_EXCHANGE_RATE = 6.5;
-const toUsdAmount = (amount, currencyCode)=>{
+const toUsdAmount = (amount, currencyCode, usdExchangeRate)=>{
     if (!Number.isFinite(amount)) return 0;
     const code = String(currencyCode || 'USD').toUpperCase();
     if (code === 'USD') return Math.round(amount * 100) / 100;
-    if (code === 'CNY' || code === 'RMB') return Math.round(amount / USD_EXCHANGE_RATE * 100) / 100;
+    if (code === 'CNY' || code === 'RMB') return (0, _exchangeRate.toUsdFromCny)(amount, usdExchangeRate);
     return Math.round(amount * 100) / 100;
 };
 function inferExcelImageExtension(contentType, url) {
@@ -98810,87 +98859,158 @@ async function tryFetchImageBuffer(url) {
     const normalized = String(url || '').trim();
     if (!normalized) return null;
     try {
-        const res = await fetch(normalized, {
+        const requestUrl = normalized.startsWith('/') ? new URL(normalized, process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://sourcingjewelry.com').toString() : normalized;
+        const res = await fetch(requestUrl, {
             cache: 'no-store'
         });
         if (!res.ok) return null;
-        const extension = inferExcelImageExtension(res.headers.get('content-type'), normalized);
-        if (!extension) return null;
         const ab = await res.arrayBuffer();
+        const buffer = Buffer.from(ab);
+        const extension = inferExcelImageExtension(res.headers.get('content-type'), requestUrl);
+        if (!extension) return null;
         return {
-            buffer: Buffer.from(ab),
+            buffer,
             extension
         };
     } catch  {
         return null;
     }
 }
+const cleanExcelText = (value)=>String(value !== null && value !== void 0 ? value : '').trim();
+const containsChinese = (value)=>/[\u3400-\u9fff]/.test(value);
+function readProductTranslationName(value, lang) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+    const root = value;
+    const languageValue = root[lang];
+    if (languageValue && typeof languageValue === 'object' && !Array.isArray(languageValue)) {
+        return cleanExcelText(languageValue.name);
+    }
+    return '';
+}
+function readPreviewProductName(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+    return cleanExcelText(value.name);
+}
+function resolveChineseExportProductName(params) {
+    const product = params.product;
+    const candidates = [
+        readProductTranslationName(product === null || product === void 0 ? void 0 : product.translationsJson, 'zh'),
+        ...((product === null || product === void 0 ? void 0 : product.importTaskItems) || []).flatMap((row)=>[
+                cleanExcelText(row.parsedName),
+                readPreviewProductName(row.previewDataJson)
+            ]),
+        cleanExcelText(params.productNameSnapshot),
+        cleanExcelText(product === null || product === void 0 ? void 0 : product.name)
+    ].filter(Boolean);
+    return candidates.find(containsChinese) || candidates[0] || '';
+}
+function resolveSkuSpecification(params) {
+    var _attributes_find, _attributes_find1;
+    const attributes = Array.isArray(params.attributeJson) ? params.attributeJson.map((entry)=>{
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+        const row = entry;
+        const name = cleanExcelText(row.name || row.label || row.key);
+        const value = cleanExcelText(row.value || row.labelValue);
+        return value ? {
+            name,
+            value
+        } : null;
+    }).filter((entry)=>Boolean(entry)) : [];
+    const colorPattern = /颜色|顏色|color|colour|款式|style/i;
+    const sizePattern = /尺寸|尺码|規格|规格|size|length|长度|長度/i;
+    const color = ((_attributes_find = attributes.find((entry)=>colorPattern.test(entry.name))) === null || _attributes_find === void 0 ? void 0 : _attributes_find.value) || cleanExcelText(params.itemMaterialLabel) || cleanExcelText(params.materialLabel);
+    const size = ((_attributes_find1 = attributes.find((entry)=>sizePattern.test(entry.name))) === null || _attributes_find1 === void 0 ? void 0 : _attributes_find1.value) || cleanExcelText(params.itemSizeLabel) || cleanExcelText(params.sizeLabel);
+    const otherValues = attributes.filter((entry)=>!colorPattern.test(entry.name) && !sizePattern.test(entry.name)).map((entry)=>entry.value);
+    const values = [
+        color,
+        size,
+        ...otherValues
+    ].map(cleanExcelText).filter((value, index, all)=>Boolean(value) && all.indexOf(value) === index);
+    return values.join('-') || '默认规格';
+}
 async function buildOrderExcelRows(orderIdsInput) {
     var _orders_;
     const orderIds = Array.from(new Set((orderIdsInput || []).filter(Boolean)));
     if (!orderIds.length) throw new Error('请至少选择一笔订单');
-    const orders = await _prisma.default.orderrecord.findMany({
-        where: {
-            id: {
-                in: orderIds
-            }
-        },
-        include: {
-            items: {
-                include: {
-                    product: {
-                        select: {
-                            id: true,
-                            productCode: true,
-                            mainImageUrl: true,
-                            costPrice: true,
-                            supplierName: true,
-                            source: true,
-                            name: true,
-                            // product 表无 sourceUrl；1688 链接在 importtaskitem.sourceUrl
-                            importTaskItems: {
-                                select: {
-                                    sourceUrl: true
-                                },
-                                orderBy: {
-                                    publishedAt: 'desc'
-                                },
-                                take: 5
+    const [usdExchangeRate, orders] = await Promise.all([
+        (0, _exchangeRate.getUsdExchangeRate)(_prisma.default),
+        _prisma.default.orderrecord.findMany({
+            where: {
+                id: {
+                    in: orderIds
+                }
+            },
+            include: {
+                items: {
+                    include: {
+                        product: {
+                            select: {
+                                id: true,
+                                productCode: true,
+                                mainImageUrl: true,
+                                costPrice: true,
+                                supplierName: true,
+                                source: true,
+                                name: true,
+                                translationsJson: true,
+                                // product 表无 sourceUrl；1688 链接在 importtaskitem.sourceUrl
+                                importTaskItems: {
+                                    select: {
+                                        sourceUrl: true,
+                                        parsedName: true,
+                                        previewDataJson: true
+                                    },
+                                    orderBy: {
+                                        publishedAt: 'desc'
+                                    },
+                                    take: 5
+                                }
                             }
-                        }
-                    },
-                    productSku: {
-                        select: {
-                            skuCode: true,
-                            price: true,
-                            originalPrice: true
+                        },
+                        productSku: {
+                            select: {
+                                skuCode: true,
+                                imageUrl: true,
+                                attributeJson: true,
+                                materialLabel: true,
+                                sizeLabel: true,
+                                price: true,
+                                originalPrice: true
+                            }
                         }
                     }
                 }
+            },
+            orderBy: {
+                createdAt: 'desc'
             }
-        },
-        orderBy: {
-            createdAt: 'desc'
-        }
-    });
+        })
+    ]);
     const rows = [];
     for (const order of orders){
         for (const item of order.items){
-            var _item_productSku, _item_product_importTaskItems_find, _item_product_importTaskItems, _item_product, _item_product_importTaskItems_, _item_product_importTaskItems1, _item_product1, _item_product2, _item_productSku1, _item_product3, _item_product4, _item_product5, _item_product6, _item_product7;
+            var _item_productSku, _item_product_importTaskItems_find, _item_product_importTaskItems, _item_product, _item_product_importTaskItems_, _item_product_importTaskItems1, _item_product1, _item_product2, _item_productSku1, _item_productSku2, _item_productSku3, _item_product3, _item_productSku4, _item_product4, _item_product5, _item_product6;
             const unitPrice = item.unitPrice.toNumber();
             const lineAmount = item.lineAmount.toNumber();
             const skuOriginal = ((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.originalPrice) != null ? Number(item.productSku.originalPrice) : null;
-            const originalPriceUsd = toUsdAmount(skuOriginal !== null && skuOriginal !== void 0 ? skuOriginal : unitPrice, order.currencyCode);
+            // SKU price fields are always CNY; order item snapshots use the order currency.
+            const originalPriceUsd = skuOriginal != null ? (0, _exchangeRate.toUsdFromCny)(skuOriginal, usdExchangeRate) : toUsdAmount(unitPrice, order.currencyCode, usdExchangeRate);
             // 无独立折扣价时回退到原价
-            const discountPriceUsd = skuOriginal != null ? toUsdAmount(unitPrice, order.currencyCode) : originalPriceUsd;
-            const totalPriceUsd = toUsdAmount(lineAmount, order.currencyCode);
+            const discountPriceUsd = skuOriginal != null ? toUsdAmount(unitPrice, order.currencyCode, usdExchangeRate) : originalPriceUsd;
+            const totalPriceUsd = toUsdAmount(lineAmount, order.currencyCode, usdExchangeRate);
             const importSourceUrl = ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : (_item_product_importTaskItems = _item_product.importTaskItems) === null || _item_product_importTaskItems === void 0 ? void 0 : (_item_product_importTaskItems_find = _item_product_importTaskItems.find((row)=>/1688\.com/i.test(String(row.sourceUrl || '')))) === null || _item_product_importTaskItems_find === void 0 ? void 0 : _item_product_importTaskItems_find.sourceUrl) || ((_item_product1 = item.product) === null || _item_product1 === void 0 ? void 0 : (_item_product_importTaskItems1 = _item_product1.importTaskItems) === null || _item_product_importTaskItems1 === void 0 ? void 0 : (_item_product_importTaskItems_ = _item_product_importTaskItems1[0]) === null || _item_product_importTaskItems_ === void 0 ? void 0 : _item_product_importTaskItems_.sourceUrl) || '';
             const supplierUrl = ((_item_product2 = item.product) === null || _item_product2 === void 0 ? void 0 : _item_product2.source) === 'IMPORT_1688' || /1688\.com/i.test(importSourceUrl) ? importSourceUrl : '';
             rows.push({
                 productId: item.productId,
-                sku: item.skuCode || ((_item_productSku1 = item.productSku) === null || _item_productSku1 === void 0 ? void 0 : _item_productSku1.skuCode) || '',
+                sku: resolveSkuSpecification({
+                    attributeJson: (_item_productSku1 = item.productSku) === null || _item_productSku1 === void 0 ? void 0 : _item_productSku1.attributeJson,
+                    materialLabel: (_item_productSku2 = item.productSku) === null || _item_productSku2 === void 0 ? void 0 : _item_productSku2.materialLabel,
+                    sizeLabel: (_item_productSku3 = item.productSku) === null || _item_productSku3 === void 0 ? void 0 : _item_productSku3.sizeLabel,
+                    itemMaterialLabel: item.materialLabel,
+                    itemSizeLabel: item.sizeLabel
+                }),
                 spu: ((_item_product3 = item.product) === null || _item_product3 === void 0 ? void 0 : _item_product3.productCode) || '',
-                imageUrl: ((_item_product4 = item.product) === null || _item_product4 === void 0 ? void 0 : _item_product4.mainImageUrl) || '',
+                imageUrl: ((_item_productSku4 = item.productSku) === null || _item_productSku4 === void 0 ? void 0 : _item_productSku4.imageUrl) || ((_item_product4 = item.product) === null || _item_product4 === void 0 ? void 0 : _item_product4.mainImageUrl) || '',
                 originalPriceUsd,
                 discountPriceUsd,
                 quantity: item.quantity,
@@ -98898,7 +99018,10 @@ async function buildOrderExcelRows(orderIdsInput) {
                 costPrice: ((_item_product5 = item.product) === null || _item_product5 === void 0 ? void 0 : _item_product5.costPrice) != null ? Number(item.product.costPrice) : null,
                 supplierName: ((_item_product6 = item.product) === null || _item_product6 === void 0 ? void 0 : _item_product6.supplierName) || '',
                 supplierUrl,
-                productName: item.productName || ((_item_product7 = item.product) === null || _item_product7 === void 0 ? void 0 : _item_product7.name) || '',
+                productName: resolveChineseExportProductName({
+                    productNameSnapshot: item.productName,
+                    product: item.product
+                }),
                 orderNo: order.orderNo
             });
         }
@@ -98922,7 +99045,7 @@ async function buildOrderExcelFile(orderIds) {
                 '商品 ID': row.productId,
                 SKU: row.sku,
                 SPU: row.spu,
-                图片链接: row.imageUrl,
+                图片: row.imageUrl,
                 '原价(美金)': row.originalPriceUsd,
                 '折扣价(美金)': (_row_discountPriceUsd = row.discountPriceUsd) !== null && _row_discountPriceUsd !== void 0 ? _row_discountPriceUsd : row.originalPriceUsd,
                 数量: row.quantity,
@@ -98973,9 +99096,9 @@ async function buildOrderExcelFile(orderIds) {
             width: 18
         },
         {
-            header: '图片链接',
+            header: '图片',
             key: 'image',
-            width: 14
+            width: 27
         },
         {
             header: '__图片链接URL',
@@ -99019,14 +99142,23 @@ async function buildOrderExcelFile(orderIds) {
             width: 40
         },
         {
-            header: '商品名称',
+            header: '商品名称（中文）',
             key: 'productName',
-            width: 40
+            width: 55
         }
     ];
     const headerRow = worksheet.getRow(1);
+    headerRow.height = 28;
     headerRow.font = {
-        bold: true
+        bold: true,
+        size: 12
+    };
+    headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: {
+            argb: 'FFD9D9D9'
+        }
     };
     headerRow.alignment = {
         vertical: 'middle',
@@ -99057,31 +99189,37 @@ async function buildOrderExcelFile(orderIds) {
         horizontal: 'center'
     };
     worksheet.getColumn(imageUrlRawColIndex).hidden = true;
-    // Embed thumbnails into the "图片链接" column.
+    // Embed procurement-sized SKU images into the "图片" column.
+    const imageIdByUrl = new Map();
     for(let i = 0; i < rows.length; i++){
         var _rows_i;
         const rowNumber = i + 2 // 1-based row index; row 1 is header
         ;
         const excelRow = worksheet.getRow(rowNumber);
-        excelRow.height = 42;
+        excelRow.height = 132;
         excelRow.alignment = {
-            vertical: 'middle'
+            vertical: 'middle',
+            wrapText: true
         };
         const imageUrl = ((_rows_i = rows[i]) === null || _rows_i === void 0 ? void 0 : _rows_i.imageUrl) || '';
-        const img = await tryFetchImageBuffer(imageUrl);
-        if (!img) continue;
-        const imageId = workbook.addImage({
-            buffer: img.buffer,
-            extension: img.extension
-        });
+        let imageId = imageIdByUrl.get(imageUrl);
+        if (imageId == null) {
+            const img = await tryFetchImageBuffer(imageUrl);
+            if (!img) continue;
+            imageId = workbook.addImage({
+                buffer: img.buffer,
+                extension: img.extension
+            });
+            imageIdByUrl.set(imageUrl, imageId);
+        }
         worksheet.addImage(imageId, {
             tl: {
-                col: imageColIndex - 1 + 0.2,
-                row: rowNumber - 1 + 0.15
+                col: imageColIndex - 1 + 0.08,
+                row: rowNumber - 1 + 0.08
             },
             ext: {
-                width: 52,
-                height: 52
+                width: 168,
+                height: 168
             },
             editAs: 'oneCell'
         });
@@ -99375,6 +99513,8 @@ const _priceThresholdAutoClassify = __webpack_require__(77744);
 const _bulkTitleCategoryBackfill = __webpack_require__(99685);
 const _brandAlias = __webpack_require__(69646);
 const _brandTitleNormalize = __webpack_require__(53958);
+const _homeRecommendZoneCache = __webpack_require__(78196);
+const _ProductCategory = __webpack_require__(98648);
 const _categoryWeight = __webpack_require__(99552);
 const _titleSuffix = __webpack_require__(73101);
 const _resolveInitialStock = __webpack_require__(35196);
@@ -99866,6 +100006,10 @@ async function replaceProductCategoryRelations(tx, productId, linkedCategoryIds)
             skipDuplicates: true
         });
     }
+}
+function invalidateStorefrontAfterCategoryBind() {
+    (0, _ProductCategory.invalidateStorefrontCatalogCaches)();
+    (0, _homeRecommendZoneCache.invalidateHomeRecommendZoneCache)();
 }
 function buildBoundCategories(product, categoryMap = new Map()) {
     var _product_category, _product_brandCategory;
@@ -100913,6 +101057,7 @@ const createProduct = (0, _action_utils.requireRole)([
         await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, product.id);
         return product;
     });
+    invalidateStorefrontAfterCategoryBind();
     return {
         product_id: result.id
     };
@@ -101157,6 +101302,7 @@ const updateProduct = (0, _action_utils.requireRole)([
         // After SKU prices settle — bind/prune below13 / below3 without touching primary category.
         await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
     });
+    invalidateStorefrontAfterCategoryBind();
     return {
         success: true
     };
@@ -101369,6 +101515,7 @@ const inlineUpdateProductField = (0, _action_utils.requireRole)([
                 await (0, _priceThresholdAutoClassify.syncProductPriceThresholdRelations)(tx, input.product_id);
             }
         });
+        invalidateStorefrontAfterCategoryBind();
         return {
             success: true
         };
@@ -101633,20 +101780,23 @@ const batchBindProductCategories = (0, _action_utils.requireRole)([
     const productIds = Array.from(new Set(input.product_ids.filter(Boolean)));
     const linkedCategoryIds = Array.from(new Set(input.linked_category_ids.filter(Boolean)));
     // Append-only: keep primary categoryId untouched; only add missing relation rows.
+    let insertedCount = 0;
     await _prisma.default.$transaction(async (tx)=>{
         const relationRows = buildRelationRows(productIds, linkedCategoryIds);
         if (relationRows.length > 0) {
-            await tx.product_category_relations.createMany({
+            const created = await tx.product_category_relations.createMany({
                 data: relationRows.map((item)=>({
                         productId: item.productId,
                         categoryId: item.relationId
                     })),
                 skipDuplicates: true
             });
+            insertedCount = created.count;
         }
     });
+    invalidateStorefrontAfterCategoryBind();
     return {
-        success_count: productIds.length,
+        success_count: insertedCount,
         fail_count: 0
     };
 }));
@@ -101702,6 +101852,7 @@ const batchUnbindProductCategories = (0, _action_utils.requireRole)([
             fail++;
         }
     }
+    invalidateStorefrontAfterCategoryBind();
     return {
         success_count: success,
         fail_count: fail
@@ -101829,6 +101980,7 @@ const unbindProductCategory = (0, _action_utils.requireRole)([
             }
         }
     });
+    invalidateStorefrontAfterCategoryBind();
     return {
         success: true
     };
@@ -105278,11 +105430,35 @@ const DEFAULT_BRAND_ALIASES = [
         standard: 'Louis Vuitton'
     },
     {
+        alias: '蔻C家',
+        standard: 'Coach'
+    },
+    {
+        alias: '寇C家',
+        standard: 'Coach'
+    },
+    {
         alias: '蔻C',
         standard: 'Coach'
     },
     {
+        alias: '寇C',
+        standard: 'Coach'
+    },
+    {
         alias: '蔻家',
+        standard: 'Coach'
+    },
+    {
+        alias: '寇家',
+        standard: 'Coach'
+    },
+    {
+        alias: '蔻驰',
+        standard: 'Coach'
+    },
+    {
+        alias: '寇驰',
         standard: 'Coach'
     },
     {
@@ -105302,6 +105478,19 @@ const DEFAULT_BRAND_ALIASES = [
         standard: 'Chanel'
     }
 ];
+const aliasKey = (value)=>String(value || '').trim().toLowerCase();
+function mergeAliasRules(defaults, fromDb) {
+    const map = new Map();
+    for (const rule of defaults){
+        const key = aliasKey(rule.alias);
+        if (key) map.set(key, rule);
+    }
+    for (const rule of fromDb){
+        const key = aliasKey(rule.alias);
+        if (key) map.set(key, rule);
+    }
+    return Array.from(map.values());
+}
 const CACHE_TTL_MS = 60000;
 let cache = null;
 function invalidateBrandAliasCache() {
@@ -105311,7 +105500,7 @@ async function loadBrandAliasRules() {
     const now = Date.now();
     if (cache && cache.expiresAt > now) return cache.rules;
     try {
-        const rows = await _prisma.default.brandalias.findMany({
+        let rows = await _prisma.default.brandalias.findMany({
             orderBy: [
                 {
                     sortWeight: 'desc'
@@ -105325,10 +105514,37 @@ async function loadBrandAliasRules() {
                 standardName: true
             }
         });
-        const rules = rows.length ? rows.map((row)=>({
+        const existing = new Set(rows.map((row)=>aliasKey(row.alias)));
+        const missing = DEFAULT_BRAND_ALIASES.filter((rule)=>!existing.has(aliasKey(rule.alias)));
+        if (missing.length > 0) {
+            await _prisma.default.brandalias.createMany({
+                data: missing.map((rule)=>({
+                        alias: rule.alias,
+                        standardName: rule.standard,
+                        sortWeight: Math.max(10, String(rule.alias).length * 10)
+                    })),
+                skipDuplicates: true
+            });
+            rows = await _prisma.default.brandalias.findMany({
+                orderBy: [
+                    {
+                        sortWeight: 'desc'
+                    },
+                    {
+                        createdAt: 'asc'
+                    }
+                ],
+                select: {
+                    alias: true,
+                    standardName: true
+                }
+            });
+        }
+        const fromDb = rows.map((row)=>({
                 alias: row.alias,
                 standard: row.standardName
-            })) : DEFAULT_BRAND_ALIASES;
+            }));
+        const rules = mergeAliasRules(DEFAULT_BRAND_ALIASES, fromDb);
         cache = {
             rules,
             expiresAt: now + CACHE_TTL_MS
@@ -109122,6 +109338,7 @@ const _priceCoefficient = __webpack_require__(1282);
 const _exchangeRate = __webpack_require__(48511);
 const _pricingPromotionConfig = __webpack_require__(53281);
 const _pricingPromotionCalc = __webpack_require__(13050);
+const _storefrontQty = __webpack_require__(11914);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -109282,7 +109499,7 @@ const getCartData = (0, _action_utils.requireRole)([
         if (pStatus !== 'ACTIVE' || cStatus !== 'ACTIVE') {
             isValid = false;
             invalidReason = 'Product or category unavailable';
-        } else if (stock < item.quantity) {
+        } else if (!(0, _storefrontQty.isStorefrontInStock)(stock)) {
             isValid = false;
             invalidReason = 'Insufficient stock';
         } else if (item.quantity < effectiveSkuMinOrderQty) {
@@ -109453,8 +109670,8 @@ const updateCartItemQuantity = (0, _action_utils.requireRole)([
     if (!item) {
         throw new Error('购物车条目不存在或无权访问');
     }
-    if (quantity > item.productSku.stock) {
-        throw new Error(`更新失败，库存不足（当前库存: ${item.productSku.stock}）`);
+    if (!(0, _storefrontQty.isStorefrontQtyAllowed)(item.productSku.stock, quantity)) {
+        throw new Error('This option is out of stock');
     }
     const siblingItems = await _prisma.default.cartitem.findMany({
         where: {
@@ -109478,7 +109695,7 @@ const updateCartItemQuantity = (0, _action_utils.requireRole)([
     // 重新判定是否符合 VALID
     const isProductActive = item.product.status === 'ACTIVE';
     const isCategoryActive = ((_item_product_category = item.product.category) === null || _item_product_category === void 0 ? void 0 : _item_product_category.status) === 'ACTIVE';
-    const newStatus = isProductActive && isCategoryActive && item.productSku.stock >= quantity && quantity >= effectiveSkuMinOrderQty && nextProductQty >= productMinOrderQty ? 'VALID' : 'INVALID';
+    const newStatus = isProductActive && isCategoryActive && (0, _storefrontQty.isStorefrontQtyAllowed)(item.productSku.stock, quantity) && quantity >= effectiveSkuMinOrderQty && nextProductQty >= productMinOrderQty ? 'VALID' : 'INVALID';
     if (!isProductActive || !isCategoryActive) {
         throw new Error('该商品已下架，不允许修改数量');
     }
@@ -109672,6 +109889,7 @@ const _priceCoefficient = __webpack_require__(1282);
 const _exchangeRate = __webpack_require__(48511);
 const _pricingPromotionConfig = __webpack_require__(53281);
 const _pricingPromotionCalc = __webpack_require__(13050);
+const _storefrontQty = __webpack_require__(11914);
 const _productTranslation = __webpack_require__(17908);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
@@ -110090,7 +110308,7 @@ const placeCheckoutOrder = (0, _action_utils.requireRole)([
         if (sku.product.status !== 'ACTIVE' || ((_sku_product_category = sku.product.category) === null || _sku_product_category === void 0 ? void 0 : _sku_product_category.status) !== 'ACTIVE') {
             throw new Error(`Product “${(0, _productTranslation.resolveProductDisplayName)(sku.product.name, sku.product.translationsJson, 'en')}” is unavailable`);
         }
-        if (sku.stock < quantity) {
+        if (!(0, _storefrontQty.isStorefrontQtyAllowed)(sku.stock, quantity)) {
             throw new Error(`Insufficient stock for “${(0, _productTranslation.resolveProductDisplayName)(sku.product.name, sku.product.translationsJson, 'en')}”`);
         }
         const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
@@ -110913,9 +111131,9 @@ const getHomeRecommendZones = async (input)=>{
             var _item_category;
             return item.categoryId || ((_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id) || null;
         }).filter((id)=>Boolean(id)))));
-    const productZoneSourceCategoryIds = Array.from(new Set(zones.filter((zone)=>zone.zoneType === 'PRODUCT').flatMap((zone)=>zone.items.map((item)=>{
+    const productZoneSourceCategoryIds = Array.from(new Set(zones.filter((zone)=>zone.zoneType === 'PRODUCT').flatMap((zone)=>zone.items.filter((item)=>item.entityType === 'CATEGORY').map((item)=>{
             var _item_category;
-            return item.categoryId || (item.entityType === 'CATEGORY' ? (_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id : null) || null;
+            return item.categoryId || ((_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id) || null;
         }).filter((id)=>Boolean(id)))));
     const productZoneChildCategories = productZoneSourceCategoryIds.length > 0 ? await _prisma.default.category.findMany({
         where: {
@@ -110951,7 +111169,11 @@ const getHomeRecommendZones = async (input)=>{
         ...categoryZoneCategoryIds,
         ...productZoneQueryIds
     ]));
-    const maxLatestPerCategory = Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, ...zones.filter((zone)=>zone.zoneType === 'CATEGORY').map((zone)=>normalizePcCols(zone.pcCols)), productZoneSourceCategoryIds.length > 0 ? 80 : 0);
+    const maxProductZoneItemsPerCategory = productZoneSourceCategoryIds.length > 0 ? Math.max(80, ...zones.filter((zone)=>zone.zoneType === 'PRODUCT').map((zone)=>{
+        var _zone_pcRows;
+        return normalizePcCols(zone.pcCols) * Math.max(2, (_zone_pcRows = zone.pcRows) !== null && _zone_pcRows !== void 0 ? _zone_pcRows : 2);
+    })) : 0;
+    const maxLatestPerCategory = Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, ...zones.filter((zone)=>zone.zoneType === 'CATEGORY').map((zone)=>normalizePcCols(zone.pcCols)), maxProductZoneItemsPerCategory);
     const productCountByCategoryId = new Map();
     const loadProductCounts = async ()=>{
         if (categoryIds.length === 0) return;
@@ -110996,7 +111218,7 @@ const getHomeRecommendZones = async (input)=>{
     };
     const latestProductsByCategoryId = new Map();
     if (fetchCategoryIds.length > 0) {
-        const latestTake = Math.min(400, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)));
+        const latestTake = Math.min(800, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)));
         const [, latestCandidates] = await Promise.all([
             loadProductCounts(),
             _prisma.default.product.findMany({
@@ -111310,9 +111532,9 @@ const getHomeRecommendZones = async (input)=>{
             return acc;
         }, []);
         if (zone.zoneType === 'PRODUCT') {
-            const selectedCategoryIds = zone.items.map((item)=>{
+            const selectedCategoryIds = zone.items.filter((item)=>item.entityType === 'CATEGORY').map((item)=>{
                 var _item_category;
-                return item.categoryId || (item.entityType === 'CATEGORY' ? (_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id : null);
+                return item.categoryId || ((_item_category = item.category) === null || _item_category === void 0 ? void 0 : _item_category.id) || null;
             }).filter((id)=>Boolean(id));
             const productItems = items.filter((item)=>item.entityType === 'PRODUCT');
             if (selectedCategoryIds.length > 0) {
@@ -112114,6 +112336,9 @@ _export(exports, {
     get getWishlistProducts () {
         return getWishlistProducts;
     },
+    get invalidateStorefrontCatalogCaches () {
+        return invalidateStorefrontCatalogCaches;
+    },
     get resolveCategoryRouteKey () {
         return resolveCategoryRouteKey;
     }
@@ -112126,6 +112351,7 @@ const _priceCoefficient = __webpack_require__(1282);
 const _exchangeRate = __webpack_require__(48511);
 const _productSearch = __webpack_require__(12597);
 const _posterLink = __webpack_require__(87993);
+const _storefrontQty = __webpack_require__(11914);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -112280,6 +112506,12 @@ const parseCategoryTopPromotion = (rawContent, fallbackActive)=>{
         font_size
     };
 };
+const hasCategoryParentId = (parentId)=>{
+    const text = String(parentId || '').trim();
+    return text.length > 0 && text !== '0';
+};
+/** 与后台分类树一致：无父级且不是二级，视为一级（兼容 level=0/3 脏数据） */ const isStorefrontLevel1 = (cat)=>!hasCategoryParentId(cat.parentId) && Number(cat.level) !== 2;
+/** 有父级即二级，不要求 level === 2 */ const isStorefrontLevel2 = (cat)=>hasCategoryParentId(cat.parentId);
 const resolveCategoryContext = async (categoryId)=>{
     var _currentCategory_parent;
     if (!categoryId) {
@@ -112320,8 +112552,8 @@ const resolveCategoryContext = async (categoryId)=>{
         });
         return empty;
     }
-    // L1 = level 1 or root (no parent). Expand to all ACTIVE direct L2 children.
-    const isL1 = currentCategory.level === 1 || !currentCategory.parentId;
+    // L1 = 无父级且不是二级。有父级的类目即使 level 标成 1 也按二级查自己，避免 popular products 这类脏数据点进去变成空列表。
+    const isL1 = isStorefrontLevel1(currentCategory);
     if (isL1) {
         const descendants = await _prisma.default.category.findMany({
             where: {
@@ -112529,9 +112761,9 @@ const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
     });
     const mainCategories = categories.filter((cat)=>{
         var _cat_navConfig;
-        return cat.level === 1 && !cat.isBrandCategory && ((_cat_navConfig = cat.navConfig) === null || _cat_navConfig === void 0 ? void 0 : _cat_navConfig.isVisible) !== false;
+        return isStorefrontLevel1(cat) && !cat.isBrandCategory && ((_cat_navConfig = cat.navConfig) === null || _cat_navConfig === void 0 ? void 0 : _cat_navConfig.isVisible) !== false;
     });
-    const childCategories = categories.filter((cat)=>cat.level === 2 && !cat.isBrandCategory);
+    const childCategories = categories.filter((cat)=>isStorefrontLevel2(cat) && !cat.isBrandCategory);
     const brandCategories = categories.filter((cat)=>cat.isBrandCategory);
     const brandIds = brandCategories.map((brand)=>brand.id);
     // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
@@ -113137,9 +113369,29 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
         };
     }
     const searchTokens = (0, _productSearch.tokenizeProductSearch)(input.search_keyword);
-    // Broader take when searching so translated English titles are not truncated away
-    // before the in-memory fuzzy filter runs.
-    const listTake = searchTokens.length > 0 ? 5000 : 2000;
+    const searchQuery = String(input.search_keyword || '').trim();
+    // Push search into SQL so Chrome mobile is not stuck on a 5000-row in-memory scan.
+    if (searchQuery) {
+        const like = {
+            contains: searchQuery
+        };
+        const searchClause = {
+            OR: [
+                {
+                    name: like
+                },
+                {
+                    shortDescription: like
+                }
+            ]
+        };
+        dbWhere.AND = [
+            ...Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [
+                dbWhere.AND
+            ] : [],
+            searchClause
+        ];
+    }
     // 列表卡片只需价格/库存/编码/图；只 select 必要字段，避免每个商品拖回
     // detailText / detailContentJson / galleryJson 等大字段。
     const listSelect = {
@@ -113221,10 +113473,10 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
             }
         }
     };
-    // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
-    // 直接用 SQL orderBy + skip/take 分页 + count()，只回本页数据，避免一次拉 2000 条全量再 JS 过滤。
-    // 其余场景（搜索、价格排序、价格区间/折扣/库存筛选）仍走下方原逻辑，结果零回归。
-    const canPushdownPaginate = searchTokens.length === 0 && input.min_price === undefined && input.max_price === undefined && !input.has_discount && !(input.stock_status && input.stock_status.length > 0) && (input.sort_by === undefined || input.sort_by === 'NEWEST' || input.sort_by === 'POPULARITY');
+    // 快速路径：无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
+    // 直接用 SQL orderBy + skip/take 分页 + count()。搜索已写入 dbWhere，可走同一路径。
+    const canPushdownPaginate = input.min_price === undefined && input.max_price === undefined && !input.has_discount && !(input.stock_status && input.stock_status.length > 0) && (input.sort_by === undefined || input.sort_by === 'NEWEST' || input.sort_by === 'POPULARITY');
+    const listTake = searchTokens.length > 0 ? 800 : 2000;
     if (canPushdownPaginate) {
         const orderBy = input.sort_by === 'POPULARITY' ? [
             {
@@ -113403,6 +113655,13 @@ const getProductList = (0, _action_utils.withResult)(async (input)=>{
 const BRAND_FACET_CACHE_TTL_MS = Number(process.env.BRAND_FACET_CACHE_TTL_MS || 45000);
 const BRAND_FACET_CACHE_MAX = 200;
 const brandFacetCache = new Map();
+function invalidateStorefrontCatalogCaches() {
+    productListCache.clear();
+    categoryListServerCache.clear();
+    categoryContextCache.clear();
+    posterListCache.clear();
+    brandFacetCache.clear();
+}
 function buildBrandFacetCacheKey(input, lang) {
     var _input_min_price, _input_max_price, _input_min_rating;
     return JSON.stringify({
@@ -113628,7 +113887,7 @@ const addToCart = (0, _action_utils.requireRole)([
     if (input.quantity <= 0) {
         throw new Error('加购数量必须大于零');
     }
-    if (sku.stock < input.quantity) {
+    if (!(0, _storefrontQty.isStorefrontQtyAllowed)(sku.stock, input.quantity)) {
         throw new Error('商品库存不足');
     }
     let cart = await _prisma.default.cart.findUnique({
@@ -113845,6 +114104,7 @@ const _productTranslation = __webpack_require__(17908);
 const _exchangeRate = __webpack_require__(48511);
 const _pricingPromotionConfig = __webpack_require__(53281);
 const _minOrderQty = __webpack_require__(25834);
+const _storefrontQty = __webpack_require__(11914);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -114331,7 +114591,7 @@ const addToCart = (0, _action_utils.requireRole)([
     if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
         throw new Error('该商品当前不可购买');
     }
-    if (input.quantity > sku.stock) {
+    if (!(0, _storefrontQty.isStorefrontQtyAllowed)(sku.stock, input.quantity)) {
         throw new Error('库存不足，请减少购买数量');
     }
     const productMinOrderQty = (0, _minOrderQty.resolveProductMinOrderQty)(sku.product.tradeInfoJson);
@@ -114593,7 +114853,7 @@ const setCartSkuQuantity = (0, _action_utils.requireRole)([
 /***/ },
 
 /***/ 43656
-(__unused_webpack_module, exports) {
+(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
 
@@ -114653,10 +114913,12 @@ _export(exports, {
         return writeCustomerServiceLocal;
     }
 });
+const _isNarrowViewport = __webpack_require__(43064);
 const CUSTOMER_SERVICE_STORAGE_KEY = 'autocoder:customer-service:v1';
 const CUSTOMER_SERVICE_SETTING_TITLE = 'CUSTOMER_SERVICE_WHATSAPP';
 const DEFAULT_CUSTOMER_SERVICE_CONFIG = {
     whatsappNumber: '8613500529627',
+    paypalLink: '',
     floatEnabled: true,
     floatSize: 56,
     floatPosition: 'free',
@@ -114766,6 +115028,7 @@ function normalizeCustomerServiceConfig(raw) {
     const anchors = migratePresetToFreeAnchors(position, merged);
     return {
         whatsappNumber: normalizeWhatsappNumber(merged.whatsappNumber) || DEFAULT_CUSTOMER_SERVICE_CONFIG.whatsappNumber,
+        paypalLink: String(merged.paypalLink || '').trim(),
         floatEnabled: Boolean(merged.floatEnabled),
         floatSize: clampFloatSize(Number(merged.floatSize)),
         ...anchors,
@@ -114823,7 +115086,7 @@ function clampFloatPointInViewport(left, top, size) {
 }
 function isMobileStorefrontViewport() {
     if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 767px)').matches;
+    return (0, _isNarrowViewport.isNarrowViewport)();
 }
 function resolveFloatStyle(config, options) {
     var _ref;
@@ -115242,6 +115505,114 @@ const getDateKeyRange = (dateKey)=>{
 
 /***/ },
 
+/***/ 43064
+(__unused_webpack_module, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get cssScreenWidth () {
+        return cssScreenWidth;
+    },
+    get isNarrowViewport () {
+        return isNarrowViewport;
+    },
+    get isPhoneScreen () {
+        return isPhoneScreen;
+    },
+    get lockStorefrontViewport () {
+        return lockStorefrontViewport;
+    },
+    get syncNarrowHtmlClass () {
+        return syncNarrowHtmlClass;
+    }
+});
+const NARROW_MQ = '(max-width: 1023px)';
+const PHONE_DEVICE_MQ = '(max-device-width: 512px)';
+function cssScreenWidth(win = window) {
+    var _win_screen, _win_screen1;
+    const sw = ((_win_screen = win.screen) === null || _win_screen === void 0 ? void 0 : _win_screen.width) || 0;
+    const sh = ((_win_screen1 = win.screen) === null || _win_screen1 === void 0 ? void 0 : _win_screen1.height) || 0;
+    const dpr = win.devicePixelRatio || 1;
+    let short = Math.min(sw, sh) || sw;
+    if (short > 540 && dpr > 1) short = Math.round(short / dpr);
+    if (short >= 280 && short <= 540) return short;
+    if (dpr > 1) {
+        const alt = Math.round((Math.min(sw, sh) || sw) / dpr);
+        if (alt >= 280 && alt <= 540) return alt;
+    }
+    return short;
+}
+function isPhoneScreen(win = window) {
+    var _win_matchMedia;
+    const cssW = cssScreenWidth(win);
+    if (cssW >= 280 && cssW <= 540) return true;
+    if ((_win_matchMedia = win.matchMedia) === null || _win_matchMedia === void 0 ? void 0 : _win_matchMedia.call(win, PHONE_DEVICE_MQ).matches) return true;
+    return false;
+}
+function lockStorefrontViewport(win = window) {
+    if (!isPhoneScreen(win)) return;
+    const w = cssScreenWidth(win);
+    if (w < 280 || w > 540) return;
+    const inner = win.innerWidth || 0;
+    if (inner > 0 && inner <= 540 && Math.abs(inner - w) < 64) return;
+    const doc = win.document;
+    let meta = doc.querySelector('meta[name="viewport"]');
+    if (!meta) {
+        var _doc_head;
+        meta = doc.createElement('meta');
+        meta.setAttribute('name', 'viewport');
+        (_doc_head = doc.head) === null || _doc_head === void 0 ? void 0 : _doc_head.insertBefore(meta, doc.head.firstChild);
+    }
+    const next = `width=${w}, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover`;
+    if (meta.getAttribute('content') !== next) meta.setAttribute('content', next);
+}
+function isNarrowViewport(win = window) {
+    var _win_matchMedia;
+    if (isPhoneScreen(win)) return true;
+    if ((_win_matchMedia = win.matchMedia) === null || _win_matchMedia === void 0 ? void 0 : _win_matchMedia.call(win, NARROW_MQ).matches) return true;
+    if ((win.innerWidth || 9999) < 1024) return true;
+    return false;
+}
+function syncNarrowHtmlClass(win = window) {
+    lockStorefrontViewport(win);
+    const narrow = isNarrowViewport(win);
+    const root = win.document.documentElement;
+    root.classList.toggle('is-narrow', narrow);
+    if (narrow) {
+        root.style.overflowX = 'hidden';
+        root.style.maxWidth = '100%';
+        root.style.width = '100%';
+        root.style.setProperty('-webkit-text-size-adjust', '100%');
+        if (win.document.body) {
+            win.document.body.style.overflowX = 'hidden';
+            win.document.body.style.maxWidth = '100%';
+        }
+    } else {
+        root.style.removeProperty('overflow-x');
+        root.style.removeProperty('max-width');
+        root.style.removeProperty('width');
+        root.style.removeProperty('-webkit-text-size-adjust');
+        if (win.document.body) {
+            win.document.body.style.removeProperty('overflow-x');
+            win.document.body.style.removeProperty('max-width');
+        }
+    }
+    return narrow;
+}
+
+
+/***/ },
+
 /***/ 53958
 (__unused_webpack_module, exports) {
 
@@ -115279,7 +115650,8 @@ function applyBrandAliases(title, rules) {
             const re = new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(alias)}(?![A-Za-z0-9])`, 'gi');
             text = text.replace(re, standard);
         } else {
-            text = text.split(alias).join(standard);
+            const re = new RegExp(escapeRegExp(alias), 'gi');
+            text = text.replace(re, standard);
         }
     }
     return text;
@@ -116087,6 +116459,27 @@ Object.defineProperty(exports, "resolveCategorySynonyms", ({
             '发箍',
             '头箍',
             '头带'
+        ]
+    },
+    // —— 品牌货架暗语（1688 标题常用错字/夹英文，供一键校准命中 Brand L2）——
+    {
+        names: [
+            'Coach',
+            'COACH'
+        ],
+        synonyms: [
+            '蔻C家',
+            '蔻c家',
+            '寇C家',
+            '寇c家',
+            '蔻C',
+            '蔻c',
+            '寇C',
+            '寇c',
+            '蔻家',
+            '寇家',
+            '蔻驰',
+            '寇驰'
         ]
     },
     // —— 包 / Bags ——
@@ -118267,6 +118660,14 @@ _export(exports, {
 });
 const PRODUCT_KEYWORD_ORDER = [
     // materials (compound first)
+    '内胆材质',
+    '外壳材质',
+    '杯盖材质',
+    '北欧风',
+    '过滤茶渣',
+    '可拆卸',
+    '便携',
+    '保温',
     '不锈钢',
     '人造革',
     '合成革',
@@ -118479,6 +118880,11 @@ const PRODUCT_KEYWORD_ORDER = [
     '度假风',
     'ins风',
     '韩版',
+    '高版',
+    '中版',
+    '低版',
+    '原版',
+    '荔枝纹',
     '欧美',
     '百搭',
     '通勤',
@@ -118491,16 +118897,34 @@ const PRODUCT_KEYWORD_ORDER = [
     '开口',
     '款式',
     // packaging / spec add-ons (compound before shorter)
+    '配防尘袋',
+    '防尘袋',
+    '礼袋',
+    '清新',
     '礼品盒',
     '飞机盒',
     '礼盒',
     '包装盒',
     '现货',
     '预售',
+    '加大码',
+    '特大码',
+    '超大码',
+    '大码',
+    '中码',
+    '小码',
     '均码',
     '单码'
 ];
 const PRODUCT_KEYWORD_EN = {
+    内胆材质: 'Inner liner',
+    外壳材质: 'Outer shell',
+    杯盖材质: 'Lid material',
+    北欧风: 'Nordic',
+    过滤茶渣: 'Tea strainer',
+    可拆卸: 'Detachable',
+    便携: 'Portable',
+    保温: 'Insulated',
     不锈钢: 'Stainless Steel',
     人造革: 'PU Leather',
     合成革: 'Synthetic Leather',
@@ -118673,12 +119097,22 @@ const PRODUCT_KEYWORD_EN = {
     刺绣: 'Embroidery',
     外穿: 'Outdoor',
     增高: 'Height Boost',
+    配防尘袋: 'With Dust Bag',
+    防尘袋: 'Dust Bag',
+    礼袋: 'Gift Bag',
+    清新: 'Fresh',
     礼品盒: 'Gift Box',
     飞机盒: 'Box',
     礼盒: 'Gift Box',
     包装盒: 'Packaging Box',
     现货: 'In Stock',
     预售: 'Pre-Order',
+    加大码: 'Plus Size',
+    特大码: 'XXL',
+    超大码: 'XL',
+    大码: 'Large',
+    中码: 'Medium',
+    小码: 'Small',
     均码: 'One Size',
     单码: 'One Size',
     锌合金: 'Zinc Alloy',
@@ -118716,6 +119150,11 @@ const PRODUCT_KEYWORD_EN = {
     度假风: 'Resort',
     ins风: 'Ins Style',
     韩版: 'Korean Style',
+    高版: 'Premium',
+    中版: 'Standard',
+    低版: 'Lite',
+    原版: 'Original',
+    荔枝纹: 'Lychee Grain',
     百搭: 'Versatile',
     通勤: 'Commuter',
     款式: 'Style',
@@ -118728,6 +119167,14 @@ const PRODUCT_KEYWORD_EN = {
     开口: 'Open'
 };
 const PRODUCT_KEYWORD_ES = {
+    内胆材质: 'Forro interior',
+    外壳材质: 'Carcasa',
+    杯盖材质: 'Tapa',
+    北欧风: 'Nórdico',
+    过滤茶渣: 'Filtro de té',
+    可拆卸: 'Desmontable',
+    便携: 'Portátil',
+    保温: 'Térmico',
     不锈钢: 'Acero inoxidable',
     人造革: 'Cuero PU',
     合成革: 'Cuero sintético',
@@ -118900,12 +119347,22 @@ const PRODUCT_KEYWORD_ES = {
     刺绣: 'Bordado',
     外穿: 'Exterior',
     增高: 'Aumenta altura',
+    配防尘袋: 'Con bolsa antipolvo',
+    防尘袋: 'Bolsa antipolvo',
+    礼袋: 'Bolsa de regalo',
+    清新: 'Fresh',
     礼品盒: 'Caja de regalo',
     飞机盒: 'Caja',
     礼盒: 'Caja de regalo',
     包装盒: 'Caja de embalaje',
     现货: 'En stock',
     预售: 'Preventa',
+    加大码: 'Talla plus',
+    特大码: 'XXL',
+    超大码: 'XL',
+    大码: 'Grande',
+    中码: 'Mediana',
+    小码: 'Pequeña',
     均码: 'Talla única',
     单码: 'Talla única',
     锌合金: 'Aleación de zinc',
@@ -118943,6 +119400,11 @@ const PRODUCT_KEYWORD_ES = {
     度假风: 'Resort',
     ins风: 'Estilo Ins',
     韩版: 'Estilo coreano',
+    高版: 'Premium',
+    中版: 'Estándar',
+    低版: 'Lite',
+    原版: 'Original',
+    荔枝纹: 'Grano lichi',
     百搭: 'Versátil',
     通勤: 'De oficina',
     款式: 'Estilo',
@@ -119976,6 +120438,50 @@ function summarizeCountryRule(mode, rule) {
 
 /***/ },
 
+/***/ 11914
+(__unused_webpack_module, exports) {
+
+"use strict";
+/** Soft qty cap for storefront — never expose admin numeric warehouse stock. */ 
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get STOREFRONT_QTY_CAP () {
+        return STOREFRONT_QTY_CAP;
+    },
+    get isStorefrontInStock () {
+        return isStorefrontInStock;
+    },
+    get isStorefrontQtyAllowed () {
+        return isStorefrontQtyAllowed;
+    },
+    get storefrontQtyMax () {
+        return storefrontQtyMax;
+    }
+});
+const STOREFRONT_QTY_CAP = 9999;
+function isStorefrontInStock(stock) {
+    return Number(stock) > 0;
+}
+function storefrontQtyMax(stock) {
+    return isStorefrontInStock(stock) ? STOREFRONT_QTY_CAP : 0;
+}
+function isStorefrontQtyAllowed(stock, qty) {
+    const n = Math.floor(Number(qty) || 0);
+    if (n <= 0) return false;
+    return isStorefrontInStock(stock) && n <= STOREFRONT_QTY_CAP;
+}
+
+
+/***/ },
+
 /***/ 22452
 (__unused_webpack_module, exports) {
 
@@ -120107,7 +120613,7 @@ function resolveTableImportColorSpec(input) {
             if (packed.size) specs.push(packed.size);
             return;
         }
-        if (!token || LOOKS_LIKE_PRICE_RE.test(token)) return;
+        if (!token || LOOKS_LIKE_PRICE_RE.test(token) && prefer !== 'spec') return;
         if (prefer === 'spec' || prefer === 'auto' && DIMENSION_RE.test(token)) {
             specs.push(token);
             return;
@@ -126519,8 +127025,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  // Custom path used by server/webpack (not node_modules default)\n  output        = \"../prisma-generated/client\"\n  // Dev may be Windows; prod ECS is Debian OpenSSL 3 — always include both\n  binaryTargets = [\"native\", \"debian-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"mysql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum userrole {\n  CUSTOMER\n  ADMIN\n  SUB_ADMIN\n}\n\nenum userstatus {\n  ACTIVE\n  DISABLED\n}\n\nenum categorystatus {\n  ACTIVE\n  INACTIVE\n}\n\nenum productstatus {\n  DRAFT\n  ACTIVE\n  INACTIVE\n  OUT_OF_STOCK\n  PREORDER\n}\n\nenum productsource {\n  MANUAL\n  IMPORT_1688\n  TABLE_IMPORT\n}\n\nenum stockstatus {\n  IN_STOCK\n  LOW_STOCK\n  OUT_OF_STOCK\n}\n\nenum cartitemstatus {\n  VALID\n  INVALID\n}\n\nenum importtaskstatus {\n  PENDING\n  RUNNING\n  COMPLETED\n  FAILED\n  QUEUED\n  RATE_LIMITED\n  PARTIAL_SUCCESS\n  RETRY_PENDING\n}\n\nenum materialtype {\n  GOLD_14K\n  GOLD_18K\n  SILVER_925\n  GOLD_PLATED\n  ROSE_GOLD\n  WHITE_GOLD\n  PEARL\n  GEMSTONE\n}\n\nenum gemstoneType {\n  DIAMOND\n  ZIRCON\n  PEARL\n  COLOR_GEM\n  NONE\n}\n\nenum jewelryproducttype {\n  RING\n  NECKLACE\n  EARRING\n  BRACELET\n  ANKLET\n  SET\n  MENS_JEWELRY\n  GIFT_BOX\n  CUSTOM_ENGRAVING\n}\n\nenum sitesettingtype {\n  PROMO_BAR\n  HERO_BANNER\n  CATEGORY_BANNER\n  HOT_MATERIAL\n  LOOKBOOK\n  TRUST_BADGE\n  HOT_SEARCH\n  FOOTER_LINK\n  FLOAT_CONTACT\n  HOMEPAGE_POSTER\n  HOME_SECTION\n  STATIC_COPY\n  EMAIL_TEMPLATE\n  PAYMENT_METHOD\n  CURRENCY_SETTING\n  EXCHANGE_RATE\n  SHIPPING_TEMPLATE\n  TAX_RULE\n  ROLE_PERMISSION\n  HOME_BRAND_SECTION\n  HOME_REVIEW_SECTION\n  HOME_FEATURED_KEYWORDS\n  FRONTEND_SCENE_SLOT\n}\n\nenum keywordgrouptype {\n  BRAND\n  NEW_ARRIVAL\n  PROMOTION\n  GENERAL\n}\n\nenum keywordscenearea {\n  LEFT_NAV\n  RECOMMENDATION\n  BOTH\n}\n\nenum homerecommendzonetype {\n  PRODUCT\n  CATEGORY\n  SIDE_NAV\n}\n\nenum wishlistitemstatus {\n  ACTIVE\n  MOVED_TO_CART\n}\n\nenum orderstatus {\n  PENDING_PAYMENT\n  PAID\n  PROCESSING\n  SHIPPED\n  DELIVERED\n  CANCELLED\n  REFUNDED\n}\n\nenum ordershipmethod {\n  STANDARD\n  EXPRESS\n}\n\nenum paymentmethodtype {\n  PAYPAL\n  BANK_TRANSFER\n  STRIPE\n  CREDIT_CARD\n}\n\nenum reviewstatus {\n  PUBLISHED\n  HIDDEN\n  PENDING\n}\n\nenum promotiontype {\n  FLASH_SALE\n  COUPON\n  NEW_CUSTOMER\n  HOLIDAY\n  FULL_REDUCTION\n  PERCENTAGE_DISCOUNT\n  BUY_X_GET_Y\n}\n\nenum ticketstatus {\n  OPEN\n  REPLIED\n  RESOLVED\n  CLOSED\n}\n\nenum customorderstatus {\n  PENDING_CONFIRMATION\n  IN_PRODUCTION\n  READY_TO_SHIP\n  SHIPPED\n  COMPLETED\n}\n\nmodel sysuser {\n  id                   String     @id @default(uuid()) @db.VarChar(36)\n  account              String     @unique @db.VarChar(50)\n  password             String     @db.VarChar(255)\n  email                String     @unique @db.VarChar(100)\n  role                 userrole\n  status               userstatus @default(ACTIVE)\n  username             String     @db.VarChar(100)\n  avatarUrl            String?    @db.VarChar(700)\n  phone                String?    @db.VarChar(30) // WhatsApp 号（前台注册同步写入）\n  preferredCurrency    String?    @db.VarChar(10)\n  preferredLocale      String?    @db.VarChar(20)\n  countryCode          String?    @db.VarChar(10)\n  countryName          String?    @db.VarChar(100)\n  purchaseCount        Int        @default(0)\n  adminNote            String?    @db.Text\n  customerType         String     @default(\"NEW\") @db.VarChar(20) // 客户类型：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED，后台可行内下拉修改\n  ringSizeUs           String?    @db.VarChar(20)\n  ringSizeEu           String?    @db.VarChar(20)\n  braceletSize         String?    @db.VarChar(20)\n  savedPreferencesJson Json? // 用户偏好，格式：{ \"recentMaterials\": [\"GOLD_14K\"], \"recentSearches\": [\"pearl ring\"] }\n  savedSizesJson       Json? // 保存尺寸，格式：[{ \"type\": \"ring\", \"label\": \"US 6\" }]\n  lastLoginAt          DateTime?\n  createdAt            DateTime   @default(now())\n  updatedAt            DateTime   @default(now()) @updatedAt\n\n  carts             cart[]\n  importTasks       importtask[]\n  importTaskItems   importtaskitem[]\n  addresses         useraddress[]\n  wishlists         wishlistitem[]\n  orders            orderrecord[]\n  reviews           productreview[]\n  tickets           customerticket[]\n  customOrders      customorder[]\n  customerTags      customertaglink[]\n  communicationLogs customercommunication[]\n}\n\nmodel category {\n  id                        String         @id @default(uuid()) @db.VarChar(36)\n  parentId                  String?        @db.VarChar(36)\n  level                     Int            @default(1) // 目录层级：1=一级分类，2=二级分类\n  name                      String         @db.VarChar(120)\n  slug                      String?        @db.VarChar(120)\n  imageUrl                  String?        @db.VarChar(700)\n  iconUrl                   String?        @db.VarChar(700)\n  bannerImageUrl            String?        @db.VarChar(700)\n  description               String?        @db.Text\n  seoTitle                  String?        @db.VarChar(200)\n  seoDescription            String?        @db.Text\n  seoKeywords               String?        @db.VarChar(300)\n  sortWeight                Int            @default(0) // 排序权重，数值越大越靠前\n  status                    categorystatus @default(ACTIVE)\n  path                      String?        @db.VarChar(500)\n  isBrandCategory           Boolean        @default(false)\n  brandCode                 String?        @db.VarChar(80)\n  brandKeywordsJson         Json? // 品牌关键词，格式：[{ \"keyword\": \"chanel\", \"weight\": 100 }, { \"keyword\": \"香奈儿\", \"weight\": 90 }]\n  homepageConfigJson        Json? // 首页联动配置，格式：{ \"showOnHome\": true, \"showInHotSection\": true, \"showInBrandSection\": false, \"heroTitle\": \"\", \"heroSubtitle\": \"\", \"heroButtonText\": \"\", \"heroButtonLink\": \"\" }\n  categoryDisplayConfigJson Json? // 类目展示配置，格式：{ \"showChildrenByDefault\": true, \"allowChildrenCollapse\": true, \"showBrandFilter\": false, \"brandFilterCollapsedRows\": 3 }\n  keywordMappingJson        Json? // 关键词映射配置，格式：{ \"groupIds\": [\"uuid\"], \"keywordIds\": [\"uuid\"], \"syncToHomepage\": true }\n  priceCoefficient          Decimal?       @db.Decimal(6, 2) // 售价系数（子级优先：二级有值用二级，否则用一级，都未设则前台按 1；成本价×系数换算展示）\n  translationsJson          Json? // 多语言字段，格式：{ \"zh\": {\"name\": \"戒指\"}, \"en\": {\"name\": \"Rings\"}, \"ar\": {\"name\": \"خواتم\"} }\n  seoTranslationsJson       Json? // 多语言SEO，格式：{ \"zh\": {\"title\": \"\", \"description\": \"\", \"keywords\": \"\"} }\n  createdAt                 DateTime       @default(now())\n  updatedAt                 DateTime       @default(now()) @updatedAt\n\n  parent             category?                     @relation(\"CategoryTree\", fields: [parentId], references: [id])\n  children           category[]                    @relation(\"CategoryTree\")\n  products           product[]\n  brandProducts      product[]                     @relation(\"BrandCategoryProducts\")\n  recommendZoneItems homeRecommendZoneItem[]\n  categoryFilters    categoryfilterbinding[]\n  categorySpecs      categoryspectemplatebinding[]\n  productLinks       productcategory[]\n  keywordLinks       categorykeywordlink[]\n  relationProducts   product_category_relations[]\n  navConfig          categorynavconfig?\n\n  @@index([parentId])\n  @@index([level])\n  @@index([status])\n  @@index([isBrandCategory])\n  @@index([brandCode])\n}\n\nmodel categorynavconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  navTitle   String?  @db.VarChar(120)\n  sortWeight Int      @default(0)\n  isVisible  Boolean  @default(true)\n  badgeText  String?  @db.VarChar(60)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([categoryId])\n  @@index([isVisible])\n  @@index([sortWeight])\n}\n\nmodel product {\n  id                      String             @id @default(uuid()) @db.VarChar(36)\n  categoryId              String             @db.VarChar(36) // FK → category.id\n  name                    String             @db.VarChar(200)\n  slug                    String             @unique @db.VarChar(200)\n  productCode             String             @unique @db.VarChar(100)\n  source                  productsource\n  supplierName            String?            @db.VarChar(160)\n  status                  productstatus      @default(DRAFT)\n  productType             jewelryproducttype @default(RING)\n  goodsStatus             String?            @db.VarChar(60)\n  costPrice               Decimal?           @db.Decimal(10, 2)\n  priceCoefficient        Decimal?           @db.Decimal(6, 2)\n  detailText              String?            @db.Text\n  brandName               String?            @db.VarChar(120)\n  brandCategoryId         String?            @db.VarChar(36)\n  brandMatchKeyword       String?            @db.VarChar(120)\n  autoBrandMatched        Boolean            @default(false)\n  materialType            materialtype?\n  gemstoneType            gemstoneType?      @default(NONE)\n  metalPurity             String?            @db.VarChar(50)\n  platingProcess          String?            @db.VarChar(120)\n  totalCarat              Decimal?           @db.Decimal(8, 2)\n  weightGram              Decimal?           @db.Decimal(8, 2)\n  mainImageUrl            String             @db.VarChar(700)\n  hoverImageUrl           String?            @db.VarChar(700)\n  wearImageUrl            String?            @db.VarChar(700)\n  videoUrl                String?            @db.VarChar(700)\n  rotate360Json           Json? // 360 视图，格式：[{ \"url\": \"图片URL\", \"sort\": 1 }]\n  galleryJson             Json // 商品相册，格式：[{ \"url\": \"图片URL\", \"sort\": 1, \"type\": \"image|detail|wear\" }]\n  shortDescription        String?            @db.Text\n  designStory             String?            @db.Text\n  translationsJson        Json? // 多语言商品信息，格式：{ \"zh\": {\"name\": \"\", \"shortDescription\": \"\", \"detail\": \"\"}, \"en\": {...}, \"ar\": {...} }\n  detailTranslationsJson  Json? // 多语言图文详情，格式：{ \"zh\": [{\"type\": \"text\", \"content\": \"\"}], \"en\": [...] }\n  sellingPointsJson       Json? // 商品卖点，格式：[{ \"title\": \"卖点标题\", \"content\": \"卖点内容\" }]\n  detailContentJson       Json? // 图文详情，格式：[{ \"type\": \"text|image\", \"content\": \"文本内容或图片URL\", \"title\": \"可选标题\" }]\n  parameterJson           Json? // 参数表，格式：[{ \"group\": \"参数分组\", \"items\": [{ \"key\": \"参数名\", \"value\": \"参数值\" }] }]\n  careGuideJson           Json? // 护理指南，格式：[{ \"title\": \"步骤\", \"content\": \"说明\" }]\n  sizeGuideJson           Json? // 尺码指南，格式：{ \"ring\": [...], \"necklace\": [...], \"printableUrl\": \"PDF链接\" }\n  engravingPreviewBaseUrl String?            @db.VarChar(700)\n  packagingImageUrl       String?            @db.VarChar(700)\n  certificateInfo         String?            @db.Text\n  tradeInfoJson           Json? // 物流与贸易说明，格式：{ \"shipFrom\": \"发货地\", \"deliveryDays\": 7, \"minOrderQty\": 1, \"supportedRegions\": [\"US\",\"EU\"], \"shippingNote\": \"运输说明\", \"tradeNotice\": \"注意事项\" }\n  faqJson                 Json? // 常见购买问题，格式：[{ \"question\": \"问题\", \"answer\": \"回答\" }]\n  ratingAverage           Float              @default(0) // 平均评分（X分，0-5）\n  ratingCount             Int                @default(0) // 评价数量（X个）\n  soldCount               Int                @default(0)\n  isNewArrival            Boolean            @default(false)\n  isBestSeller            Boolean            @default(false)\n  isLimitedDiscount       Boolean            @default(false)\n  sortWeight              Int                @default(0) // 排序权重，数值越大越靠前\n  /**\n   * 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt\n   */\n  publishedAt             DateTime?\n  createdAt               DateTime           @default(now())\n  updatedAt               DateTime           @default(now()) @updatedAt\n\n  category             category                      @relation(fields: [categoryId], references: [id])\n  brandCategory        category?                     @relation(\"BrandCategoryProducts\", fields: [brandCategoryId], references: [id])\n  skus                 productsku[]\n  cartItems            cartitem[]\n  importTaskItems      importtaskitem[]\n  reviews              productreview[]\n  wishlistItems        wishlistitem[]\n  lookbookLinks        lookbookproduct[]\n  orderItems           orderitem[]\n  customOrders         customorder[]\n  categoryLinks        productcategory[]\n  relationCategories   product_category_relations[]\n  relationKeywords     product_keyword_relations[]\n  keywordGroupLinks    keywordgroupproduct[]\n  recommendZoneItems   homeRecommendZoneItem[]\n  recommendCollections homeRecommendCollectionItem[]\n\n  @@index([categoryId])\n  @@index([brandCategoryId])\n  @@index([status])\n  @@index([productType])\n  @@index([materialType])\n  @@index([gemstoneType])\n  @@index([goodsStatus])\n  @@index([brandName])\n  @@index([publishedAt])\n}\n\nmodel productsku {\n  id                 String        @id @default(uuid()) @db.VarChar(36)\n  productId          String        @db.VarChar(36) // FK → product.id\n  skuCode            String        @unique @db.VarChar(100)\n  imageUrl           String?       @db.VarChar(700)\n  minOrderQty        Int? // SKU独立起订量；为空时继承商品级，若商品级也未设则前台按1\n  materialType       materialtype?\n  gemstoneType       gemstoneType? @default(NONE)\n  ringSizeUs         String?       @db.VarChar(20)\n  ringSizeEu         String?       @db.VarChar(20)\n  materialLabel      String?       @db.VarChar(60)\n  sizeLabel          String?       @db.VarChar(60)\n  necklaceLengthInch String?       @db.VarChar(20)\n  braceletLengthCm   String?       @db.VarChar(20)\n  engravingSupported Boolean       @default(false)\n  engravingMaxChars  Int?          @default(0)\n  fontOptionsJson    Json? // 字体选项，格式：[{ \"name\": \"Serif\", \"extraFee\": 5 }]\n  extraFee           Decimal?      @db.Decimal(10, 2)\n  price              Decimal       @db.Decimal(10, 2) // 售价（X元）\n  originalPrice      Decimal?      @db.Decimal(10, 2) // 原价（X元）\n  stock              Int           @default(0) // 库存（X个）\n  stockStatus        stockstatus   @default(IN_STOCK)\n  attributeJson      Json // SKU规格属性，格式：[{ \"name\": \"颜色\", \"value\": \"黑色\" }, { \"name\": \"尺寸\", \"value\": \"L\" }]\n  deliveryDays       Int? // 预计交期（X天）\n  weightKg           Decimal?      @db.Decimal(10, 3) // 重量（X千克）\n  volumeM3           Decimal?      @db.Decimal(10, 4) // 体积（X立方米）\n  createdAt          DateTime      @default(now())\n  updatedAt          DateTime      @default(now()) @updatedAt\n\n  product      product       @relation(fields: [productId], references: [id])\n  cartItems    cartitem[]\n  orderItems   orderitem[]\n  customOrders customorder[]\n\n  @@index([productId])\n  @@index([materialType])\n}\n\nmodel cart {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  accountId String   @unique @db.VarChar(36) // FK → sysuser.id\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  account sysuser    @relation(fields: [accountId], references: [id])\n  items   cartitem[]\n}\n\nmodel cartitem {\n  id                  String         @id @default(uuid()) @db.VarChar(36)\n  cartId              String         @db.VarChar(36) // FK → cart.id\n  productId           String         @db.VarChar(36) // FK → product.id\n  productSkuId        String         @db.VarChar(36) // FK → productsku.id\n  quantity            Int            @default(1) // 商品数量（X个）\n  engravingText       String?        @db.VarChar(120)\n  engravingFont       String?        @db.VarChar(50)\n  engravingPreviewUrl String?        @db.VarChar(700)\n  giftWrapSelected    Boolean        @default(false)\n  giftWrapFee         Decimal?       @db.Decimal(10, 2)\n  status              cartitemstatus @default(VALID)\n  createdAt           DateTime       @default(now())\n  updatedAt           DateTime       @default(now()) @updatedAt\n\n  cart       cart       @relation(fields: [cartId], references: [id])\n  product    product    @relation(fields: [productId], references: [id])\n  productSku productsku @relation(fields: [productSkuId], references: [id])\n\n  @@unique([cartId, productSkuId, engravingText, engravingFont])\n  @@index([cartId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel importtask {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  creatorId            String           @db.VarChar(36) // FK → sysuser.id\n  taskName             String           @db.VarChar(150)\n  status               importtaskstatus @default(PENDING)\n  sourceLinkCount      Int              @default(0) // 来源链接数量（X条）\n  successCount         Int              @default(0) // 成功数量（X条）\n  failureCount         Int              @default(0) // 失败数量（X条）\n  progressPercent      Int              @default(0) // 进度百分比（X%）\n  markupRate           Decimal?         @db.Decimal(5, 2) // 加价比例（X%）\n  defaultStatus        productstatus    @default(DRAFT)\n  defaultCategoryId    String?          @db.VarChar(36)\n  queueConcurrency     Int              @default(1) // 采集并发上限，默认串行或小并发\n  rateLimitMinDelaySec Int              @default(2) // 每次采集最小延迟秒数\n  rateLimitMaxDelaySec Int              @default(5) // 每次采集最大延迟秒数\n  startedAt            DateTime?\n  finishedAt           DateTime?\n  lastScheduledAt      DateTime?\n  lastRateLimitedAt    DateTime?\n  stockStrategyJson    Json? // 默认库存策略，格式：{ \"type\": \"fixed\", \"stock\": 100 }\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  creator sysuser          @relation(fields: [creatorId], references: [id])\n  items   importtaskitem[]\n\n  @@index([creatorId])\n  @@index([status])\n}\n\nmodel importtaskitem {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  importTaskId         String           @db.VarChar(36) // FK → importtask.id\n  operatorId           String           @db.VarChar(36) // FK → sysuser.id\n  sourceUrl            String           @db.VarChar(700)\n  parsedName           String?          @db.VarChar(200)\n  parsedMainImageUrl   String?          @db.VarChar(700)\n  parsedPriceMin       Decimal?         @db.Decimal(10, 2) // 解析最低价（X元）\n  parsedPriceMax       Decimal?         @db.Decimal(10, 2) // 解析最高价（X元）\n  supplierName         String?          @db.VarChar(150)\n  mainImageUrl         String?          @db.VarChar(700)\n  costPrice            Decimal?         @db.Decimal(10, 2) // 成本价（人民币）\n  weightGrams          Int? // 重量（克）\n  sourceCategoryName   String?          @db.VarChar(150) // 1688来源主类目名称\n  targetCategoryId     String?          @db.VarChar(36) // 发布到正式商品时使用的目标分类ID\n  coefficient          Decimal?         @db.Decimal(8, 2) // 当前成本系数\n  goodsStatus          productstatus? // 待上传项目标商品状态（上架/下架/缺货/预售等）\n  minimumOrderQuantity Int? // 起订量\n  availableStock       Int? // 可用库存\n  cnyPriceMin          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最低价\n  cnyPriceMax          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最高价\n  usdPriceMin          Decimal?         @db.Decimal(10, 2) // 美元预估区间最低价\n  usdPriceMax          Decimal?         @db.Decimal(10, 2) // 美元预估区间最高价\n  productDetail        String?          @db.LongText // 商品详情描述/图文摘要\n  skuSummaryText       String?          @db.LongText // SKU摘要文本，便于待上传列表直接编辑\n  fetchStatus          importtaskstatus @default(PENDING) // 单条采集状态：排队/抓取中/成功/失败/可重试\n  publishStatus        importtaskstatus @default(PENDING) // 单条发布状态：待发布/发布中/完成/失败/可重试\n  retryCount           Int              @default(0)\n  fetchStartedAt       DateTime?\n  fetchFinishedAt      DateTime?\n  publishStartedAt     DateTime?\n  publishedAt          DateTime?\n  specSummaryJson      Json? // 规格摘要，格式：[{ \"name\": \"颜色\", \"values\": [\"黑色\",\"白色\"] }]\n  previewDataJson      Json? // 导入/采集预览数据，格式：{ \"name\": \"商品名\", \"categoryId\": \"分类ID\", \"price\": 99.99, \"mainImageUrl\": \"图片URL\", \"shortDescription\": \"简述\", \"detailImages\": [\"图片URL1\"], \"skuTable\": [{ \"spec\": \"金色/7号\", \"costPrice\": 88.5, \"stock\": 20 }] }\n  isSelected           Boolean          @default(false)\n  isPublished          Boolean          @default(false)\n  importedProductId    String?          @db.VarChar(36) // FK → product.id\n  failureReason        String?          @db.Text\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  importTask      importtask @relation(fields: [importTaskId], references: [id])\n  operator        sysuser    @relation(fields: [operatorId], references: [id])\n  importedProduct product?   @relation(fields: [importedProductId], references: [id])\n\n  @@index([importTaskId])\n  @@index([operatorId])\n  @@index([importedProductId])\n  @@index([fetchStatus])\n  @@index([publishStatus])\n  @@index([isPublished])\n  @@index([targetCategoryId])\n}\n\nmodel useraddress {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  userId        String   @db.VarChar(36)\n  recipientName String   @db.VarChar(100)\n  phone         String?  @db.VarChar(30)\n  countryCode   String   @db.VarChar(10)\n  countryName   String   @db.VarChar(100)\n  stateName     String?  @db.VarChar(100)\n  cityName      String?  @db.VarChar(100)\n  addressLine1  String   @db.VarChar(255)\n  addressLine2  String?  @db.VarChar(255)\n  postalCode    String?  @db.VarChar(30)\n  isDefault     Boolean  @default(false)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  user   sysuser       @relation(fields: [userId], references: [id])\n  orders orderrecord[]\n\n  @@index([userId])\n}\n\nmodel wishlistitem {\n  id         String             @id @default(uuid()) @db.VarChar(36)\n  userId     String             @db.VarChar(36)\n  productId  String             @db.VarChar(36)\n  status     wishlistitemstatus @default(ACTIVE)\n  shareToken String?            @unique @db.VarChar(100)\n  createdAt  DateTime           @default(now())\n  updatedAt  DateTime           @default(now()) @updatedAt\n\n  user    sysuser @relation(fields: [userId], references: [id])\n  product product @relation(fields: [productId], references: [id])\n\n  @@unique([userId, productId])\n  @@index([userId])\n  @@index([productId])\n}\n\nmodel sitesetting {\n  id           String          @id @default(uuid()) @db.VarChar(36)\n  settingType  sitesettingtype\n  title        String          @db.VarChar(150)\n  subtitle     String?         @db.VarChar(200)\n  contentJson  Json // 配置内容，格式：{ \"items\": [...], \"link\": \"\", \"categoryId\": \"一级分类ID\" }\n  imageUrl     String?         @db.VarChar(700)\n  localeCode   String?         @db.VarChar(20)\n  currencyCode String?         @db.VarChar(10)\n  sortWeight   Int             @default(0)\n  isActive     Boolean         @default(true)\n  createdAt    DateTime        @default(now())\n  updatedAt    DateTime        @default(now()) @updatedAt\n\n  @@index([settingType])\n  @@index([isActive])\n}\n\nmodel lookbook {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  title       String   @db.VarChar(150)\n  subtitle    String?  @db.VarChar(200)\n  imageUrl    String   @db.VarChar(700)\n  videoUrl    String?  @db.VarChar(700)\n  description String?  @db.Text\n  isActive    Boolean  @default(true)\n  sortWeight  Int      @default(0)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  products lookbookproduct[]\n}\n\nmodel lookbookproduct {\n  id          String @id @default(uuid()) @db.VarChar(36)\n  lookbookId  String @db.VarChar(36)\n  productId   String @db.VarChar(36)\n  hotspotJson Json? // 热点信息，格式：{ \"x\": 50, \"y\": 40, \"label\": \"戒指\" }\n\n  lookbook lookbook @relation(fields: [lookbookId], references: [id])\n  product  product  @relation(fields: [productId], references: [id])\n\n  @@unique([lookbookId, productId])\n  @@index([lookbookId])\n  @@index([productId])\n}\n\nmodel homeRecommendCollection {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  name         String   @db.VarChar(150)\n  description  String?  @db.Text\n  sourceZoneId String?  @unique @db.VarChar(36)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  sourceZone        homeRecommendZone?            @relation(\"CollectionSourceZone\", fields: [sourceZoneId], references: [id])\n  collectionItems   homeRecommendCollectionItem[]\n  zonesUsingAsBound homeRecommendZone[]           @relation(\"ZoneBoundCollection\")\n\n  @@index([isActive])\n}\n\nmodel homeRecommendCollectionItem {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  collectionId String   @db.VarChar(36)\n  productId    String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  collection homeRecommendCollection @relation(fields: [collectionId], references: [id])\n  product    product                 @relation(fields: [productId], references: [id])\n\n  @@unique([collectionId, productId])\n  @@index([collectionId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZone {\n  id                String                @id @default(uuid()) @db.VarChar(36)\n  title             String                @db.VarChar(150)\n  zoneType          homerecommendzonetype\n  pcCols            Int                   @default(4)\n  mobileCols        Int                   @default(2)\n  pcRows            Int                   @default(2)\n  sortWeight        Int                   @default(0)\n  isActive          Boolean               @default(true)\n  boundCollectionId String?               @unique @db.VarChar(36)\n  createdAt         DateTime              @default(now())\n  updatedAt         DateTime              @default(now()) @updatedAt\n\n  sourceCollection homeRecommendCollection? @relation(\"CollectionSourceZone\")\n  boundCollection  homeRecommendCollection? @relation(\"ZoneBoundCollection\", fields: [boundCollectionId], references: [id])\n  items            homeRecommendZoneItem[]\n\n  @@index([zoneType])\n  @@index([isActive])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZoneItem {\n  id         String                @id @default(uuid()) @db.VarChar(36)\n  zoneId     String                @db.VarChar(36)\n  entityType homerecommendzonetype\n  productId  String?               @db.VarChar(36)\n  categoryId String?               @db.VarChar(36)\n  sortWeight Int                   @default(0)\n  createdAt  DateTime              @default(now())\n  updatedAt  DateTime              @default(now()) @updatedAt\n\n  zone     homeRecommendZone @relation(fields: [zoneId], references: [id])\n  product  product?          @relation(fields: [productId], references: [id])\n  category category?         @relation(fields: [categoryId], references: [id])\n\n  @@index([zoneId])\n  @@index([productId])\n  @@index([categoryId])\n  @@index([sortWeight])\n}\n\nmodel promotioncampaign {\n  id              String        @id @default(uuid()) @db.VarChar(36)\n  name            String        @db.VarChar(150)\n  promotionType   promotiontype\n  code            String?       @unique @db.VarChar(60)\n  discountPercent Decimal?      @db.Decimal(5, 2)\n  discountAmount  Decimal?      @db.Decimal(10, 2)\n  minOrderAmount  Decimal?      @db.Decimal(10, 2)\n  startAt         DateTime?\n  endAt           DateTime?\n  usageLimit      Int?\n  usedCount       Int           @default(0)\n  contentJson     Json? // 活动说明，格式：{ \"bannerText\": \"\", \"eligibleMaterials\": [] }\n  isActive        Boolean       @default(true)\n  createdAt       DateTime      @default(now())\n  updatedAt       DateTime      @default(now()) @updatedAt\n\n  orders       orderrecord[]\n  customOrders customorder[]\n\n  @@index([promotionType])\n  @@index([isActive])\n}\n\nmodel orderrecord {\n  id                 String            @id @default(uuid()) @db.VarChar(36)\n  orderNo            String            @unique @db.VarChar(60)\n  userId             String            @db.VarChar(36)\n  addressId          String?           @db.VarChar(36)\n  status             orderstatus       @default(PENDING_PAYMENT)\n  currencyCode       String            @db.VarChar(10)\n  localeCode         String?           @db.VarChar(20)\n  subtotalAmount     Decimal           @db.Decimal(10, 2)\n  discountAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  shippingAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  giftWrapAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  totalAmount        Decimal           @db.Decimal(10, 2)\n  paymentMethod      paymentmethodtype\n  paymentStatus      String?           @db.VarChar(50)\n  installmentInfo    String?           @db.VarChar(100)\n  couponId           String?           @db.VarChar(36)\n  shipMethod         ordershipmethod   @default(STANDARD)\n  trackingCarrier    String?           @db.VarChar(60)\n  trackingNumber     String?           @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  internalNote       String?           @db.Text\n  giftMessage        String?           @db.VarChar(255)\n  note               String?           @db.Text\n  createdAt          DateTime          @default(now())\n  updatedAt          DateTime          @default(now()) @updatedAt\n\n  user      sysuser                 @relation(fields: [userId], references: [id])\n  address   useraddress?            @relation(fields: [addressId], references: [id])\n  coupon    promotioncampaign?      @relation(fields: [couponId], references: [id])\n  items     orderitem[]\n  reviews   productreview[]\n  logistics orderlogisticssegment[]\n  logs      orderoperationlog[]\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel orderitem {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  orderId          String   @db.VarChar(36)\n  productId        String   @db.VarChar(36)\n  productSkuId     String   @db.VarChar(36)\n  productName      String   @db.VarChar(200)\n  skuCode          String   @db.VarChar(100)\n  materialLabel    String?  @db.VarChar(60)\n  sizeLabel        String?  @db.VarChar(60)\n  engravingText    String?  @db.VarChar(120)\n  engravingFont    String?  @db.VarChar(50)\n  quantity         Int      @default(1)\n  unitPrice        Decimal  @db.Decimal(10, 2)\n  lineAmount       Decimal  @db.Decimal(10, 2)\n  giftWrapSelected Boolean  @default(false)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  order      orderrecord @relation(fields: [orderId], references: [id])\n  product    product     @relation(fields: [productId], references: [id])\n  productSku productsku  @relation(fields: [productSkuId], references: [id])\n\n  @@index([orderId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel productreview {\n  id            String       @id @default(uuid()) @db.VarChar(36)\n  productId     String       @db.VarChar(36)\n  userId        String       @db.VarChar(36)\n  orderId       String?      @db.VarChar(36)\n  rating        Int\n  title         String?      @db.VarChar(150)\n  content       String?      @db.Text\n  imageUrlsJson Json? // 晒图，格式：[\"url1\", \"url2\"]\n  hasImages     Boolean      @default(false)\n  status        reviewstatus @default(PUBLISHED)\n  createdAt     DateTime     @default(now())\n  updatedAt     DateTime     @default(now()) @updatedAt\n\n  product product      @relation(fields: [productId], references: [id])\n  user    sysuser      @relation(fields: [userId], references: [id])\n  order   orderrecord? @relation(fields: [orderId], references: [id])\n\n  @@index([productId])\n  @@index([userId])\n  @@index([status])\n}\n\nmodel customorder {\n  id                  String            @id @default(uuid()) @db.VarChar(36)\n  orderId             String?           @unique @db.VarChar(36)\n  userId              String            @db.VarChar(36)\n  productId           String            @db.VarChar(36)\n  productSkuId        String            @db.VarChar(36)\n  promotionId         String?           @db.VarChar(36)\n  engravingText       String?           @db.VarChar(120)\n  engravingFont       String?           @db.VarChar(50)\n  engravingPreviewUrl String?           @db.VarChar(700)\n  status              customorderstatus @default(PENDING_CONFIRMATION)\n  productionNote      String?           @db.Text\n  shippingLabelUrl    String?           @db.VarChar(700)\n  completedAt         DateTime?\n  createdAt           DateTime          @default(now())\n  updatedAt           DateTime          @default(now()) @updatedAt\n\n  user       sysuser            @relation(fields: [userId], references: [id])\n  product    product            @relation(fields: [productId], references: [id])\n  productSku productsku         @relation(fields: [productSkuId], references: [id])\n  promotion  promotioncampaign? @relation(fields: [promotionId], references: [id])\n\n  @@index([userId])\n  @@index([productId])\n  @@index([productSkuId])\n  @@index([status])\n}\n\nmodel sizemapping {\n  id               String             @id @default(uuid()) @db.VarChar(36)\n  regionCode       String             @db.VarChar(20)\n  jewelryType      jewelryproducttype\n  sourceSize       String             @db.VarChar(20)\n  targetRegionCode String             @db.VarChar(20)\n  targetSize       String             @db.VarChar(20)\n  note             String?            @db.VarChar(200)\n  createdAt        DateTime           @default(now())\n  updatedAt        DateTime           @default(now()) @updatedAt\n\n  @@index([regionCode, jewelryType])\n}\n\nmodel customerticket {\n  id           String       @id @default(uuid()) @db.VarChar(36)\n  userId       String?      @db.VarChar(36)\n  contactName  String       @db.VarChar(100)\n  email        String?      @db.VarChar(120)\n  channel      String?      @db.VarChar(50)\n  subject      String       @db.VarChar(150)\n  content      String       @db.Text\n  status       ticketstatus @default(OPEN)\n  replyContent String?      @db.Text\n  createdAt    DateTime     @default(now())\n  updatedAt    DateTime     @default(now()) @updatedAt\n\n  user sysuser? @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel productcategory {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  isPrimary  Boolean  @default(false)\n  createdAt  DateTime @default(now())\n\n  product  product  @relation(fields: [productId], references: [id])\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([productId, categoryId])\n  @@index([categoryId])\n}\n\nmodel filterspec {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  inputType        String   @db.VarChar(50)\n  optionJson       Json? // 筛选项选项，格式：[{ \"label\": \"Gold\", \"value\": \"gold\" }]\n  translationsJson Json? // 多语言名称，格式：{ \"zh\": {\"name\": \"材质\"}, \"en\": {\"name\": \"Material\"} }\n  sortWeight       Int      @default(0)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryfilterbinding[]\n}\n\nmodel categoryfilterbinding {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  categoryId   String   @db.VarChar(36)\n  filterSpecId String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n\n  category   category   @relation(fields: [categoryId], references: [id])\n  filterSpec filterspec @relation(fields: [filterSpecId], references: [id])\n\n  @@unique([categoryId, filterSpecId])\n  @@index([filterSpecId])\n}\n\nmodel spectemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  fieldsJson       Json // 规格模板字段，格式：[{ \"name\": \"ringSize\", \"label\": \"戒指尺寸\", \"type\": \"select\" }]\n  translationsJson Json? // 多语言模板信息，格式：{ \"zh\": {\"name\": \"戒指尺寸\"}, \"en\": {\"name\": \"Ring Size\"} }\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryspectemplatebinding[]\n}\n\nmodel categoryspectemplatebinding {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  categoryId     String   @db.VarChar(36)\n  specTemplateId String   @db.VarChar(36)\n  createdAt      DateTime @default(now())\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  specTemplate spectemplate @relation(fields: [specTemplateId], references: [id])\n\n  @@unique([categoryId, specTemplateId])\n  @@index([specTemplateId])\n}\n\nmodel customertag {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  name        String   @db.VarChar(120)\n  code        String   @unique @db.VarChar(100)\n  color       String?  @db.VarChar(30)\n  description String?  @db.Text\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  userLinks customertaglink[]\n}\n\nmodel customertaglink {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  userId    String   @db.VarChar(36)\n  tagId     String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n\n  user sysuser     @relation(fields: [userId], references: [id])\n  tag  customertag @relation(fields: [tagId], references: [id])\n\n  @@unique([userId, tagId])\n  @@index([tagId])\n}\n\nmodel customercommunication {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  userId       String   @db.VarChar(36)\n  channel      String   @db.VarChar(50)\n  content      String   @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  user sysuser @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n}\n\nmodel orderlogisticssegment {\n  id                 String    @id @default(uuid()) @db.VarChar(36)\n  orderId            String    @db.VarChar(36)\n  segmentType        String    @db.VarChar(50)\n  carrierName        String?   @db.VarChar(100)\n  trackingNumber     String?   @db.VarChar(120)\n  statusLabel        String?   @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  remark             String?   @db.Text\n  timelineJson       Json? // 物流轨迹，格式：[{ \"time\": \"2026-07-11T10:00:00Z\", \"label\": \"已出库\" }]\n  createdAt          DateTime  @default(now())\n  updatedAt          DateTime  @default(now()) @updatedAt\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel orderoperationlog {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  orderId      String   @db.VarChar(36)\n  actionType   String   @db.VarChar(60)\n  actionNote   String?  @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel shippingtemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  countryCode      String?  @db.VarChar(10)\n  minWeightKg      Decimal? @db.Decimal(10, 3)\n  maxWeightKg      Decimal? @db.Decimal(10, 3)\n  minOrderAmount   Decimal? @db.Decimal(10, 2)\n  maxOrderAmount   Decimal? @db.Decimal(10, 2)\n  shippingFee      Decimal  @db.Decimal(10, 2)\n  freeShippingOver Decimal? @db.Decimal(10, 2)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n}\n\n/// 物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态\nmodel shippingchannel {\n  id                 String   @id @default(uuid()) @db.VarChar(36)\n  name               String   @db.VarChar(120)\n  estimatedTime      String   @db.VarChar(120)\n  /// 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）\n  billingMode        String   @default(\"EXPRESS_TIER\") @db.VarChar(30)\n  /// 渠道系数，最终运费 = 基础运费 × 系数，默认 1.00\n  channelCoefficient Decimal  @default(1.0000) @db.Decimal(10, 4)\n  /// 按国家运费规则（人民币 ¥）。\n  /// EXPRESS_TIER: { \"United States\": { \"tiers\": [{ \"maxKg\": 0.5, \"fee\": 10 }] } }\n  /// SEA_PER_KG:   { \"United States\": { \"baseKg\": 12, \"baseFee\": 180, \"perKgFee\": 12 } }\n  /// 兼容旧版固定价数字：{ \"United States\": 15.53 }\n  countryFeesJson    Json\n  isEnabled          Boolean  @default(true)\n  sortWeight         Int      @default(0)\n  createdAt          DateTime @default(now())\n  updatedAt          DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n  @@index([billingMode])\n}\n\nmodel currencysetting {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  currencyCode String   @unique @db.VarChar(10)\n  currencyName String   @db.VarChar(60)\n  exchangeRate Decimal  @db.Decimal(12, 6)\n  isDefault    Boolean  @default(false)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n}\n\nmodel taxrule {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  countryCode String   @db.VarChar(10)\n  countryName String?  @db.VarChar(100)\n  taxType     String   @db.VarChar(50)\n  taxRate     Decimal  @db.Decimal(6, 2)\n  taxNumber   String?  @db.VarChar(100)\n  isActive    Boolean  @default(true)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  @@index([countryCode])\n}\n\nmodel rolepermission {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  roleCode      String   @db.VarChar(50)\n  permissionKey String   @db.VarChar(100)\n  isAllowed     Boolean  @default(true)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  @@unique([roleCode, permissionKey])\n}\n\nmodel keywordgroup {\n  id                 String           @id @default(uuid()) @db.VarChar(36)\n  name               String           @db.VarChar(120)\n  slug               String?          @db.VarChar(120)\n  groupType          keywordgrouptype @default(GENERAL)\n  parentGroupId      String?          @db.VarChar(36)\n  sceneKey           String?          @db.VarChar(160)\n  sceneType          String?          @db.VarChar(80)\n  sceneArea          keywordscenearea @default(RECOMMENDATION)\n  sceneSlotKey       String?          @db.VarChar(160)\n  sceneSlotName      String?          @db.VarChar(120)\n  floorTitle         String?          @db.VarChar(160)\n  floorIcon          String?          @db.VarChar(160)\n  floorLink          String?          @db.VarChar(255)\n  homepageSortWeight Int              @default(0)\n  showOnHomepage     Boolean          @default(false)\n  sortWeight         Int              @default(0)\n  isActive           Boolean          @default(true)\n  description        String?          @db.Text\n  createdAt          DateTime         @default(now())\n  updatedAt          DateTime         @default(now()) @updatedAt\n\n  parentGroup    keywordgroup?         @relation(\"KeywordGroupTree\", fields: [parentGroupId], references: [id])\n  childrenGroups keywordgroup[]        @relation(\"KeywordGroupTree\")\n  keywords       keyworditem[]\n  categoryLinks  categorykeywordlink[]\n  productLinks   keywordgroupproduct[]\n\n  @@index([groupType])\n  @@index([parentGroupId])\n  @@index([sceneKey])\n  @@index([sceneType])\n  @@index([sceneArea])\n  @@index([sceneSlotKey])\n  @@index([showOnHomepage])\n  @@index([homepageSortWeight])\n  @@index([isActive])\n}\n\nmodel keyworditem {\n  id                String   @id @default(uuid()) @db.VarChar(36)\n  groupId           String   @db.VarChar(36)\n  parentKeywordId   String?  @db.VarChar(36)\n  keyword           String   @db.VarChar(160)\n  normalizedKeyword String?  @db.VarChar(160)\n  sortWeight        Int      @default(0)\n  isActive          Boolean  @default(true)\n  createdAt         DateTime @default(now())\n  updatedAt         DateTime @default(now()) @updatedAt\n\n  group            keywordgroup                @relation(fields: [groupId], references: [id])\n  parentKeyword    keyworditem?                @relation(\"KeywordItemTree\", fields: [parentKeywordId], references: [id])\n  childrenKeywords keyworditem[]               @relation(\"KeywordItemTree\")\n  categoryLinks    categorykeywordlink[]\n  productLinks     product_keyword_relations[]\n\n  @@index([groupId])\n  @@index([parentKeywordId])\n  @@index([normalizedKeyword])\n  @@index([isActive])\n}\n\nmodel categorykeywordlink {\n  id              String   @id @default(uuid()) @db.VarChar(36)\n  categoryId      String   @db.VarChar(36)\n  keywordGroupId  String   @db.VarChar(36)\n  keywordItemId   String?  @db.VarChar(36)\n  applyToHomepage Boolean  @default(false)\n  sortWeight      Int      @default(0)\n  createdAt       DateTime @default(now())\n  updatedAt       DateTime @default(now()) @updatedAt\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  keywordItem  keyworditem? @relation(fields: [keywordItemId], references: [id])\n\n  @@unique([categoryId, keywordGroupId, keywordItemId])\n  @@index([categoryId])\n  @@index([keywordGroupId])\n  @@index([keywordItemId])\n}\n\nmodel categorybanner {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  title      String?  @db.VarChar(150)\n  imageUrl   String   @db.VarChar(700)\n  linkUrl    String   @db.VarChar(1000)\n  sortWeight Int      @default(0)\n  isEnabled  Boolean  @default(true)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n}\n\nmodel product_category_relations {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  product  product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n  category category @relation(fields: [categoryId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, categoryId])\n  @@index([productId])\n  @@index([categoryId])\n}\n\nmodel product_keyword_relations {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  productId String   @db.VarChar(36)\n  keywordId String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  product product     @relation(fields: [productId], references: [id], onDelete: Cascade)\n  keyword keyworditem @relation(fields: [keywordId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, keywordId])\n  @@index([productId])\n  @@index([keywordId])\n}\n\nmodel keywordgroupproduct {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  keywordGroupId String   @db.VarChar(36)\n  productId      String   @db.VarChar(36)\n  sortWeight     Int      @default(0)\n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @default(now()) @updatedAt\n\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  product      product      @relation(fields: [productId], references: [id])\n\n  @@unique([keywordGroupId, productId])\n  @@index([keywordGroupId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\n/// 商品标题后缀预设（“批量加后缀”下拉框数据源，支持自定义 CRUD）\nmodel suffixconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  suffixName String   @unique @map(\"suffix_name\") @db.VarChar(120)\n  sortWeight Int      @default(0)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([sortWeight])\n  @@map(\"suffix_config\")\n}\n\n/// 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD\nmodel brandalias {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  alias        String   @unique @db.VarChar(120)\n  standardName String   @map(\"standard_name\") @db.VarChar(120)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  @@index([sortWeight])\n  @@map(\"brand_alias\")\n}\n",
-  "inlineSchemaHash": "ae204b55d126e36fbce4d056c10b36bc5aa2dbe1d1beda781d2004c758aa2429",
+  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  // Custom path used by server/webpack (not node_modules default)\n  output        = \"../prisma-generated/client\"\n  // Dev may be Windows; prod ECS is Debian OpenSSL 3 — always include both\n  binaryTargets = [\"native\", \"debian-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"mysql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum userrole {\n  CUSTOMER\n  ADMIN\n  SUB_ADMIN\n}\n\nenum userstatus {\n  ACTIVE\n  DISABLED\n}\n\nenum categorystatus {\n  ACTIVE\n  INACTIVE\n}\n\nenum productstatus {\n  DRAFT\n  ACTIVE\n  INACTIVE\n  OUT_OF_STOCK\n  PREORDER\n}\n\nenum productsource {\n  MANUAL\n  IMPORT_1688\n  TABLE_IMPORT\n}\n\nenum stockstatus {\n  IN_STOCK\n  LOW_STOCK\n  OUT_OF_STOCK\n}\n\nenum cartitemstatus {\n  VALID\n  INVALID\n}\n\nenum importtaskstatus {\n  PENDING\n  RUNNING\n  COMPLETED\n  FAILED\n  QUEUED\n  RATE_LIMITED\n  PARTIAL_SUCCESS\n  RETRY_PENDING\n}\n\nenum materialtype {\n  GOLD_14K\n  GOLD_18K\n  SILVER_925\n  GOLD_PLATED\n  ROSE_GOLD\n  WHITE_GOLD\n  PEARL\n  GEMSTONE\n}\n\nenum gemstoneType {\n  DIAMOND\n  ZIRCON\n  PEARL\n  COLOR_GEM\n  NONE\n}\n\nenum jewelryproducttype {\n  RING\n  NECKLACE\n  EARRING\n  BRACELET\n  ANKLET\n  SET\n  MENS_JEWELRY\n  GIFT_BOX\n  CUSTOM_ENGRAVING\n}\n\nenum sitesettingtype {\n  PROMO_BAR\n  HERO_BANNER\n  CATEGORY_BANNER\n  HOT_MATERIAL\n  LOOKBOOK\n  TRUST_BADGE\n  HOT_SEARCH\n  FOOTER_LINK\n  FLOAT_CONTACT\n  HOMEPAGE_POSTER\n  HOME_SECTION\n  STATIC_COPY\n  EMAIL_TEMPLATE\n  PAYMENT_METHOD\n  CURRENCY_SETTING\n  EXCHANGE_RATE\n  SHIPPING_TEMPLATE\n  TAX_RULE\n  ROLE_PERMISSION\n  HOME_BRAND_SECTION\n  HOME_REVIEW_SECTION\n  HOME_FEATURED_KEYWORDS\n  FRONTEND_SCENE_SLOT\n}\n\nenum keywordgrouptype {\n  BRAND\n  NEW_ARRIVAL\n  PROMOTION\n  GENERAL\n}\n\nenum keywordscenearea {\n  LEFT_NAV\n  RECOMMENDATION\n  BOTH\n}\n\nenum homerecommendzonetype {\n  PRODUCT\n  CATEGORY\n  SIDE_NAV\n}\n\nenum wishlistitemstatus {\n  ACTIVE\n  MOVED_TO_CART\n}\n\nenum orderstatus {\n  PENDING_PAYMENT\n  PAID\n  PROCESSING\n  SHIPPED\n  DELIVERED\n  CANCELLED\n  REFUNDED\n}\n\nenum ordershipmethod {\n  STANDARD\n  EXPRESS\n}\n\nenum paymentmethodtype {\n  PAYPAL\n  BANK_TRANSFER\n  STRIPE\n  CREDIT_CARD\n}\n\nenum reviewstatus {\n  PUBLISHED\n  HIDDEN\n  PENDING\n}\n\nenum promotiontype {\n  FLASH_SALE\n  COUPON\n  NEW_CUSTOMER\n  HOLIDAY\n  FULL_REDUCTION\n  PERCENTAGE_DISCOUNT\n  BUY_X_GET_Y\n}\n\nenum ticketstatus {\n  OPEN\n  REPLIED\n  RESOLVED\n  CLOSED\n}\n\nenum customorderstatus {\n  PENDING_CONFIRMATION\n  IN_PRODUCTION\n  READY_TO_SHIP\n  SHIPPED\n  COMPLETED\n}\n\nmodel sysuser {\n  id                   String     @id @default(uuid()) @db.VarChar(36)\n  account              String     @unique @db.VarChar(50)\n  password             String     @db.VarChar(255)\n  email                String     @unique @db.VarChar(100)\n  role                 userrole\n  status               userstatus @default(ACTIVE)\n  username             String     @db.VarChar(100)\n  avatarUrl            String?    @db.VarChar(700)\n  phone                String?    @db.VarChar(30) // WhatsApp 号（前台注册同步写入）\n  preferredCurrency    String?    @db.VarChar(10)\n  preferredLocale      String?    @db.VarChar(20)\n  countryCode          String?    @db.VarChar(10)\n  countryName          String?    @db.VarChar(100)\n  purchaseCount        Int        @default(0)\n  adminNote            String?    @db.Text\n  customerType         String     @default(\"NEW\") @db.VarChar(20) // 客户类型：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED，后台可行内下拉修改\n  ringSizeUs           String?    @db.VarChar(20)\n  ringSizeEu           String?    @db.VarChar(20)\n  braceletSize         String?    @db.VarChar(20)\n  savedPreferencesJson Json? // 用户偏好，格式：{ \"recentMaterials\": [\"GOLD_14K\"], \"recentSearches\": [\"pearl ring\"] }\n  savedSizesJson       Json? // 保存尺寸，格式：[{ \"type\": \"ring\", \"label\": \"US 6\" }]\n  lastLoginAt          DateTime?\n  createdAt            DateTime   @default(now())\n  updatedAt            DateTime   @default(now()) @updatedAt\n\n  carts             cart[]\n  importTasks       importtask[]\n  importTaskItems   importtaskitem[]\n  addresses         useraddress[]\n  wishlists         wishlistitem[]\n  orders            orderrecord[]\n  reviews           productreview[]\n  tickets           customerticket[]\n  customOrders      customorder[]\n  customerTags      customertaglink[]\n  communicationLogs customercommunication[]\n}\n\nmodel category {\n  id                        String         @id @default(uuid()) @db.VarChar(36)\n  parentId                  String?        @db.VarChar(36)\n  level                     Int            @default(1) // 目录层级：1=一级分类，2=二级分类\n  name                      String         @db.VarChar(120)\n  slug                      String?        @db.VarChar(120)\n  imageUrl                  String?        @db.VarChar(700)\n  iconUrl                   String?        @db.VarChar(700)\n  bannerImageUrl            String?        @db.VarChar(700)\n  description               String?        @db.Text\n  seoTitle                  String?        @db.VarChar(200)\n  seoDescription            String?        @db.Text\n  seoKeywords               String?        @db.VarChar(300)\n  sortWeight                Int            @default(0) // 排序权重，数值越大越靠前\n  status                    categorystatus @default(ACTIVE)\n  path                      String?        @db.VarChar(500)\n  isBrandCategory           Boolean        @default(false)\n  brandCode                 String?        @db.VarChar(80)\n  brandKeywordsJson         Json? // 品牌关键词，格式：[{ \"keyword\": \"chanel\", \"weight\": 100 }, { \"keyword\": \"香奈儿\", \"weight\": 90 }]\n  homepageConfigJson        Json? // 首页联动配置，格式：{ \"showOnHome\": true, \"showInHotSection\": true, \"showInBrandSection\": false, \"heroTitle\": \"\", \"heroSubtitle\": \"\", \"heroButtonText\": \"\", \"heroButtonLink\": \"\" }\n  categoryDisplayConfigJson Json? // 类目展示配置，格式：{ \"showChildrenByDefault\": true, \"allowChildrenCollapse\": true, \"showBrandFilter\": false, \"brandFilterCollapsedRows\": 3 }\n  keywordMappingJson        Json? // 关键词映射配置，格式：{ \"groupIds\": [\"uuid\"], \"keywordIds\": [\"uuid\"], \"syncToHomepage\": true }\n  priceCoefficient          Decimal?       @db.Decimal(6, 2) // 售价系数（子级优先：二级有值用二级，否则用一级，都未设则前台按 1；成本价×系数换算展示）\n  translationsJson          Json? // 多语言字段，格式：{ \"zh\": {\"name\": \"戒指\"}, \"en\": {\"name\": \"Rings\"}, \"ar\": {\"name\": \"خواتم\"} }\n  seoTranslationsJson       Json? // 多语言SEO，格式：{ \"zh\": {\"title\": \"\", \"description\": \"\", \"keywords\": \"\"} }\n  createdAt                 DateTime       @default(now())\n  updatedAt                 DateTime       @default(now()) @updatedAt\n\n  parent             category?                     @relation(\"CategoryTree\", fields: [parentId], references: [id])\n  children           category[]                    @relation(\"CategoryTree\")\n  products           product[]\n  brandProducts      product[]                     @relation(\"BrandCategoryProducts\")\n  recommendZoneItems homeRecommendZoneItem[]\n  categoryFilters    categoryfilterbinding[]\n  categorySpecs      categoryspectemplatebinding[]\n  productLinks       productcategory[]\n  keywordLinks       categorykeywordlink[]\n  relationProducts   product_category_relations[]\n  navConfig          categorynavconfig?\n\n  @@index([parentId])\n  @@index([level])\n  @@index([status])\n  @@index([isBrandCategory])\n  @@index([brandCode])\n}\n\nmodel categorynavconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  navTitle   String?  @db.VarChar(120)\n  sortWeight Int      @default(0)\n  isVisible  Boolean  @default(true)\n  badgeText  String?  @db.VarChar(60)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([categoryId])\n  @@index([isVisible])\n  @@index([sortWeight])\n}\n\nmodel product {\n  id                      String             @id @default(uuid()) @db.VarChar(36)\n  categoryId              String             @db.VarChar(36) // FK → category.id\n  name                    String             @db.VarChar(200)\n  slug                    String             @unique @db.VarChar(200)\n  productCode             String             @unique @db.VarChar(100)\n  source                  productsource\n  supplierName            String?            @db.VarChar(160)\n  status                  productstatus      @default(DRAFT)\n  productType             jewelryproducttype @default(RING)\n  goodsStatus             String?            @db.VarChar(60)\n  costPrice               Decimal?           @db.Decimal(10, 2)\n  priceCoefficient        Decimal?           @db.Decimal(6, 2)\n  detailText              String?            @db.Text\n  brandName               String?            @db.VarChar(120)\n  brandCategoryId         String?            @db.VarChar(36)\n  brandMatchKeyword       String?            @db.VarChar(120)\n  autoBrandMatched        Boolean            @default(false)\n  materialType            materialtype?\n  gemstoneType            gemstoneType?      @default(NONE)\n  metalPurity             String?            @db.VarChar(50)\n  platingProcess          String?            @db.VarChar(120)\n  totalCarat              Decimal?           @db.Decimal(8, 2)\n  weightGram              Decimal?           @db.Decimal(8, 2)\n  mainImageUrl            String             @db.VarChar(700)\n  hoverImageUrl           String?            @db.VarChar(700)\n  wearImageUrl            String?            @db.VarChar(700)\n  videoUrl                String?            @db.VarChar(700)\n  rotate360Json           Json? // 360 视图，格式：[{ \"url\": \"图片URL\", \"sort\": 1 }]\n  galleryJson             Json // 商品相册，格式：[{ \"url\": \"图片URL\", \"sort\": 1, \"type\": \"image|detail|wear\" }]\n  shortDescription        String?            @db.Text\n  designStory             String?            @db.Text\n  translationsJson        Json? // 多语言商品信息，格式：{ \"zh\": {\"name\": \"\", \"shortDescription\": \"\", \"detail\": \"\"}, \"en\": {...}, \"ar\": {...} }\n  detailTranslationsJson  Json? // 多语言图文详情，格式：{ \"zh\": [{\"type\": \"text\", \"content\": \"\"}], \"en\": [...] }\n  sellingPointsJson       Json? // 商品卖点，格式：[{ \"title\": \"卖点标题\", \"content\": \"卖点内容\" }]\n  detailContentJson       Json? // 图文详情，格式：[{ \"type\": \"text|image\", \"content\": \"文本内容或图片URL\", \"title\": \"可选标题\" }]\n  parameterJson           Json? // 参数表，格式：[{ \"group\": \"参数分组\", \"items\": [{ \"key\": \"参数名\", \"value\": \"参数值\" }] }]\n  careGuideJson           Json? // 护理指南，格式：[{ \"title\": \"步骤\", \"content\": \"说明\" }]\n  sizeGuideJson           Json? // 尺码指南，格式：{ \"ring\": [...], \"necklace\": [...], \"printableUrl\": \"PDF链接\" }\n  engravingPreviewBaseUrl String?            @db.VarChar(700)\n  packagingImageUrl       String?            @db.VarChar(700)\n  certificateInfo         String?            @db.Text\n  tradeInfoJson           Json? // 物流与贸易说明，格式：{ \"shipFrom\": \"发货地\", \"deliveryDays\": 7, \"minOrderQty\": 1, \"supportedRegions\": [\"US\",\"EU\"], \"shippingNote\": \"运输说明\", \"tradeNotice\": \"注意事项\" }\n  faqJson                 Json? // 常见购买问题，格式：[{ \"question\": \"问题\", \"answer\": \"回答\" }]\n  ratingAverage           Float              @default(0) // 平均评分（X分，0-5）\n  ratingCount             Int                @default(0) // 评价数量（X个）\n  soldCount               Int                @default(0)\n  isNewArrival            Boolean            @default(false)\n  isBestSeller            Boolean            @default(false)\n  isLimitedDiscount       Boolean            @default(false)\n  sortWeight              Int                @default(0) // 排序权重，数值越大越靠前\n  /**\n   * 上架时间：New / 每月上新按此字段归月；为空则回退 createdAt\n   */\n  publishedAt             DateTime?\n  createdAt               DateTime           @default(now())\n  updatedAt               DateTime           @default(now()) @updatedAt\n\n  category             category                      @relation(fields: [categoryId], references: [id])\n  brandCategory        category?                     @relation(\"BrandCategoryProducts\", fields: [brandCategoryId], references: [id])\n  skus                 productsku[]\n  cartItems            cartitem[]\n  importTaskItems      importtaskitem[]\n  reviews              productreview[]\n  wishlistItems        wishlistitem[]\n  lookbookLinks        lookbookproduct[]\n  orderItems           orderitem[]\n  customOrders         customorder[]\n  categoryLinks        productcategory[]\n  relationCategories   product_category_relations[]\n  relationKeywords     product_keyword_relations[]\n  keywordGroupLinks    keywordgroupproduct[]\n  recommendZoneItems   homeRecommendZoneItem[]\n  recommendCollections homeRecommendCollectionItem[]\n\n  @@index([categoryId])\n  @@index([brandCategoryId])\n  @@index([status])\n  @@index([productType])\n  @@index([materialType])\n  @@index([gemstoneType])\n  @@index([goodsStatus])\n  @@index([brandName])\n  @@index([publishedAt])\n  // 前台列表快速路径：WHERE status=ACTIVE ORDER BY createdAt/sortWeight 的复合索引\n  @@index([status, createdAt])\n  @@index([status, sortWeight])\n  @@index([categoryId, createdAt])\n  @@index([brandCategoryId, createdAt])\n}\n\nmodel productsku {\n  id                 String        @id @default(uuid()) @db.VarChar(36)\n  productId          String        @db.VarChar(36) // FK → product.id\n  skuCode            String        @unique @db.VarChar(100)\n  imageUrl           String?       @db.VarChar(700)\n  minOrderQty        Int? // SKU独立起订量；为空时继承商品级，若商品级也未设则前台按1\n  materialType       materialtype?\n  gemstoneType       gemstoneType? @default(NONE)\n  ringSizeUs         String?       @db.VarChar(20)\n  ringSizeEu         String?       @db.VarChar(20)\n  materialLabel      String?       @db.VarChar(60)\n  sizeLabel          String?       @db.VarChar(60)\n  necklaceLengthInch String?       @db.VarChar(20)\n  braceletLengthCm   String?       @db.VarChar(20)\n  engravingSupported Boolean       @default(false)\n  engravingMaxChars  Int?          @default(0)\n  fontOptionsJson    Json? // 字体选项，格式：[{ \"name\": \"Serif\", \"extraFee\": 5 }]\n  extraFee           Decimal?      @db.Decimal(10, 2)\n  price              Decimal       @db.Decimal(10, 2) // 售价（X元）\n  originalPrice      Decimal?      @db.Decimal(10, 2) // 原价（X元）\n  stock              Int           @default(0) // 库存（X个）\n  stockStatus        stockstatus   @default(IN_STOCK)\n  attributeJson      Json // SKU规格属性，格式：[{ \"name\": \"颜色\", \"value\": \"黑色\" }, { \"name\": \"尺寸\", \"value\": \"L\" }]\n  deliveryDays       Int? // 预计交期（X天）\n  weightKg           Decimal?      @db.Decimal(10, 3) // 重量（X千克）\n  volumeM3           Decimal?      @db.Decimal(10, 4) // 体积（X立方米）\n  createdAt          DateTime      @default(now())\n  updatedAt          DateTime      @default(now()) @updatedAt\n\n  product      product       @relation(fields: [productId], references: [id])\n  cartItems    cartitem[]\n  orderItems   orderitem[]\n  customOrders customorder[]\n\n  @@index([productId])\n  @@index([materialType])\n}\n\nmodel cart {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  accountId String   @unique @db.VarChar(36) // FK → sysuser.id\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  account sysuser    @relation(fields: [accountId], references: [id])\n  items   cartitem[]\n}\n\nmodel cartitem {\n  id                  String         @id @default(uuid()) @db.VarChar(36)\n  cartId              String         @db.VarChar(36) // FK → cart.id\n  productId           String         @db.VarChar(36) // FK → product.id\n  productSkuId        String         @db.VarChar(36) // FK → productsku.id\n  quantity            Int            @default(1) // 商品数量（X个）\n  engravingText       String?        @db.VarChar(120)\n  engravingFont       String?        @db.VarChar(50)\n  engravingPreviewUrl String?        @db.VarChar(700)\n  giftWrapSelected    Boolean        @default(false)\n  giftWrapFee         Decimal?       @db.Decimal(10, 2)\n  status              cartitemstatus @default(VALID)\n  createdAt           DateTime       @default(now())\n  updatedAt           DateTime       @default(now()) @updatedAt\n\n  cart       cart       @relation(fields: [cartId], references: [id])\n  product    product    @relation(fields: [productId], references: [id])\n  productSku productsku @relation(fields: [productSkuId], references: [id])\n\n  @@unique([cartId, productSkuId, engravingText, engravingFont])\n  @@index([cartId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel importtask {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  creatorId            String           @db.VarChar(36) // FK → sysuser.id\n  taskName             String           @db.VarChar(150)\n  status               importtaskstatus @default(PENDING)\n  sourceLinkCount      Int              @default(0) // 来源链接数量（X条）\n  successCount         Int              @default(0) // 成功数量（X条）\n  failureCount         Int              @default(0) // 失败数量（X条）\n  progressPercent      Int              @default(0) // 进度百分比（X%）\n  markupRate           Decimal?         @db.Decimal(5, 2) // 加价比例（X%）\n  defaultStatus        productstatus    @default(DRAFT)\n  defaultCategoryId    String?          @db.VarChar(36)\n  queueConcurrency     Int              @default(1) // 采集并发上限，默认串行或小并发\n  rateLimitMinDelaySec Int              @default(2) // 每次采集最小延迟秒数\n  rateLimitMaxDelaySec Int              @default(5) // 每次采集最大延迟秒数\n  startedAt            DateTime?\n  finishedAt           DateTime?\n  lastScheduledAt      DateTime?\n  lastRateLimitedAt    DateTime?\n  stockStrategyJson    Json? // 默认库存策略，格式：{ \"type\": \"fixed\", \"stock\": 100 }\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  creator sysuser          @relation(fields: [creatorId], references: [id])\n  items   importtaskitem[]\n\n  @@index([creatorId])\n  @@index([status])\n}\n\nmodel importtaskitem {\n  id                   String           @id @default(uuid()) @db.VarChar(36)\n  importTaskId         String           @db.VarChar(36) // FK → importtask.id\n  operatorId           String           @db.VarChar(36) // FK → sysuser.id\n  sourceUrl            String           @db.VarChar(700)\n  parsedName           String?          @db.VarChar(200)\n  parsedMainImageUrl   String?          @db.VarChar(700)\n  parsedPriceMin       Decimal?         @db.Decimal(10, 2) // 解析最低价（X元）\n  parsedPriceMax       Decimal?         @db.Decimal(10, 2) // 解析最高价（X元）\n  supplierName         String?          @db.VarChar(150)\n  mainImageUrl         String?          @db.VarChar(700)\n  costPrice            Decimal?         @db.Decimal(10, 2) // 成本价（人民币）\n  weightGrams          Int? // 重量（克）\n  sourceCategoryName   String?          @db.VarChar(150) // 1688来源主类目名称\n  targetCategoryId     String?          @db.VarChar(36) // 发布到正式商品时使用的目标分类ID\n  coefficient          Decimal?         @db.Decimal(8, 2) // 当前成本系数\n  goodsStatus          productstatus? // 待上传项目标商品状态（上架/下架/缺货/预售等）\n  minimumOrderQuantity Int? // 起订量\n  availableStock       Int? // 可用库存\n  cnyPriceMin          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最低价\n  cnyPriceMax          Decimal?         @db.Decimal(10, 2) // 人民币售价区间最高价\n  usdPriceMin          Decimal?         @db.Decimal(10, 2) // 美元预估区间最低价\n  usdPriceMax          Decimal?         @db.Decimal(10, 2) // 美元预估区间最高价\n  productDetail        String?          @db.LongText // 商品详情描述/图文摘要\n  skuSummaryText       String?          @db.LongText // SKU摘要文本，便于待上传列表直接编辑\n  fetchStatus          importtaskstatus @default(PENDING) // 单条采集状态：排队/抓取中/成功/失败/可重试\n  publishStatus        importtaskstatus @default(PENDING) // 单条发布状态：待发布/发布中/完成/失败/可重试\n  retryCount           Int              @default(0)\n  fetchStartedAt       DateTime?\n  fetchFinishedAt      DateTime?\n  publishStartedAt     DateTime?\n  publishedAt          DateTime?\n  specSummaryJson      Json? // 规格摘要，格式：[{ \"name\": \"颜色\", \"values\": [\"黑色\",\"白色\"] }]\n  previewDataJson      Json? // 导入/采集预览数据，格式：{ \"name\": \"商品名\", \"categoryId\": \"分类ID\", \"price\": 99.99, \"mainImageUrl\": \"图片URL\", \"shortDescription\": \"简述\", \"detailImages\": [\"图片URL1\"], \"skuTable\": [{ \"spec\": \"金色/7号\", \"costPrice\": 88.5, \"stock\": 20 }] }\n  isSelected           Boolean          @default(false)\n  isPublished          Boolean          @default(false)\n  importedProductId    String?          @db.VarChar(36) // FK → product.id\n  failureReason        String?          @db.Text\n  createdAt            DateTime         @default(now())\n  updatedAt            DateTime         @default(now()) @updatedAt\n\n  importTask      importtask @relation(fields: [importTaskId], references: [id])\n  operator        sysuser    @relation(fields: [operatorId], references: [id])\n  importedProduct product?   @relation(fields: [importedProductId], references: [id])\n\n  @@index([importTaskId])\n  @@index([operatorId])\n  @@index([importedProductId])\n  @@index([fetchStatus])\n  @@index([publishStatus])\n  @@index([isPublished])\n  @@index([targetCategoryId])\n}\n\nmodel useraddress {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  userId        String   @db.VarChar(36)\n  recipientName String   @db.VarChar(100)\n  phone         String?  @db.VarChar(30)\n  countryCode   String   @db.VarChar(10)\n  countryName   String   @db.VarChar(100)\n  stateName     String?  @db.VarChar(100)\n  cityName      String?  @db.VarChar(100)\n  addressLine1  String   @db.VarChar(255)\n  addressLine2  String?  @db.VarChar(255)\n  postalCode    String?  @db.VarChar(30)\n  isDefault     Boolean  @default(false)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  user   sysuser       @relation(fields: [userId], references: [id])\n  orders orderrecord[]\n\n  @@index([userId])\n}\n\nmodel wishlistitem {\n  id         String             @id @default(uuid()) @db.VarChar(36)\n  userId     String             @db.VarChar(36)\n  productId  String             @db.VarChar(36)\n  status     wishlistitemstatus @default(ACTIVE)\n  shareToken String?            @unique @db.VarChar(100)\n  createdAt  DateTime           @default(now())\n  updatedAt  DateTime           @default(now()) @updatedAt\n\n  user    sysuser @relation(fields: [userId], references: [id])\n  product product @relation(fields: [productId], references: [id])\n\n  @@unique([userId, productId])\n  @@index([userId])\n  @@index([productId])\n}\n\nmodel sitesetting {\n  id           String          @id @default(uuid()) @db.VarChar(36)\n  settingType  sitesettingtype\n  title        String          @db.VarChar(150)\n  subtitle     String?         @db.VarChar(200)\n  contentJson  Json // 配置内容，格式：{ \"items\": [...], \"link\": \"\", \"categoryId\": \"一级分类ID\" }\n  imageUrl     String?         @db.VarChar(700)\n  localeCode   String?         @db.VarChar(20)\n  currencyCode String?         @db.VarChar(10)\n  sortWeight   Int             @default(0)\n  isActive     Boolean         @default(true)\n  createdAt    DateTime        @default(now())\n  updatedAt    DateTime        @default(now()) @updatedAt\n\n  @@index([settingType])\n  @@index([isActive])\n}\n\nmodel lookbook {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  title       String   @db.VarChar(150)\n  subtitle    String?  @db.VarChar(200)\n  imageUrl    String   @db.VarChar(700)\n  videoUrl    String?  @db.VarChar(700)\n  description String?  @db.Text\n  isActive    Boolean  @default(true)\n  sortWeight  Int      @default(0)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  products lookbookproduct[]\n}\n\nmodel lookbookproduct {\n  id          String @id @default(uuid()) @db.VarChar(36)\n  lookbookId  String @db.VarChar(36)\n  productId   String @db.VarChar(36)\n  hotspotJson Json? // 热点信息，格式：{ \"x\": 50, \"y\": 40, \"label\": \"戒指\" }\n\n  lookbook lookbook @relation(fields: [lookbookId], references: [id])\n  product  product  @relation(fields: [productId], references: [id])\n\n  @@unique([lookbookId, productId])\n  @@index([lookbookId])\n  @@index([productId])\n}\n\nmodel homeRecommendCollection {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  name         String   @db.VarChar(150)\n  description  String?  @db.Text\n  sourceZoneId String?  @unique @db.VarChar(36)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  sourceZone        homeRecommendZone?            @relation(\"CollectionSourceZone\", fields: [sourceZoneId], references: [id])\n  collectionItems   homeRecommendCollectionItem[]\n  zonesUsingAsBound homeRecommendZone[]           @relation(\"ZoneBoundCollection\")\n\n  @@index([isActive])\n}\n\nmodel homeRecommendCollectionItem {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  collectionId String   @db.VarChar(36)\n  productId    String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  collection homeRecommendCollection @relation(fields: [collectionId], references: [id])\n  product    product                 @relation(fields: [productId], references: [id])\n\n  @@unique([collectionId, productId])\n  @@index([collectionId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZone {\n  id                String                @id @default(uuid()) @db.VarChar(36)\n  title             String                @db.VarChar(150)\n  zoneType          homerecommendzonetype\n  pcCols            Int                   @default(4)\n  mobileCols        Int                   @default(2)\n  pcRows            Int                   @default(2)\n  sortWeight        Int                   @default(0)\n  isActive          Boolean               @default(true)\n  boundCollectionId String?               @unique @db.VarChar(36)\n  createdAt         DateTime              @default(now())\n  updatedAt         DateTime              @default(now()) @updatedAt\n\n  sourceCollection homeRecommendCollection? @relation(\"CollectionSourceZone\")\n  boundCollection  homeRecommendCollection? @relation(\"ZoneBoundCollection\", fields: [boundCollectionId], references: [id])\n  items            homeRecommendZoneItem[]\n\n  @@index([zoneType])\n  @@index([isActive])\n  @@index([sortWeight])\n}\n\nmodel homeRecommendZoneItem {\n  id         String                @id @default(uuid()) @db.VarChar(36)\n  zoneId     String                @db.VarChar(36)\n  entityType homerecommendzonetype\n  productId  String?               @db.VarChar(36)\n  categoryId String?               @db.VarChar(36)\n  sortWeight Int                   @default(0)\n  createdAt  DateTime              @default(now())\n  updatedAt  DateTime              @default(now()) @updatedAt\n\n  zone     homeRecommendZone @relation(fields: [zoneId], references: [id])\n  product  product?          @relation(fields: [productId], references: [id])\n  category category?         @relation(fields: [categoryId], references: [id])\n\n  @@index([zoneId])\n  @@index([productId])\n  @@index([categoryId])\n  @@index([sortWeight])\n}\n\nmodel promotioncampaign {\n  id              String        @id @default(uuid()) @db.VarChar(36)\n  name            String        @db.VarChar(150)\n  promotionType   promotiontype\n  code            String?       @unique @db.VarChar(60)\n  discountPercent Decimal?      @db.Decimal(5, 2)\n  discountAmount  Decimal?      @db.Decimal(10, 2)\n  minOrderAmount  Decimal?      @db.Decimal(10, 2)\n  startAt         DateTime?\n  endAt           DateTime?\n  usageLimit      Int?\n  usedCount       Int           @default(0)\n  contentJson     Json? // 活动说明，格式：{ \"bannerText\": \"\", \"eligibleMaterials\": [] }\n  isActive        Boolean       @default(true)\n  createdAt       DateTime      @default(now())\n  updatedAt       DateTime      @default(now()) @updatedAt\n\n  orders       orderrecord[]\n  customOrders customorder[]\n\n  @@index([promotionType])\n  @@index([isActive])\n}\n\nmodel orderrecord {\n  id                 String            @id @default(uuid()) @db.VarChar(36)\n  orderNo            String            @unique @db.VarChar(60)\n  userId             String            @db.VarChar(36)\n  addressId          String?           @db.VarChar(36)\n  status             orderstatus       @default(PENDING_PAYMENT)\n  currencyCode       String            @db.VarChar(10)\n  localeCode         String?           @db.VarChar(20)\n  subtotalAmount     Decimal           @db.Decimal(10, 2)\n  discountAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  shippingAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  giftWrapAmount     Decimal           @default(0) @db.Decimal(10, 2)\n  totalAmount        Decimal           @db.Decimal(10, 2)\n  paymentMethod      paymentmethodtype\n  paymentStatus      String?           @db.VarChar(50)\n  installmentInfo    String?           @db.VarChar(100)\n  couponId           String?           @db.VarChar(36)\n  shipMethod         ordershipmethod   @default(STANDARD)\n  trackingCarrier    String?           @db.VarChar(60)\n  trackingNumber     String?           @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  internalNote       String?           @db.Text\n  giftMessage        String?           @db.VarChar(255)\n  note               String?           @db.Text\n  createdAt          DateTime          @default(now())\n  updatedAt          DateTime          @default(now()) @updatedAt\n\n  user      sysuser                 @relation(fields: [userId], references: [id])\n  address   useraddress?            @relation(fields: [addressId], references: [id])\n  coupon    promotioncampaign?      @relation(fields: [couponId], references: [id])\n  items     orderitem[]\n  reviews   productreview[]\n  logistics orderlogisticssegment[]\n  logs      orderoperationlog[]\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel orderitem {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  orderId          String   @db.VarChar(36)\n  productId        String   @db.VarChar(36)\n  productSkuId     String   @db.VarChar(36)\n  productName      String   @db.VarChar(200)\n  skuCode          String   @db.VarChar(100)\n  materialLabel    String?  @db.VarChar(60)\n  sizeLabel        String?  @db.VarChar(60)\n  engravingText    String?  @db.VarChar(120)\n  engravingFont    String?  @db.VarChar(50)\n  quantity         Int      @default(1)\n  unitPrice        Decimal  @db.Decimal(10, 2)\n  lineAmount       Decimal  @db.Decimal(10, 2)\n  giftWrapSelected Boolean  @default(false)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  order      orderrecord @relation(fields: [orderId], references: [id])\n  product    product     @relation(fields: [productId], references: [id])\n  productSku productsku  @relation(fields: [productSkuId], references: [id])\n\n  @@index([orderId])\n  @@index([productId])\n  @@index([productSkuId])\n}\n\nmodel productreview {\n  id            String       @id @default(uuid()) @db.VarChar(36)\n  productId     String       @db.VarChar(36)\n  userId        String       @db.VarChar(36)\n  orderId       String?      @db.VarChar(36)\n  rating        Int\n  title         String?      @db.VarChar(150)\n  content       String?      @db.Text\n  imageUrlsJson Json? // 晒图，格式：[\"url1\", \"url2\"]\n  hasImages     Boolean      @default(false)\n  status        reviewstatus @default(PUBLISHED)\n  createdAt     DateTime     @default(now())\n  updatedAt     DateTime     @default(now()) @updatedAt\n\n  product product      @relation(fields: [productId], references: [id])\n  user    sysuser      @relation(fields: [userId], references: [id])\n  order   orderrecord? @relation(fields: [orderId], references: [id])\n\n  @@index([productId])\n  @@index([userId])\n  @@index([status])\n}\n\nmodel customorder {\n  id                  String            @id @default(uuid()) @db.VarChar(36)\n  orderId             String?           @unique @db.VarChar(36)\n  userId              String            @db.VarChar(36)\n  productId           String            @db.VarChar(36)\n  productSkuId        String            @db.VarChar(36)\n  promotionId         String?           @db.VarChar(36)\n  engravingText       String?           @db.VarChar(120)\n  engravingFont       String?           @db.VarChar(50)\n  engravingPreviewUrl String?           @db.VarChar(700)\n  status              customorderstatus @default(PENDING_CONFIRMATION)\n  productionNote      String?           @db.Text\n  shippingLabelUrl    String?           @db.VarChar(700)\n  completedAt         DateTime?\n  createdAt           DateTime          @default(now())\n  updatedAt           DateTime          @default(now()) @updatedAt\n\n  user       sysuser            @relation(fields: [userId], references: [id])\n  product    product            @relation(fields: [productId], references: [id])\n  productSku productsku         @relation(fields: [productSkuId], references: [id])\n  promotion  promotioncampaign? @relation(fields: [promotionId], references: [id])\n\n  @@index([userId])\n  @@index([productId])\n  @@index([productSkuId])\n  @@index([status])\n}\n\nmodel sizemapping {\n  id               String             @id @default(uuid()) @db.VarChar(36)\n  regionCode       String             @db.VarChar(20)\n  jewelryType      jewelryproducttype\n  sourceSize       String             @db.VarChar(20)\n  targetRegionCode String             @db.VarChar(20)\n  targetSize       String             @db.VarChar(20)\n  note             String?            @db.VarChar(200)\n  createdAt        DateTime           @default(now())\n  updatedAt        DateTime           @default(now()) @updatedAt\n\n  @@index([regionCode, jewelryType])\n}\n\nmodel customerticket {\n  id           String       @id @default(uuid()) @db.VarChar(36)\n  userId       String?      @db.VarChar(36)\n  contactName  String       @db.VarChar(100)\n  email        String?      @db.VarChar(120)\n  channel      String?      @db.VarChar(50)\n  subject      String       @db.VarChar(150)\n  content      String       @db.Text\n  status       ticketstatus @default(OPEN)\n  replyContent String?      @db.Text\n  createdAt    DateTime     @default(now())\n  updatedAt    DateTime     @default(now()) @updatedAt\n\n  user sysuser? @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n  @@index([status])\n}\n\nmodel productcategory {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  isPrimary  Boolean  @default(false)\n  createdAt  DateTime @default(now())\n\n  product  product  @relation(fields: [productId], references: [id])\n  category category @relation(fields: [categoryId], references: [id])\n\n  @@unique([productId, categoryId])\n  @@index([categoryId])\n}\n\nmodel filterspec {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  inputType        String   @db.VarChar(50)\n  optionJson       Json? // 筛选项选项，格式：[{ \"label\": \"Gold\", \"value\": \"gold\" }]\n  translationsJson Json? // 多语言名称，格式：{ \"zh\": {\"name\": \"材质\"}, \"en\": {\"name\": \"Material\"} }\n  sortWeight       Int      @default(0)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryfilterbinding[]\n}\n\nmodel categoryfilterbinding {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  categoryId   String   @db.VarChar(36)\n  filterSpecId String   @db.VarChar(36)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n\n  category   category   @relation(fields: [categoryId], references: [id])\n  filterSpec filterspec @relation(fields: [filterSpecId], references: [id])\n\n  @@unique([categoryId, filterSpecId])\n  @@index([filterSpecId])\n}\n\nmodel spectemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  code             String   @unique @db.VarChar(100)\n  fieldsJson       Json // 规格模板字段，格式：[{ \"name\": \"ringSize\", \"label\": \"戒指尺寸\", \"type\": \"select\" }]\n  translationsJson Json? // 多语言模板信息，格式：{ \"zh\": {\"name\": \"戒指尺寸\"}, \"en\": {\"name\": \"Ring Size\"} }\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n\n  categoryBindings categoryspectemplatebinding[]\n}\n\nmodel categoryspectemplatebinding {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  categoryId     String   @db.VarChar(36)\n  specTemplateId String   @db.VarChar(36)\n  createdAt      DateTime @default(now())\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  specTemplate spectemplate @relation(fields: [specTemplateId], references: [id])\n\n  @@unique([categoryId, specTemplateId])\n  @@index([specTemplateId])\n}\n\nmodel customertag {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  name        String   @db.VarChar(120)\n  code        String   @unique @db.VarChar(100)\n  color       String?  @db.VarChar(30)\n  description String?  @db.Text\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  userLinks customertaglink[]\n}\n\nmodel customertaglink {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  userId    String   @db.VarChar(36)\n  tagId     String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n\n  user sysuser     @relation(fields: [userId], references: [id])\n  tag  customertag @relation(fields: [tagId], references: [id])\n\n  @@unique([userId, tagId])\n  @@index([tagId])\n}\n\nmodel customercommunication {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  userId       String   @db.VarChar(36)\n  channel      String   @db.VarChar(50)\n  content      String   @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  user sysuser @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n}\n\nmodel orderlogisticssegment {\n  id                 String    @id @default(uuid()) @db.VarChar(36)\n  orderId            String    @db.VarChar(36)\n  segmentType        String    @db.VarChar(50)\n  carrierName        String?   @db.VarChar(100)\n  trackingNumber     String?   @db.VarChar(120)\n  statusLabel        String?   @db.VarChar(100)\n  estimatedArrivalAt DateTime?\n  shippedAt          DateTime?\n  remark             String?   @db.Text\n  timelineJson       Json? // 物流轨迹，格式：[{ \"time\": \"2026-07-11T10:00:00Z\", \"label\": \"已出库\" }]\n  createdAt          DateTime  @default(now())\n  updatedAt          DateTime  @default(now()) @updatedAt\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel orderoperationlog {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  orderId      String   @db.VarChar(36)\n  actionType   String   @db.VarChar(60)\n  actionNote   String?  @db.Text\n  operatorName String?  @db.VarChar(100)\n  createdAt    DateTime @default(now())\n\n  order orderrecord @relation(fields: [orderId], references: [id])\n\n  @@index([orderId])\n}\n\nmodel shippingtemplate {\n  id               String   @id @default(uuid()) @db.VarChar(36)\n  name             String   @db.VarChar(120)\n  countryCode      String?  @db.VarChar(10)\n  minWeightKg      Decimal? @db.Decimal(10, 3)\n  maxWeightKg      Decimal? @db.Decimal(10, 3)\n  minOrderAmount   Decimal? @db.Decimal(10, 2)\n  maxOrderAmount   Decimal? @db.Decimal(10, 2)\n  shippingFee      Decimal  @db.Decimal(10, 2)\n  freeShippingOver Decimal? @db.Decimal(10, 2)\n  isActive         Boolean  @default(true)\n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @default(now()) @updatedAt\n}\n\n/// 物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态\nmodel shippingchannel {\n  id                 String   @id @default(uuid()) @db.VarChar(36)\n  name               String   @db.VarChar(120)\n  estimatedTime      String   @db.VarChar(120)\n  /// 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）\n  billingMode        String   @default(\"EXPRESS_TIER\") @db.VarChar(30)\n  /// 渠道系数，最终运费 = 基础运费 × 系数，默认 1.00\n  channelCoefficient Decimal  @default(1.0000) @db.Decimal(10, 4)\n  /// 按国家运费规则（人民币 ¥）。\n  /// EXPRESS_TIER: { \"United States\": { \"tiers\": [{ \"maxKg\": 0.5, \"fee\": 10 }] } }\n  /// SEA_PER_KG:   { \"United States\": { \"baseKg\": 12, \"baseFee\": 180, \"perKgFee\": 12 } }\n  /// 兼容旧版固定价数字：{ \"United States\": 15.53 }\n  countryFeesJson    Json\n  isEnabled          Boolean  @default(true)\n  sortWeight         Int      @default(0)\n  createdAt          DateTime @default(now())\n  updatedAt          DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n  @@index([billingMode])\n}\n\nmodel currencysetting {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  currencyCode String   @unique @db.VarChar(10)\n  currencyName String   @db.VarChar(60)\n  exchangeRate Decimal  @db.Decimal(12, 6)\n  isDefault    Boolean  @default(false)\n  isActive     Boolean  @default(true)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n}\n\nmodel taxrule {\n  id          String   @id @default(uuid()) @db.VarChar(36)\n  countryCode String   @db.VarChar(10)\n  countryName String?  @db.VarChar(100)\n  taxType     String   @db.VarChar(50)\n  taxRate     Decimal  @db.Decimal(6, 2)\n  taxNumber   String?  @db.VarChar(100)\n  isActive    Boolean  @default(true)\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @default(now()) @updatedAt\n\n  @@index([countryCode])\n}\n\nmodel rolepermission {\n  id            String   @id @default(uuid()) @db.VarChar(36)\n  roleCode      String   @db.VarChar(50)\n  permissionKey String   @db.VarChar(100)\n  isAllowed     Boolean  @default(true)\n  createdAt     DateTime @default(now())\n  updatedAt     DateTime @default(now()) @updatedAt\n\n  @@unique([roleCode, permissionKey])\n}\n\nmodel keywordgroup {\n  id                 String           @id @default(uuid()) @db.VarChar(36)\n  name               String           @db.VarChar(120)\n  slug               String?          @db.VarChar(120)\n  groupType          keywordgrouptype @default(GENERAL)\n  parentGroupId      String?          @db.VarChar(36)\n  sceneKey           String?          @db.VarChar(160)\n  sceneType          String?          @db.VarChar(80)\n  sceneArea          keywordscenearea @default(RECOMMENDATION)\n  sceneSlotKey       String?          @db.VarChar(160)\n  sceneSlotName      String?          @db.VarChar(120)\n  floorTitle         String?          @db.VarChar(160)\n  floorIcon          String?          @db.VarChar(160)\n  floorLink          String?          @db.VarChar(255)\n  homepageSortWeight Int              @default(0)\n  showOnHomepage     Boolean          @default(false)\n  sortWeight         Int              @default(0)\n  isActive           Boolean          @default(true)\n  description        String?          @db.Text\n  createdAt          DateTime         @default(now())\n  updatedAt          DateTime         @default(now()) @updatedAt\n\n  parentGroup    keywordgroup?         @relation(\"KeywordGroupTree\", fields: [parentGroupId], references: [id])\n  childrenGroups keywordgroup[]        @relation(\"KeywordGroupTree\")\n  keywords       keyworditem[]\n  categoryLinks  categorykeywordlink[]\n  productLinks   keywordgroupproduct[]\n\n  @@index([groupType])\n  @@index([parentGroupId])\n  @@index([sceneKey])\n  @@index([sceneType])\n  @@index([sceneArea])\n  @@index([sceneSlotKey])\n  @@index([showOnHomepage])\n  @@index([homepageSortWeight])\n  @@index([isActive])\n}\n\nmodel keyworditem {\n  id                String   @id @default(uuid()) @db.VarChar(36)\n  groupId           String   @db.VarChar(36)\n  parentKeywordId   String?  @db.VarChar(36)\n  keyword           String   @db.VarChar(160)\n  normalizedKeyword String?  @db.VarChar(160)\n  sortWeight        Int      @default(0)\n  isActive          Boolean  @default(true)\n  createdAt         DateTime @default(now())\n  updatedAt         DateTime @default(now()) @updatedAt\n\n  group            keywordgroup                @relation(fields: [groupId], references: [id])\n  parentKeyword    keyworditem?                @relation(\"KeywordItemTree\", fields: [parentKeywordId], references: [id])\n  childrenKeywords keyworditem[]               @relation(\"KeywordItemTree\")\n  categoryLinks    categorykeywordlink[]\n  productLinks     product_keyword_relations[]\n\n  @@index([groupId])\n  @@index([parentKeywordId])\n  @@index([normalizedKeyword])\n  @@index([isActive])\n}\n\nmodel categorykeywordlink {\n  id              String   @id @default(uuid()) @db.VarChar(36)\n  categoryId      String   @db.VarChar(36)\n  keywordGroupId  String   @db.VarChar(36)\n  keywordItemId   String?  @db.VarChar(36)\n  applyToHomepage Boolean  @default(false)\n  sortWeight      Int      @default(0)\n  createdAt       DateTime @default(now())\n  updatedAt       DateTime @default(now()) @updatedAt\n\n  category     category     @relation(fields: [categoryId], references: [id])\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  keywordItem  keyworditem? @relation(fields: [keywordItemId], references: [id])\n\n  @@unique([categoryId, keywordGroupId, keywordItemId])\n  @@index([categoryId])\n  @@index([keywordGroupId])\n  @@index([keywordItemId])\n}\n\nmodel categorybanner {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  title      String?  @db.VarChar(150)\n  imageUrl   String   @db.VarChar(700)\n  linkUrl    String   @db.VarChar(1000)\n  sortWeight Int      @default(0)\n  isEnabled  Boolean  @default(true)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([isEnabled])\n  @@index([sortWeight])\n}\n\nmodel product_category_relations {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  productId  String   @db.VarChar(36)\n  categoryId String   @db.VarChar(36)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  product  product  @relation(fields: [productId], references: [id], onDelete: Cascade)\n  category category @relation(fields: [categoryId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, categoryId])\n  @@index([productId])\n  @@index([categoryId])\n}\n\nmodel product_keyword_relations {\n  id        String   @id @default(uuid()) @db.VarChar(36)\n  productId String   @db.VarChar(36)\n  keywordId String   @db.VarChar(36)\n  createdAt DateTime @default(now())\n  updatedAt DateTime @default(now()) @updatedAt\n\n  product product     @relation(fields: [productId], references: [id], onDelete: Cascade)\n  keyword keyworditem @relation(fields: [keywordId], references: [id], onDelete: Cascade)\n\n  @@unique([productId, keywordId])\n  @@index([productId])\n  @@index([keywordId])\n}\n\nmodel keywordgroupproduct {\n  id             String   @id @default(uuid()) @db.VarChar(36)\n  keywordGroupId String   @db.VarChar(36)\n  productId      String   @db.VarChar(36)\n  sortWeight     Int      @default(0)\n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @default(now()) @updatedAt\n\n  keywordGroup keywordgroup @relation(fields: [keywordGroupId], references: [id])\n  product      product      @relation(fields: [productId], references: [id])\n\n  @@unique([keywordGroupId, productId])\n  @@index([keywordGroupId])\n  @@index([productId])\n  @@index([sortWeight])\n}\n\n/// 商品标题后缀预设（“批量加后缀”下拉框数据源，支持自定义 CRUD）\nmodel suffixconfig {\n  id         String   @id @default(uuid()) @db.VarChar(36)\n  suffixName String   @unique @map(\"suffix_name\") @db.VarChar(120)\n  sortWeight Int      @default(0)\n  createdAt  DateTime @default(now())\n  updatedAt  DateTime @default(now()) @updatedAt\n\n  @@index([sortWeight])\n  @@map(\"suffix_config\")\n}\n\n/// 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD\nmodel brandalias {\n  id           String   @id @default(uuid()) @db.VarChar(36)\n  alias        String   @unique @db.VarChar(120)\n  standardName String   @map(\"standard_name\") @db.VarChar(120)\n  sortWeight   Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @default(now()) @updatedAt\n\n  @@index([sortWeight])\n  @@map(\"brand_alias\")\n}\n",
+  "inlineSchemaHash": "3effbcc09c3109112ae7a06a2182523e6e3411d210a97748b59fd93cf27c7740",
   "copyEngine": true
 }
 

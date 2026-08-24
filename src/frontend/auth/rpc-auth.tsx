@@ -3,8 +3,6 @@
 import { useEffect } from 'react'
 import { useUserSession } from '@/tools/FrontendSession'
 import { create } from 'zustand'
-import { useOptionalCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
-import { customerLoginHref, hardNavigate } from '@/frontend/utils/hardNavigate'
 
 interface AuthDialogState {
   isOpen: boolean
@@ -36,19 +34,12 @@ export function clearAuth(): void {
 }
 
 /**
- * 401 未登录处理
- * 逻辑：清除本地缓存并打开统一登录/注册弹窗（CustomerAuthModal）
- * 注意：如果当前已在登录页，则不弹窗
+ * 401 未登录处理（店面）
+ * 只清本地坏 token，绝不自动跳登录/注册页。
+ * 游客正常浏览不应被打断；需要登录时由「Login to view price / Cart / Account / Add to cart」等显式入口触发。
  */
 export function handleUnauthorized(): void {
   clearAuth()
-
-  if (typeof window === 'undefined') return
-  const path = window.location.pathname || '/'
-  if (/customerlogin|customerregister/i.test(path)) return
-
-  const returnTo = `${path}${window.location.search || ''}`
-  hardNavigate(customerLoginHref(returnTo))
 }
 
 /**
@@ -58,13 +49,13 @@ export function handleUnauthorized(): void {
  */
 export function AuthExpiredDialog() {
   const { isOpen, close } = useAuthDialog()
-  const authModal = useOptionalCustomerAuthModal()
 
   useEffect(() => {
-    if (!isOpen || !authModal) return
+    // Storefront: never auto-open login/register modal on 401.
+    // Explicit entry points (price / cart / account / add-to-cart) open auth themselves.
+    if (!isOpen) return
     close()
-    authModal.openAuthModal('login')
-  }, [isOpen, close, authModal])
+  }, [isOpen, close])
 
   return null
 }

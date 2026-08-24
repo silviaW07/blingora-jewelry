@@ -17,7 +17,7 @@ type WishlistHeartButtonProps = {
   onToggle?: (favorited: boolean, productId: string) => void
   /** 点击前拦截；返回 false 则不切换 */
   beforeToggle?: () => boolean
-  /** 未登录时是否弹出登录（默认 true） */
+  /** 未登录时是否弹出登录（默认 false：心愿单走本地，浏览不必强制注册） */
   requireAuth?: boolean
   size?: number
   strokeWidth?: number
@@ -31,7 +31,7 @@ export const WishlistHeartButton = ({
   iconClassName,
   onToggle,
   beforeToggle,
-  requireAuth = true,
+  requireAuth = false,
   size = 18,
   strokeWidth = 1.6,
   'aria-label': ariaLabel,

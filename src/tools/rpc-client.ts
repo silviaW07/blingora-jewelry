@@ -275,10 +275,14 @@ async function rpcCallInternal<T>(
         }
       }
 
-      // 401 统一拦截 — reject so callers leave loading state (do not hang forever)
+      // 401：清坏 token 后抛错，由调用方处理。
+      // 店面浏览不自动跳登录/注册（避免游客看商品时被打断）；后台仍提示登录。
       if (resp.status === 401) {
         rpcAuth.handleUnauthorized();
-        toast.error('Please login first', { id: 'auth-401' });
+        const isStorefront = actionName.includes('.frontend.')
+        if (!isStorefront) {
+          toast.error('Please login first', { id: 'auth-401' });
+        }
         throw new Error(ERROR_MESSAGES.UNAUTHORIZED);
       }
 

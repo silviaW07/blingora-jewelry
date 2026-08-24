@@ -44,19 +44,23 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           1688 链接导入任务
         </CardTitle>
         <CardDescription>
-          分两步：先提交链接，本机采集器抓页后再点解析（服务器无法直接打开 1688）。
+          分两步：先提交链接（支持商品详情或店铺分类页），本机采集器抓页/展开后再点解析。
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground flex items-center gap-1">
-            1688 商品源链接
+            1688 商品 / 分类源链接
             <Info className="w-3 h-3 text-muted-foreground" />
           </label>
           <Textarea
             value={state.createForm.urls}
             onChange={(e) => handlers.handleCreateFormChange('urls', e.target.value)}
-            placeholder="请输入 URL，支持多行批量粘贴"
+            placeholder={
+              '商品详情：https://detail.1688.com/offer/数字.html\n' +
+              '店铺分类：https://shopXXXX.1688.com/page/offerlist_….htm\n' +
+              '支持多行批量粘贴；分类页需本机采集器展开后再解析'
+            }
             className="min-h-[120px] resize-none focus-visible:ring-primary"
           />
         </div>

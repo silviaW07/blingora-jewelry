@@ -32,8 +32,8 @@ export function OptimizedProductImage({
   width,
   height,
   priority = false,
-  imageWidth = 1200,
-  quality = 90,
+  imageWidth = 720,
+  quality = 82,
 }: Props) {
   const primary = toProxiedImageUrl(src, { width: imageWidth, quality })
   const raw = String(src || '').trim()
@@ -53,7 +53,12 @@ export function OptimizedProductImage({
         : raw
 
   if ((!primary && !raw) || failed || !displaySrc) {
-    return <div className={cn('bg-[#f0ebe3]', className)} aria-hidden />
+    return (
+      <div
+        className={cn(fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]', className)}
+        aria-hidden
+      />
+    )
   }
 
   const handleError = () => {

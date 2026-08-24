@@ -317,6 +317,8 @@ export interface CreateImportTaskOutput {
   createdCount: number
   /** 因历史已导入（同 offer/goods）而跳过的链接数 */
   skippedDuplicateCount: number
+  /** 其中店铺分类页链接数（需本机采集器先展开为商品详情） */
+  categoryUrlCount?: number
 }
 
 export interface CreatePinduoduoImportTaskInput {
@@ -661,6 +663,7 @@ import {
   normalizeBrandTitleSync,
 } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
+import { is1688ShopCategoryUrl } from '@/shared/1688ShopCategory'
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
 import {
   resolveInitialStock,
@@ -4870,6 +4873,10 @@ const is1688ImportSourceUrl = (sourceUrl?: string | null) => {
   return /1688\.com/i.test(url) && /offer\/\d+/i.test(url)
 }
 
+/** 店铺分类列表页（offerlist）：提交后由本机采集器展开为多条 offer 详情 */
+const is1688ShopCategorySourceUrl = (sourceUrl?: string | null) =>
+  is1688ShopCategoryUrl(sourceUrl)
+
 const isPinduoduoImportSourceUrl = (sourceUrl?: string | null) =>
   Boolean(sourceUrl && isPinduoduoProductUrl(String(sourceUrl)))
 
@@ -6891,16 +6898,21 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
     }
 
     const validUrls = httpUrls.filter(
-      u => is1688ImportSourceUrl(u) || isPinduoduoProductUrl(u),
+      u => is1688ImportSourceUrl(u) || is1688ShopCategorySourceUrl(u) || isPinduoduoProductUrl(u),
     )
     if (validUrls.length === 0) {
       throw new Error(
-        '请粘贴有效的1688商品详情链接（需含 offer/数字，如 https://detail.1688.com/offer/123.html）或拼多多商品链接',
+        '请粘贴有效的1688商品详情链接（offer/数字）、店铺分类页链接（page/offerlist…）或拼多多商品链接',
       )
     }
 
-    // 历史已导入（同 offer/goods）或本次粘贴内重复：直接跳过，不建条目、不进入解析
-    const { acceptedUrls, skippedDuplicateCount } = await filterFreshImportUrls(validUrls)
+    const categoryUrls = validUrls.filter(u => is1688ShopCategorySourceUrl(u))
+    const detailOrPddUrls = validUrls.filter(u => !is1688ShopCategorySourceUrl(u))
+
+    // 历史已导入（同 offer/goods）或本次粘贴内重复：直接跳过；分类页保留待采集器展开
+    const { acceptedUrls: acceptedDetailUrls, skippedDuplicateCount } =
+      await filterFreshImportUrls(detailOrPddUrls)
+    const acceptedUrls = [...acceptedDetailUrls, ...categoryUrls]
     if (acceptedUrls.length === 0) {
       throw new Error(
         skippedDuplicateCount > 0
@@ -6940,7 +6952,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
         }
       })
 
-      // 1688：每条独立 URL → 一条独立 pending 父商品（不走表格产品编号合并）
+      // 1688：每条独立 URL → 一条独立 pending（分类页由采集器展开为多条 offer）
       await tx.importtaskitem.createMany({
         data: acceptedUrls.map(url => ({
           importTaskId: newTask.id,
@@ -6951,7 +6963,13 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
           publishStatus: 'PENDING' as any,
           isPublished: false,
           targetCategoryId: input.defaultCategoryId || null,
-          goodsStatus: (input.defaultStatus || 'DRAFT') as any
+          goodsStatus: (input.defaultStatus || 'DRAFT') as any,
+          ...(is1688ShopCategorySourceUrl(url)
+            ? {
+                failureReason: '店铺分类页：请先运行本机采集器展开商品后再解析',
+                previewDataJson: { importKind: 'SHOP_CATEGORY' } as any,
+              }
+            : {}),
         }))
       })
 
@@ -6962,6 +6980,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
       taskId: task.id,
       createdCount: acceptedUrls.length,
       skippedDuplicateCount,
+      categoryUrlCount: categoryUrls.length,
     }
   })
 )
@@ -7149,6 +7168,22 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
       const item = taskSnapshot.items[index]
       const sourceUrl = String(item.sourceUrl || '')
+
+      // 分类页必须先由本机采集器展开为 offer 详情；直接解析只会失败
+      if (is1688ShopCategorySourceUrl(sourceUrl)) {
+        await prisma.importtaskitem.update({
+          where: { id: item.id },
+          data: {
+            fetchStatus: 'FAILED' as any,
+            failureReason: '店铺分类页尚未展开：请先运行本机采集器（collect-1688），再点开始解析',
+            fetchFinishedAt: new Date(),
+          },
+        })
+        failureCount += 1
+        bumpParseJobProgress(index + 1, taskSnapshot.items.length)
+        continue
+      }
+
       const dedupeKey = resolveImportLinkDedupeKey(sourceUrl)
       if (dedupeKey) {
         if (seenDedupeKeysInTask.has(dedupeKey) || existingLinkKeysElsewhere.has(dedupeKey)) {

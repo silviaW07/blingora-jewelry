@@ -269,6 +269,9 @@ export interface CreateImportTaskInput {
 
 export interface CreateImportTaskOutput {
   taskId: string
+  createdCount?: number
+  skippedDuplicateCount?: number
+  categoryUrlCount?: number
 }
 
 export interface StartParseTaskInput {

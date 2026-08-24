@@ -11,6 +11,23 @@ export type KeywordLocale = 'en' | 'es' | 'zh'
 
 /** Longer-first order for greedy left-to-right matching. */
 export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
+  // watch style compounds (before shorter stems)
+  '日志无钻女间',
+  '日志无钻男间',
+  '日志有钻女间',
+  '日志有钻男间',
+  '日志型',
+  '日志',
+  '无钻',
+  '有钻',
+  '女间金',
+  '男间金',
+  '女间',
+  '男间',
+  '间金',
+  '女款',
+  '男款',
+  '镶钻',
   // materials (compound first)
   '内胆材质',
   '外壳材质',
@@ -270,6 +287,22 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
 ]
 
 export const PRODUCT_KEYWORD_EN: Record<string, string> = {
+  日志无钻女间: 'Datejust No-Diamond Ladies Two-Tone',
+  日志无钻男间: 'Datejust No-Diamond Mens Two-Tone',
+  日志有钻女间: 'Datejust Diamond Ladies Two-Tone',
+  日志有钻男间: 'Datejust Diamond Mens Two-Tone',
+  日志型: 'Datejust',
+  日志: 'Datejust',
+  无钻: 'No Diamond',
+  有钻: 'Diamond',
+  女间金: 'Ladies Two-Tone',
+  男间金: 'Mens Two-Tone',
+  女间: 'Ladies Two-Tone',
+  男间: 'Mens Two-Tone',
+  间金: 'Two-Tone',
+  女款: 'Ladies',
+  男款: 'Mens',
+  镶钻: 'Diamond-Set',
   内胆材质: 'Inner liner',
   外壳材质: 'Outer shell',
   杯盖材质: 'Lid material',
@@ -521,6 +554,22 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
 }
 
 export const PRODUCT_KEYWORD_ES: Record<string, string> = {
+  日志无钻女间: 'Datejust sin diamantes bicolor mujer',
+  日志无钻男间: 'Datejust sin diamantes bicolor hombre',
+  日志有钻女间: 'Datejust con diamantes bicolor mujer',
+  日志有钻男间: 'Datejust con diamantes bicolor hombre',
+  日志型: 'Datejust',
+  日志: 'Datejust',
+  无钻: 'Sin diamantes',
+  有钻: 'Con diamantes',
+  女间金: 'Bicolor mujer',
+  男间金: 'Bicolor hombre',
+  女间: 'Bicolor mujer',
+  男间: 'Bicolor hombre',
+  间金: 'Bicolor',
+  女款: 'Mujer',
+  男款: 'Hombre',
+  镶钻: 'Con diamantes',
   内胆材质: 'Forro interior',
   外壳材质: 'Carcasa',
   杯盖材质: 'Tapa',
