@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { ImagePlus, Minus, Plus } from 'lucide-react'
+import { Copy, ImagePlus, Minus, Plus, Trash2 } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
 import { PreviewableThumb } from '@/backend/components/ImageLightbox'
 import { Button, TableCell, TableRow } from '@/backend/components/ui'
@@ -100,6 +100,51 @@ const buildColorGroups = (skus: PendingImportSkuDraftItem[]): ColorGroup[] => {
   })
 }
 
+function PendingImportSkuRowActions({
+  disabled,
+  canDelete,
+  onCopy,
+  onDelete,
+  copyTitle,
+  deleteTitle,
+}: {
+  disabled?: boolean
+  canDelete: boolean
+  onCopy: () => void
+  onDelete: () => void
+  copyTitle: string
+  deleteTitle: string
+}) {
+  return (
+    <TableCell className="pr-6 text-right">
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-slate-600 hover:text-primary"
+          disabled={disabled}
+          title={copyTitle}
+          onClick={onCopy}
+        >
+          <Copy className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+          disabled={disabled || !canDelete}
+          title={canDelete ? deleteTitle : '至少保留一行'}
+          onClick={onDelete}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </TableCell>
+  )
+}
+
 function SpecDetailRows({
   itemId,
   skus,
@@ -108,6 +153,7 @@ function SpecDetailRows({
   handlers,
   minOrderQty,
   indentClassName = 'pl-10',
+  canDeleteSku = true,
 }: {
   itemId: string
   skus: PendingImportSkuDraftItem[]
@@ -116,6 +162,7 @@ function SpecDetailRows({
   handlers: ProductManagementHandlers
   minOrderQty?: number | null
   indentClassName?: string
+  canDeleteSku?: boolean
 }) {
   const displayMoq = Math.max(1, Number(minOrderQty ?? 1) || 1)
   return (
@@ -222,7 +269,16 @@ function SpecDetailRows({
                     : <span>--</span>}
               />
             </TableCell>
-            <TableCell colSpan={3} />
+            <TableCell />
+            <TableCell />
+            <PendingImportSkuRowActions
+              disabled={state.pendingImportSkuSaving}
+              canDelete={canDeleteSku}
+              copyTitle="复制规格行"
+              deleteTitle="删除规格行"
+              onCopy={() => void handlers.duplicatePendingImportSkuRow(itemId, sku.sku_key)}
+              onDelete={() => void handlers.deletePendingImportSkuRow(itemId, sku.sku_key)}
+            />
           </TableRow>
         )
       })}
@@ -327,6 +383,7 @@ export function PendingImportSkuChildRows({
         handlers={handlers}
         minOrderQty={displayMoq}
         indentClassName="pl-8"
+        canDeleteSku={skus.length > 1}
       />
     )
   }
@@ -525,7 +582,16 @@ export function PendingImportSkuChildRows({
                 )}
               </TableCell>
 
-              <TableCell colSpan={3} />
+              <TableCell />
+              <TableCell />
+              <PendingImportSkuRowActions
+                disabled={state.pendingImportSkuSaving}
+                canDelete={colorGroups.length > 1}
+                copyTitle="复制颜色行"
+                deleteTitle="删除颜色行"
+                onCopy={() => void handlers.duplicatePendingImportSkuColorRow(itemId, group.color)}
+                onDelete={() => void handlers.deletePendingImportSkuColorRow(itemId, group.color)}
+              />
             </TableRow>
 
             {canExpand && colorExpanded ? (
@@ -536,6 +602,7 @@ export function PendingImportSkuChildRows({
                 state={state}
                 handlers={handlers}
                 minOrderQty={displayMoq}
+                canDeleteSku={skus.length > 1}
               />
             ) : null}
           </React.Fragment>

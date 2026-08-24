@@ -649,6 +649,10 @@ import {
   inlineUpdatePendingImportItemField as updateImportFrom1688PendingImportItemField,
   batchUpdatePendingImportItemField as batchUpdateImportFrom1688PendingImportItemField,
   inlineUpdatePendingImportSkuField as updateImportFrom1688PendingImportSkuField,
+  duplicatePendingImportSku as duplicateImportFrom1688PendingImportSku,
+  deletePendingImportSku as deleteImportFrom1688PendingImportSku,
+  duplicatePendingImportSkuColorGroup as duplicateImportFrom1688PendingImportSkuColorGroup,
+  deletePendingImportSkuColorGroup as deleteImportFrom1688PendingImportSkuColorGroup,
   publishPendingImportItems as publishImportFrom1688PendingImportItems,
   reparsePendingImportItems as reparseImportFrom1688PendingImportItems,
   cancelPendingImportParseJob as cancelImportFrom1688PendingImportParseJob,
@@ -3229,6 +3233,54 @@ export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
     })
     return { success: true }
   })
+)
+
+export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_id: string
+    sku_key: string
+  }): Promise<{ success: boolean; item_skus: PendingImportSkuDraftItem[] }> => {
+    return duplicateImportFrom1688PendingImportSku({
+      itemId: input.item_id,
+      skuKey: input.sku_key,
+    })
+  }),
+)
+
+export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_id: string
+    sku_key: string
+  }): Promise<{ success: boolean; item_skus: PendingImportSkuDraftItem[] }> => {
+    return deleteImportFrom1688PendingImportSku({
+      itemId: input.item_id,
+      skuKey: input.sku_key,
+    })
+  }),
+)
+
+export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_id: string
+    color: string
+  }): Promise<{ success: boolean; item_skus: PendingImportSkuDraftItem[] }> => {
+    return duplicateImportFrom1688PendingImportSkuColorGroup({
+      itemId: input.item_id,
+      color: input.color,
+    })
+  }),
+)
+
+export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_id: string
+    color: string
+  }): Promise<{ success: boolean; item_skus: PendingImportSkuDraftItem[] }> => {
+    return deleteImportFrom1688PendingImportSkuColorGroup({
+      itemId: input.item_id,
+      color: input.color,
+    })
+  }),
 )
 
 export const updatePendingImportGallery = requireRole([UserRole.ADMIN])(

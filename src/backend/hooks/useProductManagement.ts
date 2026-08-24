@@ -33,6 +33,10 @@ import {
   inlineUpdatePendingImportItemField,
   batchUpdatePendingImportItemField,
   inlineUpdatePendingImportSkuField,
+  duplicatePendingImportSku,
+  deletePendingImportSku,
+  duplicatePendingImportSkuColorGroup,
+  deletePendingImportSkuColorGroup,
   updatePendingImportGallery,
   publishPendingImportItems,
   reparsePendingImportItems,
@@ -778,6 +782,10 @@ export interface ProductManagementHandlers {
   uploadPendingImportSkuImage: (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   replacePendingImportSkuImage: (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   removePendingImportSkuImage: (itemId: string, skuKey: string) => Promise<void>
+  duplicatePendingImportSkuRow: (itemId: string, skuKey: string) => Promise<void>
+  deletePendingImportSkuRow: (itemId: string, skuKey: string) => Promise<void>
+  duplicatePendingImportSkuColorRow: (itemId: string, color: string) => Promise<void>
+  deletePendingImportSkuColorRow: (itemId: string, color: string) => Promise<void>
   addBatchImportRow: () => void
   removeBatchImportRow: (index: number) => void
   handleSubmitBatchImport: () => Promise<void>
@@ -4213,6 +4221,82 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const applyPendingImportSkuMutation = (
+    itemId: string,
+    item_skus: PendingImportSkuDraftItem[],
+  ) => {
+    setPendingImportQueue((prev) =>
+      prev.map((item) => {
+        if (item.item_id !== itemId) return item
+        const totalStock = item_skus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
+        return {
+          ...item,
+          item_skus,
+          item_availableStock: totalStock,
+          item_skuSummaryText: item_skus.map((sku) => sku.spec_text).filter(Boolean).join(' | '),
+        }
+      }),
+    )
+  }
+
+  const duplicatePendingImportSkuRow = async (itemId: string, skuKey: string) => {
+    if (pendingImportSkuSaving) return
+    setPendingImportSkuSaving(true)
+    try {
+      const result = await duplicatePendingImportSku({ item_id: itemId, sku_key: skuKey })
+      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      toast.success('已复制规格行')
+    } catch (err: any) {
+      toast.error(err.message || '复制规格行失败')
+    } finally {
+      setPendingImportSkuSaving(false)
+    }
+  }
+
+  const deletePendingImportSkuRow = async (itemId: string, skuKey: string) => {
+    if (pendingImportSkuSaving) return
+    if (!window.confirm('确认删除该规格行？')) return
+    setPendingImportSkuSaving(true)
+    try {
+      const result = await deletePendingImportSku({ item_id: itemId, sku_key: skuKey })
+      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      toast.success('已删除规格行')
+    } catch (err: any) {
+      toast.error(err.message || '删除规格行失败')
+    } finally {
+      setPendingImportSkuSaving(false)
+    }
+  }
+
+  const duplicatePendingImportSkuColorRow = async (itemId: string, color: string) => {
+    if (pendingImportSkuSaving) return
+    setPendingImportSkuSaving(true)
+    try {
+      const result = await duplicatePendingImportSkuColorGroup({ item_id: itemId, color })
+      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      toast.success('已复制颜色行')
+    } catch (err: any) {
+      toast.error(err.message || '复制颜色行失败')
+    } finally {
+      setPendingImportSkuSaving(false)
+    }
+  }
+
+  const deletePendingImportSkuColorRow = async (itemId: string, color: string) => {
+    if (pendingImportSkuSaving) return
+    if (!window.confirm(`确认删除颜色「${color}」及其全部规格？`)) return
+    setPendingImportSkuSaving(true)
+    try {
+      const result = await deletePendingImportSkuColorGroup({ item_id: itemId, color })
+      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      toast.success('已删除颜色行')
+    } catch (err: any) {
+      toast.error(err.message || '删除颜色行失败')
+    } finally {
+      setPendingImportSkuSaving(false)
+    }
+  }
+
   const addBatchImportRow = () => setBatchImportRows(prev => [...prev, defaultImportRow()])
   const removeBatchImportRow = (index: number) => setBatchImportRows(prev => prev.filter((_, i) => i !== index))
 
@@ -4481,6 +4565,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       uploadPendingImportSkuImage,
       replacePendingImportSkuImage,
       removePendingImportSkuImage,
+      duplicatePendingImportSkuRow,
+      deletePendingImportSkuRow,
+      duplicatePendingImportSkuColorRow,
+      deletePendingImportSkuColorRow,
       addBatchImportRow,
       removeBatchImportRow,
       handleSubmitBatchImport,

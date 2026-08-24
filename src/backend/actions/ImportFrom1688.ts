@@ -474,6 +474,31 @@ export interface InlineUpdatePendingImportSkuFieldInput {
   value: string | number
 }
 
+export interface DuplicatePendingImportSkuInput {
+  itemId: string
+  skuKey: string
+}
+
+export interface DeletePendingImportSkuInput {
+  itemId: string
+  skuKey: string
+}
+
+export interface DuplicatePendingImportSkuColorGroupInput {
+  itemId: string
+  color: string
+}
+
+export interface DeletePendingImportSkuColorGroupInput {
+  itemId: string
+  color: string
+}
+
+export interface MutatePendingImportSkusOutput {
+  success: boolean
+  item_skus: PendingImportSkuItem[]
+}
+
 export interface PublishPendingImportItemsInput {
   itemIds: string[]
 }
@@ -8062,6 +8087,200 @@ export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
       }
     })
   })
+)
+
+const allocatePendingSkuKey = (existingKeys: Set<string>, seed: string) => {
+  const base = normalizeText(seed).replace(/\s+/g, '-') || 'sku'
+  let candidate = `${base}-copy`
+  let index = 2
+  while (existingKeys.has(candidate)) {
+    candidate = `${base}-copy-${index}`
+    index += 1
+  }
+  existingKeys.add(candidate)
+  return candidate
+}
+
+const clonePendingSkuWithColor = (
+  sku: PendingImportSkuItem,
+  nextColor: string,
+  existingKeys: Set<string>,
+): PendingImportSkuItem => {
+  const attributes = (Array.isArray(sku.attributes) ? sku.attributes : []).map((attr) =>
+    attr.name === '颜色' ? { ...attr, value: nextColor } : { ...attr },
+  )
+  if (!attributes.some((attr) => attr.name === '颜色')) {
+    attributes.unshift({ name: '颜色', value: nextColor })
+  }
+  return {
+    ...sku,
+    sku_key: allocatePendingSkuKey(existingKeys, sku.sku_key || nextColor),
+    attributes,
+    spec_text: formatSpecText(attributes, sku.spec_text || '默认规格'),
+  }
+}
+
+const clonePendingSkuWithSpecSuffix = (
+  sku: PendingImportSkuItem,
+  existingKeys: Set<string>,
+): PendingImportSkuItem => {
+  const attributes = (Array.isArray(sku.attributes) ? sku.attributes : []).map((attr) => ({ ...attr }))
+  const specAttr = attributes.find(
+    (attr) => attr.name === '规格' || attr.name === '尺码' || attr.name === '尺寸',
+  )
+  if (specAttr) {
+    const base = String(specAttr.value || '默认规格').replace(/\s*副本\d*$/, '').trim() || '默认规格'
+    let next = `${base} 副本`
+    let index = 2
+    while (attributes.some((attr) => attr !== specAttr && attr.value === next)) {
+      next = `${base} 副本${index}`
+      index += 1
+    }
+    specAttr.value = next
+  } else {
+    attributes.push({ name: '规格', value: '默认规格 副本' })
+  }
+  return {
+    ...sku,
+    sku_key: allocatePendingSkuKey(existingKeys, sku.sku_key || 'sku'),
+    attributes,
+    spec_text: formatSpecText(attributes, sku.spec_text || '默认规格'),
+  }
+}
+
+const allocateUniqueColorName = (existingColors: Set<string>, sourceColor: string) => {
+  const base = String(sourceColor || '默认颜色').replace(/\s*副本\d*$/, '').trim() || '默认颜色'
+  let next = `${base} 副本`
+  let index = 2
+  while (existingColors.has(next)) {
+    next = `${base} 副本${index}`
+    index += 1
+  }
+  existingColors.add(next)
+  return next
+}
+
+const persistPendingImportSkuDrafts = async (item: any, nextSkus: PendingImportSkuItem[]) => {
+  if (!nextSkus.length) throw new Error('至少保留一个规格行')
+  const stocks = nextSkus.map((sku) => toNumberOrNull(sku.stock) ?? 0)
+  const currentPreview = (item.previewDataJson || {}) as PreviewDataJson
+  const categoryMap = await loadImportPricingCategories(prisma)
+  const coefficient = resolveImportCategoryCoefficient(
+    categoryMap,
+    item.targetCategoryId || null,
+  )
+  const exchangeRate = await getGlobalExchangeRate(prisma)
+  const priceSummary = summarizePendingSkuPrices(nextSkus, exchangeRate)
+
+  await prisma.importtaskitem.update({
+    where: { id: item.id },
+    data: {
+      skuSummaryText: nextSkus.map((sku) => sku.spec_text).join(' | '),
+      costPrice: nextSkus[0]?.cost_price ?? item.costPrice,
+      weightGrams: nextSkus[0]?.weight_grams ?? item.weightGrams,
+      availableStock: stocks.reduce((sum, value) => sum + value, 0),
+      coefficient,
+      cnyPriceMin: priceSummary.cnyMin,
+      cnyPriceMax: priceSummary.cnyMax,
+      usdPriceMin: priceSummary.usdMin,
+      usdPriceMax: priceSummary.usdMax,
+      previewDataJson: {
+        ...currentPreview,
+        price: priceSummary.cnyMin ?? currentPreview.price,
+        skuTable: nextSkus.map((sku) => ({
+          skuKey: sku.sku_key,
+          spec: sku.spec_text,
+          costPrice: sku.cost_price,
+          price: sku.price,
+          stock: sku.stock,
+          weightGrams: sku.weight_grams,
+          imageUrl: sku.image_url || undefined,
+          attributes: sku.attributes,
+        })),
+      } as any,
+    },
+  })
+
+  return nextSkus
+}
+
+export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
+  withResult(async (input: DuplicatePendingImportSkuInput): Promise<MutatePendingImportSkusOutput> => {
+    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    if (!item) throw new Error('未找到待上传明细')
+    if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+
+    const drafts = resolvePendingSkuDrafts(item)
+    const source = drafts.find((sku) => sku.sku_key === input.skuKey)
+    if (!source) throw new Error('未找到对应规格行')
+
+    const existingKeys = new Set(drafts.map((sku) => sku.sku_key))
+    const cloned = clonePendingSkuWithSpecSuffix(source, existingKeys)
+    const nextSkus = [...drafts]
+    const sourceIndex = drafts.findIndex((sku) => sku.sku_key === input.skuKey)
+    nextSkus.splice(sourceIndex + 1, 0, cloned)
+    const item_skus = await persistPendingImportSkuDrafts(item, nextSkus)
+    return { success: true, item_skus }
+  }),
+)
+
+export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
+  withResult(async (input: DeletePendingImportSkuInput): Promise<MutatePendingImportSkusOutput> => {
+    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    if (!item) throw new Error('未找到待上传明细')
+    if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+
+    const drafts = resolvePendingSkuDrafts(item)
+    if (drafts.length <= 1) throw new Error('至少保留一个规格行')
+    if (!drafts.some((sku) => sku.sku_key === input.skuKey)) throw new Error('未找到对应规格行')
+
+    const nextSkus = drafts.filter((sku) => sku.sku_key !== input.skuKey)
+    const item_skus = await persistPendingImportSkuDrafts(item, nextSkus)
+    return { success: true, item_skus }
+  }),
+)
+
+export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+  withResult(async (input: DuplicatePendingImportSkuColorGroupInput): Promise<MutatePendingImportSkusOutput> => {
+    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    if (!item) throw new Error('未找到待上传明细')
+    if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+
+    const drafts = resolvePendingSkuDrafts(item)
+    const color = String(input.color || '').trim() || '默认颜色'
+    const sourceSkus = drafts.filter((sku) => getColorAttrValue(sku) === color)
+    if (!sourceSkus.length) throw new Error('未找到对应颜色行')
+
+    const existingColors = new Set(drafts.map((sku) => getColorAttrValue(sku)))
+    const nextColor = allocateUniqueColorName(existingColors, color)
+    const existingKeys = new Set(drafts.map((sku) => sku.sku_key))
+    const cloned = sourceSkus.map((sku) => clonePendingSkuWithColor(sku, nextColor, existingKeys))
+
+    const lastIndex = drafts.reduce((max, sku, index) => (
+      getColorAttrValue(sku) === color ? index : max
+    ), -1)
+    const nextSkus = [...drafts]
+    nextSkus.splice(lastIndex + 1, 0, ...cloned)
+    const item_skus = await persistPendingImportSkuDrafts(item, nextSkus)
+    return { success: true, item_skus }
+  }),
+)
+
+export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+  withResult(async (input: DeletePendingImportSkuColorGroupInput): Promise<MutatePendingImportSkusOutput> => {
+    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    if (!item) throw new Error('未找到待上传明细')
+    if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+
+    const drafts = resolvePendingSkuDrafts(item)
+    const color = String(input.color || '').trim() || '默认颜色'
+    const remaining = drafts.filter((sku) => getColorAttrValue(sku) !== color)
+    if (remaining.length === drafts.length) throw new Error('未找到对应颜色行')
+    if (!remaining.length) throw new Error('至少保留一个颜色行')
+
+    const item_skus = await persistPendingImportSkuDrafts(item, remaining)
+    return { success: true, item_skus }
+  }),
 )
 
 export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
