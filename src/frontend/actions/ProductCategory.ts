@@ -735,7 +735,13 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
   )
   const childCategories = categories.filter(cat => isStorefrontLevel2(cat) && !cat.isBrandCategory)
   const brandCategories = categories.filter(cat => cat.isBrandCategory)
-  const brandIds = brandCategories.map(brand => brand.id)
+  // Brand L1 shelf ids — product L1s (Bags/Accessories/…) must show these shelf's brand tags,
+  // not only brands whose parentId equals the product L1 (almost always empty).
+  const brandShelfIds = new Set(
+    brandCategories.filter((brand) => isStorefrontLevel1(brand)).map((brand) => brand.id),
+  )
+  const brandTagCategories = brandCategories.filter((brand) => isStorefrontLevel2(brand))
+  const brandIds = brandTagCategories.map((brand) => brand.id)
 
   // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
   const brandProductCount = new Map<string, number>()
@@ -790,8 +796,11 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
             category_slug: child.slug,
             image_url: child.imageUrl || child.iconUrl || null,
           })),
-        brand_options: brandCategories
-          .filter(brand => brand.parentId === cat.id)
+        brand_options: (brandShelfIds.size > 0
+          ? brandTagCategories.filter(
+              (brand) => brand.parentId != null && brandShelfIds.has(brand.parentId),
+            )
+          : brandTagCategories)
           .map(brand => ({
             category_id: brand.id,
             category_name: resolveCategoryDisplayName(brand.translationsJson, brand.name, lang),
