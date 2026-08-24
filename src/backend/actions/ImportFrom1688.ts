@@ -5383,9 +5383,10 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
   // 品质/材质/below* 后缀：允许粘在货号后（3313normal quality）或后面再跟 jewelry
   if (isGluedFilterSuffixToken(normalizedToken)) return true
 
-  // 纯 ASCII 品牌词（Chanel/Gucci/LV…）：要求左右非字母数字邻居。
+  // 纯 ASCII 品牌词（Chanel/Gucci/LV…）：要求左右非字母邻居。
   // 标题常见「Chanel【钛钢】」「Chanel钛钢」「chanel 欧美」——品牌后直接接中文/符号仍算命中；
   // 「2026 Gucci / 2026loewe」去空格后变 2026GUCCI——年份数字紧挨品牌也要算命中；
+  // 「Gucci2025 / Miumiu25 / Chanel2026」——品牌后紧跟年份/货号数字也要算命中；
   // 但要避免短词误伤（LV⊂SALVATION）以及长词嵌在英文单词内部。
   const isAsciiToken = /^[A-Z0-9]+$/.test(normalizedToken)
   if (isAsciiToken) {
@@ -5401,7 +5402,11 @@ export const containsCategoryMatchToken = (text: string, token: string) => {
         !/[A-Z0-9]/.test(before) ||
         // 年份前缀：2026GUCCI / 2026LOEWE
         /[0-9]/.test(before)
-      const afterOk = !after || !/[A-Z0-9]/.test(after)
+      const afterOk =
+        !after ||
+        !/[A-Z0-9]/.test(after) ||
+        // 年份/货号后缀：Gucci2025 / Miumiu25 / Chanel2026
+        /[0-9]/.test(after)
       if (beforeOk && afterOk) return true
       from = idx + 1
     }

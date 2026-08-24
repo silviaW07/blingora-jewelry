@@ -470,7 +470,11 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 sortBy={queryState.sortBy}
                 onPriceRangeChange={handlers.handlePriceRangeChange}
                 onSortChange={handlers.handleSortChange}
-                brandOptions={state.availableBrandFilters}
+                brandOptions={
+                  state.availableBrandFilters.length > 0
+                    ? state.availableBrandFilters
+                    : state.visibleBrandOptions
+                }
                 selectedBrandId={queryState.brandCategoryId}
                 onBrandToggle={handlers.handleBrandQuickFilterToggle}
                 isBrandExpanded={state.isBrandExpanded}
