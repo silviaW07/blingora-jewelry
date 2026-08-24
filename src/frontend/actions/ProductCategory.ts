@@ -292,6 +292,7 @@ import {
 } from '@/shared/productSearch'
 import { normalizePosterLinkUrl } from '@/shared/posterLink'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
+import { isProductTypeCategory } from '@/shared/categoryMatchGuards'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
@@ -474,8 +475,26 @@ const hasCategoryParentId = (parentId?: string | null) => {
 const isStorefrontLevel1 = (cat: { level?: number | null; parentId?: string | null }) =>
   !hasCategoryParentId(cat.parentId) && Number(cat.level) !== 2
 
-/** 有父级即二级，不要求 level === 2 */
+/** 有父级即二级，不要求 level === 2（商品筛选上下文用） */
 const isStorefrontLevel2 = (cat: { parentId?: string | null }) => hasCategoryParentId(cat.parentId)
+
+/** 前台顶栏/侧栏导航二级：与后台分类树一致，须 level=2 且为真实货架（排除 Material/silver/品质筛选等标签类目） */
+const isStorefrontNavChild = (
+  child: {
+    level?: number | null
+    parentId?: string | null
+    name?: string | null
+    isBrandCategory?: boolean | null
+  },
+  parent: { id: string; name?: string | null },
+) =>
+  child.parentId === parent.id &&
+  Number(child.level) === 2 &&
+  isProductTypeCategory({
+    name: child.name,
+    parentName: parent.name,
+    isBrandCategory: child.isBrandCategory,
+  })
 
 const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCategoryContext> => {
   if (!categoryId) {
@@ -762,7 +781,7 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
         image_url: cat.imageUrl || cat.iconUrl || null,
         display_config: parseCategoryDisplayConfig(cat.categoryDisplayConfigJson),
         children: childCategories
-          .filter(child => child.parentId === cat.id)
+          .filter(child => isStorefrontNavChild(child, cat))
           .slice()
           .sort((a, b) => b.sortWeight - a.sortWeight || a.name.localeCompare(b.name, 'zh-CN'))
           .map(child => ({
