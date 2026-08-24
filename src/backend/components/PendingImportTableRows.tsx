@@ -179,7 +179,7 @@ function PendingImportTableRowsInner({
           </div>
         </TableCell>
 
-        <TableCell>
+        <TableCell className="whitespace-normal">
           <div className="flex items-start gap-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2 max-w-[260px]">
@@ -275,7 +275,7 @@ function PendingImportTableRowsInner({
                 </div>
               </div>
             </div>
-            <div className="flex flex-col overflow-hidden">
+            <div className="flex min-w-0 flex-col">
               <PendingImportEditableCell
                 itemId={item.item_id}
                 field="product_name"
@@ -315,7 +315,7 @@ function PendingImportTableRowsInner({
                 />
               ) : null}
               {isSingleColor ? (
-                <span className="text-[11px] text-slate-500 mt-0.5">
+                <span className="mt-0.5 block max-w-[420px] whitespace-normal break-words text-[11px] leading-4 text-slate-500">
                   {pricesUniform
                     ? `包含规格：${Array.from(new Set(specLabels)).join(', ')}`
                     : `单色商品 · 价格有差异，点击左侧展开查看规格`}

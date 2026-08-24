@@ -434,7 +434,7 @@ export function PendingImportSkuChildRows({
                 )}
               </TableCell>
 
-              <TableCell className="py-3">
+              <TableCell className="whitespace-normal py-3">
                 <div className="flex items-start gap-3 pl-4 border-l-2 border-primary/30">
                   <ColorImageUploader
                     itemId={itemId}
@@ -445,9 +445,9 @@ export function PendingImportSkuChildRows({
                     handlers={handlers}
                   />
 
-                  <div className="space-y-1 min-w-0">
+                  <div className="min-w-0 max-w-[420px] space-y-1">
                     <div className="text-sm font-semibold text-slate-800">颜色：{group.color}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="whitespace-normal break-words text-xs leading-4 text-slate-500">
                       {group.pricesUniform
                         ? `包含规格：${group.specs.join(', ')}`
                         : `${group.skus.length} 个规格，价格有差异`}
