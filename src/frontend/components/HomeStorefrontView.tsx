@@ -46,7 +46,7 @@ import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav';
 import { isStorefrontHomeContentZone } from '@/frontend/utils/recommendZoneDisplay';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
-import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
+import { ProductListToolbar, ListingBrandFilter } from '@/frontend/components/ProductListToolbar';
 import { ListingPageHead } from '@/frontend/components/ListingPageHead';
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection';
 import { MobileHomeStorefrontView } from '@/frontend/components/MobileHomeStorefrontView';
@@ -1215,49 +1215,54 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
             data-controller-name="分类商品展示区"
           >
             <div className="bg-transparent px-0 py-2 sm:py-5">
-              <div className="category-listing-head flex flex-col gap-2 border-b border-[#ece7dc] pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:pb-5">
-                <ListingPageHead
-                  title={currentCategoryName}
-                  countText={
-                    isLoadingProducts && products.length === 0
-                      ? t('product.loadingShort')
-                      : `(${t('product.totalCount', { count: totalCount })})`
-                  }
-                  backLabel={t('common.backToHome')}
-                  onBack={(event) => {
-                    event.preventDefault();
-                    goHomeFromListing();
-                  }}
-                  note={
-                    isSecondaryCategoryResults
-                      ? t('product.secondaryCategoryNote')
-                      : queryState.categoryId
-                        ? t('product.includesSubcategories')
-                        : null
-                  }
-                />
+              <div className="category-listing-head flex flex-col gap-2 border-b border-[#ece7dc] pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:pb-5">
+                <div className="min-w-0 shrink-0 sm:max-w-[220px]">
+                  <ListingPageHead
+                    title={currentCategoryName}
+                    countText={
+                      isLoadingProducts && products.length === 0
+                        ? t('product.loadingShort')
+                        : `(${t('product.totalCount', { count: totalCount })})`
+                    }
+                    backLabel={t('common.backToHome')}
+                    onBack={(event) => {
+                      event.preventDefault();
+                      goHomeFromListing();
+                    }}
+                    note={
+                      isSecondaryCategoryResults
+                        ? t('product.secondaryCategoryNote')
+                        : queryState.categoryId
+                          ? t('product.includesSubcategories')
+                          : null
+                    }
+                  />
+                </div>
 
-                <ProductListToolbar
-                  className="w-full shrink-0 sm:w-auto sm:justify-end"
-                  minPrice={queryState.minPrice}
-                  maxPrice={queryState.maxPrice}
-                  sortBy={queryState.sortBy}
-                  onPriceRangeChange={handlers.handlePriceRangeChange}
-                  onSortChange={handlers.handleSortChange}
-                  brandOptions={
+                <ListingBrandFilter
+                  className="-mt-0.5 min-w-0 flex-1"
+                  brands={
                     state.availableBrandFilters.length > 0
                       ? state.availableBrandFilters
                       : state.visibleBrandOptions
                   }
                   selectedBrandId={queryState.brandCategoryId}
                   onBrandToggle={handlers.handleBrandQuickFilterToggle}
-                  isBrandExpanded={state.isBrandExpanded}
-                  onBrandExpandToggle={handlers.handleToggleBrandExpand}
                   isLoadingBrands={
                     state.isLoadingBrandFilters &&
                     state.availableBrandFilters.length === 0 &&
                     state.visibleBrandOptions.length === 0
                   }
+                />
+
+                <ProductListToolbar
+                  className="w-full shrink-0 sm:w-auto sm:justify-end"
+                  hideBrands
+                  minPrice={queryState.minPrice}
+                  maxPrice={queryState.maxPrice}
+                  sortBy={queryState.sortBy}
+                  onPriceRangeChange={handlers.handlePriceRangeChange}
+                  onSortChange={handlers.handleSortChange}
                 />
               </div>
 

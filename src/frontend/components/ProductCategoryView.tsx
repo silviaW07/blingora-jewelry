@@ -8,7 +8,7 @@ import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Pac
 import type { ProductCategoryState, ProductCategoryHandlers, ProductCategoryBannerItem, ProductCategoryKeywordItem } from '@/frontend/hooks/useProductCategory';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { StorefrontPagination } from '@/frontend/components/StorefrontPagination';
-import { ProductListToolbar } from '@/frontend/components/ProductListToolbar';
+import { ProductListToolbar, ListingBrandFilter } from '@/frontend/components/ProductListToolbar';
 import { ListingPageHead } from '@/frontend/components/ListingPageHead';
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
 import { useTranslation } from 'react-i18next';
@@ -160,8 +160,8 @@ export const ProductCategoryView = ({
 
           <section className="space-y-6" data-controller-name="商品结果展示区" data-api-unique-id='productcategoryview-r81884d5ddb85b4ab-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
               <div className="rounded-[36px] bg-white px-5 py-5 shadow-[0_18px_55px_-42px_rgba(0,0,0,0.4)] sm:px-6 lg:px-8" data-api-unique-id='productcategoryview-r8d0e44f2c72aff49-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                <div className="category-listing-head flex flex-col gap-2 border-b border-[#ece7dc] pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:pb-5" data-api-unique-id='productcategoryview-r54d4d55ec42aabc8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                  <div className="min-w-0 w-full shrink" data-api-unique-id='productcategoryview-ra6f6136bd984af62-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                <div className="category-listing-head flex flex-col gap-2 border-b border-[#ece7dc] pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:pb-5" data-api-unique-id='productcategoryview-r54d4d55ec42aabc8-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  <div className="min-w-0 shrink-0 sm:max-w-[220px]" data-api-unique-id='productcategoryview-ra6f6136bd984af62-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     <ListingPageHead
                       title={currentCategoryName}
                       countText={
@@ -181,27 +181,30 @@ export const ProductCategoryView = ({
                     </div> : null}
                   </div>
 
-                  <ProductListToolbar
-                    className="w-full min-w-0 shrink-0 sm:w-auto sm:justify-end"
-                    minPrice={queryState.minPrice}
-                    maxPrice={queryState.maxPrice}
-                    sortBy={queryState.sortBy}
-                    onPriceRangeChange={handlers.handlePriceRangeChange}
-                    onSortChange={handlers.handleSortChange}
-                    brandOptions={
+                  <ListingBrandFilter
+                    className="-mt-0.5 min-w-0 flex-1"
+                    brands={
                       state.availableBrandFilters.length > 0
                         ? state.availableBrandFilters
                         : state.visibleBrandOptions
                     }
                     selectedBrandId={queryState.brandCategoryId}
                     onBrandToggle={handlers.handleBrandQuickFilterToggle}
-                    isBrandExpanded={state.isBrandExpanded}
-                    onBrandExpandToggle={handlers.handleToggleBrandExpand}
                     isLoadingBrands={
                       state.isLoadingBrandFilters &&
                       state.availableBrandFilters.length === 0 &&
                       state.visibleBrandOptions.length === 0
                     }
+                  />
+
+                  <ProductListToolbar
+                    className="w-full min-w-0 shrink-0 sm:w-auto sm:justify-end"
+                    hideBrands
+                    minPrice={queryState.minPrice}
+                    maxPrice={queryState.maxPrice}
+                    sortBy={queryState.sortBy}
+                    onPriceRangeChange={handlers.handlePriceRangeChange}
+                    onSortChange={handlers.handleSortChange}
                   />
                 </div>
 

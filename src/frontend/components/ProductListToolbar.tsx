@@ -32,7 +32,40 @@ export type ProductListToolbarProps = {
   onBrandExpandToggle?: () => void
   isLoadingBrands?: boolean
   brandVisibleCount?: number
+  /** When true, brands are rendered by the parent in a dedicated slot. */
+  hideBrands?: boolean
   className?: string
+}
+
+export type ListingBrandFilterProps = {
+  brands?: BrandCategoryItem[]
+  selectedBrandId?: string
+  onBrandToggle?: (brandId: string) => void
+  isLoadingBrands?: boolean
+  className?: string
+}
+
+/** Brand chips for the listing head middle slot (wraps inside its own column). */
+export function ListingBrandFilter({
+  brands = [],
+  selectedBrandId = '',
+  onBrandToggle,
+  isLoadingBrands = false,
+  className,
+}: ListingBrandFilterProps) {
+  if (!onBrandToggle) return null
+  if (!isLoadingBrands && brands.length === 0) return null
+
+  return (
+    <div className={cn('listing-brands-slot min-w-0', className)} data-controller-name="商品列表品牌筛选区">
+      <ListingBrandCircles
+        brands={brands}
+        selectedBrandId={selectedBrandId}
+        onToggle={onBrandToggle}
+        isLoading={isLoadingBrands}
+      />
+    </div>
+  )
 }
 
 const formatUsd = (value: number) => {
@@ -299,6 +332,7 @@ export function ProductListToolbar({
   onBrandExpandToggle,
   isLoadingBrands = false,
   brandVisibleCount,
+  hideBrands = false,
   className,
 }: ProductListToolbarProps) {
   const { t } = useTranslation()
@@ -332,7 +366,8 @@ export function ProductListToolbar({
 
   const activeSort = SORT_OPTIONS.some((option) => option.value === sortBy) ? sortBy : 'NEWEST'
 
-  const showBrandFilter = Boolean(onBrandToggle) && (isLoadingBrands || brandOptions.length > 0)
+  const showBrandFilter =
+    !hideBrands && Boolean(onBrandToggle) && (isLoadingBrands || brandOptions.length > 0)
 
   return (
     <div

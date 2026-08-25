@@ -2240,6 +2240,16 @@ html.is-narrow .listing-toolbar__price-values {
   font-size: 0.6875rem !important;
 }
 
+html.is-narrow .listing-brands-slot {
+  width: 100% !important;
+  max-width: 100% !important;
+  order: 2;
+}
+
+html.is-narrow .category-listing-head > .listing-toolbar {
+  order: 3;
+}
+
 html.is-narrow .listing-price-slider {
   position: relative !important;
   display: block !important;
