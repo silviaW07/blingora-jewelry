@@ -112,7 +112,9 @@ module.exports = {
       min_uptime: '15s',
       restart_delay: 4000,
       exp_backoff_restart_delay: 2000,
-      max_memory_restart: '1024M',
+      // Pending import / OneBound parse can hold large preview JSON in-process;
+      // 1GB caused minute-level OOM flaps and admin "Backend service error" toasts.
+      max_memory_restart: '2048M',
       kill_timeout: 10000,
       env: {
         NODE_ENV: 'production',

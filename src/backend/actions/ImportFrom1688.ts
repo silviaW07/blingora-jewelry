@@ -4473,14 +4473,22 @@ const isPendingSellPriceStuckAtCost = (
   return comparable.every((row) => Math.abs((row.price as number) - (row.cost as number)) < 0.02)
 }
 
-const repairPendingImportPricesMissingCoefficient = async () => {
+const repairPendingImportPricesMissingCoefficient = async (opts?: {
+  maxScan?: number
+  maxUpdate?: number
+}) => {
+  const maxScan = Math.max(1, opts?.maxScan ?? 300)
+  const maxUpdate = Math.max(1, opts?.maxUpdate ?? 40)
   const exchangeRate = await getGlobalExchangeRate(prisma)
   const categoryMap = await loadImportPricingCategories(prisma)
   let updated = 0
+  let scanned = 0
   let cursor: string | undefined
-  const batchSize = 100
+  const batchSize = 50
 
   for (;;) {
+    if (scanned >= maxScan || updated >= maxUpdate) break
+    const take = Math.min(batchSize, maxScan - scanned)
     const items = await prisma.importtaskitem.findMany({
       where: {
         isPublished: false,
@@ -4500,13 +4508,15 @@ const repairPendingImportPricesMissingCoefficient = async () => {
         parsedPriceMin: true,
       },
       orderBy: { id: 'asc' },
-      take: batchSize,
+      take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     })
     if (!items.length) break
     cursor = items[items.length - 1]?.id
+    scanned += items.length
 
     for (const item of items) {
+      if (updated >= maxUpdate) break
       const coefficient = resolvePendingItemCoefficient(item, categoryMap)
       if (!(coefficient > 1.0001)) continue
       const drafts = resolvePendingSkuDrafts(item)
@@ -4544,7 +4554,7 @@ const repairPendingImportPricesMissingCoefficient = async () => {
       updated += 1
     }
 
-    if (items.length < batchSize) break
+    if (items.length < take) break
   }
   return updated
 }
@@ -6069,6 +6079,9 @@ export const getImportTaskDetail = requireRole([UserRole.ADMIN])(
 /** Queue list is a hot path — full charset/mock sweeps at most once per 10 minutes. */
 let lastPendingQueueMaintenanceAt = 0
 const PENDING_QUEUE_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000
+/** Price repair used to run on every pending-tab poll and scanned all rows — OOM flap. */
+let lastPendingPriceRepairAt = 0
+const PENDING_PRICE_REPAIR_INTERVAL_MS = 10 * 60 * 1000
 
 /** In-process mutex: only one 1688/PDD parse job (startParseTask or reparse) at a time. */
 let parseJobBusy = false
@@ -6247,16 +6260,23 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
     }
 
-    // 系数已写入但售价仍=成本：每次打开队列都尝试修复（不限维护间隔）
-    try {
-      const repairedPriceCount = await repairPendingImportPricesMissingCoefficient()
-      if (repairedPriceCount > 0) {
-        console.info(
-          `[getPendingImportQueue] repaired ${repairedPriceCount} pending items with sell price stuck at cost`,
-        )
+    // 系数已写入但售价仍=成本：限频 + 限量扫描（admin UI 每 3s 轮询时不能全表扫）
+    const duePriceRepair = Date.now() - lastPendingPriceRepairAt >= PENDING_PRICE_REPAIR_INTERVAL_MS
+    if (duePriceRepair) {
+      lastPendingPriceRepairAt = Date.now()
+      try {
+        const repairedPriceCount = await repairPendingImportPricesMissingCoefficient({
+          maxScan: 300,
+          maxUpdate: 40,
+        })
+        if (repairedPriceCount > 0) {
+          console.info(
+            `[getPendingImportQueue] repaired ${repairedPriceCount} pending items with sell price stuck at cost`,
+          )
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to repair pending sell prices', error)
       }
-    } catch (error) {
-      console.error('[getPendingImportQueue] failed to repair pending sell prices', error)
     }
 
     const dueMaintenance =

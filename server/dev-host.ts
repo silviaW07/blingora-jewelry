@@ -8,6 +8,14 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
+/** Prisma arg cleanup logs flood stdout under load and inflate RSS in production. */
+const PRISMA_CLEAN_LOG =
+  process.env.DEBUG_PRISMA_CLEAN === '1' ||
+  (process.env.NODE_ENV !== 'production' && process.env.DEBUG_PRISMA_CLEAN !== '0')
+function prismaCleanLog(message: string): void {
+  if (PRISMA_CLEAN_LOG) console.log(message)
+}
+
 // Node 20 happy-eyeballs tries AAAA first; on hosts without working IPv6 egress
 // outbound fetch (1688 scrape, FX rates) dies with ETIMEDOUT in
 // internalConnectMultiple. Force IPv4 unless explicitly opted out.
@@ -54,7 +62,7 @@ if (EGRESS_PROXY) {
         bodyTimeout: 60_000,
       }),
     )
-    console.log(`[DEV] Outbound fetch routed through proxy: ${EGRESS_PROXY.replace(/\/\/[^@]*@/, '//***@')}`)
+    prismaCleanLog(`[DEV] Outbound fetch routed through proxy: ${EGRESS_PROXY.replace(/\/\/[^@]*@/, '//***@')}`)
   } catch (error) {
     console.warn(
       '[DEV] HTTPS_PROXY set but undici is unavailable; run `pnpm add undici` to enable proxying',
@@ -86,9 +94,9 @@ if (_platform === 'darwin' && _arch === 'arm64') {
 const enginePath = path.join(ENGINES_ROOT, engineFile)
 if (fs.existsSync(enginePath)) {
   process.env.PRISMA_QUERY_ENGINE_LIBRARY = enginePath
-  console.log(`[DEV] Using Prisma engine: ${enginePath}`)
+  prismaCleanLog(`[DEV] Using Prisma engine: ${enginePath}`)
 } else {
-  console.log(`[DEV] Prisma engine not found at ${enginePath}, using default resolution`)
+  prismaCleanLog(`[DEV] Prisma engine not found at ${enginePath}, using default resolution`)
 }
 
 // 动态发现 server-action-generated/PROJ_*.js 入口文件
@@ -100,7 +108,7 @@ if (!projFile) {
 }
 const bundledModule = require(path.join(generatedDir, projFile)) as { path: string; router: express.Router }
 const { router, path: routePath } = bundledModule
-console.log(`[DEV] Loaded entry: ${projFile}`)
+prismaCleanLog(`[DEV] Loaded entry: ${projFile}`)
 
 // 初始化 Prisma Client 并注入到 globalThis
 // 这样 Server Action 里的 prisma.ts 可以通过 globalThis.__runtimePrisma 获取
@@ -283,7 +291,7 @@ function fixDbDateValues(
         const fixed = new Date(Date.UTC(y, m, d))
         if (fixed.getTime() !== val.getTime()) {
           obj[key] = fixed
-          console.log(`[DEV] Fixed @db.Date field ${pathStr}.${key}: ${val.toISOString()} -> ${fixed.toISOString()}`)
+          prismaCleanLog(`[DEV] Fixed @db.Date field ${pathStr}.${key}: ${val.toISOString()} -> ${fixed.toISOString()}`)
         }
       } else if (typeof val === 'string' && ISO_DATE_RE.test(val)) {
         const parsed = new Date(val)
@@ -295,7 +303,7 @@ function fixDbDateValues(
           const d = localDate.getUTCDate()
           const fixed = new Date(Date.UTC(y, m, d))
           obj[key] = fixed
-          console.log(`[DEV] Fixed @db.Date field ${pathStr}.${key}: "${val}" -> ${fixed.toISOString()}`)
+          prismaCleanLog(`[DEV] Fixed @db.Date field ${pathStr}.${key}: "${val}" -> ${fixed.toISOString()}`)
         }
       } else if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
         fixDbDateValues(val, dbDateFields, timezoneOffset, `${pathStr}.${key}`)
@@ -424,20 +432,20 @@ function fixEnumValues(
       // where 里传 "ALL" 且 enum 定义里没有 ALL，表示不筛选，删掉该条件
       if (isWhere && val.toLowerCase() === 'all' && !enumInfo.valuesMap.has('all')) {
         delete obj[key]
-        console.log(`[DEV] Removed enum filter "${val}" for ${pathStr}.${key} (treated as no filter)`)
+        prismaCleanLog(`[DEV] Removed enum filter "${val}" for ${pathStr}.${key} (treated as no filter)`)
         continue
       }
       const real = enumInfo.valuesMap.get(val.toLowerCase())
       if (real && real !== val) {
         obj[key] = real
-        console.log(`[DEV] Fixed enum value: ${pathStr}.${key} "${val}" -> "${real}"`)
+        prismaCleanLog(`[DEV] Fixed enum value: ${pathStr}.${key} "${val}" -> "${real}"`)
       }
     } else if (val && typeof val === 'object' && !Array.isArray(val)) {
       for (const op of Object.keys(val)) {
         if (typeof val[op] === 'string') {
           const real = enumInfo.valuesMap.get(val[op].toLowerCase())
           if (real && real !== val[op]) {
-            console.log(`[DEV] Fixed enum value: ${pathStr}.${key}.${op} "${val[op]}" -> "${real}"`)
+            prismaCleanLog(`[DEV] Fixed enum value: ${pathStr}.${key}.${op} "${val[op]}" -> "${real}"`)
             val[op] = real
           }
         } else if (Array.isArray(val[op])) {
@@ -445,7 +453,7 @@ function fixEnumValues(
             if (typeof item === 'string') {
               const real = enumInfo.valuesMap.get(item.toLowerCase())
               if (real && real !== item) {
-                console.log(`[DEV] Fixed enum value: ${pathStr}.${key}.${op}[] "${item}" -> "${real}"`)
+                prismaCleanLog(`[DEV] Fixed enum value: ${pathStr}.${key}.${op}[] "${item}" -> "${real}"`)
                 return real
               }
             }
@@ -498,13 +506,13 @@ function fixEnumStringOps(
 
       if (matched.length === 0) {
         delete obj[key]
-        console.log(`[DEV] Removed enum ${op} "${val[op]}" for ${pathStr}.${key} (no matching values)`)
+        prismaCleanLog(`[DEV] Removed enum ${op} "${val[op]}" for ${pathStr}.${key} (no matching values)`)
       } else if (matched.length === 1) {
         obj[key] = matched[0]
-        console.log(`[DEV] Fixed enum ${op}: ${pathStr}.${key} { ${op}: "${val[op]}" } -> "${matched[0]}"`)
+        prismaCleanLog(`[DEV] Fixed enum ${op}: ${pathStr}.${key} { ${op}: "${val[op]}" } -> "${matched[0]}"`)
       } else {
         obj[key] = { in: matched }
-        console.log(`[DEV] Fixed enum ${op}: ${pathStr}.${key} { ${op}: "${val[op]}" } -> { in: [${matched.join(', ')}] }`)
+        prismaCleanLog(`[DEV] Fixed enum ${op}: ${pathStr}.${key} { ${op}: "${val[op]}" } -> { in: [${matched.join(', ')}] }`)
       }
       break
     }
@@ -530,7 +538,7 @@ function fixFieldNames(obj: any, fieldMap: Map<string, string>, pathStr: string)
     if (realField && realField !== key) {
       obj[realField] = obj[key]
       delete obj[key]
-      console.log(`[DEV] Fixed field name: ${pathStr}.${key} -> ${pathStr}.${realField}`)
+      prismaCleanLog(`[DEV] Fixed field name: ${pathStr}.${key} -> ${pathStr}.${realField}`)
     }
 
     const val = obj[currentKey]
@@ -561,7 +569,7 @@ function fixGroupByAggregates(args: any): void {
     if (val.select && Object.keys(val).length === 1) {
       const inner = val.select
       args[key] = inner
-      console.log(`[DEV] Fixed groupBy ${key}: removed extra select wrapper`)
+      prismaCleanLog(`[DEV] Fixed groupBy ${key}: removed extra select wrapper`)
     }
     // _count: { _all: true } 是合法的 groupBy 语法，保持不变
   }
@@ -574,7 +582,7 @@ function fixGroupByAggregates(args: any): void {
       if (val.select && Object.keys(val).length === 1) {
         const inner = val.select
         args.select[key] = inner
-        console.log(`[DEV] Fixed groupBy select.${key}: removed extra select wrapper`)
+        prismaCleanLog(`[DEV] Fixed groupBy select.${key}: removed extra select wrapper`)
       }
       // _count: { _all: true } 是合法的 groupBy 语法，保持不变
     }
@@ -587,7 +595,7 @@ function fixGroupByAggregates(args: any): void {
       if (!val || typeof val !== 'object') continue
       if (val.select && Object.keys(val).length === 1) {
         args.having[key] = val.select
-        console.log(`[DEV] Fixed groupBy having.${key}: removed extra select wrapper`)
+        prismaCleanLog(`[DEV] Fixed groupBy having.${key}: removed extra select wrapper`)
       }
     }
   }
@@ -605,13 +613,13 @@ function fixGroupByAggregates(args: any): void {
           const byFields = args.by
           if (Array.isArray(byFields) && byFields.length > 0) {
             item[key] = { [byFields[0]]: val._all }
-            console.log(`[DEV] Fixed groupBy orderBy.${key}: { _all: "${val._all}" } -> { ${byFields[0]}: "${val._all}" }`)
+            prismaCleanLog(`[DEV] Fixed groupBy orderBy.${key}: { _all: "${val._all}" } -> { ${byFields[0]}: "${val._all}" }`)
           }
         }
         // _sum: { select: { field: "desc" } } → _sum: { field: "desc" }
         if (val.select && Object.keys(val).length === 1) {
           item[key] = val.select
-          console.log(`[DEV] Fixed groupBy orderBy.${key}: removed extra select wrapper`)
+          prismaCleanLog(`[DEV] Fixed groupBy orderBy.${key}: removed extra select wrapper`)
         }
       }
     }
@@ -644,15 +652,15 @@ function cleanInvalidValues(obj: any, path: string, dateTimeFields?: Set<string>
 
     if (isInvalidFieldValue(val)) {
       delete obj[key]
-      console.log(`[DEV] Removed invalid ${path}.${key} (was "${val}")`)
+      prismaCleanLog(`[DEV] Removed invalid ${path}.${key} (was "${val}")`)
     } else if (val === null && nullableFields && !nullableFields.has(key) && !PRISMA_OPERATORS.has(key)) {
       delete obj[key]
-      console.log(`[DEV] Removed null for non-nullable field ${path}.${key}`)
+      prismaCleanLog(`[DEV] Removed null for non-nullable field ${path}.${key}`)
     } else if (typeof val === 'string' && dateTimeFields?.has(key) && ISO_DATE_RE.test(val)) {
       const date = new Date(val)
       if (!isNaN(date.getTime())) {
         obj[key] = date
-        console.log(`[DEV] Converted ${path}.${key} string to Date`)
+        prismaCleanLog(`[DEV] Converted ${path}.${key} string to Date`)
       }
     } else if (Array.isArray(val)) {
       for (let i = val.length - 1; i >= 0; i--) {
@@ -661,19 +669,19 @@ function cleanInvalidValues(obj: any, path: string, dateTimeFields?: Set<string>
           const shouldDelete = cleanInvalidValues(item, `${path}.${key}[${i}]`, dateTimeFields, nullableFields)
           if (shouldDelete || Object.keys(item).length === 0) {
             val.splice(i, 1)
-            console.log(`[DEV] Removed empty ${path}.${key}[${i}]`)
+            prismaCleanLog(`[DEV] Removed empty ${path}.${key}[${i}]`)
           }
         }
       }
       if (val.length === 0) {
         delete obj[key]
-        console.log(`[DEV] Removed empty array ${path}.${key}`)
+        prismaCleanLog(`[DEV] Removed empty array ${path}.${key}`)
       }
     } else if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
       const shouldDelete = cleanInvalidValues(val, `${path}.${key}`, dateTimeFields, nullableFields)
       if (shouldDelete || Object.keys(val).length === 0) {
         delete obj[key]
-        console.log(`[DEV] Removed empty ${path}.${key}`)
+        prismaCleanLog(`[DEV] Removed empty ${path}.${key}`)
       }
     }
   }
@@ -694,7 +702,7 @@ function convertDateStrings(obj: any, path: string, dateTimeFields: Set<string>)
       const date = new Date(val)
       if (!isNaN(date.getTime())) {
         obj[key] = date
-        console.log(`[DEV] Converted ${path}.${key} string "${val}" to Date`)
+        prismaCleanLog(`[DEV] Converted ${path}.${key} string "${val}" to Date`)
       }
     } else if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
       convertDateStrings(val, `${path}.${key}`, dateTimeFields)
@@ -717,7 +725,7 @@ function getChildRelations(prisma: any, modelName: string): Array<{ childModel: 
     || prisma._dmmf?.modelMap
 
   if (!models) {
-    console.log(`[DEV] No DMMF models found for cascade relation lookup`)
+    prismaCleanLog(`[DEV] No DMMF models found for cascade relation lookup`)
     return results
   }
 
@@ -731,7 +739,7 @@ function getChildRelations(prisma: any, modelName: string): Array<{ childModel: 
     }
   }
 
-  console.log(`[DEV] Looking for child relations of "${modelName}" (resolved: "${resolvedModelName}") among ${Object.keys(models).length} models`)
+  prismaCleanLog(`[DEV] Looking for child relations of "${modelName}" (resolved: "${resolvedModelName}") among ${Object.keys(models).length} models`)
 
   for (const [otherModelName, otherModel] of Object.entries(models)) {
     if (otherModelName.toLowerCase() === modelNameLower) continue
@@ -882,7 +890,7 @@ function createPrismaProxy(prisma: any): any {
     if (typeof prisma[key] !== 'object' || prisma[key] === null) continue
     const normalized = normalizeFieldName(key)
     if (modelDelegateMap.has(normalized)) {
-      console.log(`[DEV] WARNING: model delegate name collision after normalization: "${key}" and "${modelDelegateMap.get(normalized)}" both normalize to "${normalized}"`)
+      prismaCleanLog(`[DEV] WARNING: model delegate name collision after normalization: "${key}" and "${modelDelegateMap.get(normalized)}" both normalize to "${normalized}"`)
       continue  // 保留先遍历到的
     }
     modelDelegateMap.set(normalized, key)
@@ -893,7 +901,7 @@ function createPrismaProxy(prisma: any): any {
       const fields = getModelFields(prisma, modelName)
       fieldMapCache.set(modelName, buildFieldMap(fields))
       if (fields.length > 0) {
-        console.log(`[DEV] Cached fields for ${modelName}: [${fields.join(', ')}]`)
+        prismaCleanLog(`[DEV] Cached fields for ${modelName}: [${fields.join(', ')}]`)
       }
     }
     return fieldMapCache.get(modelName)!
@@ -918,7 +926,7 @@ function createPrismaProxy(prisma: any): any {
       const rels = getChildRelations(prisma, modelName)
       childRelationsCache.set(modelName, rels)
       if (rels.length > 0) {
-        console.log(`[DEV] Cascade relations for ${modelName}:`, rels.map(r => `${r.childModel}.${r.childFkField}`).join(', '))
+        prismaCleanLog(`[DEV] Cascade relations for ${modelName}:`, rels.map(r => `${r.childModel}.${r.childFkField}`).join(', '))
       }
     }
     return childRelationsCache.get(modelName)!
@@ -967,7 +975,7 @@ function createPrismaProxy(prisma: any): any {
               (p: any) => !p || typeof p.requestTransaction !== 'function'
             )
             if (hasNonPrismaPromise) {
-              console.log(`[DEV] $transaction fallback: array contains non-PrismaPromise elements`)
+              prismaCleanLog(`[DEV] $transaction fallback: array contains non-PrismaPromise elements`)
               return (async () => {
                 const results = []
                 for (const p of input) results.push(await p)
@@ -992,7 +1000,7 @@ function createPrismaProxy(prisma: any): any {
         const normalized = normalizeFieldName(prop)
         const realName = modelDelegateMap.get(normalized)
         if (realName) {
-          console.log(`[DEV] Model name fuzzy match: "${prop}" -> "${realName}"`)
+          prismaCleanLog(`[DEV] Model name fuzzy match: "${prop}" -> "${realName}"`)
           value = target[realName]
           prop = realName  // 更新 prop 使后续字段缓存使用正确的 model 名
         }
@@ -1034,7 +1042,7 @@ function createPrismaProxy(prisma: any): any {
                 args.distinct = args.distinct.map((d: string) => {
                   const real = fieldMap.get(normalizeFieldName(d))
                   if (real && real !== d) {
-                    console.log(`[DEV] Fixed distinct field: ${d} -> ${real}`)
+                    prismaCleanLog(`[DEV] Fixed distinct field: ${d} -> ${real}`)
                     return real
                   }
                   return d
@@ -1090,7 +1098,7 @@ function createPrismaProxy(prisma: any): any {
               if (isInvalidValue(args[param])) {
                 const val = args[param]
                 delete args[param]
-                console.log(`[DEV] Removed invalid ${param} (was "${val}")`)
+                prismaCleanLog(`[DEV] Removed invalid ${param} (was "${val}")`)
               }
             }
 
@@ -1107,7 +1115,7 @@ function createPrismaProxy(prisma: any): any {
                   if (!item || typeof item !== 'object') return false
                   for (const key of Object.keys(item)) {
                     if (isInvalidValue(item[key])) {
-                      console.log(`[DEV] Removed invalid orderBy.${key} (was "${item[key]}")`)
+                      prismaCleanLog(`[DEV] Removed invalid orderBy.${key} (was "${item[key]}")`)
                       return false
                     }
                   }
@@ -1118,7 +1126,7 @@ function createPrismaProxy(prisma: any): any {
                 for (const key of Object.keys(args.orderBy)) {
                   if (isInvalidValue(args.orderBy[key])) {
                     delete args.orderBy[key]
-                    console.log(`[DEV] Removed invalid orderBy.${key}`)
+                    prismaCleanLog(`[DEV] Removed invalid orderBy.${key}`)
                   }
                 }
                 const keys = Object.keys(args.orderBy)
@@ -1126,7 +1134,7 @@ function createPrismaProxy(prisma: any): any {
                   delete args.orderBy
                 } else if (keys.length > 1) {
                   args.orderBy = keys.map(key => ({ [key]: args.orderBy[key] }))
-                  console.log(`[DEV] Normalized orderBy for ${String(prop)}.${action}:`, args.orderBy)
+                  prismaCleanLog(`[DEV] Normalized orderBy for ${String(prop)}.${action}:`, args.orderBy)
                 }
               } else if (isInvalidValue(args.orderBy)) {
                 delete args.orderBy
@@ -1143,7 +1151,7 @@ function createPrismaProxy(prisma: any): any {
               const modelName = String(prop)
               const childRels = getChildRels(modelName)
               if (childRels.length > 0) {
-                console.log(`[DEV] Cascade delete triggered for ${modelName}.${action}`)
+                prismaCleanLog(`[DEV] Cascade delete triggered for ${modelName}.${action}`)
 
                 // 用交互式 $transaction 保证事务性和顺序
                 const cascadeDelete = async () => {
@@ -1162,7 +1170,7 @@ function createPrismaProxy(prisma: any): any {
                       return method.call(modelTarget, args)
                     }
 
-                    console.log(`[DEV] Found ${toDelete.length} ${modelName} record(s) to delete, cleaning child tables...`)
+                    prismaCleanLog(`[DEV] Found ${toDelete.length} ${modelName} record(s) to delete, cleaning child tables...`)
 
                     // 交互式事务：tx 是一个事务内的 prisma client
                     return prisma.$transaction(async (tx: any) => {
@@ -1171,19 +1179,19 @@ function createPrismaProxy(prisma: any): any {
                         if (parentIds.length === 0) continue
 
                         if (!tx[rel.childModel]) {
-                          console.log(`[DEV] WARNING: tx["${rel.childModel}"] not found, skipping cascade for this relation`)
+                          prismaCleanLog(`[DEV] WARNING: tx["${rel.childModel}"] not found, skipping cascade for this relation`)
                           continue
                         }
 
                         const deleted = await tx[rel.childModel].deleteMany({
                           where: { [rel.childFkField]: { in: parentIds } }
                         })
-                        console.log(`[DEV] Cascade deleted ${deleted.count} ${rel.childModel} records where ${rel.childFkField} in [${parentIds.length} ids]`)
+                        prismaCleanLog(`[DEV] Cascade deleted ${deleted.count} ${rel.childModel} records where ${rel.childFkField} in [${parentIds.length} ids]`)
                       }
 
                       // 最后执行原始的 delete/deleteMany（用 tx 保证在同一事务内）
                       if (!tx[modelName]) {
-                        console.log(`[DEV] WARNING: tx["${modelName}"] not found, trying original method`)
+                        prismaCleanLog(`[DEV] WARNING: tx["${modelName}"] not found, trying original method`)
                         return method.call(modelTarget, args)
                       }
                       return tx[modelName][action](args)
@@ -1238,7 +1246,7 @@ function createPrismaProxy(prisma: any): any {
                           || (typeof altResult === 'number' && altResult === 0)
 
                         if (!altIsEmpty) {
-                          console.log(`[DEV] ⚠️ UUID auto-fix: ${modelName}.${action} where.${entry.field}="${entry.value}" → matched on where.${candidate}`)
+                          prismaCleanLog(`[DEV] ⚠️ UUID auto-fix: ${modelName}.${action} where.${entry.field}="${entry.value}" → matched on where.${candidate}`)
                           return altResult
                         }
                       } catch { /* candidate 字段查询失败，跳过 */ }
@@ -1275,7 +1283,7 @@ function createPrismaProxy(prisma: any): any {
                             || (typeof altResult === 'number' && altResult === 0)
 
                           if (!altIsEmpty) {
-                            console.log(`[DEV] ⚠️ UUID auto-fix (cross-table): ${modelName}.${action} where.${entry.field}="${entry.value}" → found in ${fkRel.referencedModel}.${refUuidField}, resolved ${fkRel.referencedField}="${newFkValue}"`)
+                            prismaCleanLog(`[DEV] ⚠️ UUID auto-fix (cross-table): ${modelName}.${action} where.${entry.field}="${entry.value}" → found in ${fkRel.referencedModel}.${refUuidField}, resolved ${fkRel.referencedField}="${newFkValue}"`)
                             return altResult
                           }
                         }
@@ -1359,7 +1367,7 @@ if (!process.env.DATABASE_URL) {
   const proxyClient = createPrismaProxy(client)
   prismaInstances.set(cacheKey, proxyClient)
 
-  console.log(`[DEV] Created new Prisma instance for: ${cacheKey}`)
+  prismaCleanLog(`[DEV] Created new Prisma instance for: ${cacheKey}`)
   return proxyClient
 }
 
@@ -1667,9 +1675,9 @@ app.post('/ingest/1688-expand-category', express.json({ limit: '2mb' }), async (
 })
 
 app.listen(PORT, () => {
-  console.log(`[DEV] RPC Server running at http://localhost:${PORT}`)
-  console.log(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)
-  console.log(`[DEV] healthz: http://localhost:${PORT}/healthz`)
+  prismaCleanLog(`[DEV] RPC Server running at http://localhost:${PORT}`)
+  prismaCleanLog(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)
+  prismaCleanLog(`[DEV] healthz: http://localhost:${PORT}/healthz`)
   console.log(
     `[DEV] 1688 HTML intake: ${
       INGEST_TOKEN
