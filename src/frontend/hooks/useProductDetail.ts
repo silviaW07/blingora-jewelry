@@ -6,6 +6,7 @@ import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { customerLoginHref, openStorefrontLogin } from '@/frontend/utils/hardNavigate'
 import { useUserSession } from '@/tools/FrontendSession'
 import { toast } from "sonner"
+import { useTranslation } from 'react-i18next'
 import type {
   ProductDetailData,
   RelatedProductItem,
@@ -19,6 +20,7 @@ import {
   addToCart,
 } from '@/frontend/actions/ProductDetail'
 import { getClientPreferredLang } from '@/frontend/i18n'
+import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 import {
   readCachedProductDetail,
   readProductDetailPreview,
@@ -134,6 +136,7 @@ export const useProductDetail = (seed?: {
   handlers: ProductDetailHandlers;
 } => {
   const router = useRouter()
+  const { t } = useTranslation()
   const productId = String(seed?.productId || '').trim()
   const slug = String(seed?.slug || '').trim()
   const isDecorateMode = Boolean(seed?.decorate)
@@ -865,7 +868,7 @@ export const useProductDetail = (seed?: {
       }
       toast.success('Added to cart')
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to add to cart')
+      toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
     } finally {
       setSubmitting(false)
     }

@@ -5,11 +5,13 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { usePathname, useRouter } from 'next/navigation'
 import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Home, ProductCategory, ProductDetail, Cart } from '@/frontend/route-params'
 import { openStorefrontLogin, openStorefrontRegister, notifyStorefrontUrl } from '@/frontend/utils/hardNavigate'
 import { useUserSession, UserSession } from '@/tools/FrontendSession'
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { getClientPreferredLang } from '@/frontend/i18n'
+import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 import type {
   StockStatusEnum,
   SortByEnum,
@@ -362,6 +364,7 @@ export const useProductCategory = (
 } => {
   const topNavPanelRef = useRef<HTMLDivElement | null>(null)
   const router = useRouter()
+  const { t } = useTranslation()
   const pathname = usePathname()
   const isMobile = useIsMobile()
   const searchParams = useClientSearchParams()
@@ -1662,7 +1665,7 @@ export const useProductCategory = (
     }
 
     if (item.stock_status === 'OUT_OF_STOCK') {
-      toast.error('This product is unavailable')
+      toast.error(t('product.errors.unavailable'))
       return
     }
 
@@ -1674,7 +1677,7 @@ export const useProductCategory = (
       })
       toast.success('Added to cart')
     } catch (err: any) {
-      toast.error(err.message)
+      toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
     }
   }
 

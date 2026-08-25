@@ -292,6 +292,7 @@ import {
 } from '@/shared/productSearch'
 import { normalizePosterLinkUrl } from '@/shared/posterLink'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
+import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isProductTypeCategory } from '@/shared/categoryMatchGuards'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
@@ -1512,21 +1513,114 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     },
   }
 
-  // 快速路径：无搜索 / 无价格·折扣·库存后置筛选 / 且按 NEWEST|POPULARITY 排序时，
-  // 直接用 SQL orderBy + skip/take。有搜索时必须走内存 token-AND（含 translationsJson）。
+  // Fast path: SQL orderBy + skip/take when we can avoid in-memory price/search scans.
+  // Price sort uses SKU min-price ranking (approximate vs coefficient USD, but paginates correctly).
+  const sortBy = input.sort_by || 'NEWEST'
+  const wantsPriceSort = sortBy === 'PRICE_ASC' || sortBy === 'PRICE_DESC'
   const canPushdownPaginate =
     searchTokens.length === 0 &&
     input.min_price === undefined &&
     input.max_price === undefined &&
     !input.has_discount &&
-    !(input.stock_status && input.stock_status.length > 0) &&
-    (input.sort_by === undefined || input.sort_by === 'NEWEST' || input.sort_by === 'POPULARITY')
+    (sortBy === 'NEWEST' || sortBy === 'POPULARITY' || wantsPriceSort)
 
-  const listTake = searchTokens.length > 0 ? 800 : 2000
+  if (input.stock_status && input.stock_status.length > 0) {
+    dbWhere.AND = [
+      ...(Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [dbWhere.AND] : []),
+      { skus: { some: { stockStatus: { in: input.stock_status } } } },
+    ]
+  }
+
+  // Slow-path ceiling: never pull thousands of fat product+SKU rows for Accessories-scale L1s.
+  const listTake = searchTokens.length > 0 ? 500 : 800
+
+  if (canPushdownPaginate && wantsPriceSort) {
+    const [total, priceRows] = await Promise.all([
+      prisma.product.count({ where: dbWhere }),
+      prisma.productsku.groupBy({
+        by: ['productId'],
+        where: { product: dbWhere },
+        _min: { price: true },
+      }),
+    ])
+
+    const ranked = priceRows
+      .map((row) => ({
+        productId: row.productId,
+        minPrice: row._min.price != null ? Number(row._min.price) : Number.POSITIVE_INFINITY,
+      }))
+      .sort((a, b) =>
+        sortBy === 'PRICE_DESC' ? b.minPrice - a.minPrice : a.minPrice - b.minPrice,
+      )
+
+    const skip = (page - 1) * pageSize
+    const pageIds = ranked.slice(skip, skip + pageSize).map((row) => row.productId)
+    const pageRows =
+      pageIds.length > 0
+        ? await prisma.product.findMany({
+            where: { id: { in: pageIds } },
+            select: listSelect,
+          })
+        : []
+    const byId = new Map(pageRows.map((row) => [row.id, row]))
+    const orderedRows = pageIds.map((id) => byId.get(id)).filter(Boolean) as typeof pageRows
+
+    const [skuPriceAggs, skuStockRows] =
+      pageIds.length > 0
+        ? await Promise.all([
+            prisma.productsku.groupBy({
+              by: ['productId'],
+              where: { productId: { in: pageIds } },
+              _min: { price: true },
+              _max: { price: true },
+            }),
+            prisma.productsku.findMany({
+              where: { productId: { in: pageIds } },
+              select: { productId: true, stockStatus: true },
+            }),
+          ])
+        : [[], []]
+
+    const skuPriceAggByProduct = new Map(
+      skuPriceAggs.map((row) => [
+        row.productId,
+        {
+          min: row._min.price != null ? row._min.price.toNumber() : null,
+          max: row._max.price != null ? row._max.price.toNumber() : null,
+        },
+      ]),
+    )
+    const stockByProduct = new Map<string, StockStatusEnum>()
+    for (const row of skuStockRows) {
+      const current = stockByProduct.get(row.productId)
+      const next = row.stockStatus as StockStatusEnum
+      if (next === 'IN_STOCK') {
+        stockByProduct.set(row.productId, 'IN_STOCK')
+      } else if (next === 'LOW_STOCK' && current !== 'IN_STOCK') {
+        stockByProduct.set(row.productId, 'LOW_STOCK')
+      } else if (!current) {
+        stockByProduct.set(row.productId, 'OUT_OF_STOCK')
+      }
+    }
+
+    const priceSortOutput: GetProductListOutput = {
+      list: orderedRows.map((p) => {
+        const agg = skuPriceAggByProduct.get(p.id)
+        return mapProductRecordToItem(p, lang, exchangeRate, {
+          skuPriceMinRmb: agg?.min ?? null,
+          skuPriceMaxRmb: agg?.max ?? null,
+          stockStatus: stockByProduct.get(p.id),
+        })
+      }),
+      total,
+    }
+    setCachedList(cacheKey, priceSortOutput)
+    return priceSortOutput
+  }
 
   if (canPushdownPaginate) {
     const orderBy =
-      input.sort_by === 'POPULARITY'
+      sortBy === 'POPULARITY'
         ? [{ sortWeight: 'desc' as const }, { ratingCount: 'desc' as const }, { id: 'desc' as const }]
         : input.keyword_group_id
           ? [{ sortWeight: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }]
@@ -1649,11 +1743,8 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     items = items.filter(i => i.has_discount)
   }
 
-  if (input.stock_status && input.stock_status.length > 0) {
-    items = items.filter(i => input.stock_status!.includes(i.stock_status))
-  }
+  // stock_status already pushed into SQL where when present
 
-  const sortBy = input.sort_by || 'NEWEST'
   items.sort((a, b) => {
     switch (sortBy) {
       case 'PRICE_ASC':
@@ -1832,7 +1923,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     })
 
     if (!product || product.status !== 'ACTIVE' || product.category.status !== 'ACTIVE') {
-      throw new Error('该商品不存在或已下架')
+      throw storefrontError('product.errors.unavailable')
     }
 
     const sku = await prisma.productsku.findUnique({
@@ -1840,15 +1931,15 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     })
 
     if (!sku || sku.productId !== input.product_id) {
-      throw new Error('请求的商品规格无效')
+      throw storefrontError('checkout.errors.skuInvalid')
     }
 
     if (input.quantity <= 0) {
-      throw new Error('加购数量必须大于零')
+      throw storefrontError('checkout.errors.qtyInvalid')
     }
 
     if (!isStorefrontQtyAllowed(sku.stock, input.quantity)) {
-      throw new Error('商品库存不足')
+      throw storefrontError('product.errors.outOfStock')
     }
 
     let cart = await prisma.cart.findUnique({
@@ -1875,7 +1966,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     if (existingItem) {
       const newQuantity = existingItem.quantity + input.quantity
       if (newQuantity > sku.stock) {
-        throw new Error('加购后数量超过了当前商品库存上限')
+        throw storefrontError('product.errors.outOfStock')
       }
 
       await prisma.cartitem.update({

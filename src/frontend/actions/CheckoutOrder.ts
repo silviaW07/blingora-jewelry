@@ -22,6 +22,7 @@ import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
+import { storefrontError } from '@/frontend/utils/storefrontErrors'
 
 const COUNTRY_CODE_MAP: Record<string, string> = {
   'United States': 'US',
@@ -296,13 +297,13 @@ export const saveCheckoutAddress = requireRole([UserRole.CUSTOMER])(
     const addressLine2 = cleanSpaces(input.addressLine2 || '')
     const postalCode = cleanSpaces(input.zipCode || '')
 
-    if (!recipientName) throw new Error('请填写收货人姓名')
-    if (!phone) throw new Error('请填写联系电话')
-    if (!addressLine1) throw new Error('请填写收货地址')
-    if (!countryName) throw new Error('请选择收货国家')
-    if (!postalCode) throw new Error('请填写邮编')
+    if (!recipientName) throw storefrontError('checkout.errors.nameRequired')
+    if (!phone) throw storefrontError('checkout.errors.phoneRequired')
+    if (!addressLine1) throw storefrontError('checkout.errors.addressRequired')
+    if (!countryName) throw storefrontError('checkout.errors.countryRequired')
+    if (!postalCode) throw storefrontError('checkout.errors.zipRequired')
     if (countryName === 'United States' && !stateName) {
-      throw new Error('请选择 State/Province')
+      throw storefrontError('checkout.errors.stateRequired')
     }
 
     const countryCode =
@@ -422,7 +423,7 @@ async function withAllocatedOrderNo<T>(
     lockKey,
   )
   if (Number(lockRows?.[0]?.acquired ?? 0) !== 1) {
-    throw new Error('订单号生成繁忙，请稍后重试')
+    throw storefrontError('checkout.placeOrderFailed')
   }
   try {
     const latest = await tx.orderrecord.findFirst({
@@ -438,7 +439,7 @@ async function withAllocatedOrderNo<T>(
       }
     }
     if (nextSeq > 9999) {
-      throw new Error('今日订单序号已用尽')
+      throw storefrontError('checkout.placeOrderFailed')
     }
     const orderNo = `${prefix}${String(nextSeq).padStart(4, '0')}`
     return await run(orderNo)
@@ -456,22 +457,22 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
 
     const address = input.address
     if (!address?.firstName?.trim() || !address?.lastName?.trim()) {
-      throw new Error('请填写收货人姓名')
+      throw storefrontError('checkout.errors.nameRequired')
     }
-    if (!address.phone?.trim()) throw new Error('请填写联系电话')
-    if (!address.addressLine1?.trim()) throw new Error('请填写收货地址')
-    if (!address.country?.trim()) throw new Error('请选择收货国家')
-    if (!address.zipCode?.trim()) throw new Error('请填写邮编')
+    if (!address.phone?.trim()) throw storefrontError('checkout.errors.phoneRequired')
+    if (!address.addressLine1?.trim()) throw storefrontError('checkout.errors.addressRequired')
+    if (!address.country?.trim()) throw storefrontError('checkout.errors.countryRequired')
+    if (!address.zipCode?.trim()) throw storefrontError('checkout.errors.zipRequired')
     if (address.country === 'United States' && !address.state?.trim()) {
-      throw new Error('请选择 State/Province')
+      throw storefrontError('checkout.errors.stateRequired')
     }
 
     const channelId = (input.shipping?.channelId || '').trim()
-    if (!channelId) throw new Error('请选择物流渠道')
+    if (!channelId) throw storefrontError('checkout.errors.shippingRequired')
 
     const submittedItems = Array.isArray(input.items) ? input.items : []
     if (submittedItems.length === 0) {
-      throw new Error('购物车为空，无法下单')
+      throw storefrontError('checkout.errors.emptyCart')
     }
 
     const [exchangeRate, pricingConfig] = await Promise.all([
@@ -482,7 +483,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
     const channel = await prisma.shippingchannel.findFirst({
       where: { id: channelId, isEnabled: true },
     })
-    if (!channel) throw new Error('物流渠道不可用，请重新选择')
+    if (!channel) throw storefrontError('checkout.errors.shippingUnavailable')
 
     const country = address.country.trim()
     const billingMode = normalizeBillingMode(channel.billingMode)
@@ -560,20 +561,16 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
 
     for (const item of submittedItems) {
       const quantity = Math.floor(Number(item.quantity) || 0)
-      if (quantity <= 0) throw new Error('商品数量无效')
+      if (quantity <= 0) throw storefrontError('checkout.errors.qtyInvalid')
       const sku = skuMap.get(item.productSkuId)
       if (!sku || sku.productId !== item.productId) {
-        throw new Error('商品信息已变更，请刷新购物车后重试')
+        throw storefrontError('checkout.errors.cartChanged')
       }
       if (sku.product.status !== 'ACTIVE' || sku.product.category?.status !== 'ACTIVE') {
-        throw new Error(
-          `Product “${resolveProductDisplayName(sku.product.name, (sku.product as any).translationsJson, 'en')}” is unavailable`,
-        )
+        throw storefrontError('product.errors.unavailable')
       }
       if (!isStorefrontQtyAllowed(sku.stock, quantity)) {
-        throw new Error(
-          `Insufficient stock for “${resolveProductDisplayName(sku.product.name, (sku.product as any).translationsJson, 'en')}”`,
-        )
+        throw storefrontError('product.errors.outOfStock')
       }
 
       const pricingCoeffs = pickFrontPricingCategoryCoeffs({
@@ -788,7 +785,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
     }
 
     if (!result) {
-      throw new Error('订单创建失败，请稍后重试')
+      throw storefrontError('checkout.placeOrderFailed')
     }
 
     return {

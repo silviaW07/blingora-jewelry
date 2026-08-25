@@ -22,6 +22,7 @@ import { computeCheckoutTotals, formatUsd, sumCartWeightGram } from '@/shared/ch
 import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService';
 import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen';
 import { useIsStorefrontGuest } from '@/frontend/components/GuestPricePlaceholder';
+import { translateStorefrontError } from '@/frontend/utils/storefrontErrors';
 import {
   buildWhatsAppUrl,
   readCustomerServiceLocal,
@@ -515,7 +516,7 @@ export const CartView = ({
                             setSelectedChannelName(null)
                             setSelectedIds([])
                           } catch (error) {
-                            toast.error((error as Error).message || t('checkout.placeOrderFailed'))
+                            toast.error(translateStorefrontError(t, error, 'checkout.placeOrderFailed'))
                           } finally {
                             setIsPlacingOrder(false)
                           }

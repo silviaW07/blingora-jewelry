@@ -25,6 +25,7 @@ import {
   resolveProductMinOrderQty,
 } from '@/shared/minOrderQty'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
+import { storefrontError } from '@/frontend/utils/storefrontErrors'
 
 // ===== Enums =====
 /** 商品状态：草稿(DRAFT) | 上架(ACTIVE) | 下架(INACTIVE) */
@@ -361,7 +362,7 @@ const mapActiveCoupons = (campaigns: Array<{
 export const getProductDetail = withResult(
   async (input: GetProductDetailInput): Promise<GetProductDetailOutput> => {
     if (!input.productId && !input.slug) {
-      throw new Error('缺少必要的商品标识')
+      throw storefrontError('product.errors.skuMissing')
     }
 
     const whereCondition = input.productId
@@ -472,7 +473,7 @@ export const getProductDetail = withResult(
     ])
 
     if (!product) {
-      throw new Error('未找到对应商品')
+      throw storefrontError('product.errors.unavailable')
     }
 
     const parameterJson = product.parameterJson
@@ -700,7 +701,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     const { userId } = getAuthContext()
 
     if (input.quantity <= 0) {
-      throw new Error('加购数量必须大于0')
+      throw storefrontError('checkout.errors.qtyInvalid')
     }
 
     // 1. 查 SKU，并获取商品和分类的可见性状态
@@ -714,13 +715,13 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     })
 
     if (!sku) {
-      throw new Error('商品SKU不存在')
+      throw storefrontError('product.errors.skuMissing')
     }
     if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
-      throw new Error('该商品当前不可购买')
+      throw storefrontError('product.errors.notPurchasable')
     }
     if (!isStorefrontQtyAllowed(sku.stock, input.quantity)) {
-      throw new Error('库存不足，请减少购买数量')
+      throw storefrontError('product.errors.outOfStock')
     }
 
     const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)
@@ -764,7 +765,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     if (existingItem) {
       const newQuantity = existingItem.quantity + input.quantity
       if (newQuantity > sku.stock) {
-        throw new Error('加购后数量超过可用库存，请减少购买数量')
+        throw storefrontError('product.errors.outOfStock')
       }
       if (newQuantity < skuMinOrderQty) {
         throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
@@ -835,10 +836,10 @@ export const setCartSkuQuantity = requireRole([UserRole.CUSTOMER])(
     })
 
     if (!sku) {
-      throw new Error('商品SKU不存在')
+      throw storefrontError('product.errors.skuMissing')
     }
     if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
-      throw new Error('该商品当前不可购买')
+      throw storefrontError('product.errors.notPurchasable')
     }
 
     let cart = await prisma.cart.findUnique({
@@ -872,7 +873,7 @@ export const setCartSkuQuantity = requireRole([UserRole.CUSTOMER])(
     }
 
     if (targetQty > sku.stock) {
-      throw new Error('库存不足，请减少购买数量')
+      throw storefrontError('product.errors.outOfStock')
     }
 
     const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)

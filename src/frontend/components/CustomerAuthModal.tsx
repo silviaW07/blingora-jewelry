@@ -121,7 +121,7 @@ export function CustomerAuthModal() {
     event.preventDefault();
     if (isDecorateAuthOpen) return;
     if (!loginAccount.trim() || !loginPassword) {
-      setLoginError(t('auth.loginRequired'));
+      setLoginError(t('auth.credentialsRequired'));
       return;
     }
 

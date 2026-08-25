@@ -392,9 +392,17 @@
     "monthFallback": "Este mes",
     "bannerEmpty": "No hay banners disponibles",
     "discoverMore": "Descubrir más",
-    "recommendedKeyword": "Palabra clave recomendada"
+    "recommendedKeyword": "Palabra clave recomendada",
+    "errors": {
+      "unavailable": "Este producto no está disponible",
+      "outOfStock": "No hay stock suficiente. Reduce la cantidad",
+      "skuMissing": "Opción de producto no encontrada",
+      "notPurchasable": "Este producto no se puede comprar ahora"
+    }
   },
   "auth": {
+    "loginRequired": "Inicia sesión primero",
+    "credentialsRequired": "Introduce correo/teléfono y contraseña",
     "welcomeBack": "Bienvenido de nuevo",
     "createAccount": "Crear cuenta de compra",
     "loginDesc": "Inicia sesión para ver productos y gestionar pedidos.",
@@ -424,7 +432,6 @@
     "loginNow": "Inicia sesión ahora",
     "hidePassword": "Ocultar contraseña",
     "showPassword": "Mostrar contraseña",
-    "loginRequired": "Introduce correo/teléfono y contraseña",
     "loginSuccess": "Sesión iniciada correctamente",
     "loginFailed": "Error al iniciar sesión. Revisa tus datos",
     "registerFailed": "Error en el registro. Inténtalo más tarde",
@@ -458,7 +465,28 @@
     "selectShipping": "Selecciona un método de envío",
     "noOrderableItems": "No hay artículos disponibles para pedir",
     "placeOrderFailed": "No se pudo realizar el pedido. Inténtalo de nuevo.",
-    "selectItem": "Seleccionar {{name}}"
+    "selectItem": "Seleccionar {{name}}",
+    "errors": {
+      "nameRequired": "Introduce el nombre y el apellido",
+      "phoneRequired": "Introduce un número de teléfono",
+      "addressRequired": "Introduce la dirección (línea 1)",
+      "countryRequired": "Selecciona un país",
+      "stateRequired": "Selecciona un estado / provincia",
+      "zipRequired": "Introduce el código postal",
+      "shippingRequired": "Selecciona un método de envío",
+      "shippingUnavailable": "Este método de envío no está disponible. Elige otro.",
+      "shippingLoadFailed": "No se pudieron cargar los métodos de envío",
+      "emptyCart": "Tu carrito está vacío",
+      "cartChanged": "Algunos artículos cambiaron. Actualiza el carrito e inténtalo de nuevo.",
+      "skuInvalid": "La opción de producto seleccionada no es válida",
+      "qtyInvalid": "La cantidad debe ser mayor que cero"
+    }
+  },
+  "cart": {
+    "errors": {
+      "itemMissing": "Artículo del carrito no encontrado o sin acceso",
+      "outOfStockUpdate": "No hay stock suficiente para actualizar la cantidad"
+    }
   },
   "accountAddresses": {
     "title": "Direcciones de envío",

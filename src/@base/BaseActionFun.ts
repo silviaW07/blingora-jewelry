@@ -36,9 +36,15 @@ export const authStorage = new AsyncLocalStorage<any>()
 
 // ===== JWT 配置 =====
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-64-chars-recommended'
-)
+const INSECURE_JWT_FALLBACK = 'your-secret-key-64-chars-recommended'
+const rawJwtSecret = String(process.env.JWT_SECRET || '').trim()
+const isProd = process.env.NODE_ENV === 'production'
+if (isProd && (!rawJwtSecret || rawJwtSecret === INSECURE_JWT_FALLBACK || rawJwtSecret.length < 32)) {
+  throw new Error(
+    'JWT_SECRET must be set in production to a strong secret (≥32 chars). Refusing to start with the insecure default.',
+  )
+}
+const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || INSECURE_JWT_FALLBACK)
 
 // ===== 死方法：绝对不变 =====
 

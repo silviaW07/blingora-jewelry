@@ -84,7 +84,7 @@ export function requireAuth() {
   ) => {
     return async (...args: TArgs): Promise<TReturn> => {
       const ctx = authStorage.getStore() as AuthContext | undefined
-      if (!ctx) throw new UnauthorizedError('请先登录')
+      if (!ctx) throw new UnauthorizedError('auth.loginRequired')
       return fn(...args)
     }
   }
@@ -101,7 +101,7 @@ export function requireRole(
   ) => {
     return async (...args: TArgs): Promise<TReturn> => {
       const ctx = authStorage.getStore() as AuthContext | undefined
-      if (!ctx) throw new UnauthorizedError('请先登录')
+      if (!ctx) throw new UnauthorizedError('auth.loginRequired')
 
       const allowedRoles = Array.isArray(roles) ? roles : [roles]
       const userRole = String(ctx.role)
@@ -121,7 +121,7 @@ export function requireRole(
  */
 export function getAuthContext(): AuthContext {
   const ctx = authStorage.getStore() as AuthContext | undefined
-  if (!ctx) throw new UnauthorizedError('请先登录')
+  if (!ctx) throw new UnauthorizedError('auth.loginRequired')
   return ctx
 }
 

@@ -397,9 +397,17 @@
     "monthFallback": "This month",
     "bannerEmpty": "No banners available",
     "discoverMore": "Discover More",
-    "recommendedKeyword": "Recommended"
+    "recommendedKeyword": "Recommended",
+    "errors": {
+      "unavailable": "This product is unavailable",
+      "outOfStock": "Not enough stock. Please reduce the quantity",
+      "skuMissing": "Product option not found",
+      "notPurchasable": "This product cannot be purchased right now"
+    }
   },
   "auth": {
+    "loginRequired": "Please sign in first",
+    "credentialsRequired": "Please enter email/phone and password",
     "welcomeBack": "Welcome back",
     "createAccount": "Create buying account",
     "loginDesc": "Sign in to browse products and manage your orders.",
@@ -429,7 +437,6 @@
     "loginNow": "Sign in now",
     "hidePassword": "Hide password",
     "showPassword": "Show password",
-    "loginRequired": "Please enter email/phone and password",
     "loginSuccess": "Signed in successfully",
     "loginFailed": "Sign-in failed. Please check your details",
     "registerFailed": "Registration failed. Please try again later",
@@ -463,7 +470,28 @@
     "selectShipping": "Please select a shipping method",
     "noOrderableItems": "No items available to order",
     "placeOrderFailed": "Could not place the order. Please try again.",
-    "selectItem": "Select {{name}}"
+    "selectItem": "Select {{name}}",
+    "errors": {
+      "nameRequired": "Please enter first and last name",
+      "phoneRequired": "Please enter a phone number",
+      "addressRequired": "Please enter address line 1",
+      "countryRequired": "Please select a country",
+      "stateRequired": "Please select a state / province",
+      "zipRequired": "Please enter a postal / zip code",
+      "shippingRequired": "Please select a shipping method",
+      "shippingUnavailable": "This shipping method is unavailable. Please choose another.",
+      "shippingLoadFailed": "Could not load shipping methods",
+      "emptyCart": "Your cart is empty",
+      "cartChanged": "Some items changed. Please refresh your cart and try again.",
+      "skuInvalid": "The selected product option is invalid",
+      "qtyInvalid": "Quantity must be greater than zero"
+    }
+  },
+  "cart": {
+    "errors": {
+      "itemMissing": "Cart item not found or access denied",
+      "outOfStockUpdate": "Not enough stock to update quantity"
+    }
   },
   "accountAddresses": {
     "title": "Shipping addresses",

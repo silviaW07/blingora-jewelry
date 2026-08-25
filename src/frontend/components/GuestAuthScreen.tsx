@@ -62,7 +62,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
   const handleLoginSubmit = async (event?: { preventDefault?: () => void }) => {
     event?.preventDefault?.()
     if (!loginAccount.trim() || !loginPassword) {
-      setLoginError(t('auth.loginRequired'))
+      setLoginError(t('auth.credentialsRequired'))
       return
     }
     setIsLoginSubmitting(true)

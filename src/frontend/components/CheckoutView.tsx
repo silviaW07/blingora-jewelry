@@ -19,6 +19,7 @@ import { CheckoutSmartPanel, type CheckoutAddressForm } from '@/frontend/compone
 import { OrderAmountOverview } from '@/frontend/components/OrderAmountOverview'
 import type { CartState, CartHandlers } from '@/frontend/hooks/useCart'
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder'
+import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 import { AccountOrders, Cart } from '@/frontend/route-params'
 import { computeCheckoutTotals, sumCartWeightGram } from '@/shared/checkoutSummary'
 import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService'
@@ -134,12 +135,12 @@ export default function CheckoutView({ state, handlers }: Props) {
       return
     }
     if (!selectedChannelId || selectedShippingFee == null) {
-      toast.error(t('checkout.noChannels', { defaultValue: '请选择物流渠道' }))
+      toast.error(t('checkout.selectShipping'))
       return
     }
     const validItems = state.items.filter((item) => item.status !== 'INVALID')
     if (validItems.length === 0) {
-      toast.error(t('common.placeOrder', { defaultValue: '没有可下单的商品' }))
+      toast.error(t('checkout.noOrderableItems'))
       return
     }
 
@@ -173,7 +174,7 @@ export default function CheckoutView({ state, handlers }: Props) {
       setSelectedChannelId(null)
       setSelectedChannelName(null)
     } catch (error) {
-      toast.error((error as Error).message || '下单失败，请稍后重试')
+      toast.error(translateStorefrontError(t, error, 'checkout.placeOrderFailed'))
     } finally {
       setIsPlacingOrder(false)
     }

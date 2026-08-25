@@ -29,6 +29,11 @@ import {
 } from '@/backend/action_utils'
 import { hashSecurePassword, verifyStoredPassword } from '@/backend/password-security'
 import { isBackendStaffRole } from '@/backend/roles'
+import {
+  assertAdminLoginAllowed,
+  clearAdminLoginFailures,
+  recordAdminLoginFailure,
+} from '@/backend/utils/adminLoginThrottle'
 
 // ===== Actions =====
 
@@ -39,6 +44,7 @@ import { isBackendStaffRole } from '@/backend/roles'
 export const adminLogin = withResult(
   async (input: AdminLoginInput): Promise<AdminLoginOutput> => {
     const { sysuser_account, sysuser_password } = input
+    assertAdminLoginAllowed(sysuser_account)
 
     // 1. 查询用户
     const user = await prisma.sysuser.findUnique({
@@ -57,17 +63,20 @@ export const adminLogin = withResult(
     })
 
     if (!user) {
+      recordAdminLoginFailure(sysuser_account)
       throw new Error('账号或密码错误')
     }
 
     // 2. 验证密码
     const passwordCheck = verifyStoredPassword(sysuser_password, user.password)
     if (!passwordCheck.valid) {
+      recordAdminLoginFailure(sysuser_account)
       throw new Error('账号或密码错误')
     }
 
     // 3. 验证角色
     if (!isBackendStaffRole(user.role)) {
+      recordAdminLoginFailure(sysuser_account)
       throw new Error('此账号无后台访问权限')
     }
 
@@ -75,6 +84,8 @@ export const adminLogin = withResult(
     if (user.status === 'DISABLED') {
       throw new Error('账号已被禁用')
     }
+
+    clearAdminLoginFailures(sysuser_account)
 
     // 5. 更新最后登录时间
     await prisma.sysuser.update({

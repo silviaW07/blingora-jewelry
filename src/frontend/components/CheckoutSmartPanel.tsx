@@ -19,6 +19,7 @@ import {
 } from '@/frontend/actions/CheckoutOrder'
 import { useUserSession } from '@/tools/FrontendSession'
 import { useTranslation } from 'react-i18next'
+import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 
 export type CheckoutAddressForm = {
   country: string
@@ -397,7 +398,7 @@ export function CheckoutSmartPanel({
         shippingFee: null,
         shippingFeeLabel: null,
       })
-      toast.error((error as Error).message || '加载物流渠道失败')
+      toast.error(translateStorefrontError(t, error, 'checkout.errors.shippingLoadFailed'))
     } finally {
       if (requestId === shippingRequestRef.current) setLoadingChannels(false)
     }
@@ -489,23 +490,23 @@ export function CheckoutSmartPanel({
 
   const handleSaveAddress = async () => {
     if (!cleanSpaces(form.firstName) && !cleanSpaces(form.lastName)) {
-      toast.error('请填写 First Name / Last Name')
+      toast.error(t('checkout.errors.nameRequired'))
       return
     }
     if (!cleanSpaces(form.phone)) {
-      toast.error('请填写联系电话')
+      toast.error(t('checkout.errors.phoneRequired'))
       return
     }
     if (!cleanSpaces(form.addressLine1)) {
-      toast.error('请填写 Address Line 1')
+      toast.error(t('checkout.errors.addressRequired'))
       return
     }
     if (form.country === 'United States' && !cleanSpaces(form.state)) {
-      toast.error('请选择 State/Province')
+      toast.error(t('checkout.errors.stateRequired'))
       return
     }
     if (!cleanSpaces(form.zipCode)) {
-      toast.error('请填写 Zip Code')
+      toast.error(t('checkout.errors.zipRequired'))
       return
     }
     setSavingAddress(true)
@@ -522,7 +523,7 @@ export function CheckoutSmartPanel({
       toast.success(t('checkout.addressConfirmed'))
       toast.success(t('checkout.addressSavedDefault'))
     } catch (error) {
-      toast.error((error as Error).message || t('checkout.addressSaveFailed'))
+      toast.error(translateStorefrontError(t, error, 'checkout.addressSaveFailed'))
     } finally {
       setSavingAddress(false)
     }

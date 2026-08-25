@@ -1428,20 +1428,66 @@ app.get('/healthz', (_req, res) => {
 // parser in ImportFrom1688 picks it up instead of fetching, which is why these
 // routes bypass the RPC envelope: the collector runs outside the app.
 const INGEST_TOKEN = (process.env.INGEST_TOKEN || '').trim()
+const INGEST_ALLOW_IPS = String(process.env.INGEST_ALLOW_IPS || '')
+  .split(/[\s,]+/)
+  .map((s) => s.trim())
+  .filter(Boolean)
+const INGEST_RATE_LIMIT = Math.max(1, Number(process.env.INGEST_RATE_LIMIT || 60))
+const INGEST_RATE_WINDOW_MS = Math.max(1000, Number(process.env.INGEST_RATE_WINDOW_MS || 60_000))
 const OFFER_HTML_TTL_MS = 6 * 60 * 60 * 1000
 const offerHtmlInbox = new Map<string, { html: string; receivedAt: number }>()
 ;(globalThis as any).__offerHtmlInbox = offerHtmlInbox
 
+const ingestRateBuckets = new Map<string, { count: number; windowStartedAt: number }>()
+
 const extractOfferId = (url: string): string | null =>
   String(url || '').match(/(?:offer\/|offerId=)(\d{6,})/)?.[1] || null
 
+const clientIpOf = (req: express.Request): string => {
+  const forwarded = String(req.get('x-forwarded-for') || '')
+    .split(',')[0]
+    ?.trim()
+  return forwarded || req.socket.remoteAddress || req.ip || ''
+}
+
+const isIngestIpAllowed = (ip: string): boolean => {
+  if (INGEST_ALLOW_IPS.length === 0) {
+    // Token + rate-limit still apply; set INGEST_ALLOW_IPS in production.
+    return true
+  }
+  const normalized = ip.replace(/^::ffff:/, '')
+  return INGEST_ALLOW_IPS.some((allowed) => allowed === ip || allowed === normalized)
+}
+
+const checkIngestRateLimit = (ip: string): boolean => {
+  const now = Date.now()
+  const key = ip || 'unknown'
+  const prev = ingestRateBuckets.get(key)
+  if (!prev || now - prev.windowStartedAt > INGEST_RATE_WINDOW_MS) {
+    ingestRateBuckets.set(key, { count: 1, windowStartedAt: now })
+    return true
+  }
+  if (prev.count >= INGEST_RATE_LIMIT) return false
+  prev.count += 1
+  return true
+}
+
 const requireIngestToken = (req: express.Request, res: express.Response): boolean => {
   if (!INGEST_TOKEN) {
-    res.status(503).json({ ok: false, error: 'INGEST_TOKEN 未配置，请在 .env 中设置后重启 rpc' })
+    res.status(503).json({ ok: false, error: 'INGEST_TOKEN is not configured' })
+    return false
+  }
+  const ip = clientIpOf(req)
+  if (!isIngestIpAllowed(ip)) {
+    res.status(403).json({ ok: false, error: 'ingest IP not allowed' })
+    return false
+  }
+  if (!checkIngestRateLimit(ip)) {
+    res.status(429).json({ ok: false, error: 'ingest rate limit exceeded' })
     return false
   }
   if (req.get('X-Ingest-Token') !== INGEST_TOKEN) {
-    res.status(401).json({ ok: false, error: 'X-Ingest-Token 不匹配' })
+    res.status(401).json({ ok: false, error: 'X-Ingest-Token mismatch' })
     return false
   }
   return true
@@ -1624,5 +1670,14 @@ app.listen(PORT, () => {
   console.log(`[DEV] RPC Server running at http://localhost:${PORT}`)
   console.log(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)
   console.log(`[DEV] healthz: http://localhost:${PORT}/healthz`)
-  console.log(`[DEV] 1688 HTML intake: ${INGEST_TOKEN ? 'enabled' : 'DISABLED (set INGEST_TOKEN in .env)'}`)
+  console.log(
+    `[DEV] 1688 HTML intake: ${
+      INGEST_TOKEN
+        ? `enabled (allowlist=${INGEST_ALLOW_IPS.length ? INGEST_ALLOW_IPS.length + ' ips' : 'open+rate-limit'}, rate=${INGEST_RATE_LIMIT}/${INGEST_RATE_WINDOW_MS}ms)`
+        : 'DISABLED (set INGEST_TOKEN in .env)'
+    }`,
+  )
+  if (INGEST_TOKEN && INGEST_ALLOW_IPS.length === 0 && process.env.NODE_ENV === 'production') {
+    console.warn('[DEV] INGEST_ALLOW_IPS is empty — set operator public IPs to lock down /ingest/')
+  }
 })

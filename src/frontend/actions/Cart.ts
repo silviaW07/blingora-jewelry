@@ -102,6 +102,7 @@ import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
 import { isStorefrontInStock, isStorefrontQtyAllowed } from '@/shared/storefrontQty'
+import { storefrontError } from '@/frontend/utils/storefrontErrors'
 
 const resolveProductMinOrderQty = (tradeInfoJson: unknown) => Math.max(1, Number((tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
 const resolveEffectiveSkuMinOrderQty = (productMinOrderQty: number, skuMinOrderQty: unknown) => {
@@ -452,11 +453,11 @@ export const updateCartItemQuantity = requireRole([UserRole.CUSTOMER])(
     })
 
     if (!item) {
-      throw new Error('购物车条目不存在或无权访问')
+      throw storefrontError('cart.errors.itemMissing')
     }
 
     if (!isStorefrontQtyAllowed(item.productSku.stock, quantity)) {
-      throw new Error('This option is out of stock')
+      throw storefrontError('product.errors.outOfStock')
     }
 
     const siblingItems = await prisma.cartitem.findMany({
@@ -485,7 +486,7 @@ export const updateCartItemQuantity = requireRole([UserRole.CUSTOMER])(
       : 'INVALID'
 
     if (!isProductActive || !isCategoryActive) {
-      throw new Error('该商品已下架，不允许修改数量')
+      throw storefrontError('product.errors.unavailable')
     }
 
     await prisma.cartitem.update({

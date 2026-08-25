@@ -18,7 +18,9 @@ import {
   getRecommendedProducts
 } from '@/frontend/actions/Cart'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { useUserSession } from '@/tools/FrontendSession'
+import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 
 // Export States
 export interface CartState {
@@ -65,6 +67,7 @@ export interface CartHandlers {
  */
 export const useCart = (): { state: CartState, handlers: CartHandlers } => {
   const router = useRouter()
+  const { t } = useTranslation()
 
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<CartItemData[]>([])
@@ -145,7 +148,7 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
       await updateCartItemQuantity({ cartItemId, quantity: newQuantity })
       await loadCartData()
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Unable to update quantity')
+      toast.error(translateStorefrontError(t, error, 'cart.errors.outOfStockUpdate'))
     } finally {
       setActionLoading(false)
     }
