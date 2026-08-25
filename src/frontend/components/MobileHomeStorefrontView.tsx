@@ -479,7 +479,11 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 onBrandToggle={handlers.handleBrandQuickFilterToggle}
                 isBrandExpanded={state.isBrandExpanded}
                 onBrandExpandToggle={handlers.handleToggleBrandExpand}
-                isLoadingBrands={state.isLoadingBrandFilters}
+                isLoadingBrands={
+                  state.isLoadingBrandFilters &&
+                  state.availableBrandFilters.length === 0 &&
+                  state.visibleBrandOptions.length === 0
+                }
               />
               {products.length > 0 ? (
                 <div className="storefront-product-grid mt-3 grid grid-cols-2 gap-2.5">

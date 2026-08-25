@@ -30,7 +30,8 @@ import {
 import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
 import { loadCategoryListCached, peekCachedCategoryList, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
 import type { StorefrontBootstrap } from '@/frontend/types/storefrontBootstrap'
-import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
+import { loadSideNavZonesCached, peekCachedSideNavZones } from '@/frontend/utils/sideNavZonesCache'
+import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 import { normalizePosterLinkUrl, isAbsoluteHttpUrl } from '@/shared/posterLink'
@@ -46,6 +47,7 @@ type BrandCategoryItem = {
   category_name: string
   category_slug: string | null
   product_count: number
+  image_url?: string | null
 }
 
 type CategoryItem = {
@@ -419,7 +421,9 @@ export const useProductCategory = (
   const [categoryDetail, setCategoryDetail] = useState<CategoryDetail | null>(null)
   const [currentCategoryLevel, setCurrentCategoryLevel] = useState<number | null>(routeParams.categoryId ? null : 1)
   const [posters, setPosters] = useState<CategoryPosterItem[]>(() => bootstrap?.posters || [])
-  const [sideNavZones, setSideNavZones] = useState<ProductCategorySideNavZone[]>([])
+  const [sideNavZones, setSideNavZones] = useState<ProductCategorySideNavZone[]>(() => {
+    return peekCachedSideNavZones(getClientPreferredLang()) || []
+  })
   const [leftNavKeywordGroups, setLeftNavKeywordGroups] = useState<ProductCategoryKeywordGroup[]>([])
   const [recommendationKeywordGroups, setRecommendationKeywordGroups] = useState<ProductCategoryKeywordGroup[]>([])
   const [activeLeftNavGroupId, setActiveLeftNavGroupId] = useState('')
@@ -1074,7 +1078,7 @@ export const useProductCategory = (
     }
 
     if (isCategorySlugRoute && routeCategorySlug && !queryState.categoryId) {
-      setIsLoadingBrandFilters(true)
+      // Keep previous chips visible; categoryId resolves from slug tree shortly.
       return
     }
 
@@ -1084,7 +1088,9 @@ export const useProductCategory = (
       return
     }
 
+    // Refine chips in the background — never block first paint on facets.
     setIsLoadingBrandFilters(true)
+    let cancelled = false
     const lang = getCurrentLang()
     getAvailableBrandFilters({
       category_id: queryState.categoryId || undefined,
@@ -1099,12 +1105,20 @@ export const useProductCategory = (
       lang,
     })
       .then((res) => {
+        if (cancelled) return
         setAvailableBrandFilters(res.list)
       })
       .catch(() => {
+        if (cancelled) return
         setAvailableBrandFilters([])
       })
-      .finally(() => setIsLoadingBrandFilters(false))
+      .finally(() => {
+        if (!cancelled) setIsLoadingBrandFilters(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [
     isDailyNewArrivalMode,
     isCategorySlugRoute,
@@ -1545,17 +1559,41 @@ export const useProductCategory = (
   }, [syncListingQueryToUrl])
 
   const visibleBrandOptions = useMemo(() => {
-    const options = selectedParentCategory?.brand_options || []
+    const fromCategory = selectedParentCategory?.brand_options || []
+    let options: BrandCategoryItem[] = fromCategory
+
+    // Desktop listing previously only used brand_options (parented under the L1),
+    // which is empty for Bags/Accessories/…. Fall back to Brand SIDE_NAV like mobile.
+    if (options.length === 0) {
+      const brandZone =
+        pickBrandSideNavZone(sideNavZones, { requireSideNavType: true }) ||
+        pickBrandSideNavZone(sideNavZones)
+      options = (brandZone?.items || []).map((item) => ({
+        category_id: item.category_id,
+        category_name: item.category_name,
+        category_slug: item.category_slug,
+        product_count: item.product_count || 0,
+        image_url: null,
+      }))
+    }
+
     const collapsedRows = selectedParentCategory?.display_config.brandFilterCollapsedRows || 3
     const maxVisibleCount = collapsedRows * 4
     return isBrandExpanded ? options : options.slice(0, maxVisibleCount)
-  }, [isBrandExpanded, selectedParentCategory])
+  }, [isBrandExpanded, selectedParentCategory, sideNavZones])
 
   const hasMoreBrandOptions = useMemo(() => {
-    const options = selectedParentCategory?.brand_options || []
+    const fromCategory = selectedParentCategory?.brand_options || []
+    let optionsLen = fromCategory.length
+    if (optionsLen === 0) {
+      const brandZone =
+        pickBrandSideNavZone(sideNavZones, { requireSideNavType: true }) ||
+        pickBrandSideNavZone(sideNavZones)
+      optionsLen = brandZone?.items?.length || 0
+    }
     const collapsedRows = selectedParentCategory?.display_config.brandFilterCollapsedRows || 3
-    return options.length > collapsedRows * 4
-  }, [selectedParentCategory])
+    return optionsLen > collapsedRows * 4
+  }, [selectedParentCategory, sideNavZones])
 
   const recommendationFloors = useMemo<ProductCategoryRecommendationFloor[]>(() => {
     return recommendationKeywordGroups

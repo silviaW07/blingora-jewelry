@@ -735,12 +735,24 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
   )
   const childCategories = categories.filter(cat => isStorefrontLevel2(cat) && !cat.isBrandCategory)
   const brandCategories = categories.filter(cat => cat.isBrandCategory)
-  // Brand L1 shelf ids — product L1s (Bags/Accessories/…) must show these shelf's brand tags,
-  // not only brands whose parentId equals the product L1 (almost always empty).
-  const brandShelfIds = new Set(
-    brandCategories.filter((brand) => isStorefrontLevel1(brand)).map((brand) => brand.id),
-  )
-  const brandTagCategories = brandCategories.filter((brand) => isStorefrontLevel2(brand))
+  // Brand shelf = isBrandCategory L1 OR a top-level category named Brand/品牌
+  // (some installs forget isBrandCategory on the shelf itself).
+  const BRAND_SHELF_NAME_RE = /^(brand|brands|品牌)$/i
+  const brandShelfIds = new Set([
+    ...brandCategories.filter((brand) => isStorefrontLevel1(brand)).map((brand) => brand.id),
+    ...categories
+      .filter(
+        (cat) =>
+          isStorefrontLevel1(cat) && BRAND_SHELF_NAME_RE.test(String(cat.name || '').trim()),
+      )
+      .map((cat) => cat.id),
+  ])
+  // Brand chips: isBrandCategory L2 tags, plus any L2 under a Brand shelf even if the flag is missing.
+  const brandTagCategories = categories.filter((cat) => {
+    if (!isStorefrontLevel2(cat)) return false
+    if (cat.isBrandCategory) return true
+    return Boolean(cat.parentId && brandShelfIds.has(cat.parentId))
+  })
   const brandIds = brandTagCategories.map((brand) => brand.id)
 
   // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
@@ -796,11 +808,7 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
             category_slug: child.slug,
             image_url: child.imageUrl || child.iconUrl || null,
           })),
-        brand_options: (brandShelfIds.size > 0
-          ? brandTagCategories.filter(
-              (brand) => brand.parentId != null && brandShelfIds.has(brand.parentId),
-            )
-          : brandTagCategories)
+        brand_options: brandTagCategories
           .map(brand => ({
             category_id: brand.id,
             category_name: resolveCategoryDisplayName(brand.translationsJson, brand.name, lang),
@@ -1720,6 +1728,9 @@ function resolveProductBrandCategoryId(p: {
 /**
  * 当前列表上下文下可用的品牌快捷筛选项（按商品数降序）。
  * 不含 brand_category_id 条件，便于在已选品牌时仍可切换其它品牌。
+ *
+ * Fast path: SQL groupBy on brandCategoryId only — never load thousands of
+ * product+SKU rows (that was freezing Accessories / large L1 listings).
  */
 export const getAvailableBrandFilters = withResult(
   async (input: GetAvailableBrandFiltersInput): Promise<GetAvailableBrandFiltersOutput> => {
@@ -1730,137 +1741,34 @@ export const getAvailableBrandFilters = withResult(
       return cached.value
     }
 
-    const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
     const categoryContext = await resolveCategoryContext(input.category_id)
+    // Scope to category / keyword only. Skip price/stock/search token scans —
+    // those required loading SKUs and made L1 pages multi-second.
     const dbWhere = buildProductWhere(
       categoryContext,
       undefined,
       input.keyword_id,
       input.keyword_group_id,
-      input.search_keyword,
+      undefined,
     )
 
     if (input.min_rating !== undefined) {
       dbWhere.ratingAverage = { gte: input.min_rating }
     }
 
-    const searchTokens = tokenizeProductSearch(input.search_keyword)
-    const facetSelect = {
-      id: true,
-      name: true,
-      productCode: true,
-      slug: true,
-      shortDescription: true,
-      translationsJson: true,
-      costPrice: true,
-      tradeInfoJson: true,
-      ratingAverage: true,
-      brandCategoryId: true,
-      createdAt: true,
-      skus: {
-        select: {
-          id: true,
-          skuCode: true,
-          price: true,
-          originalPrice: true,
-          stockStatus: true,
-        },
-        orderBy: [{ createdAt: 'asc' as const }, { skuCode: 'asc' as const }],
-        take: PRODUCT_LIST_SKU_TAKE,
+    const grouped = await prisma.product.groupBy({
+      by: ['brandCategoryId'],
+      where: {
+        ...dbWhere,
+        brandCategoryId: { not: null },
       },
-      brandCategory: {
-        select: {
-          name: true,
-          brandKeywordsJson: true,
-        },
-      },
-      category: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          isBrandCategory: true,
-          priceCoefficient: true,
-          parent: {
-            select: {
-              priceCoefficient: true,
-              isBrandCategory: true,
-            },
-          },
-        },
-      },
-      relationCategories: {
-        select: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              isBrandCategory: true,
-              priceCoefficient: true,
-              parent: {
-                select: {
-                  priceCoefficient: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    }
-
-    const dbProducts = await prisma.product.findMany({
-      where: dbWhere,
-      select: facetSelect,
-      take: searchTokens.length > 0 ? 5000 : 2000,
+      _count: { _all: true },
     })
 
     const brandCounts = new Map<string, number>()
-
-    for (const p of dbProducts) {
-      if (searchTokens.length > 0) {
-        const translationTexts = collectTranslationSearchTexts(
-          (p as { translationsJson?: unknown }).translationsJson,
-        )
-        const displayName = resolveProductDisplayName(
-          p.name,
-          (p as { translationsJson?: unknown }).translationsJson,
-          lang,
-        )
-        const brandKeywords = collectBrandKeywordTexts(
-          (p.brandCategory as { brandKeywordsJson?: unknown } | null)?.brandKeywordsJson,
-        )
-        const relatedCategoryNames = (p.relationCategories || [])
-          .map((rel) => rel.category?.name)
-          .filter(Boolean)
-        const matches = productMatchesSearchTokens(searchTokens, [
-          p.name,
-          displayName,
-          p.shortDescription,
-          (p as { productCode?: string | null }).productCode,
-          (p as { slug?: string | null }).slug,
-          p.brandCategory?.name,
-          p.category?.name,
-          ...brandKeywords,
-          ...relatedCategoryNames,
-          ...translationTexts,
-          ...p.skus.map((sku) => sku.skuCode),
-        ])
-        if (!matches) continue
-      }
-
-      const item = mapProductRecordToItem(p, lang, exchangeRate)
-
-      if (input.min_price !== undefined && item.price < input.min_price) continue
-      if (input.max_price !== undefined && item.price > input.max_price) continue
-      if (input.has_discount && !item.has_discount) continue
-      if (input.stock_status && input.stock_status.length > 0 && !input.stock_status.includes(item.stock_status)) {
-        continue
-      }
-
-      const brandId = resolveProductBrandCategoryId(p)
-      if (!brandId) continue
-      brandCounts.set(brandId, (brandCounts.get(brandId) || 0) + 1)
+    for (const row of grouped) {
+      if (!row.brandCategoryId) continue
+      brandCounts.set(row.brandCategoryId, row._count._all)
     }
 
     if (brandCounts.size === 0) {
@@ -1874,7 +1782,6 @@ export const getAvailableBrandFilters = withResult(
       where: {
         id: { in: brandIds },
         status: 'ACTIVE',
-        isBrandCategory: true,
       },
       select: {
         id: true,
@@ -1883,6 +1790,7 @@ export const getAvailableBrandFilters = withResult(
         imageUrl: true,
         iconUrl: true,
         translationsJson: true,
+        isBrandCategory: true,
       },
     })
 

@@ -1253,7 +1253,11 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   onBrandToggle={handlers.handleBrandQuickFilterToggle}
                   isBrandExpanded={state.isBrandExpanded}
                   onBrandExpandToggle={handlers.handleToggleBrandExpand}
-                  isLoadingBrands={state.isLoadingBrandFilters}
+                  isLoadingBrands={
+                    state.isLoadingBrandFilters &&
+                    state.availableBrandFilters.length === 0 &&
+                    state.visibleBrandOptions.length === 0
+                  }
                 />
               </div>
 
