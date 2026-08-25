@@ -319,7 +319,7 @@ function ColorImageUploader({
               src={imageUrl}
               keywords={imageUrl}
               description={`${colorLabel} 代表图`}
-              proxyWidth={96}
+              proxyWidth={160}
               disableKeywordSearch
             />
           </PreviewableThumb>

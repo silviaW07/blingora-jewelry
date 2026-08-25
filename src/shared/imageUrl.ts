@@ -48,6 +48,8 @@ export const shouldBypassImageOptimizer = (value?: string | null): boolean => {
     // missing remotePatterns cannot blank home category cards.
     const host = url.hostname.toLowerCase()
     if (host.endsWith('.aliyuncs.com') || host === 'aliyuncs.com') return true
+    // Direct alicdn (incl. img/sc*) — native <img> + no-referrer is more reliable than /_next/image
+    if (host.endsWith('.alicdn.com') || host === 'alicdn.com') return true
     return false
   } catch {
     return false

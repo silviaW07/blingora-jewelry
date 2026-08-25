@@ -208,7 +208,7 @@ function PendingImportTableRowsInner({
                         src={url}
                         keywords={url || item.item_productName || 'product'}
                         description={item.item_productName || item.item_parsedName || '待上传商品'}
-                        proxyWidth={96}
+                        proxyWidth={160}
                         disableKeywordSearch
                       />
                     </PreviewableThumb>

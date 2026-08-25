@@ -102,7 +102,7 @@ function proxyPathForHost(host: string, pathname: string, search: string): strin
   if (host === 'cbu02.alicdn.com') return `/img-proxy/cbu02${pathname}${search}`
   // Must match deploy/nginx/sourcingjewelry.com.conf location /img-proxy/gw/
   if (host === 'gw.alicdn.com') return `/img-proxy/gw${pathname}${search}`
-  if (host === 'img.alicdn.com') return `/img-proxy/cbu01${pathname}${search}`
+  // img.alicdn.com / sc*.alicdn.com are different buckets — do NOT remap onto cbu01 (404s).
   return null
 }
 
@@ -170,12 +170,9 @@ export function toProxiedImageUrl(
         return proxied
       }
 
-      // Unknown *.alicdn.com → default to cbu01 proxy bucket
-      const fallback = `/img-proxy/cbu01${sizedUrl.pathname}${sizedUrl.search}`
-      if (IMAGE_CDN_BASE) {
-        return `${IMAGE_CDN_BASE}${fallback.replace(/^\/img-proxy/, '')}`
-      }
-      return fallback
+      // Unknown *.alicdn.com (img/sc01/…) — keep host, only apply size suffix.
+      // Wrongly routing these through /img-proxy/cbu01 causes blank admin thumbs.
+      return sizedUrl.toString()
     }
 
     return raw

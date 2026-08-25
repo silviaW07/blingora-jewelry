@@ -322,7 +322,7 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: proxyWidth, quality: 75 }) || raw
+                const proxied = toProxiedImageUrl(raw, { width: proxyWidth, quality: 80 }) || raw
                 const useNativeImg =
                     shouldBypassImageOptimizer(proxied) ||
                     loadAttempt > 0 ||
@@ -335,11 +335,18 @@ const EditableImg = ({
                 }
                 const handleError = () => {
                     setLoadingState(false)
-                    // Soft-retry: native <img> before locking the placeholder.
-                    // Fixes hosts missing from next.config remotePatterns (e.g. old-shop OSS).
+                    // Soft-retry chain before locking the broken placeholder:
+                    // 1) native <img> (skip /_next/image)
+                    // 2) unsized proxied / original CDN URL (fixes bad size suffixes / wrong proxy)
                     if (loadAttempt < 1 && imageSrc && imageSrc !== fallbackSrc) {
                         setLoadAttempt(1)
                         setHasError(false)
+                        return
+                    }
+                    if (loadAttempt < 2 && src && imageSrc !== src) {
+                        setLoadAttempt(2)
+                        setHasError(false)
+                        setImageSrc(src)
                         return
                     }
                     setHasError(true)
