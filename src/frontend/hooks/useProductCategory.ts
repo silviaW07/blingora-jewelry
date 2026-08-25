@@ -1577,23 +1577,10 @@ export const useProductCategory = (
       }))
     }
 
-    const collapsedRows = selectedParentCategory?.display_config.brandFilterCollapsedRows || 3
-    const maxVisibleCount = collapsedRows * 4
-    return isBrandExpanded ? options : options.slice(0, maxVisibleCount)
-  }, [isBrandExpanded, selectedParentCategory, sideNavZones])
-
-  const hasMoreBrandOptions = useMemo(() => {
-    const fromCategory = selectedParentCategory?.brand_options || []
-    let optionsLen = fromCategory.length
-    if (optionsLen === 0) {
-      const brandZone =
-        pickBrandSideNavZone(sideNavZones, { requireSideNavType: true }) ||
-        pickBrandSideNavZone(sideNavZones)
-      optionsLen = brandZone?.items?.length || 0
-    }
-    const collapsedRows = selectedParentCategory?.display_config.brandFilterCollapsedRows || 3
-    return optionsLen > collapsedRows * 4
+    return options
   }, [selectedParentCategory, sideNavZones])
+
+  const hasMoreBrandOptions = false
 
   const recommendationFloors = useMemo<ProductCategoryRecommendationFloor[]>(() => {
     return recommendationKeywordGroups
