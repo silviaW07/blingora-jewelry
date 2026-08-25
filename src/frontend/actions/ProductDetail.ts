@@ -196,13 +196,15 @@ export interface GetDecoratePreviewProductOutput {
 }
 
 export interface AddToCartInput {
-  productSkuId: string
-  quantity: number
+  productSkuId?: string
+  quantity?: number
   /**
    * 同一次详情页多规格加购中、其余行合计数量。
    * 用于混批起订量校验：siblings + quantity + sameRequestSiblingQty >= productMoq
    */
   sameRequestSiblingQty?: number
+  /** PDP 多规格一次加购：优先于单行字段，减少 N 次 RPC */
+  lines?: Array<{ productSkuId: string; quantity: number }>
 }
 
 export interface AddToCartOutput {
@@ -213,6 +215,31 @@ export interface AddToCartOutput {
 export interface SetCartSkuQuantityInput {
   productSkuId: string
   quantity: number
+}
+
+function normalizeCartLines(
+  input: AddToCartInput,
+): Array<{ productSkuId: string; quantity: number }> {
+  const fromLines = Array.isArray(input.lines) ? input.lines : []
+  const mapped = fromLines
+    .map((line) => ({
+      productSkuId: String(line?.productSkuId || '').trim(),
+      quantity: Math.floor(Number(line?.quantity) || 0),
+    }))
+    .filter((line) => line.productSkuId && line.quantity > 0)
+
+  if (mapped.length > 0) {
+    const merged = new Map<string, number>()
+    for (const line of mapped) {
+      merged.set(line.productSkuId, (merged.get(line.productSkuId) || 0) + line.quantity)
+    }
+    return Array.from(merged, ([productSkuId, quantity]) => ({ productSkuId, quantity }))
+  }
+
+  const productSkuId = String(input.productSkuId || '').trim()
+  const quantity = Math.floor(Number(input.quantity) || 0)
+  if (!productSkuId || quantity <= 0) return []
+  return [{ productSkuId, quantity }]
 }
 
 // ===== Actions =====
@@ -694,128 +721,158 @@ export const getRelatedProducts = withResult(
 )
 
 /**
- * 加入购物车（仅限 CUSTOMER）
+ * 加入购物车（仅限 CUSTOMER）。支持单行或 lines 批量（一次 RPC）。
  */
 export const addToCart = requireRole([UserRole.CUSTOMER])(
   withResult(async (input: AddToCartInput): Promise<AddToCartOutput> => {
     const { userId } = getAuthContext()
-
-    if (input.quantity <= 0) {
+    const lines = normalizeCartLines(input)
+    if (lines.length === 0) {
       throw storefrontError('checkout.errors.qtyInvalid')
     }
 
-    // 1. 查 SKU，并获取商品和分类的可见性状态
-    const sku = await prisma.productsku.findUnique({
-      where: { id: input.productSkuId },
+    const skuIds = lines.map((line) => line.productSkuId)
+    const skus = await prisma.productsku.findMany({
+      where: { id: { in: skuIds } },
       include: {
         product: {
-          include: { category: true }
-        }
+          include: {
+            category: true,
+            _count: { select: { skus: true } },
+          },
+        },
+      },
+    })
+    const skuById = new Map(skus.map((sku) => [sku.id, sku]))
+
+    for (const line of lines) {
+      const sku = skuById.get(line.productSkuId)
+      if (!sku) throw storefrontError('product.errors.skuMissing')
+      if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
+        throw storefrontError('product.errors.notPurchasable')
       }
-    })
-
-    if (!sku) {
-      throw storefrontError('product.errors.skuMissing')
-    }
-    if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
-      throw storefrontError('product.errors.notPurchasable')
-    }
-    if (!isStorefrontQtyAllowed(sku.stock, input.quantity)) {
-      throw storefrontError('product.errors.outOfStock')
+      if (!isStorefrontQtyAllowed(sku.stock, line.quantity)) {
+        throw storefrontError('product.errors.outOfStock')
+      }
     }
 
-    const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)
-    const siblingSkuCount = await prisma.productsku.count({
-      where: { productId: sku.productId },
-    })
-    const supportsMixedBatch = siblingSkuCount > 1
-    const skuMinOrderQty = resolveEffectiveSkuMinOrderQty(
-      productMinOrderQty,
-      sku.minOrderQty,
-      { supportsMixedBatch },
-    )
-    if (input.quantity < skuMinOrderQty) {
-      throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
+    // 按商品聚合本请求数量，供混批起订量校验
+    const requestQtyByProduct = new Map<string, number>()
+    for (const line of lines) {
+      const sku = skuById.get(line.productSkuId)!
+      requestQtyByProduct.set(
+        sku.productId,
+        (requestQtyByProduct.get(sku.productId) || 0) + line.quantity,
+      )
     }
-    const sameRequestSiblingQty = Math.max(0, Math.floor(Number(input.sameRequestSiblingQty) || 0))
 
-    // 2. 查找或创建用户购物车
+    for (const line of lines) {
+      const sku = skuById.get(line.productSkuId)!
+      const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)
+      const supportsMixedBatch = (sku.product._count?.skus || 0) > 1
+      const skuMinOrderQty = resolveEffectiveSkuMinOrderQty(
+        productMinOrderQty,
+        sku.minOrderQty,
+        { supportsMixedBatch },
+      )
+      if (line.quantity < skuMinOrderQty) {
+        throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
+      }
+    }
+
     let cart = await prisma.cart.findUnique({
-      where: { accountId: userId }
+      where: { accountId: userId },
     })
-
     if (!cart) {
       cart = await prisma.cart.create({
-        data: {
-          account: { connect: { id: userId } }
-        }
+        data: { account: { connect: { id: userId } } },
       })
     }
 
-    // 3. 查找是否已存在该购物车项（唯一键含刻字字段，无刻字时用 findFirst）
-    const existingItem = await prisma.cartitem.findFirst({
+    const existingItems = await prisma.cartitem.findMany({
       where: {
         cartId: cart.id,
-        productSkuId: input.productSkuId,
+        productSkuId: { in: skuIds },
       },
       orderBy: { updatedAt: 'desc' },
     })
-
-    // 4. 事务或者合并逻辑更新
-    if (existingItem) {
-      const newQuantity = existingItem.quantity + input.quantity
-      if (newQuantity > sku.stock) {
-        throw storefrontError('product.errors.outOfStock')
+    const existingBySku = new Map<string, (typeof existingItems)[number]>()
+    for (const item of existingItems) {
+      if (!existingBySku.has(item.productSkuId)) {
+        existingBySku.set(item.productSkuId, item)
       }
-      if (newQuantity < skuMinOrderQty) {
-        throw new Error(formatMinOrderQtyMessage(skuMinOrderQty))
-      }
-      const siblingQty = await prisma.cartitem.aggregate({
-        where: {
-          cartId: cart.id,
-          productId: sku.productId,
-          id: { not: existingItem.id },
-        },
-        _sum: { quantity: true },
-      })
-      const totalProductQty =
-        (siblingQty._sum.quantity ?? 0) + newQuantity + sameRequestSiblingQty
-      if (totalProductQty < productMinOrderQty) {
-        throw new Error(formatMinOrderQtyMessage(productMinOrderQty))
-      }
-      await prisma.cartitem.update({
-        where: { id: existingItem.id },
-        data: {
-          quantity: newQuantity,
-          status: 'VALID'
-        }
-      })
-    } else {
-      const siblingQty = await prisma.cartitem.aggregate({
-        where: {
-          cartId: cart.id,
-          productId: sku.productId,
-        },
-        _sum: { quantity: true },
-      })
-      const totalProductQty =
-        (siblingQty._sum.quantity ?? 0) + input.quantity + sameRequestSiblingQty
-      if (totalProductQty < productMinOrderQty) {
-        throw new Error(formatMinOrderQtyMessage(productMinOrderQty))
-      }
-      await prisma.cartitem.create({
-        data: {
-          cart: { connect: { id: cart.id } },
-          product: { connect: { id: sku.productId } },
-          productSku: { connect: { id: sku.id } },
-          quantity: input.quantity,
-          status: 'VALID'
-        }
-      })
     }
 
+    const productIds = Array.from(requestQtyByProduct.keys())
+    const siblingAggs = await prisma.cartitem.groupBy({
+      by: ['productId'],
+      where: { cartId: cart.id, productId: { in: productIds } },
+      _sum: { quantity: true },
+    })
+    const cartQtyByProduct = new Map(
+      siblingAggs.map((row) => [row.productId, row._sum.quantity ?? 0]),
+    )
+
+    // 从购物车合计中去掉本批将覆盖/累加的现有行，再加本批数量
+    for (const line of lines) {
+      const existing = existingBySku.get(line.productSkuId)
+      if (!existing) continue
+      const sku = skuById.get(line.productSkuId)!
+      cartQtyByProduct.set(
+        sku.productId,
+        Math.max(0, (cartQtyByProduct.get(sku.productId) || 0) - existing.quantity),
+      )
+    }
+
+    for (const [productId, requestQty] of requestQtyByProduct) {
+      const sku = skus.find((row) => row.productId === productId)!
+      const productMinOrderQty = resolveProductMinOrderQty(sku.product.tradeInfoJson)
+      const sameRequestSiblingQty =
+        lines.length === 1
+          ? Math.max(0, Math.floor(Number(input.sameRequestSiblingQty) || 0))
+          : 0
+      const totalProductQty =
+        (cartQtyByProduct.get(productId) || 0) + requestQty + sameRequestSiblingQty
+      if (totalProductQty < productMinOrderQty) {
+        throw new Error(formatMinOrderQtyMessage(productMinOrderQty))
+      }
+    }
+
+    for (const line of lines) {
+      const sku = skuById.get(line.productSkuId)!
+      const existing = existingBySku.get(line.productSkuId)
+      if (existing && existing.quantity + line.quantity > sku.stock) {
+        throw storefrontError('product.errors.outOfStock')
+      }
+    }
+
+    await prisma.$transaction(
+      lines.map((line) => {
+        const sku = skuById.get(line.productSkuId)!
+        const existing = existingBySku.get(line.productSkuId)
+        if (existing) {
+          return prisma.cartitem.update({
+            where: { id: existing.id },
+            data: {
+              quantity: existing.quantity + line.quantity,
+              status: 'VALID',
+            },
+          })
+        }
+        return prisma.cartitem.create({
+          data: {
+            cart: { connect: { id: cart!.id } },
+            product: { connect: { id: sku.productId } },
+            productSku: { connect: { id: sku.id } },
+            quantity: line.quantity,
+            status: 'VALID',
+          },
+        })
+      }),
+    )
+
     return { success: true }
-  })
+  }),
 )
 
 /**

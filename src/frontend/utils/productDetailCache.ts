@@ -86,6 +86,13 @@ export function prefetchProductDetail(productId: string) {
   const id = String(productId || '').trim()
   if (!id || typeof window === 'undefined') return
 
+  // Mobile scroll/touch fires pointerenter — skip to keep bandwidth for images + add-to-cart
+  try {
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
+  } catch {
+    // continue
+  }
+
   const lang = getClientPreferredLang()
   if (readCachedProductDetail(id, null, lang)) return
 

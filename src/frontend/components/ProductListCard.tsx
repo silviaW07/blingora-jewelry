@@ -57,13 +57,33 @@ const formatListPrice = (price?: number | null, priceMax?: number | null) => {
 }
 
 /** Prefer SKU/color images; fall back to main image only when no variants exist. Cap to limit request fan-out. */
-/** Cap swatch requests — each card was firing 6 extra img-proxy hits and starving main images. */
-const MAX_VARIANT_THUMBS = 4
+/** Cap swatch requests — each card was firing extra img-proxy hits and starving main images. */
+const MAX_VARIANT_THUMBS_DESKTOP = 4
+const MAX_VARIANT_THUMBS_MOBILE = 2
+
+function isFinePointerHover(): boolean {
+  if (typeof window === 'undefined') return true
+  try {
+    return window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  } catch {
+    return true
+  }
+}
+
+function isNarrowViewport(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.matchMedia('(max-width: 767px)').matches
+  } catch {
+    return false
+  }
+}
 
 const resolveThumbnails = (item: ProductListCardItem) => {
+  const cap = isNarrowViewport() ? MAX_VARIANT_THUMBS_MOBILE : MAX_VARIANT_THUMBS_DESKTOP
   const fromVariants = (item.variant_thumbnails || []).filter((url) => Boolean(url?.trim()))
   if (fromVariants.length > 0) {
-    return fromVariants.slice(0, MAX_VARIANT_THUMBS)
+    return fromVariants.slice(0, cap)
   }
 
   return item.main_image_url?.trim() ? [item.main_image_url.trim()] : []
@@ -110,6 +130,8 @@ export const ProductListCard = ({
   const addToCartEvents = useChromeActivate(() => addToCart())
 
   const prefetchDetail = () => {
+    // Touch / coarse pointers: hover prefetch competes with scroll + add-to-cart bandwidth
+    if (!isFinePointerHover()) return
     prefetchProductDetail(item.product_id)
   }
 
@@ -167,8 +189,8 @@ export const ProductListCard = ({
             src={previewImage || item.main_image_url}
             alt={item.product_name}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-            imageWidth={360}
-            quality={72}
+            imageWidth={isNarrowViewport() ? 280 : 360}
+            quality={isNarrowViewport() ? 68 : 72}
             priority={priority}
           />
         </div>
@@ -243,8 +265,8 @@ export const ProductListCard = ({
                     fill
                     className="pointer-events-none"
                     sizes="48px"
-                    imageWidth={160}
-                    quality={75}
+                    imageWidth={isNarrowViewport() ? 96 : 160}
+                    quality={isNarrowViewport() ? 70 : 75}
                     priority={priority && index < 2}
                   />
                 </button>

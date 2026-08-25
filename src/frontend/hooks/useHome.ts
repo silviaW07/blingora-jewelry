@@ -387,11 +387,13 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
       return
     }
 
-    await addCartItem({
+    toast.success('Added to cart')
+    void addCartItem({
       productId: item.productId,
       productSkuId: item.defaultSkuId,
+    }).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
     })
-    toast.success('Added to cart')
   }
 
   const handleAddRecommendProductSkuToCart = async (item: HomeRecommendProductCard, productSkuId: string) => {
@@ -410,11 +412,13 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
       return
     }
 
-    await addCartItem({
+    toast.success('Added to cart')
+    void addCartItem({
       productId: item.productId,
       productSkuId: productSkuId.trim(),
+    }).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
     })
-    toast.success('Added to cart')
   }
 
   const handleAddRecommendProductToWishlist = (_item: HomeRecommendProductCard, favorited?: boolean) => {
@@ -435,11 +439,13 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
       return
     }
 
-    await addCartItem({
+    toast.success('Added to cart')
+    void addCartItem({
       productId: item.productId,
       productSkuId: item.defaultSkuId,
+    }).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
     })
-    toast.success('Added to cart')
   }
 
   return {

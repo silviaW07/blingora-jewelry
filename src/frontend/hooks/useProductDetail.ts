@@ -855,18 +855,10 @@ export const useProductDetail = (seed?: {
 
     try {
       setSubmitting(true)
-      for (let i = 0; i < lines.length; i += 1) {
-        const [skuId, qty] = lines[i]
-        const sameRequestSiblingQty = lines
-          .filter((_, idx) => idx !== i)
-          .reduce((sum, [, q]) => sum + q, 0)
-        await addToCart({
-          productSkuId: skuId,
-          quantity: qty,
-          sameRequestSiblingQty,
-        })
-      }
       toast.success('Added to cart')
+      await addToCart({
+        lines: lines.map(([productSkuId, quantity]) => ({ productSkuId, quantity })),
+      })
     } catch (err: any) {
       toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
     } finally {

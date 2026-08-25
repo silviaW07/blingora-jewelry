@@ -1917,25 +1917,28 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
   withResult(async (input: AddToCartInput): Promise<AddToCartOutput> => {
     const { userId } = getAuthContext()
 
-    const product = await prisma.product.findUnique({
-      where: { id: input.product_id },
-      include: { category: true }
-    })
-
-    if (!product || product.status !== 'ACTIVE' || product.category.status !== 'ACTIVE') {
-      throw storefrontError('product.errors.unavailable')
+    if (input.quantity <= 0) {
+      throw storefrontError('checkout.errors.qtyInvalid')
     }
 
     const sku = await prisma.productsku.findUnique({
-      where: { id: input.product_sku_id }
+      where: { id: input.product_sku_id },
+      include: {
+        product: { include: { category: true } },
+      },
     })
 
-    if (!sku || sku.productId !== input.product_id) {
-      throw storefrontError('checkout.errors.skuInvalid')
-    }
-
-    if (input.quantity <= 0) {
-      throw storefrontError('checkout.errors.qtyInvalid')
+    if (
+      !sku ||
+      sku.productId !== input.product_id ||
+      sku.product.status !== 'ACTIVE' ||
+      sku.product.category.status !== 'ACTIVE'
+    ) {
+      throw storefrontError(
+        !sku || sku.productId !== input.product_id
+          ? 'checkout.errors.skuInvalid'
+          : 'product.errors.unavailable',
+      )
     }
 
     if (!isStorefrontQtyAllowed(sku.stock, input.quantity)) {
@@ -1943,14 +1946,14 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     }
 
     let cart = await prisma.cart.findUnique({
-      where: { accountId: userId }
+      where: { accountId: userId },
+      select: { id: true },
     })
 
     if (!cart) {
       cart = await prisma.cart.create({
-        data: {
-          account: { connect: { id: userId } }
-        }
+        data: { account: { connect: { id: userId } } },
+        select: { id: true },
       })
     }
 
@@ -1959,8 +1962,9 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
         cartId: cart.id,
         productSkuId: sku.id,
         engravingText: null,
-        engravingFont: null
-      }
+        engravingFont: null,
+      },
+      select: { id: true, quantity: true },
     })
 
     if (existingItem) {
@@ -1968,28 +1972,24 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
       if (newQuantity > sku.stock) {
         throw storefrontError('product.errors.outOfStock')
       }
-
       await prisma.cartitem.update({
         where: { id: existingItem.id },
-        data: {
-          quantity: newQuantity,
-          status: 'VALID'
-        }
+        data: { quantity: newQuantity, status: 'VALID' },
       })
     } else {
       await prisma.cartitem.create({
         data: {
           cart: { connect: { id: cart.id } },
-          product: { connect: { id: product.id } },
+          product: { connect: { id: sku.productId } },
           productSku: { connect: { id: sku.id } },
           quantity: input.quantity,
-          status: 'VALID'
-        }
+          status: 'VALID',
+        },
       })
     }
 
     return { success: true }
-  })
+  }),
 )
 
 export interface GetWishlistProductsInput {

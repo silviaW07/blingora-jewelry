@@ -900,7 +900,12 @@ export const useProductCategory = (
   useEffect(() => {
     if (!isMobile) {
       setExpandedTopNavCategoryIds([])
+      return
     }
+    // Mobile: smaller pages = fewer images + faster first paint / add-to-cart readiness
+    setQueryState((prev) =>
+      prev.pageSize <= 24 ? prev : { ...prev, pageSize: 24, page: 1 },
+    )
   }, [isMobile])
 
   useEffect(() => {
@@ -1669,16 +1674,16 @@ export const useProductCategory = (
       return
     }
 
-    try {
-      await addToCart({
-        product_id: item.product_id,
-        product_sku_id: item.first_sku_id,
-        quantity: 1
-      })
-      toast.success('Added to cart')
-    } catch (err: any) {
+    const qty = Math.max(1, Math.floor(Number(item.min_order_quantity) || 1))
+    // Optimistic feedback — don't block the tap on mobile RTT
+    toast.success('Added to cart')
+    void addToCart({
+      product_id: item.product_id,
+      product_sku_id: item.first_sku_id,
+      quantity: qty,
+    }).catch((err: unknown) => {
       toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
-    }
+    })
   }
 
   const handleAddToWishlist = useCallback((item: ProductCardItem, favorited?: boolean) => {
