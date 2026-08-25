@@ -40,7 +40,11 @@
     "customizationComingSoon": "Las opciones de personalización llegarán pronto.",
     "colorPreview": "Vista previa del color",
     "loggedOut": "Sesión cerrada",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "serverError": "Algo salió mal. Inténtalo de nuevo en un momento.",
+    "requestTimeout": "La solicitud agotó el tiempo ({{seconds}}s). Inténtalo de nuevo.",
+    "rpcConnectFailed": "No se pudo conectar con el servidor. Inténtalo de nuevo en un momento.",
+    "emailAlreadyRegistered": "Este correo ya está registrado. Inicia sesión o usa otro correo."
   },
   "nav": {
     "home": "Inicio",

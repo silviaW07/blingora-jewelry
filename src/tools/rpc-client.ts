@@ -16,8 +16,68 @@ const PROJECT_ID =
 /** Default AbortController timeout for RPC fetch (ms). Override via rpcCallTimed / __rpcTimeoutMs. */
 export const RPC_DEFAULT_TIMEOUT_MS = 60_000;
 
+type RpcLocale = 'en' | 'es'
+
+function resolveRpcLocale(): RpcLocale {
+  if (typeof window === 'undefined') return 'en'
+  try {
+    const raw =
+      window.localStorage?.getItem('app_preferred_locale') ||
+      document.documentElement?.lang ||
+      ''
+    return String(raw).toLowerCase().startsWith('es') ? 'es' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+const STOREFRONT_RPC_COPY: Record<
+  RpcLocale,
+  {
+    serverError: string
+    requestTimeout: (seconds: number) => string
+    rpcConnectFailed: string
+    emailAlreadyRegistered: string
+  }
+> = {
+  en: {
+    serverError: 'Something went wrong. Please try again shortly.',
+    requestTimeout: (seconds) => `Request timed out (${seconds}s). Please try again.`,
+    rpcConnectFailed: 'Unable to reach the server. Please try again shortly.',
+    emailAlreadyRegistered:
+      'This email is already registered. Sign in or use another email.',
+  },
+  es: {
+    serverError: 'Algo salió mal. Inténtalo de nuevo en un momento.',
+    requestTimeout: (seconds) =>
+      `La solicitud agotó el tiempo (${seconds}s). Inténtalo de nuevo.`,
+    rpcConnectFailed:
+      'No se pudo conectar con el servidor. Inténtalo de nuevo en un momento.',
+    emailAlreadyRegistered:
+      'Este correo ya está registrado. Inicia sesión o usa otro correo.',
+  },
+}
+
+/** Admin-facing ops hint — English only; never show shell scripts to storefront buyers. */
+const BACKEND_SERVER_ERROR =
+  'Backend service error. Please try again. If it keeps happening, run: bash deploy/ensure-online.sh'
+
+function isStorefrontAction(actionName: string): boolean {
+  return actionName.includes('.frontend.') || actionName.startsWith('frontend.')
+}
+
+function storefrontCopy() {
+  return STOREFRONT_RPC_COPY[resolveRpcLocale()]
+}
+
+function serverErrorMessage(actionName: string): string {
+  return isStorefrontAction(actionName)
+    ? storefrontCopy().serverError
+    : BACKEND_SERVER_ERROR
+}
+
 const TIMEOUT_ERROR_MESSAGE = (timeoutMs: number) =>
-  `请求超时（${Math.round(timeoutMs / 1000)}秒），请稍后重试`;
+  storefrontCopy().requestTimeout(Math.round(timeoutMs / 1000))
 
 // 本地：直连 RPC 后端；线上走 /api/query（避免部分 Chrome 广告拦截把 /rpc/ 当追踪接口拦掉）
 const getApiUrl = () => {
@@ -38,7 +98,9 @@ const ERROR_MESSAGES = {
   UNAUTHORIZED: 'Please login',
   FORBIDDEN: 'Permission denied',
   NOT_FOUND: 'Resource not found',
-  SERVER_ERROR: '后台服务异常，请稍后重试。若反复出现请在服务器执行 bash deploy/ensure-online.sh',
+  get SERVER_ERROR() {
+    return storefrontCopy().serverError
+  },
   OPERATION_FAILED: 'Operation failed',
 };
 
@@ -69,17 +131,18 @@ const shouldSilentServerError = (actionName: string) =>
   SILENT_SERVER_ERROR_ACTIONS.has(actionLeafName(actionName));
 
 /** Hide misleading engine messages that are not actionable for operators */
-const sanitizeRpcErrorMessage = (raw: unknown): string => {
+const sanitizeRpcErrorMessage = (raw: unknown, actionName = ''): string => {
   const message = String(raw || '').trim();
-  if (!message) return ERROR_MESSAGES.SERVER_ERROR;
+  if (!message) return serverErrorMessage(actionName);
   if (/Must call super constructor/i.test(message)) {
-    return ERROR_MESSAGES.SERVER_ERROR;
+    return serverErrorMessage(actionName);
   }
   if (/该邮箱已被注册|数据库结构未同步/i.test(message)) {
+    if (/该邮箱已被注册/.test(message)) return storefrontCopy().emailAlreadyRegistered
     return message;
   }
   if (/P2002|Unique constraint/i.test(message)) {
-    return '该邮箱已被注册，请更换邮箱或直接登录';
+    return storefrontCopy().emailAlreadyRegistered;
   }
   // Prisma column/table schema drift → friendly message for storefront
   if (
@@ -87,7 +150,11 @@ const sanitizeRpcErrorMessage = (raw: unknown): string => {
     /does not exist in the current database/i.test(message) ||
     /passwordPlain/i.test(message)
   ) {
-    return ERROR_MESSAGES.SERVER_ERROR;
+    return serverErrorMessage(actionName);
+  }
+  // Legacy Chinese RPC outage toast → locale-aware copy
+  if (/后台服务异常|ensure-online\.sh|无法连接后台 RPC/i.test(message)) {
+    return serverErrorMessage(actionName);
   }
   return message;
 };
@@ -223,14 +290,15 @@ async function rpcCallInternal<T>(
         resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
       } catch (networkError: any) {
         const msg = String(networkError?.message || '');
-        if (/请求超时/.test(msg)) {
+        if (/请求超时|timed out|agotó el tiempo/i.test(msg)) {
           if (!shouldSilentServerError(actionName)) {
             toast.error(msg, { id: 'rpc-timeout-error' });
           }
           throw networkError instanceof Error ? networkError : new Error(msg);
         }
-        const connectMsg =
-          '无法连接后台 RPC（Failed to fetch）。请确认进程在线：pnpm run build:server && pm2 restart rpc（本地默认 :3100）';
+        const connectMsg = isStorefrontAction(actionName)
+          ? storefrontCopy().rpcConnectFailed
+          : 'Unable to reach RPC. Confirm the process is up: pnpm run build:server && pm2 restart rpc (local default :3100)';
         if (!shouldSilentServerError(actionName)) {
           toast.error(connectMsg, { id: 'rpc-connect-error' });
         }
@@ -242,10 +310,11 @@ async function rpcCallInternal<T>(
         await new Promise(r => setTimeout(r, 500));
         resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
         if (resp.status === 503) {
+          const errMsg = serverErrorMessage(actionName);
           if (!shouldSilentServerError(actionName)) {
-            toast.error(ERROR_MESSAGES.SERVER_ERROR, { id: 'rpc-server-error' });
+            toast.error(errMsg, { id: 'rpc-server-error' });
           }
-          throw new Error(ERROR_MESSAGES.SERVER_ERROR);
+          throw new Error(errMsg);
         }
       }
 
@@ -289,7 +358,7 @@ async function rpcCallInternal<T>(
       // 403 权限不足
       if (resp.status === 403) {
         const data = await resp.json();
-        const errorMsg = sanitizeRpcErrorMessage(data.error ?? ERROR_MESSAGES.FORBIDDEN);
+        const errorMsg = sanitizeRpcErrorMessage(data.error ?? ERROR_MESSAGES.FORBIDDEN, actionName);
         toast.error(errorMsg);
         throw new Error(errorMsg);
       }
@@ -303,7 +372,10 @@ async function rpcCallInternal<T>(
 
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => ({}));
-        const errorMsg = sanitizeRpcErrorMessage(errorData.error || ERROR_MESSAGES.SERVER_ERROR);
+        const errorMsg = sanitizeRpcErrorMessage(
+          errorData.error || serverErrorMessage(actionName),
+          actionName,
+        );
         // Auth forms surface their own field error; skip global toast spam for 4xx
         const isAuthLeaf = /^(loginCustomer|registerCustomer|checkEmailUnique)$/.test(
           actionLeafName(actionName),

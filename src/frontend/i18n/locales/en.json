@@ -40,7 +40,11 @@
     "customizationComingSoon": "Customization options coming soon.",
     "colorPreview": "Color preview",
     "loggedOut": "Logged out",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "serverError": "Something went wrong. Please try again shortly.",
+    "requestTimeout": "Request timed out ({{seconds}}s). Please try again.",
+    "rpcConnectFailed": "Unable to reach the server. Please try again shortly.",
+    "emailAlreadyRegistered": "This email is already registered. Sign in or use another email."
   },
   "nav": {
     "home": "Home",
