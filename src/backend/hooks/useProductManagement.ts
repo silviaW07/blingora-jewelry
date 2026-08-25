@@ -989,12 +989,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const pendingImportQueueRef = useRef<PendingImportQueueItem[]>([])
   const pendingImportGalleryPersistableRef = useRef<Map<string, string[]>>(new Map())
   const pendingImportGalleryPersistChainRef = useRef<Map<string, Promise<void>>>(new Map())
-  /** Shared low-concurrency upload pool so one product's many images don't starve others. */
+  /** Shared upload pool — raised so multi-select galleries finish quickly without starving other products. */
   const sharedImageUploadPoolRef = useRef<{
     pending: Array<() => Promise<void>>
     active: number
     concurrency: number
-  }>({ pending: [], active: 0, concurrency: 2 })
+  }>({ pending: [], active: 0, concurrency: 5 })
   const [galleryUploadingIndex, setGalleryUploadingIndex] = useState<number | null>(null)
   const [featuredKeywords, setFeaturedKeywords] = useState<string[]>([])
   const [featuredKeywordInput, setFeaturedKeywordInput] = useState('')
@@ -1729,15 +1729,15 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const uploadImagesToProject = async (files: File[]) => {
     let lastToastAt = 0
     const result = await upload_project_files_detailed(files, {
-      // Low concurrency + sequential for multi-select: keep admin UI usable while uploading.
-      concurrency: 2,
-      sequential: files.length > 1,
+      concurrency: 5,
+      // Only force sequential for very large selections to avoid one huge multipart.
+      sequential: files.length > 12,
       onProgress: (done, total) => {
         if (total <= 1) return
         const now = Date.now()
         if (done === total || now - lastToastAt > 1200) {
           lastToastAt = now
-          toast.message(`图片上传中 ${done}/${total}（后台慢慢传，可继续给其它商品选图）`)
+          toast.message(`图片上传中 ${done}/${total}`)
         }
       },
     })
@@ -4051,61 +4051,36 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         : item,
     ))
     bumpPendingImportImageInflight(itemId, 1)
-    toast.message(`已加入 ${files.length} 张到上传队列，后台慢慢传；可继续给其它商品选图`)
+    toast.message(`已加入 ${files.length} 张到上传队列，可继续给其它商品选图`)
 
-    // Fire-and-forget: shared pool drains slowly across all products.
+    // Fire-and-forget: batch multipart (or pooled individuals) then persist once.
     void (async () => {
-      const uploadedByPreview = new Map<string, string>()
-      let successCount = 0
       try {
-        await Promise.all(
-          files.map((file, index) =>
-            enqueueSharedImageUpload(async () => {
-              const preview = previewUrls[index]
-              try {
-                const real = await uploadImageToProject(file)
-                uploadedByPreview.set(preview, real)
-                successCount += 1
+        const uploaded = await uploadImagesToProject(files)
+        const successCount = uploaded.length
 
-                setPendingImportQueue(prev => prev.map(item => {
-                  if (item.item_id !== itemId) return item
-                  const gallery = readPendingGalleryUrls(item).map(url =>
-                    url === preview ? real : url,
-                  )
-                  const persistable = gallery.filter(url => !url.startsWith('blob:'))
-                  const main = persistable[0] || item.item_mainImageUrl
-                  return {
-                    ...item,
-                    item_galleryUrls: gallery,
-                    item_mainImageUrl: main,
-                    item_parsedMainImageUrl: main,
-                  }
-                }))
-
-                const persistableNow = Array.from(
-                  new Set([
-                    ...current.filter(url => !url.startsWith('blob:')),
-                    ...Array.from(uploadedByPreview.values()),
-                  ]),
-                )
-                if (persistableNow.length) {
-                  await enqueuePersistPendingImportGallery(itemId, persistableNow, 'merge')
-                }
-              } catch (fileErr: any) {
-                setPendingImportQueue(prev => prev.map(item => {
-                  if (item.item_id !== itemId) return item
-                  return {
-                    ...item,
-                    item_galleryUrls: readPendingGalleryUrls(item).filter(url => url !== preview),
-                  }
-                }))
-                toast.warning(`${file.name} 上传失败：${fileErr?.message || '网络异常'}`)
-              }
-            }),
-          ),
-        )
+        setPendingImportQueue(prev => prev.map(item => {
+          if (item.item_id !== itemId) return item
+          const withoutBlobs = readPendingGalleryUrls(item).filter(url => !previewUrls.includes(url))
+          const gallery = [...withoutBlobs, ...uploaded]
+          const persistable = gallery.filter(url => !url.startsWith('blob:'))
+          const main = persistable[0] || item.item_mainImageUrl
+          return {
+            ...item,
+            item_galleryUrls: gallery,
+            item_mainImageUrl: main,
+            item_parsedMainImageUrl: main,
+          }
+        }))
 
         if (successCount > 0) {
+          const persistableNow = Array.from(
+            new Set([
+              ...current.filter(url => !url.startsWith('blob:')),
+              ...uploaded,
+            ]),
+          )
+          await enqueuePersistPendingImportGallery(itemId, persistableNow, 'merge')
           toast.success(`已上传 ${successCount}/${files.length} 张图片`)
         } else {
           toast.error('图片上传失败：没有成功写入的图片')
@@ -4121,6 +4096,19 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             }
           }))
         }
+      } catch (err: any) {
+        setPendingImportQueue(prev => prev.map(item => {
+          if (item.item_id !== itemId) return item
+          const gallery = readPendingGalleryUrls(item).filter(url => !previewUrls.includes(url))
+          const main = gallery.find(url => !url.startsWith('blob:')) || gallery[0] || current[0] || null
+          return {
+            ...item,
+            item_galleryUrls: gallery.length ? gallery : current,
+            item_mainImageUrl: main,
+            item_parsedMainImageUrl: main,
+          }
+        }))
+        toast.error(err?.message || '图片上传失败')
       } finally {
         bumpPendingImportImageInflight(itemId, -1)
         window.setTimeout(() => {

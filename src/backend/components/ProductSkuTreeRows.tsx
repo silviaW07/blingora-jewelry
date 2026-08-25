@@ -93,6 +93,7 @@ function ProductTreeRowsInner({
                     keywords={item.main_image_url}
                     description={item.product_name}
                     disableKeywordSearch
+                    proxyWidth={96}
                   />
                 </PreviewableThumb>
               ) : (

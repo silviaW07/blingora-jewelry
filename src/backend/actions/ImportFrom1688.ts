@@ -4650,7 +4650,7 @@ const buildPendingItemStructure = (
     ...((Array.isArray(preview.detailImages) ? preview.detailImages : []).filter(Boolean)),
   ])
   // List payload: cap gallery + truncate detail HTML so queue open stays under RPC timeout.
-  const galleryUrls = rawGallery.slice(0, 12)
+  const galleryUrls = rawGallery.slice(0, 6)
   const rawDetail = String(item.productDetail || '')
   const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail
   const priced = enrich

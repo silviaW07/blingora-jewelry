@@ -10,8 +10,8 @@ import { isDirectImageSrc, shouldBypassImageOptimizer } from '@/shared/imageUrl'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl';
 
 
-// 并发控制：最多同时 3 个图片请求
-const MAX_CONCURRENT = 3;
+// 并发控制：后台列表多缩略图时 3 太低，容易排队假死
+const MAX_CONCURRENT = 8;
 const KEYWORD_IMAGE_TIMEOUT_MS = 4000;
 let activeCount = 0;
 const waitQueue: Array<() => void> = [];
@@ -86,6 +86,8 @@ interface EditableImgProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement
     fallbackSrc?: string | null;
     /** 主图超过该毫秒仍未加载成功时切到 fallbackSrc（首页类目卡：商品图慢则用分类主图） */
     slowFallbackMs?: number;
+    /** Proxy / OSS resize hint for list thumbs (default 400). */
+    proxyWidth?: number;
 }
 
 const defaultStyle: CSSProperties = {
@@ -128,6 +130,7 @@ const EditableImg = ({
     disableKeywordSearch = false,
     fallbackSrc = null,
     slowFallbackMs = 0,
+    proxyWidth = 400,
     loading = 'lazy',
     decoding = 'async',
     ...imgProps
@@ -319,7 +322,7 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: 400, quality: 75 }) || raw
+                const proxied = toProxiedImageUrl(raw, { width: proxyWidth, quality: 75 }) || raw
                 const useNativeImg =
                     shouldBypassImageOptimizer(proxied) ||
                     loadAttempt > 0 ||

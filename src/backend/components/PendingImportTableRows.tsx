@@ -183,11 +183,17 @@ function PendingImportTableRowsInner({
           <div className="flex items-start gap-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2 max-w-[260px]">
-                {(item.item_galleryUrls?.length
-                  ? item.item_galleryUrls
-                  : (item.item_mainImageUrl || item.item_parsedMainImageUrl
-                    ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
-                    : [])).map((url, imageIndex, allUrls) => {
+                {(() => {
+                  const allUrls = item.item_galleryUrls?.length
+                    ? item.item_galleryUrls
+                    : (item.item_mainImageUrl || item.item_parsedMainImageUrl
+                      ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
+                      : [])
+                  const visibleUrls = allUrls.slice(0, 4)
+                  const hiddenCount = Math.max(0, allUrls.length - visibleUrls.length)
+                  return (
+                    <>
+                      {visibleUrls.map((url, imageIndex) => {
                   const canDelete = allUrls.length > 1
                   return (
                   <div key={`${item.item_id}-${imageIndex}-${url}`} className="relative w-12 h-12 rounded border border-slate-100 overflow-hidden flex-shrink-0 bg-slate-50">
@@ -202,6 +208,8 @@ function PendingImportTableRowsInner({
                         src={url}
                         keywords={url || item.item_productName || 'product'}
                         description={item.item_productName || item.item_parsedName || '待上传商品'}
+                        proxyWidth={96}
+                        disableKeywordSearch
                       />
                     </PreviewableThumb>
                     <button
@@ -246,6 +254,14 @@ function PendingImportTableRowsInner({
                   </div>
                   )
                 })}
+                      {hiddenCount > 0 ? (
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-500">
+                          +{hiddenCount}
+                        </div>
+                      ) : null}
+                    </>
+                  )
+                })()}
               </div>
               <div>
                 <Button

@@ -369,7 +369,9 @@ const PRODUCT_LIST_QUERY_SELECT = {
       materialLabel: true,
       minOrderQty: true,
     },
+    // Cap list payload — extreme color×size grids otherwise stall admin RPC/page.
     orderBy: { skuCode: 'asc' as const },
+    take: 80,
   },
 } as const
 
