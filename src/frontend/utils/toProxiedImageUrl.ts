@@ -102,7 +102,8 @@ function proxyPathForHost(host: string, pathname: string, search: string): strin
   if (host === 'cbu02.alicdn.com') return `/img-proxy/cbu02${pathname}${search}`
   // Must match deploy/nginx/sourcingjewelry.com.conf location /img-proxy/gw/
   if (host === 'gw.alicdn.com') return `/img-proxy/gw${pathname}${search}`
-  // img.alicdn.com / sc*.alicdn.com are different buckets — do NOT remap onto cbu01 (404s).
+  // img.alicdn.com / imgextra — own bucket (do not remap onto cbu01)
+  if (host === 'img.alicdn.com') return `/img-proxy/img${pathname}${search}`
   return null
 }
 

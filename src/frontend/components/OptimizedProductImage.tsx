@@ -88,7 +88,7 @@ export function OptimizedProductImage({
         loading={priority ? 'eager' : 'lazy'}
         decoding={priority ? 'sync' : 'async'}
         draggable={false}
-        fetchPriority={priority ? 'high' : 'low'}
+        fetchPriority={priority ? 'high' : 'auto'}
         referrerPolicy="no-referrer"
         onContextMenu={(event) => event.preventDefault()}
         onError={handleError}

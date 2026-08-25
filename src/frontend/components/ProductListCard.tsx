@@ -56,10 +56,9 @@ const formatListPrice = (price?: number | null, priceMax?: number | null) => {
   return `US$ ${formatPricePart(price)}`
 }
 
-/** Prefer SKU/color images; fall back to main image only when no variants exist. Cap to limit request fan-out. */
-/** Cap swatch requests — each card was firing extra img-proxy hits and starving main images. */
-const MAX_VARIANT_THUMBS_DESKTOP = 4
-const MAX_VARIANT_THUMBS_MOBILE = 2
+/** Cap swatch requests — swatches were starving main-image bandwidth on list pages. */
+const MAX_VARIANT_THUMBS_DESKTOP = 2
+const MAX_VARIANT_THUMBS_MOBILE = 0
 
 function isFinePointerHover(): boolean {
   if (typeof window === 'undefined') return true
@@ -81,6 +80,7 @@ function isNarrowViewport(): boolean {
 
 const resolveThumbnails = (item: ProductListCardItem) => {
   const cap = isNarrowViewport() ? MAX_VARIANT_THUMBS_MOBILE : MAX_VARIANT_THUMBS_DESKTOP
+  if (cap <= 0) return []
   const fromVariants = (item.variant_thumbnails || []).filter((url) => Boolean(url?.trim()))
   if (fromVariants.length > 0) {
     return fromVariants.slice(0, cap)
@@ -189,8 +189,8 @@ export const ProductListCard = ({
             src={previewImage || item.main_image_url}
             alt={item.product_name}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-            imageWidth={isNarrowViewport() ? 280 : 360}
-            quality={isNarrowViewport() ? 68 : 72}
+            imageWidth={isNarrowViewport() ? 240 : 320}
+            quality={isNarrowViewport() ? 65 : 70}
             priority={priority}
           />
         </div>
@@ -265,9 +265,9 @@ export const ProductListCard = ({
                     fill
                     className="pointer-events-none"
                     sizes="48px"
-                    imageWidth={isNarrowViewport() ? 96 : 160}
-                    quality={isNarrowViewport() ? 70 : 75}
-                    priority={priority && index < 2}
+                    imageWidth={96}
+                    quality={70}
+                    priority={false}
                   />
                 </button>
               )

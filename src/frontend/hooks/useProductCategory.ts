@@ -403,7 +403,7 @@ export const useProductCategory = (
       stockStatus: (routeParams.stockStatus ? routeParams.stockStatus.split(',').filter(Boolean) : []).filter((status): status is StockStatusEnum => status === 'IN_STOCK' || status === 'LOW_STOCK') as StockStatusEnum[],
       sortBy: (routeParams.sortBy as SortByEnum) || 'NEWEST',
       page: routeParams.page ? parseInt(routeParams.page) : 1,
-      pageSize: 60,
+      pageSize: 30,
       minPrice: routeParams.minPrice ? parseFloat(routeParams.minPrice) : undefined,
       maxPrice: routeParams.maxPrice ? parseFloat(routeParams.maxPrice) : undefined,
       hasDiscount: false,
@@ -900,12 +900,12 @@ export const useProductCategory = (
   useEffect(() => {
     if (!isMobile) {
       setExpandedTopNavCategoryIds([])
-      return
     }
-    // Mobile: smaller pages = fewer images + faster first paint / add-to-cart readiness
-    setQueryState((prev) =>
-      prev.pageSize <= 24 ? prev : { ...prev, pageSize: 24, page: 1 },
-    )
+    // Cap page size so list image fan-out doesn't starve below-fold mains.
+    setQueryState((prev) => {
+      const target = isMobile ? 24 : 30
+      return prev.pageSize <= target ? prev : { ...prev, pageSize: target, page: 1 }
+    })
   }, [isMobile])
 
   useEffect(() => {
