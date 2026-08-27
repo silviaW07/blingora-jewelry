@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import EditableImg from '@/@base/EditableImg';
@@ -39,6 +39,7 @@ export const ProductCategoryView = ({
     totalCount,
     totalPages,
     isLoadingProducts,
+    isLoadingMore,
     isResolvingCategoryRoute,
     routeCategorySlug,
     stockStatusLabels,
@@ -64,6 +65,18 @@ export const ProductCategoryView = ({
     handlers.handleFilterChange('pageSize', nextSize);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMoreProducts = products.length < totalCount;
+  useEffect(() => {
+    if (!hasMoreProducts) return;
+    const el = loadMoreSentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) handlers.handleLoadMore();
+    }, { rootMargin: '280px 0px' });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [handlers.handleLoadMore, hasMoreProducts, isLoadingMore, products.length]);
   // Prefer product listing shell as soon as we have any listing intent (incl. pending slug resolve)
   const showProductResults = Boolean(
     queryState.categoryId ||
@@ -214,7 +227,7 @@ export const ProductCategoryView = ({
                         <div className="h-3 w-1/2 rounded-full bg-[#ebe7de]" />
                       </div>
                     ))}
-                  </div> : products.length > 0 ? <div className={`storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 ${isLoadingProducts ? 'opacity-60 transition-opacity' : ''}`} data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
+                  </div> : products.length > 0 ? <div className={`storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 ${isLoadingProducts && !isLoadingMore ? 'opacity-60 transition-opacity' : ''}`} data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     {products.map((item, index) => <ProductListCard key={item.product_id} item={item} imagePropKey={`category-product-${item.product_id}`} onNavigate={handlers.handleNavigateToDetail} onAddToCart={handlers.handleAddToCart} onAddToWishlist={handlers.handleAddToWishlist} controllerName={isSecondaryCategoryResults ? '二级类目商品图片名称卡片' : '分类商品信息卡片'} priority={index < 12} />)}
                   </div> : <div className="mt-6 rounded-[28px] border border-dashed border-[#ddd6c8] bg-[#faf8f3] px-6 py-14 text-center" data-api-unique-id='productcategoryview-rf8e519298f81db85-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#ebe7de] text-[#111111]" data-api-unique-id='productcategoryview-re1ac063fbce010dd-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
@@ -223,7 +236,20 @@ export const ProductCategoryView = ({
                     <h3 className="mt-4 text-lg font-semibold text-[#111111]" data-api-unique-id='productcategoryview-rfe3d71fe117bd8be-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{queryState.searchKeyword ? t('product.emptySearchTitle') : t('product.emptyCategoryTitle')}</h3>
                     <p className="mt-2 text-sm text-[#7a756c]" data-api-unique-id='productcategoryview-rf2517b47779e392b-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{queryState.searchKeyword ? t('product.emptySearchHint', { keyword: queryState.searchKeyword }) : t('product.emptyCategoryFilterHint')}</p>
                   </div>}
-                {products.length > 0 && totalPages > 1 ? <StorefrontPagination page={queryState.page} pageSize={queryState.pageSize} total={totalCount} totalPages={totalPages} onPageChange={handleGoToPage} /> : null}
+                {products.length > 0 && hasMoreProducts ? (
+                  <div ref={loadMoreSentinelRef} className="mt-6 flex justify-center py-4 lg:hidden" aria-hidden={!isLoadingMore}>
+                    {isLoadingMore ? (
+                      <span className="text-sm text-[#7a756c]">{t('product.loading')}</span>
+                    ) : (
+                      <span className="h-8 w-8" />
+                    )}
+                  </div>
+                ) : null}
+                {products.length > 0 && totalPages > 1 ? (
+                  <div className="hidden lg:block">
+                    <StorefrontPagination page={queryState.page} pageSize={queryState.pageSize} total={totalCount} totalPages={totalPages} onPageChange={handleGoToPage} />
+                  </div>
+                ) : null}
               </div>
             </section>
         </div>

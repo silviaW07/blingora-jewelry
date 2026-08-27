@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
 import { usePathname, useRouter } from 'next/navigation'
 import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { toast } from 'sonner'
@@ -81,6 +82,18 @@ type CategoryPosterItem = {
 
 type ProductCardItem = ProductItem & {
   brand_category_name: string | null
+}
+
+function mergeListingPage(
+  prev: ProductCardItem[],
+  next: ProductCardItem[],
+  page: number,
+  append: boolean,
+): ProductCardItem[] {
+  if (!append || page <= 1) return next
+  const seen = new Set(prev.map((item) => item.product_id))
+  const extra = next.filter((item) => !seen.has(item.product_id))
+  return extra.length ? [...prev, ...extra] : prev
 }
 
 type KeywordSceneArea = 'LEFT_NAV' | 'RECOMMENDATION' | 'BOTH'
@@ -303,6 +316,8 @@ export interface ProductCategoryState {
   totalCount: number
   isLoadingCategories: boolean
   isLoadingProducts: boolean
+  isLoadingMore: boolean
+  isMobile: boolean
   /** True while /category/[slug] has a slug but categoryId is not resolved yet */
   isResolvingCategoryRoute: boolean
   routeCategorySlug: string
@@ -344,6 +359,7 @@ export interface ProductCategoryHandlers {
   handleAddToCart: (item: ProductCardItem) => Promise<void>
   handleAddToWishlist: (item: ProductCardItem, favorited?: boolean) => void
   handleNavigateToDetail: (productId: string) => void
+  handleLoadMore: () => void
   handleToggleCategoryChildren: (categoryId: string) => void
   handleToggleBrandExpand: () => void
   handleBrandQuickFilterToggle: (brandId: string) => void
@@ -451,6 +467,7 @@ export const useProductCategory = (
   const [isLoadingProducts, setIsLoadingProducts] = useState(
     () => !(listingSeed?.products && listingSeed.products.length > 0),
   )
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [localeTick, setLocaleTick] = useState(0)
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([])
   const [isBrandExpanded, setIsBrandExpanded] = useState(false)
@@ -987,22 +1004,26 @@ export const useProductCategory = (
       setProducts([])
       setTotalCount(0)
       setIsLoadingProducts(false)
+      setIsLoadingMore(false)
       return
     }
 
     const gen = ++productFetchGenRef.current
     if (productsRef.current.length === 0) setIsLoadingProducts(true)
+    else if (queryState.page > 1 && (isMobile || isNarrowViewport())) setIsLoadingMore(true)
 
     const lang = getCurrentLang()
     const safety = window.setTimeout(() => {
       if (productFetchGenRef.current !== gen) return
       setIsLoadingProducts(false)
+      setIsLoadingMore(false)
     }, 20000)
 
     const finish = () => {
       if (productFetchGenRef.current !== gen) return
       window.clearTimeout(safety)
       setIsLoadingProducts(false)
+      setIsLoadingMore(false)
     }
 
     if (isDailyNewArrivalMode) {
@@ -1029,7 +1050,14 @@ export const useProductCategory = (
       })
         .then((res) => {
           if (productFetchGenRef.current !== gen) return
-          setProducts(Array.isArray(res.list) ? res.list : [])
+          setProducts((prev) =>
+            mergeListingPage(
+              prev,
+              Array.isArray(res.list) ? res.list : [],
+              queryState.page,
+              isMobile || isNarrowViewport(),
+            ),
+          )
           setTotalCount(res.total || 0)
         })
         .catch((err: any) => {
@@ -1062,7 +1090,9 @@ export const useProductCategory = (
     })
       .then(({ list, total }) => {
         if (productFetchGenRef.current !== gen) return
-        setProducts(list as ProductItem[])
+        setProducts((prev) =>
+          mergeListingPage(prev, list as ProductCardItem[], queryState.page, isMobile || isNarrowViewport()),
+        )
         setTotalCount(total)
       })
       .catch((err: any) => {
@@ -1076,7 +1106,7 @@ export const useProductCategory = (
     return () => {
       window.clearTimeout(safety)
     }
-  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams])
+  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams, isMobile])
 
   useEffect(() => {
     if (isDailyNewArrivalMode) {
@@ -1701,6 +1731,15 @@ export const useProductCategory = (
     ProductDetail.navigateToById(router, { productId })
   }
 
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingProducts || isLoadingMore) return
+    if (typeof window !== 'undefined' && !isNarrowViewport()) return
+    setQueryState((prev) => {
+      if (productsRef.current.length >= totalCount) return prev
+      return { ...prev, page: prev.page + 1 }
+    })
+  }, [isLoadingMore, isLoadingProducts, totalCount])
+
   const totalPages = Math.max(1, Math.ceil(totalCount / queryState.pageSize))
 
   const userDisplayName = username?.trim() || 'My account'
@@ -1747,6 +1786,8 @@ export const useProductCategory = (
       totalCount,
       isLoadingCategories,
       isLoadingProducts,
+      isLoadingMore,
+      isMobile,
       isResolvingCategoryRoute: Boolean(isCategorySlugRoute && routeCategorySlug && !queryState.categoryId),
       routeCategorySlug,
       totalPages,
@@ -1786,6 +1827,7 @@ export const useProductCategory = (
       handleAddToCart,
       handleAddToWishlist,
       handleNavigateToDetail,
+      handleLoadMore,
       handleToggleCategoryChildren,
       handleToggleBrandExpand,
       handleBrandQuickFilterToggle,
