@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { acquireImageSlot } from '@/frontend/utils/imageLoadGate'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
 
 export { toProxiedImageUrl }
@@ -21,8 +20,8 @@ type Props = {
 }
 
 /**
- * Native <img>. Load near the viewport, at most 6 in flight, always a small thumb.
- * Do not dump the whole page after a timeout — that is what made lists crawl.
+ * Native <img> with CDN/OSS thumbs. Always attach src immediately —
+ * delaying the tag until a slot/IO fired left empty beige boxes on mobile.
  */
 export function OptimizedProductImage({
   src,
@@ -35,10 +34,6 @@ export function OptimizedProductImage({
   imageWidth = 400,
   quality = 85,
 }: Props) {
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const releaseRef = useRef<(() => void) | null>(null)
-  const [near, setNear] = useState(priority)
-  const [canFetch, setCanFetch] = useState(priority)
   const primary = toProxiedImageUrl(src, { width: imageWidth, quality })
   const raw = String(src || '').trim()
   const [attempt, setAttempt] = useState(0)
@@ -47,63 +42,12 @@ export function OptimizedProductImage({
   useEffect(() => {
     setAttempt(0)
     setFailed(false)
-    setCanFetch(priority)
-    setNear(priority)
-  }, [src, imageWidth, quality, priority])
-
-  useEffect(() => {
-    if (priority || near) return
-    const node = boxRef.current
-    if (!node) return
-    if (typeof IntersectionObserver === 'undefined') {
-      setNear(true)
-      return
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setNear(true)
-          io.disconnect()
-        }
-      },
-      { rootMargin: '480px 0px', threshold: 0.01 },
-    )
-    io.observe(node)
-    return () => io.disconnect()
-  }, [priority, near])
-
-  useEffect(() => {
-    if (!near || canFetch) return
-    let cancelled = false
-    void acquireImageSlot(priority).then((release) => {
-      if (cancelled) {
-        release()
-        return
-      }
-      releaseRef.current = release
-      setCanFetch(true)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [near, canFetch, priority])
-
-  useEffect(() => {
-    return () => {
-      releaseRef.current?.()
-      releaseRef.current = null
-    }
-  }, [])
-
-  const releaseSlot = () => {
-    releaseRef.current?.()
-    releaseRef.current = null
-  }
+  }, [src, imageWidth, quality])
 
   const displaySrc =
     attempt === 0
       ? primary
-      : toProxiedImageUrl(src, { width: imageWidth, quality: Math.min(80, quality + 10) }) || primary
+      : toProxiedImageUrl(src, { width: imageWidth, quality: Math.min(90, quality + 5) }) || raw || primary
 
   const shellClass = fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]'
 
@@ -116,31 +60,27 @@ export function OptimizedProductImage({
     : cn('max-w-full object-cover', className)
 
   return (
-    <div ref={boxRef} className={fill ? 'absolute inset-0' : 'relative'}>
+    <div className={fill ? 'absolute inset-0' : 'relative'}>
       <div className={cn(shellClass)} aria-hidden />
-      {canFetch ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={`${attempt}-${displaySrc}`}
-          src={displaySrc}
-          alt={alt}
-          width={fill ? imageWidth : width || imageWidth}
-          height={fill ? imageWidth : height || imageWidth}
-          className={imgClass}
-          loading={priority ? 'eager' : 'lazy'}
-          decoding="async"
-          draggable={false}
-          fetchPriority={priority ? 'high' : 'low'}
-          referrerPolicy="no-referrer"
-          onContextMenu={(event) => event.preventDefault()}
-          onError={() => {
-            releaseSlot()
-            if (attempt < 1) setAttempt(1)
-            else setFailed(true)
-          }}
-          onLoad={releaseSlot}
-        />
-      ) : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={`${attempt}-${displaySrc}`}
+        src={displaySrc}
+        alt={alt}
+        width={fill ? imageWidth : width || imageWidth}
+        height={fill ? imageWidth : height || imageWidth}
+        className={imgClass}
+        loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
+        draggable={false}
+        fetchPriority={priority ? 'high' : 'auto'}
+        referrerPolicy="no-referrer"
+        onContextMenu={(event) => event.preventDefault()}
+        onError={() => {
+          if (attempt < 1) setAttempt(1)
+          else setFailed(true)
+        }}
+      />
     </div>
   )
 }

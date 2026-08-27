@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import EditableImg from '@/@base/EditableImg';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { CheckoutTopBar } from '@/frontend/components/CheckoutTopBar';
 import { CheckoutSmartPanel, type CheckoutAddressForm } from '@/frontend/components/CheckoutSmartPanel';
@@ -315,16 +314,13 @@ export const CartView = ({
                               data-api-unique-page-name='src/frontend/components/CartView'
                               data-api-in-loop='1'
                             >
-                              <EditableImg
-                                propKey={`cart-img-${item.cartItemId}`}
+                              <OptimizedProductImage
                                 src={item.imageUrl || item.mainImageUrl || undefined}
-                                keywords={item.imageUrl || item.mainImageUrl || item.productName}
-                                fallbackSrc={item.mainImageUrl || undefined}
-                                disableKeywordSearch
-                                className="pointer-events-none h-full w-full object-cover md:object-contain"
-                                data-api-unique-id='cartview-rf0f39ebfda21d17d-s3843595280'
-                                data-api-unique-page-name='src/frontend/components/CartView'
-                                data-api-in-loop='1'
+                                alt={item.productName}
+                                imageWidth={240}
+                                quality={85}
+                                priority
+                                className="pointer-events-none object-cover md:object-contain"
                               />
                               {item.status === 'INVALID' && <div className="absolute left-1 top-1" data-api-unique-id='cartview-r30c4e56a56d03072-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
                                   <Badge variant="destructive" className="rounded-none bg-[#EF4444] text-[9px] font-semibold text-white" data-api-unique-id='cartview-rb20ffdfd1b905bdf-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
@@ -612,7 +608,9 @@ export const CartView = ({
                       src={prod.mainImageUrl}
                       alt={prod.name}
                       sizes="(max-width: 768px) 45vw, 20vw"
-                      imageWidth={200}
+                      imageWidth={240}
+                      quality={85}
+                      priority
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   </div>
