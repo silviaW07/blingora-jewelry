@@ -12,6 +12,9 @@ import {
   normalizeChannelCoefficient,
   normalizeCountryRuleMap,
   isWeightTierBillingMode,
+  isSeaTierRule,
+  isExpressRule,
+  isSeaRule,
   type CountryRuleMap,
   type ShippingBillingMode,
 } from '@/shared/shippingFeeCalc'
@@ -161,9 +164,21 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
       throw new Error('请至少为一个国家配置运费规则')
     }
 
-    if (isWeightTierBillingMode(billingMode)) {
+    if (billingMode === 'SEA_TIER') {
       for (const [country, rule] of Object.entries(fees)) {
-        if (!rule || !('tiers' in rule)) continue
+        if (!rule || !isSeaTierRule(rule)) continue
+        if (!(rule.baseKg > 0)) throw new Error(`${country} 首重重量必须大于 0`)
+        if (!(rule.extraUnitKg > 0)) throw new Error(`${country} 续重单位必须大于 0`)
+        if (!(rule.bulkFromKg > 0)) throw new Error(`${country} 体积档起始重量必须大于 0`)
+        if (rule.baseFee < 0 || rule.extraFee < 0) throw new Error(`${country} 运费不能为负数`)
+        for (const tier of rule.tiers) {
+          if (!(tier.maxKg > 0)) throw new Error(`${country} 体积档重量必须大于 0`)
+          if (tier.perKgFee < 0) throw new Error(`${country} 公斤单价不能为负数`)
+        }
+      }
+    } else if (isWeightTierBillingMode(billingMode)) {
+      for (const [country, rule] of Object.entries(fees)) {
+        if (!rule || !isExpressRule(rule)) continue
         if (!rule.tiers.length) throw new Error(`${country} 请至少添加一个重量阶梯`)
         for (const tier of rule.tiers) {
           if (!(tier.maxKg > 0)) throw new Error(`${country} 阶梯重量必须大于 0`)
@@ -172,7 +187,7 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
       }
     } else {
       for (const [country, rule] of Object.entries(fees)) {
-        if (!rule || !('baseFee' in rule)) continue
+        if (!rule || !isSeaRule(rule)) continue
         if (!(rule.baseKg > 0)) throw new Error(`${country} 起重重量必须大于 0`)
         if (rule.baseFee < 0 || rule.perKgFee < 0) throw new Error(`${country} 运费不能为负数`)
       }

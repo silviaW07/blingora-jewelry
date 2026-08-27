@@ -1850,20 +1850,42 @@ export const getAvailableBrandFilters = withResult(
       dbWhere.ratingAverage = { gte: input.min_rating }
     }
 
-    const grouped = await prisma.product.groupBy({
-      by: ['brandCategoryId'],
-      where: {
-        ...dbWhere,
-        brandCategoryId: { not: null },
-      },
-      _count: { _all: true },
-    })
+    const addBrandCount = (id: string | null | undefined, n: number) => {
+      if (!id || n <= 0) return
+      brandCounts.set(id, (brandCounts.get(id) || 0) + n)
+    }
 
     const brandCounts = new Map<string, number>()
-    for (const row of grouped) {
-      if (!row.brandCategoryId) continue
-      brandCounts.set(row.brandCategoryId, row._count._all)
-    }
+    const [byBrandField, byPrimaryCategory, byRelation] = await Promise.all([
+      prisma.product.groupBy({
+        by: ['brandCategoryId'],
+        where: {
+          ...dbWhere,
+          brandCategoryId: { not: null },
+        },
+        _count: { _all: true },
+      }),
+      prisma.product.groupBy({
+        by: ['categoryId'],
+        where: {
+          ...dbWhere,
+          category: { isBrandCategory: true, status: 'ACTIVE' },
+        },
+        _count: { _all: true },
+      }),
+      prisma.product_category_relations.groupBy({
+        by: ['categoryId'],
+        where: {
+          product: dbWhere,
+          category: { isBrandCategory: true, status: 'ACTIVE' },
+        },
+        _count: { _all: true },
+      }),
+    ])
+
+    for (const row of byBrandField) addBrandCount(row.brandCategoryId, row._count._all)
+    for (const row of byPrimaryCategory) addBrandCount(row.categoryId, row._count._all)
+    for (const row of byRelation) addBrandCount(row.categoryId, row._count._all)
 
     if (brandCounts.size === 0) {
       const empty: GetAvailableBrandFiltersOutput = { list: [] }

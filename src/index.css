@@ -2246,6 +2246,15 @@ html.is-narrow .listing-brands-slot {
   order: 2;
 }
 
+html.is-narrow .listing-brand-circles__name {
+  display: none;
+}
+
+html.is-narrow .listing-brand-circles--collapsed {
+  max-height: 2.5rem;
+  overflow: hidden;
+}
+
 html.is-narrow .category-listing-head > .listing-toolbar {
   order: 3;
 }
@@ -2271,6 +2280,14 @@ html.is-narrow .listing-price-slider {
 
 .home-product-card h3,
 .home-product-card-link h3 {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.home-recommend-product-name {
   white-space: normal !important;
   overflow: visible !important;
   text-overflow: clip !important;

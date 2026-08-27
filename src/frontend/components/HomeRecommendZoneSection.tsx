@@ -219,15 +219,6 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
     </div>
   )
 
-  const title = (
-    <h3
-      className="w-full px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline break-words whitespace-normal sm:px-2.5"
-      title={item.productName}
-    >
-      {item.productName}
-    </h3>
-  )
-
   return (
     <article
       className="home-product-card group flex h-full flex-col overflow-visible transition duration-200 hover:opacity-95"
@@ -237,7 +228,9 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
       {isDraft ? (
         <div className="block text-[#111111]">
           {media}
-          {title}
+          <p className="home-recommend-product-name px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
+            {item.productName}
+          </p>
         </div>
       ) : (
         <a
@@ -254,7 +247,9 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
           onClick={openProductEvents.onClick}
         >
           {media}
-          {title}
+          <p className="home-recommend-product-name px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
+            {item.productName}
+          </p>
         </a>
       )}
 
@@ -328,6 +323,21 @@ const renderMobileSquircleContent = (
         </div>
       )
     }
+    if (!isComingSoon) {
+      return (
+        <div className="storefront-product-grid grid grid-cols-2 gap-2.5">
+          {productItems.map((item, index) => (
+            <RecommendZoneProductCard
+              key={item.itemId}
+              item={item}
+              index={index}
+              handlers={handlers}
+              t={t}
+            />
+          ))}
+        </div>
+      )
+    }
     return wrapSquircleItems(
       productItems.length,
       productItems.map((item) => {
@@ -376,6 +386,7 @@ const renderMobileSquircleContent = (
           <a
             key={item.itemId}
             {...hardNavProps(href)}
+            aria-label={item.productName}
             className="mobile-zone-squircle"
             onPointerDown={() => {
               writeProductDetailPreview({
@@ -387,18 +398,6 @@ const renderMobileSquircleContent = (
             onPointerEnter={() => prefetchProductDetail(item.productId)}
             data-controller-name="移动端推荐商品图标"
           >
-            <span className="mobile-zone-squircle__media">
-              <EditableImg
-                propKey={`home-recommend-product-m-${item.productId}`}
-                src={item.imageUrl || undefined}
-                alt={item.productName}
-                keywords={item.imageUrl || undefined}
-                disableKeywordSearch
-                fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                loading="lazy"
-                orientation="square"
-                className="mobile-zone-squircle__img h-full w-full object-cover"
-              />
             </span>
             <span className="mobile-zone-squircle__label">
               <DecorateText propKey={`home_product_name_${item.productId}`} as="span">

@@ -32,6 +32,7 @@ import {
   buildSourceRows,
   buildWeekSeries,
   countListed,
+  listedProductWhere,
   listingDateRangeWhere,
   percentChange,
   startOfMonth,
@@ -112,6 +113,8 @@ export const getKpiStats = requireRole(UserRole.ADMIN)(
       todayImportCount,
       lowStockAlertCount,
       newRegisteredUserCount,
+      totalCustomerCount,
+      totalOrderCount,
       sources,
     ] = await Promise.all([
       prisma.product.count(),
@@ -133,6 +136,10 @@ export const getKpiStats = requireRole(UserRole.ADMIN)(
           createdAt: { gte: thisWeekStart },
         },
       }),
+      prisma.sysuser.count({
+        where: { role: 'CUSTOMER' as any },
+      }),
+      prisma.orderrecord.count(),
       buildSourceRows(weekStart, monthStart),
     ])
 
@@ -150,6 +157,8 @@ export const getKpiStats = requireRole(UserRole.ADMIN)(
       todayImportCount,
       lowStockAlertCount,
       newRegisteredUserCount,
+      totalCustomerCount,
+      totalOrderCount,
       sources,
     }
   })
@@ -159,8 +168,9 @@ export const getListingStatsDetail = requireRole(UserRole.ADMIN)(
   withResult(async (): Promise<ListingStatsDetail_Output> => {
     const weekStart = startOfWeekMonday()
     const monthStart = startOfMonth()
-    const [listedProductCount, weeks, months, sources] = await Promise.all([
+    const [listedProductCount, monthListedCount, weeks, months, sources] = await Promise.all([
       countListed(),
+      countListed(listingDateRangeWhere(monthStart, new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1))),
       buildWeekSeries(12),
       buildMonthSeries(12),
       buildSourceRows(weekStart, monthStart),
@@ -168,6 +178,7 @@ export const getListingStatsDetail = requireRole(UserRole.ADMIN)(
     return {
       generatedAt: new Date().toISOString(),
       listedProductCount,
+      monthListedCount,
       weeks,
       months,
       sources,
@@ -344,11 +355,17 @@ export const getCategoryBrandShelfTree = requireRole(UserRole.ADMIN)(
     )
 
     const brandTags = categories.filter((cat) => {
-      if (!hasCategoryParentId(cat.parentId)) return false
+      if (brandShelfIds.has(cat.id)) return false
       if (cat.isBrandCategory) return true
-      return Boolean(cat.parentId && brandShelfIds.has(cat.parentId))
+      if (cat.parentId && brandShelfIds.has(cat.parentId)) return true
+      return false
     })
     const brandTagIds = new Set(brandTags.map((cat) => cat.id))
+    const brandIdByName = new Map<string, string>()
+    for (const brand of brandTags) {
+      const key = String(brand.name || '').trim().toLowerCase()
+      if (key && !brandIdByName.has(key)) brandIdByName.set(key, brand.id)
+    }
 
     const parentNameOf = (cat: { parentId?: string | null }) =>
       cat.parentId ? byId.get(cat.parentId)?.name || null : null
@@ -387,11 +404,12 @@ export const getCategoryBrandShelfTree = requireRole(UserRole.ADMIN)(
 
     const [products, relationRows] = await Promise.all([
       prisma.product.findMany({
-        where: { status: 'ACTIVE' as any },
+        where: listedProductWhere,
         select: {
           id: true,
           categoryId: true,
           brandCategoryId: true,
+          brandName: true,
         },
       }),
       prisma.product_category_relations.findMany({
@@ -450,16 +468,24 @@ export const getCategoryBrandShelfTree = requireRole(UserRole.ADMIN)(
         if (!hasChild) rememberL1Unmatched(l1Id, product.id)
       }
 
-      let brandId =
-        product.brandCategoryId && brandTagIds.has(product.brandCategoryId)
-          ? product.brandCategoryId
-          : linkedIds.find((id) => brandTagIds.has(id)) || null
+      const brandIds = new Set<string>()
+      if (product.brandCategoryId && brandTagIds.has(product.brandCategoryId)) {
+        brandIds.add(product.brandCategoryId)
+      }
+      for (const categoryId of linkedIds) {
+        if (brandTagIds.has(categoryId)) brandIds.add(categoryId)
+      }
+      const brandNameKey = String(product.brandName || '').trim().toLowerCase()
+      const namedBrandId = brandNameKey ? brandIdByName.get(brandNameKey) : undefined
+      if (namedBrandId) brandIds.add(namedBrandId)
 
       const l2Targets = matchedL2.size > 0 ? Array.from(matchedL2) : []
       if (l2Targets.length === 0) continue
       for (const l2Id of l2Targets) {
-        if (brandId) rememberBrand(l2Id, brandId, product.id)
-        else rememberUnmatchedBrand(l2Id, product.id)
+        if (brandIds.size === 0) rememberUnmatchedBrand(l2Id, product.id)
+        else {
+          for (const brandId of brandIds) rememberBrand(l2Id, brandId, product.id)
+        }
       }
     }
 

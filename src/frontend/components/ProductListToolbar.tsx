@@ -42,6 +42,8 @@ export type ListingBrandFilterProps = {
   selectedBrandId?: string
   onBrandToggle?: (brandId: string) => void
   isLoadingBrands?: boolean
+  isBrandExpanded?: boolean
+  onBrandExpandToggle?: () => void
   className?: string
 }
 
@@ -51,6 +53,8 @@ export function ListingBrandFilter({
   selectedBrandId = '',
   onBrandToggle,
   isLoadingBrands = false,
+  isBrandExpanded = false,
+  onBrandExpandToggle,
   className,
 }: ListingBrandFilterProps) {
   if (!onBrandToggle) return null
@@ -62,6 +66,8 @@ export function ListingBrandFilter({
         brands={brands}
         selectedBrandId={selectedBrandId}
         onToggle={onBrandToggle}
+        isExpanded={isBrandExpanded}
+        onExpandToggle={onBrandExpandToggle}
         isLoading={isLoadingBrands}
       />
     </div>
@@ -236,6 +242,8 @@ function ListingBrandCircles({
   brands,
   selectedBrandId = '',
   onToggle,
+  isExpanded = false,
+  onExpandToggle,
   isLoading = false,
 }: {
   brands: BrandCategoryItem[]
@@ -247,6 +255,24 @@ function ListingBrandCircles({
   isLoading?: boolean
 }) {
   const { t } = useTranslation()
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [hasOverflow, setHasOverflow] = useState(false)
+
+  useEffect(() => {
+    const el = rowRef.current
+    if (!el) return
+    const measure = () => {
+      setHasOverflow(el.scrollHeight > el.clientHeight + 4)
+    }
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [brands, isExpanded])
 
   if (isLoading && brands.length === 0) {
     return (
@@ -254,7 +280,6 @@ function ListingBrandCircles({
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex flex-col items-center gap-0.5">
             <div className="size-9 animate-pulse rounded-full bg-[#ebe7de]" />
-            <div className="h-2 w-8 animate-pulse rounded-full bg-[#ebe7de]" />
           </div>
         ))}
       </div>
@@ -263,57 +288,73 @@ function ListingBrandCircles({
 
   if (brands.length === 0) return null
 
+  const showToggle = Boolean(onExpandToggle) && (hasOverflow || isExpanded)
+
   return (
-    <div
-      className="flex flex-wrap items-start gap-x-2 gap-y-1.5"
-      data-controller-name="商品列表品牌圆形筛选"
-    >
-      {brands.map((brand) => {
-        const isSelected = selectedBrandId === brand.category_id
-        const label = translateCatalogLabel(t, brand.category_name)
-        return (
-          <button
-            key={brand.category_id}
-            type="button"
-            aria-pressed={isSelected}
-            title={label}
-            onClick={() => onToggle(brand.category_id)}
-            className="group flex flex-col items-center gap-0.5 outline-none"
-          >
-            <span
-              className={cn(
-                'flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#faf8f3] transition-all',
-                isSelected
-                  ? 'border-[#111111] ring-2 ring-[#111111]/15'
-                  : 'border-[#e6e0d5] group-hover:border-[#9a948a]',
-              )}
+    <div className="listing-brand-circles-wrap min-w-0" data-controller-name="商品列表品牌圆形筛选">
+      <div
+        ref={rowRef}
+        className={cn(
+          'listing-brand-circles flex flex-wrap items-start gap-x-2 gap-y-1.5',
+          !isExpanded && 'listing-brand-circles--collapsed',
+        )}
+      >
+        {brands.map((brand) => {
+          const isSelected = selectedBrandId === brand.category_id
+          const label = translateCatalogLabel(t, brand.category_name)
+          return (
+            <button
+              key={brand.category_id}
+              type="button"
+              aria-pressed={isSelected}
+              title={label}
+              onClick={() => onToggle(brand.category_id)}
+              className="group flex flex-col items-center gap-0.5 outline-none"
             >
-              {brand.image_url ? (
-                <EditableImg
-                  propKey={`listing-brand-circle-${brand.category_id}`}
-                  src={brand.image_url}
-                  keywords={brand.image_url}
-                  disableKeywordSearch
-                  alt={label}
-                  className="size-full object-cover"
-                />
-              ) : (
-                <span className="px-0.5 text-center text-[9px] font-bold uppercase leading-none text-[#6f6a62]">
-                  {label.slice(0, 2)}
-                </span>
-              )}
-            </span>
-            <span
-              className={cn(
-                'w-12 truncate text-center text-[9px] leading-tight transition-colors',
-                isSelected ? 'font-semibold text-[#111111]' : 'text-[#6f6a62] group-hover:text-[#111111]',
-              )}
-            >
-              {label}
-            </span>
-          </button>
-        )
-      })}
+              <span
+                className={cn(
+                  'flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#faf8f3] transition-all',
+                  isSelected
+                    ? 'border-[#111111] ring-2 ring-[#111111]/15'
+                    : 'border-[#e6e0d5] group-hover:border-[#9a948a]',
+                )}
+              >
+                {brand.image_url ? (
+                  <EditableImg
+                    propKey={`listing-brand-circle-${brand.category_id}`}
+                    src={brand.image_url}
+                    keywords={brand.image_url}
+                    disableKeywordSearch
+                    alt={label}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <span className="px-0.5 text-center text-[9px] font-bold uppercase leading-none text-[#6f6a62]">
+                    {label.slice(0, 2)}
+                  </span>
+                )}
+              </span>
+              <span
+                className={cn(
+                  'listing-brand-circles__name w-12 truncate text-center text-[9px] leading-tight transition-colors',
+                  isSelected ? 'font-semibold text-[#111111]' : 'text-[#6f6a62] group-hover:text-[#111111]',
+                )}
+              >
+                {label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {showToggle ? (
+        <button
+          type="button"
+          onClick={onExpandToggle}
+          className="listing-brand-circles__more mt-1 inline-flex h-7 items-center rounded-full border border-dashed border-[#d8d4ca] px-2.5 text-[11px] font-medium text-[#6f6a62]"
+        >
+          {isExpanded ? t('product.brandFilterCollapse') : t('product.brandFilterMore')}
+        </button>
+      ) : null}
     </div>
   )
 }

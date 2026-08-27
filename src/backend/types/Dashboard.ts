@@ -41,6 +41,8 @@ export interface KpiStats_Output {
   lowStockAlertCount: number;
   // data-from: sysuser-id | 聚合计算新注册买家数
   newRegisteredUserCount: number;
+  totalCustomerCount: number;
+  totalOrderCount: number;
   sources: ListingSourceRow_Output[];
 }
 
@@ -62,6 +64,7 @@ export interface PeriodCount_Output {
 export interface ListingStatsDetail_Output {
   generatedAt: string;
   listedProductCount: number;
+  monthListedCount: number;
   weeks: PeriodCount_Output[];
   months: PeriodCount_Output[];
   sources: ListingSourceRow_Output[];

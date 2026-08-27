@@ -195,7 +195,7 @@ export const ProductListCard = ({
           />
         </div>
         <h3
-          className="w-full px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline break-words whitespace-normal sm:px-2.5"
+          className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
           style={{ color: '#111111', textDecoration: 'none' }}
           title={item.product_name}
         >

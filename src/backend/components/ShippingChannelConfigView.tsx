@@ -17,6 +17,9 @@ import { Plus, Search, RotateCcw, Trash2, Edit2, ChevronRight } from 'lucide-rea
 import {
   SHIPPING_BILLING_MODE_LABELS,
   summarizeCountryRule,
+  isExpressRule,
+  isSeaRule,
+  isSeaTierRule,
   type ShippingBillingMode,
 } from '@/shared/shippingFeeCalc'
 
@@ -281,7 +284,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                     {billingMode === 'EXPRESS_TIER'
                       ? '快递阶梯价：按重量匹配下一档（≤maxKg），取对应固定运费。关闭开关表示该国家不可用。'
                       : billingMode === 'SEA_TIER'
-                        ? '海运阶梯价：按重量落入的档位收取固定运费（例如 ≤12kg / ≤21kg / ≤30kg）。关闭开关表示该国家不可用。'
+                        ? '海运阶梯价：未到体积档按「首重 + 续重」计费；达到体积档后整票重量 × 该档 ¥/kg（不是快递那种固定档价）。例如首重 2kg=100，续重 1kg=28，11kg 起按 27/kg。美西/美中/美东请分国家或分渠道填不同单价。关闭开关表示该国家不可用。'
                         : '海运按公斤：重量 ≤ 起重重量取起重运费；超出部分按续重单价加收。关闭开关表示该国家不可用。'}
                   </p>
                 </div>
@@ -312,7 +315,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
 
                         {!enabled ? (
                           <p className="text-xs text-muted-foreground">该国家暂不提供此渠道</p>
-                        ) : (billingMode === 'EXPRESS_TIER' || billingMode === 'SEA_TIER') && rule && 'tiers' in rule ? (
+                        ) : billingMode === 'EXPRESS_TIER' && isExpressRule(rule) ? (
                           <div className="space-y-2">
                             {rule.tiers.map((tier, index) => (
                               <div
@@ -346,7 +349,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                                     handlers.updateExpressTier(country, index, 'fee', e.target.value)
                                   }
                                 />
-                                <span className="text-xs text-muted-foreground">¥</span>
+                                <span className="text-xs text-muted-foreground">¥ 固定</span>
                                 <Button
                                   type="button"
                                   size="sm"
@@ -368,7 +371,140 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                               添加阶梯
                             </Button>
                           </div>
-                        ) : billingMode === 'SEA_PER_KG' && rule && 'baseFee' in rule ? (
+                        ) : billingMode === 'SEA_TIER' && isSeaTierRule(rule) ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">首重重量 (kg)</label>
+                                <Input
+                                  className="h-8"
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={String(rule.baseKg)}
+                                  onChange={(e) =>
+                                    handlers.updateSeaTierMeta(country, 'baseKg', e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">首重运费 (¥)</label>
+                                <Input
+                                  className="h-8"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={String(rule.baseFee)}
+                                  onChange={(e) =>
+                                    handlers.updateSeaTierMeta(country, 'baseFee', e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">续重单位 (kg)</label>
+                                <Input
+                                  className="h-8"
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={String(rule.extraUnitKg)}
+                                  onChange={(e) =>
+                                    handlers.updateSeaTierMeta(country, 'extraUnitKg', e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">续重单价 (¥)</label>
+                                <Input
+                                  className="h-8"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={String(rule.extraFee)}
+                                  onChange={(e) =>
+                                    handlers.updateSeaTierMeta(country, 'extraFee', e.target.value)
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">体积档起始重量 (kg)</label>
+                              <Input
+                                className="h-8 w-32"
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                value={String(rule.bulkFromKg)}
+                                onChange={(e) =>
+                                  handlers.updateSeaTierMeta(country, 'bulkFromKg', e.target.value)
+                                }
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                小于此重量：首重 + ceil(超出/续重单位)×续重。达到此重量：整票 kg × 下方档位单价。
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-muted-foreground">体积档（¥/kg）</p>
+                              {rule.tiers.map((tier, index) => (
+                                <div
+                                  key={`${country}-sea-bulk-${index}`}
+                                  className="flex flex-wrap items-center gap-2"
+                                >
+                                  <span className="text-xs text-muted-foreground">≤</span>
+                                  <Input
+                                    className="h-8 w-24"
+                                    type="number"
+                                    step="0.001"
+                                    min="0"
+                                    value={String(tier.maxKg)}
+                                    onChange={(e) =>
+                                      handlers.updateSeaBulkTier(
+                                        country,
+                                        index,
+                                        'maxKg',
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                  <span className="text-xs text-muted-foreground">kg</span>
+                                  <Input
+                                    className="h-8 w-28"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={String(tier.perKgFee)}
+                                    onChange={(e) =>
+                                      handlers.updateSeaBulkTier(
+                                        country,
+                                        index,
+                                        'perKgFee',
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                  <span className="text-xs text-muted-foreground">¥/kg</span>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handlers.removeSeaBulkTier(country, index)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlers.addSeaBulkTier(country)}
+                              >
+                                <Plus className="mr-1 h-3.5 w-3.5" />
+                                添加体积档
+                              </Button>
+                            </div>
+                          </div>
+                        ) : billingMode === 'SEA_PER_KG' && isSeaRule(rule) ? (
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                             <div className="space-y-1">
                               <label className="text-xs text-muted-foreground">起重重量 (kg)</label>

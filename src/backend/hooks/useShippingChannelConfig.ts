@@ -9,10 +9,13 @@ import {
   emptyExpressRule,
   emptySeaRule,
   emptySeaTierRule,
-  isWeightTierBillingMode,
+  isExpressRule,
+  isSeaRule,
+  isSeaTierRule,
   type CountryRuleMap,
   type ExpressCountryRule,
   type SeaCountryRule,
+  type SeaTierCountryRule,
   type ShippingBillingMode,
 } from '@/shared/shippingFeeCalc'
 import type {
@@ -92,6 +95,19 @@ export interface ShippingChannelConfigHandlers {
   updateSeaField: (
     country: string,
     field: keyof SeaCountryRule,
+    value: string,
+  ) => void
+  updateSeaTierMeta: (
+    country: string,
+    field: keyof Omit<SeaTierCountryRule, 'tiers'>,
+    value: string,
+  ) => void
+  addSeaBulkTier: (country: string) => void
+  removeSeaBulkTier: (country: string, index: number) => void
+  updateSeaBulkTier: (
+    country: string,
+    index: number,
+    field: 'maxKg' | 'perKgFee',
     value: string,
   ) => void
   handleSubmit: () => Promise<void>
@@ -186,9 +202,15 @@ export function useShippingChannelConfig() {
             continue
           }
           if (mode === 'SEA_PER_KG') {
-            if ('baseFee' in current && !('tiers' in current)) {
+            if (isSeaRule(current)) {
               nextFees[country] = current
-            } else if ('tiers' in current && current.tiers[0]) {
+            } else if (isSeaTierRule(current)) {
+              nextFees[country] = {
+                baseKg: current.baseKg,
+                baseFee: current.baseFee,
+                perKgFee: current.extraFee,
+              }
+            } else if (isExpressRule(current) && current.tiers[0]) {
               nextFees[country] = {
                 baseKg: DEFAULT_SEA_BASE_KG,
                 baseFee: current.tiers[0].fee,
@@ -197,9 +219,22 @@ export function useShippingChannelConfig() {
             } else {
               nextFees[country] = emptySeaRule()
             }
-          } else if ('tiers' in current) {
+          } else if (mode === 'SEA_TIER') {
+            if (isSeaTierRule(current)) {
+              nextFees[country] = current
+            } else if (isSeaRule(current)) {
+              nextFees[country] = {
+                ...emptySeaTierRule(),
+                baseKg: current.baseKg > 0 ? current.baseKg : 2,
+                baseFee: current.baseFee,
+                extraFee: current.perKgFee,
+              }
+            } else {
+              nextFees[country] = emptySeaTierRule()
+            }
+          } else if (isExpressRule(current)) {
             nextFees[country] = current
-          } else if ('baseFee' in current) {
+          } else if (isSeaRule(current) || isSeaTierRule(current)) {
             nextFees[country] = {
               tiers: [{ maxKg: current.baseKg > 0 ? current.baseKg : 12, fee: current.baseFee }],
             }
@@ -240,7 +275,7 @@ export function useShippingChannelConfig() {
         if (!prev) return prev
         const rule = prev.channel_countryFees[country]
         const tiers =
-          rule && 'tiers' in rule
+          rule && isExpressRule(rule)
             ? [...rule.tiers]
             : [{ maxKg: 0.5, fee: 0 }]
         const last = tiers[tiers.length - 1]
@@ -261,7 +296,7 @@ export function useShippingChannelConfig() {
       setFormData((prev) => {
         if (!prev) return prev
         const rule = prev.channel_countryFees[country]
-        if (!rule || !('tiers' in rule)) return prev
+        if (!rule || !isExpressRule(rule)) return prev
         const tiers = rule.tiers.filter((_, i) => i !== index)
         return {
           ...prev,
@@ -276,7 +311,7 @@ export function useShippingChannelConfig() {
       setFormData((prev) => {
         if (!prev) return prev
         const rule = prev.channel_countryFees[country]
-        if (!rule || !('tiers' in rule)) return prev
+        if (!rule || !isExpressRule(rule)) return prev
         const tiers = rule.tiers.map((tier, i) => {
           if (i !== index) return tier
           const trimmed = value.trim()
@@ -300,7 +335,7 @@ export function useShippingChannelConfig() {
         if (!prev) return prev
         const rule = prev.channel_countryFees[country]
         const base: SeaCountryRule =
-          rule && 'baseFee' in rule ? { ...rule } : emptySeaRule()
+          rule && isSeaRule(rule) ? { ...rule } : emptySeaRule()
         const trimmed = value.trim()
         const num = trimmed === '' ? 0 : Number(trimmed)
         return {
@@ -311,6 +346,82 @@ export function useShippingChannelConfig() {
               ...base,
               [field]: Number.isFinite(num) ? num : 0,
             },
+          },
+        }
+      })
+    },
+    updateSeaTierMeta: (country, field, value) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        const base: SeaTierCountryRule = isSeaTierRule(rule) ? { ...rule, tiers: [...rule.tiers] } : emptySeaTierRule()
+        const trimmed = value.trim()
+        const num = trimmed === '' ? 0 : Number(trimmed)
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: {
+              ...base,
+              [field]: Number.isFinite(num) ? num : 0,
+            },
+          },
+        }
+      })
+    },
+    addSeaBulkTier: (country) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        const base: SeaTierCountryRule = isSeaTierRule(rule) ? { ...rule, tiers: [...rule.tiers] } : emptySeaTierRule()
+        const last = base.tiers[base.tiers.length - 1]
+        base.tiers.push({
+          maxKg: last ? Number((last.maxKg + 10).toFixed(3)) : 20,
+          perKgFee: last ? last.perKgFee : 0,
+        })
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: base,
+          },
+        }
+      })
+    },
+    removeSeaBulkTier: (country, index) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        if (!isSeaTierRule(rule)) return prev
+        const tiers = rule.tiers.filter((_, i) => i !== index)
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: { ...rule, tiers },
+          },
+        }
+      })
+    },
+    updateSeaBulkTier: (country, index, field, value) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        if (!isSeaTierRule(rule)) return prev
+        const trimmed = value.trim()
+        const num = trimmed === '' ? 0 : Number(trimmed)
+        const tiers = rule.tiers.map((tier, i) => {
+          if (i !== index) return tier
+          return {
+            ...tier,
+            [field]: Number.isFinite(num) ? num : 0,
+          }
+        })
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: { ...rule, tiers },
           },
         }
       })

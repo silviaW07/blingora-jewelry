@@ -181,21 +181,19 @@ export const ProductCategoryView = ({
                     </div> : null}
                   </div>
 
+                  {!queryState.searchKeyword ? (
                   <ListingBrandFilter
                     className="-mt-0.5 min-w-0 flex-1"
-                    brands={
-                      state.availableBrandFilters.length > 0
-                        ? state.availableBrandFilters
-                        : state.visibleBrandOptions
-                    }
+                    brands={state.availableBrandFilters}
                     selectedBrandId={queryState.brandCategoryId}
                     onBrandToggle={handlers.handleBrandQuickFilterToggle}
+                    isBrandExpanded={state.isBrandExpanded}
+                    onBrandExpandToggle={handlers.handleToggleBrandExpand}
                     isLoadingBrands={
-                      state.isLoadingBrandFilters &&
-                      state.availableBrandFilters.length === 0 &&
-                      state.visibleBrandOptions.length === 0
+                      state.isLoadingBrandFilters && state.availableBrandFilters.length === 0
                     }
                   />
+                  ) : null}
 
                   <ProductListToolbar
                     className="w-full min-w-0 shrink-0 sm:w-auto sm:justify-end"

@@ -8,7 +8,7 @@ export type ShippingBillingMode = 'EXPRESS_TIER' | 'SEA_PER_KG' | 'SEA_TIER'
 export const SHIPPING_BILLING_MODE_LABELS: Record<ShippingBillingMode, string> = {
   EXPRESS_TIER: '快递阶梯价',
   SEA_PER_KG: '海运按公斤',
-  SEA_TIER: '海运阶梯价',
+  SEA_TIER: '海运阶梯价（首重续重）',
 }
 
 export const DEFAULT_CHANNEL_COEFFICIENT = 1
@@ -36,7 +36,29 @@ export type SeaCountryRule = {
   perKgFee: number
 }
 
-export type CountryShippingRule = ExpressCountryRule | SeaCountryRule
+export type SeaBulkPerKgTier = {
+  /** 重量上限（kg），含：weightKg ≤ maxKg 时命中 */
+  maxKg: number
+  /** 整票按公斤单价（¥/kg） */
+  perKgFee: number
+}
+
+/**
+ * 海运阶梯（与快递固定档价不同）：
+ * - 未到体积档：首重运费 + ceil((重量-首重)/续重单位)×续重单价
+ * - 达到体积档：整票重量 × 该档 ¥/kg
+ */
+export type SeaTierCountryRule = {
+  baseKg: number
+  baseFee: number
+  extraUnitKg: number
+  extraFee: number
+  /** 从此重量起改为整票按公斤（对应表上 11-20kg 起） */
+  bulkFromKg: number
+  tiers: SeaBulkPerKgTier[]
+}
+
+export type CountryShippingRule = ExpressCountryRule | SeaCountryRule | SeaTierCountryRule
 
 export type CountryRuleMap = Record<string, CountryShippingRule | null>
 
@@ -55,15 +77,31 @@ export function formatShippingFeeCny(amount: number): string {
 }
 
 export function isWeightTierBillingMode(mode: ShippingBillingMode): boolean {
-  return mode === 'EXPRESS_TIER' || mode === 'SEA_TIER'
+  return mode === 'EXPRESS_TIER'
 }
 
 export function isExpressRule(rule: CountryShippingRule | null | undefined): rule is ExpressCountryRule {
-  return !!rule && Array.isArray((rule as ExpressCountryRule).tiers)
+  return (
+    !!rule &&
+    Array.isArray((rule as ExpressCountryRule).tiers) &&
+    typeof (rule as SeaTierCountryRule).baseFee !== 'number'
+  )
+}
+
+export function isSeaTierRule(rule: CountryShippingRule | null | undefined): rule is SeaTierCountryRule {
+  return (
+    !!rule &&
+    typeof (rule as SeaTierCountryRule).baseFee === 'number' &&
+    Array.isArray((rule as SeaTierCountryRule).tiers)
+  )
 }
 
 export function isSeaRule(rule: CountryShippingRule | null | undefined): rule is SeaCountryRule {
-  return !!rule && typeof (rule as SeaCountryRule).baseFee === 'number'
+  return (
+    !!rule &&
+    typeof (rule as SeaCountryRule).baseFee === 'number' &&
+    !Array.isArray((rule as SeaTierCountryRule).tiers)
+  )
 }
 
 /** 将任意历史/表单数据规范为快递阶梯 */
@@ -95,6 +133,64 @@ export function normalizeExpressRule(raw: unknown): ExpressCountryRule | null {
   if (tiers.length === 0) return null
   tiers.sort((a, b) => a.maxKg - b.maxKg)
   return { tiers }
+}
+
+const DEFAULT_SEA_TIER_BULK_FROM_KG = 11
+
+/** 将任意历史/表单数据规范为海运阶梯（首重续重 + 体积档整票单价） */
+export function normalizeSeaTierRule(raw: unknown): SeaTierCountryRule | null {
+  if (raw === null || raw === undefined || raw === '') return null
+
+  const asNumber = toFiniteNumber(raw)
+  if (asNumber != null && (typeof raw === 'number' || typeof raw === 'string')) {
+    return {
+      baseKg: 2,
+      baseFee: roundMoney(Math.max(0, asNumber)),
+      extraUnitKg: 1,
+      extraFee: 0,
+      bulkFromKg: DEFAULT_SEA_TIER_BULK_FROM_KG,
+      tiers: [],
+    }
+  }
+
+  if (typeof raw !== 'object' || Array.isArray(raw)) return null
+  const obj = raw as Record<string, unknown>
+  const baseFee = toFiniteNumber(obj.baseFee)
+  const hasSeaHead = baseFee != null && baseFee >= 0
+
+  const tiersRaw = Array.isArray(obj.tiers) ? obj.tiers : []
+  const tiers: SeaBulkPerKgTier[] = []
+  for (const item of tiersRaw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    const maxKg = toFiniteNumber(row.maxKg)
+    const perKgFee = toFiniteNumber(row.perKgFee) ?? toFiniteNumber(row.fee)
+    if (maxKg == null || maxKg <= 0 || perKgFee == null || perKgFee < 0) continue
+    // 旧版快递式固定档：fee 通常远大于单价，不当成 ¥/kg
+    const looksLikeFlatFee = !('perKgFee' in row) && perKgFee > 80
+    if (looksLikeFlatFee) continue
+    tiers.push({ maxKg: Number(maxKg.toFixed(3)), perKgFee: roundMoney(perKgFee) })
+  }
+  tiers.sort((a, b) => a.maxKg - b.maxKg)
+
+  if (!hasSeaHead && tiers.length === 0) return null
+
+  const baseKgRaw = toFiniteNumber(obj.baseKg)
+  const extraUnitRaw = toFiniteNumber(obj.extraUnitKg)
+  const extraFeeRaw = toFiniteNumber(obj.extraFee) ?? toFiniteNumber(obj.perKgFee)
+  const bulkFromRaw = toFiniteNumber(obj.bulkFromKg)
+
+  return {
+    baseKg: baseKgRaw != null && baseKgRaw > 0 ? Number(baseKgRaw.toFixed(3)) : 2,
+    baseFee: roundMoney(Math.max(0, baseFee ?? 0)),
+    extraUnitKg: extraUnitRaw != null && extraUnitRaw > 0 ? Number(extraUnitRaw.toFixed(3)) : 1,
+    extraFee: extraFeeRaw != null && extraFeeRaw >= 0 ? roundMoney(extraFeeRaw) : 0,
+    bulkFromKg:
+      bulkFromRaw != null && bulkFromRaw > 0
+        ? Number(bulkFromRaw.toFixed(3))
+        : DEFAULT_SEA_TIER_BULK_FROM_KG,
+    tiers,
+  }
 }
 
 /** 将任意历史/表单数据规范为海运按公斤 */
@@ -163,7 +259,11 @@ export function normalizeCountryRuleMap(
       continue
     }
     result[country] =
-      mode === 'SEA_PER_KG' ? normalizeSeaRule(value) : normalizeExpressRule(value)
+      mode === 'SEA_PER_KG'
+        ? normalizeSeaRule(value)
+        : mode === 'SEA_TIER'
+          ? normalizeSeaTierRule(value)
+          : normalizeExpressRule(value)
   }
   return result
 }
@@ -190,6 +290,33 @@ export function calcSeaPerKgFee(rule: SeaCountryRule, weightKg: number): number 
   return roundMoney(baseFee + (weight - baseKg) * perKgFee)
 }
 
+function calcSeaFirstPlusExtra(rule: SeaTierCountryRule, weightKg: number): number {
+  const baseKg = rule.baseKg > 0 ? rule.baseKg : 2
+  const baseFee = Math.max(0, rule.baseFee)
+  const extraUnitKg = rule.extraUnitKg > 0 ? rule.extraUnitKg : 1
+  const extraFee = Math.max(0, rule.extraFee)
+  if (weightKg <= baseKg) return roundMoney(baseFee)
+  const extraUnits = Math.ceil((weightKg - baseKg) / extraUnitKg - 1e-9)
+  return roundMoney(baseFee + Math.max(0, extraUnits) * extraFee)
+}
+
+/** 海运阶梯：轻抛走首重续重；达到体积档后整票 × 该档单价 */
+export function calcSeaTierFee(rule: SeaTierCountryRule, weightKg: number): number | null {
+  const weight = Math.max(0, Number(weightKg) || 0)
+  const bulkFromKg = rule.bulkFromKg > 0 ? rule.bulkFromKg : DEFAULT_SEA_TIER_BULK_FROM_KG
+  const sorted = [...(rule.tiers || [])]
+    .filter((t) => Number.isFinite(t.maxKg) && t.maxKg > 0 && Number.isFinite(t.perKgFee) && t.perKgFee >= 0)
+    .sort((a, b) => a.maxKg - b.maxKg)
+
+  if (sorted.length > 0 && weight >= bulkFromKg) {
+    const hit = sorted.find((t) => weight <= t.maxKg)
+    if (!hit) return null
+    return roundMoney(weight * hit.perKgFee)
+  }
+
+  return calcSeaFirstPlusExtra(rule, weight)
+}
+
 export type CalcShippingFeeInput = {
   billingMode: ShippingBillingMode
   channelCoefficient?: number
@@ -211,6 +338,10 @@ export function calculateShippingFee(input: CalcShippingFeeInput): number | null
     const sea = normalizeSeaRule(countryRule)
     if (!sea) return null
     baseFee = calcSeaPerKgFee(sea, weightKg)
+  } else if (billingMode === 'SEA_TIER') {
+    const seaTier = normalizeSeaTierRule(countryRule)
+    if (!seaTier) return null
+    baseFee = calcSeaTierFee(seaTier, weightKg)
   } else {
     const express = normalizeExpressRule(countryRule)
     if (!express) return null
@@ -225,12 +356,18 @@ export function emptyExpressRule(): ExpressCountryRule {
   return { tiers: [{ maxKg: 0.5, fee: 0 }] }
 }
 
-export function emptySeaTierRule(): ExpressCountryRule {
+export function emptySeaTierRule(): SeaTierCountryRule {
   return {
+    baseKg: 2,
+    baseFee: 0,
+    extraUnitKg: 1,
+    extraFee: 0,
+    bulkFromKg: 11,
     tiers: [
-      { maxKg: 12, fee: 0 },
-      { maxKg: 21, fee: 0 },
-      { maxKg: 30, fee: 0 },
+      { maxKg: 20, perKgFee: 0 },
+      { maxKg: 70, perKgFee: 0 },
+      { maxKg: 100, perKgFee: 0 },
+      { maxKg: 9999, perKgFee: 0 },
     ],
   }
 }
@@ -254,9 +391,20 @@ export function summarizeCountryRule(
     if (!sea) return null
     return `起重${sea.baseKg}kg ${formatShippingFeeCny(sea.baseFee)} + ${formatShippingFeeCny(sea.perKgFee)}/kg`
   }
+  if (mode === 'SEA_TIER') {
+    const sea = normalizeSeaTierRule(rule)
+    if (!sea) return null
+    const head = `首重${sea.baseKg}kg ${formatShippingFeeCny(sea.baseFee)} + ${formatShippingFeeCny(sea.extraFee)}/${sea.extraUnitKg}kg`
+    if (!sea.tiers.length) return head
+    const bulk = sea.tiers
+      .slice(0, 2)
+      .map((t) => `≤${t.maxKg}kg ${formatShippingFeeCny(t.perKgFee)}/kg`)
+      .join(' · ')
+    const more = sea.tiers.length > 2 ? ` +${sea.tiers.length - 2}` : ''
+    return `${head}；≥${sea.bulkFromKg}kg ${bulk}${more}`
+  }
   const express = normalizeExpressRule(rule)
   if (!express) return null
-  const prefix = mode === 'SEA_TIER' ? '海运阶梯 ' : ''
   const parts = express.tiers.slice(0, 3).map((t) => `≤${t.maxKg}kg ${formatShippingFeeCny(t.fee)}`)
   const more = express.tiers.length > 3 ? ` +${express.tiers.length - 3}` : ''
   return parts.join(' · ') + more

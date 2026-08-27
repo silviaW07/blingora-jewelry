@@ -10,7 +10,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import {
   MAX_UPLOAD_BYTES,
+  MAX_VIDEO_UPLOAD_BYTES,
   extensionForUpload,
+  isVideoUploadExt,
   saveUploadedImage,
 } from '@/lib/uploadStorage'
 
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
   // A gallery is sent as one multipart request. Keep a generous body cap while
   // enforcing the existing per-image limit below.
   const declaredLength = Number(request.headers.get('content-length') || 0)
-  const maxBatchBytes = MAX_UPLOAD_BYTES * 12
+  const maxBatchBytes = MAX_VIDEO_UPLOAD_BYTES * 2
   if (declaredLength > maxBatchBytes * 1.05) {
     return fail(`图片上传失败：单次上传总大小超过 ${maxBatchBytes / 1024 / 1024}MB`, 413)
   }
@@ -67,9 +69,10 @@ export async function POST(request: NextRequest) {
     if (!bytes.byteLength) {
       return fail(`图片上传失败：${entry.name || '图片'}内容为空`, 400)
     }
-    if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    const maxBytes = isVideoUploadExt(ext) ? MAX_VIDEO_UPLOAD_BYTES : MAX_UPLOAD_BYTES
+    if (bytes.byteLength > maxBytes) {
       return fail(
-        `图片上传失败：${entry.name || '图片'}超过 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB 限制（${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB）`,
+        `图片上传失败：${entry.name || '图片'}超过 ${maxBytes / 1024 / 1024}MB 限制（${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB）`,
         413,
       )
     }

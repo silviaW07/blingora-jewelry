@@ -465,24 +465,19 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               />
               <ProductListToolbar
                 className="mt-1.5 w-full"
+                hideBrands={Boolean(queryState.searchKeyword)}
                 minPrice={queryState.minPrice}
                 maxPrice={queryState.maxPrice}
                 sortBy={queryState.sortBy}
                 onPriceRangeChange={handlers.handlePriceRangeChange}
                 onSortChange={handlers.handleSortChange}
-                brandOptions={
-                  state.availableBrandFilters.length > 0
-                    ? state.availableBrandFilters
-                    : state.visibleBrandOptions
-                }
+                brandOptions={state.availableBrandFilters}
                 selectedBrandId={queryState.brandCategoryId}
                 onBrandToggle={handlers.handleBrandQuickFilterToggle}
                 isBrandExpanded={state.isBrandExpanded}
                 onBrandExpandToggle={handlers.handleToggleBrandExpand}
                 isLoadingBrands={
-                  state.isLoadingBrandFilters &&
-                  state.availableBrandFilters.length === 0 &&
-                  state.visibleBrandOptions.length === 0
+                  state.isLoadingBrandFilters && state.availableBrandFilters.length === 0
                 }
               />
               {products.length > 0 ? (

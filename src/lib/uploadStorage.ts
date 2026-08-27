@@ -15,6 +15,7 @@ export const UPLOAD_URL_PREFIX = '/api/uploads'
 
 /** Hard server cap (client compresses first, so this is only a safety net). */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+export const MAX_VIDEO_UPLOAD_BYTES = 80 * 1024 * 1024
 
 /** Whitelisted extensions — keeps non-image files out of the upload dir. */
 const MIME_BY_EXT: Record<string, string> = {
@@ -26,6 +27,10 @@ const MIME_BY_EXT: Record<string, string> = {
   avif: 'image/avif',
   bmp: 'image/bmp',
   svg: 'image/svg+xml',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  m4v: 'video/mp4',
 }
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -39,6 +44,15 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/bmp': 'bmp',
   'image/x-ms-bmp': 'bmp',
   'image/svg+xml': 'svg',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+}
+
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v'])
+
+export function isVideoUploadExt(ext: string): boolean {
+  return VIDEO_EXTS.has(ext)
 }
 
 /** Generated file names only ever contain uuid + extension. */
@@ -57,7 +71,14 @@ export function extensionForUpload(fileName?: string | null, mimeType?: string |
     .trim()
   if (EXT_BY_MIME[mime]) return EXT_BY_MIME[mime]
   // Some browsers / clients send an empty or generic type — fall back to the file name
-  if (mime && mime !== 'application/octet-stream' && !mime.startsWith('image/')) return null
+  if (
+    mime &&
+    mime !== 'application/octet-stream' &&
+    !mime.startsWith('image/') &&
+    !mime.startsWith('video/')
+  ) {
+    return null
+  }
 
   const ext = path
     .extname(String(fileName || ''))

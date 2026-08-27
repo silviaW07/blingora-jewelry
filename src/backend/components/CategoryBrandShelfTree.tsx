@@ -18,7 +18,9 @@ function countClass(count: number) {
 }
 
 function BrandGrid({ node, gapsOnly }: { node: ShelfL2Node_Output; gapsOnly: boolean }) {
-  const brands = gapsOnly ? node.brands.filter((item) => item.count === 0) : node.brands;
+  const brands = gapsOnly
+    ? node.brands.filter((item) => item.count === 0)
+    : node.brands.filter((item) => item.count > 0);
   if (brands.length === 0 && node.unmatchedBrandCount === 0) {
     return <p className="text-[11px] text-[#94A3B8] px-1">该二级类目下暂无品牌缺口</p>;
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { TrendingUp, AlertTriangle, Plus, CheckCircle2, XCircle, Clock, ExternalLink } from "lucide-react";
+import { TrendingUp, AlertTriangle, Plus, CheckCircle2, XCircle, Clock } from "lucide-react";
 import EditableImg from "@/@base/EditableImg";
 import type { UseDashboardState, UseDashboardHandlers } from "@/backend/hooks/useDashboard";
 import { ImportTaskStatus } from "@/backend/types/Dashboard";
@@ -61,56 +61,49 @@ export default function DashboardView({
             {(() => {
               const kpi = state.kpiStats;
               const listed = kpi?.listedProductCount ?? kpi?.totalProductCount ?? 0;
-              const mom = kpi?.monthOverMonthPercent ?? 0;
-              const wow = kpi?.weekOverWeekPercent ?? 0;
-              const trendCls = (n: number) => n >= 0 ? "bg-[#2BA471]/10 text-[#2BA471]" : "bg-[#D9001B]/10 text-[#D9001B]";
-              const trendText = (n: number) => `${n >= 0 ? "↑" : "↓"} ${Math.abs(n)}%`;
               const fmt = (n: number) => n.toLocaleString();
-              const source1688 = kpi?.sources?.find((row) => row.source === "IMPORT_1688");
+              const cardCls =
+                "bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow text-left w-full";
               return <>
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <button
+              type="button"
+              onClick={() => handlers.handleNavigateToListingStats()}
+              className={`${cardCls} cursor-pointer`}
+            >
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" />
               <div className="flex justify-between items-start">
                 <span className="text-xs font-medium text-[#64748B]">总上架数</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${trendCls(mom)}`}>
-                  {trendText(mom)}
-                </span>
+                <span className="text-[10px] font-semibold text-[#0052D9]">详情 →</span>
               </div>
               <div className="space-y-1">
                 <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(listed)}</p>
-                <p className="text-[11px] text-[#94A3B8]">相比上月新增 {fmt(kpi?.monthListedDelta ?? 0)} 件</p>
+                <p className="text-[11px] text-[#94A3B8]">点击查看途径与周月明细</p>
               </div>
-            </div>
+            </button>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className={cardCls}>
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" />
               <div className="flex justify-between items-start">
-                <span className="text-xs font-medium text-[#64748B]">本周上架</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${trendCls(wow)}`}>
-                  {trendText(wow)}
-                </span>
+                <span className="text-xs font-medium text-[#64748B]">总注册数</span>
               </div>
               <div className="space-y-1">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.weekListedCount ?? 0)}</p>
-                <p className="text-[11px] text-[#94A3B8]">上周 {fmt(kpi?.prevWeekListedCount ?? 0)} 件</p>
+                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.totalCustomerCount ?? 0)}</p>
+                <p className="text-[11px] text-[#94A3B8]">本周新注册 {fmt(kpi?.newRegisteredUserCount ?? 0)}</p>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className={cardCls}>
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF6A00]" />
               <div className="flex justify-between items-start">
-                <span className="text-xs font-medium text-[#64748B]">本月上架</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#FF6A00]/10 text-[#C2410C]">
-                  1688 {source1688?.monthCount ?? 0}
-                </span>
+                <span className="text-xs font-medium text-[#64748B]">总订单数</span>
               </div>
               <div className="space-y-1">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.monthListedCount ?? 0)}</p>
-                <p className="text-[11px] text-[#94A3B8]">上月 {fmt(kpi?.prevMonthListedCount ?? 0)} 件</p>
+                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.totalOrderCount ?? 0)}</p>
+                <p className="text-[11px] text-[#94A3B8]">全部订单记录</p>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className={cardCls}>
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#D9001B]" />
               <div className="flex justify-between items-start">
                 <span className="text-xs font-medium text-[#64748B]">待处理库存预警</span>
@@ -120,64 +113,11 @@ export default function DashboardView({
               </div>
               <div className="space-y-1">
                 <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.kpiStats?.lowStockAlertCount ?? "—"}</p>
-                <p className="text-[11px] text-[#94A3B8]">本周新买家 {state.kpiStats?.newRegisteredUserCount ?? 0}</p>
+                <p className="text-[11px] text-[#94A3B8]">本周新注册 {fmt(kpi?.newRegisteredUserCount ?? 0)}</p>
               </div>
             </div>
               </>;
             })()}
-          </div>
-
-          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5">
-            <div className="flex justify-between items-center border-b border-[#F1F5F9] pb-3 mb-3">
-              <div>
-                <h2 className="text-sm font-bold text-[#1E293B]">上传途径统计</h2>
-                <p className="text-[11px] text-[#64748B] mt-0.5">按来源拆分当前上架库存 · 周 / 月新增</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handlers.handleNavigateToListingStats()}
-                className="text-xs text-[#0052D9] font-semibold hover:underline flex items-center gap-1"
-              >
-                数据详情统计 <ExternalLink className="size-3" />
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-[#64748B] bg-[#F8FAFC]">
-                    <th className="py-2 px-3 font-semibold">途径</th>
-                    <th className="py-2 px-3 font-semibold text-right">上架数</th>
-                    <th className="py-2 px-3 font-semibold text-right">本周</th>
-                    <th className="py-2 px-3 font-semibold text-right">本月</th>
-                    <th className="py-2 px-3 font-semibold text-right">占比</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F5F9]">
-                  {(state.kpiStats?.sources || []).map((row) => {
-                    const is1688 = row.source === "IMPORT_1688";
-                    return (
-                      <tr key={row.source} className={is1688 ? "bg-[#FFF7ED]" : ""}>
-                        <td className="py-2.5 px-3">
-                          <span className={`inline-flex items-center gap-1.5 font-bold ${is1688 ? "text-[#C2410C]" : "text-[#1E293B]"}`}>
-                            {is1688 ? <span className="inline-block size-2 rounded-sm bg-[#FF6A00]" /> : null}
-                            {row.label}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold">{row.listedCount.toLocaleString()}</td>
-                        <td className="py-2.5 px-3 text-right font-mono">{row.weekCount.toLocaleString()}</td>
-                        <td className="py-2.5 px-3 text-right font-mono">{row.monthCount.toLocaleString()}</td>
-                        <td className="py-2.5 px-3 text-right">
-                          <span className={`font-mono font-bold ${is1688 ? "text-[#C2410C]" : "text-[#334155]"}`}>{row.sharePercent}%</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!state.isInitializing && (state.kpiStats?.sources || []).length === 0 ? (
-                    <tr><td colSpan={5} className="py-8 text-center text-[#94A3B8]">暂无上架数据</td></tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
           </div>
 
 

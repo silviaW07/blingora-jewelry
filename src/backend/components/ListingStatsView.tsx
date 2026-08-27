@@ -36,6 +36,29 @@ export default function ListingStatsView({
           </div>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {(() => {
+            const sources = state.detail?.sources || [];
+            const s1688 = sources.find((row) => row.source === "IMPORT_1688");
+            const sTable = sources.find((row) => row.source === "TABLE_IMPORT");
+            const fmt = (n: number) => n.toLocaleString();
+            const cards = [
+              { label: "本周 1688 数", value: s1688?.weekCount ?? 0, hint: `本月 ${fmt(s1688?.monthCount ?? 0)}`, color: "bg-[#FF6A00]" },
+              { label: "本周表格数", value: sTable?.weekCount ?? 0, hint: `本月 ${fmt(sTable?.monthCount ?? 0)}`, color: "bg-[#0052D9]" },
+              { label: "本月上架数", value: state.detail?.monthListedCount ?? 0, hint: "当月新增上架", color: "bg-[#2BA471]" },
+              { label: "总上架数", value: state.detail?.listedProductCount ?? 0, hint: "当前前台在架", color: "bg-[#0052D9]" },
+            ];
+            return cards.map((card) => (
+              <div key={card.label} className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 relative overflow-hidden">
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${card.color}`} />
+                <p className="text-xs font-medium text-[#64748B]">{card.label}</p>
+                <p className="mt-2 text-2xl font-bold font-mono text-[#1E293B]">{state.loading ? "—" : fmt(card.value)}</p>
+                <p className="mt-1 text-[11px] text-[#94A3B8]">{card.hint}</p>
+              </div>
+            ));
+          })()}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5">
             <h2 className="text-sm font-bold text-[#1E293B] mb-4">近 12 周上架</h2>
@@ -80,7 +103,8 @@ export default function ListingStatsView({
         </div>
 
         <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5">
-          <h2 className="text-sm font-bold text-[#1E293B] mb-3">上传途径</h2>
+          <h2 className="text-sm font-bold text-[#1E293B] mb-1">上传途径统计</h2>
+          <p className="text-[11px] text-[#64748B] mb-3">按来源拆分当前上架库存 · 周 / 月新增</p>
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="text-[#64748B] bg-[#F8FAFC]">

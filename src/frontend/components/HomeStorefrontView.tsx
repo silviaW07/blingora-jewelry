@@ -237,25 +237,18 @@ const DesktopRecommendZoneProductCard = ({
 
       <div className="mt-5 space-y-4">
         {isDraft ? (
-          <p className="text-left text-lg font-semibold leading-7 text-[#111111] break-words whitespace-normal">
-            <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-              {item.productName}
-            </DecorateText>
+          <p className="home-recommend-product-name text-left text-lg font-semibold leading-7 text-[#111111]">
+            {item.productName}
           </p>
         ) : (
           <button
             type="button"
-            className="text-left text-lg font-semibold leading-7 text-[#111111] break-words whitespace-normal transition-colors hover:text-[#5f4b32]"
+            className="home-recommend-product-name text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
             onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
-            data-api-bind-info={`productItems-${index}-productName`}
-            data-api-map-var-name="item"
           >
-            <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-              {item.productName}
-            </DecorateText>
+            {item.productName}
           </button>
         )}
-
         {!isDraft ? (
           <div className="flex items-center gap-3 text-sm text-[#7a756c]">
             <div className="flex items-center gap-1">{renderRatingStars(item.ratingAverage)}</div>
@@ -1239,21 +1232,19 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   />
                 </div>
 
+                {!queryState.searchKeyword ? (
                 <ListingBrandFilter
                   className="-mt-0.5 min-w-0 flex-1"
-                  brands={
-                    state.availableBrandFilters.length > 0
-                      ? state.availableBrandFilters
-                      : state.visibleBrandOptions
-                  }
+                  brands={state.availableBrandFilters}
                   selectedBrandId={queryState.brandCategoryId}
                   onBrandToggle={handlers.handleBrandQuickFilterToggle}
+                  isBrandExpanded={state.isBrandExpanded}
+                  onBrandExpandToggle={handlers.handleToggleBrandExpand}
                   isLoadingBrands={
-                    state.isLoadingBrandFilters &&
-                    state.availableBrandFilters.length === 0 &&
-                    state.visibleBrandOptions.length === 0
+                    state.isLoadingBrandFilters && state.availableBrandFilters.length === 0
                   }
                 />
+                ) : null}
 
                 <ProductListToolbar
                   className="w-full shrink-0 sm:w-auto sm:justify-end"

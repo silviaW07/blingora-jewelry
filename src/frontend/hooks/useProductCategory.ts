@@ -1090,7 +1090,7 @@ export const useProductCategory = (
       return
     }
 
-    if (!hasActiveListingQuery) {
+    if (!hasActiveListingQuery || queryState.searchKeyword) {
       setAvailableBrandFilters([])
       setIsLoadingBrandFilters(false)
       return

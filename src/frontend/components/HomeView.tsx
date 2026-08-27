@@ -98,7 +98,7 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                 <EditableImg propKey={`home-recommend-product-${item.productId}`} keywords={item.imageUrl || item.productName} className="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-[1.03]" data-api-unique-id='homeview-rzone-product-image-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' />
               </button>
               <div className="mt-5 space-y-4" data-api-unique-id='homeview-rzone-product-body-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
-                <button type="button" className="text-left text-lg font-semibold leading-7 text-[#111111] break-words whitespace-normal transition-colors hover:text-[#5f4b32] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20" onClick={() => handlers.handleNavigateRecommendProduct(item.productId)} data-api-unique-id='homeview-rzone-product-name-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1' data-api-bind-info={`productItems-${index}-productName`} data-api-map-var-name='item'>
+                <button type="button" className="home-recommend-product-name text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20" onClick={() => handlers.handleNavigateRecommendProduct(item.productId)} data-api-unique-id='homeview-rzone-product-name-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView' data-api-in-loop='1'>
                   {item.productName}
                 </button>
                 {!isDraft ? (

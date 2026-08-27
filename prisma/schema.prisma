@@ -1264,3 +1264,42 @@ model brandalias {
   @@index([sortWeight])
   @@map("brand_alias")
 }
+
+enum buyershowmediatype {
+  IMAGE
+  VIDEO
+}
+
+enum buyershowcommentstatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// 买家秀媒体：后台上传图片/视频，可选标题；前台独立页展示
+model buyershowmedia {
+  id         String             @id @default(uuid()) @db.VarChar(36)
+  mediaType  buyershowmediatype @map("media_type")
+  mediaUrl   String             @map("media_url") @db.VarChar(700)
+  title      String?            @db.VarChar(160)
+  sortWeight Int                @default(0) @map("sort_weight")
+  isEnabled  Boolean            @default(true) @map("is_enabled")
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt @default(now())
+
+  @@index([isEnabled, sortWeight])
+  @@map("buyer_show_media")
+}
+
+/// 买家秀留言：客户提交后待审核，通过后才在前台展示
+model buyershowcomment {
+  id         String                  @id @default(uuid()) @db.VarChar(36)
+  authorName String                  @map("author_name") @db.VarChar(80)
+  content    String                  @db.Text
+  status     buyershowcommentstatus  @default(PENDING)
+  createdAt  DateTime                @default(now())
+  reviewedAt DateTime?               @map("reviewed_at")
+
+  @@index([status, createdAt])
+  @@map("buyer_show_comment")
+}
