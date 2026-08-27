@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect } from "react";
-import Link from "next/link";
 import { TrendingUp, AlertTriangle, Plus, CheckCircle2, XCircle, Clock, ExternalLink } from "lucide-react";
 import EditableImg from "@/@base/EditableImg";
 import type { UseDashboardState, UseDashboardHandlers } from "@/backend/hooks/useDashboard";
-import { ImportTaskStatus, ProductStatus } from "@/backend/types/Dashboard";
+import { ImportTaskStatus } from "@/backend/types/Dashboard";
+import CategoryBrandShelfTree from "@/backend/components/CategoryBrandShelfTree";
 interface Props {
   state: UseDashboardState;
   handlers: UseDashboardHandlers;
@@ -24,11 +24,6 @@ export default function DashboardView({
     COMPLETED: "已同步完成",
     FAILED: "任务中断"
   };
-  const productStatusMap: Record<ProductStatus, string> = {
-    DRAFT: "草稿",
-    ACTIVE: "已上架",
-    INACTIVE: "已下架"
-  };
   return <section className="w-full bg-[#F8FAFC] relative overflow-hidden" data-controller-name="管理概览" data-api-unique-id="dashboardview-r0904c4ce69995de7-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
       <div className="absolute inset-0 opacity-[0.04] bg-[radial-gradient(#CBD5E1_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" data-api-unique-id="dashboardview-r3eef73e538d0c005-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
 
@@ -41,7 +36,7 @@ export default function DashboardView({
                 <span className="inline-block w-1.5 h-5 bg-[#0052D9] rounded-sm" data-api-unique-id="dashboardview-r739cf73933a43ace-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
                 跨境独立站运营概览
               </h1>
-              <p className="text-xs text-[#64748B] mt-1" data-api-unique-id="dashboardview-r4eecd345a71dd6e8-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">实时监控 1688 铺货任务、供应链安全水位及新注册买家动态</p>
+              <p className="text-xs text-[#64748B] mt-1">实时监控上架规模、周月新增、1688 等上传途径</p>
             </div>
 
             <div className="flex flex-wrap gap-2" data-api-unique-id="dashboardview-r38f3199624e6ee46-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
@@ -62,63 +57,129 @@ export default function DashboardView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-controller-name="KPI统计卡片" data-api-unique-id="dashboardview-rd07c25429ee0d6b5-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow" data-api-unique-id="dashboardview-r4e22bc736a1b1a43-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" data-api-unique-id="dashboardview-re19ea4021f8bb22b-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
-              <div className="flex justify-between items-start" data-api-unique-id="dashboardview-rac4c27193ebb5435-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <span className="text-xs font-medium text-[#64748B]" data-api-unique-id="dashboardview-r88398f83b3536ff1-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">总商品数</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#2BA471]/10 text-[#2BA471]" data-api-unique-id="dashboardview-r7031f9e84e29b163-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                  ↑ 12%
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-controller-name="KPI统计卡片">
+            {(() => {
+              const kpi = state.kpiStats;
+              const listed = kpi?.listedProductCount ?? kpi?.totalProductCount ?? 0;
+              const mom = kpi?.monthOverMonthPercent ?? 0;
+              const wow = kpi?.weekOverWeekPercent ?? 0;
+              const trendCls = (n: number) => n >= 0 ? "bg-[#2BA471]/10 text-[#2BA471]" : "bg-[#D9001B]/10 text-[#D9001B]";
+              const trendText = (n: number) => `${n >= 0 ? "↑" : "↓"} ${Math.abs(n)}%`;
+              const fmt = (n: number) => n.toLocaleString();
+              const source1688 = kpi?.sources?.find((row) => row.source === "IMPORT_1688");
+              return <>
+            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" />
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-medium text-[#64748B]">总上架数</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${trendCls(mom)}`}>
+                  {trendText(mom)}
                 </span>
               </div>
-              <div className="space-y-1" data-api-unique-id="dashboardview-r139d04c62c107aa0-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight" data-api-unique-id="dashboardview-rb3f500ccdab2f227-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">{state.kpiStats?.totalProductCount ?? "12,840"}</p>
-                <p className="text-[11px] text-[#94A3B8]" data-api-unique-id="dashboardview-rc1189c06834a6f52-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">相比上月新增 1,420 件</p>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(listed)}</p>
+                <p className="text-[11px] text-[#94A3B8]">相比上月新增 {fmt(kpi?.monthListedDelta ?? 0)} 件</p>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow" data-api-unique-id="dashboardview-r9334838a3836130c-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" data-api-unique-id="dashboardview-rd60c322a8656bb20-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
-              <div className="flex justify-between items-start" data-api-unique-id="dashboardview-rc810b550311ed73a-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <span className="text-xs font-medium text-[#64748B]" data-api-unique-id="dashboardview-rac8e0130e002c4e7-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">今日 1688 采集数</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#0052D9]/10 text-[#0052D9]" data-api-unique-id="dashboardview-r0afc6a34a5882838-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                  占今日上新 80%
+            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" />
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-medium text-[#64748B]">本周上架</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${trendCls(wow)}`}>
+                  {trendText(wow)}
                 </span>
               </div>
-              <div className="space-y-1" data-api-unique-id="dashboardview-r1574acdbdbccb674-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight" data-api-unique-id="dashboardview-r501c050020059dd5-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">{state.kpiStats?.todayImportCount ?? "456"}</p>
-                <p className="text-[11px] text-[#94A3B8]" data-api-unique-id="dashboardview-r5a5c0ea4fb1a0455-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">自动同步成功率 98.4%</p>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.weekListedCount ?? 0)}</p>
+                <p className="text-[11px] text-[#94A3B8]">上周 {fmt(kpi?.prevWeekListedCount ?? 0)} 件</p>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow" data-api-unique-id="dashboardview-r583ecfc559866fca-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" data-api-unique-id="dashboardview-rcaf7adf3575dd7b9-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
-              <div className="flex justify-between items-start" data-api-unique-id="dashboardview-ra8e5e7abbe4bcf46-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <span className="text-xs font-medium text-[#64748B]" data-api-unique-id="dashboardview-r80cdd30ef59cb6f3-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">待处理库存预警</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#D9001B]/10 text-[#D9001B]" data-api-unique-id="dashboardview-ra78192cd210b13dc-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
+            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF6A00]" />
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-medium text-[#64748B]">本月上架</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#FF6A00]/10 text-[#C2410C]">
+                  1688 {source1688?.monthCount ?? 0}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.monthListedCount ?? 0)}</p>
+                <p className="text-[11px] text-[#94A3B8]">上月 {fmt(kpi?.prevMonthListedCount ?? 0)} 件</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#D9001B]" />
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-medium text-[#64748B]">待处理库存预警</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#D9001B]/10 text-[#D9001B]">
                   需立即处理
                 </span>
               </div>
-              <div className="space-y-1" data-api-unique-id="dashboardview-ra4cecfad0d30cc72-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight" data-api-unique-id="dashboardview-r6e93f4e33f0f2a33-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">{state.kpiStats?.lowStockAlertCount ?? "23"}</p>
-                <p className="text-[11px] text-[#94A3B8]" data-api-unique-id="dashboardview-r87b222ee0d3a0855-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">涉及 3 个核心供应商</p>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.kpiStats?.lowStockAlertCount ?? "—"}</p>
+                <p className="text-[11px] text-[#94A3B8]">本周新买家 {state.kpiStats?.newRegisteredUserCount ?? 0}</p>
               </div>
             </div>
+              </>;
+            })()}
+          </div>
 
-            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-4 space-y-3 relative overflow-hidden group hover:shadow-md transition-shadow" data-api-unique-id="dashboardview-rf214561db766a1e7-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0052D9]" data-api-unique-id="dashboardview-r6e276cd07a4e3640-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
-              <div className="flex justify-between items-start" data-api-unique-id="dashboardview-r0e057c769a60e5d1-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <span className="text-xs font-medium text-[#64748B]" data-api-unique-id="dashboardview-rbd5207ee9d06c2f7-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">新注册用户</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-[#2BA471]/10 text-[#2BA471]" data-api-unique-id="dashboardview-r91fd2fe274086e15-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                  本周新增
-                </span>
+          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5">
+            <div className="flex justify-between items-center border-b border-[#F1F5F9] pb-3 mb-3">
+              <div>
+                <h2 className="text-sm font-bold text-[#1E293B]">上传途径统计</h2>
+                <p className="text-[11px] text-[#64748B] mt-0.5">按来源拆分当前上架库存 · 周 / 月新增</p>
               </div>
-              <div className="space-y-1" data-api-unique-id="dashboardview-rb632db05c8bb7898-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight" data-api-unique-id="dashboardview-rc7077d7a72117be2-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">{state.kpiStats?.newRegisteredUserCount ?? "1,204"}</p>
-                <p className="text-[11px] text-[#94A3B8]" data-api-unique-id="dashboardview-r5ee17e229f157d96-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">环比增长 8.5%</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => handlers.handleNavigateToListingStats()}
+                className="text-xs text-[#0052D9] font-semibold hover:underline flex items-center gap-1"
+              >
+                数据详情统计 <ExternalLink className="size-3" />
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[#64748B] bg-[#F8FAFC]">
+                    <th className="py-2 px-3 font-semibold">途径</th>
+                    <th className="py-2 px-3 font-semibold text-right">上架数</th>
+                    <th className="py-2 px-3 font-semibold text-right">本周</th>
+                    <th className="py-2 px-3 font-semibold text-right">本月</th>
+                    <th className="py-2 px-3 font-semibold text-right">占比</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F1F5F9]">
+                  {(state.kpiStats?.sources || []).map((row) => {
+                    const is1688 = row.source === "IMPORT_1688";
+                    return (
+                      <tr key={row.source} className={is1688 ? "bg-[#FFF7ED]" : ""}>
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-flex items-center gap-1.5 font-bold ${is1688 ? "text-[#C2410C]" : "text-[#1E293B]"}`}>
+                            {is1688 ? <span className="inline-block size-2 rounded-sm bg-[#FF6A00]" /> : null}
+                            {row.label}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold">{row.listedCount.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right font-mono">{row.weekCount.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right font-mono">{row.monthCount.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <span className={`font-mono font-bold ${is1688 ? "text-[#C2410C]" : "text-[#334155]"}`}>{row.sharePercent}%</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!state.isInitializing && (state.kpiStats?.sources || []).length === 0 ? (
+                    <tr><td colSpan={5} className="py-8 text-center text-[#94A3B8]">暂无上架数据</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </div>
+
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" data-api-unique-id="dashboardview-r3025e95e4d2766ab-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
 
@@ -215,63 +276,13 @@ export default function DashboardView({
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" data-api-unique-id="dashboardview-r174a5e7b6dcb3d87-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
 
-            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5 space-y-4 flex flex-col" data-controller-name="最近上架商品" data-api-unique-id="dashboardview-r3347167fbb6f58ff-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-              <div className="flex justify-between items-center border-b border-[#F1F5F9] pb-3 shrink-0" data-api-unique-id="dashboardview-re1d6ba98bc8a48ec-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <h2 className="text-sm font-bold text-[#1E293B]" data-api-unique-id="dashboardview-rf47f33e8eb2e42b2-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">最近上架商品明细</h2>
-                <button onClick={e => {
-                e.preventDefault();
-                handlers.handleNavigateToAllProducts();
-              }} className="text-xs text-[#0052D9] font-semibold hover:underline flex items-center gap-1" data-api-unique-id="dashboardview-re86d731f00a2baca-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                  查看全部商品 <ExternalLink className="size-3" data-api-unique-id="dashboardview-r3416ec8385140205-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-x-auto" data-api-unique-id="dashboardview-r63aa169bc5b7c8f2-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                <table className="w-full text-left text-xs border-collapse" data-api-unique-id="dashboardview-r1929518f0f4e0b44-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                  <thead data-api-unique-id="dashboardview-r9ee535696edab9c8-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                    <tr className="border-b border-[#E2E8F0] text-[#64748B] font-semibold bg-[#F8FAFC]" data-api-unique-id="dashboardview-r57219425cba973de-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                      <th className="py-2.5 px-3" data-api-unique-id="dashboardview-re1ef083ade33e556-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">商品</th>
-                      <th className="py-2.5 px-3" data-api-unique-id="dashboardview-r9c27c7f820f4171c-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">SKU</th>
-                      <th className="py-2.5 px-3" data-api-unique-id="dashboardview-r0b21d1069d4c8339-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">品类</th>
-                      <th className="py-2.5 px-3 text-right" data-api-unique-id="dashboardview-re674186ee1c0c9e7-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">价格</th>
-                      <th className="py-2.5 px-3 text-center" data-api-unique-id="dashboardview-r1b4088d8f5b2f9c5-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">状态</th>
-                      <th className="py-2.5 px-3 text-right" data-api-unique-id="dashboardview-r04bd33f3a7be0aa9-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#F1F5F9]" data-api-unique-id="dashboardview-r032113ac6369533e-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                    {state.isInitializing ? <tr data-api-unique-id="dashboardview-r29da54881f504c42-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                        <td colSpan={6} className="text-center py-10 text-[#64748B]" data-api-unique-id="dashboardview-r497c52795558a9f5-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">加载中...</td>
-                      </tr> : state.recentProducts.length === 0 ? <tr data-api-unique-id="dashboardview-r59f3cf01ce11a2f7-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
-                        <td colSpan={6} className="text-center py-10 text-[#64748B]" data-api-unique-id="dashboardview-raee74f98d9464aff-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">暂无近期商品</td>
-                      </tr> : state.recentProducts.map((product, index) => <tr key={product.id} className="hover:bg-[#F8FAFC] transition-colors group" data-api-unique-id="dashboardview-rdb3b91c071fe8f85-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                          <td className="py-2.5 px-3 flex items-center gap-2.5" data-api-unique-id="dashboardview-r346b07567b9aa43b-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                            <EditableImg propKey={`recent-product-${product.id}`} keywords={product.mainImageUrl} className="size-8 rounded border border-[#E2E8F0] object-cover shrink-0" style={{
-                        width: '2rem',
-                        height: '2rem',
-                        borderRadius: '0.25rem'
-                      }} description="Product main image showing the item against a clean background, well lit and professionally framed" data-api-unique-id="dashboardview-re97346218cf312e2-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1" />
-                            <div className="min-w-0" data-api-unique-id="dashboardview-r6ee02512b3b47f47-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                              <p className="font-semibold text-[#1E293B] truncate max-w-[180px]" data-api-unique-id="dashboardview-r112a4d4683d32653-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">{product.name ?? "未知商品"}</p>
-                              <p className="text-[10px] text-[#94A3B8] font-mono" data-api-unique-id="dashboardview-r369e03974616a0fd-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">{product.id}</p>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-[#475569]" data-api-unique-id="dashboardview-r397dfa8c078260cf-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">{product.productCode ?? "-"}</td>
-                          <td className="py-2.5 px-3 text-[#64748B]" data-api-unique-id="dashboardview-r3f32531771943438-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">{product.categoryName ?? "-"}</td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1E293B]" data-api-unique-id="dashboardview-r7907b70fb6735ac6-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">${product.price ?? "0.00"}</td>
-                          <td className="py-2.5 px-3 text-center" data-api-unique-id="dashboardview-rbc943c82d1f4b500-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${product.status === "ACTIVE" ? "bg-[#2BA471]/10 text-[#2BA471]" : "bg-amber-100 text-amber-800"}`} data-api-unique-id="dashboardview-r260ed46e53113143-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                              {productStatusMap[product.status] ?? "未知"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right" data-api-unique-id="dashboardview-rb8645680ea54722b-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                            <button onClick={() => handlers.handleNavigateToProductEdit(product.name)} className="text-[#0052D9] hover:underline font-semibold text-[11px] opacity-0 group-hover:opacity-100 transition-opacity" data-api-unique-id="dashboardview-r94ebed8f0454e5db-s704011111" data-api-unique-page-name="src/backend/components/DashboardView" data-api-in-loop="1">
-                              编辑
-                            </button>
-                          </td>
-                        </tr>)}
-                  </tbody>
-                </table>
-              </div>
+            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5 flex flex-col" data-controller-name="前台类目品牌货盘" data-api-unique-id="dashboardview-r3347167fbb6f58ff-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">
+              <CategoryBrandShelfTree
+                data={state.shelfTree}
+                isLoading={state.isInitializing}
+                gapsOnly={state.shelfGapsOnly}
+                onGapsOnlyChange={handlers.handleToggleShelfGapsOnly}
+              />
             </div>
 
             <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-5 space-y-4 flex flex-col" data-controller-name="最新注册买家" data-api-unique-id="dashboardview-r60e7f6a0e7a733bc-s704011111" data-api-unique-page-name="src/backend/components/DashboardView">

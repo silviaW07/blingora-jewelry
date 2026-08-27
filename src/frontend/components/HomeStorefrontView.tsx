@@ -237,7 +237,7 @@ const DesktopRecommendZoneProductCard = ({
 
       <div className="mt-5 space-y-4">
         {isDraft ? (
-          <p className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111]">
+          <p className="text-left text-lg font-semibold leading-7 text-[#111111] break-words whitespace-normal">
             <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
               {item.productName}
             </DecorateText>
@@ -245,7 +245,7 @@ const DesktopRecommendZoneProductCard = ({
         ) : (
           <button
             type="button"
-            className="line-clamp-2 text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
+            className="text-left text-lg font-semibold leading-7 text-[#111111] break-words whitespace-normal transition-colors hover:text-[#5f4b32]"
             onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
             data-api-bind-info={`productItems-${index}-productName`}
             data-api-map-var-name="item"

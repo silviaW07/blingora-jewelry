@@ -11,6 +11,7 @@ import {
   normalizeBillingMode,
   normalizeChannelCoefficient,
   normalizeCountryRuleMap,
+  isWeightTierBillingMode,
   type CountryRuleMap,
   type ShippingBillingMode,
 } from '@/shared/shippingFeeCalc'
@@ -160,7 +161,7 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
       throw new Error('请至少为一个国家配置运费规则')
     }
 
-    if (billingMode === 'EXPRESS_TIER') {
+    if (isWeightTierBillingMode(billingMode)) {
       for (const [country, rule] of Object.entries(fees)) {
         if (!rule || !('tiers' in rule)) continue
         if (!rule.tiers.length) throw new Error(`${country} 请至少添加一个重量阶梯`)

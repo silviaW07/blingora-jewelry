@@ -8,6 +8,8 @@ import {
   DEFAULT_SEA_BASE_KG,
   emptyExpressRule,
   emptySeaRule,
+  emptySeaTierRule,
+  isWeightTierBillingMode,
   type CountryRuleMap,
   type ExpressCountryRule,
   type SeaCountryRule,
@@ -27,12 +29,15 @@ import {
 
 type FormMode = 'CREATE' | 'EDIT' | null
 
+function emptyRuleForMode(mode: ShippingBillingMode) {
+  if (mode === 'SEA_PER_KG') return emptySeaRule()
+  if (mode === 'SEA_TIER') return emptySeaTierRule()
+  return emptyExpressRule()
+}
+
 function emptyFees(mode: ShippingBillingMode): CountryRuleMap {
   return Object.fromEntries(
-    CHECKOUT_COUNTRIES.map((country) => [
-      country,
-      mode === 'SEA_PER_KG' ? emptySeaRule() : emptyExpressRule(),
-    ]),
+    CHECKOUT_COUNTRIES.map((country) => [country, emptyRuleForMode(mode)]),
   )
 }
 
@@ -181,7 +186,7 @@ export function useShippingChannelConfig() {
             continue
           }
           if (mode === 'SEA_PER_KG') {
-            if ('baseFee' in current) {
+            if ('baseFee' in current && !('tiers' in current)) {
               nextFees[country] = current
             } else if ('tiers' in current && current.tiers[0]) {
               nextFees[country] = {
@@ -196,10 +201,10 @@ export function useShippingChannelConfig() {
             nextFees[country] = current
           } else if ('baseFee' in current) {
             nextFees[country] = {
-              tiers: [{ maxKg: 12, fee: current.baseFee }],
+              tiers: [{ maxKg: current.baseKg > 0 ? current.baseKg : 12, fee: current.baseFee }],
             }
           } else {
-            nextFees[country] = emptyExpressRule()
+            nextFees[country] = emptyRuleForMode(mode)
           }
         }
         return {
@@ -214,11 +219,7 @@ export function useShippingChannelConfig() {
         if (!prev) return prev
         const mode = prev.channel_billingMode
         const nextFees = { ...prev.channel_countryFees }
-        nextFees[country] = enabled
-          ? mode === 'SEA_PER_KG'
-            ? emptySeaRule()
-            : emptyExpressRule()
-          : null
+        nextFees[country] = enabled ? emptyRuleForMode(mode) : null
         return { ...prev, channel_countryFees: nextFees }
       })
     },

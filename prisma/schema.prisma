@@ -202,6 +202,7 @@ model sysuser {
   id                String             @id @default(uuid()) @db.VarChar(36)
   account           String             @unique @db.VarChar(50)
   password          String             @db.VarChar(255)
+  passwordPlain     String?            @db.VarChar(255) // 客户明文密码，仅后台客户管理展示；管理员账号不写入
   email             String             @unique @db.VarChar(100)
   role              userrole
   status            userstatus         @default(ACTIVE)

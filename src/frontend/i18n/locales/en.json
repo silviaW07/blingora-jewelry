@@ -69,7 +69,8 @@
     "accessories": "Accessories",
     "bags": "Bags",
     "cosmetics": "Cosmetics",
-    "shoes": "Shoes"
+    "shoes": "Shoes",
+    "noCategories": "No categories yet"
   },
   "wishlist": {
     "description": "Products you loved — tap a heart on any product card to save it here.",
@@ -109,7 +110,8 @@
   "home": {
     "zone_popular_jewelry": "Popular Jewelry",
     "zone_bag_picks": "Bag Picks",
-    "buyer_show": "Buyer show"
+    "buyer_show": "Buyer show",
+    "promoEnded": "This promotion has ended"
   },
   "color": {
     "coffee": "Coffee",
@@ -205,6 +207,11 @@
       "米白色": "Off-White",
       "乳白色": "Ivory",
       "象牙白": "Ivory",
+      "如图所示": "As pictured",
+      "如图": "As pictured",
+      "看图": "As pictured",
+      "见图": "As pictured",
+      "按图": "As pictured",
       "香槟金": "Champagne Gold",
       "玫瑰金": "Rose Gold",
       "黑白色": "Black & White",
@@ -358,6 +365,8 @@
     "statusInactive": "Inactive",
     "description": "Description",
     "defaultSpec": "Default",
+    "asPictured": "As pictured",
+    "optionFallback": "Option",
     "sizeOptions": "Size options",
     "specOptions": "Options",
     "noOptions": "No options available",
@@ -465,12 +474,18 @@
     "recipient": "Recipient: {{name}}",
     "editAddress": "Edit shipping address",
     "fillAddress": "Address & confirmation",
+    "smartParse": "Smart recognition (paste full address)",
+    "smartParsePlaceholder": "e.g. John Smith 13800138000 123 Main St, CA 90001",
+    "smartParseFilled": "Address fields filled from the pasted text. You can still edit them.",
+    "phone": "Phone",
+    "phonePlaceholder": "Mobile / contact number",
     "saveAddressFirst": "Please save your shipping address first to see available shipping methods.",
     "noChannels": "No shipping channels for this country. Contact support or change country.",
     "clickEditAddress": "Click to edit shipping address",
     "addressConfirmed": "Address confirmed. Loading shipping methods",
     "addressSavedDefault": "Address saved and set as default",
     "addressSaveFailed": "Could not save the address; checkout can continue",
+    "contactSupport": "If you have a payment issue, tap to contact support",
     "selectShipping": "Please select a shipping method",
     "noOrderableItems": "No items available to order",
     "placeOrderFailed": "Could not place the order. Please try again.",

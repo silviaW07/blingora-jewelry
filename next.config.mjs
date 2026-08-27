@@ -69,6 +69,10 @@ const nextConfig = {
           source: '/img-proxy/gw/:path*',
           destination: 'https://gw.alicdn.com/:path*',
         },
+        {
+          source: '/img-proxy/img/:path*',
+          destination: 'https://img.alicdn.com/:path*',
+        },
       ]
     }
   }),

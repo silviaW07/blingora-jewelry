@@ -24,7 +24,7 @@ export function StorefrontBrandMark({
   className,
   compact = false,
   useNextLink = false,
-  ariaLabel = '返回首页',
+  ariaLabel = 'Back to home',
 }: StorefrontBrandMarkProps) {
   const { getPatch } = useDecorateMode()
   const wordmarkPatch = getPatch('home_brand_wordmark')

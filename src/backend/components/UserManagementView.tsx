@@ -229,10 +229,8 @@ export default function UserManagementView({ state, handlers }: Props) {
                         <TableCell className="text-muted-foreground" scrollX scrollXClassName="max-w-[260px]">
                           {user.email}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="font-normal">
-                            {user.passwordMasked}
-                          </Badge>
+                        <TableCell className="font-mono text-sm">
+                          {user.passwordPlain || '--'}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm tabular-nums">
                           {handlers.formatDateTime(user.createdAt)}
@@ -425,7 +423,7 @@ function CustomerDetailPanel({ state, handlers }: Props) {
                 <InfoItem label="姓名" value={detail.username} />
                 <InfoItem label="WhatsApp号" value={detail.whatsapp || '--'} />
                 <InfoItem label="邮箱" value={detail.email} />
-                <InfoItem label="密码" value={detail.passwordMasked} />
+                <InfoItem label="密码" value={detail.passwordPlain || '--'} />
                 <InfoItem label="注册时间" value={handlers.formatDateTime(detail.createdAt)} />
                 <InfoItem label="最近登录" value={handlers.formatDateTime(detail.lastLoginAt)} />
                 <InfoItem label="购物车金额(美金)" value={handlers.formatUsd(detail.cartUsdTotal)} />

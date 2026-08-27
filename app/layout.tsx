@@ -3,7 +3,7 @@ import { Providers } from './providers';
 import { Toaster } from 'sonner';
 import { header, body, display } from './font';
 
-const siteTitle = process.env.NEXT_PUBLIC_SITE_TITLE ?? "外贸跨境电商独立站";
+const siteTitle = process.env.NEXT_PUBLIC_SITE_TITLE ?? 'Cross-border store';
 
 export const viewport = {
   width: 'device-width',

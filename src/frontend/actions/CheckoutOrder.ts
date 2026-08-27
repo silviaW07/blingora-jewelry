@@ -23,6 +23,7 @@ import { computeDiscounts } from '@/shared/pricingPromotionCalc'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
+import { isStorefrontVisibleProduct } from '@/shared/storefrontProductVisibility'
 
 const COUNTRY_CODE_MAP: Record<string, string> = {
   'United States': 'US',
@@ -566,7 +567,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       if (!sku || sku.productId !== item.productId) {
         throw storefrontError('checkout.errors.cartChanged')
       }
-      if (sku.product.status !== 'ACTIVE' || sku.product.category?.status !== 'ACTIVE') {
+      if (!isStorefrontVisibleProduct(sku.product) || sku.product.category?.status !== 'ACTIVE') {
         throw storefrontError('product.errors.unavailable')
       }
       if (!isStorefrontQtyAllowed(sku.stock, quantity)) {
@@ -642,7 +643,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
     })
     if (serverShippingFee == null) {
       throw new Error(
-        `当前国家/重量暂不支持物流渠道「${channel.name}」（计费模式：${billingMode}，重量：${weightKg.toFixed(3)}kg）`,
+        `This shipping method is not available for the selected country/weight (${channel.name})`,
       )
     }
 

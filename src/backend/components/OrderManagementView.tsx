@@ -388,26 +388,49 @@ export const OrderManagementView = ({
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0" data-api-unique-id="ordermanagementview-rfb0a6d9007c97a49-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                          <Table data-api-unique-id="ordermanagementview-rf7731c296354418e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                            <TableBody data-api-unique-id="ordermanagementview-raaeee018bdf17cac-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                              {state.detailData.items.map((sku, index) => <TableRow key={sku.id} className="hover:bg-transparent" data-api-unique-id="ordermanagementview-r44560f09ec28ab2f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
-                                  <TableCell className="w-14 pl-4 py-4" data-api-unique-id="ordermanagementview-r1b50d5b047936c99-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
-                                    <div className="w-12 h-12 rounded border bg-slate-50 overflow-hidden" data-api-unique-id="ordermanagementview-r8c0207cf481510f2-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
-                                      {sku.mainImageUrl && <EditableImg propKey={`sku-${sku.id}`} keywords={sku.mainImageUrl} description={sku.productName} className="w-full h-full object-cover" data-api-unique-id="ordermanagementview-re2dca2ff88078099-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1" />}
+                          <div className="divide-y">
+                            {state.detailData.items.map((sku) => {
+                              const qty = Math.max(0, Number(sku.quantity) || 0)
+                              return (
+                                <div key={sku.id} className="flex items-start gap-3 px-4 py-4">
+                                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded border bg-slate-50">
+                                    {sku.mainImageUrl ? (
+                                      <EditableImg
+                                        propKey={`sku-${sku.id}`}
+                                        keywords={sku.mainImageUrl}
+                                        description={sku.productName}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : null}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-bold leading-5 break-words whitespace-normal">
+                                      {sku.productName}
                                     </div>
-                                  </TableCell>
-                                  <TableCell className="py-4" scrollX scrollXClassName="max-w-[320px]" data-api-unique-id="ordermanagementview-re99ef7ad8810a245-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
-                                    <div className="text-sm font-bold" data-api-unique-id="ordermanagementview-rca7c3834c34f43be-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">{sku.productName}</div>
-                                    <div className="text-[10px] text-muted-foreground font-mono mt-0.5" data-api-unique-id="ordermanagementview-r76fdb7081c5dee6b-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">SKU: {sku.skuCode}</div>
-                                  </TableCell>
-                                  <TableCell className="text-right pr-4 py-4 whitespace-nowrap" data-api-unique-id="ordermanagementview-r3c9cf3d7cd1d192c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
-                                    <div className="text-xs" data-api-unique-id="ordermanagementview-rafe4ea9780451e65-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">x {sku.quantity}</div>
-                                    <div className="text-sm font-bold" data-api-unique-id="ordermanagementview-r52ee6af3f05ebebd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">{state.detailData?.currencyCode} {sku.lineAmount}</div>
-                                  </TableCell>
-                                </TableRow>)}
-                            </TableBody>
-                          </Table>
+                                    <div className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">
+                                      SKU: {sku.skuCode}
+                                    </div>
+                                  </div>
+                                  <div className="w-[7.5rem] shrink-0 text-right">
+                                    <div className="text-sm font-bold tabular-nums">× {qty}</div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                      单价 {state.detailData?.currencyCode} {sku.unitPrice}
+                                    </div>
+                                    <div className="text-sm font-bold">
+                                      {state.detailData?.currencyCode} {sku.lineAmount}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
                           <div className="p-4 bg-slate-50/50 space-y-2 border-t text-sm" data-api-unique-id="ordermanagementview-rae190e488686cab2-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>件数合计</span>
+                              <span className="font-medium text-foreground">
+                                {state.detailData.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} 件
+                              </span>
+                            </div>
                             <div className="flex justify-between text-muted-foreground" data-api-unique-id="ordermanagementview-r3d93493188a704cd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                               <span data-api-unique-id="ordermanagementview-r1f2d872bb16f0f83-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">商品小计</span>
                               <span data-api-unique-id="ordermanagementview-rb7aaa7a20d6669b0-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">{state.detailData.subtotalAmount}</span>

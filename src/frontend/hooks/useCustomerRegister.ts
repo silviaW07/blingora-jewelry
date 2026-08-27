@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { hardNavigate } from '@/frontend/utils/hardNavigate';
 import { registerCustomer } from '@/frontend/actions/CustomerRegister';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
+import { useTranslation } from 'react-i18next';
 import { useUserSession } from '@/tools/FrontendSession';
 
 interface FormFields {
@@ -40,6 +41,7 @@ export interface CustomerRegisterHandlers {
 export const useCustomerRegister = (): { state: CustomerRegisterState, handlers: CustomerRegisterHandlers } => {
   const searchParams = useSearchParams();
   const returnTo = String(searchParams.get('returnTo') || searchParams.get('redirect') || '').trim() || undefined
+  const { t } = useTranslation()
   const { set: setSession } = useUserSession();
 
   const [form, setForm] = useState<FormFields>({
@@ -100,7 +102,7 @@ export const useCustomerRegister = (): { state: CustomerRegisterState, handlers:
       const target = returnTo ? decodeURIComponent(returnTo) : '/'
       hardNavigate(target.startsWith('/') ? target : '/')
     } catch (error: any) {
-      setGlobalError(error.message || '注册请求失败，请稍后重试');
+      setGlobalError(error.message || t('auth.registerFailed'));
     } finally {
       setIsSubmitting(false);
     }

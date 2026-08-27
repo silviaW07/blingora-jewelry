@@ -378,16 +378,14 @@ export const getHomeRecommendZones = async (input?: {
       const items = zone.items.reduce<Array<HomeRecommendProductCard | HomeRecommendCategoryCard | HomeRecommendSideNavItem>>((acc, item) => {
         if (item.entityType === 'PRODUCT') {
           const product = item.product
-          if (!product || (product.status !== 'ACTIVE' && product.status !== 'DRAFT')) {
+          if (!product || product.status !== 'ACTIVE') {
             return acc
           }
 
-          const isDraft = product.status === 'DRAFT'
           const sortedSkus = [...product.skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
           const defaultSku = sortedSkus[0]
 
-          // 草稿展示商品允许无 SKU；上架商品仍需至少一个 SKU 才展示
-          if (!isDraft && !defaultSku) {
+          if (!defaultSku) {
             return acc
           }
 

@@ -7,6 +7,7 @@ import {
   withResult,
   UserRole,
 } from '@/frontend/action_utils'
+import { isStorefrontVisibleProduct } from '@/shared/storefrontProductVisibility'
 
 // ===== Types =====
 
@@ -521,6 +522,7 @@ export const reorderCustomerOrder = requireRole([UserRole.CUSTOMER])(
           product: {
             select: {
               status: true,
+              goodsStatus: true,
               tradeInfoJson: true,
               category: { select: { status: true } },
             },
@@ -571,7 +573,7 @@ export const reorderCustomerOrder = requireRole([UserRole.CUSTOMER])(
           skip('SKU_NOT_FOUND')
           continue
         }
-        if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
+        if (!isStorefrontVisibleProduct(sku.product) || sku.product.category.status !== 'ACTIVE') {
           skip('PRODUCT_UNAVAILABLE')
           continue
         }

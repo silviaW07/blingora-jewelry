@@ -43,7 +43,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
             <div>
               <h1 className="font-header text-2xl font-bold tracking-tight">物流渠道配置</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                配置快递阶梯价 / 海运按公斤（人民币 ¥），支持渠道系数。前台结账按购物车重量自动计费。
+                配置快递阶梯价、海运阶梯价或海运按公斤（人民币 ¥），支持渠道系数。前台结账按购物车重量自动计费。
               </p>
             </div>
             <Button size="sm" onClick={handlers.openCreateModal}>
@@ -137,7 +137,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                           <TableCell className="font-medium">{item.channel_name}</TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {SHIPPING_BILLING_MODE_LABELS[item.channel_billingMode]}
+                              {SHIPPING_BILLING_MODE_LABELS[item.channel_billingMode] || item.channel_billingMode}
                             </Badge>
                           </TableCell>
                           <TableCell>{item.channel_estimatedTime}</TableCell>
@@ -235,6 +235,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="EXPRESS_TIER">快递阶梯价</SelectItem>
+                      <SelectItem value="SEA_TIER">海运阶梯价</SelectItem>
                       <SelectItem value="SEA_PER_KG">海运按公斤</SelectItem>
                     </SelectContent>
                   </Select>
@@ -279,7 +280,9 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {billingMode === 'EXPRESS_TIER'
                       ? '快递阶梯价：按重量匹配下一档（≤maxKg），取对应固定运费。关闭开关表示该国家不可用。'
-                      : '海运按公斤：重量 ≤ 起重重量取起重运费；超出部分按续重单价加收。关闭开关表示该国家不可用。'}
+                      : billingMode === 'SEA_TIER'
+                        ? '海运阶梯价：按重量落入的档位收取固定运费（例如 ≤12kg / ≤21kg / ≤30kg）。关闭开关表示该国家不可用。'
+                        : '海运按公斤：重量 ≤ 起重重量取起重运费；超出部分按续重单价加收。关闭开关表示该国家不可用。'}
                   </p>
                 </div>
 
@@ -309,7 +312,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
 
                         {!enabled ? (
                           <p className="text-xs text-muted-foreground">该国家暂不提供此渠道</p>
-                        ) : billingMode === 'EXPRESS_TIER' && rule && 'tiers' in rule ? (
+                        ) : (billingMode === 'EXPRESS_TIER' || billingMode === 'SEA_TIER') && rule && 'tiers' in rule ? (
                           <div className="space-y-2">
                             {rule.tiers.map((tier, index) => (
                               <div

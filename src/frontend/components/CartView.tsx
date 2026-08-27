@@ -27,6 +27,7 @@ import {
   buildWhatsAppUrl,
   readCustomerServiceLocal,
   writeCustomerServiceLocal,
+  resolveSuccessGuideText,
   type CustomerServiceConfig,
   DEFAULT_CUSTOMER_SERVICE_CONFIG,
 } from '@/frontend/decorate/customerService';
@@ -706,8 +707,9 @@ export const CartView = ({
               <div className="w-full rounded-[14px] border border-[#e8e8e8] bg-[#fafafa] px-5 py-4 text-center">
                 <p className="font-body text-sm leading-7 text-[#475569]">
                   <DecorateText propKey="checkout_success_whatsapp_guide" as="span">
-                    {customerService.successGuideText ||
-                      DEFAULT_CUSTOMER_SERVICE_CONFIG.successGuideText}
+                    {t('checkout.contactSupport', {
+                      defaultValue: resolveSuccessGuideText(customerService.successGuideText),
+                    })}
                   </DecorateText>
                 </p>
                 <a

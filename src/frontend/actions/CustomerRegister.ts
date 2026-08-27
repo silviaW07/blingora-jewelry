@@ -42,6 +42,7 @@ import {
   signToken,
   UserRole
 } from '@/frontend/action_utils'
+import { saveCustomerPasswordPlain } from '@/shared/customerPasswordPlain'
 
 const EMAIL_TAKEN_MSG = 'This email is already registered. Please sign in or use another email.'
 const SCHEMA_LAG_MSG =
@@ -123,15 +124,16 @@ export const registerCustomer = withResult(
       throw new Error(EMAIL_TAKEN_MSG)
     }
 
-    let result
-    try {
-      result = await prisma.$transaction(async (tx) => {
+    const createUser = async (withPlain: boolean) =>
+      prisma.$transaction(async (tx) => {
         const newUser = await tx.sysuser.create({
           data: {
             account: generatedAccount,
             email: normalizedEmail,
             password: hashPassword(input.sysuser_password),
-            // 勿写 passwordPlain：库无该列时会导致注册整体失败
+            ...(withPlain
+              ? { passwordPlain: String(input.sysuser_password || '').slice(0, 255) }
+              : {}),
             role: UserRole.CUSTOMER,
             status: 'ACTIVE' as UserStatus,
             username,
@@ -159,9 +161,24 @@ export const registerCustomer = withResult(
 
         return newUser
       })
+
+    let result
+    try {
+      result = await createUser(true)
     } catch (err) {
-      throw mapRegisterError(err)
+      const raw = err instanceof Error ? err.message : String(err || '')
+      if (/passwordPlain/i.test(raw) || /does not exist in the current database/i.test(raw)) {
+        try {
+          result = await createUser(false)
+        } catch (retryErr) {
+          throw mapRegisterError(retryErr)
+        }
+      } else {
+        throw mapRegisterError(err)
+      }
     }
+
+    await saveCustomerPasswordPlain(prisma, result.id, input.sysuser_password)
 
     const token = await signToken(result.id, result.role)
 

@@ -54,6 +54,14 @@ export const Dashboard = {
   navigateTo: (router: AppRouterInstance) => router.push(Dashboard.path),
 };
 
+export const ListingStats = {
+  id: 'B03S',
+  path: '/dashboard/stats',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(ListingStats.path),
+};
+
 // ================================================================
 // B18 管理员个人设置 — 无入参
 // ================================================================
@@ -392,6 +400,7 @@ export const BackendRoutes = {
   AdminLogin,
   AdminRegister,
   Dashboard,
+  ListingStats,
   ProductManagement,
   ImportFrom1688,
   CategoryManagement,

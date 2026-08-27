@@ -620,7 +620,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     );
   }
 
-  if (!product) {
+  if (!product || product.status !== 'ACTIVE') {
     return withStorefrontHeader(
       <section className="flex min-h-[60vh] w-full items-center justify-center bg-[#FFF5F5]">
         <div className="flex flex-col items-center gap-4 text-[#64748B]">
@@ -645,12 +645,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
   return withStorefrontHeader(
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
-      {!isPurchasable ? (
-        <div className="border-b border-[#e5e5e5] bg-[#fff7ed] px-4 py-3 text-center text-sm font-medium text-[#9a3412]">
-          {t('product.unavailable', { status: t(PRODUCT_STATUS_I18N[product.status]) })}
-        </div>
-      ) : null}
-
       <div className="storefront-container py-5">
         <div className="product-detail-layout">
           {/* ===== 主图区 ===== */}

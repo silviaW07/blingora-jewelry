@@ -1644,7 +1644,9 @@ export const useProductCategory = (
     const isEnded = totalSeconds <= 0
 
     return {
-      message: isEnded ? '活动已结束' : promotionConfig.message,
+      message: isEnded
+        ? t('home.promoEnded', { defaultValue: 'This promotion has ended' })
+        : promotionConfig.message,
       isActive: !isEnded,
       isEnded,
       countdown: {
@@ -1655,7 +1657,7 @@ export const useProductCategory = (
       },
       colors
     }
-  }, [promotionConfig, promotionNow])
+  }, [promotionConfig, promotionNow, t])
 
   const handleAddToCart = async (item: ProductCardItem) => {
     if (!userSession.token?.trim()) {

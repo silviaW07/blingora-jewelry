@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport'
+import { containsChinese } from '@/shared/productKeywordDictionary'
 
 /** 全站客服（WhatsApp）配置 —— 接入页面可视化装修 */
 
@@ -61,7 +62,23 @@ export const DEFAULT_CUSTOMER_SERVICE_CONFIG: CustomerServiceConfig = {
   floatBottom: 24,
   floatRight: 24,
   floatLeft: 24,
-  successGuideText: '如有付款问题，请点击联系客服',
+  successGuideText: 'If you have a payment issue, tap to contact support',
+}
+
+const SUCCESS_GUIDE_ZH_TO_EN: Record<string, string> = {
+  请点击联系客服: 'Please tap to contact support',
+  '如有付款问题，请点击联系客服': 'If you have a payment issue, tap to contact support',
+  如有付款问题请点击联系客服: 'If you have a payment issue, tap to contact support',
+}
+
+/** Storefront never shows Chinese; map known 客服文案 then fall back to English. */
+export function resolveSuccessGuideText(raw?: string | null): string {
+  const text = String(raw || '').trim()
+  if (!text) return DEFAULT_CUSTOMER_SERVICE_CONFIG.successGuideText
+  const mapped = SUCCESS_GUIDE_ZH_TO_EN[text]
+  if (mapped) return mapped
+  if (containsChinese(text)) return DEFAULT_CUSTOMER_SERVICE_CONFIG.successGuideText
+  return text
 }
 
 export function normalizeWhatsappNumber(raw?: string | null): string {
@@ -183,8 +200,7 @@ export function normalizeCustomerServiceConfig(
     floatEnabled: Boolean(merged.floatEnabled),
     floatSize: clampFloatSize(Number(merged.floatSize)),
     ...anchors,
-    successGuideText:
-      String(merged.successGuideText || '').trim() || DEFAULT_CUSTOMER_SERVICE_CONFIG.successGuideText,
+    successGuideText: resolveSuccessGuideText(merged.successGuideText),
   }
 }
 

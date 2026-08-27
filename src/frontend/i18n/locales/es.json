@@ -69,7 +69,8 @@
     "accessories": "Accesorios",
     "bags": "Bolsos",
     "cosmetics": "Cosméticos",
-    "shoes": "Zapatos"
+    "shoes": "Zapatos",
+    "noCategories": "Aún no hay categorías"
   },
   "wishlist": {
     "description": "Los productos que te gustan — toca el corazón en una tarjeta para guardarlos aquí.",
@@ -109,7 +110,8 @@
   "home": {
     "zone_popular_jewelry": "Joyería popular",
     "zone_bag_picks": "Bolsos recomendados",
-    "buyer_show": "Buyer show"
+    "buyer_show": "Buyer show",
+    "promoEnded": "Esta promoción ha terminado"
   },
   "color": {
     "coffee": "Café",
@@ -200,6 +202,11 @@
       "米白色": "Blanco roto",
       "乳白色": "Marfil",
       "象牙白": "Marfil",
+      "如图所示": "Como en la foto",
+      "如图": "Como en la foto",
+      "看图": "Como en la foto",
+      "见图": "Como en la foto",
+      "按图": "Como en la foto",
       "香槟金": "Oro champán",
       "玫瑰金": "Oro rosa",
       "黑白色": "Blanco y negro",
@@ -353,6 +360,8 @@
     "statusInactive": "Inactivo",
     "description": "Descripción",
     "defaultSpec": "Predeterminado",
+    "asPictured": "Como en la foto",
+    "optionFallback": "Opción",
     "sizeOptions": "Tallas",
     "specOptions": "Opciones",
     "noOptions": "No hay opciones disponibles",
@@ -460,12 +469,18 @@
     "recipient": "Destinatario: {{name}}",
     "editAddress": "Editar dirección de envío",
     "fillAddress": "Dirección y confirmación",
+    "smartParse": "Reconocimiento inteligente (pega la dirección completa)",
+    "smartParsePlaceholder": "p. ej. John Smith 13800138000 123 Main St, CA 90001",
+    "smartParseFilled": "Campos de dirección rellenados desde el texto pegado. Puedes editarlos.",
+    "phone": "Teléfono",
+    "phonePlaceholder": "Móvil / número de contacto",
     "saveAddressFirst": "Guarda primero la dirección de envío para ver los métodos disponibles.",
     "noChannels": "No hay canales de envío para este país. Contacta soporte o cambia de país.",
     "clickEditAddress": "Haz clic para editar la dirección",
     "addressConfirmed": "Dirección confirmada. Cargando métodos de envío",
     "addressSavedDefault": "Dirección guardada y establecida como predeterminada",
     "addressSaveFailed": "No se pudo guardar la dirección; puedes continuar con el pago",
+    "contactSupport": "Si tienes un problema de pago, toca para contactar a soporte",
     "selectShipping": "Selecciona un método de envío",
     "noOrderableItems": "No hay artículos disponibles para pedir",
     "placeOrderFailed": "No se pudo realizar el pedido. Inténtalo de nuevo.",

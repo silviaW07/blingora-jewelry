@@ -23,14 +23,48 @@ export interface UpdateAdminProfile_Input {
 }
 
 export interface KpiStats_Output {
-  // data-from: product-id | 聚合计算总数
+  // data-from: product-id | 全部商品（含草稿）
   totalProductCount: number;
+  // data-from: product-id | 当前前台上架数
+  listedProductCount: number;
+  weekListedCount: number;
+  monthListedCount: number;
+  prevWeekListedCount: number;
+  prevMonthListedCount: number;
+  monthOverMonthPercent: number;
+  weekOverWeekPercent: number;
+  weekListedDelta: number;
+  monthListedDelta: number;
   // data-from: importtask-id | 聚合计算今日任务数
   todayImportCount: number;
   // data-from: productsku-id | 聚合计算低库存数
   lowStockAlertCount: number;
   // data-from: sysuser-id | 聚合计算新注册买家数
   newRegisteredUserCount: number;
+  sources: ListingSourceRow_Output[];
+}
+
+export interface ListingSourceRow_Output {
+  source: string;
+  label: string;
+  listedCount: number;
+  weekCount: number;
+  monthCount: number;
+  sharePercent: number;
+}
+
+export interface PeriodCount_Output {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface ListingStatsDetail_Output {
+  generatedAt: string;
+  listedProductCount: number;
+  weeks: PeriodCount_Output[];
+  months: PeriodCount_Output[];
+  sources: ListingSourceRow_Output[];
 }
 
 export interface ImportTaskOverview_Output {
@@ -87,6 +121,41 @@ export interface RecentUser_Output {
   avatarUrl: string | null;
   // data-from: sysuser-createdAt
   createdAt: Date;
+}
+
+export interface ShelfBrandCount_Output {
+  id: string;
+  name: string;
+  slug: string | null;
+  count: number;
+}
+
+export interface ShelfL2Node_Output {
+  id: string;
+  name: string;
+  slug: string | null;
+  count: number;
+  emptyBrandCount: number;
+  unmatchedBrandCount: number;
+  brands: ShelfBrandCount_Output[];
+}
+
+export interface ShelfL1Node_Output {
+  id: string;
+  name: string;
+  slug: string | null;
+  count: number;
+  emptyChildCount: number;
+  unmatchedL2Count: number;
+  children: ShelfL2Node_Output[];
+}
+
+export interface CategoryBrandShelfTree_Output {
+  generatedAt: string;
+  activeProductCount: number;
+  emptyL2Count: number;
+  emptyBrandSlotCount: number;
+  tree: ShelfL1Node_Output[];
 }
 
 // ===== Input =====
@@ -184,3 +253,17 @@ declare function getRecentProducts(): Promise<RecentProduct_Output[]>;
  *   2. [返回结果]: 映射为 RecentUser_Output 数组并返回
  */
 declare function getRecentUsers(): Promise<RecentUser_Output[]>;
+
+/**
+ * @requires: ADMIN
+ * @Prisma_Model: category, product, product_category_relations
+ * @Description: 前台货架树：一级类目 → 二级类目 → 品牌，统计 ACTIVE 上架商品数，用于补货缺口监控
+ */
+declare function getCategoryBrandShelfTree(): Promise<CategoryBrandShelfTree_Output>;
+
+/**
+ * @requires: ADMIN
+ * @Prisma_Model: product
+ * @Description: 上架数据详情：近 12 周 / 12 月及上传途径拆分
+ */
+declare function getListingStatsDetail(): Promise<ListingStatsDetail_Output>;

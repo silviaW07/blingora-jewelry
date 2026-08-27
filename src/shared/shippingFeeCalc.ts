@@ -1,13 +1,14 @@
 /**
- * 物流运费计算：快递阶梯价 / 海运按公斤，统一人民币（¥）
+ * 物流运费计算：快递阶梯价 / 海运按公斤 / 海运阶梯价，统一人民币（¥）
  * 后台配置与前台结账共用。
  */
 
-export type ShippingBillingMode = 'EXPRESS_TIER' | 'SEA_PER_KG'
+export type ShippingBillingMode = 'EXPRESS_TIER' | 'SEA_PER_KG' | 'SEA_TIER'
 
 export const SHIPPING_BILLING_MODE_LABELS: Record<ShippingBillingMode, string> = {
   EXPRESS_TIER: '快递阶梯价',
   SEA_PER_KG: '海运按公斤',
+  SEA_TIER: '海运阶梯价',
 }
 
 export const DEFAULT_CHANNEL_COEFFICIENT = 1
@@ -51,6 +52,10 @@ function roundMoney(n: number): number {
 
 export function formatShippingFeeCny(amount: number): string {
   return `¥${roundMoney(amount).toFixed(2)}`
+}
+
+export function isWeightTierBillingMode(mode: ShippingBillingMode): boolean {
+  return mode === 'EXPRESS_TIER' || mode === 'SEA_TIER'
 }
 
 export function isExpressRule(rule: CountryShippingRule | null | undefined): rule is ExpressCountryRule {
@@ -132,7 +137,9 @@ export function normalizeSeaRule(raw: unknown): SeaCountryRule | null {
 }
 
 export function normalizeBillingMode(raw: unknown): ShippingBillingMode {
-  return raw === 'SEA_PER_KG' ? 'SEA_PER_KG' : 'EXPRESS_TIER'
+  if (raw === 'SEA_PER_KG') return 'SEA_PER_KG'
+  if (raw === 'SEA_TIER') return 'SEA_TIER'
+  return 'EXPRESS_TIER'
 }
 
 export function normalizeChannelCoefficient(raw: unknown): number {
@@ -218,6 +225,16 @@ export function emptyExpressRule(): ExpressCountryRule {
   return { tiers: [{ maxKg: 0.5, fee: 0 }] }
 }
 
+export function emptySeaTierRule(): ExpressCountryRule {
+  return {
+    tiers: [
+      { maxKg: 12, fee: 0 },
+      { maxKg: 21, fee: 0 },
+      { maxKg: 30, fee: 0 },
+    ],
+  }
+}
+
 export function emptySeaRule(): SeaCountryRule {
   return {
     baseKg: DEFAULT_SEA_BASE_KG,
@@ -239,6 +256,7 @@ export function summarizeCountryRule(
   }
   const express = normalizeExpressRule(rule)
   if (!express) return null
+  const prefix = mode === 'SEA_TIER' ? '海运阶梯 ' : ''
   const parts = express.tiers.slice(0, 3).map((t) => `≤${t.maxKg}kg ${formatShippingFeeCny(t.fee)}`)
   const more = express.tiers.length > 3 ? ` +${express.tiers.length - 3}` : ''
   return parts.join(' · ') + more

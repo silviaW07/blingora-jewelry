@@ -484,7 +484,11 @@ export function CheckoutSmartPanel({
         parsed.zipCode
       )
     ) {
-      toast.success('已智能识别并填入地址字段，可继续手动修正')
+      toast.success(
+        t('checkout.smartParseFilled', {
+          defaultValue: 'Address fields filled from the pasted text. You can still edit them.',
+        }),
+      )
     }
   }
 
@@ -624,13 +628,17 @@ export function CheckoutSmartPanel({
           <div className="space-y-1.5">
             <label className="flex items-center gap-1 text-xs font-medium text-[#64748B]">
               <Sparkles className="size-3.5 text-[#f254a6]" />
-              智能识别（粘贴整段地址文本）
+              {t('checkout.smartParse', {
+                defaultValue: 'Smart recognition (paste full address)',
+              })}
             </label>
             <textarea
               value={smartText}
               disabled={disabled || formCollapsed}
               rows={3}
-              placeholder="例如：John Smith 13800138000 123 Main St, CA 90001"
+              placeholder={t('checkout.smartParsePlaceholder', {
+                defaultValue: 'e.g. John Smith 13800138000 123 Main St, CA 90001',
+              })}
               className={cn(
                 inputClassName,
                 'h-auto min-h-[76px] w-full resize-y py-2.5 leading-5',
@@ -672,11 +680,15 @@ export function CheckoutSmartPanel({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#64748B]">电话</label>
+            <label className="text-xs font-medium text-[#64748B]">
+              {t('checkout.phone', { defaultValue: 'Phone' })}
+            </label>
             <Input
               value={form.phone}
               disabled={disabled || formCollapsed}
-              placeholder="手机号 / 联系电话"
+              placeholder={t('checkout.phonePlaceholder', {
+                defaultValue: 'Mobile / contact number',
+              })}
               className={inputClassName}
               onChange={(event) => updateForm({ phone: event.target.value })}
             />

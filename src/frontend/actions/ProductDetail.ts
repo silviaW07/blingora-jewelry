@@ -26,6 +26,7 @@ import {
 } from '@/shared/minOrderQty'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
+import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 
 // ===== Enums =====
 /** 商品状态：草稿(DRAFT) | 上架(ACTIVE) | 下架(INACTIVE) */
@@ -407,6 +408,7 @@ export const getProductDetail = withResult(
           name: true,
           productCode: true,
           status: true,
+          goodsStatus: true,
           source: true,
           mainImageUrl: true,
           galleryJson: true,
@@ -499,7 +501,7 @@ export const getProductDetail = withResult(
       }),
     ])
 
-    if (!product) {
+    if (!product || !isStorefrontVisibleProduct(product) || product.category?.status !== 'ACTIVE') {
       throw storefrontError('product.errors.unavailable')
     }
 
@@ -541,7 +543,7 @@ export const getProductDetail = withResult(
         isRealSizeValue(storedSizeLabel) &&
         !attrs.some(attr => isSizeAttributeName(attr.name) && isRealSizeValue(attr.value))
       ) {
-        attrs.push({ name: '尺码', value: storedSizeLabel })
+        attrs.push({ name: 'Size', value: storedSizeLabel })
       }
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: sku.price.toNumber(),
@@ -644,11 +646,7 @@ export const getProductDetail = withResult(
 export const getDecoratePreviewProduct = withResult(
   async (): Promise<GetDecoratePreviewProductOutput | null> => {
     const product = await prisma.product.findFirst({
-      where: {
-        status: {
-          in: ['ACTIVE', 'DRAFT'],
-        },
-      },
+      where: storefrontVisibilityWhere(),
       select: {
         id: true,
         slug: true,
@@ -676,9 +674,9 @@ export const getRelatedProducts = withResult(
     const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
     const products = await prisma.product.findMany({
       where: {
+        ...storefrontVisibilityWhere(),
         categoryId: input.categoryId,
         id: { not: input.excludeProductId },
-        status: 'ACTIVE',
         category: {
           status: 'ACTIVE'
         }
@@ -748,7 +746,7 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     for (const line of lines) {
       const sku = skuById.get(line.productSkuId)
       if (!sku) throw storefrontError('product.errors.skuMissing')
-      if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
+      if (!isStorefrontVisibleProduct(sku.product) || sku.product.category.status !== 'ACTIVE') {
         throw storefrontError('product.errors.notPurchasable')
       }
       if (!isStorefrontQtyAllowed(sku.stock, line.quantity)) {
@@ -895,7 +893,7 @@ export const setCartSkuQuantity = requireRole([UserRole.CUSTOMER])(
     if (!sku) {
       throw storefrontError('product.errors.skuMissing')
     }
-    if (sku.product.status !== 'ACTIVE' || sku.product.category.status !== 'ACTIVE') {
+    if (!isStorefrontVisibleProduct(sku.product) || sku.product.category.status !== 'ACTIVE') {
       throw storefrontError('product.errors.notPurchasable')
     }
 

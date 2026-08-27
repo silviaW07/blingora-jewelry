@@ -3,6 +3,7 @@
 import { getProductDetail } from '@/frontend/actions/ProductDetail'
 import type { ProductDetailData } from '@/frontend/actions/ProductDetail'
 import { getClientPreferredLang } from '@/frontend/i18n'
+import { isStorefrontVisibleProduct } from '@/shared/storefrontProductVisibility'
 
 type CacheEntry = {
   product: ProductDetailData
@@ -45,6 +46,10 @@ export function readCachedProductDetail(
     memory.delete(key)
     return null
   }
+  if (!isStorefrontVisibleProduct(entry.product)) {
+    memory.delete(key)
+    return null
+  }
   return entry.product
 }
 
@@ -53,6 +58,7 @@ export function writeCachedProductDetail(
   lang?: string | null,
   slug?: string | null,
 ) {
+  if (!isStorefrontVisibleProduct(product)) return
   const key = makeKey(product.id, slug, lang)
   memory.delete(key)
   memory.set(key, { product, fetchedAt: Date.now() })

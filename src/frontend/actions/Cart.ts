@@ -103,6 +103,7 @@ import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
 import { isStorefrontInStock, isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
+import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 
 const resolveProductMinOrderQty = (tradeInfoJson: unknown) => Math.max(1, Number((tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
 const resolveEffectiveSkuMinOrderQty = (productMinOrderQty: number, skuMinOrderQty: unknown) => {
@@ -564,7 +565,7 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
 
     const products = await prisma.product.findMany({
       where: {
-        status: 'ACTIVE',
+        ...storefrontVisibilityWhere(),
         category: { status: 'ACTIVE' }
       },
       select: {

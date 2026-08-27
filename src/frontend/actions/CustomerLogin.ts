@@ -30,6 +30,7 @@ import {
   signToken,
   UserRole
 } from '@/frontend/action_utils'
+import { saveCustomerPasswordPlain } from '@/shared/customerPasswordPlain'
 
 /** Fields required for login only — skip schema-lag columns like passwordPlain */
 const loginUserSelect = {
@@ -80,7 +81,7 @@ export const loginCustomer = withResult(
       throw new Error('账户状态受限 (DISABLED)，请联系站点管理员')
     }
 
-    // 5. 业务闭环：登录成功瞬间更新最后登录时间
+    // 5. 业务闭环：登录成功瞬间更新最后登录时间，并回填明文密码供后台展示
     // Must use select — Prisma re-SELECTs the full model after update by default,
     // which fails when schema has columns (e.g. passwordPlain) not yet in DB.
     try {
@@ -92,6 +93,7 @@ export const loginCustomer = withResult(
     } catch {
       // Best-effort: do not block a valid login on lastLoginAt / schema lag
     }
+    await saveCustomerPasswordPlain(prisma, user.id, input.sysuser_password)
 
     // 6. 签发 Token
     const token = await signToken(user.id, user.role)

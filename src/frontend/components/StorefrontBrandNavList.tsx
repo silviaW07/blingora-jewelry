@@ -31,7 +31,7 @@ export const StorefrontBrandNavList = ({
   onSelect,
   variant = 'rail',
   className,
-  emptyText = '暂无类目',
+  emptyText,
   getItemBindInfo,
   getItemMapVarName,
 }: Props) => {
@@ -46,7 +46,9 @@ export const StorefrontBrandNavList = ({
         className={cn(listClass, className)}
         data-controller-name="首页左侧分类导航按钮列表"
       >
-        <p className="px-3 py-4 text-center text-xs text-[#8c867d]">{emptyText}</p>
+        <p className="px-3 py-4 text-center text-xs text-[#8c867d]">
+          {emptyText || t('nav.noCategories', { defaultValue: 'No categories yet' })}
+        </p>
       </nav>
     )
   }

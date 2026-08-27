@@ -294,6 +294,7 @@ import { normalizePosterLinkUrl } from '@/shared/posterLink'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isProductTypeCategory } from '@/shared/categoryMatchGuards'
+import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
@@ -577,8 +578,10 @@ const buildProductWhere = (
   keywordGroupId?: string,
   searchKeyword?: string,
 ) => {
+  const vis = storefrontVisibilityWhere()
   const where: any = {
-    status: 'ACTIVE',
+    status: vis.status,
+    AND: [...vis.AND],
   }
 
   const orConditions: any[] = []
@@ -762,19 +765,19 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
     const [byCategory, byBrandCategory, byRelation] = await Promise.all([
       prisma.product.groupBy({
         by: ['categoryId'],
-        where: { status: 'ACTIVE', categoryId: { in: brandIds } },
+        where: { ...storefrontVisibilityWhere(), categoryId: { in: brandIds } },
         _count: { _all: true },
       }),
       prisma.product.groupBy({
         by: ['brandCategoryId'],
-        where: { status: 'ACTIVE', brandCategoryId: { in: brandIds } },
+        where: { ...storefrontVisibilityWhere(), brandCategoryId: { in: brandIds } },
         _count: { _all: true },
       }),
       prisma.product_category_relations.groupBy({
         by: ['categoryId'],
         where: {
           categoryId: { in: brandIds },
-          product: { status: 'ACTIVE' },
+          product: storefrontVisibilityWhere(),
         },
         _count: { _all: true },
       }),
@@ -2018,7 +2021,7 @@ export const getWishlistProducts = withResult(async (
   const rows = await prisma.product.findMany({
     where: {
       id: { in: ids },
-      status: 'ACTIVE',
+      ...storefrontVisibilityWhere(),
       category: { status: 'ACTIVE' },
     },
     select: {

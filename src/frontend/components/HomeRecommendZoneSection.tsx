@@ -221,8 +221,7 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
 
   const title = (
     <h3
-      className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
-      style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
+      className="w-full px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline break-words whitespace-normal sm:px-2.5"
       title={item.productName}
     >
       {item.productName}

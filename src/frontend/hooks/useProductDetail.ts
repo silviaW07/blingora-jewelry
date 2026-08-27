@@ -207,7 +207,7 @@ export const useProductDetail = (seed?: {
     try {
       const lang = typeof window !== 'undefined' ? getClientPreferredLang() : 'en'
       const cached = readCachedProductDetail(productId, slug, lang)
-      if (cached) {
+      if (cached && cached.status === 'ACTIVE') {
         setProduct(cached)
         setActiveImage(cached.mainImageUrl)
         setError(null)
@@ -236,6 +236,12 @@ export const useProductDetail = (seed?: {
       }
       setError(null)
       const data = await getProductDetail({ productId, slug, lang })
+      if (data.product.status !== 'ACTIVE') {
+        setProduct(null)
+        setError(null)
+        setLoading(false)
+        return
+      }
       writeCachedProductDetail(data.product, lang, slug)
       setProduct(data.product)
       setActiveImage(data.product.mainImageUrl)
@@ -252,7 +258,12 @@ export const useProductDetail = (seed?: {
           setRelatedProducts([])
         })
     } catch (err: any) {
-      setError(err.message || 'Failed to load product')
+      const raw = String(err?.message || '')
+      const unavailable =
+        raw === 'product.errors.unavailable' ||
+        /unavailable|不存在或已下架|not found/i.test(raw)
+      setProduct(null)
+      setError(unavailable ? null : raw || 'Failed to load product')
       setLoading(false)
     }
   }, [isDecorateMode, productId, router, slug])

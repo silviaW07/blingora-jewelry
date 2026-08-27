@@ -1,4 +1,5 @@
 import type { ProductDetailData } from '@/frontend/actions/ProductDetail'
+import { isStorefrontVisibleProduct } from '@/shared/storefrontProductVisibility'
 
 const PROJECT_ID =
   process.env.NEXT_PUBLIC_PROJECT_ID || 'PROJ_fcb9e6ee_snap_20260726_092922_893'
@@ -30,7 +31,8 @@ export async function loadProductDetail(input: {
     const raw = await resp.json()
     const data = raw?.json ?? raw
     const product = data?.product as ProductDetailData | undefined
-    return product?.id ? product : null
+    if (!product?.id || !isStorefrontVisibleProduct(product)) return null
+    return product
   } catch (err) {
     console.error('[loadProductDetail]', err)
     return null

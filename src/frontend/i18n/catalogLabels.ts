@@ -102,6 +102,11 @@ const COLOR_ALIASES: Record<string, string> = {
   purple: 'color.purple',
   橙色: 'color.orange',
   orange: 'color.orange',
+  如图所示: 'product.asPictured',
+  如图: 'product.asPictured',
+  看图: 'product.asPictured',
+  见图: 'product.asPictured',
+  按图: 'product.asPictured',
 }
 
 function lookupAlias(map: Record<string, string>, raw: unknown): string | undefined {
@@ -179,7 +184,13 @@ export function translateColorName(t: TFunction, raw?: string | null): string {
   const translated = translateColorStyleText(value, t)
   if (!containsChinese(translated)) return translated
   const stripped = stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim()
-  return stripped || translated
+  if (stripped && !containsChinese(stripped)) return stripped
+  if (/如图|看图|见图|按图/.test(value)) {
+    const pictured = t('product.asPictured')
+    return pictured && pictured !== 'product.asPictured' ? pictured : 'As pictured'
+  }
+  const option = t('product.optionFallback')
+  return option && option !== 'product.optionFallback' ? option : 'Option'
 }
 
 /**
@@ -202,5 +213,7 @@ export function translateAttributeValue(t: TFunction, raw?: string | null): stri
     .replace(/\s*\+\s*/g, ' + ')
   translated = translated.replace(/\s+/g, ' ').trim()
   if (!containsChinese(translated)) return translated
-  return stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim() || translated
+  const stripped = stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim()
+  if (stripped && !containsChinese(stripped)) return stripped
+  return translateColorName(t, value) || 'Option'
 }

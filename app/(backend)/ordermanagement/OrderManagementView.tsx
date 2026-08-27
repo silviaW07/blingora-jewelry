@@ -392,35 +392,49 @@ export const OrderManagementView = ({ state, handlers }: Props) => {
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                          <Table>
-                            <TableBody>
-                              {state.detailData.items.map((sku) => (
-                                <TableRow key={sku.id} className="hover:bg-transparent">
-                                  <TableCell className="w-14 pl-4 py-4">
-                                    <div className="w-12 h-12 rounded border bg-slate-50 overflow-hidden">
-                                      {sku.mainImageUrl && (
-                                        <EditableImg 
-                                          propKey={`sku-${sku.id}`}
-                                          keywords={sku.mainImageUrl}
-                                          description={sku.productName}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      )}
+                          <div className="divide-y">
+                            {state.detailData.items.map((sku) => {
+                              const qty = Math.max(0, Number(sku.quantity) || 0)
+                              return (
+                                <div key={sku.id} className="flex items-start gap-3 px-4 py-4">
+                                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded border bg-slate-50">
+                                    {sku.mainImageUrl ? (
+                                      <EditableImg
+                                        propKey={`sku-${sku.id}`}
+                                        keywords={sku.mainImageUrl}
+                                        description={sku.productName}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : null}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-bold leading-5 break-words whitespace-normal">
+                                      {sku.productName}
                                     </div>
-                                  </TableCell>
-                                  <TableCell className="py-4">
-                                    <div className="text-sm font-bold line-clamp-1">{sku.productName}</div>
-                                    <div className="text-[10px] text-muted-foreground font-mono mt-0.5">SKU: {sku.skuCode}</div>
-                                  </TableCell>
-                                  <TableCell className="text-right pr-4 py-4 whitespace-nowrap">
-                                    <div className="text-xs">x {sku.quantity}</div>
-                                    <div className="text-sm font-bold">{state.detailData?.currencyCode} {sku.lineAmount}</div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                                    <div className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">
+                                      SKU: {sku.skuCode}
+                                    </div>
+                                  </div>
+                                  <div className="w-[7.5rem] shrink-0 text-right">
+                                    <div className="text-sm font-bold tabular-nums">× {qty}</div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                      单价 {state.detailData?.currencyCode} {sku.unitPrice}
+                                    </div>
+                                    <div className="text-sm font-bold">
+                                      {state.detailData?.currencyCode} {sku.lineAmount}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
                           <div className="p-4 bg-slate-50/50 space-y-2 border-t text-sm">
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>件数合计</span>
+                              <span className="font-medium text-foreground">
+                                {state.detailData.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} 件
+                              </span>
+                            </div>
                             <div className="flex justify-between text-muted-foreground">
                               <span>商品小计</span>
                               <span>{state.detailData.subtotalAmount}</span>

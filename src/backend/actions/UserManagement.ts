@@ -173,6 +173,7 @@ import {
   UserRole,
   signToken
 } from '@/backend/action_utils'
+import { loadCustomerPasswordPlains } from '@/shared/customerPasswordPlain'
 
 const USD_EXCHANGE_RATE = 6.5
 
@@ -417,20 +418,23 @@ export const getUserList = requireRole([UserRole.ADMIN])(
     }
 
     const emails = Array.from(new Set(users.map(user => user.email.trim().toLowerCase()).filter(Boolean)))
-    const emailOrders = emails.length
-      ? await prisma.orderrecord.findMany({
-          where: {
-            user: {
-              email: { in: emails }
+    const [emailOrders, passwordPlains] = await Promise.all([
+      emails.length
+        ? prisma.orderrecord.findMany({
+            where: {
+              user: {
+                email: { in: emails }
+              }
+            },
+            select: {
+              userId: true,
+              status: true,
+              user: { select: { email: true } }
             }
-          },
-          select: {
-            userId: true,
-            status: true,
-            user: { select: { email: true } }
-          }
-        })
-      : []
+          })
+        : Promise.resolve([] as Array<{ userId: string; status: string; user: { email: string } }>),
+      loadCustomerPasswordPlains(prisma, users.map(user => user.id)),
+    ])
 
     const emailStatusMap = new Map<string, RawOrderStatus[]>()
     for (const order of emailOrders) {
@@ -452,7 +456,9 @@ export const getUserList = requireRole([UserRole.ADMIN])(
         username: user.username,
         whatsapp: user.phone || null,
         email: user.email,
-        passwordPlain: (user as any).passwordPlain || null,
+        passwordPlain: user.role === 'CUSTOMER'
+          ? (passwordPlains.get(user.id) || (user as any).passwordPlain || null)
+          : null,
         role: user.role as SysUserRole,
         status: user.status as SysUserStatus,
         createdAt: user.createdAt.toISOString(),
@@ -622,6 +628,7 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
     const unpaidOrders = orderRecords.filter(order => order.rawStatus === 'PENDING_PAYMENT')
     const cart = user.carts[0]
     const tag = pickPrimaryTag(user.customerTags)
+    const passwordPlains = await loadCustomerPasswordPlains(prisma, [user.id])
 
     return {
       id: user.id,
@@ -629,7 +636,9 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
       username: user.username,
       whatsapp: user.phone || null,
       email: user.email,
-      passwordPlain: (user as any).passwordPlain || null,
+      passwordPlain: user.role === 'CUSTOMER'
+        ? (passwordPlains.get(user.id) || (user as any).passwordPlain || null)
+        : null,
       role: user.role as SysUserRole,
       status: user.status as SysUserStatus,
       createdAt: user.createdAt.toISOString(),

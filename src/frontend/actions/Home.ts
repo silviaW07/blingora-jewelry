@@ -32,6 +32,7 @@ import {
 } from '@/shared/priceCoefficient'
 import { optimizeCatalogImageUrl, resolveCategoryCardImageUrl, resolveCategoryShelfImageUrl } from '@/shared/imageUrl'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 
 type HomeRecommendZoneType = 'PRODUCT' | 'CATEGORY' | 'SIDE_NAV'
 
@@ -283,7 +284,7 @@ export const getHomeRecommendZones = async (input?: {
       prisma.product.groupBy({
         by: ['categoryId'],
         where: {
-          status: 'ACTIVE',
+          ...storefrontVisibilityWhere(),
           categoryId: { in: categoryIds },
         },
         _count: { _all: true },
@@ -292,7 +293,7 @@ export const getHomeRecommendZones = async (input?: {
         by: ['categoryId'],
         where: {
           categoryId: { in: categoryIds },
-          product: { status: 'ACTIVE' },
+          product: storefrontVisibilityWhere(),
         },
         _count: { _all: true },
       }),
@@ -313,7 +314,7 @@ export const getHomeRecommendZones = async (input?: {
       loadProductCounts(),
       prisma.product.findMany({
       where: {
-        status: 'ACTIVE',
+        ...storefrontVisibilityWhere(),
         mainImageUrl: { not: '' },
         OR: [
           { categoryId: { in: fetchCategoryIds } },
@@ -523,16 +524,14 @@ export const getHomeRecommendZones = async (input?: {
         }
         if (item.entityType === 'PRODUCT') {
           const product = item.product
-          if (!product || (product.status !== 'ACTIVE' && product.status !== 'DRAFT')) {
+          if (!product || !isStorefrontVisibleProduct(product)) {
             return acc
           }
 
-          const isDraft = product.status === 'DRAFT'
           const sortedSkus = [...product.skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
           const defaultSku = sortedSkus[0]
 
-          // 草稿展示商品允许无 SKU；上架商品仍需至少一个 SKU 才展示
-          if (!isDraft && !defaultSku) {
+          if (!defaultSku) {
             return acc
           }
 
@@ -836,7 +835,7 @@ export const getBrandShelf = async (input?: {
   }>>()
 
   productResult.list.forEach((item) => {
-    const brandName = item.brand_category_name || '精选推荐'
+    const brandName = item.brand_category_name || 'Featured'
     const current = grouped.get(brandName) || []
     current.push({
       brandName,
@@ -1077,7 +1076,7 @@ const mapActiveProductToItem = (
 }
 
 const activeListedProductWhere = {
-  status: 'ACTIVE' as const,
+  ...storefrontVisibilityWhere(),
   category: {
     status: 'ACTIVE' as const,
   },
@@ -1305,17 +1304,9 @@ const comingTeaserSelect = {
   translationsJson: true,
 } as const
 
-const buildComingTeaserWhere = (teaserCategoryIds: string[]) =>
-  teaserCategoryIds.length > 0
-    ? {
-        OR: [
-          { status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const } },
-          { categoryId: { in: teaserCategoryIds } },
-        ],
-      }
-    : {
-        status: { in: ['DRAFT', 'PREORDER', 'INACTIVE'] as const },
-      }
+const buildComingTeaserWhere = (_teaserCategoryIds: string[]) => ({
+  status: 'PREORDER' as const,
+})
 
 const loadComingTeaserCategoryIds = async () => {
   const teaserCategories = await prisma.category.findMany({
@@ -1335,8 +1326,7 @@ const loadComingTeaserCategoryIds = async () => {
 }
 
 /**
- * Shared product source for Coming:
- * DRAFT / PREORDER / INACTIVE, or teaser categories; soft ACTIVE fallback for demos.
+ * Shared product source for Coming: PREORDER only (draft / off-shelf stay off the storefront).
  */
 const loadComingSoonProductRows = async (take = 500): Promise<ComingSoonProductRow[]> => {
   const teaserCategoryIds = await loadComingTeaserCategoryIds()

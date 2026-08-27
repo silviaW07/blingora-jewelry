@@ -12,6 +12,7 @@ import type {
   StockAlert_Output, 
   RecentProduct_Output, 
   RecentUser_Output,
+  CategoryBrandShelfTree_Output,
   ImportTaskStatus,
   ProductStatus
 } from '@/backend/types/Dashboard';
@@ -24,11 +25,11 @@ import {
   retryImportTask, 
   getStockAlerts, 
   getRecentProducts, 
-  getRecentUsers 
+  getRecentUsers,
+  getCategoryBrandShelfTree,
 } from '@/backend/actions/Dashboard';
 
-// Import Route Params
-import { Dashboard as DashboardRoute, ProductManagement, ImportFrom1688 } from '@/backend/route-params';
+import { Dashboard as DashboardRoute, ProductManagement, ImportFrom1688, ListingStats } from '@/backend/route-params';
 
 /**
  * 接口定义位置红线：必须在本 Hook 文件中直接定义并 export
@@ -68,6 +69,20 @@ export interface UseDashboardState {
    * @Initial: []
    */
   recentProducts: RecentProduct_Output[];
+
+  /**
+   * @State: shelfTree
+   * @Description: 前台一级/二级类目与品牌上架数量树
+   * @Initial: null
+   */
+  shelfTree: CategoryBrandShelfTree_Output | null;
+
+  /**
+   * @State: shelfGapsOnly
+   * @Description: 货盘树是否只显示数量为 0 的缺口
+   * @Initial: false
+   */
+  shelfGapsOnly: boolean;
 
   /**
    * @State: recentUsers
@@ -122,6 +137,8 @@ export interface UseDashboardHandlers {
    */
   handleNavigateToAllProducts: () => void;
 
+  handleNavigateToListingStats: () => void;
+
   /**
    * @Method: handleNavigateToProductEdit
    * @Description: 跳转至特定商品编辑页或商品管理带筛选项
@@ -133,6 +150,8 @@ export interface UseDashboardHandlers {
    * @Description: 一键补货（占位操作）
    */
   handleReplenishStock: (skuCode: string) => void;
+
+  handleToggleShelfGapsOnly: (value: boolean) => void;
 }
 
 /**
@@ -147,6 +166,8 @@ export function useDashboard() {
   const [importTasks, setImportTasks] = useState<ImportTaskOverview_Output[]>([]);
   const [stockAlerts, setStockAlerts] = useState<StockAlert_Output[]>([]);
   const [recentProducts, setRecentProducts] = useState<RecentProduct_Output[]>([]);
+  const [shelfTree, setShelfTree] = useState<CategoryBrandShelfTree_Output | null>(null);
+  const [shelfGapsOnly, setShelfGapsOnly] = useState(false);
   const [recentUsers, setRecentUsers] = useState<RecentUser_Output[]>([]);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [isRetryingTaskId, setIsRetryingTaskId] = useState<string | null>(null);
@@ -173,6 +194,7 @@ export function useDashboard() {
         getStockAlerts(),
         getRecentProducts(),
         getRecentUsers(),
+        getCategoryBrandShelfTree(),
       ]);
 
       // 3. [fetchAllDashboardData]: 若成功，提取返回值并分别 set 到对应状态变量
@@ -181,6 +203,7 @@ export function useDashboard() {
       if (results[2].status === 'fulfilled') setStockAlerts(results[2].value);
       if (results[3].status === 'fulfilled') setRecentProducts(results[3].value);
       if (results[4].status === 'fulfilled') setRecentUsers(results[4].value);
+      if (results[5].status === 'fulfilled') setShelfTree(results[5].value);
 
       // 4. [fetchAllDashboardData]: 若失败，可以通过 toast 提示错误
       const hasError = results.some(r => r.status === 'rejected');
@@ -220,8 +243,21 @@ export function useDashboard() {
     // 3. [startTasksPolling]: 设定 4000 毫秒(4秒) 的 setInterval 定时器定期执行
     const timerId = setInterval(fetchTasks, 4000);
 
-    // 4. [startTasksPolling]: 返回清理函数（clearInterval）
-    return () => clearInterval(timerId);
+    const fetchShelf = async () => {
+      try {
+        const tree = await getCategoryBrandShelfTree();
+        setShelfTree(tree);
+      } catch (error) {
+        console.error("Polling shelf tree failed", error);
+      }
+    };
+    fetchShelf();
+    const shelfTimerId = setInterval(fetchShelf, 15000);
+
+    return () => {
+      clearInterval(timerId);
+      clearInterval(shelfTimerId);
+    };
   }, []);
 
   // ----- Handlers -----
@@ -306,6 +342,10 @@ export function useDashboard() {
     ProductManagement.navigateToAll(router);
   }, [router]);
 
+  const handleNavigateToListingStats = useCallback(() => {
+    ListingStats.navigateTo(router);
+  }, [router]);
+
   /**
    * @Method: handleNavigateToProductEdit
    * @Steps:
@@ -326,6 +366,10 @@ export function useDashboard() {
     toast.success(`SKU: ${skuCode} 已生成缺货工单通知供应商`);
   }, []);
 
+  const handleToggleShelfGapsOnly = useCallback((value: boolean) => {
+    setShelfGapsOnly(value);
+  }, []);
+
   return {
     state: {
       adminProfile,
@@ -333,6 +377,8 @@ export function useDashboard() {
       importTasks,
       stockAlerts,
       recentProducts,
+      shelfTree,
+      shelfGapsOnly,
       recentUsers,
       isInitializing,
       isRetryingTaskId,
@@ -343,8 +389,10 @@ export function useDashboard() {
       handleExportReport,
       handleNavigateToCreateImportTask,
       handleNavigateToAllProducts,
+      handleNavigateToListingStats,
       handleNavigateToProductEdit,
       handleReplenishStock,
+      handleToggleShelfGapsOnly,
     },
   } satisfies { state: UseDashboardState; handlers: UseDashboardHandlers };
 }

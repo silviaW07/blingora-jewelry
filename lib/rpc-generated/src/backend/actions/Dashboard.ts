@@ -18,3 +18,7 @@ export const getRecentProducts = (...args: Parameters<Actions["getRecentProducts
   rpcCall<Awaited<ReturnType<Actions["getRecentProducts"]>>>("src.backend.actions.Dashboard.getRecentProducts", ...args);
 export const getRecentUsers = (...args: Parameters<Actions["getRecentUsers"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getRecentUsers"]>>>("src.backend.actions.Dashboard.getRecentUsers", ...args);
+export const getCategoryBrandShelfTree = (...args: Parameters<Actions["getCategoryBrandShelfTree"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getCategoryBrandShelfTree"]>>>("src.backend.actions.Dashboard.getCategoryBrandShelfTree", ...args);
+export const getListingStatsDetail = (...args: Parameters<Actions["getListingStatsDetail"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getListingStatsDetail"]>>>("src.backend.actions.Dashboard.getListingStatsDetail", ...args);
