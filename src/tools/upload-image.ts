@@ -345,16 +345,23 @@ export async function upload_image_file(
   }
 }
 
-/** Image or video (skip compress). Admin buyer-show gallery. */
+/** Image or video. Images use JPEG/WebP compress; videos re-encode when possible. */
 export async function upload_media_file(file: File, projectId?: string): Promise<string> {
   const isVideo = /^video\//i.test(file.type) || /\.(mp4|webm|mov|m4v)$/i.test(file.name)
   if (isVideo) {
+    let uploadFile = file
+    try {
+      const { compressVideoForUpload } = await import('./compress-video')
+      uploadFile = await compressVideoForUpload(file)
+    } catch (error) {
+      console.warn('[upload] video compression failed, uploading original', error)
+    }
     const maxSize = 80 * 1024 * 1024
-    if (file.size > maxSize) {
+    if (uploadFile.size > maxSize) {
       throw new Error('Video is over 80MB.')
     }
     const project_id = (projectId && projectId.trim()) || DEFAULT_PROJECT_ID
-    return postToUploadEndpoint(PRIMARY_UPLOAD_URL, file, project_id)
+    return postToUploadEndpoint(PRIMARY_UPLOAD_URL, uploadFile, project_id)
   }
   return upload_image_file(file, projectId)
 }

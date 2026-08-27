@@ -3,12 +3,13 @@
  * 后台配置与前台结账共用。
  */
 
-export type ShippingBillingMode = 'EXPRESS_TIER' | 'SEA_PER_KG' | 'SEA_TIER'
+export type ShippingBillingMode = 'EXPRESS_TIER' | 'SEA_PER_KG' | 'SEA_TIER' | 'PARCEL_BAND'
 
 export const SHIPPING_BILLING_MODE_LABELS: Record<ShippingBillingMode, string> = {
   EXPRESS_TIER: '快递阶梯价',
   SEA_PER_KG: '海运按公斤',
   SEA_TIER: '海运阶梯价（首重续重）',
+  PARCEL_BAND: '小包区间价（¥/kg+处理费）',
 }
 
 export const DEFAULT_CHANNEL_COEFFICIENT = 1
@@ -24,7 +25,24 @@ export type ExpressWeightTier = {
 }
 
 export type ExpressCountryRule = {
+  minKg?: number
   tiers: ExpressWeightTier[]
+}
+
+export type ParcelBandTier = {
+  maxKg: number
+  /** 运费（¥/kg） */
+  perKgFee: number
+  /** 处理费（¥/票） */
+  handlingFee: number
+}
+
+/** 小包：命中重量区间后 运费=重量×单价+处理费；超过 capKg 不可用 */
+export type ParcelBandCountryRule = {
+  kind: 'PARCEL_BAND'
+  minKg: number
+  capKg: number
+  tiers: ParcelBandTier[]
 }
 
 export type SeaCountryRule = {
@@ -58,7 +76,11 @@ export type SeaTierCountryRule = {
   tiers: SeaBulkPerKgTier[]
 }
 
-export type CountryShippingRule = ExpressCountryRule | SeaCountryRule | SeaTierCountryRule
+export type CountryShippingRule =
+  | ExpressCountryRule
+  | SeaCountryRule
+  | SeaTierCountryRule
+  | ParcelBandCountryRule
 
 export type CountryRuleMap = Record<string, CountryShippingRule | null>
 
@@ -77,12 +99,24 @@ export function formatShippingFeeCny(amount: number): string {
 }
 
 export function isWeightTierBillingMode(mode: ShippingBillingMode): boolean {
-  return mode === 'EXPRESS_TIER'
+  return mode === 'EXPRESS_TIER' || mode === 'PARCEL_BAND'
+}
+
+export function isParcelBandRule(
+  rule: CountryShippingRule | null | undefined,
+): rule is ParcelBandCountryRule {
+  if (!rule) return false
+  if ((rule as ParcelBandCountryRule).kind === 'PARCEL_BAND') return true
+  const first = Array.isArray((rule as ParcelBandCountryRule).tiers)
+    ? (rule as ParcelBandCountryRule).tiers[0]
+    : null
+  return !!first && typeof first.perKgFee === 'number' && typeof first.handlingFee === 'number'
 }
 
 export function isExpressRule(rule: CountryShippingRule | null | undefined): rule is ExpressCountryRule {
   return (
     !!rule &&
+    !isParcelBandRule(rule) &&
     Array.isArray((rule as ExpressCountryRule).tiers) &&
     typeof (rule as SeaTierCountryRule).baseFee !== 'number'
   )
@@ -132,7 +166,11 @@ export function normalizeExpressRule(raw: unknown): ExpressCountryRule | null {
   }
   if (tiers.length === 0) return null
   tiers.sort((a, b) => a.maxKg - b.maxKg)
-  return { tiers }
+  const minKgRaw = toFiniteNumber(obj.minKg)
+  return {
+    minKg: minKgRaw != null && minKgRaw > 0 ? Number(minKgRaw.toFixed(3)) : 0,
+    tiers,
+  }
 }
 
 const DEFAULT_SEA_TIER_BULK_FROM_KG = 11
@@ -212,6 +250,7 @@ export function normalizeSeaRule(raw: unknown): SeaCountryRule | null {
 
   // 若误存了快递结构，尝试用第一档费用作起重运费
   if (Array.isArray(obj.tiers) && !('baseFee' in obj)) {
+    if (obj.kind === 'PARCEL_BAND' || isParcelBandRule(obj as CountryShippingRule)) return null
     const first = normalizeExpressRule(obj)
     if (!first?.tiers.length) return null
     return {
@@ -232,9 +271,78 @@ export function normalizeSeaRule(raw: unknown): SeaCountryRule | null {
   }
 }
 
+export const AIPAI_USPS_PARCEL_TIERS: ParcelBandTier[] = [
+  { maxKg: 0.1, perKgFee: 81, handlingFee: 18 },
+  { maxKg: 0.2, perKgFee: 82, handlingFee: 19 },
+  { maxKg: 0.453, perKgFee: 82, handlingFee: 19 },
+  { maxKg: 0.7, perKgFee: 83, handlingFee: 19 },
+  { maxKg: 1, perKgFee: 84, handlingFee: 21 },
+  { maxKg: 2, perKgFee: 84, handlingFee: 21 },
+  { maxKg: 5, perKgFee: 84, handlingFee: 21 },
+]
+
+export function emptyParcelBandRule(): ParcelBandCountryRule {
+  return {
+    kind: 'PARCEL_BAND',
+    minKg: 0.05,
+    capKg: 5,
+    tiers: AIPAI_USPS_PARCEL_TIERS.map((tier) => ({ ...tier })),
+  }
+}
+
+export function normalizeParcelBandRule(raw: unknown): ParcelBandCountryRule | null {
+  if (raw === null || raw === undefined || raw === '') return null
+  if (typeof raw !== 'object' || Array.isArray(raw)) return null
+  const obj = raw as Record<string, unknown>
+  const tiersRaw = Array.isArray(obj.tiers) ? obj.tiers : []
+  const tiers: ParcelBandTier[] = []
+  for (const item of tiersRaw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    const maxKg = toFiniteNumber(row.maxKg)
+    const perKgFee = toFiniteNumber(row.perKgFee) ?? toFiniteNumber(row.fee)
+    const handlingFee = toFiniteNumber(row.handlingFee) ?? 0
+    if (maxKg == null || maxKg <= 0 || perKgFee == null || perKgFee < 0) continue
+    tiers.push({
+      maxKg: Number(maxKg.toFixed(3)),
+      perKgFee: roundMoney(perKgFee),
+      handlingFee: roundMoney(Math.max(0, handlingFee)),
+    })
+  }
+  if (tiers.length === 0) return null
+  tiers.sort((a, b) => a.maxKg - b.maxKg)
+  const minKgRaw = toFiniteNumber(obj.minKg)
+  const capKgRaw = toFiniteNumber(obj.capKg)
+  return {
+    kind: 'PARCEL_BAND',
+    minKg: minKgRaw != null && minKgRaw > 0 ? Number(minKgRaw.toFixed(3)) : 0.05,
+    capKg: capKgRaw != null && capKgRaw > 0 ? Number(capKgRaw.toFixed(3)) : Math.max(tiers[tiers.length - 1].maxKg, 5),
+    tiers,
+  }
+}
+
+export function calcParcelBandFee(rule: ParcelBandCountryRule, weightKg: number): number | null {
+  const weight = Math.max(0, Number(weightKg) || 0)
+  const capKg = rule.capKg > 0 ? rule.capKg : 5
+  if (weight - 1e-9 > capKg) return null
+  const sorted = [...(rule.tiers || [])]
+    .filter(
+      (t) =>
+        Number.isFinite(t.maxKg) &&
+        t.maxKg > 0 &&
+        Number.isFinite(t.perKgFee) &&
+        t.perKgFee >= 0,
+    )
+    .sort((a, b) => a.maxKg - b.maxKg)
+  const hit = sorted.find((t) => weight <= t.maxKg)
+  if (!hit) return null
+  return roundMoney(weight * hit.perKgFee + Math.max(0, hit.handlingFee || 0))
+}
+
 export function normalizeBillingMode(raw: unknown): ShippingBillingMode {
   if (raw === 'SEA_PER_KG') return 'SEA_PER_KG'
   if (raw === 'SEA_TIER') return 'SEA_TIER'
+  if (raw === 'PARCEL_BAND') return 'PARCEL_BAND'
   return 'EXPRESS_TIER'
 }
 
@@ -263,7 +371,9 @@ export function normalizeCountryRuleMap(
         ? normalizeSeaRule(value)
         : mode === 'SEA_TIER'
           ? normalizeSeaTierRule(value)
-          : normalizeExpressRule(value)
+          : mode === 'PARCEL_BAND'
+            ? normalizeParcelBandRule(value)
+            : normalizeExpressRule(value)
   }
   return result
 }
@@ -342,6 +452,10 @@ export function calculateShippingFee(input: CalcShippingFeeInput): number | null
     const seaTier = normalizeSeaTierRule(countryRule)
     if (!seaTier) return null
     baseFee = calcSeaTierFee(seaTier, weightKg)
+  } else if (billingMode === 'PARCEL_BAND') {
+    const band = normalizeParcelBandRule(countryRule)
+    if (!band) return null
+    baseFee = calcParcelBandFee(band, weightKg)
   } else {
     const express = normalizeExpressRule(countryRule)
     if (!express) return null
@@ -353,7 +467,7 @@ export function calculateShippingFee(input: CalcShippingFeeInput): number | null
 }
 
 export function emptyExpressRule(): ExpressCountryRule {
-  return { tiers: [{ maxKg: 0.5, fee: 0 }] }
+  return { minKg: 0, tiers: [{ maxKg: 0.5, fee: 0 }] }
 }
 
 export function emptySeaTierRule(): SeaTierCountryRule {
@@ -402,6 +516,11 @@ export function summarizeCountryRule(
       .join(' · ')
     const more = sea.tiers.length > 2 ? ` +${sea.tiers.length - 2}` : ''
     return `${head}；≥${sea.bulkFromKg}kg ${bulk}${more}`
+  }
+  if (mode === 'PARCEL_BAND') {
+    const band = normalizeParcelBandRule(rule)
+    if (!band) return null
+    return `${band.minKg}-${band.capKg}kg · ${band.tiers.length}档 ¥/kg+处理费`
   }
   const express = normalizeExpressRule(rule)
   if (!express) return null

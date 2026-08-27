@@ -62,6 +62,14 @@ export const ListingStats = {
   navigateTo: (router: AppRouterInstance) => router.push(ListingStats.path),
 };
 
+export const RegistrationStats = {
+  id: 'B03R',
+  path: '/dashboard/registration',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(RegistrationStats.path),
+};
+
 // ================================================================
 // B18 管理员个人设置 — 无入参
 // ================================================================
@@ -361,6 +369,14 @@ export const BannerManagement = {
   navigateTo: (router: AppRouterInstance) => router.push(BannerManagement.path),
 };
 
+export const BuyerShowManagement = {
+  id: 'B21',
+  path: '/buyershowmanagement',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(BuyerShowManagement.path),
+};
+
 // ================================================================
 // B15 Home Recommend Zone Management Page — 无入参
 // ================================================================
@@ -401,12 +417,14 @@ export const BackendRoutes = {
   AdminRegister,
   Dashboard,
   ListingStats,
+  RegistrationStats,
   ProductManagement,
   ImportFrom1688,
   CategoryManagement,
   UserManagement,
   OrderManagement,
   BannerManagement,
+  BuyerShowManagement,
   HomeRecommendZoneManagement,
   ShippingChannelConfig,
   AdminManagement,
@@ -423,6 +441,7 @@ export const NAVIGATION_MAP: Record<string, string[]> = {
   'B07': [],
   'B08': ['B07'], // OrderManagement,
   'B14': ['B12', 'B06'], // BannerManagement,
+  'B21': [],
   'B15': [], // HomeRecommendZoneManagement
   'B16': [], // ShippingChannelConfig
 };
@@ -437,6 +456,7 @@ export const PAGE_ID_MAP: Record<string, string> = {
   'B07': 'UserManagement',
   'B08': 'OrderManagement',
   'B14': 'BannerManagement',
+  'B21': 'BuyerShowManagement',
   'B15': 'HomeRecommendZoneManagement',
   'B16': 'ShippingChannelConfig',
   'B19': 'AdminManagement',

@@ -5,7 +5,7 @@
  * Order: chrome → search → L1 chips → banner → services → recommend zones
  */
 import React, { useCallback, useMemo, useRef } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,7 +22,7 @@ import { ProductListCard } from '@/frontend/components/ProductListCard'
 import { ProductListToolbar } from '@/frontend/components/ProductListToolbar'
 import { ListingPageHead } from '@/frontend/components/ListingPageHead'
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid'
-import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { isDailyNewArrivalCategoryName, findDailyNewArrivalCategory } from '@/frontend/utils/dailyNewArrival'
 import { isStorefrontHomeContentZone, isComingSoonRecommendZoneTitle } from '@/frontend/utils/recommendZoneDisplay'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
@@ -77,7 +77,6 @@ interface Props {
 
 export function MobileHomeStorefrontView({ state, handlers }: Props) {
   const router = useRouter()
-  const pathname = usePathname() || '/'
   const { t } = useTranslation()
   const {
     posters,
@@ -169,8 +168,18 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
     handlers.handleSelectCategory(categoryId, { categorySlug: slug })
   }
 
+  const dailyNewCategory = useMemo(
+    () => findDailyNewArrivalCategory(categories),
+    [categories],
+  )
+  const dailyNewHref = dailyNewCategory
+    ? categoryHref(dailyNewCategory.category_slug, dailyNewCategory.category_id)
+    : '/'
   const isHomeChipActive = isDefaultHomeState
-  const isComingChipActive = pathname.startsWith('/coming')
+  const isNewChipActive = Boolean(
+    (dailyNewCategory && queryState.categoryId === dailyNewCategory.category_id) ||
+      selectedDailyNewArrivalMonthKey,
+  )
 
   const renderChipButton = (
     key: string,
@@ -200,13 +209,17 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
         <div className="mobile-home__chips-row">
           {renderChipButton('home', t('nav.home'), isHomeChipActive, '/')}
           {renderChipButton(
-            'coming',
-            t('nav.coming', { defaultValue: 'Coming' }),
-            isComingChipActive,
-            '/coming/',
+            'new',
+            t('nav.new', { defaultValue: 'new' }),
+            isNewChipActive,
+            dailyNewHref,
           )}
           {categories
-            .filter((category) => !isComingSoonRecommendZoneTitle(category.category_name))
+            .filter(
+              (category) =>
+                !isComingSoonRecommendZoneTitle(category.category_name) &&
+                !isDailyNewArrivalCategoryName(category.category_name),
+            )
             .map((category) => {
             const isActive =
               queryState.categoryId === category.category_id ||
@@ -277,7 +290,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                     className="mobile-home__banner-track absolute inset-0 z-[1] flex h-full w-full"
                     style={{ transform: `translate3d(-${activeBannerIndex * 100}%, 0, 0)` }}
                   >
-                    {posters.map((banner) => {
+                    {posters.map((banner, index) => {
                       const link = normalizePosterLinkUrl(banner.link_url)
                       const slideMedia = (
                         <EditableImg
@@ -285,6 +298,10 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                           src={banner.image_url || undefined}
                           keywords={banner.image_url || banner.title}
                           alt={banner.title || 'Banner'}
+                          disableKeywordSearch
+                          loading={index === 0 ? 'eager' : 'lazy'}
+                          proxyWidth={index === 0 ? 720 : 480}
+                          proxyQuality={70}
                           className="mobile-home__banner-media absolute inset-0 h-full w-full object-cover"
                         />
                       )
@@ -440,7 +457,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       onAddToCart={handlers.handleAddToCart}
                       onAddToWishlist={handlers.handleAddToWishlist}
                       controllerName="每日上新商品卡片"
-                      priority={index < 12}
+                      priority={index < 6}
                     />
                   ))}
                 </div>
@@ -494,7 +511,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       controllerName={
                         isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'
                       }
-                      priority={index < 12}
+                      priority={index < 6}
                     />
                   ))}
                 </div>

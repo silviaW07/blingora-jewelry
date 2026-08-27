@@ -677,7 +677,7 @@ export const updateUserCustomerType = requireRole([UserRole.ADMIN])(
     if (!user) throw new Error('客户不存在')
     await prisma.sysuser.update({
       where: { id: input.id },
-      data: { customerType: value } as any,
+      data: { customerType: value, customerTypeUpdatedAt: new Date() } as any,
     })
     return { success: true, customerType: value }
   })

@@ -8,6 +8,10 @@ export const updateAdminProfile = (...args: Parameters<Actions["updateAdminProfi
   rpcCall<Awaited<ReturnType<Actions["updateAdminProfile"]>>>("src.backend.actions.Dashboard.updateAdminProfile", ...args);
 export const getKpiStats = (...args: Parameters<Actions["getKpiStats"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getKpiStats"]>>>("src.backend.actions.Dashboard.getKpiStats", ...args);
+export const getListingStatsDetail = (...args: Parameters<Actions["getListingStatsDetail"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getListingStatsDetail"]>>>("src.backend.actions.Dashboard.getListingStatsDetail", ...args);
+export const getRegistrationStatsDetail = (...args: Parameters<Actions["getRegistrationStatsDetail"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getRegistrationStatsDetail"]>>>("src.backend.actions.Dashboard.getRegistrationStatsDetail", ...args);
 export const getImportTasksOverview = (...args: Parameters<Actions["getImportTasksOverview"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getImportTasksOverview"]>>>("src.backend.actions.Dashboard.getImportTasksOverview", ...args);
 export const retryImportTask = (...args: Parameters<Actions["retryImportTask"]>) => 
@@ -16,9 +20,9 @@ export const getStockAlerts = (...args: Parameters<Actions["getStockAlerts"]>) =
   rpcCall<Awaited<ReturnType<Actions["getStockAlerts"]>>>("src.backend.actions.Dashboard.getStockAlerts", ...args);
 export const getRecentProducts = (...args: Parameters<Actions["getRecentProducts"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getRecentProducts"]>>>("src.backend.actions.Dashboard.getRecentProducts", ...args);
-export const getRecentUsers = (...args: Parameters<Actions["getRecentUsers"]>) => 
-  rpcCall<Awaited<ReturnType<Actions["getRecentUsers"]>>>("src.backend.actions.Dashboard.getRecentUsers", ...args);
 export const getCategoryBrandShelfTree = (...args: Parameters<Actions["getCategoryBrandShelfTree"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getCategoryBrandShelfTree"]>>>("src.backend.actions.Dashboard.getCategoryBrandShelfTree", ...args);
-export const getListingStatsDetail = (...args: Parameters<Actions["getListingStatsDetail"]>) => 
-  rpcCall<Awaited<ReturnType<Actions["getListingStatsDetail"]>>>("src.backend.actions.Dashboard.getListingStatsDetail", ...args);
+export const getRecentUsers = (...args: Parameters<Actions["getRecentUsers"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getRecentUsers"]>>>("src.backend.actions.Dashboard.getRecentUsers", ...args);
+export const getAdminUnreadCounts = (...args: Parameters<Actions["getAdminUnreadCounts"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getAdminUnreadCounts"]>>>("src.backend.actions.Dashboard.getAdminUnreadCounts", ...args);

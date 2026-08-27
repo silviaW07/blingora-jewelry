@@ -5,6 +5,7 @@ import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import EditableImg from '@/@base/EditableImg'
+import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import type { HomeHandlers } from '@/frontend/hooks/useHome'
@@ -166,7 +167,7 @@ type RecommendZoneProductCardProps = {
   t: ReturnType<typeof useTranslation>['t']
 }
 
-const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCardProps) => {
+const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZoneProductCardProps) => {
   const isDraft = item.status === 'DRAFT'
   const canViewPrice = useCanViewStorePrice()
   const href = productHref(item.productId)
@@ -194,18 +195,12 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
 
   const media = (
     <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
-      <EditableImg
-        propKey={`home-recommend-product-${item.productId}`}
+      <OptimizedProductImage
         src={item.imageUrl || undefined}
         alt={item.productName}
-        keywords={item.imageUrl || undefined}
-        disableKeywordSearch
-        fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-        loading="eager"
-        proxyWidth={280}
-        orientation="square"
-        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-        style={{ aspectRatio: '1 / 1' }}
+        imageWidth={240}
+        quality={70}
+        priority={index < 4}
       />
       {isDraft ? (
         <div className="absolute right-2 top-2 z-[3]">
@@ -326,7 +321,7 @@ const renderMobileSquircleContent = (
     }
     return wrapSquircleItems(
       productItems.length,
-      productItems.map((item) => {
+      productItems.map((item, index) => {
         const isComingDraft = isComingSoon || item.status === 'DRAFT'
         if (isComingDraft) {
           return (
@@ -336,17 +331,12 @@ const renderMobileSquircleContent = (
               data-controller-name="移动端Coming推荐商品"
             >
               <span className="mobile-zone-squircle__media">
-                <EditableImg
-                  propKey={`home-recommend-product-m-${item.productId}`}
+                <OptimizedProductImage
                   src={item.imageUrl || undefined}
                   alt={item.productName}
-                  keywords={item.imageUrl || undefined}
-                  disableKeywordSearch
-                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                  loading="eager"
-                  proxyWidth={200}
-                  orientation="square"
-                  className="mobile-zone-squircle__img h-full w-full object-cover"
+                  imageWidth={200}
+                  quality={68}
+                  priority={index < 5}
                 />
                 <span className="absolute right-1 top-1 z-[3]">
                   <WishlistHeartButton
@@ -386,17 +376,12 @@ const renderMobileSquircleContent = (
             data-controller-name="移动端推荐商品图标"
           >
             <span className="mobile-zone-squircle__media">
-              <EditableImg
-                propKey={`home-recommend-product-m-${item.productId}`}
+              <OptimizedProductImage
                 src={item.imageUrl || undefined}
                 alt={item.productName}
-                keywords={item.imageUrl || undefined}
-                disableKeywordSearch
-                fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                loading="eager"
-                proxyWidth={200}
-                orientation="square"
-                className="mobile-zone-squircle__img h-full w-full object-cover"
+                imageWidth={200}
+                quality={68}
+                priority={index < 5}
               />
             </span>
             <span className="mobile-zone-squircle__label">
@@ -435,16 +420,18 @@ const renderMobileSquircleContent = (
             data-controller-name="移动端推荐类目图标"
           >
             <span className="mobile-zone-squircle__media">
-              <EditableImg
-                propKey={`home-recommend-category-m-${item.categoryId}`}
-                src={imageSrc}
-                alt={displayName}
-                keywords={undefined}
-                disableKeywordSearch
-                fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
-                slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
-                loading="eager"
-                orientation="square"
+                <EditableImg
+                  propKey={`home-recommend-category-m-${item.categoryId}`}
+                  src={imageSrc}
+                  alt={displayName}
+                  keywords={undefined}
+                  disableKeywordSearch
+                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
+                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
+                  loading="lazy"
+                  proxyWidth={200}
+                  proxyQuality={68}
+                  orientation="square"
                 className="mobile-zone-squircle__img h-full w-full object-cover"
               />
             </span>
@@ -518,7 +505,7 @@ const renderRecommendZoneContent = (
 
     return (
       <div className={getCategoryCardGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格">
-        {categoryItems.map((item) => {
+        {categoryItems.map((item, index) => {
           const displayName = translateCatalogLabel(t, item.categoryName)
           const imageSrc = resolveCategoryCardSrc(item.imageUrl)
           const shelfFallback = resolveCategoryCardFallback(item)
@@ -541,7 +528,9 @@ const renderRecommendZoneContent = (
                   disableKeywordSearch
                   fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
                   slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
-                  loading="eager"
+                  loading={index < 4 ? 'eager' : 'lazy'}
+                  proxyWidth={240}
+                  proxyQuality={70}
                   orientation="square"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   style={{ aspectRatio: '1 / 1' }}

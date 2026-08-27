@@ -159,10 +159,12 @@
   box-sizing: border-box;
 }
 
-/* Account center: use the full viewport so order tables (Pay / reOrder) are not clipped */
+/* Account center: same max width as storefront so Orders / Love / Profile don't jump */
 .account-shell-wrap {
   width: 100%;
-  max-width: none;
+  max-width: var(--storefront-max-w, 1440px);
+  margin-left: auto;
+  margin-right: auto;
   box-sizing: border-box;
 }
 

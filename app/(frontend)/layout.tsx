@@ -65,7 +65,11 @@ export default function FrontendLayout({ children }: RootLayoutProps) {
                     <Footer />
                   </div>
                 ) : null}
-                {isFullscreen ? null : <MobileBottomNav />}
+                {isFullscreen ? null : (
+                  <Suspense fallback={null}>
+                    <MobileBottomNav />
+                  </Suspense>
+                )}
                 <WhatsAppFloatButton />
               </DecorateModeProvider>
               <CustomerAuthModal />

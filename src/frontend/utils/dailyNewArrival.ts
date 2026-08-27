@@ -16,9 +16,11 @@ const DAILY_NEW_ARRIVAL_EXACT_NAMES = ['new', '上新', '新品']
 export type DailyNewArrivalCategoryRef = {
   category_id: string
   category_name: string
+  category_slug?: string | null
   children?: Array<{
     category_id: string
     category_name: string
+    category_slug?: string | null
   }>
 }
 
@@ -29,21 +31,40 @@ export const isDailyNewArrivalCategoryName = (name?: string | null) => {
   return DAILY_NEW_ARRIVAL_NAME_PATTERNS.some((pattern) => value.includes(pattern.toLowerCase()))
 }
 
-export const findDailyNewArrivalCategoryId = (categories: DailyNewArrivalCategoryRef[]) => {
+export type DailyNewArrivalCategoryHit = {
+  category_id: string
+  category_name: string
+  category_slug: string | null
+}
+
+export const findDailyNewArrivalCategory = (
+  categories: DailyNewArrivalCategoryRef[],
+): DailyNewArrivalCategoryHit | null => {
   for (const category of categories) {
     if (isDailyNewArrivalCategoryName(category.category_name)) {
-      return category.category_id
+      return {
+        category_id: category.category_id,
+        category_name: category.category_name,
+        category_slug: category.category_slug || null,
+      }
     }
 
     for (const child of category.children || []) {
       if (isDailyNewArrivalCategoryName(child.category_name)) {
-        return child.category_id
+        return {
+          category_id: child.category_id,
+          category_name: child.category_name,
+          category_slug: child.category_slug || null,
+        }
       }
     }
   }
 
   return null
 }
+
+export const findDailyNewArrivalCategoryId = (categories: DailyNewArrivalCategoryRef[]) =>
+  findDailyNewArrivalCategory(categories)?.category_id || null
 
 export type DailyNewArrivalMonthRef = {
   year: number

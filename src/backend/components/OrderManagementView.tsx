@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 // ===== 枚举映射与样式助手 =====
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -36,21 +37,25 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   REFUNDED: '已退款'
 };
 /** 列表行内快捷状态（业务三态） */
-const LIST_STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
-  { value: 'PENDING_PAYMENT', label: '待付款' },
-  { value: 'PROCESSING', label: '处理中' },
-  { value: 'SHIPPED', label: '已发货' },
+const LIST_STATUS_OPTIONS: { value: OrderStatus; label: string; className: string }[] = [
+  { value: 'PENDING_PAYMENT', label: '待付款', className: 'bg-amber-100 text-amber-900 border-amber-200' },
+  { value: 'PROCESSING', label: '处理中', className: 'bg-sky-100 text-sky-800 border-sky-200' },
+  { value: 'SHIPPED', label: '已发货', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
 ];
 const LIST_STATUS_VALUES = new Set(LIST_STATUS_OPTIONS.map((o) => o.value));
 const ORDER_STATUS_VARIANTS: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: 'bg-muted text-muted-foreground',
-  PAID: 'bg-primary text-primary-foreground',
-  PROCESSING: 'bg-accent text-accent-foreground',
-  SHIPPED: 'bg-blue-600 text-white',
-  DELIVERED: 'bg-green-600 text-white',
-  CANCELLED: 'bg-destructive text-destructive-foreground',
-  REFUNDED: 'bg-orange-500 text-white'
+  PENDING_PAYMENT: 'bg-amber-100 text-amber-900 hover:bg-amber-100',
+  PAID: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
+  PROCESSING: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
+  SHIPPED: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100',
+  DELIVERED: 'bg-green-600 text-white hover:bg-green-600',
+  CANCELLED: 'bg-slate-200 text-slate-700 hover:bg-slate-200',
+  REFUNDED: 'bg-orange-100 text-orange-800 hover:bg-orange-100'
 };
+const getListStatusClassName = (status: OrderStatus) =>
+  LIST_STATUS_OPTIONS.find((o) => o.value === status)?.className ||
+  ORDER_STATUS_VARIANTS[status] ||
+  'bg-slate-100 text-slate-700 border-slate-200';
 const PAYMENT_METHOD_LABELS: Record<PaymentMethodType, string> = {
   PAYPAL: 'PayPal',
   BANK_TRANSFER: '银行转账',
@@ -231,7 +236,7 @@ export const OrderManagementView = ({
                               value={LIST_STATUS_VALUES.has(row.status) ? row.status : row.status}
                               onValueChange={(val) => handlers.handleQuickStatusChange(row.id, val as OrderStatus)}
                             >
-                              <SelectTrigger className="h-9 w-[118px] text-sm">
+                              <SelectTrigger className={cn('h-9 w-[118px] border text-sm font-semibold', getListStatusClassName(row.status))}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -239,7 +244,11 @@ export const OrderManagementView = ({
                                   <SelectItem value={row.status}>{ORDER_STATUS_LABELS[row.status]}</SelectItem>
                                 )}
                                 {LIST_STATUS_OPTIONS.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    <span className={cn('inline-flex rounded-md border px-1.5 py-0.5 text-xs font-semibold', opt.className)}>
+                                      {opt.label}
+                                    </span>
+                                  </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>

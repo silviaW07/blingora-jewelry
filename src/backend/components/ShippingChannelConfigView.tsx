@@ -134,9 +134,9 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                       const feeEntries = Object.entries(item.channel_countryFees)
                         .map(([country, rule]) => ({
                           country,
-                          summary: summarizeCountryRule(item.channel_billingMode, rule),
+                          enabled: Boolean(summarizeCountryRule(item.channel_billingMode, rule)),
                         }))
-                        .filter((row) => row.summary)
+                        .filter((row) => row.enabled)
                       return (
                         <TableRow key={item.channel_id}>
                           <TableCell className="font-medium">{item.channel_name}</TableCell>
@@ -167,11 +167,6 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                                   ) : null}
                                 </div>
                               )}
-                              {feeEntries[0]?.summary ? (
-                                <span className="line-clamp-1 text-xs text-muted-foreground">
-                                  {feeEntries[0].country}: {feeEntries[0].summary}
-                                </span>
-                              ) : null}
                               <span className="text-xs text-primary">点击编辑运费</span>
                             </button>
                           </TableCell>

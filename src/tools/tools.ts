@@ -18,6 +18,7 @@ export {
   upload_project_file,
   upload_project_files,
   upload_project_files_detailed,
+  upload_media_file,
   type UploadImageBatchResult,
   type UploadImageFailure,
 } from './upload-image'

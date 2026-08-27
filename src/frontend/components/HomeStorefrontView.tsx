@@ -1096,7 +1096,13 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       >
                         <EditableImg
                           propKey={`category-poster-${activeBanner.poster_id}`}
+                          src={activeBanner.image_url || undefined}
                           keywords={activeBanner.image_url || activeBanner.title}
+                          alt={activeBanner.title || 'Banner'}
+                          disableKeywordSearch
+                          loading="eager"
+                          proxyWidth={720}
+                          proxyQuality={70}
                           className="home-banner-media absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                         />
                       </button>

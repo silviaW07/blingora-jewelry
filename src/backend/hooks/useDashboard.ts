@@ -29,7 +29,7 @@ import {
   getCategoryBrandShelfTree,
 } from '@/backend/actions/Dashboard';
 
-import { Dashboard as DashboardRoute, ProductManagement, ImportFrom1688, ListingStats } from '@/backend/route-params';
+import { Dashboard as DashboardRoute, ProductManagement, ImportFrom1688, ListingStats, RegistrationStats } from '@/backend/route-params';
 
 /**
  * 接口定义位置红线：必须在本 Hook 文件中直接定义并 export
@@ -138,6 +138,8 @@ export interface UseDashboardHandlers {
   handleNavigateToAllProducts: () => void;
 
   handleNavigateToListingStats: () => void;
+
+  handleNavigateToRegistrationStats: () => void;
 
   /**
    * @Method: handleNavigateToProductEdit
@@ -346,6 +348,10 @@ export function useDashboard() {
     ListingStats.navigateTo(router);
   }, [router]);
 
+  const handleNavigateToRegistrationStats = useCallback(() => {
+    RegistrationStats.navigateTo(router);
+  }, [router]);
+
   /**
    * @Method: handleNavigateToProductEdit
    * @Steps:
@@ -390,6 +396,7 @@ export function useDashboard() {
       handleNavigateToCreateImportTask,
       handleNavigateToAllProducts,
       handleNavigateToListingStats,
+      handleNavigateToRegistrationStats,
       handleNavigateToProductEdit,
       handleReplenishStock,
       handleToggleShelfGapsOnly,

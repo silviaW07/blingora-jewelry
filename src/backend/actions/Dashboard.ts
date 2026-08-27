@@ -21,6 +21,7 @@ import type {
   CategoryBrandShelfTree_Output,
   ShelfL1Node_Output,
   ListingStatsDetail_Output,
+  RegistrationStatsDetail_Output,
 } from '@/backend/types/Dashboard'
 import {
   isAggregatePricingCategoryName,
@@ -38,6 +39,46 @@ import {
   startOfMonth,
   startOfWeekMonday,
 } from '@/backend/lib/listingStats'
+
+function startOfYear(now = new Date()) {
+  return new Date(now.getFullYear(), 0, 1)
+}
+
+async function countRegistered(start: Date, end: Date) {
+  return prisma.sysuser.count({
+    where: {
+      role: 'CUSTOMER' as any,
+      createdAt: { gte: start, lt: end },
+    },
+  })
+}
+
+async function countMarkedCustomerType(type: 'FIRST_ORDER' | 'MULTI_ORDER', start: Date, end: Date) {
+  return prisma.sysuser.count({
+    where: {
+      role: 'CUSTOMER' as any,
+      customerType: type,
+      OR: [
+        { customerTypeUpdatedAt: { gte: start, lt: end } },
+        {
+          AND: [
+            { customerTypeUpdatedAt: null },
+            { updatedAt: { gte: start, lt: end } },
+          ],
+        },
+      ],
+    } as any,
+  })
+}
+
+async function registrationPeriodMetrics(start: Date, end: Date) {
+  const [registerCount, firstOrderCount, repeatOrderCount] = await Promise.all([
+    countRegistered(start, end),
+    countMarkedCustomerType('FIRST_ORDER', start, end),
+    countMarkedCustomerType('MULTI_ORDER', start, end),
+  ])
+  return { registerCount, firstOrderCount, repeatOrderCount }
+}
 
 export const getAdminProfile = requireRole(UserRole.ADMIN)(
   withResult(async (): Promise<AdminProfile_Output> => {
@@ -182,6 +223,29 @@ export const getListingStatsDetail = requireRole(UserRole.ADMIN)(
       weeks,
       months,
       sources,
+    }
+  }),
+)
+
+export const getRegistrationStatsDetail = requireRole(UserRole.ADMIN)(
+  withResult(async (): Promise<RegistrationStatsDetail_Output> => {
+    const now = new Date()
+    const weekStart = startOfWeekMonday(now)
+    const monthStart = startOfMonth(now)
+    const yearStart = startOfYear(now)
+    const next = addDays(now, 1)
+    const [totalCustomerCount, week, month, year] = await Promise.all([
+      prisma.sysuser.count({ where: { role: 'CUSTOMER' as any } }),
+      registrationPeriodMetrics(weekStart, addDays(weekStart, 7)),
+      registrationPeriodMetrics(monthStart, new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)),
+      registrationPeriodMetrics(yearStart, next),
+    ])
+    return {
+      generatedAt: now.toISOString(),
+      totalCustomerCount,
+      week,
+      month,
+      year,
     }
   }),
 )
@@ -572,4 +636,41 @@ export const getRecentUsers = requireRole(UserRole.ADMIN)(
       createdAt: item.createdAt
     }))
   })
+)
+
+export interface AdminUnreadCountsInput {
+  customerSince?: string | null
+  orderSince?: string | null
+}
+
+export interface AdminUnreadCountsOutput {
+  newCustomers: number
+  newOrders: number
+}
+
+export const getAdminUnreadCounts = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+  withResult(async (input: AdminUnreadCountsInput = {}): Promise<AdminUnreadCountsOutput> => {
+    const parseSince = (raw?: string | null) => {
+      const text = String(raw || '').trim()
+      if (!text) return null
+      const date = new Date(text)
+      return Number.isNaN(date.getTime()) ? null : date
+    }
+    const customerSince = parseSince(input.customerSince)
+    const orderSince = parseSince(input.orderSince)
+
+    const [newCustomers, newOrders] = await Promise.all([
+      prisma.sysuser.count({
+        where: {
+          role: 'CUSTOMER',
+          ...(customerSince ? { createdAt: { gt: customerSince } } : {}),
+        },
+      }),
+      prisma.orderrecord.count({
+        where: orderSince ? { createdAt: { gt: orderSince } } : {},
+      }),
+    ])
+
+    return { newCustomers, newOrders }
+  }),
 )

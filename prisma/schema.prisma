@@ -216,6 +216,7 @@ model sysuser {
   purchaseCount     Int                @default(0)
   adminNote         String?            @db.Text
   customerType      String             @default("NEW") @db.VarChar(20) // 客户类型：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED，后台可行内下拉修改
+  customerTypeUpdatedAt DateTime?      // 后台最后一次标记客户类型的时间，用于首单/复购周月年统计
   ringSizeUs        String?            @db.VarChar(20)
   ringSizeEu        String?            @db.VarChar(20)
   braceletSize      String?            @db.VarChar(20)
@@ -1296,6 +1297,7 @@ model buyershowcomment {
   id         String                  @id @default(uuid()) @db.VarChar(36)
   authorName String                  @map("author_name") @db.VarChar(80)
   content    String                  @db.Text
+  rating     Int?                    // 1-5 评价打分，纯留言可为空
   status     buyershowcommentstatus  @default(PENDING)
   createdAt  DateTime                @default(now())
   reviewedAt DateTime?               @map("reviewed_at")

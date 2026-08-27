@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { acquireImageSlot } from '@/frontend/utils/imageLoadGate'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
 
 export { toProxiedImageUrl }
@@ -16,13 +17,12 @@ type Props = {
   sizes?: string
   priority?: boolean
   imageWidth?: number
-  /** JPG quality for alicdn/OSS resize (default 90). Use 75–80 for list thumbs. */
   quality?: number
 }
 
 /**
- * Native <img> only — Next/Image + loading=lazy blank on Chrome Android.
- * Same-origin /img-proxy + eager decode so list cards paint.
+ * Native <img>. Load near the viewport, at most 6 in flight, always a small thumb.
+ * Do not dump the whole page after a timeout — that is what made lists crawl.
  */
 export function OptimizedProductImage({
   src,
@@ -32,9 +32,13 @@ export function OptimizedProductImage({
   width,
   height,
   priority = false,
-  imageWidth = 280,
-  quality = 72,
+  imageWidth = 240,
+  quality = 70,
 }: Props) {
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const releaseRef = useRef<(() => void) | null>(null)
+  const [near, setNear] = useState(priority)
+  const [canFetch, setCanFetch] = useState(priority)
   const primary = toProxiedImageUrl(src, { width: imageWidth, quality })
   const raw = String(src || '').trim()
   const [attempt, setAttempt] = useState(0)
@@ -43,56 +47,100 @@ export function OptimizedProductImage({
   useEffect(() => {
     setAttempt(0)
     setFailed(false)
-  }, [src, imageWidth, quality])
+    setCanFetch(priority)
+    setNear(priority)
+  }, [src, imageWidth, quality, priority])
+
+  useEffect(() => {
+    if (priority || near) return
+    const node = boxRef.current
+    if (!node) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true)
+      return
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setNear(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin: '240px 0px', threshold: 0.01 },
+    )
+    io.observe(node)
+    return () => io.disconnect()
+  }, [priority, near])
+
+  useEffect(() => {
+    if (!near || canFetch) return
+    let cancelled = false
+    void acquireImageSlot(priority).then((release) => {
+      if (cancelled) {
+        release()
+        return
+      }
+      releaseRef.current = release
+      setCanFetch(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [near, canFetch, priority])
+
+  useEffect(() => {
+    return () => {
+      releaseRef.current?.()
+      releaseRef.current = null
+    }
+  }, [])
+
+  const releaseSlot = () => {
+    releaseRef.current?.()
+    releaseRef.current = null
+  }
 
   const displaySrc =
     attempt === 0
       ? primary
-      : attempt === 1
-        ? toProxiedImageUrl(src, { width: 0, quality }) || raw
-        : raw
+      : toProxiedImageUrl(src, { width: imageWidth, quality: Math.min(80, quality + 10) }) || primary
+
+  const shellClass = fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]'
 
   if ((!primary && !raw) || failed || !displaySrc) {
-    return (
-      <div
-        className={cn(fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]', className)}
-        aria-hidden
-      />
-    )
+    return <div className={cn(shellClass, className)} aria-hidden />
   }
 
-  const handleError = () => {
-    if (attempt < 2) {
-      setAttempt((n) => n + 1)
-      return
-    }
-    setFailed(true)
-  }
-
-  // Visible immediately — Chrome mobile often never paints loading=lazy list thumbs.
   const imgClass = fill
     ? cn('absolute inset-0 h-full w-full max-w-full object-cover', className)
     : cn('max-w-full object-cover', className)
 
   return (
-    <>
-      {fill ? <div className="absolute inset-0 bg-[#f0ebe3]" aria-hidden /> : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        key={`${attempt}-${displaySrc}`}
-        src={displaySrc}
-        alt={alt}
-        width={fill ? undefined : width || imageWidth}
-        height={fill ? undefined : height || imageWidth}
-        className={imgClass}
-        loading="eager"
-        decoding={priority ? 'sync' : 'async'}
-        draggable={false}
-        fetchPriority={priority ? 'high' : 'auto'}
-        referrerPolicy="no-referrer"
-        onContextMenu={(event) => event.preventDefault()}
-        onError={handleError}
-      />
-    </>
+    <div ref={boxRef} className={fill ? 'absolute inset-0' : 'relative'}>
+      <div className={cn(shellClass)} aria-hidden />
+      {canFetch ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${attempt}-${displaySrc}`}
+          src={displaySrc}
+          alt={alt}
+          width={fill ? imageWidth : width || imageWidth}
+          height={fill ? imageWidth : height || imageWidth}
+          className={imgClass}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          draggable={false}
+          fetchPriority={priority ? 'high' : 'low'}
+          referrerPolicy="no-referrer"
+          onContextMenu={(event) => event.preventDefault()}
+          onError={() => {
+            releaseSlot()
+            if (attempt < 1) setAttempt(1)
+            else setFailed(true)
+          }}
+          onLoad={releaseSlot}
+        />
+      ) : null}
+    </div>
   )
 }

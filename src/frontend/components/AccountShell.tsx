@@ -169,8 +169,8 @@ export function AccountShell({
           ) : null}
         </div>
 
-        <div className="mobile-account-card flex w-full max-w-none flex-col items-stretch overflow-visible rounded-[14px] border border-[#f0dede] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.35)] md:rounded-[28px] lg:flex-row">
-          <aside className="w-full shrink-0 border-b border-[#f0dede] bg-white p-1 md:p-2.5 lg:w-auto lg:min-w-[140px] lg:border-b-0 lg:border-r lg:border-[#f0dede]">
+        <div className="mobile-account-card flex w-full flex-col items-stretch overflow-visible rounded-[14px] border border-[#f0dede] bg-white shadow-[0_10px_28px_-24px_rgba(0,0,0,0.35)] md:rounded-[28px] lg:flex-row">
+          <aside className="w-full shrink-0 border-b border-[#f0dede] bg-white p-1 md:p-2.5 lg:w-[13.5rem] lg:min-w-[13.5rem] lg:border-b-0 lg:border-r lg:border-[#f0dede]">
             <nav className="flex flex-row gap-0.5 overflow-x-auto sm:gap-1 lg:flex-col lg:space-y-1 lg:overflow-visible">
               {navItems.map((item) => {
                 const active = isNavActive(pathname, item.path)

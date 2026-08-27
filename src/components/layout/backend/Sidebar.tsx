@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Camera } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
+import { formatBadgeCount, useAdminNavBadges } from '@/backend/hooks/useAdminNavBadges';
 
 // 扁平化的导航配置
 const MENU_ITEMS = [{
@@ -56,6 +57,12 @@ const MENU_ITEMS = [{
   href: '/bannermanagement',
   icon: Images,
   roles: ['ADMIN']
+}, {
+  id: 'B21',
+  label: '买家秀管理',
+  href: '/buyershowmanagement',
+  icon: Camera,
+  roles: ['ADMIN', 'SUB_ADMIN']
 }, {
   id: 'B15',
   label: '首页推荐专区管理',
@@ -143,6 +150,7 @@ export default function Sidebar() {
   const isLogin = !!user_id;
   const currentRole = isLogin ? (role || 'ADMIN') : 'GUEST';
   const avatarLetter = (username || 'A').slice(0, 1).toUpperCase();
+  const { newCustomers, newOrders } = useAdminNavBadges(isLogin, user_id);
 
   // 过滤当前角色可见的菜单
   const displayMenus = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
@@ -215,13 +223,32 @@ export default function Sidebar() {
             </div>
           </div>
         ) : null}
-        {displayMenus.map((item, index) => {
+        {displayMenus.map((item) => {
         const isActive = pathname.startsWith(item.href);
         const Icon = item.icon;
-        return <Link key={item.id} href={item.href} data-active={isActive} className={`flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
-              <Icon className="shrink-0 w-5 h-5" />
-              {sidebarOpen && <div className="flex items-center justify-between w-full min-w-0">
+        const unread =
+          item.href === '/usermanagement'
+            ? newCustomers
+            : item.href === '/ordermanagement'
+              ? newOrders
+              : 0;
+        const badge = formatBadgeCount(unread);
+        return <Link key={item.id} href={item.href} data-active={isActive} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
+              <span className="relative shrink-0">
+                <Icon className="w-5 h-5" />
+                {!sidebarOpen && badge ? (
+                  <span className="absolute -right-2 -top-1.5 min-w-[1.1rem] rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-4 text-white">
+                    {badge}
+                  </span>
+                ) : null}
+              </span>
+              {sidebarOpen && <div className="flex min-w-0 w-full items-center justify-between">
                   <span className="truncate">{item.label}</span>
+                  {badge ? (
+                    <span className="ml-2 inline-flex min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                      {badge}
+                    </span>
+                  ) : null}
                 </div>}
             </Link>;
       })}

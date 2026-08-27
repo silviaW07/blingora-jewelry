@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import { getCustomerTypeClassName } from '@/shared/customerType'
 import {
   Search,
   User,
@@ -146,7 +148,9 @@ export default function UserManagementView({ state, handlers }: Props) {
                 <SelectItem value="ALL">全部类型</SelectItem>
                 {state.CUSTOMER_TYPE_OPTIONS.map(option => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                    <span className={cn('inline-flex rounded-md border px-1.5 py-0.5 text-xs font-semibold', option.className)}>
+                      {option.label}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -271,13 +275,20 @@ export default function UserManagementView({ state, handlers }: Props) {
                             disabled={state.customerTypeSavingId === user.id}
                             onValueChange={(val) => handlers.handleCustomerTypeChange(user.id, val)}
                           >
-                            <SelectTrigger className="h-8 w-[112px]">
+                            <SelectTrigger
+                              className={cn(
+                                'h-8 w-[118px] border font-semibold',
+                                getCustomerTypeClassName(user.customerType),
+                              )}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               {state.CUSTOMER_TYPE_OPTIONS.map(opt => (
                                 <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
+                                  <span className={cn('inline-flex rounded-md border px-1.5 py-0.5 text-xs font-semibold', opt.className)}>
+                                    {opt.label}
+                                  </span>
                                 </SelectItem>
                               ))}
                             </SelectContent>

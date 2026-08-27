@@ -1,9 +1,8 @@
 // {"router": "/buyer-show", "id": "f13", "en_name": "BuyerShow"}
 'use client'
 
-import ServiceInfoPageView from '@/frontend/components/ServiceInfoPageView'
-import { SERVICE_PAGE_CONFIG_MAP } from '@/frontend/content/servicePages'
+import BuyerShowView from '@/frontend/components/BuyerShowView'
 
 export default function BuyerShowPage() {
-  return <ServiceInfoPageView config={SERVICE_PAGE_CONFIG_MAP['buyer-show']} />
+  return <BuyerShowView />
 }

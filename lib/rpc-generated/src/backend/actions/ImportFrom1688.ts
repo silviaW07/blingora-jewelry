@@ -62,6 +62,14 @@ export const batchUpdatePendingImportItemField = (...args: Parameters<Actions["b
   rpcCall<Awaited<ReturnType<Actions["batchUpdatePendingImportItemField"]>>>("src.backend.actions.ImportFrom1688.batchUpdatePendingImportItemField", ...args);
 export const inlineUpdatePendingImportSkuField = (...args: Parameters<Actions["inlineUpdatePendingImportSkuField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportSkuField"]>>>("src.backend.actions.ImportFrom1688.inlineUpdatePendingImportSkuField", ...args);
+export const duplicatePendingImportSku = (...args: Parameters<Actions["duplicatePendingImportSku"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["duplicatePendingImportSku"]>>>("src.backend.actions.ImportFrom1688.duplicatePendingImportSku", ...args);
+export const deletePendingImportSku = (...args: Parameters<Actions["deletePendingImportSku"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["deletePendingImportSku"]>>>("src.backend.actions.ImportFrom1688.deletePendingImportSku", ...args);
+export const duplicatePendingImportSkuColorGroup = (...args: Parameters<Actions["duplicatePendingImportSkuColorGroup"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["duplicatePendingImportSkuColorGroup"]>>>("src.backend.actions.ImportFrom1688.duplicatePendingImportSkuColorGroup", ...args);
+export const deletePendingImportSkuColorGroup = (...args: Parameters<Actions["deletePendingImportSkuColorGroup"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["deletePendingImportSkuColorGroup"]>>>("src.backend.actions.ImportFrom1688.deletePendingImportSkuColorGroup", ...args);
 export const publishPendingImportItems = (...args: Parameters<Actions["publishPendingImportItems"]>) => 
   rpcCall<Awaited<ReturnType<Actions["publishPendingImportItems"]>>>("src.backend.actions.ImportFrom1688.publishPendingImportItems", ...args);
 export const reparsePendingImportItems = (...args: Parameters<Actions["reparsePendingImportItems"]>) => 

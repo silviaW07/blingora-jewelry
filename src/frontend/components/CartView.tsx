@@ -612,7 +612,7 @@ export const CartView = ({
                       src={prod.mainImageUrl}
                       alt={prod.name}
                       sizes="(max-width: 768px) 45vw, 20vw"
-                      imageWidth={320}
+                      imageWidth={200}
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   </div>

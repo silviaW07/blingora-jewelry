@@ -70,6 +70,20 @@ export interface ListingStatsDetail_Output {
   sources: ListingSourceRow_Output[];
 }
 
+export interface RegistrationPeriodMetrics_Output {
+  registerCount: number;
+  firstOrderCount: number;
+  repeatOrderCount: number;
+}
+
+export interface RegistrationStatsDetail_Output {
+  generatedAt: string;
+  totalCustomerCount: number;
+  week: RegistrationPeriodMetrics_Output;
+  month: RegistrationPeriodMetrics_Output;
+  year: RegistrationPeriodMetrics_Output;
+}
+
 export interface ImportTaskOverview_Output {
   // data-from: importtask-id
   id: string;
@@ -257,6 +271,18 @@ declare function getRecentProducts(): Promise<RecentProduct_Output[]>;
  */
 declare function getRecentUsers(): Promise<RecentUser_Output[]>;
 
+export interface AdminUnreadCounts_Input {
+  customerSince?: string | null
+  orderSince?: string | null
+}
+
+export interface AdminUnreadCounts_Output {
+  newCustomers: number
+  newOrders: number
+}
+
+declare function getAdminUnreadCounts(input?: AdminUnreadCounts_Input): Promise<AdminUnreadCounts_Output>;
+
 /**
  * @requires: ADMIN
  * @Prisma_Model: category, product, product_category_relations
@@ -270,3 +296,10 @@ declare function getCategoryBrandShelfTree(): Promise<CategoryBrandShelfTree_Out
  * @Description: 上架数据详情：近 12 周 / 12 月及上传途径拆分
  */
 declare function getListingStatsDetail(): Promise<ListingStatsDetail_Output>;
+
+/**
+ * @requires: ADMIN
+ * @Prisma_Model: sysuser
+ * @Description: 注册详情：本周 / 本月 / 本年注册数，以及后台标记的首单、多单（复购）数
+ */
+declare function getRegistrationStatsDetail(): Promise<RegistrationStatsDetail_Output>;

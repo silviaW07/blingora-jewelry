@@ -88,6 +88,8 @@ interface EditableImgProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement
     slowFallbackMs?: number;
     /** Proxy / OSS resize hint for list thumbs (default 400). */
     proxyWidth?: number;
+    /** Alicdn/OSS JPEG quality for thumbs (default 70). */
+    proxyQuality?: number;
 }
 
 const defaultStyle: CSSProperties = {
@@ -130,8 +132,9 @@ const EditableImg = ({
     disableKeywordSearch = false,
     fallbackSrc = null,
     slowFallbackMs = 0,
-    proxyWidth = 400,
-    loading = 'eager',
+    proxyWidth = 280,
+    proxyQuality = 70,
+    loading = 'lazy',
     decoding = 'async',
     ...imgProps
 }: EditableImgProps) => {
@@ -169,7 +172,7 @@ const EditableImg = ({
         let cancelled = false;
         let settled = false;
         const img = new window.Image();
-        const proxied = toProxiedImageUrl(src, { width: 400, quality: 75 }) || src;
+        const proxied = toProxiedImageUrl(src, { width: proxyWidth, quality: proxyQuality }) || src;
         const timer = window.setTimeout(() => {
             settled = true;
             img.onload = null;
@@ -322,8 +325,9 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: proxyWidth, quality: 80 }) || raw
+                const proxied = toProxiedImageUrl(raw, { width: proxyWidth, quality: proxyQuality }) || raw
                 const useNativeImg =
+                    proxyWidth <= 480 ||
                     shouldBypassImageOptimizer(proxied) ||
                     loadAttempt > 0 ||
                     /\.svg($|\?)/i.test(proxied)
@@ -365,6 +369,7 @@ const EditableImg = ({
                             referrerPolicy={imgProps.referrerPolicy ?? 'no-referrer'}
                             loading={loading}
                             decoding={decoding}
+                            fetchPriority={loading === 'eager' ? 'high' : 'low'}
                             style={imgStyle}
                             src={proxied}
                             alt={imageAlt ?? ''}

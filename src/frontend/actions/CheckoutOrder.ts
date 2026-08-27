@@ -379,7 +379,7 @@ export const saveCheckoutAddress = requireRole([UserRole.CUSTOMER])(
   }),
 )
 
-/** BJ + YYMMDD（Asia/Shanghai）+ 当日 4 位序号，例：BJ2607310001 */
+/** BJ + YYMMDD（Asia/Shanghai）+ 全局 4 位序号，例：BJ2608260003 */
 function getOrderNoDatePrefix(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Shanghai',
@@ -410,15 +410,15 @@ type CheckoutTx = {
 }
 
 /**
- * 在事务内用 MySQL GET_LOCK 串行化当日序号，并在持锁期间执行建单回调。
- * 仅匹配 BJ+YYMMDD 前缀，历史旧号不受影响；唯一索引 + 外层重试兜底。
+ * 在事务内用 MySQL GET_LOCK 串行化全局 4 位序号。
+ * 单号 = BJ + YYMMDD（下单日）+ 全局递增 0001…9999，后四位不按天重置。
  */
 async function withAllocatedOrderNo<T>(
   tx: CheckoutTx,
   run: (orderNo: string) => Promise<T>,
 ): Promise<T> {
   const prefix = getOrderNoDatePrefix()
-  const lockKey = `orderno_${prefix}`
+  const lockKey = 'orderno_bj_global_seq'
   const lockRows = await tx.$queryRawUnsafe<Array<{ acquired: number | bigint | null }>>(
     'SELECT GET_LOCK(?, 10) AS acquired',
     lockKey,
@@ -427,18 +427,13 @@ async function withAllocatedOrderNo<T>(
     throw storefrontError('checkout.placeOrderFailed')
   }
   try {
-    const latest = await tx.orderrecord.findFirst({
-      where: { orderNo: { startsWith: prefix } },
-      orderBy: { orderNo: 'desc' },
-      select: { orderNo: true },
-    })
-    let nextSeq = 1
-    if (latest?.orderNo) {
-      const seqPart = latest.orderNo.slice(prefix.length)
-      if (/^\d+$/.test(seqPart)) {
-        nextSeq = Number(seqPart) + 1
-      }
-    }
+    const maxRows = await tx.$queryRawUnsafe<Array<{ maxSeq: number | bigint | null }>>(
+      `SELECT MAX(CAST(RIGHT(orderNo, 4) AS UNSIGNED)) AS maxSeq
+       FROM orderrecord
+       WHERE orderNo REGEXP '^BJ[0-9]{10}$'`,
+    )
+    const maxSeq = Number(maxRows?.[0]?.maxSeq ?? 0)
+    const nextSeq = (Number.isFinite(maxSeq) ? maxSeq : 0) + 1
     if (nextSeq > 9999) {
       throw storefrontError('checkout.placeOrderFailed')
     }

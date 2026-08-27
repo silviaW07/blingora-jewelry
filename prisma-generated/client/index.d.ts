@@ -258,6 +258,16 @@ export type suffixconfig = $Result.DefaultSelection<Prisma.$suffixconfigPayload>
  * 品牌别名归一：采集/翻译/上架前把卖家暗语（如“蔻C/蔻家/古驰/LV”）替换成标准品牌名，支持后台 CRUD
  */
 export type brandalias = $Result.DefaultSelection<Prisma.$brandaliasPayload>
+/**
+ * Model buyershowmedia
+ * 买家秀媒体：后台上传图片/视频，可选标题；前台独立页展示
+ */
+export type buyershowmedia = $Result.DefaultSelection<Prisma.$buyershowmediaPayload>
+/**
+ * Model buyershowcomment
+ * 买家秀留言：客户提交后待审核，通过后才在前台展示
+ */
+export type buyershowcomment = $Result.DefaultSelection<Prisma.$buyershowcommentPayload>
 
 /**
  * Enums
@@ -517,6 +527,23 @@ export const customorderstatus: {
 
 export type customorderstatus = (typeof customorderstatus)[keyof typeof customorderstatus]
 
+
+export const buyershowmediatype: {
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO'
+};
+
+export type buyershowmediatype = (typeof buyershowmediatype)[keyof typeof buyershowmediatype]
+
+
+export const buyershowcommentstatus: {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED'
+};
+
+export type buyershowcommentstatus = (typeof buyershowcommentstatus)[keyof typeof buyershowcommentstatus]
+
 }
 
 export type userrole = $Enums.userrole
@@ -610,6 +637,14 @@ export const ticketstatus: typeof $Enums.ticketstatus
 export type customorderstatus = $Enums.customorderstatus
 
 export const customorderstatus: typeof $Enums.customorderstatus
+
+export type buyershowmediatype = $Enums.buyershowmediatype
+
+export const buyershowmediatype: typeof $Enums.buyershowmediatype
+
+export type buyershowcommentstatus = $Enums.buyershowcommentstatus
+
+export const buyershowcommentstatus: typeof $Enums.buyershowcommentstatus
 
 /**
  * ##  Prisma Client ʲˢ
@@ -1218,6 +1253,26 @@ export class PrismaClient<
     * ```
     */
   get brandalias(): Prisma.brandaliasDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.buyershowmedia`: Exposes CRUD operations for the **buyershowmedia** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Buyershowmedias
+    * const buyershowmedias = await prisma.buyershowmedia.findMany()
+    * ```
+    */
+  get buyershowmedia(): Prisma.buyershowmediaDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.buyershowcomment`: Exposes CRUD operations for the **buyershowcomment** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Buyershowcomments
+    * const buyershowcomments = await prisma.buyershowcomment.findMany()
+    * ```
+    */
+  get buyershowcomment(): Prisma.buyershowcommentDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -1707,7 +1762,9 @@ export namespace Prisma {
     product_keyword_relations: 'product_keyword_relations',
     keywordgroupproduct: 'keywordgroupproduct',
     suffixconfig: 'suffixconfig',
-    brandalias: 'brandalias'
+    brandalias: 'brandalias',
+    buyershowmedia: 'buyershowmedia',
+    buyershowcomment: 'buyershowcomment'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1726,7 +1783,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias"
+      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -4964,6 +5021,138 @@ export namespace Prisma {
           }
         }
       }
+      buyershowmedia: {
+        payload: Prisma.$buyershowmediaPayload<ExtArgs>
+        fields: Prisma.buyershowmediaFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.buyershowmediaFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.buyershowmediaFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>
+          }
+          findFirst: {
+            args: Prisma.buyershowmediaFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.buyershowmediaFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>
+          }
+          findMany: {
+            args: Prisma.buyershowmediaFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>[]
+          }
+          create: {
+            args: Prisma.buyershowmediaCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>
+          }
+          createMany: {
+            args: Prisma.buyershowmediaCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.buyershowmediaDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>
+          }
+          update: {
+            args: Prisma.buyershowmediaUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>
+          }
+          deleteMany: {
+            args: Prisma.buyershowmediaDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.buyershowmediaUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.buyershowmediaUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowmediaPayload>
+          }
+          aggregate: {
+            args: Prisma.BuyershowmediaAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateBuyershowmedia>
+          }
+          groupBy: {
+            args: Prisma.buyershowmediaGroupByArgs<ExtArgs>
+            result: $Utils.Optional<BuyershowmediaGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.buyershowmediaCountArgs<ExtArgs>
+            result: $Utils.Optional<BuyershowmediaCountAggregateOutputType> | number
+          }
+        }
+      }
+      buyershowcomment: {
+        payload: Prisma.$buyershowcommentPayload<ExtArgs>
+        fields: Prisma.buyershowcommentFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.buyershowcommentFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.buyershowcommentFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>
+          }
+          findFirst: {
+            args: Prisma.buyershowcommentFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.buyershowcommentFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>
+          }
+          findMany: {
+            args: Prisma.buyershowcommentFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>[]
+          }
+          create: {
+            args: Prisma.buyershowcommentCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>
+          }
+          createMany: {
+            args: Prisma.buyershowcommentCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.buyershowcommentDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>
+          }
+          update: {
+            args: Prisma.buyershowcommentUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>
+          }
+          deleteMany: {
+            args: Prisma.buyershowcommentDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.buyershowcommentUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.buyershowcommentUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowcommentPayload>
+          }
+          aggregate: {
+            args: Prisma.BuyershowcommentAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateBuyershowcomment>
+          }
+          groupBy: {
+            args: Prisma.buyershowcommentGroupByArgs<ExtArgs>
+            result: $Utils.Optional<BuyershowcommentGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.buyershowcommentCountArgs<ExtArgs>
+            result: $Utils.Optional<BuyershowcommentCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -5109,6 +5298,8 @@ export namespace Prisma {
     keywordgroupproduct?: keywordgroupproductOmit
     suffixconfig?: suffixconfigOmit
     brandalias?: brandaliasOmit
+    buyershowmedia?: buyershowmediaOmit
+    buyershowcomment?: buyershowcommentOmit
   }
 
   /* Types for Logging */
@@ -6126,6 +6317,7 @@ export namespace Prisma {
     id: string | null
     account: string | null
     password: string | null
+    passwordPlain: string | null
     email: string | null
     role: $Enums.userrole | null
     status: $Enums.userstatus | null
@@ -6139,6 +6331,7 @@ export namespace Prisma {
     purchaseCount: number | null
     adminNote: string | null
     customerType: string | null
+    customerTypeUpdatedAt: Date | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6151,6 +6344,7 @@ export namespace Prisma {
     id: string | null
     account: string | null
     password: string | null
+    passwordPlain: string | null
     email: string | null
     role: $Enums.userrole | null
     status: $Enums.userstatus | null
@@ -6164,6 +6358,7 @@ export namespace Prisma {
     purchaseCount: number | null
     adminNote: string | null
     customerType: string | null
+    customerTypeUpdatedAt: Date | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6176,6 +6371,7 @@ export namespace Prisma {
     id: number
     account: number
     password: number
+    passwordPlain: number
     email: number
     role: number
     status: number
@@ -6189,6 +6385,7 @@ export namespace Prisma {
     purchaseCount: number
     adminNote: number
     customerType: number
+    customerTypeUpdatedAt: number
     ringSizeUs: number
     ringSizeEu: number
     braceletSize: number
@@ -6213,6 +6410,7 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
+    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6226,6 +6424,7 @@ export namespace Prisma {
     purchaseCount?: true
     adminNote?: true
     customerType?: true
+    customerTypeUpdatedAt?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6238,6 +6437,7 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
+    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6251,6 +6451,7 @@ export namespace Prisma {
     purchaseCount?: true
     adminNote?: true
     customerType?: true
+    customerTypeUpdatedAt?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6263,6 +6464,7 @@ export namespace Prisma {
     id?: true
     account?: true
     password?: true
+    passwordPlain?: true
     email?: true
     role?: true
     status?: true
@@ -6276,6 +6478,7 @@ export namespace Prisma {
     purchaseCount?: true
     adminNote?: true
     customerType?: true
+    customerTypeUpdatedAt?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6377,6 +6580,7 @@ export namespace Prisma {
     id: string
     account: string
     password: string
+    passwordPlain: string | null
     email: string
     role: $Enums.userrole
     status: $Enums.userstatus
@@ -6390,6 +6594,7 @@ export namespace Prisma {
     purchaseCount: number
     adminNote: string | null
     customerType: string
+    customerTypeUpdatedAt: Date | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6423,6 +6628,7 @@ export namespace Prisma {
     id?: boolean
     account?: boolean
     password?: boolean
+    passwordPlain?: boolean
     email?: boolean
     role?: boolean
     status?: boolean
@@ -6436,6 +6642,7 @@ export namespace Prisma {
     purchaseCount?: boolean
     adminNote?: boolean
     customerType?: boolean
+    customerTypeUpdatedAt?: boolean
     ringSizeUs?: boolean
     ringSizeEu?: boolean
     braceletSize?: boolean
@@ -6464,6 +6671,7 @@ export namespace Prisma {
     id?: boolean
     account?: boolean
     password?: boolean
+    passwordPlain?: boolean
     email?: boolean
     role?: boolean
     status?: boolean
@@ -6477,6 +6685,7 @@ export namespace Prisma {
     purchaseCount?: boolean
     adminNote?: boolean
     customerType?: boolean
+    customerTypeUpdatedAt?: boolean
     ringSizeUs?: boolean
     ringSizeEu?: boolean
     braceletSize?: boolean
@@ -6487,7 +6696,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
+  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "customerTypeUpdatedAt" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
   export type sysuserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     carts?: boolean | sysuser$cartsArgs<ExtArgs>
     importTasks?: boolean | sysuser$importTasksArgs<ExtArgs>
@@ -6522,6 +6731,7 @@ export namespace Prisma {
       id: string
       account: string
       password: string
+      passwordPlain: string | null
       email: string
       role: $Enums.userrole
       status: $Enums.userstatus
@@ -6535,6 +6745,7 @@ export namespace Prisma {
       purchaseCount: number
       adminNote: string | null
       customerType: string
+      customerTypeUpdatedAt: Date | null
       ringSizeUs: string | null
       ringSizeEu: string | null
       braceletSize: string | null
@@ -6926,6 +7137,7 @@ export namespace Prisma {
     readonly id: FieldRef<"sysuser", 'String'>
     readonly account: FieldRef<"sysuser", 'String'>
     readonly password: FieldRef<"sysuser", 'String'>
+    readonly passwordPlain: FieldRef<"sysuser", 'String'>
     readonly email: FieldRef<"sysuser", 'String'>
     readonly role: FieldRef<"sysuser", 'userrole'>
     readonly status: FieldRef<"sysuser", 'userstatus'>
@@ -6939,6 +7151,7 @@ export namespace Prisma {
     readonly purchaseCount: FieldRef<"sysuser", 'Int'>
     readonly adminNote: FieldRef<"sysuser", 'String'>
     readonly customerType: FieldRef<"sysuser", 'String'>
+    readonly customerTypeUpdatedAt: FieldRef<"sysuser", 'DateTime'>
     readonly ringSizeUs: FieldRef<"sysuser", 'String'>
     readonly ringSizeEu: FieldRef<"sysuser", 'String'>
     readonly braceletSize: FieldRef<"sysuser", 'String'>
@@ -58121,6 +58334,1893 @@ export namespace Prisma {
 
 
   /**
+   * Model buyershowmedia
+   */
+
+  export type AggregateBuyershowmedia = {
+    _count: BuyershowmediaCountAggregateOutputType | null
+    _avg: BuyershowmediaAvgAggregateOutputType | null
+    _sum: BuyershowmediaSumAggregateOutputType | null
+    _min: BuyershowmediaMinAggregateOutputType | null
+    _max: BuyershowmediaMaxAggregateOutputType | null
+  }
+
+  export type BuyershowmediaAvgAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type BuyershowmediaSumAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type BuyershowmediaMinAggregateOutputType = {
+    id: string | null
+    mediaType: $Enums.buyershowmediatype | null
+    mediaUrl: string | null
+    title: string | null
+    sortWeight: number | null
+    isEnabled: boolean | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BuyershowmediaMaxAggregateOutputType = {
+    id: string | null
+    mediaType: $Enums.buyershowmediatype | null
+    mediaUrl: string | null
+    title: string | null
+    sortWeight: number | null
+    isEnabled: boolean | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BuyershowmediaCountAggregateOutputType = {
+    id: number
+    mediaType: number
+    mediaUrl: number
+    title: number
+    sortWeight: number
+    isEnabled: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type BuyershowmediaAvgAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type BuyershowmediaSumAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type BuyershowmediaMinAggregateInputType = {
+    id?: true
+    mediaType?: true
+    mediaUrl?: true
+    title?: true
+    sortWeight?: true
+    isEnabled?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BuyershowmediaMaxAggregateInputType = {
+    id?: true
+    mediaType?: true
+    mediaUrl?: true
+    title?: true
+    sortWeight?: true
+    isEnabled?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BuyershowmediaCountAggregateInputType = {
+    id?: true
+    mediaType?: true
+    mediaUrl?: true
+    title?: true
+    sortWeight?: true
+    isEnabled?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type BuyershowmediaAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which buyershowmedia to aggregate.
+     */
+    where?: buyershowmediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowmedias to fetch.
+     */
+    orderBy?: buyershowmediaOrderByWithRelationInput | buyershowmediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: buyershowmediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowmedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowmedias.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned buyershowmedias
+    **/
+    _count?: true | BuyershowmediaCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: BuyershowmediaAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: BuyershowmediaSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: BuyershowmediaMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: BuyershowmediaMaxAggregateInputType
+  }
+
+  export type GetBuyershowmediaAggregateType<T extends BuyershowmediaAggregateArgs> = {
+        [P in keyof T & keyof AggregateBuyershowmedia]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateBuyershowmedia[P]>
+      : GetScalarType<T[P], AggregateBuyershowmedia[P]>
+  }
+
+
+
+
+  export type buyershowmediaGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: buyershowmediaWhereInput
+    orderBy?: buyershowmediaOrderByWithAggregationInput | buyershowmediaOrderByWithAggregationInput[]
+    by: BuyershowmediaScalarFieldEnum[] | BuyershowmediaScalarFieldEnum
+    having?: buyershowmediaScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: BuyershowmediaCountAggregateInputType | true
+    _avg?: BuyershowmediaAvgAggregateInputType
+    _sum?: BuyershowmediaSumAggregateInputType
+    _min?: BuyershowmediaMinAggregateInputType
+    _max?: BuyershowmediaMaxAggregateInputType
+  }
+
+  export type BuyershowmediaGroupByOutputType = {
+    id: string
+    mediaType: $Enums.buyershowmediatype
+    mediaUrl: string
+    title: string | null
+    sortWeight: number
+    isEnabled: boolean
+    createdAt: Date
+    updatedAt: Date
+    _count: BuyershowmediaCountAggregateOutputType | null
+    _avg: BuyershowmediaAvgAggregateOutputType | null
+    _sum: BuyershowmediaSumAggregateOutputType | null
+    _min: BuyershowmediaMinAggregateOutputType | null
+    _max: BuyershowmediaMaxAggregateOutputType | null
+  }
+
+  type GetBuyershowmediaGroupByPayload<T extends buyershowmediaGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<BuyershowmediaGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof BuyershowmediaGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], BuyershowmediaGroupByOutputType[P]>
+            : GetScalarType<T[P], BuyershowmediaGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type buyershowmediaSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    mediaType?: boolean
+    mediaUrl?: boolean
+    title?: boolean
+    sortWeight?: boolean
+    isEnabled?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["buyershowmedia"]>
+
+
+
+  export type buyershowmediaSelectScalar = {
+    id?: boolean
+    mediaType?: boolean
+    mediaUrl?: boolean
+    title?: boolean
+    sortWeight?: boolean
+    isEnabled?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type buyershowmediaOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "mediaType" | "mediaUrl" | "title" | "sortWeight" | "isEnabled" | "createdAt" | "updatedAt", ExtArgs["result"]["buyershowmedia"]>
+
+  export type $buyershowmediaPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "buyershowmedia"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      mediaType: $Enums.buyershowmediatype
+      mediaUrl: string
+      title: string | null
+      sortWeight: number
+      isEnabled: boolean
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["buyershowmedia"]>
+    composites: {}
+  }
+
+  type buyershowmediaGetPayload<S extends boolean | null | undefined | buyershowmediaDefaultArgs> = $Result.GetResult<Prisma.$buyershowmediaPayload, S>
+
+  type buyershowmediaCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<buyershowmediaFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: BuyershowmediaCountAggregateInputType | true
+    }
+
+  export interface buyershowmediaDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['buyershowmedia'], meta: { name: 'buyershowmedia' } }
+    /**
+     * Find zero or one Buyershowmedia that matches the filter.
+     * @param {buyershowmediaFindUniqueArgs} args - Arguments to find a Buyershowmedia
+     * @example
+     * // Get one Buyershowmedia
+     * const buyershowmedia = await prisma.buyershowmedia.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends buyershowmediaFindUniqueArgs>(args: SelectSubset<T, buyershowmediaFindUniqueArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Buyershowmedia that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {buyershowmediaFindUniqueOrThrowArgs} args - Arguments to find a Buyershowmedia
+     * @example
+     * // Get one Buyershowmedia
+     * const buyershowmedia = await prisma.buyershowmedia.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends buyershowmediaFindUniqueOrThrowArgs>(args: SelectSubset<T, buyershowmediaFindUniqueOrThrowArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Buyershowmedia that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowmediaFindFirstArgs} args - Arguments to find a Buyershowmedia
+     * @example
+     * // Get one Buyershowmedia
+     * const buyershowmedia = await prisma.buyershowmedia.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends buyershowmediaFindFirstArgs>(args?: SelectSubset<T, buyershowmediaFindFirstArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Buyershowmedia that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowmediaFindFirstOrThrowArgs} args - Arguments to find a Buyershowmedia
+     * @example
+     * // Get one Buyershowmedia
+     * const buyershowmedia = await prisma.buyershowmedia.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends buyershowmediaFindFirstOrThrowArgs>(args?: SelectSubset<T, buyershowmediaFindFirstOrThrowArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Buyershowmedias that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowmediaFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Buyershowmedias
+     * const buyershowmedias = await prisma.buyershowmedia.findMany()
+     * 
+     * // Get first 10 Buyershowmedias
+     * const buyershowmedias = await prisma.buyershowmedia.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const buyershowmediaWithIdOnly = await prisma.buyershowmedia.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends buyershowmediaFindManyArgs>(args?: SelectSubset<T, buyershowmediaFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Buyershowmedia.
+     * @param {buyershowmediaCreateArgs} args - Arguments to create a Buyershowmedia.
+     * @example
+     * // Create one Buyershowmedia
+     * const Buyershowmedia = await prisma.buyershowmedia.create({
+     *   data: {
+     *     // ... data to create a Buyershowmedia
+     *   }
+     * })
+     * 
+     */
+    create<T extends buyershowmediaCreateArgs>(args: SelectSubset<T, buyershowmediaCreateArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Buyershowmedias.
+     * @param {buyershowmediaCreateManyArgs} args - Arguments to create many Buyershowmedias.
+     * @example
+     * // Create many Buyershowmedias
+     * const buyershowmedia = await prisma.buyershowmedia.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends buyershowmediaCreateManyArgs>(args?: SelectSubset<T, buyershowmediaCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Buyershowmedia.
+     * @param {buyershowmediaDeleteArgs} args - Arguments to delete one Buyershowmedia.
+     * @example
+     * // Delete one Buyershowmedia
+     * const Buyershowmedia = await prisma.buyershowmedia.delete({
+     *   where: {
+     *     // ... filter to delete one Buyershowmedia
+     *   }
+     * })
+     * 
+     */
+    delete<T extends buyershowmediaDeleteArgs>(args: SelectSubset<T, buyershowmediaDeleteArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Buyershowmedia.
+     * @param {buyershowmediaUpdateArgs} args - Arguments to update one Buyershowmedia.
+     * @example
+     * // Update one Buyershowmedia
+     * const buyershowmedia = await prisma.buyershowmedia.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends buyershowmediaUpdateArgs>(args: SelectSubset<T, buyershowmediaUpdateArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Buyershowmedias.
+     * @param {buyershowmediaDeleteManyArgs} args - Arguments to filter Buyershowmedias to delete.
+     * @example
+     * // Delete a few Buyershowmedias
+     * const { count } = await prisma.buyershowmedia.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends buyershowmediaDeleteManyArgs>(args?: SelectSubset<T, buyershowmediaDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Buyershowmedias.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowmediaUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Buyershowmedias
+     * const buyershowmedia = await prisma.buyershowmedia.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends buyershowmediaUpdateManyArgs>(args: SelectSubset<T, buyershowmediaUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Buyershowmedia.
+     * @param {buyershowmediaUpsertArgs} args - Arguments to update or create a Buyershowmedia.
+     * @example
+     * // Update or create a Buyershowmedia
+     * const buyershowmedia = await prisma.buyershowmedia.upsert({
+     *   create: {
+     *     // ... data to create a Buyershowmedia
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Buyershowmedia we want to update
+     *   }
+     * })
+     */
+    upsert<T extends buyershowmediaUpsertArgs>(args: SelectSubset<T, buyershowmediaUpsertArgs<ExtArgs>>): Prisma__buyershowmediaClient<$Result.GetResult<Prisma.$buyershowmediaPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Buyershowmedias.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowmediaCountArgs} args - Arguments to filter Buyershowmedias to count.
+     * @example
+     * // Count the number of Buyershowmedias
+     * const count = await prisma.buyershowmedia.count({
+     *   where: {
+     *     // ... the filter for the Buyershowmedias we want to count
+     *   }
+     * })
+    **/
+    count<T extends buyershowmediaCountArgs>(
+      args?: Subset<T, buyershowmediaCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], BuyershowmediaCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Buyershowmedia.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BuyershowmediaAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends BuyershowmediaAggregateArgs>(args: Subset<T, BuyershowmediaAggregateArgs>): Prisma.PrismaPromise<GetBuyershowmediaAggregateType<T>>
+
+    /**
+     * Group by Buyershowmedia.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowmediaGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends buyershowmediaGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: buyershowmediaGroupByArgs['orderBy'] }
+        : { orderBy?: buyershowmediaGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, buyershowmediaGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetBuyershowmediaGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the buyershowmedia model
+   */
+  readonly fields: buyershowmediaFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for buyershowmedia.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__buyershowmediaClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the buyershowmedia model
+   */
+  interface buyershowmediaFieldRefs {
+    readonly id: FieldRef<"buyershowmedia", 'String'>
+    readonly mediaType: FieldRef<"buyershowmedia", 'buyershowmediatype'>
+    readonly mediaUrl: FieldRef<"buyershowmedia", 'String'>
+    readonly title: FieldRef<"buyershowmedia", 'String'>
+    readonly sortWeight: FieldRef<"buyershowmedia", 'Int'>
+    readonly isEnabled: FieldRef<"buyershowmedia", 'Boolean'>
+    readonly createdAt: FieldRef<"buyershowmedia", 'DateTime'>
+    readonly updatedAt: FieldRef<"buyershowmedia", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * buyershowmedia findUnique
+   */
+  export type buyershowmediaFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowmedia to fetch.
+     */
+    where: buyershowmediaWhereUniqueInput
+  }
+
+  /**
+   * buyershowmedia findUniqueOrThrow
+   */
+  export type buyershowmediaFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowmedia to fetch.
+     */
+    where: buyershowmediaWhereUniqueInput
+  }
+
+  /**
+   * buyershowmedia findFirst
+   */
+  export type buyershowmediaFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowmedia to fetch.
+     */
+    where?: buyershowmediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowmedias to fetch.
+     */
+    orderBy?: buyershowmediaOrderByWithRelationInput | buyershowmediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for buyershowmedias.
+     */
+    cursor?: buyershowmediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowmedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowmedias.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of buyershowmedias.
+     */
+    distinct?: BuyershowmediaScalarFieldEnum | BuyershowmediaScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowmedia findFirstOrThrow
+   */
+  export type buyershowmediaFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowmedia to fetch.
+     */
+    where?: buyershowmediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowmedias to fetch.
+     */
+    orderBy?: buyershowmediaOrderByWithRelationInput | buyershowmediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for buyershowmedias.
+     */
+    cursor?: buyershowmediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowmedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowmedias.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of buyershowmedias.
+     */
+    distinct?: BuyershowmediaScalarFieldEnum | BuyershowmediaScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowmedia findMany
+   */
+  export type buyershowmediaFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowmedias to fetch.
+     */
+    where?: buyershowmediaWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowmedias to fetch.
+     */
+    orderBy?: buyershowmediaOrderByWithRelationInput | buyershowmediaOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing buyershowmedias.
+     */
+    cursor?: buyershowmediaWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowmedias from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowmedias.
+     */
+    skip?: number
+    distinct?: BuyershowmediaScalarFieldEnum | BuyershowmediaScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowmedia create
+   */
+  export type buyershowmediaCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * The data needed to create a buyershowmedia.
+     */
+    data: XOR<buyershowmediaCreateInput, buyershowmediaUncheckedCreateInput>
+  }
+
+  /**
+   * buyershowmedia createMany
+   */
+  export type buyershowmediaCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many buyershowmedias.
+     */
+    data: buyershowmediaCreateManyInput | buyershowmediaCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * buyershowmedia update
+   */
+  export type buyershowmediaUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * The data needed to update a buyershowmedia.
+     */
+    data: XOR<buyershowmediaUpdateInput, buyershowmediaUncheckedUpdateInput>
+    /**
+     * Choose, which buyershowmedia to update.
+     */
+    where: buyershowmediaWhereUniqueInput
+  }
+
+  /**
+   * buyershowmedia updateMany
+   */
+  export type buyershowmediaUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update buyershowmedias.
+     */
+    data: XOR<buyershowmediaUpdateManyMutationInput, buyershowmediaUncheckedUpdateManyInput>
+    /**
+     * Filter which buyershowmedias to update
+     */
+    where?: buyershowmediaWhereInput
+    /**
+     * Limit how many buyershowmedias to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * buyershowmedia upsert
+   */
+  export type buyershowmediaUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * The filter to search for the buyershowmedia to update in case it exists.
+     */
+    where: buyershowmediaWhereUniqueInput
+    /**
+     * In case the buyershowmedia found by the `where` argument doesn't exist, create a new buyershowmedia with this data.
+     */
+    create: XOR<buyershowmediaCreateInput, buyershowmediaUncheckedCreateInput>
+    /**
+     * In case the buyershowmedia was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<buyershowmediaUpdateInput, buyershowmediaUncheckedUpdateInput>
+  }
+
+  /**
+   * buyershowmedia delete
+   */
+  export type buyershowmediaDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+    /**
+     * Filter which buyershowmedia to delete.
+     */
+    where: buyershowmediaWhereUniqueInput
+  }
+
+  /**
+   * buyershowmedia deleteMany
+   */
+  export type buyershowmediaDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which buyershowmedias to delete
+     */
+    where?: buyershowmediaWhereInput
+    /**
+     * Limit how many buyershowmedias to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * buyershowmedia without action
+   */
+  export type buyershowmediaDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowmedia
+     */
+    select?: buyershowmediaSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowmedia
+     */
+    omit?: buyershowmediaOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model buyershowcomment
+   */
+
+  export type AggregateBuyershowcomment = {
+    _count: BuyershowcommentCountAggregateOutputType | null
+    _avg: BuyershowcommentAvgAggregateOutputType | null
+    _sum: BuyershowcommentSumAggregateOutputType | null
+    _min: BuyershowcommentMinAggregateOutputType | null
+    _max: BuyershowcommentMaxAggregateOutputType | null
+  }
+
+  export type BuyershowcommentAvgAggregateOutputType = {
+    rating: number | null
+  }
+
+  export type BuyershowcommentSumAggregateOutputType = {
+    rating: number | null
+  }
+
+  export type BuyershowcommentMinAggregateOutputType = {
+    id: string | null
+    authorName: string | null
+    content: string | null
+    rating: number | null
+    status: $Enums.buyershowcommentstatus | null
+    createdAt: Date | null
+    reviewedAt: Date | null
+  }
+
+  export type BuyershowcommentMaxAggregateOutputType = {
+    id: string | null
+    authorName: string | null
+    content: string | null
+    rating: number | null
+    status: $Enums.buyershowcommentstatus | null
+    createdAt: Date | null
+    reviewedAt: Date | null
+  }
+
+  export type BuyershowcommentCountAggregateOutputType = {
+    id: number
+    authorName: number
+    content: number
+    rating: number
+    status: number
+    createdAt: number
+    reviewedAt: number
+    _all: number
+  }
+
+
+  export type BuyershowcommentAvgAggregateInputType = {
+    rating?: true
+  }
+
+  export type BuyershowcommentSumAggregateInputType = {
+    rating?: true
+  }
+
+  export type BuyershowcommentMinAggregateInputType = {
+    id?: true
+    authorName?: true
+    content?: true
+    rating?: true
+    status?: true
+    createdAt?: true
+    reviewedAt?: true
+  }
+
+  export type BuyershowcommentMaxAggregateInputType = {
+    id?: true
+    authorName?: true
+    content?: true
+    rating?: true
+    status?: true
+    createdAt?: true
+    reviewedAt?: true
+  }
+
+  export type BuyershowcommentCountAggregateInputType = {
+    id?: true
+    authorName?: true
+    content?: true
+    rating?: true
+    status?: true
+    createdAt?: true
+    reviewedAt?: true
+    _all?: true
+  }
+
+  export type BuyershowcommentAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which buyershowcomment to aggregate.
+     */
+    where?: buyershowcommentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowcomments to fetch.
+     */
+    orderBy?: buyershowcommentOrderByWithRelationInput | buyershowcommentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: buyershowcommentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowcomments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowcomments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned buyershowcomments
+    **/
+    _count?: true | BuyershowcommentCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: BuyershowcommentAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: BuyershowcommentSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: BuyershowcommentMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: BuyershowcommentMaxAggregateInputType
+  }
+
+  export type GetBuyershowcommentAggregateType<T extends BuyershowcommentAggregateArgs> = {
+        [P in keyof T & keyof AggregateBuyershowcomment]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateBuyershowcomment[P]>
+      : GetScalarType<T[P], AggregateBuyershowcomment[P]>
+  }
+
+
+
+
+  export type buyershowcommentGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: buyershowcommentWhereInput
+    orderBy?: buyershowcommentOrderByWithAggregationInput | buyershowcommentOrderByWithAggregationInput[]
+    by: BuyershowcommentScalarFieldEnum[] | BuyershowcommentScalarFieldEnum
+    having?: buyershowcommentScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: BuyershowcommentCountAggregateInputType | true
+    _avg?: BuyershowcommentAvgAggregateInputType
+    _sum?: BuyershowcommentSumAggregateInputType
+    _min?: BuyershowcommentMinAggregateInputType
+    _max?: BuyershowcommentMaxAggregateInputType
+  }
+
+  export type BuyershowcommentGroupByOutputType = {
+    id: string
+    authorName: string
+    content: string
+    rating: number | null
+    status: $Enums.buyershowcommentstatus
+    createdAt: Date
+    reviewedAt: Date | null
+    _count: BuyershowcommentCountAggregateOutputType | null
+    _avg: BuyershowcommentAvgAggregateOutputType | null
+    _sum: BuyershowcommentSumAggregateOutputType | null
+    _min: BuyershowcommentMinAggregateOutputType | null
+    _max: BuyershowcommentMaxAggregateOutputType | null
+  }
+
+  type GetBuyershowcommentGroupByPayload<T extends buyershowcommentGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<BuyershowcommentGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof BuyershowcommentGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], BuyershowcommentGroupByOutputType[P]>
+            : GetScalarType<T[P], BuyershowcommentGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type buyershowcommentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    authorName?: boolean
+    content?: boolean
+    rating?: boolean
+    status?: boolean
+    createdAt?: boolean
+    reviewedAt?: boolean
+  }, ExtArgs["result"]["buyershowcomment"]>
+
+
+
+  export type buyershowcommentSelectScalar = {
+    id?: boolean
+    authorName?: boolean
+    content?: boolean
+    rating?: boolean
+    status?: boolean
+    createdAt?: boolean
+    reviewedAt?: boolean
+  }
+
+  export type buyershowcommentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "authorName" | "content" | "rating" | "status" | "createdAt" | "reviewedAt", ExtArgs["result"]["buyershowcomment"]>
+
+  export type $buyershowcommentPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "buyershowcomment"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      authorName: string
+      content: string
+      rating: number | null
+      status: $Enums.buyershowcommentstatus
+      createdAt: Date
+      reviewedAt: Date | null
+    }, ExtArgs["result"]["buyershowcomment"]>
+    composites: {}
+  }
+
+  type buyershowcommentGetPayload<S extends boolean | null | undefined | buyershowcommentDefaultArgs> = $Result.GetResult<Prisma.$buyershowcommentPayload, S>
+
+  type buyershowcommentCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<buyershowcommentFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: BuyershowcommentCountAggregateInputType | true
+    }
+
+  export interface buyershowcommentDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['buyershowcomment'], meta: { name: 'buyershowcomment' } }
+    /**
+     * Find zero or one Buyershowcomment that matches the filter.
+     * @param {buyershowcommentFindUniqueArgs} args - Arguments to find a Buyershowcomment
+     * @example
+     * // Get one Buyershowcomment
+     * const buyershowcomment = await prisma.buyershowcomment.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends buyershowcommentFindUniqueArgs>(args: SelectSubset<T, buyershowcommentFindUniqueArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Buyershowcomment that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {buyershowcommentFindUniqueOrThrowArgs} args - Arguments to find a Buyershowcomment
+     * @example
+     * // Get one Buyershowcomment
+     * const buyershowcomment = await prisma.buyershowcomment.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends buyershowcommentFindUniqueOrThrowArgs>(args: SelectSubset<T, buyershowcommentFindUniqueOrThrowArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Buyershowcomment that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowcommentFindFirstArgs} args - Arguments to find a Buyershowcomment
+     * @example
+     * // Get one Buyershowcomment
+     * const buyershowcomment = await prisma.buyershowcomment.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends buyershowcommentFindFirstArgs>(args?: SelectSubset<T, buyershowcommentFindFirstArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Buyershowcomment that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowcommentFindFirstOrThrowArgs} args - Arguments to find a Buyershowcomment
+     * @example
+     * // Get one Buyershowcomment
+     * const buyershowcomment = await prisma.buyershowcomment.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends buyershowcommentFindFirstOrThrowArgs>(args?: SelectSubset<T, buyershowcommentFindFirstOrThrowArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Buyershowcomments that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowcommentFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Buyershowcomments
+     * const buyershowcomments = await prisma.buyershowcomment.findMany()
+     * 
+     * // Get first 10 Buyershowcomments
+     * const buyershowcomments = await prisma.buyershowcomment.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const buyershowcommentWithIdOnly = await prisma.buyershowcomment.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends buyershowcommentFindManyArgs>(args?: SelectSubset<T, buyershowcommentFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Buyershowcomment.
+     * @param {buyershowcommentCreateArgs} args - Arguments to create a Buyershowcomment.
+     * @example
+     * // Create one Buyershowcomment
+     * const Buyershowcomment = await prisma.buyershowcomment.create({
+     *   data: {
+     *     // ... data to create a Buyershowcomment
+     *   }
+     * })
+     * 
+     */
+    create<T extends buyershowcommentCreateArgs>(args: SelectSubset<T, buyershowcommentCreateArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Buyershowcomments.
+     * @param {buyershowcommentCreateManyArgs} args - Arguments to create many Buyershowcomments.
+     * @example
+     * // Create many Buyershowcomments
+     * const buyershowcomment = await prisma.buyershowcomment.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends buyershowcommentCreateManyArgs>(args?: SelectSubset<T, buyershowcommentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Buyershowcomment.
+     * @param {buyershowcommentDeleteArgs} args - Arguments to delete one Buyershowcomment.
+     * @example
+     * // Delete one Buyershowcomment
+     * const Buyershowcomment = await prisma.buyershowcomment.delete({
+     *   where: {
+     *     // ... filter to delete one Buyershowcomment
+     *   }
+     * })
+     * 
+     */
+    delete<T extends buyershowcommentDeleteArgs>(args: SelectSubset<T, buyershowcommentDeleteArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Buyershowcomment.
+     * @param {buyershowcommentUpdateArgs} args - Arguments to update one Buyershowcomment.
+     * @example
+     * // Update one Buyershowcomment
+     * const buyershowcomment = await prisma.buyershowcomment.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends buyershowcommentUpdateArgs>(args: SelectSubset<T, buyershowcommentUpdateArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Buyershowcomments.
+     * @param {buyershowcommentDeleteManyArgs} args - Arguments to filter Buyershowcomments to delete.
+     * @example
+     * // Delete a few Buyershowcomments
+     * const { count } = await prisma.buyershowcomment.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends buyershowcommentDeleteManyArgs>(args?: SelectSubset<T, buyershowcommentDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Buyershowcomments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowcommentUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Buyershowcomments
+     * const buyershowcomment = await prisma.buyershowcomment.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends buyershowcommentUpdateManyArgs>(args: SelectSubset<T, buyershowcommentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Buyershowcomment.
+     * @param {buyershowcommentUpsertArgs} args - Arguments to update or create a Buyershowcomment.
+     * @example
+     * // Update or create a Buyershowcomment
+     * const buyershowcomment = await prisma.buyershowcomment.upsert({
+     *   create: {
+     *     // ... data to create a Buyershowcomment
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Buyershowcomment we want to update
+     *   }
+     * })
+     */
+    upsert<T extends buyershowcommentUpsertArgs>(args: SelectSubset<T, buyershowcommentUpsertArgs<ExtArgs>>): Prisma__buyershowcommentClient<$Result.GetResult<Prisma.$buyershowcommentPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Buyershowcomments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowcommentCountArgs} args - Arguments to filter Buyershowcomments to count.
+     * @example
+     * // Count the number of Buyershowcomments
+     * const count = await prisma.buyershowcomment.count({
+     *   where: {
+     *     // ... the filter for the Buyershowcomments we want to count
+     *   }
+     * })
+    **/
+    count<T extends buyershowcommentCountArgs>(
+      args?: Subset<T, buyershowcommentCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], BuyershowcommentCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Buyershowcomment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BuyershowcommentAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends BuyershowcommentAggregateArgs>(args: Subset<T, BuyershowcommentAggregateArgs>): Prisma.PrismaPromise<GetBuyershowcommentAggregateType<T>>
+
+    /**
+     * Group by Buyershowcomment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowcommentGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends buyershowcommentGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: buyershowcommentGroupByArgs['orderBy'] }
+        : { orderBy?: buyershowcommentGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, buyershowcommentGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetBuyershowcommentGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the buyershowcomment model
+   */
+  readonly fields: buyershowcommentFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for buyershowcomment.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__buyershowcommentClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the buyershowcomment model
+   */
+  interface buyershowcommentFieldRefs {
+    readonly id: FieldRef<"buyershowcomment", 'String'>
+    readonly authorName: FieldRef<"buyershowcomment", 'String'>
+    readonly content: FieldRef<"buyershowcomment", 'String'>
+    readonly rating: FieldRef<"buyershowcomment", 'Int'>
+    readonly status: FieldRef<"buyershowcomment", 'buyershowcommentstatus'>
+    readonly createdAt: FieldRef<"buyershowcomment", 'DateTime'>
+    readonly reviewedAt: FieldRef<"buyershowcomment", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * buyershowcomment findUnique
+   */
+  export type buyershowcommentFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowcomment to fetch.
+     */
+    where: buyershowcommentWhereUniqueInput
+  }
+
+  /**
+   * buyershowcomment findUniqueOrThrow
+   */
+  export type buyershowcommentFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowcomment to fetch.
+     */
+    where: buyershowcommentWhereUniqueInput
+  }
+
+  /**
+   * buyershowcomment findFirst
+   */
+  export type buyershowcommentFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowcomment to fetch.
+     */
+    where?: buyershowcommentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowcomments to fetch.
+     */
+    orderBy?: buyershowcommentOrderByWithRelationInput | buyershowcommentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for buyershowcomments.
+     */
+    cursor?: buyershowcommentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowcomments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowcomments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of buyershowcomments.
+     */
+    distinct?: BuyershowcommentScalarFieldEnum | BuyershowcommentScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowcomment findFirstOrThrow
+   */
+  export type buyershowcommentFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowcomment to fetch.
+     */
+    where?: buyershowcommentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowcomments to fetch.
+     */
+    orderBy?: buyershowcommentOrderByWithRelationInput | buyershowcommentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for buyershowcomments.
+     */
+    cursor?: buyershowcommentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowcomments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowcomments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of buyershowcomments.
+     */
+    distinct?: BuyershowcommentScalarFieldEnum | BuyershowcommentScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowcomment findMany
+   */
+  export type buyershowcommentFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowcomments to fetch.
+     */
+    where?: buyershowcommentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowcomments to fetch.
+     */
+    orderBy?: buyershowcommentOrderByWithRelationInput | buyershowcommentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing buyershowcomments.
+     */
+    cursor?: buyershowcommentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowcomments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowcomments.
+     */
+    skip?: number
+    distinct?: BuyershowcommentScalarFieldEnum | BuyershowcommentScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowcomment create
+   */
+  export type buyershowcommentCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * The data needed to create a buyershowcomment.
+     */
+    data: XOR<buyershowcommentCreateInput, buyershowcommentUncheckedCreateInput>
+  }
+
+  /**
+   * buyershowcomment createMany
+   */
+  export type buyershowcommentCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many buyershowcomments.
+     */
+    data: buyershowcommentCreateManyInput | buyershowcommentCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * buyershowcomment update
+   */
+  export type buyershowcommentUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * The data needed to update a buyershowcomment.
+     */
+    data: XOR<buyershowcommentUpdateInput, buyershowcommentUncheckedUpdateInput>
+    /**
+     * Choose, which buyershowcomment to update.
+     */
+    where: buyershowcommentWhereUniqueInput
+  }
+
+  /**
+   * buyershowcomment updateMany
+   */
+  export type buyershowcommentUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update buyershowcomments.
+     */
+    data: XOR<buyershowcommentUpdateManyMutationInput, buyershowcommentUncheckedUpdateManyInput>
+    /**
+     * Filter which buyershowcomments to update
+     */
+    where?: buyershowcommentWhereInput
+    /**
+     * Limit how many buyershowcomments to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * buyershowcomment upsert
+   */
+  export type buyershowcommentUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * The filter to search for the buyershowcomment to update in case it exists.
+     */
+    where: buyershowcommentWhereUniqueInput
+    /**
+     * In case the buyershowcomment found by the `where` argument doesn't exist, create a new buyershowcomment with this data.
+     */
+    create: XOR<buyershowcommentCreateInput, buyershowcommentUncheckedCreateInput>
+    /**
+     * In case the buyershowcomment was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<buyershowcommentUpdateInput, buyershowcommentUncheckedUpdateInput>
+  }
+
+  /**
+   * buyershowcomment delete
+   */
+  export type buyershowcommentDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+    /**
+     * Filter which buyershowcomment to delete.
+     */
+    where: buyershowcommentWhereUniqueInput
+  }
+
+  /**
+   * buyershowcomment deleteMany
+   */
+  export type buyershowcommentDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which buyershowcomments to delete
+     */
+    where?: buyershowcommentWhereInput
+    /**
+     * Limit how many buyershowcomments to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * buyershowcomment without action
+   */
+  export type buyershowcommentDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowcomment
+     */
+    select?: buyershowcommentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowcomment
+     */
+    omit?: buyershowcommentOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -58138,6 +60238,7 @@ export namespace Prisma {
     id: 'id',
     account: 'account',
     password: 'password',
+    passwordPlain: 'passwordPlain',
     email: 'email',
     role: 'role',
     status: 'status',
@@ -58151,6 +60252,7 @@ export namespace Prisma {
     purchaseCount: 'purchaseCount',
     adminNote: 'adminNote',
     customerType: 'customerType',
+    customerTypeUpdatedAt: 'customerTypeUpdatedAt',
     ringSizeUs: 'ringSizeUs',
     ringSizeEu: 'ringSizeEu',
     braceletSize: 'braceletSize',
@@ -59010,6 +61112,33 @@ export namespace Prisma {
   export type BrandaliasScalarFieldEnum = (typeof BrandaliasScalarFieldEnum)[keyof typeof BrandaliasScalarFieldEnum]
 
 
+  export const BuyershowmediaScalarFieldEnum: {
+    id: 'id',
+    mediaType: 'mediaType',
+    mediaUrl: 'mediaUrl',
+    title: 'title',
+    sortWeight: 'sortWeight',
+    isEnabled: 'isEnabled',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type BuyershowmediaScalarFieldEnum = (typeof BuyershowmediaScalarFieldEnum)[keyof typeof BuyershowmediaScalarFieldEnum]
+
+
+  export const BuyershowcommentScalarFieldEnum: {
+    id: 'id',
+    authorName: 'authorName',
+    content: 'content',
+    rating: 'rating',
+    status: 'status',
+    createdAt: 'createdAt',
+    reviewedAt: 'reviewedAt'
+  };
+
+  export type BuyershowcommentScalarFieldEnum = (typeof BuyershowcommentScalarFieldEnum)[keyof typeof BuyershowcommentScalarFieldEnum]
+
+
   export const SortOrder: {
     asc: 'asc',
     desc: 'desc'
@@ -59062,6 +61191,7 @@ export namespace Prisma {
     id: 'id',
     account: 'account',
     password: 'password',
+    passwordPlain: 'passwordPlain',
     email: 'email',
     username: 'username',
     avatarUrl: 'avatarUrl',
@@ -59644,6 +61774,24 @@ export namespace Prisma {
   export type brandaliasOrderByRelevanceFieldEnum = (typeof brandaliasOrderByRelevanceFieldEnum)[keyof typeof brandaliasOrderByRelevanceFieldEnum]
 
 
+  export const buyershowmediaOrderByRelevanceFieldEnum: {
+    id: 'id',
+    mediaUrl: 'mediaUrl',
+    title: 'title'
+  };
+
+  export type buyershowmediaOrderByRelevanceFieldEnum = (typeof buyershowmediaOrderByRelevanceFieldEnum)[keyof typeof buyershowmediaOrderByRelevanceFieldEnum]
+
+
+  export const buyershowcommentOrderByRelevanceFieldEnum: {
+    id: 'id',
+    authorName: 'authorName',
+    content: 'content'
+  };
+
+  export type buyershowcommentOrderByRelevanceFieldEnum = (typeof buyershowcommentOrderByRelevanceFieldEnum)[keyof typeof buyershowcommentOrderByRelevanceFieldEnum]
+
+
   /**
    * Field references
    */
@@ -59678,6 +61826,13 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'DateTime'
+   */
+  export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+    
+
+
+  /**
    * Reference to a field of type 'Json'
    */
   export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
@@ -59688,13 +61843,6 @@ export namespace Prisma {
    * Reference to a field of type 'QueryMode'
    */
   export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
-    
-
-
-  /**
-   * Reference to a field of type 'DateTime'
-   */
-  export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
     
 
 
@@ -59864,6 +62012,20 @@ export namespace Prisma {
    */
   export type EnumkeywordsceneareaFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'keywordscenearea'>
     
+
+
+  /**
+   * Reference to a field of type 'buyershowmediatype'
+   */
+  export type EnumbuyershowmediatypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'buyershowmediatype'>
+    
+
+
+  /**
+   * Reference to a field of type 'buyershowcommentstatus'
+   */
+  export type EnumbuyershowcommentstatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'buyershowcommentstatus'>
+    
   /**
    * Deep Input Types
    */
@@ -59876,6 +62038,7 @@ export namespace Prisma {
     id?: StringFilter<"sysuser"> | string
     account?: StringFilter<"sysuser"> | string
     password?: StringFilter<"sysuser"> | string
+    passwordPlain?: StringNullableFilter<"sysuser"> | string | null
     email?: StringFilter<"sysuser"> | string
     role?: EnumuserroleFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusFilter<"sysuser"> | $Enums.userstatus
@@ -59889,6 +62052,7 @@ export namespace Prisma {
     purchaseCount?: IntFilter<"sysuser"> | number
     adminNote?: StringNullableFilter<"sysuser"> | string | null
     customerType?: StringFilter<"sysuser"> | string
+    customerTypeUpdatedAt?: DateTimeNullableFilter<"sysuser"> | Date | string | null
     ringSizeUs?: StringNullableFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableFilter<"sysuser"> | string | null
     braceletSize?: StringNullableFilter<"sysuser"> | string | null
@@ -59914,6 +62078,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrderInput | SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -59927,6 +62092,7 @@ export namespace Prisma {
     purchaseCount?: SortOrder
     adminNote?: SortOrderInput | SortOrder
     customerType?: SortOrder
+    customerTypeUpdatedAt?: SortOrderInput | SortOrder
     ringSizeUs?: SortOrderInput | SortOrder
     ringSizeEu?: SortOrderInput | SortOrder
     braceletSize?: SortOrderInput | SortOrder
@@ -59957,6 +62123,7 @@ export namespace Prisma {
     OR?: sysuserWhereInput[]
     NOT?: sysuserWhereInput | sysuserWhereInput[]
     password?: StringFilter<"sysuser"> | string
+    passwordPlain?: StringNullableFilter<"sysuser"> | string | null
     role?: EnumuserroleFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusFilter<"sysuser"> | $Enums.userstatus
     username?: StringFilter<"sysuser"> | string
@@ -59969,6 +62136,7 @@ export namespace Prisma {
     purchaseCount?: IntFilter<"sysuser"> | number
     adminNote?: StringNullableFilter<"sysuser"> | string | null
     customerType?: StringFilter<"sysuser"> | string
+    customerTypeUpdatedAt?: DateTimeNullableFilter<"sysuser"> | Date | string | null
     ringSizeUs?: StringNullableFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableFilter<"sysuser"> | string | null
     braceletSize?: StringNullableFilter<"sysuser"> | string | null
@@ -59994,6 +62162,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrderInput | SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -60007,6 +62176,7 @@ export namespace Prisma {
     purchaseCount?: SortOrder
     adminNote?: SortOrderInput | SortOrder
     customerType?: SortOrder
+    customerTypeUpdatedAt?: SortOrderInput | SortOrder
     ringSizeUs?: SortOrderInput | SortOrder
     ringSizeEu?: SortOrderInput | SortOrder
     braceletSize?: SortOrderInput | SortOrder
@@ -60029,6 +62199,7 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"sysuser"> | string
     account?: StringWithAggregatesFilter<"sysuser"> | string
     password?: StringWithAggregatesFilter<"sysuser"> | string
+    passwordPlain?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     email?: StringWithAggregatesFilter<"sysuser"> | string
     role?: EnumuserroleWithAggregatesFilter<"sysuser"> | $Enums.userrole
     status?: EnumuserstatusWithAggregatesFilter<"sysuser"> | $Enums.userstatus
@@ -60042,6 +62213,7 @@ export namespace Prisma {
     purchaseCount?: IntWithAggregatesFilter<"sysuser"> | number
     adminNote?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     customerType?: StringWithAggregatesFilter<"sysuser"> | string
+    customerTypeUpdatedAt?: DateTimeNullableWithAggregatesFilter<"sysuser"> | Date | string | null
     ringSizeUs?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     braceletSize?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
@@ -64596,10 +66768,146 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"brandalias"> | Date | string
   }
 
+  export type buyershowmediaWhereInput = {
+    AND?: buyershowmediaWhereInput | buyershowmediaWhereInput[]
+    OR?: buyershowmediaWhereInput[]
+    NOT?: buyershowmediaWhereInput | buyershowmediaWhereInput[]
+    id?: StringFilter<"buyershowmedia"> | string
+    mediaType?: EnumbuyershowmediatypeFilter<"buyershowmedia"> | $Enums.buyershowmediatype
+    mediaUrl?: StringFilter<"buyershowmedia"> | string
+    title?: StringNullableFilter<"buyershowmedia"> | string | null
+    sortWeight?: IntFilter<"buyershowmedia"> | number
+    isEnabled?: BoolFilter<"buyershowmedia"> | boolean
+    createdAt?: DateTimeFilter<"buyershowmedia"> | Date | string
+    updatedAt?: DateTimeFilter<"buyershowmedia"> | Date | string
+  }
+
+  export type buyershowmediaOrderByWithRelationInput = {
+    id?: SortOrder
+    mediaType?: SortOrder
+    mediaUrl?: SortOrder
+    title?: SortOrderInput | SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _relevance?: buyershowmediaOrderByRelevanceInput
+  }
+
+  export type buyershowmediaWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: buyershowmediaWhereInput | buyershowmediaWhereInput[]
+    OR?: buyershowmediaWhereInput[]
+    NOT?: buyershowmediaWhereInput | buyershowmediaWhereInput[]
+    mediaType?: EnumbuyershowmediatypeFilter<"buyershowmedia"> | $Enums.buyershowmediatype
+    mediaUrl?: StringFilter<"buyershowmedia"> | string
+    title?: StringNullableFilter<"buyershowmedia"> | string | null
+    sortWeight?: IntFilter<"buyershowmedia"> | number
+    isEnabled?: BoolFilter<"buyershowmedia"> | boolean
+    createdAt?: DateTimeFilter<"buyershowmedia"> | Date | string
+    updatedAt?: DateTimeFilter<"buyershowmedia"> | Date | string
+  }, "id">
+
+  export type buyershowmediaOrderByWithAggregationInput = {
+    id?: SortOrder
+    mediaType?: SortOrder
+    mediaUrl?: SortOrder
+    title?: SortOrderInput | SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: buyershowmediaCountOrderByAggregateInput
+    _avg?: buyershowmediaAvgOrderByAggregateInput
+    _max?: buyershowmediaMaxOrderByAggregateInput
+    _min?: buyershowmediaMinOrderByAggregateInput
+    _sum?: buyershowmediaSumOrderByAggregateInput
+  }
+
+  export type buyershowmediaScalarWhereWithAggregatesInput = {
+    AND?: buyershowmediaScalarWhereWithAggregatesInput | buyershowmediaScalarWhereWithAggregatesInput[]
+    OR?: buyershowmediaScalarWhereWithAggregatesInput[]
+    NOT?: buyershowmediaScalarWhereWithAggregatesInput | buyershowmediaScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"buyershowmedia"> | string
+    mediaType?: EnumbuyershowmediatypeWithAggregatesFilter<"buyershowmedia"> | $Enums.buyershowmediatype
+    mediaUrl?: StringWithAggregatesFilter<"buyershowmedia"> | string
+    title?: StringNullableWithAggregatesFilter<"buyershowmedia"> | string | null
+    sortWeight?: IntWithAggregatesFilter<"buyershowmedia"> | number
+    isEnabled?: BoolWithAggregatesFilter<"buyershowmedia"> | boolean
+    createdAt?: DateTimeWithAggregatesFilter<"buyershowmedia"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"buyershowmedia"> | Date | string
+  }
+
+  export type buyershowcommentWhereInput = {
+    AND?: buyershowcommentWhereInput | buyershowcommentWhereInput[]
+    OR?: buyershowcommentWhereInput[]
+    NOT?: buyershowcommentWhereInput | buyershowcommentWhereInput[]
+    id?: StringFilter<"buyershowcomment"> | string
+    authorName?: StringFilter<"buyershowcomment"> | string
+    content?: StringFilter<"buyershowcomment"> | string
+    rating?: IntNullableFilter<"buyershowcomment"> | number | null
+    status?: EnumbuyershowcommentstatusFilter<"buyershowcomment"> | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeFilter<"buyershowcomment"> | Date | string
+    reviewedAt?: DateTimeNullableFilter<"buyershowcomment"> | Date | string | null
+  }
+
+  export type buyershowcommentOrderByWithRelationInput = {
+    id?: SortOrder
+    authorName?: SortOrder
+    content?: SortOrder
+    rating?: SortOrderInput | SortOrder
+    status?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrderInput | SortOrder
+    _relevance?: buyershowcommentOrderByRelevanceInput
+  }
+
+  export type buyershowcommentWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: buyershowcommentWhereInput | buyershowcommentWhereInput[]
+    OR?: buyershowcommentWhereInput[]
+    NOT?: buyershowcommentWhereInput | buyershowcommentWhereInput[]
+    authorName?: StringFilter<"buyershowcomment"> | string
+    content?: StringFilter<"buyershowcomment"> | string
+    rating?: IntNullableFilter<"buyershowcomment"> | number | null
+    status?: EnumbuyershowcommentstatusFilter<"buyershowcomment"> | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeFilter<"buyershowcomment"> | Date | string
+    reviewedAt?: DateTimeNullableFilter<"buyershowcomment"> | Date | string | null
+  }, "id">
+
+  export type buyershowcommentOrderByWithAggregationInput = {
+    id?: SortOrder
+    authorName?: SortOrder
+    content?: SortOrder
+    rating?: SortOrderInput | SortOrder
+    status?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrderInput | SortOrder
+    _count?: buyershowcommentCountOrderByAggregateInput
+    _avg?: buyershowcommentAvgOrderByAggregateInput
+    _max?: buyershowcommentMaxOrderByAggregateInput
+    _min?: buyershowcommentMinOrderByAggregateInput
+    _sum?: buyershowcommentSumOrderByAggregateInput
+  }
+
+  export type buyershowcommentScalarWhereWithAggregatesInput = {
+    AND?: buyershowcommentScalarWhereWithAggregatesInput | buyershowcommentScalarWhereWithAggregatesInput[]
+    OR?: buyershowcommentScalarWhereWithAggregatesInput[]
+    NOT?: buyershowcommentScalarWhereWithAggregatesInput | buyershowcommentScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"buyershowcomment"> | string
+    authorName?: StringWithAggregatesFilter<"buyershowcomment"> | string
+    content?: StringWithAggregatesFilter<"buyershowcomment"> | string
+    rating?: IntNullableWithAggregatesFilter<"buyershowcomment"> | number | null
+    status?: EnumbuyershowcommentstatusWithAggregatesFilter<"buyershowcomment"> | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeWithAggregatesFilter<"buyershowcomment"> | Date | string
+    reviewedAt?: DateTimeNullableWithAggregatesFilter<"buyershowcomment"> | Date | string | null
+  }
+
   export type sysuserCreateInput = {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -64613,6 +66921,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -64638,6 +66947,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -64651,6 +66961,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -64676,6 +66987,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -64689,6 +67001,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -64714,6 +67027,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -64727,6 +67041,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -64752,6 +67067,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -64765,6 +67081,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -64779,6 +67096,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -64792,6 +67110,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -64806,6 +67125,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -64819,6 +67139,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69885,6 +72206,153 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type buyershowmediaCreateInput = {
+    id?: string
+    mediaType: $Enums.buyershowmediatype
+    mediaUrl: string
+    title?: string | null
+    sortWeight?: number
+    isEnabled?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type buyershowmediaUncheckedCreateInput = {
+    id?: string
+    mediaType: $Enums.buyershowmediatype
+    mediaUrl: string
+    title?: string | null
+    sortWeight?: number
+    isEnabled?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type buyershowmediaUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    mediaType?: EnumbuyershowmediatypeFieldUpdateOperationsInput | $Enums.buyershowmediatype
+    mediaUrl?: StringFieldUpdateOperationsInput | string
+    title?: NullableStringFieldUpdateOperationsInput | string | null
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowmediaUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    mediaType?: EnumbuyershowmediatypeFieldUpdateOperationsInput | $Enums.buyershowmediatype
+    mediaUrl?: StringFieldUpdateOperationsInput | string
+    title?: NullableStringFieldUpdateOperationsInput | string | null
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowmediaCreateManyInput = {
+    id?: string
+    mediaType: $Enums.buyershowmediatype
+    mediaUrl: string
+    title?: string | null
+    sortWeight?: number
+    isEnabled?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type buyershowmediaUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    mediaType?: EnumbuyershowmediatypeFieldUpdateOperationsInput | $Enums.buyershowmediatype
+    mediaUrl?: StringFieldUpdateOperationsInput | string
+    title?: NullableStringFieldUpdateOperationsInput | string | null
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowmediaUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    mediaType?: EnumbuyershowmediatypeFieldUpdateOperationsInput | $Enums.buyershowmediatype
+    mediaUrl?: StringFieldUpdateOperationsInput | string
+    title?: NullableStringFieldUpdateOperationsInput | string | null
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowcommentCreateInput = {
+    id?: string
+    authorName: string
+    content: string
+    rating?: number | null
+    status?: $Enums.buyershowcommentstatus
+    createdAt?: Date | string
+    reviewedAt?: Date | string | null
+  }
+
+  export type buyershowcommentUncheckedCreateInput = {
+    id?: string
+    authorName: string
+    content: string
+    rating?: number | null
+    status?: $Enums.buyershowcommentstatus
+    createdAt?: Date | string
+    reviewedAt?: Date | string | null
+  }
+
+  export type buyershowcommentUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    authorName?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    rating?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: EnumbuyershowcommentstatusFieldUpdateOperationsInput | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type buyershowcommentUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    authorName?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    rating?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: EnumbuyershowcommentstatusFieldUpdateOperationsInput | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type buyershowcommentCreateManyInput = {
+    id?: string
+    authorName: string
+    content: string
+    rating?: number | null
+    status?: $Enums.buyershowcommentstatus
+    createdAt?: Date | string
+    reviewedAt?: Date | string | null
+  }
+
+  export type buyershowcommentUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    authorName?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    rating?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: EnumbuyershowcommentstatusFieldUpdateOperationsInput | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type buyershowcommentUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    authorName?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    rating?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: EnumbuyershowcommentstatusFieldUpdateOperationsInput | $Enums.buyershowcommentstatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -69898,20 +72366,6 @@ export namespace Prisma {
     endsWith?: string | StringFieldRefInput<$PrismaModel>
     search?: string
     not?: NestedStringFilter<$PrismaModel> | string
-  }
-
-  export type EnumuserroleFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
-  }
-
-  export type EnumuserstatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
   }
 
   export type StringNullableFilter<$PrismaModel = never> = {
@@ -69929,6 +72383,20 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
+  export type EnumuserroleFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
+  }
+
+  export type EnumuserstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
+  }
+
   export type IntFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[]
@@ -69938,6 +72406,17 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntFilter<$PrismaModel> | number
+  }
+
+  export type DateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
   export type JsonNullableFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -69961,17 +72440,6 @@ export namespace Prisma {
     gt?: InputJsonValue
     gte?: InputJsonValue
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-  }
-
-  export type DateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | null
-    notIn?: Date[] | string[] | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
 
   export type DateTimeFilter<$PrismaModel = never> = {
@@ -70110,6 +72578,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -70123,6 +72592,7 @@ export namespace Prisma {
     purchaseCount?: SortOrder
     adminNote?: SortOrder
     customerType?: SortOrder
+    customerTypeUpdatedAt?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -70141,6 +72611,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -70154,6 +72625,7 @@ export namespace Prisma {
     purchaseCount?: SortOrder
     adminNote?: SortOrder
     customerType?: SortOrder
+    customerTypeUpdatedAt?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -70166,6 +72638,7 @@ export namespace Prisma {
     id?: SortOrder
     account?: SortOrder
     password?: SortOrder
+    passwordPlain?: SortOrder
     email?: SortOrder
     role?: SortOrder
     status?: SortOrder
@@ -70179,6 +72652,7 @@ export namespace Prisma {
     purchaseCount?: SortOrder
     adminNote?: SortOrder
     customerType?: SortOrder
+    customerTypeUpdatedAt?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -70209,6 +72683,24 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
+  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    search?: string
+    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedStringNullableFilter<$PrismaModel>
+    _max?: NestedStringNullableFilter<$PrismaModel>
+  }
+
   export type EnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
     equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
     in?: $Enums.userrole[]
@@ -70229,24 +72721,6 @@ export namespace Prisma {
     _max?: NestedEnumuserstatusFilter<$PrismaModel>
   }
 
-  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: string | StringFieldRefInput<$PrismaModel> | null
-    in?: string[] | null
-    notIn?: string[] | null
-    lt?: string | StringFieldRefInput<$PrismaModel>
-    lte?: string | StringFieldRefInput<$PrismaModel>
-    gt?: string | StringFieldRefInput<$PrismaModel>
-    gte?: string | StringFieldRefInput<$PrismaModel>
-    contains?: string | StringFieldRefInput<$PrismaModel>
-    startsWith?: string | StringFieldRefInput<$PrismaModel>
-    endsWith?: string | StringFieldRefInput<$PrismaModel>
-    search?: string
-    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedStringNullableFilter<$PrismaModel>
-    _max?: NestedStringNullableFilter<$PrismaModel>
-  }
-
   export type IntWithAggregatesFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[]
@@ -70261,6 +72735,20 @@ export namespace Prisma {
     _sum?: NestedIntFilter<$PrismaModel>
     _min?: NestedIntFilter<$PrismaModel>
     _max?: NestedIntFilter<$PrismaModel>
+  }
+
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
   export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -70287,20 +72775,6 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedJsonNullableFilter<$PrismaModel>
     _max?: NestedJsonNullableFilter<$PrismaModel>
-  }
-
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | null
-    notIn?: Date[] | string[] | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -73933,6 +76407,131 @@ export namespace Prisma {
     sortWeight?: SortOrder
   }
 
+  export type EnumbuyershowmediatypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowmediatype | EnumbuyershowmediatypeFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowmediatype[]
+    notIn?: $Enums.buyershowmediatype[]
+    not?: NestedEnumbuyershowmediatypeFilter<$PrismaModel> | $Enums.buyershowmediatype
+  }
+
+  export type buyershowmediaOrderByRelevanceInput = {
+    fields: buyershowmediaOrderByRelevanceFieldEnum | buyershowmediaOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type buyershowmediaCountOrderByAggregateInput = {
+    id?: SortOrder
+    mediaType?: SortOrder
+    mediaUrl?: SortOrder
+    title?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type buyershowmediaAvgOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
+  export type buyershowmediaMaxOrderByAggregateInput = {
+    id?: SortOrder
+    mediaType?: SortOrder
+    mediaUrl?: SortOrder
+    title?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type buyershowmediaMinOrderByAggregateInput = {
+    id?: SortOrder
+    mediaType?: SortOrder
+    mediaUrl?: SortOrder
+    title?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type buyershowmediaSumOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
+  export type EnumbuyershowmediatypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowmediatype | EnumbuyershowmediatypeFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowmediatype[]
+    notIn?: $Enums.buyershowmediatype[]
+    not?: NestedEnumbuyershowmediatypeWithAggregatesFilter<$PrismaModel> | $Enums.buyershowmediatype
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumbuyershowmediatypeFilter<$PrismaModel>
+    _max?: NestedEnumbuyershowmediatypeFilter<$PrismaModel>
+  }
+
+  export type EnumbuyershowcommentstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowcommentstatus | EnumbuyershowcommentstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowcommentstatus[]
+    notIn?: $Enums.buyershowcommentstatus[]
+    not?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel> | $Enums.buyershowcommentstatus
+  }
+
+  export type buyershowcommentOrderByRelevanceInput = {
+    fields: buyershowcommentOrderByRelevanceFieldEnum | buyershowcommentOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type buyershowcommentCountOrderByAggregateInput = {
+    id?: SortOrder
+    authorName?: SortOrder
+    content?: SortOrder
+    rating?: SortOrder
+    status?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrder
+  }
+
+  export type buyershowcommentAvgOrderByAggregateInput = {
+    rating?: SortOrder
+  }
+
+  export type buyershowcommentMaxOrderByAggregateInput = {
+    id?: SortOrder
+    authorName?: SortOrder
+    content?: SortOrder
+    rating?: SortOrder
+    status?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrder
+  }
+
+  export type buyershowcommentMinOrderByAggregateInput = {
+    id?: SortOrder
+    authorName?: SortOrder
+    content?: SortOrder
+    rating?: SortOrder
+    status?: SortOrder
+    createdAt?: SortOrder
+    reviewedAt?: SortOrder
+  }
+
+  export type buyershowcommentSumOrderByAggregateInput = {
+    rating?: SortOrder
+  }
+
+  export type EnumbuyershowcommentstatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowcommentstatus | EnumbuyershowcommentstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowcommentstatus[]
+    notIn?: $Enums.buyershowcommentstatus[]
+    not?: NestedEnumbuyershowcommentstatusWithAggregatesFilter<$PrismaModel> | $Enums.buyershowcommentstatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel>
+    _max?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel>
+  }
+
   export type cartCreateNestedManyWithoutAccountInput = {
     create?: XOR<cartCreateWithoutAccountInput, cartUncheckedCreateWithoutAccountInput> | cartCreateWithoutAccountInput[] | cartUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
@@ -74091,16 +76690,16 @@ export namespace Prisma {
     set?: string
   }
 
+  export type NullableStringFieldUpdateOperationsInput = {
+    set?: string | null
+  }
+
   export type EnumuserroleFieldUpdateOperationsInput = {
     set?: $Enums.userrole
   }
 
   export type EnumuserstatusFieldUpdateOperationsInput = {
     set?: $Enums.userstatus
-  }
-
-  export type NullableStringFieldUpdateOperationsInput = {
-    set?: string | null
   }
 
   export type IntFieldUpdateOperationsInput = {
@@ -77571,6 +80170,14 @@ export namespace Prisma {
     update?: XOR<XOR<productUpdateToOneWithWhereWithoutKeywordGroupLinksInput, productUpdateWithoutKeywordGroupLinksInput>, productUncheckedUpdateWithoutKeywordGroupLinksInput>
   }
 
+  export type EnumbuyershowmediatypeFieldUpdateOperationsInput = {
+    set?: $Enums.buyershowmediatype
+  }
+
+  export type EnumbuyershowcommentstatusFieldUpdateOperationsInput = {
+    set?: $Enums.buyershowcommentstatus
+  }
+
   export type NestedStringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -77586,20 +80193,6 @@ export namespace Prisma {
     not?: NestedStringFilter<$PrismaModel> | string
   }
 
-  export type NestedEnumuserroleFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
-  }
-
-  export type NestedEnumuserstatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
-  }
-
   export type NestedStringNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -77613,6 +80206,20 @@ export namespace Prisma {
     endsWith?: string | StringFieldRefInput<$PrismaModel>
     search?: string
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
+  }
+
+  export type NestedEnumuserroleFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleFilter<$PrismaModel> | $Enums.userrole
+  }
+
+  export type NestedEnumuserstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusFilter<$PrismaModel> | $Enums.userstatus
   }
 
   export type NestedIntFilter<$PrismaModel = never> = {
@@ -77666,26 +80273,6 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type NestedEnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
-    in?: $Enums.userrole[]
-    notIn?: $Enums.userrole[]
-    not?: NestedEnumuserroleWithAggregatesFilter<$PrismaModel> | $Enums.userrole
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumuserroleFilter<$PrismaModel>
-    _max?: NestedEnumuserroleFilter<$PrismaModel>
-  }
-
-  export type NestedEnumuserstatusWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
-    in?: $Enums.userstatus[]
-    notIn?: $Enums.userstatus[]
-    not?: NestedEnumuserstatusWithAggregatesFilter<$PrismaModel> | $Enums.userstatus
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumuserstatusFilter<$PrismaModel>
-    _max?: NestedEnumuserstatusFilter<$PrismaModel>
-  }
-
   export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | null
@@ -77715,6 +80302,26 @@ export namespace Prisma {
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
   }
 
+  export type NestedEnumuserroleWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.userrole | EnumuserroleFieldRefInput<$PrismaModel>
+    in?: $Enums.userrole[]
+    notIn?: $Enums.userrole[]
+    not?: NestedEnumuserroleWithAggregatesFilter<$PrismaModel> | $Enums.userrole
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumuserroleFilter<$PrismaModel>
+    _max?: NestedEnumuserroleFilter<$PrismaModel>
+  }
+
+  export type NestedEnumuserstatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.userstatus | EnumuserstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.userstatus[]
+    notIn?: $Enums.userstatus[]
+    not?: NestedEnumuserstatusWithAggregatesFilter<$PrismaModel> | $Enums.userstatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumuserstatusFilter<$PrismaModel>
+    _max?: NestedEnumuserstatusFilter<$PrismaModel>
+  }
+
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[]
@@ -77741,6 +80348,20 @@ export namespace Prisma {
     gte?: number | FloatFieldRefInput<$PrismaModel>
     not?: NestedFloatFilter<$PrismaModel> | number
   }
+
+  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
   export type NestedJsonNullableFilter<$PrismaModel = never> =
     | PatchUndefined<
         Either<Required<NestedJsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<NestedJsonNullableFilterBase<$PrismaModel>>, 'path'>>,
@@ -77763,20 +80384,6 @@ export namespace Prisma {
     gt?: InputJsonValue
     gte?: InputJsonValue
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-  }
-
-  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | null
-    notIn?: Date[] | string[] | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -78298,6 +80905,40 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumkeywordsceneareaFilter<$PrismaModel>
     _max?: NestedEnumkeywordsceneareaFilter<$PrismaModel>
+  }
+
+  export type NestedEnumbuyershowmediatypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowmediatype | EnumbuyershowmediatypeFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowmediatype[]
+    notIn?: $Enums.buyershowmediatype[]
+    not?: NestedEnumbuyershowmediatypeFilter<$PrismaModel> | $Enums.buyershowmediatype
+  }
+
+  export type NestedEnumbuyershowmediatypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowmediatype | EnumbuyershowmediatypeFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowmediatype[]
+    notIn?: $Enums.buyershowmediatype[]
+    not?: NestedEnumbuyershowmediatypeWithAggregatesFilter<$PrismaModel> | $Enums.buyershowmediatype
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumbuyershowmediatypeFilter<$PrismaModel>
+    _max?: NestedEnumbuyershowmediatypeFilter<$PrismaModel>
+  }
+
+  export type NestedEnumbuyershowcommentstatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowcommentstatus | EnumbuyershowcommentstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowcommentstatus[]
+    notIn?: $Enums.buyershowcommentstatus[]
+    not?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel> | $Enums.buyershowcommentstatus
+  }
+
+  export type NestedEnumbuyershowcommentstatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.buyershowcommentstatus | EnumbuyershowcommentstatusFieldRefInput<$PrismaModel>
+    in?: $Enums.buyershowcommentstatus[]
+    notIn?: $Enums.buyershowcommentstatus[]
+    not?: NestedEnumbuyershowcommentstatusWithAggregatesFilter<$PrismaModel> | $Enums.buyershowcommentstatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel>
+    _max?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel>
   }
 
   export type cartCreateWithoutAccountInput = {
@@ -82112,6 +84753,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -82125,6 +84767,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -82149,6 +84792,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -82162,6 +84806,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -82242,6 +84887,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -82255,6 +84901,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -82279,6 +84926,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -82292,6 +84940,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -82812,6 +85461,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -82825,6 +85475,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -82849,6 +85500,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -82862,6 +85514,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -82994,6 +85647,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -83007,6 +85661,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83031,6 +85686,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -83044,6 +85700,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83137,6 +85794,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83150,6 +85808,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -83174,6 +85833,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83187,6 +85847,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -83429,6 +86090,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -83442,6 +86104,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83466,6 +86129,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -83479,6 +86143,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83652,6 +86317,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83665,6 +86331,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -83689,6 +86356,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83702,6 +86370,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -83816,6 +86485,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -83829,6 +86499,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83853,6 +86524,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -83866,6 +86538,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -83906,6 +86579,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83919,6 +86593,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -83943,6 +86618,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -83956,6 +86632,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -84139,6 +86816,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -84152,6 +86830,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -84176,6 +86855,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -84189,6 +86869,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86155,6 +88836,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -86168,6 +88850,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86192,6 +88875,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -86205,6 +88889,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86475,6 +89160,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -86488,6 +89174,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86512,6 +89199,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -86525,6 +89213,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87460,6 +90149,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87473,6 +90163,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87497,6 +90188,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87510,6 +90202,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87768,6 +90461,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87781,6 +90475,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87805,6 +90500,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -87818,6 +90514,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87917,6 +90614,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87930,6 +90628,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87954,6 +90653,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -87967,6 +90667,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -88262,6 +90963,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -88275,6 +90977,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -88299,6 +91002,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -88312,6 +91016,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -88609,6 +91314,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -88622,6 +91328,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -88646,6 +91353,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -88659,6 +91367,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -88699,6 +91408,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -88712,6 +91422,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -88736,6 +91447,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -88749,6 +91461,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -89813,6 +92526,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -89826,6 +92540,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -89850,6 +92565,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -89863,6 +92579,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -89928,6 +92645,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -89941,6 +92659,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -89965,6 +92684,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -89978,6 +92698,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -90033,6 +92754,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -90046,6 +92768,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -90070,6 +92793,7 @@ export namespace Prisma {
     id?: string
     account: string
     password: string
+    passwordPlain?: string | null
     email: string
     role: $Enums.userrole
     status?: $Enums.userstatus
@@ -90083,6 +92807,7 @@ export namespace Prisma {
     purchaseCount?: number
     adminNote?: string | null
     customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -90123,6 +92848,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -90136,6 +92862,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -90160,6 +92887,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     account?: StringFieldUpdateOperationsInput | string
     password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
     status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
@@ -90173,6 +92901,7 @@ export namespace Prisma {
     purchaseCount?: IntFieldUpdateOperationsInput | number
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null

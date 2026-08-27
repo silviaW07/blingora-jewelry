@@ -51,7 +51,7 @@ export function StorefrontNavBridge() {
 
     window.__storefrontNav = nav
     const later = window.setTimeout(() => {
-      ;['/', '/categories/', '/coming/', '/cart/', '/account/profile/', '/checkout/'].forEach((href) => {
+      ;['/', '/categories/', '/cart/', '/account/profile/', '/checkout/'].forEach((href) => {
         try {
           router.prefetch(href)
         } catch {

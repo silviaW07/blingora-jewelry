@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import { Heart } from 'lucide-react'
 import { AccountShell } from '@/frontend/components/AccountShell'
 import { ProductListCard } from '@/frontend/components/ProductListCard'
-import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import {
   addToCart,
   getWishlistProducts,
@@ -111,6 +110,9 @@ export default function WishlistView() {
 
   const body = (
     <div className="space-y-4" data-controller-name="心愿单商品列表">
+      {!loading && products.length > 0 ? (
+        <p className="text-xs font-medium text-[#6f6558]">{t('wishlist.count', { count: products.length })}</p>
+      ) : null}
       {loading ? (
         <p className="py-16 text-center text-sm text-[#6f6558]">{t('wishlist.loading')}</p>
       ) : products.length === 0 ? (
@@ -146,32 +148,8 @@ export default function WishlistView() {
   )
 
   return (
-    <>
-      <div className="hidden lg:block" data-storefront-chrome="desktop">
-        <StorefrontStickyHeader />
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6">
-          <div className="mb-6 flex items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-[#1f1a14]">
-                {t('nav.wishlist')}
-              </h1>
-              <p className="mt-1 text-sm text-[#6f6558]">{t('wishlist.description')}</p>
-            </div>
-            {!loading && products.length > 0 ? (
-              <span className="text-xs font-medium text-[#6f6558]">
-                {t('wishlist.count', { count: products.length })}
-              </span>
-            ) : null}
-          </div>
-          {body}
-        </main>
-      </div>
-
-      <div className="lg:hidden" data-storefront-chrome="mobile">
-        <AccountShell title={t('nav.wishlist')} description={t('wishlist.description')}>
-          {body}
-        </AccountShell>
-      </div>
-    </>
+    <AccountShell title={t('nav.wishlist')} description={t('wishlist.description')}>
+      {body}
+    </AccountShell>
   )
 }

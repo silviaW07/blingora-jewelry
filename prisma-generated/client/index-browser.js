@@ -125,6 +125,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
+  passwordPlain: 'passwordPlain',
   email: 'email',
   role: 'role',
   status: 'status',
@@ -138,6 +139,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   purchaseCount: 'purchaseCount',
   adminNote: 'adminNote',
   customerType: 'customerType',
+  customerTypeUpdatedAt: 'customerTypeUpdatedAt',
   ringSizeUs: 'ringSizeUs',
   ringSizeEu: 'ringSizeEu',
   braceletSize: 'braceletSize',
@@ -850,6 +852,27 @@ exports.Prisma.BrandaliasScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.BuyershowmediaScalarFieldEnum = {
+  id: 'id',
+  mediaType: 'mediaType',
+  mediaUrl: 'mediaUrl',
+  title: 'title',
+  sortWeight: 'sortWeight',
+  isEnabled: 'isEnabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BuyershowcommentScalarFieldEnum = {
+  id: 'id',
+  authorName: 'authorName',
+  content: 'content',
+  rating: 'rating',
+  status: 'status',
+  createdAt: 'createdAt',
+  reviewedAt: 'reviewedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -884,6 +907,7 @@ exports.Prisma.sysuserOrderByRelevanceFieldEnum = {
   id: 'id',
   account: 'account',
   password: 'password',
+  passwordPlain: 'passwordPlain',
   email: 'email',
   username: 'username',
   avatarUrl: 'avatarUrl',
@@ -1318,6 +1342,18 @@ exports.Prisma.brandaliasOrderByRelevanceFieldEnum = {
   alias: 'alias',
   standardName: 'standardName'
 };
+
+exports.Prisma.buyershowmediaOrderByRelevanceFieldEnum = {
+  id: 'id',
+  mediaUrl: 'mediaUrl',
+  title: 'title'
+};
+
+exports.Prisma.buyershowcommentOrderByRelevanceFieldEnum = {
+  id: 'id',
+  authorName: 'authorName',
+  content: 'content'
+};
 exports.userrole = exports.$Enums.userrole = {
   CUSTOMER: 'CUSTOMER',
   ADMIN: 'ADMIN',
@@ -1504,6 +1540,17 @@ exports.keywordscenearea = exports.$Enums.keywordscenearea = {
   BOTH: 'BOTH'
 };
 
+exports.buyershowmediatype = exports.$Enums.buyershowmediatype = {
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO'
+};
+
+exports.buyershowcommentstatus = exports.$Enums.buyershowcommentstatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED'
+};
+
 exports.Prisma.ModelName = {
   sysuser: 'sysuser',
   category: 'category',
@@ -1553,7 +1600,9 @@ exports.Prisma.ModelName = {
   product_keyword_relations: 'product_keyword_relations',
   keywordgroupproduct: 'keywordgroupproduct',
   suffixconfig: 'suffixconfig',
-  brandalias: 'brandalias'
+  brandalias: 'brandalias',
+  buyershowmedia: 'buyershowmedia',
+  buyershowcomment: 'buyershowcomment'
 };
 
 /**
