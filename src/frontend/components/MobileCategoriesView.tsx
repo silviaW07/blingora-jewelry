@@ -32,6 +32,8 @@ function CategoryEntryLink({ href, className, children }: { href: string; classN
     </a>
   )
 }
+
+type CircleEntry = {
   key: string
   label: string
   imageUrl?: string | null
