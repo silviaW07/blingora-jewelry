@@ -398,6 +398,18 @@ const renderMobileSquircleContent = (
             onPointerEnter={() => prefetchProductDetail(item.productId)}
             data-controller-name="移动端推荐商品图标"
           >
+            <span className="mobile-zone-squircle__media">
+              <EditableImg
+                propKey={`home-recommend-product-m-${item.productId}`}
+                src={item.imageUrl || undefined}
+                alt={item.productName}
+                keywords={item.imageUrl || undefined}
+                disableKeywordSearch
+                fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                loading="lazy"
+                orientation="square"
+                className="mobile-zone-squircle__img h-full w-full object-cover"
+              />
             </span>
             <span className="mobile-zone-squircle__label">
               <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
