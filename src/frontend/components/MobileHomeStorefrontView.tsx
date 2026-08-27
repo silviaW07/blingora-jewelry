@@ -26,7 +26,7 @@ import { isDailyNewArrivalCategoryName, findDailyNewArrivalCategory } from '@/fr
 import { isStorefrontHomeContentZone, isComingSoonRecommendZoneTitle } from '@/frontend/utils/recommendZoneDisplay'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
-import { categoryHref, hardNavigate, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate, hardNavProps, useChromeActivate, useStorefrontLink } from '@/frontend/utils/hardNavigate'
 import { isAbsoluteHttpUrl, normalizePosterLinkUrl } from '@/shared/posterLink'
 import type { HomeBannerItem } from '@/frontend/hooks/useHome'
 
@@ -73,6 +73,30 @@ function BannerDotButton({
 interface Props {
   state: HomeState
   handlers: HomeHandlers
+}
+
+function HomeChipLink({
+  label,
+  isActive,
+  href,
+}: {
+  label: string
+  isActive: boolean
+  href: string
+}) {
+  const link = useStorefrontLink(href)
+  return (
+    <a
+      {...link}
+      data-active={isActive}
+      className={cn(
+        'mobile-home__chip relative shrink-0 py-2 text-[0.8125rem] font-semibold tracking-[0.02em] transition-colors',
+        isActive ? 'text-[#f254a6]' : 'text-[#3a3a3a]',
+      )}
+    >
+      <span className="whitespace-nowrap">{label}</span>
+    </a>
+  )
 }
 
 export function MobileHomeStorefrontView({ state, handlers }: Props) {
@@ -181,25 +205,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       selectedDailyNewArrivalMonthKey,
   )
 
-  const renderChipButton = (
-    key: string,
-    label: string,
-    isActive: boolean,
-    href: string,
-  ) => (
-    <a
-      key={key}
-      {...hardNavProps(href)}
-      data-active={isActive}
-      className={cn(
-        'mobile-home__chip relative shrink-0 py-2 text-[0.8125rem] font-semibold tracking-[0.02em] transition-colors',
-        isActive ? 'text-[#f254a6]' : 'text-[#3a3a3a]',
-      )}
-    >
-      <span className="whitespace-nowrap">{label}</span>
-    </a>
-  )
-
   return (
     <div className="mobile-home bg-[#f7f4f0]" data-controller-name="移动端首页流式布局">
       <MobileStorefrontHeader initialKeyword={queryState.searchKeyword || ''} />
@@ -207,13 +212,13 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
       {/* Horizontal L1 directory only — no Expand all */}
       <div className="mobile-home__chips mb-3 border-b border-[#ebe4d8] bg-[#f7f4f0]">
         <div className="mobile-home__chips-row">
-          {renderChipButton('home', t('nav.home'), isHomeChipActive, '/')}
-          {renderChipButton(
-            'new',
-            t('nav.new', { defaultValue: 'new' }),
-            isNewChipActive,
-            dailyNewHref,
-          )}
+          <HomeChipLink key="home" label={t('nav.home')} isActive={isHomeChipActive} href="/" />
+          <HomeChipLink
+            key="new"
+            label={t('nav.new', { defaultValue: 'new' })}
+            isActive={isNewChipActive}
+            href={dailyNewHref}
+          />
           {categories
             .filter(
               (category) =>
@@ -226,11 +231,13 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               category.children.some((c) => c.category_id === queryState.categoryId) ||
               (isDailyNewArrivalCategoryName(category.category_name) &&
                 Boolean(selectedDailyNewArrivalMonthKey))
-            return renderChipButton(
-              category.category_id,
-              translateCatalogLabel(t, category.category_name),
-              isActive,
-              categoryHref(category.category_slug, category.category_id),
+            return (
+              <HomeChipLink
+                key={category.category_id}
+                label={translateCatalogLabel(t, category.category_name)}
+                isActive={isActive}
+                href={categoryHref(category.category_slug, category.category_id)}
+              />
             )
           })}
         </div>
@@ -291,6 +298,14 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                     style={{ transform: `translate3d(-${activeBannerIndex * 100}%, 0, 0)` }}
                   >
                     {posters.map((banner, index) => {
+                      if (Math.abs(index - activeBannerIndex) > 1) {
+                        return (
+                          <div
+                            key={banner.poster_id}
+                            className="mobile-home__banner-slide relative h-full w-full shrink-0"
+                          />
+                        )
+                      }
                       const link = normalizePosterLinkUrl(banner.link_url)
                       const slideMedia = (
                         <EditableImg
@@ -300,8 +315,8 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                           alt={banner.title || 'Banner'}
                           disableKeywordSearch
                           loading={index === 0 ? 'eager' : 'lazy'}
-                          proxyWidth={index === 0 ? 720 : 480}
-                          proxyQuality={70}
+                          proxyWidth={index === 0 ? 720 : 640}
+                          proxyQuality={85}
                           className="mobile-home__banner-media absolute inset-0 h-full w-full object-cover"
                         />
                       )
@@ -411,7 +426,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
               </div>
             ) : contentZones.length > 0 ? (
               <div className="flex flex-col gap-4">
-                {contentZones.map((zone: HomeRecommendZoneSection) => (
+                {contentZones.map((zone: HomeRecommendZoneSection, zoneIndex) => (
                   <RecommendZoneSection
                     key={zone.zoneId}
                     zone={zone}
@@ -420,6 +435,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                     onViewAll={handlers.handleNavigateRecommendZone}
                     className="mobile-home-zone"
                     variant="mobile-squircle"
+                    eagerImageCount={zoneIndex === 0 ? 6 : 0}
                   />
                 ))}
               </div>

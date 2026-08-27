@@ -324,7 +324,10 @@ export function normalizeParcelBandRule(raw: unknown): ParcelBandCountryRule | n
 export function calcParcelBandFee(rule: ParcelBandCountryRule, weightKg: number): number | null {
   const weight = Math.max(0, Number(weightKg) || 0)
   const capKg = rule.capKg > 0 ? rule.capKg : 5
-  if (weight - 1e-9 > capKg) return null
+  const minKg = rule.minKg > 0 ? rule.minKg : 0
+  // Below minKg still ships, but is billed at the configured floor (e.g. 40g → 0.05kg).
+  const billed = weight > 0 ? Math.max(weight, minKg) : 0
+  if (billed - 1e-9 > capKg) return null
   const sorted = [...(rule.tiers || [])]
     .filter(
       (t) =>
@@ -334,9 +337,9 @@ export function calcParcelBandFee(rule: ParcelBandCountryRule, weightKg: number)
         t.perKgFee >= 0,
     )
     .sort((a, b) => a.maxKg - b.maxKg)
-  const hit = sorted.find((t) => weight <= t.maxKg)
+  const hit = sorted.find((t) => billed <= t.maxKg)
   if (!hit) return null
-  return roundMoney(weight * hit.perKgFee + Math.max(0, hit.handlingFee || 0))
+  return roundMoney(billed * hit.perKgFee + Math.max(0, hit.handlingFee || 0))
 }
 
 export function normalizeBillingMode(raw: unknown): ShippingBillingMode {

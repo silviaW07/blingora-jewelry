@@ -21,7 +21,7 @@ import {
   zoneLooksLikeComingSoon,
 } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { categoryHref, hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavProps, productHref, useChromeActivate, useStorefrontLink } from '@/frontend/utils/hardNavigate'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -46,6 +46,8 @@ type HomeRecommendZoneSectionProps = {
   className?: string
   /** Mobile home: horizontal squircle icons + labels (PC layout unchanged). */
   variant?: 'default' | 'mobile-squircle'
+  /** How many product thumbs in this zone load eagerly (0 = all lazy). */
+  eagerImageCount?: number
 }
 
 const formatPrice = (price?: number | null) => {
@@ -160,6 +162,38 @@ const MobileComingSoonGrid = ({ children }: { children: React.ReactNode }) => (
   </div>
 )
 
+const MobileCategorySquircleLink = ({
+  href,
+  displayName,
+  imageSrc,
+  categoryId,
+}: {
+  href: string
+  displayName: string
+  imageSrc: string
+  categoryId: string
+}) => {
+  const link = useStorefrontLink(href)
+  return (
+    <a {...link} className="mobile-zone-squircle" data-controller-name="移动端推荐类目图标">
+      <span className="mobile-zone-squircle__media">
+        <OptimizedProductImage
+          src={imageSrc}
+          alt={displayName}
+          imageWidth={320}
+          quality={85}
+          priority={false}
+        />
+      </span>
+      <span className="mobile-zone-squircle__label">
+        <DecorateText propKey={`home_category_card_name_${categoryId}`} as="span">
+          {displayName}
+        </DecorateText>
+      </span>
+    </a>
+  )
+}
+
 type RecommendZoneProductCardProps = {
   item: RecommendProductCard
   index: number
@@ -200,7 +234,7 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         alt={item.productName}
         imageWidth={400}
         quality={85}
-        priority={index < 8}
+        priority={index < 4}
       />
       {isDraft ? (
         <div className="absolute right-2 top-2 z-[3]">
@@ -294,6 +328,7 @@ const renderMobileSquircleContent = (
   handlers: ZoneHandlers,
   t: ReturnType<typeof useTranslation>['t'],
   limitDisplay = true,
+  eagerImageCount = 0,
 ) => {
   const isComingSoon = zoneLooksLikeComingSoon(zone)
   const sourceItems = Array.isArray(zone.items) ? zone.items : []
@@ -336,7 +371,7 @@ const renderMobileSquircleContent = (
                   alt={item.productName}
                   imageWidth={320}
                   quality={85}
-                  priority={index < 8}
+                  priority={index < eagerImageCount}
                 />
                 <span className="absolute right-1 top-1 z-[3]">
                   <WishlistHeartButton
@@ -381,7 +416,7 @@ const renderMobileSquircleContent = (
                 alt={item.productName}
                 imageWidth={320}
                 quality={85}
-                priority={index < 8}
+                priority={index < eagerImageCount}
               />
             </span>
             <span className="mobile-zone-squircle__label">
@@ -411,36 +446,14 @@ const renderMobileSquircleContent = (
       categoryItems.map((item) => {
         const displayName = translateCatalogLabel(t, item.categoryName)
         const imageSrc = resolveCategoryCardSrc(item.imageUrl)
-        const shelfFallback = resolveCategoryCardFallback(item)
         return (
-          <a
+          <MobileCategorySquircleLink
             key={item.itemId}
-            {...hardNavProps(categoryHref(item.categorySlug, item.categoryId))}
-            className="mobile-zone-squircle"
-            data-controller-name="移动端推荐类目图标"
-          >
-            <span className="mobile-zone-squircle__media">
-                <EditableImg
-                  propKey={`home-recommend-category-m-${item.categoryId}`}
-                  src={imageSrc}
-                  alt={displayName}
-                  keywords={undefined}
-                  disableKeywordSearch
-                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
-                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
-                  loading="lazy"
-                  proxyWidth={200}
-                  proxyQuality={68}
-                  orientation="square"
-                className="mobile-zone-squircle__img h-full w-full object-cover"
-              />
-            </span>
-            <span className="mobile-zone-squircle__label">
-              <DecorateText propKey={`home_category_card_name_${item.categoryId}`} as="span">
-                {displayName}
-              </DecorateText>
-            </span>
-          </a>
+            href={categoryHref(item.categorySlug, item.categoryId)}
+            displayName={displayName}
+            imageSrc={imageSrc}
+            categoryId={item.categoryId}
+          />
         )
       }),
     )
@@ -569,6 +582,7 @@ export const HomeRecommendZoneSection = ({
   limitDisplay = true,
   className,
   variant = 'default',
+  eagerImageCount = 0,
 }: HomeRecommendZoneSectionProps) => {
   const { t } = useTranslation()
   const HeadingTag = headingAs
@@ -646,7 +660,7 @@ export const HomeRecommendZoneSection = ({
         ) : null}
       </div>
       {isMobileSquircle
-        ? renderMobileSquircleContent(zone, handlers, t, limitDisplay)
+        ? renderMobileSquircleContent(zone, handlers, t, limitDisplay, eagerImageCount)
         : renderRecommendZoneContent(zone, handlers, t, limitDisplay)}
     </section>
   )

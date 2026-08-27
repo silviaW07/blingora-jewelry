@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 
 declare global {
   interface Window {
@@ -36,6 +36,7 @@ export function notifyStorefrontUrl() {
 }
 
 let lastHardNav = { href: '', at: 0 }
+let navToken = 0
 
 function toAbsHref(href: string) {
   const raw = String(href || '').trim() || '/'
@@ -52,21 +53,43 @@ function sameHref(a: string, b: string) {
   return na === nb
 }
 
+function pathAndSearch(href: string) {
+  try {
+    const url = new URL(href, window.location.origin)
+    return `${url.pathname.replace(/\/+$/, '') || '/'}${url.search}`
+  } catch {
+    return href
+  }
+}
+
 /**
- * Storefront navigation: App Router when hydrated (fast, same as other browsers),
- * otherwise a normal same-origin jump. Avoid full reloads — they made Chrome Android slow.
+ * Storefront navigation: App Router when hydrated.
+ * If the router does not actually change the URL, fall back to a normal jump.
  */
 export function hardNavigate(href: string) {
   if (typeof window === 'undefined') return
   const next = toAbsHref(href)
   const now = Date.now()
   if (sameHref(window.location.href, next)) return
-  if (lastHardNav.href === next && now - lastHardNav.at < 400) return
+  if (lastHardNav.href === next && now - lastHardNav.at < 280) return
   lastHardNav = { href: next, at: now }
+  const token = ++navToken
   const spa = window.__storefrontNav
   if (typeof spa === 'function') {
     spa(next)
     notifyStorefrontUrl()
+    window.setTimeout(() => {
+      if (token !== navToken) return
+      const here = pathAndSearch(window.location.href)
+      const want = pathAndSearch(next)
+      if (here !== want) {
+        try {
+          window.location.assign(next)
+        } catch {
+          window.location.href = next
+        }
+      }
+    }, 320)
     return
   }
   try {
@@ -138,22 +161,53 @@ type ReliableTapOptions = {
   debounceMs?: number
 }
 
-const TAP_SLOP_PX = 12
-const SCROLL_CANCEL_PX = 6
+const TAP_SLOP_PX = 36
 
-type TapOrigin = { x: number; y: number; scrollY: number }
-
-function readScrollY() {
-  if (typeof window === 'undefined') return 0
-  return window.scrollY || window.pageYOffset || 0
-}
+type TapOrigin = { x: number; y: number }
 
 function tapWasScroll(origin: TapOrigin | null, x: number, y: number) {
   if (!origin) return false
-  const dx = Math.abs(x - origin.x)
-  const dy = Math.abs(y - origin.y)
-  const ds = Math.abs(readScrollY() - origin.scrollY)
-  return dx > TAP_SLOP_PX || dy > TAP_SLOP_PX || ds > SCROLL_CANCEL_PX
+  return Math.abs(x - origin.x) > TAP_SLOP_PX || Math.abs(y - origin.y) > TAP_SLOP_PX
+}
+
+/** Anchors that must navigate even when the browser drops `click` or the page slightly moves. */
+export function useStorefrontLink(href: string) {
+  const hrefRef = useRef(href)
+  hrefRef.current = href
+  const originRef = useRef<{ x: number; y: number } | null>(null)
+
+  const go = useCallback(() => {
+    hardNavigate(hrefRef.current)
+  }, [])
+
+  const onPointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0) return
+    originRef.current = { x: event.clientX, y: event.clientY }
+  }, [])
+
+  const onPointerUp = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
+    const origin = originRef.current
+    originRef.current = null
+    if (!origin) return
+    if (tapWasScroll(origin, event.clientX, event.clientY)) return
+    event.preventDefault()
+    go()
+  }, [go])
+
+  const onClick = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    if (event.button) return
+    event.preventDefault()
+    go()
+  }, [go])
+
+  return {
+    href,
+    'data-hard-nav': '' as const,
+    onPointerDown,
+    onPointerUp,
+    onClick,
+  }
 }
 
 /**
@@ -170,27 +224,7 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
   disabledRef.current = disabled
   const lastFire = useRef(0)
   const originRef = useRef<TapOrigin | null>(null)
-  const scrolledRef = useRef(false)
-  const unbindScrollRef = useRef<(() => void) | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
-
-  const unbindScroll = () => {
-    unbindScrollRef.current?.()
-    unbindScrollRef.current = null
-  }
-
-  const bindScrollCancel = () => {
-    unbindScroll()
-    if (typeof window === 'undefined') return
-    const onScroll = () => {
-      scrolledRef.current = true
-    }
-    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
-    unbindScrollRef.current = () => {
-      window.removeEventListener('scroll', onScroll, { capture: true })
-    }
-  }
-
   const suppressUntil = useRef(0)
 
   const fire = useCallback(() => {
@@ -206,25 +240,17 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
     (node: T | null) => {
       cleanupRef.current?.()
       cleanupRef.current = null
-      unbindScroll()
       if (!node) return
 
       const onPointerDown = (event: PointerEvent) => {
         if (disabledRef.current || event.button !== 0) return
-        event.stopPropagation()
-        originRef.current = { x: event.clientX, y: event.clientY, scrollY: readScrollY() }
-        scrolledRef.current = false
-        bindScrollCancel()
+        originRef.current = { x: event.clientX, y: event.clientY }
       }
 
       const onEnd = (event: PointerEvent | TouchEvent) => {
         if (disabledRef.current) return
-        event.stopPropagation()
         const origin = originRef.current
         originRef.current = null
-        const scrolled = scrolledRef.current
-        scrolledRef.current = false
-        unbindScroll()
         let x = origin?.x ?? 0
         let y = origin?.y ?? 0
         if ('clientX' in event) {
@@ -234,8 +260,8 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
           x = event.changedTouches[0].clientX
           y = event.changedTouches[0].clientY
         }
-        if (scrolled || tapWasScroll(origin, x, y)) {
-          suppressUntil.current = Date.now() + 500
+        if (tapWasScroll(origin, x, y)) {
+          suppressUntil.current = Date.now() + 280
           return
         }
         fire()
@@ -243,8 +269,6 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 
       const onCancel = () => {
         originRef.current = null
-        scrolledRef.current = false
-        unbindScroll()
       }
 
       node.addEventListener('pointerdown', onPointerDown, { capture: true })
@@ -257,7 +281,6 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
         node.removeEventListener('pointerup', onEnd, { capture: true })
         node.removeEventListener('pointercancel', onCancel, { capture: true })
         node.removeEventListener('touchend', onEnd, { capture: true })
-        unbindScroll()
       }
     },
     [fire],
@@ -265,13 +288,10 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 
   useEffect(() => () => {
     cleanupRef.current?.()
-    unbindScroll()
   }, [])
 
   const onClick = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation()
-      if (scrolledRef.current) return
+    (_event: ReactMouseEvent) => {
       fire()
     },
     [fire],
@@ -289,68 +309,38 @@ export function useChromeActivate(handler: () => void) {
   fn.current = handler
   const last = useRef(0)
   const originRef = useRef<TapOrigin | null>(null)
-  const scrolledRef = useRef(false)
   const suppressUntil = useRef(0)
-  const unbindScrollRef = useRef<(() => void) | null>(null)
 
-  const unbindScroll = () => {
-    unbindScrollRef.current?.()
-    unbindScrollRef.current = null
-  }
-
-  const bindScrollCancel = () => {
-    unbindScroll()
-    if (typeof window === 'undefined') return
-    const onScroll = () => {
-      scrolledRef.current = true
-    }
-    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
-    unbindScrollRef.current = () => {
-      window.removeEventListener('scroll', onScroll, { capture: true })
-    }
-  }
-
-  const commit = useCallback((x: number, y: number, event?: { stopPropagation?: () => void }) => {
-    event?.stopPropagation?.()
+  const commit = useCallback((x: number, y: number) => {
     const now = Date.now()
     if (now < suppressUntil.current) return
     const origin = originRef.current
-    const scrolled = scrolledRef.current
     originRef.current = null
-    scrolledRef.current = false
-    unbindScroll()
-    if (scrolled || tapWasScroll(origin, x, y)) {
-      suppressUntil.current = now + 500
+    if (tapWasScroll(origin, x, y)) {
+      suppressUntil.current = now + 280
       return
     }
-    if (now - last.current < 400) return
+    if (now - last.current < 280) return
     last.current = now
     fn.current()
   }, [])
 
-  const onPointerDown = useCallback((event: React.PointerEvent) => {
-    event.stopPropagation()
+  const onPointerDown = useCallback((event: ReactPointerEvent) => {
     if (event.button !== 0) return
-    originRef.current = { x: event.clientX, y: event.clientY, scrollY: readScrollY() }
-    scrolledRef.current = false
-    bindScrollCancel()
+    originRef.current = { x: event.clientX, y: event.clientY }
   }, [])
 
-  const onPointerUp = useCallback((event: React.PointerEvent) => {
-    commit(event.clientX, event.clientY, event)
+  const onPointerUp = useCallback((event: ReactPointerEvent) => {
+    commit(event.clientX, event.clientY)
   }, [commit])
 
   const onPointerCancel = useCallback(() => {
     originRef.current = null
-    scrolledRef.current = false
-    unbindScroll()
   }, [])
 
-  const onClick = useCallback((event: React.MouseEvent) => {
-    commit(event.clientX, event.clientY, event)
+  const onClick = useCallback((event: ReactMouseEvent) => {
+    commit(event.clientX, event.clientY)
   }, [commit])
-
-  useEffect(() => () => unbindScroll(), [])
 
   return { onPointerDown, onPointerUp, onPointerCancel, onClick }
 }

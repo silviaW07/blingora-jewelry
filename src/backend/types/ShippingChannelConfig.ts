@@ -11,6 +11,8 @@ export type {
   DeleteShippingChannelOutput,
   UpdateShippingChannelStatusInput,
   UpdateShippingChannelStatusOutput,
+  ReorderShippingChannelsInput,
+  ReorderShippingChannelsOutput,
 } from '@/backend/actions/ShippingChannelConfig'
 
 export {
@@ -18,4 +20,5 @@ export {
   saveShippingChannel,
   deleteShippingChannel,
   updateShippingChannelStatus,
+  reorderShippingChannels,
 } from '@/backend/actions/ShippingChannelConfig'

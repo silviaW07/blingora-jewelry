@@ -78,6 +78,14 @@ export interface UpdateShippingChannelStatusOutput {
   success: boolean
 }
 
+export interface ReorderShippingChannelsInput {
+  channel_ids: string[]
+}
+
+export interface ReorderShippingChannelsOutput {
+  success: boolean
+}
+
 function mapChannel(row: {
   id: string
   name: string
@@ -241,6 +249,25 @@ export const updateShippingChannelStatus = requireRole([UserRole.ADMIN])(
       where: { id: input.channel_id },
       data: { isEnabled: !!input.channel_isEnabled },
     })
+    return { success: true }
+  }),
+)
+
+export const reorderShippingChannels = requireRole([UserRole.ADMIN])(
+  withResult(async (input: ReorderShippingChannelsInput): Promise<ReorderShippingChannelsOutput> => {
+    const ids = (input.channel_ids || []).map((id) => String(id || '').trim()).filter(Boolean)
+    if (ids.length === 0) throw new Error('请选择要排序的渠道')
+    const unique = Array.from(new Set(ids))
+    if (unique.length !== ids.length) throw new Error('排序列表重复')
+
+    await prisma.$transaction(
+      unique.map((id, index) =>
+        prisma.shippingchannel.update({
+          where: { id },
+          data: { sortWeight: index * 10 },
+        }),
+      ),
+    )
     return { success: true }
   }),
 )

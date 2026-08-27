@@ -22,7 +22,7 @@ import {
   readCustomerServiceLocal,
 } from '@/frontend/decorate/customerService'
 import { loadCustomerServiceConfigCached } from '@/frontend/utils/customerServiceConfigCache'
-import { hardNavigate, hardNavProps, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { hardNavigate, useChromeActivate, useStorefrontLink } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 
 const WhatsAppGlyph = () => (
@@ -128,6 +128,7 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
     hardNavigate(`/?${params.toString()}`)
   }, [searchKeyword])
   const searchActivate = useChromeActivate(handleSearchSubmit)
+  const categoriesLink = useStorefrontLink('/categories/')
 
   const handleCameraFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -167,9 +168,9 @@ export function MobileStorefrontHeader({ className, initialKeyword = '' }: Props
         </div>
 
         <a
-          {...hardNavProps('/categories/')}
           className="mobile-sf-header__icon-btn"
           aria-label={t('nav.categories', { defaultValue: 'Categories' })}
+          {...categoriesLink}
         >
           <LayoutGrid width={20} height={20} strokeWidth={2} />
         </a>

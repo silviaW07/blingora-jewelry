@@ -28,6 +28,7 @@ import type {
 import {
   deleteShippingChannel,
   getShippingChannelList,
+  reorderShippingChannels,
   saveShippingChannel,
   updateShippingChannelStatus,
 } from '@/backend/actions/ShippingChannelConfig'
@@ -69,6 +70,7 @@ export interface ShippingChannelConfigState {
   formMode: FormMode
   formData: SaveShippingChannelInput | null
   submitting: boolean
+  canReorder: boolean
   STATUS_LABELS: Record<ShippingChannelFilterStatus, string>
 }
 
@@ -126,6 +128,7 @@ export interface ShippingChannelConfigHandlers {
   handleSubmit: () => Promise<void>
   handleDelete: (id: string) => Promise<void>
   handleQuickUpdateStatus: (id: string, enabled: boolean) => Promise<void>
+  handleReorder: (fromId: string, toId: string) => Promise<void>
 }
 
 export function useShippingChannelConfig() {
@@ -567,6 +570,31 @@ export function useShippingChannelConfig() {
         toast.error((error as Error).message || '状态更新失败')
       }
     },
+    handleReorder: async (fromId, toId) => {
+      if (!fromId || !toId || fromId === toId) return
+      if (appliedKeyword || filterStatus !== 'ALL') {
+        toast.error('请先重置搜索和筛选，再拖拽排序')
+        return
+      }
+      const fromIndex = list.findIndex((item) => item.channel_id === fromId)
+      const toIndex = list.findIndex((item) => item.channel_id === toId)
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
+      const previous = list
+      const next = [...list]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      const ranked = next.map((item, index) => ({
+        ...item,
+        channel_sortWeight: index * 10,
+      }))
+      setList(ranked)
+      try {
+        await reorderShippingChannels({ channel_ids: ranked.map((item) => item.channel_id) })
+      } catch (error) {
+        setList(previous)
+        toast.error((error as Error).message || '排序保存失败')
+      }
+    },
   }
 
   const state: ShippingChannelConfigState = useMemo(
@@ -580,13 +608,14 @@ export function useShippingChannelConfig() {
       formMode,
       formData,
       submitting,
+      canReorder: !appliedKeyword && filterStatus === 'ALL',
       STATUS_LABELS: {
         ALL: '全部',
         ENABLED: '已启用',
         DISABLED: '已停用',
       },
     }),
-    [loading, list, total, countries, inputKeyword, filterStatus, formMode, formData, submitting],
+    [loading, list, total, countries, inputKeyword, filterStatus, formMode, formData, submitting, appliedKeyword],
   )
 
   return { state, handlers }

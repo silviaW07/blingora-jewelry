@@ -5,12 +5,36 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Home, LayoutGrid, Sparkles, ShoppingCart, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { categoryHref, hardNavigate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, useStorefrontLink } from '@/frontend/utils/hardNavigate'
 import {
   findDailyNewArrivalCategory,
   type DailyNewArrivalCategoryHit,
 } from '@/frontend/utils/dailyNewArrival'
 import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
+
+function BottomNavTab({
+  href,
+  active,
+  label,
+  icon: Icon,
+}: {
+  href: string
+  active: boolean
+  label: string
+  icon: typeof Home
+}) {
+  const go = useStorefrontLink(href)
+  return (
+    <a
+      className={cn('mobile-bottom-nav__item', active && 'is-active')}
+      aria-current={active ? 'page' : undefined}
+      {...go}
+    >
+      <Icon className="pointer-events-none size-5 shrink-0" strokeWidth={active ? 2.4 : 1.9} />
+      <span className="truncate">{label}</span>
+    </a>
+  )
+}
 
 function isDailyNewHrefActive(
   pathname: string,
@@ -116,27 +140,16 @@ export function MobileBottomNav() {
       aria-label={t('nav.siteNav', { defaultValue: 'Site navigation' })}
     >
       <ul className="mobile-bottom-nav__list">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          return (
+        {tabs.map((tab) => (
             <li key={tab.key} className="min-w-0 flex-1">
-              <a
+              <BottomNavTab
                 href={tab.href}
-                className={cn('mobile-bottom-nav__item', tab.active && 'is-active')}
-                aria-current={tab.active ? 'page' : undefined}
-                onClick={(event) => {
-                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                  if (event.button) return
-                  event.preventDefault()
-                  hardNavigate(tab.href)
-                }}
-              >
-                <Icon className="pointer-events-none size-5 shrink-0" strokeWidth={tab.active ? 2.4 : 1.9} />
-                <span className="truncate">{tab.label}</span>
-              </a>
+                active={tab.active}
+                label={tab.label}
+                icon={tab.icon}
+              />
             </li>
-          )
-        })}
+          ))}
       </ul>
     </nav>
   )

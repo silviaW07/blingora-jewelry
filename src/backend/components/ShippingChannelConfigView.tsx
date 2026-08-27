@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useRef } from 'react'
 import type {
   ShippingChannelConfigHandlers,
   ShippingChannelConfigState,
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Search, RotateCcw, Trash2, Edit2, ChevronRight } from 'lucide-react'
+import { Plus, Search, RotateCcw, Trash2, Edit2, ChevronRight, GripVertical } from 'lucide-react'
 import {
   SHIPPING_BILLING_MODE_LABELS,
   summarizeCountryRule,
@@ -31,6 +31,7 @@ interface Props {
 
 export function ShippingChannelConfigView({ state, handlers }: Props) {
   const billingMode = state.formData?.channel_billingMode || 'EXPRESS_TIER'
+  const dragIdRef = useRef<string | null>(null)
 
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
@@ -47,7 +48,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
             <div>
               <h1 className="font-header text-2xl font-bold tracking-tight">物流渠道配置</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                配置快递阶梯价、海运阶梯价或海运按公斤（人民币 ¥），支持渠道系数。前台结账按购物车重量自动计费。
+                配置快递阶梯价、海运阶梯价或海运按公斤（人民币 ¥），支持渠道系数。前台结账按购物车重量自动计费。拖拽渠道名称左侧手柄可调整前台展示顺序。
               </p>
             </div>
             <Button size="sm" onClick={handlers.openCreateModal}>
@@ -104,7 +105,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
               <Table>
                 <TableHeader className="bg-secondary/50">
                   <TableRow>
-                    <TableHead className="min-w-[140px]">渠道名称</TableHead>
+                    <TableHead className="min-w-[180px]">渠道名称</TableHead>
                     <TableHead className="min-w-[120px]">计费模式</TableHead>
                     <TableHead className="min-w-[140px]">预计时间</TableHead>
                     <TableHead className="w-[90px]">系数</TableHead>
@@ -139,8 +140,44 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                         }))
                         .filter((row) => row.enabled)
                       return (
-                        <TableRow key={item.channel_id}>
-                          <TableCell className="font-medium">{item.channel_name}</TableCell>
+                        <TableRow
+                          key={item.channel_id}
+                          onDragOver={(event) => {
+                            if (!state.canReorder) return
+                            event.preventDefault()
+                            event.dataTransfer.dropEffect = 'move'
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault()
+                            const fromId = dragIdRef.current || event.dataTransfer.getData('text/plain')
+                            dragIdRef.current = null
+                            void handlers.handleReorder(fromId, item.channel_id)
+                          }}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <span
+                                draggable={state.canReorder}
+                                onDragStart={(event) => {
+                                  dragIdRef.current = item.channel_id
+                                  event.dataTransfer.effectAllowed = 'move'
+                                  event.dataTransfer.setData('text/plain', item.channel_id)
+                                }}
+                                onDragEnd={() => {
+                                  dragIdRef.current = null
+                                }}
+                                className={state.canReorder ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-default'}
+                                title={state.canReorder ? '拖拽调整顺序' : '请先重置搜索和筛选再排序'}
+                                aria-label="拖拽调整顺序"
+                              >
+                                <GripVertical
+                                  className={`h-4 w-4 shrink-0 ${state.canReorder ? 'text-muted-foreground' : 'text-muted-foreground/40'}`}
+                                  aria-hidden
+                                />
+                              </span>
+                              <span>{item.channel_name}</span>
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">
                               {SHIPPING_BILLING_MODE_LABELS[item.channel_billingMode] || item.channel_billingMode}

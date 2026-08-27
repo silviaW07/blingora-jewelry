@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileStorefrontHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { loadCategoryListCached, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
-import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
+import { categoryHref, useStorefrontLink } from '@/frontend/utils/hardNavigate'
 import { loadSideNavZonesCached } from '@/frontend/utils/sideNavZonesCache'
 import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
 import {
@@ -24,7 +24,14 @@ import {
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { cn } from '@/lib/utils'
 
-type CircleEntry = {
+function CategoryEntryLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  const link = useStorefrontLink(href)
+  return (
+    <a {...link} className={className}>
+      {children}
+    </a>
+  )
+}
   key: string
   label: string
   imageUrl?: string | null
@@ -379,9 +386,9 @@ export default function MobileCategoriesView({
                     data-controller-name="移动端分类圆形入口网格"
                   >
                     {circles.map((entry) => (
-                      <a
+                      <CategoryEntryLink
                         key={entry.key}
-                        {...hardNavProps(entry.href)}
+                        href={entry.href}
                         className="mobile-categories-grid__item"
                       >
                         <span className="mobile-categories-grid__icon">
@@ -400,7 +407,7 @@ export default function MobileCategoriesView({
                           )}
                         </span>
                         <span className="mobile-categories-grid__label">{entry.label}</span>
-                      </a>
+                      </CategoryEntryLink>
                     ))}
                   </div>
                 ) : (
@@ -427,9 +434,9 @@ export default function MobileCategoriesView({
             {brands.map((brand) => {
               const label = translateCatalogLabel(t, brand.name)
               return (
-                <a
+                <CategoryEntryLink
                   key={brand.id}
-                  {...hardNavProps(categoryHref(brand.slug, brand.id))}
+                  href={categoryHref(brand.slug, brand.id)}
                   className="mobile-categories-brands__item"
                 >
                   <span className="mobile-categories-brands__icon">
@@ -448,7 +455,7 @@ export default function MobileCategoriesView({
                     )}
                   </span>
                   <span className="mobile-categories-brands__label">{label}</span>
-                </a>
+                </CategoryEntryLink>
               )
             })}
           </div>
