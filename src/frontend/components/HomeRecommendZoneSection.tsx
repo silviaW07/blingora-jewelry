@@ -73,18 +73,24 @@ const renderRatingStars = (rating?: number | null) => {
   ))
 }
 
+const resolvePcColCount = (zone: HomeRecommendZoneSectionType) => {
+  const n = Number(zone.pcCols)
+  if (n === 3 || n === 5) return n
+  return 4
+}
+
 const getZoneGridClassName = (zone: HomeRecommendZoneSectionType) =>
   cn(
     'grid gap-4',
-    zone.mobileCols === 1 ? 'grid-cols-1' : 'grid-cols-2',
-    zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-3 xl:grid-cols-5' : 'md:grid-cols-3 xl:grid-cols-4',
+    zone.pcCols === 3 ? 'grid-cols-3' : zone.pcCols === 5 ? 'grid-cols-5' : 'grid-cols-4',
+    zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4',
   )
 
 const getCategoryCardGridClassName = (zone: HomeRecommendZoneSectionType) =>
   cn(
     'grid gap-4',
-    'grid-cols-2',
-    zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-4 xl:grid-cols-5' : 'md:grid-cols-4',
+    zone.pcCols === 3 ? 'grid-cols-3' : zone.pcCols === 5 ? 'grid-cols-5' : 'grid-cols-4',
+    zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4',
   )
 
 const CATEGORY_CARD_PLACEHOLDER = '/category-covers/placeholder.svg'
@@ -112,34 +118,28 @@ const MOBILE_COMING_SOON_COLS = 5
 const MOBILE_COMING_SOON_ROWS = 3
 const MOBILE_COMING_SOON_MAX = MOBILE_COMING_SOON_COLS * MOBILE_COMING_SOON_ROWS
 
-const MobileSquircleStrip = ({
-  count,
+const MobilePcMatchedGrid = ({
+  cols,
   children,
 }: {
-  count: number
+  cols: number
   children: React.ReactNode
-}) => {
-  const n = Math.max(count, 0)
-  const fillsRow = n > 0 && n <= 5
-  return (
-    <div
-      className={cn(
-        'mobile-zone-squircle-row',
-        fillsRow ? 'mobile-zone-squircle-row--fill' : 'mobile-zone-squircle-row--scroll',
-      )}
-      data-count={n}
-      style={
-        {
-          '--zone-item-count': String(Math.max(n, 1)),
-          '--zone-visible': '5',
-        } as React.CSSProperties
-      }
-      data-controller-name="移动端推荐专区横向图标行"
-    >
-      {children}
-    </div>
-  )
-}
+}) => (
+  <div
+    className="mobile-zone-squircle-grid"
+    data-controller-name="移动端推荐专区网格"
+    style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(0, 1fr))`,
+      columnGap: '0.4rem',
+      rowGap: '0.55rem',
+      width: '100%',
+      maxWidth: '100%',
+    }}
+  >
+    {children}
+  </div>
+)
 
 const MobileComingSoonGrid = ({ children }: { children: React.ReactNode }) => (
   <div
@@ -201,7 +201,8 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
         keywords={item.imageUrl || undefined}
         disableKeywordSearch
         fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-        loading="lazy"
+        loading="eager"
+        proxyWidth={280}
         orientation="square"
         className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
         style={{ aspectRatio: '1 / 1' }}
@@ -228,7 +229,7 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
       {isDraft ? (
         <div className="block text-[#111111]">
           {media}
-          <p className="home-recommend-product-name px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
+          <p className="home-recommend-product-name truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
             {item.productName}
           </p>
         </div>
@@ -247,7 +248,7 @@ const RecommendZoneProductCard = ({ item, handlers, t }: RecommendZoneProductCar
           onClick={openProductEvents.onClick}
         >
           {media}
-          <p className="home-recommend-product-name px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
+          <p className="home-recommend-product-name truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
             {item.productName}
           </p>
         </a>
@@ -306,11 +307,11 @@ const renderMobileSquircleContent = (
     : limitDisplay
       ? limitRecommendZoneItems(zone, sourceItems)
       : sourceItems
-  const wrapSquircleItems = (count: number, children: React.ReactNode) =>
+  const wrapSquircleItems = (_count: number, children: React.ReactNode) =>
     isComingSoon ? (
       <MobileComingSoonGrid>{children}</MobileComingSoonGrid>
     ) : (
-      <MobileSquircleStrip count={count}>{children}</MobileSquircleStrip>
+      <MobilePcMatchedGrid cols={resolvePcColCount(zone)}>{children}</MobilePcMatchedGrid>
     )
   if (zone.zoneType === 'PRODUCT') {
     const productItems = limitedItems.filter(
@@ -320,21 +321,6 @@ const renderMobileSquircleContent = (
       return (
         <div className="rounded-none bg-transparent px-1 py-6 text-center text-[0.875rem] text-[#8a8073]">
           {t('home.emptyProductZone', { defaultValue: 'No products in this section yet' })}
-        </div>
-      )
-    }
-    if (!isComingSoon) {
-      return (
-        <div className="storefront-product-grid grid grid-cols-2 gap-2.5">
-          {productItems.map((item, index) => (
-            <RecommendZoneProductCard
-              key={item.itemId}
-              item={item}
-              index={index}
-              handlers={handlers}
-              t={t}
-            />
-          ))}
         </div>
       )
     }
@@ -357,7 +343,8 @@ const renderMobileSquircleContent = (
                   keywords={item.imageUrl || undefined}
                   disableKeywordSearch
                   fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                  loading="lazy"
+                  loading="eager"
+                  proxyWidth={200}
                   orientation="square"
                   className="mobile-zone-squircle__img h-full w-full object-cover"
                 />
@@ -406,7 +393,8 @@ const renderMobileSquircleContent = (
                 keywords={item.imageUrl || undefined}
                 disableKeywordSearch
                 fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
-                loading="lazy"
+                loading="eager"
+                proxyWidth={200}
                 orientation="square"
                 className="mobile-zone-squircle__img h-full w-full object-cover"
               />
@@ -455,7 +443,7 @@ const renderMobileSquircleContent = (
                 disableKeywordSearch
                 fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
                 slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
-                loading="lazy"
+                loading="eager"
                 orientation="square"
                 className="mobile-zone-squircle__img h-full w-full object-cover"
               />
@@ -553,7 +541,7 @@ const renderRecommendZoneContent = (
                   disableKeywordSearch
                   fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
                   slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
-                  loading="lazy"
+                  loading="eager"
                   orientation="square"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   style={{ aspectRatio: '1 / 1' }}

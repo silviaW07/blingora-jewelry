@@ -431,7 +431,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 </div>
               ) : dailyNewArrivalProducts.length > 0 ? (
                 <div className="storefront-product-grid mt-4 grid grid-cols-2 gap-2.5">
-                  {dailyNewArrivalProducts.map((item) => (
+                  {dailyNewArrivalProducts.map((item, index) => (
                     <ProductListCard
                       key={item.product_id}
                       item={item}
@@ -440,6 +440,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       onAddToCart={handlers.handleAddToCart}
                       onAddToWishlist={handlers.handleAddToWishlist}
                       controllerName="每日上新商品卡片"
+                      priority={index < 12}
                     />
                   ))}
                 </div>
@@ -493,7 +494,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                       controllerName={
                         isSecondaryCategoryResults ? '二级类目商品卡片' : '一级类目商品卡片'
                       }
-                      priority={index < 6}
+                      priority={index < 12}
                     />
                   ))}
                 </div>

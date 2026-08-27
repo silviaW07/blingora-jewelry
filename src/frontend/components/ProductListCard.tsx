@@ -189,8 +189,8 @@ export const ProductListCard = ({
             src={previewImage || item.main_image_url}
             alt={item.product_name}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-            imageWidth={isNarrowViewport() ? 240 : 320}
-            quality={isNarrowViewport() ? 65 : 70}
+            imageWidth={280}
+            quality={70}
             priority={priority}
           />
         </div>

@@ -138,10 +138,27 @@ type ReliableTapOptions = {
   debounceMs?: number
 }
 
+const TAP_SLOP_PX = 12
+const SCROLL_CANCEL_PX = 6
+
+type TapOrigin = { x: number; y: number; scrollY: number }
+
+function readScrollY() {
+  if (typeof window === 'undefined') return 0
+  return window.scrollY || window.pageYOffset || 0
+}
+
+function tapWasScroll(origin: TapOrigin | null, x: number, y: number) {
+  if (!origin) return false
+  const dx = Math.abs(x - origin.x)
+  const dy = Math.abs(y - origin.y)
+  const ds = Math.abs(readScrollY() - origin.scrollY)
+  return dx > TAP_SLOP_PX || dy > TAP_SLOP_PX || ds > SCROLL_CANCEL_PX
+}
+
 /**
- * Chrome Android often drops React `click` / `pointerup` on PDP controls when the
- * layout viewport is scaled (~980px). Native capture-phase touchend/pointerup is
- * more reliable than synthetic handlers alone. Never call preventDefault on touch.
+ * Chrome Android often drops React `click` on nested controls. Activate on pointerup
+ * only when the finger barely moved — never on pointerdown, which fires mid-scroll.
  */
 export function useReliableTap<T extends HTMLElement = HTMLElement>(
   handler: () => void,
@@ -152,11 +169,34 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
   const disabledRef = useRef(disabled)
   disabledRef.current = disabled
   const lastFire = useRef(0)
+  const originRef = useRef<TapOrigin | null>(null)
+  const scrolledRef = useRef(false)
+  const unbindScrollRef = useRef<(() => void) | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+
+  const unbindScroll = () => {
+    unbindScrollRef.current?.()
+    unbindScrollRef.current = null
+  }
+
+  const bindScrollCancel = () => {
+    unbindScroll()
+    if (typeof window === 'undefined') return
+    const onScroll = () => {
+      scrolledRef.current = true
+    }
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
+    unbindScrollRef.current = () => {
+      window.removeEventListener('scroll', onScroll, { capture: true })
+    }
+  }
+
+  const suppressUntil = useRef(0)
 
   const fire = useCallback(() => {
     if (disabledRef.current) return
     const now = Date.now()
+    if (now < suppressUntil.current) return
     if (now - lastFire.current < debounceMs) return
     lastFire.current = now
     handlerRef.current()
@@ -166,43 +206,72 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
     (node: T | null) => {
       cleanupRef.current?.()
       cleanupRef.current = null
+      unbindScroll()
       if (!node) return
 
       const onPointerDown = (event: PointerEvent) => {
         if (disabledRef.current || event.button !== 0) return
         event.stopPropagation()
-        try {
-          node.setPointerCapture(event.pointerId)
-        } catch {
-          /* ignore */
+        originRef.current = { x: event.clientX, y: event.clientY, scrollY: readScrollY() }
+        scrolledRef.current = false
+        bindScrollCancel()
+      }
+
+      const onEnd = (event: PointerEvent | TouchEvent) => {
+        if (disabledRef.current) return
+        event.stopPropagation()
+        const origin = originRef.current
+        originRef.current = null
+        const scrolled = scrolledRef.current
+        scrolledRef.current = false
+        unbindScroll()
+        let x = origin?.x ?? 0
+        let y = origin?.y ?? 0
+        if ('clientX' in event) {
+          x = event.clientX
+          y = event.clientY
+        } else if (event.changedTouches?.[0]) {
+          x = event.changedTouches[0].clientX
+          y = event.changedTouches[0].clientY
+        }
+        if (scrolled || tapWasScroll(origin, x, y)) {
+          suppressUntil.current = Date.now() + 500
+          return
         }
         fire()
       }
 
-      const onEnd = (event: Event) => {
-        if (disabledRef.current) return
-        event.stopPropagation()
-        fire()
+      const onCancel = () => {
+        originRef.current = null
+        scrolledRef.current = false
+        unbindScroll()
       }
 
       node.addEventListener('pointerdown', onPointerDown, { capture: true })
       node.addEventListener('pointerup', onEnd, { capture: true })
+      node.addEventListener('pointercancel', onCancel, { capture: true })
       node.addEventListener('touchend', onEnd, { passive: true, capture: true })
 
       cleanupRef.current = () => {
         node.removeEventListener('pointerdown', onPointerDown, { capture: true })
         node.removeEventListener('pointerup', onEnd, { capture: true })
+        node.removeEventListener('pointercancel', onCancel, { capture: true })
         node.removeEventListener('touchend', onEnd, { capture: true })
+        unbindScroll()
       }
     },
     [fire],
   )
 
-  useEffect(() => () => cleanupRef.current?.(), [])
+  useEffect(() => () => {
+    cleanupRef.current?.()
+    unbindScroll()
+  }, [])
 
   const onClick = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation()
+      if (scrolledRef.current) return
       fire()
     },
     [fire],
@@ -212,21 +281,78 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 }
 
 /**
- * Chrome Android often drops `click` on nested buttons (parent card steals it).
- * Fire on pointerdown; do not preventDefault — that cancels the tap on Chrome.
+ * Nested storefront buttons (cart / wishlist). Record the press, then fire only on
+ * pointerup/click if the gesture did not scroll — never on pointerdown.
  */
 export function useChromeActivate(handler: () => void) {
   const fn = useRef(handler)
   fn.current = handler
   const last = useRef(0)
-  const run = useCallback((event?: { stopPropagation?: () => void }) => {
+  const originRef = useRef<TapOrigin | null>(null)
+  const scrolledRef = useRef(false)
+  const suppressUntil = useRef(0)
+  const unbindScrollRef = useRef<(() => void) | null>(null)
+
+  const unbindScroll = () => {
+    unbindScrollRef.current?.()
+    unbindScrollRef.current = null
+  }
+
+  const bindScrollCancel = () => {
+    unbindScroll()
+    if (typeof window === 'undefined') return
+    const onScroll = () => {
+      scrolledRef.current = true
+    }
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
+    unbindScrollRef.current = () => {
+      window.removeEventListener('scroll', onScroll, { capture: true })
+    }
+  }
+
+  const commit = useCallback((x: number, y: number, event?: { stopPropagation?: () => void }) => {
     event?.stopPropagation?.()
     const now = Date.now()
+    if (now < suppressUntil.current) return
+    const origin = originRef.current
+    const scrolled = scrolledRef.current
+    originRef.current = null
+    scrolledRef.current = false
+    unbindScroll()
+    if (scrolled || tapWasScroll(origin, x, y)) {
+      suppressUntil.current = now + 500
+      return
+    }
     if (now - last.current < 400) return
     last.current = now
     fn.current()
   }, [])
-  return { onPointerDown: run, onClick: run }
+
+  const onPointerDown = useCallback((event: React.PointerEvent) => {
+    event.stopPropagation()
+    if (event.button !== 0) return
+    originRef.current = { x: event.clientX, y: event.clientY, scrollY: readScrollY() }
+    scrolledRef.current = false
+    bindScrollCancel()
+  }, [])
+
+  const onPointerUp = useCallback((event: React.PointerEvent) => {
+    commit(event.clientX, event.clientY, event)
+  }, [commit])
+
+  const onPointerCancel = useCallback(() => {
+    originRef.current = null
+    scrolledRef.current = false
+    unbindScroll()
+  }, [])
+
+  const onClick = useCallback((event: React.MouseEvent) => {
+    commit(event.clientX, event.clientY, event)
+  }, [commit])
+
+  useEffect(() => () => unbindScroll(), [])
+
+  return { onPointerDown, onPointerUp, onPointerCancel, onClick }
 }
 
 /** Guest login: full-page login/register. Dialogs do not show on Chrome Android. */

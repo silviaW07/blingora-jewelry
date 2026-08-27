@@ -2288,11 +2288,12 @@ html.is-narrow .listing-price-slider {
 }
 
 .home-recommend-product-name {
-  white-space: normal !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 /* Keep a square hero. padding-bottom — Chrome aspect-ratio + absolute img was 0px tall. */
@@ -4693,6 +4694,19 @@ a.mobile-home__chip {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+}
+
+.mobile-zone-squircle-grid .mobile-zone-squircle__label {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal;
+  word-break: normal;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #8a8477;
+  text-align: center;
 }
 
 .mobile-zone-squircle-grid .mobile-zone-squircle {

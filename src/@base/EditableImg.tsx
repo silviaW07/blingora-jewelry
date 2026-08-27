@@ -131,7 +131,7 @@ const EditableImg = ({
     fallbackSrc = null,
     slowFallbackMs = 0,
     proxyWidth = 400,
-    loading = 'lazy',
+    loading = 'eager',
     decoding = 'async',
     ...imgProps
 }: EditableImgProps) => {

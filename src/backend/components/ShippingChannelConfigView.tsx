@@ -107,11 +107,13 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                     <TableHead className="min-w-[120px]">计费模式</TableHead>
                     <TableHead className="min-w-[140px]">预计时间</TableHead>
                     <TableHead className="w-[90px]">系数</TableHead>
-                    <TableHead className="min-w-[320px]">国家运费（¥）</TableHead>
+                    <TableHead className="min-w-[220px]">国家运费（¥）</TableHead>
                     <TableHead className="w-[100px]">排序</TableHead>
                     <TableHead className="w-[120px]">启用</TableHead>
                     <TableHead className="w-[160px]">更新时间</TableHead>
-                    <TableHead className="w-[140px] text-right">操作</TableHead>
+                    <TableHead className="sticky right-0 z-10 w-[160px] bg-secondary/50 text-right">
+                      操作
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -146,20 +148,32 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                           <TableCell>{item.channel_estimatedTime}</TableCell>
                           <TableCell>{item.channel_coefficient.toFixed(2)}</TableCell>
                           <TableCell>
-                            <div className="flex max-w-[420px] flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              className="flex max-w-[280px] flex-col items-start gap-1 text-left"
+                              onClick={() => handlers.openEditModal(item)}
+                            >
                               {feeEntries.length === 0 ? (
                                 <span className="text-sm text-muted-foreground">未配置运费</span>
                               ) : (
-                                feeEntries.slice(0, 4).map(({ country, summary }) => (
-                                  <Badge key={country} variant="secondary" className="font-normal">
-                                    {country}: {summary}
-                                  </Badge>
-                                ))
+                                <div className="flex flex-wrap gap-1">
+                                  {feeEntries.slice(0, 3).map(({ country }) => (
+                                    <Badge key={country} variant="secondary" className="font-normal">
+                                      {country}
+                                    </Badge>
+                                  ))}
+                                  {feeEntries.length > 3 ? (
+                                    <Badge variant="outline">+{feeEntries.length - 3}</Badge>
+                                  ) : null}
+                                </div>
                               )}
-                              {feeEntries.length > 4 ? (
-                                <Badge variant="outline">+{feeEntries.length - 4}</Badge>
+                              {feeEntries[0]?.summary ? (
+                                <span className="line-clamp-1 text-xs text-muted-foreground">
+                                  {feeEntries[0].country}: {feeEntries[0].summary}
+                                </span>
                               ) : null}
-                            </div>
+                              <span className="text-xs text-primary">点击编辑运费</span>
+                            </button>
                           </TableCell>
                           <TableCell>{item.channel_sortWeight}</TableCell>
                           <TableCell>
@@ -173,14 +187,15 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                           <TableCell className="text-sm text-muted-foreground">
                             {new Date(item.channel_updatedAt).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="sticky right-0 z-10 bg-background text-right">
                             <div className="flex justify-end gap-1">
                               <Button
-                                size="icon"
+                                size="sm"
                                 variant="ghost"
                                 onClick={() => handlers.openEditModal(item)}
                               >
-                                <Edit2 className="h-4 w-4" />
+                                <Edit2 className="mr-1 h-4 w-4" />
+                                编辑
                               </Button>
                               <Button
                                 size="icon"
@@ -203,13 +218,13 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
       </section>
 
       <Dialog open={!!state.formMode} onOpenChange={(open) => !open && handlers.closeFormModal()}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>{state.formMode === 'EDIT' ? '编辑物流渠道' : '新增物流渠道'}</DialogTitle>
           </DialogHeader>
 
           {state.formData ? (
-            <div className="space-y-4 py-2">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">渠道名称</label>
@@ -555,7 +570,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
             </div>
           ) : null}
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t pt-4">
             <Button variant="outline" onClick={handlers.closeFormModal} disabled={state.submitting}>
               取消
             </Button>

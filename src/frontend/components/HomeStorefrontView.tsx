@@ -237,13 +237,13 @@ const DesktopRecommendZoneProductCard = ({
 
       <div className="mt-5 space-y-4">
         {isDraft ? (
-          <p className="home-recommend-product-name text-left text-lg font-semibold leading-7 text-[#111111]">
+          <p className="home-recommend-product-name truncate text-left text-lg font-semibold leading-7 text-[#111111]">
             {item.productName}
           </p>
         ) : (
           <button
             type="button"
-            className="home-recommend-product-name text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
+            className="home-recommend-product-name truncate text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
             onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
           >
             {item.productName}

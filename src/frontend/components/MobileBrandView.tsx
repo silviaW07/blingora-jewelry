@@ -200,7 +200,7 @@ export default function MobileBrandView() {
                   toast.message(t('product.addToCart', { defaultValue: 'Add to cart' }))
                   router.push('/cart/')
                 }}
-                priority={index < 6}
+                priority={index < 12}
               />
             ))}
           </div>

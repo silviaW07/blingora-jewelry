@@ -32,8 +32,8 @@ export function OptimizedProductImage({
   width,
   height,
   priority = false,
-  imageWidth = 720,
-  quality = 82,
+  imageWidth = 280,
+  quality = 72,
 }: Props) {
   const primary = toProxiedImageUrl(src, { width: imageWidth, quality })
   const raw = String(src || '').trim()
@@ -69,7 +69,7 @@ export function OptimizedProductImage({
     setFailed(true)
   }
 
-  // Visible immediately — Chrome mobile often never fires React onLoad, so opacity-0 stayed blank.
+  // Visible immediately — Chrome mobile often never paints loading=lazy list thumbs.
   const imgClass = fill
     ? cn('absolute inset-0 h-full w-full max-w-full object-cover', className)
     : cn('max-w-full object-cover', className)
@@ -85,7 +85,7 @@ export function OptimizedProductImage({
         width={fill ? undefined : width || imageWidth}
         height={fill ? undefined : height || imageWidth}
         className={imgClass}
-        loading={priority ? 'eager' : 'lazy'}
+        loading="eager"
         decoding={priority ? 'sync' : 'async'}
         draggable={false}
         fetchPriority={priority ? 'high' : 'auto'}
