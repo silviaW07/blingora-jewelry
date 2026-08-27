@@ -1,5 +1,6 @@
 import {
   DEFAULT_CHANNEL_COEFFICIENT,
+  emptyParcelBandRule,
   formatShippingFeeCny,
   normalizeCountryRuleMap,
   type CountryRuleMap,
@@ -37,87 +38,11 @@ export const DEFAULT_SHIPPING_CHANNELS: Array<{
 }> = [
   {
     name: 'USPS',
-    estimatedTime: '3-7 business days',
-    billingMode: 'EXPRESS_TIER',
+    estimatedTime: '8-12 business days',
+    billingMode: 'PARCEL_BAND',
     channelCoefficient: DEFAULT_CHANNEL_COEFFICIENT,
     countryFees: {
-      'United States': {
-        tiers: [
-          { maxKg: 0.5, fee: 10 },
-          { maxKg: 1, fee: 15 },
-          { maxKg: 2, fee: 22 },
-        ],
-      },
-      'Puerto Rico': {
-        tiers: [
-          { maxKg: 0.5, fee: 12 },
-          { maxKg: 1, fee: 18 },
-          { maxKg: 2, fee: 26 },
-        ],
-      },
-      Mexico: {
-        tiers: [
-          { maxKg: 0.5, fee: 18 },
-          { maxKg: 1, fee: 26 },
-          { maxKg: 2, fee: 36 },
-        ],
-      },
-      Canada: {
-        tiers: [
-          { maxKg: 0.5, fee: 14 },
-          { maxKg: 1, fee: 20 },
-          { maxKg: 2, fee: 30 },
-        ],
-      },
-      'United Kingdom': {
-        tiers: [
-          { maxKg: 0.5, fee: 22 },
-          { maxKg: 1, fee: 32 },
-          { maxKg: 2, fee: 45 },
-        ],
-      },
-      Australia: {
-        tiers: [
-          { maxKg: 0.5, fee: 24 },
-          { maxKg: 1, fee: 35 },
-          { maxKg: 2, fee: 48 },
-        ],
-      },
-      Japan: {
-        tiers: [
-          { maxKg: 0.5, fee: 20 },
-          { maxKg: 1, fee: 30 },
-          { maxKg: 2, fee: 42 },
-        ],
-      },
-      'South Korea': {
-        tiers: [
-          { maxKg: 0.5, fee: 19 },
-          { maxKg: 1, fee: 28 },
-          { maxKg: 2, fee: 40 },
-        ],
-      },
-      Singapore: {
-        tiers: [
-          { maxKg: 0.5, fee: 18 },
-          { maxKg: 1, fee: 26 },
-          { maxKg: 2, fee: 38 },
-        ],
-      },
-      Germany: {
-        tiers: [
-          { maxKg: 0.5, fee: 22 },
-          { maxKg: 1, fee: 33 },
-          { maxKg: 2, fee: 46 },
-        ],
-      },
-      France: {
-        tiers: [
-          { maxKg: 0.5, fee: 22 },
-          { maxKg: 1, fee: 33 },
-          { maxKg: 2, fee: 46 },
-        ],
-      },
+      'United States': emptyParcelBandRule(),
     },
     isEnabled: true,
     sortWeight: 10,

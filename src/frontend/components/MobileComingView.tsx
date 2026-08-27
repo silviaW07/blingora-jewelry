@@ -253,9 +253,9 @@ export default function MobileComingView({
                       src={item.imageUrl}
                       alt={item.productName || zoneTitle}
                       sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
-                      imageWidth={240}
-                      quality={72}
-                      priority={index < 4}
+                      imageWidth={400}
+                      quality={85}
+                      priority={index < 8}
                       className="object-cover"
                     />
                   ) : (

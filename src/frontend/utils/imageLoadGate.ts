@@ -1,6 +1,6 @@
 /** Cap in-flight product images so first-screen thumbs are not starved. */
 
-const MAX_IN_FLIGHT = 6
+const MAX_IN_FLIGHT = 8
 
 let inFlight = 0
 const waiters: Array<() => void> = []
@@ -23,6 +23,16 @@ export function acquireImageSlot(priority: boolean): Promise<() => void> {
   }
 
   return new Promise((resolve) => {
-    waiters.push(() => resolve(take()))
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      resolve(take())
+    }
+    const timer = setTimeout(finish, 700)
+    waiters.push(() => {
+      clearTimeout(timer)
+      finish()
+    })
   })
 }

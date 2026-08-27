@@ -18,6 +18,7 @@ import {
   SHIPPING_BILLING_MODE_LABELS,
   summarizeCountryRule,
   isExpressRule,
+  isParcelBandRule,
   isSeaRule,
   isSeaTierRule,
   type ShippingBillingMode,
@@ -248,6 +249,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="EXPRESS_TIER">快递阶梯价</SelectItem>
+                      <SelectItem value="PARCEL_BAND">小包区间价（USPS / 爱派）</SelectItem>
                       <SelectItem value="SEA_TIER">海运阶梯价</SelectItem>
                       <SelectItem value="SEA_PER_KG">海运按公斤</SelectItem>
                     </SelectContent>
@@ -293,6 +295,8 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {billingMode === 'EXPRESS_TIER'
                       ? '快递阶梯价：按重量匹配下一档（≤maxKg），取对应固定运费。关闭开关表示该国家不可用。'
+                      : billingMode === 'PARCEL_BAND'
+                        ? '小包区间价（爱派 USPS）：运费 = 实际重量 × 该档 ¥/kg + 处理费。超过最大重量不可选。可一键填入爱派默认档。'
                       : billingMode === 'SEA_TIER'
                         ? '海运阶梯价：未到体积档按「首重 + 续重」计费；达到体积档后整票重量 × 该档 ¥/kg（不是快递那种固定档价）。例如首重 2kg=100，续重 1kg=28，11kg 起按 27/kg。美西/美中/美东请分国家或分渠道填不同单价。关闭开关表示该国家不可用。'
                         : '海运按公斤：重量 ≤ 起重重量取起重运费；超出部分按续重单价加收。关闭开关表示该国家不可用。'}
@@ -325,6 +329,121 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
 
                         {!enabled ? (
                           <p className="text-xs text-muted-foreground">该国家暂不提供此渠道</p>
+                        ) : billingMode === 'PARCEL_BAND' && isParcelBandRule(rule) ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">最小重量 (kg)</label>
+                                <Input
+                                  className="h-8"
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={String(rule.minKg)}
+                                  onChange={(e) =>
+                                    handlers.updateParcelBandMeta(country, 'minKg', e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">最大重量 (kg)</label>
+                                <Input
+                                  className="h-8"
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={String(rule.capKg)}
+                                  onChange={(e) =>
+                                    handlers.updateParcelBandMeta(country, 'capKg', e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handlers.fillAipaiUspsTiers(country)}
+                                >
+                                  填入爱派 USPS 默认档
+                                </Button>
+                              </div>
+                            </div>
+                            {rule.tiers.map((tier, index) => (
+                              <div
+                                key={`${country}-parcel-${index}`}
+                                className="flex flex-wrap items-center gap-2"
+                              >
+                                <span className="text-xs text-muted-foreground">≤</span>
+                                <Input
+                                  className="h-8 w-24"
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={String(tier.maxKg)}
+                                  onChange={(e) =>
+                                    handlers.updateParcelBandTier(
+                                      country,
+                                      index,
+                                      'maxKg',
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground">kg</span>
+                                <Input
+                                  className="h-8 w-24"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={String(tier.perKgFee)}
+                                  onChange={(e) =>
+                                    handlers.updateParcelBandTier(
+                                      country,
+                                      index,
+                                      'perKgFee',
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground">¥/kg +</span>
+                                <Input
+                                  className="h-8 w-24"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={String(tier.handlingFee)}
+                                  onChange={(e) =>
+                                    handlers.updateParcelBandTier(
+                                      country,
+                                      index,
+                                      'handlingFee',
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground">处理费</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={rule.tiers.length <= 1}
+                                  onClick={() => handlers.removeParcelBandTier(country, index)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlers.addParcelBandTier(country)}
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" />
+                              添加区间
+                            </Button>
+                          </div>
                         ) : billingMode === 'EXPRESS_TIER' && isExpressRule(rule) ? (
                           <div className="space-y-2">
                             {rule.tiers.map((tier, index) => (

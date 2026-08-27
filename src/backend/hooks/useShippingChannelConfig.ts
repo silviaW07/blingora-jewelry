@@ -7,9 +7,11 @@ import {
   DEFAULT_CHANNEL_COEFFICIENT,
   DEFAULT_SEA_BASE_KG,
   emptyExpressRule,
+  emptyParcelBandRule,
   emptySeaRule,
   emptySeaTierRule,
   isExpressRule,
+  isParcelBandRule,
   isSeaRule,
   isSeaTierRule,
   type CountryRuleMap,
@@ -35,6 +37,7 @@ type FormMode = 'CREATE' | 'EDIT' | null
 function emptyRuleForMode(mode: ShippingBillingMode) {
   if (mode === 'SEA_PER_KG') return emptySeaRule()
   if (mode === 'SEA_TIER') return emptySeaTierRule()
+  if (mode === 'PARCEL_BAND') return emptyParcelBandRule()
   return emptyExpressRule()
 }
 
@@ -110,6 +113,16 @@ export interface ShippingChannelConfigHandlers {
     field: 'maxKg' | 'perKgFee',
     value: string,
   ) => void
+  updateParcelBandMeta: (country: string, field: 'minKg' | 'capKg', value: string) => void
+  updateParcelBandTier: (
+    country: string,
+    index: number,
+    field: 'maxKg' | 'perKgFee' | 'handlingFee',
+    value: string,
+  ) => void
+  addParcelBandTier: (country: string) => void
+  removeParcelBandTier: (country: string, index: number) => void
+  fillAipaiUspsTiers: (country: string) => void
   handleSubmit: () => Promise<void>
   handleDelete: (id: string) => Promise<void>
   handleQuickUpdateStatus: (id: string, enabled: boolean) => Promise<void>
@@ -232,6 +245,8 @@ export function useShippingChannelConfig() {
             } else {
               nextFees[country] = emptySeaTierRule()
             }
+          } else if (mode === 'PARCEL_BAND') {
+            nextFees[country] = isParcelBandRule(current) ? current : emptyParcelBandRule()
           } else if (isExpressRule(current)) {
             nextFees[country] = current
           } else if (isSeaRule(current) || isSeaTierRule(current)) {
@@ -422,6 +437,98 @@ export function useShippingChannelConfig() {
           channel_countryFees: {
             ...prev.channel_countryFees,
             [country]: { ...rule, tiers },
+          },
+        }
+      })
+    },
+    updateParcelBandMeta: (country, field, value) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        if (!rule || !isParcelBandRule(rule)) return prev
+        const trimmed = value.trim()
+        const num = trimmed === '' ? 0 : Number(trimmed)
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: {
+              ...rule,
+              [field]: Number.isFinite(num) ? num : 0,
+            },
+          },
+        }
+      })
+    },
+    updateParcelBandTier: (country, index, field, value) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        if (!rule || !isParcelBandRule(rule)) return prev
+        const trimmed = value.trim()
+        const num = trimmed === '' ? 0 : Number(trimmed)
+        const tiers = rule.tiers.map((tier, i) => {
+          if (i !== index) return tier
+          return {
+            ...tier,
+            [field]: Number.isFinite(num) ? num : 0,
+          }
+        })
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: { ...rule, tiers },
+          },
+        }
+      })
+    },
+    addParcelBandTier: (country) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        const base = rule && isParcelBandRule(rule) ? rule : emptyParcelBandRule()
+        const last = base.tiers[base.tiers.length - 1]
+        const tiers = [
+          ...base.tiers,
+          {
+            maxKg: last ? Number((last.maxKg + 0.5).toFixed(3)) : 0.5,
+            perKgFee: last?.perKgFee ?? 0,
+            handlingFee: last?.handlingFee ?? 0,
+          },
+        ]
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: { ...base, tiers },
+          },
+        }
+      })
+    },
+    removeParcelBandTier: (country, index) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        const rule = prev.channel_countryFees[country]
+        if (!rule || !isParcelBandRule(rule)) return prev
+        const tiers = rule.tiers.filter((_, i) => i !== index)
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: tiers.length ? { ...rule, tiers } : emptyParcelBandRule(),
+          },
+        }
+      })
+    },
+    fillAipaiUspsTiers: (country) => {
+      setFormData((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          channel_countryFees: {
+            ...prev.channel_countryFees,
+            [country]: emptyParcelBandRule(),
           },
         }
       })

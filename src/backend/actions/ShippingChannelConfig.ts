@@ -15,6 +15,7 @@ import {
   isSeaTierRule,
   isExpressRule,
   isSeaRule,
+  normalizeParcelBandRule,
   type CountryRuleMap,
   type ShippingBillingMode,
 } from '@/shared/shippingFeeCalc'
@@ -174,6 +175,17 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
         for (const tier of rule.tiers) {
           if (!(tier.maxKg > 0)) throw new Error(`${country} 体积档重量必须大于 0`)
           if (tier.perKgFee < 0) throw new Error(`${country} 公斤单价不能为负数`)
+        }
+      }
+    } else if (billingMode === 'PARCEL_BAND') {
+      for (const [country, rule] of Object.entries(fees)) {
+        if (!rule) continue
+        const band = normalizeParcelBandRule(rule)
+        if (!band) throw new Error(`${country} 请填写小包区间价`)
+        if (!(band.minKg > 0) || !(band.capKg > 0)) throw new Error(`${country} 最小/最大重量必须大于 0`)
+        for (const tier of band.tiers) {
+          if (!(tier.maxKg > 0)) throw new Error(`${country} 区间重量必须大于 0`)
+          if (tier.perKgFee < 0 || tier.handlingFee < 0) throw new Error(`${country} 单价/处理费不能为负数`)
         }
       }
     } else if (isWeightTierBillingMode(billingMode)) {

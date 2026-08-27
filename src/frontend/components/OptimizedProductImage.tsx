@@ -32,8 +32,8 @@ export function OptimizedProductImage({
   width,
   height,
   priority = false,
-  imageWidth = 240,
-  quality = 70,
+  imageWidth = 400,
+  quality = 85,
 }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null)
   const releaseRef = useRef<(() => void) | null>(null)
@@ -66,7 +66,7 @@ export function OptimizedProductImage({
           io.disconnect()
         }
       },
-      { rootMargin: '240px 0px', threshold: 0.01 },
+      { rootMargin: '480px 0px', threshold: 0.01 },
     )
     io.observe(node)
     return () => io.disconnect()

@@ -198,9 +198,9 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
       <OptimizedProductImage
         src={item.imageUrl || undefined}
         alt={item.productName}
-        imageWidth={240}
-        quality={70}
-        priority={index < 4}
+        imageWidth={400}
+        quality={85}
+        priority={index < 8}
       />
       {isDraft ? (
         <div className="absolute right-2 top-2 z-[3]">
@@ -334,9 +334,9 @@ const renderMobileSquircleContent = (
                 <OptimizedProductImage
                   src={item.imageUrl || undefined}
                   alt={item.productName}
-                  imageWidth={200}
-                  quality={68}
-                  priority={index < 5}
+                  imageWidth={320}
+                  quality={85}
+                  priority={index < 8}
                 />
                 <span className="absolute right-1 top-1 z-[3]">
                   <WishlistHeartButton
@@ -379,9 +379,9 @@ const renderMobileSquircleContent = (
               <OptimizedProductImage
                 src={item.imageUrl || undefined}
                 alt={item.productName}
-                imageWidth={200}
-                quality={68}
-                priority={index < 5}
+                imageWidth={320}
+                quality={85}
+                priority={index < 8}
               />
             </span>
             <span className="mobile-zone-squircle__label">

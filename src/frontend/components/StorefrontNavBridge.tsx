@@ -43,10 +43,6 @@ export function StorefrontNavBridge() {
       router.push(next)
       notifyStorefrontUrl()
       window.setTimeout(notifyStorefrontUrl, 0)
-      window.setTimeout(() => {
-        const now = `${window.location.pathname}${window.location.search}`
-        if (!samePath(now, next)) window.location.assign(next)
-      }, 700)
     }
 
     window.__storefrontNav = nav

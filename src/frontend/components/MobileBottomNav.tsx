@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Home, LayoutGrid, Sparkles, ShoppingCart, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { categoryHref } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate } from '@/frontend/utils/hardNavigate'
 import {
   findDailyNewArrivalCategory,
   type DailyNewArrivalCategoryHit,
@@ -27,8 +27,10 @@ function isDailyNewHrefActive(
 
 /**
  * Mobile-only fixed bottom tab bar.
+ * Uses in-app navigation so Chinese browsers do not show a full-document “正在努力加载” wait.
  */
 export function MobileBottomNav() {
+  const router = useRouter()
   const pathname = usePathname() || '/'
   const searchParams = useSearchParams()
   const normalized = pathname.toLowerCase().replace(/\/+$/, '') || '/'
@@ -58,6 +60,17 @@ export function MobileBottomNav() {
     searchParams.get('categoryId'),
     dailyCat,
   )
+
+  useEffect(() => {
+    const hrefs = ['/', '/categories/', '/cart/', '/account/profile/', newHref]
+    hrefs.forEach((href) => {
+      try {
+        router.prefetch(href)
+      } catch {
+        /* ignore */
+      }
+    })
+  }, [router, newHref])
 
   const tabs = [
     {
@@ -100,7 +113,6 @@ export function MobileBottomNav() {
   return (
     <nav
       className="mobile-bottom-nav"
-      data-no-hard-nav=""
       aria-label={t('nav.siteNav', { defaultValue: 'Site navigation' })}
     >
       <ul className="mobile-bottom-nav__list">
@@ -110,9 +122,14 @@ export function MobileBottomNav() {
             <li key={tab.key} className="min-w-0 flex-1">
               <a
                 href={tab.href}
-                data-no-hard-nav=""
                 className={cn('mobile-bottom-nav__item', tab.active && 'is-active')}
                 aria-current={tab.active ? 'page' : undefined}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                  if (event.button) return
+                  event.preventDefault()
+                  hardNavigate(tab.href)
+                }}
               >
                 <Icon className="pointer-events-none size-5 shrink-0" strokeWidth={tab.active ? 2.4 : 1.9} />
                 <span className="truncate">{tab.label}</span>
