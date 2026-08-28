@@ -33,7 +33,6 @@ import {
   translateProductSpecValue,
 } from '@/frontend/i18n/productSpecTranslate';
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
-import { containsChinese } from '@/shared/productKeywordDictionary';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
 import { imageIdentity, imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl';
 
@@ -440,26 +439,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const colorName = colorAttributeGroup?.name
     const defaultLabel = t('product.defaultSpec')
     const isPlaceholderSpec = (value?: string | null) =>
-      /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
-
-    // Color-only: one row for the selected (or first) color.
-    if (colorName && !sizeName) {
-      const colorValue = selectedColorValue
-      if (!colorValue) return []
-      const matched =
-        product.skus.find((sku) =>
-          attrEquals(getSkuAttributeValue(sku, colorName), colorValue),
-        ) || null
-      if (!matched) return []
-      return [
-        {
-          key: matched.id,
-          label: colorValue,
-          sku: matched,
-          orderLabel: colorValue,
-        },
-      ]
-    }
+      /^(默认|默认规格|default|standard|n\/a|none|—|－)?$/i.test(String(value || '').trim())
 
     const computeLabelForSku = (sku: ProductSkuData): string => {
       const fromSize = sizeName ? getSkuAttributeValue(sku, sizeName) : ''
@@ -471,6 +451,29 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
         defaultLabel,
       })
       return isPlaceholderSpec(label) ? defaultLabel : label
+    }
+
+    // Color selected, no dedicated size axis: still list every SKU of that color
+    // (bags/jewelry often keep size in sizeLabel / 规格 / variantLabel).
+    if (colorName && !sizeName) {
+      const colorValue = selectedColorValue
+      if (!colorValue) return []
+      const matched = product.skus.filter((sku) =>
+        attrEquals(getSkuAttributeValue(sku, colorName), colorValue),
+      )
+      if (matched.length === 0) return []
+      const byKey = new Map<string, { label: string; sku: ProductSkuData }>()
+      for (const sku of matched) {
+        const label = computeLabelForSku(sku)
+        const key = `${label}::${sku.id}`
+        if (!byKey.has(key)) byKey.set(key, { label, sku })
+      }
+      return Array.from(byKey.entries()).map(([key, v]) => ({
+        key,
+        label: v.label,
+        sku: v.sku,
+        orderLabel: v.label,
+      }))
     }
 
     const byKey = new Map<
@@ -638,10 +641,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       label: translateProductSpecLabel(row.key, t),
       value: translateProductSpecValue(row.key, row.value, t),
     }))
-    .filter((row) => {
-      if (!row.label || !row.value) return false
-      return !containsChinese(row.label) && !containsChinese(row.value)
-    })
+    .filter((row) => Boolean(row.label && row.value))
 
   return withStorefrontHeader(
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">

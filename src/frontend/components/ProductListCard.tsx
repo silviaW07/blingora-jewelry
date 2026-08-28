@@ -265,9 +265,9 @@ export const ProductListCard = ({
                     fill
                     className="pointer-events-none"
                     sizes="48px"
-                    imageWidth={96}
-                    quality={70}
-                    priority={false}
+                    imageWidth={240}
+                    quality={75}
+                    priority={index < 2}
                   />
                 </button>
               )

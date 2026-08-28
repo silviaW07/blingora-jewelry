@@ -393,6 +393,9 @@ async function main() {
         }
       }
     }
+    if (!code && product.productCode && excelMap.has(product.productCode)) {
+      code = product.productCode
+    }
     if (!code && product.mainImageUrl && imageToCode.has(product.mainImageUrl)) {
       code = imageToCode.get(product.mainImageUrl)
     }
@@ -408,8 +411,8 @@ async function main() {
 
     const excelRec = code ? excelMap.get(code) : null
     const pairs = pickPairs(excelRec, matched?.preview)
-    const allHaveOptions = product.skus.length > 0 && product.skus.every(skuHasRealOption)
-    if (allHaveOptions && pairs.length <= product.skus.length) {
+    const allHaveRealSpec = product.skus.length > 0 && product.skus.every(skuHasRealSpec)
+    if (allHaveRealSpec && pairs.length <= product.skus.length) {
       skippedAlreadyOk += 1
       continue
     }
@@ -502,6 +505,34 @@ async function main() {
           },
         })
         createdSkus += 1
+      }
+    }
+    const specValues = [
+      ...new Set(
+        pairs
+          .map((p) => String(p.spec || '').trim())
+          .filter((s) => s && !isPlaceholder(s)),
+      ),
+    ]
+    if (specValues.length > 0) {
+      const existingGroups = Array.isArray(product.parameterJson) ? product.parameterJson : []
+      const hasSpecKey = existingGroups.some((g) =>
+        (g?.items || []).some(
+          (it) =>
+            /规格|尺码|尺寸|size|spec/i.test(String(it?.key || '')) &&
+            String(it?.value || '').trim(),
+        ),
+      )
+      if (!hasSpecKey) {
+        await prisma.product.update({
+          where: { id: product.id },
+          data: {
+            parameterJson: [
+              ...existingGroups.filter((g) => Array.isArray(g?.items) && g.items.length > 0),
+              { group: '基本参数', items: [{ key: '规格', value: specValues.join(' / ') }] },
+            ],
+          },
+        })
       }
     }
     updatedProducts += 1

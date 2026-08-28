@@ -4230,6 +4230,9 @@ html.is-narrow .mobile-categories-panel__title {
   min-width: 0;
   width: 100%;
   height: 100%;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .home-service-card {
@@ -4248,6 +4251,7 @@ html.is-narrow .mobile-categories-panel__title {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
+  cursor: pointer;
 }
 
 .home-service-card__icon {

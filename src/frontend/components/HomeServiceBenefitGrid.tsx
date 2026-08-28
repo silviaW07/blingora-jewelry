@@ -2,7 +2,7 @@
 
 /**
  * Home service benefit cards (Shipping / Payment / Buyer show / Why choose us).
- * Shared by desktop + mobile storefront — static display, no navigation links.
+ * Shared by desktop + mobile storefront. Cards link to /shipping /payment /buyer-show /why-choose-us.
  * Layout/sizing fully split in CSS: desktop `@media (min-width: 1024px)`, mobile `max-width: 1023px`.
  * Single DOM tree so decorate propKeys (title/desc/icon/card) stay unique.
  */
@@ -16,8 +16,10 @@ import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefi
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { hardNavProps } from '@/frontend/utils/hardNavigate'
 
 const serviceBenefitItems = SERVICE_PAGE_CONFIGS.map((cfg) => ({
+  slug: cfg.slug,
   title: cfg.title,
   description: cfg.description,
   iconSrc: cfg.iconSrc,
@@ -33,7 +35,7 @@ export function HomeServiceBenefitGrid({
   className,
   gridControllerName = '首页服务权益网格',
 }: Props) {
-  const { getPatch } = useDecorateMode()
+  const { getPatch, isDecorateMode } = useDecorateMode()
   const { t } = useTranslation()
 
   return (
@@ -48,11 +50,16 @@ export function HomeServiceBenefitGrid({
           return null
         }
 
+        const href = `/${item.slug}/`
+        const Wrapper = isDecorateMode ? 'div' : 'a'
+        const wrapperNav = isDecorateMode ? {} : hardNavProps(href)
+
         return (
-          <div
+          <Wrapper
             key={keys.card}
             className="home-service-card-cell"
             data-controller-name="首页服务权益卡片"
+            {...wrapperNav}
           >
             <DecorateFrame
               propKey={keys.card}
@@ -93,7 +100,7 @@ export function HomeServiceBenefitGrid({
                 </DecorateText>
               </div>
             </DecorateFrame>
-          </div>
+          </Wrapper>
         )
       })}
     </div>

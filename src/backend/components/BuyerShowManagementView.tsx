@@ -105,7 +105,7 @@ export default function BuyerShowManagementView({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
           {state.loading ? (
             <p className="col-span-full text-xs text-[#94A3B8]">加载中...</p>
           ) : state.media.length === 0 ? (
@@ -114,9 +114,9 @@ export default function BuyerShowManagementView({
             state.media.map((item) => (
               <div key={item.id} className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-white">
                 {item.mediaType === 'VIDEO' ? (
-                  <video src={item.mediaUrl} className="h-36 w-full bg-black object-cover" controls />
+                  <video src={item.mediaUrl} className="aspect-[3/4] w-full bg-black object-cover" controls />
                 ) : (
-                  <img src={item.mediaUrl} alt={item.title || ''} className="h-36 w-full object-cover" />
+                  <img src={item.mediaUrl} alt={item.title || ''} className="aspect-[3/4] w-full object-cover" />
                 )}
                 <div className="space-y-2 p-2">
                   <input

@@ -8,9 +8,11 @@
  */
 export const PRODUCT_SPEC_WHITELIST_GROUPS: readonly (readonly string[])[] = [
   ['品牌', 'Brand'],
-  ['材质', 'Material', '材料', '面料', 'Fabric'],
+  ['材质', 'Material', '材料', '面料', 'Fabric', '里料', 'Lining'],
   // 颜色已从 C 端规格参数白名单移除：SKU/色图已表达颜色，属性里常是超长色值列表
-  ['尺码', '尺寸', 'Size', 'Sizing'],
+  ['尺码', '尺寸', '码数', '规格', 'Size', 'Sizing', 'Spec'],
+  ['容量', 'Capacity'],
+  ['肩带', 'Strap'],
   ['重量', 'Weight'],
   ['风格', '款式', 'Style'],
   ['适用季节', 'Season'],

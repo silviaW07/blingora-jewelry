@@ -2234,6 +2234,16 @@ export const batchImportProducts = requireRole([UserRole.ADMIN])(
           return buildDraftSkus({ ...row, colors, specs, cost_price: costPrice, price_coefficient: priceCoefficient }, generatedSpuCode)
         })
         const dedupedSkus = Array.from(new Map(mergedSkus.map((sku) => [sku.sku_code, sku])).values())
+        const specLabels = Array.from(
+          new Set(
+            dedupedSkus.flatMap((sku) =>
+              (sku.attribute_json || [])
+                .filter((attr) => /规格|尺码|尺寸|size|spec/i.test(String(attr.name || '')))
+                .map((attr) => String(attr.value || '').trim())
+                .filter(Boolean),
+            ),
+          ),
+        )
         const detailContent = buildDetailContent(firstRow.detail_text, galleryUrls.slice(1).map(url => ({ type: 'image' as const, content: url })))
         const gallery = buildGallery(galleryUrls[0] || '', galleryUrls.map((url, index) => ({ url, sort: index + 1 })))
         await createProduct({
@@ -2252,6 +2262,9 @@ export const batchImportProducts = requireRole([UserRole.ADMIN])(
           short_description: firstRow.detail_text || '',
           gallery_json: gallery,
           detail_content_json: detailContent,
+          parameter_json: specLabels.length
+            ? [{ group: '基本参数', items: [{ key: '规格', value: specLabels.join(' / ') }] }]
+            : undefined,
           skus: dedupedSkus,
           submit_action: 'DRAFT'
         })

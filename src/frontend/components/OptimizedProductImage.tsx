@@ -47,7 +47,9 @@ export function OptimizedProductImage({
   const displaySrc =
     attempt === 0
       ? primary
-      : toProxiedImageUrl(src, { width: imageWidth, quality: Math.min(90, quality + 5) }) || raw || primary
+      : attempt === 1
+        ? toProxiedImageUrl(src, { width: Math.max(240, imageWidth), quality: 80 }) || raw || primary
+        : toProxiedImageUrl(src, { width: 0 }) || raw || primary
 
   const shellClass = fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]'
 
@@ -56,8 +58,8 @@ export function OptimizedProductImage({
   }
 
   const imgClass = fill
-    ? cn('absolute inset-0 h-full w-full max-w-full object-cover', className)
-    : cn('max-w-full object-cover', className)
+    ? cn('absolute inset-0 z-[1] h-full w-full max-w-full object-cover', className)
+    : cn('relative z-[1] max-w-full object-cover', className)
 
   return (
     <div className={fill ? 'absolute inset-0' : 'relative'}>
@@ -77,7 +79,7 @@ export function OptimizedProductImage({
         referrerPolicy="no-referrer"
         onContextMenu={(event) => event.preventDefault()}
         onError={() => {
-          if (attempt < 1) setAttempt(1)
+          if (attempt < 2) setAttempt((n) => n + 1)
           else setFailed(true)
         }}
       />

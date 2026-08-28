@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
@@ -10,6 +10,11 @@ type ImageLightboxProps = {
   alt?: string
   open: boolean
   onClose: () => void
+}
+
+function uniqueUrls(...urls: Array<string | null | undefined>) {
+  const list = urls.map((url) => String(url || '').trim()).filter(Boolean)
+  return Array.from(new Set(list))
 }
 
 /** Full-screen image preview: click backdrop or press Esc to close. */
@@ -36,8 +41,9 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
 
   if (!mounted || !open || !src) return null
 
-  // 大图优先用原图（去掉 alicdn 裁剪后缀），避免 _1600x1600 这类超大裁剪被 CDN 拒绝
-  const proxiedOriginal = toProxiedImageUrl(src, { width: 0 }) || src
+  const thumb = toProxiedImageUrl(src, { width: 240, quality: 75 }) || src
+  const preview = toProxiedImageUrl(src, { width: 960, quality: 82 }) || src
+  const compact = toProxiedImageUrl(src, { width: 720, quality: 80 }) || src
 
   return createPortal(
     <div
@@ -57,7 +63,9 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
         <X className="h-5 w-5" />
       </button>
       <LightboxImage
-        proxiedOriginal={proxiedOriginal}
+        thumb={thumb}
+        preview={preview}
+        compact={compact}
         rawSrc={src}
         alt={alt || '预览大图'}
       />
@@ -67,34 +75,39 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
 }
 
 /**
- * 大图加载：代理原图失败 → 回退未代理原始 URL → 最终失败提示。
- * referrerPolicy=no-referrer 规避 1688/alicdn 防盗链。
+ * Fast preview first (resized CDN/OSS thumb), then a screen-sized image.
+ * Avoids pulling full 1688 originals through img-proxy (slow progressive strips).
  */
 function LightboxImage({
-  proxiedOriginal,
+  thumb,
+  preview,
+  compact,
   rawSrc,
   alt,
 }: {
-  proxiedOriginal: string
+  thumb: string
+  preview: string
+  compact: string
   rawSrc: string
   alt: string
 }) {
-  // 尝试顺序：代理原图 → 未代理原始地址
-  const candidates = React.useMemo(() => {
-    const list = [proxiedOriginal, rawSrc].filter(Boolean)
-    return Array.from(new Set(list))
-  }, [proxiedOriginal, rawSrc])
-
+  const candidates = useMemo(
+    () => uniqueUrls(preview, compact, rawSrc),
+    [compact, preview, rawSrc],
+  )
   const [attempt, setAttempt] = useState(0)
+  const [ready, setReady] = useState(false)
+
   useEffect(() => {
     setAttempt(0)
-  }, [proxiedOriginal, rawSrc])
+    setReady(false)
+  }, [preview, compact, rawSrc])
 
   if (attempt >= candidates.length) {
     return (
       <div
         className="flex max-h-[90vh] max-w-[min(96vw,1200px)] flex-col items-center justify-center gap-2 rounded-lg bg-black/40 px-8 py-12 text-sm text-white/80"
-        onClick={event => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <span>图片加载失败</span>
         <a
@@ -109,18 +122,41 @@ function LightboxImage({
     )
   }
 
+  const displaySrc = candidates[attempt]
+
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      key={candidates[attempt]}
-      src={candidates[attempt]}
-      alt={alt}
-      referrerPolicy="no-referrer"
-      className="max-h-[90vh] max-w-[min(96vw,1200px)] object-contain shadow-2xl"
-      onClick={event => event.stopPropagation()}
-      onError={() => setAttempt(prev => prev + 1)}
-      draggable={false}
-    />
+    <div
+      className="relative flex max-h-[90vh] max-w-[min(96vw,1200px)] items-center justify-center"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {!ready ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={thumb}
+          alt=""
+          aria-hidden
+          referrerPolicy="no-referrer"
+          className="max-h-[90vh] max-w-[min(96vw,1200px)] object-contain opacity-80 blur-[1px]"
+          draggable={false}
+        />
+      ) : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={displaySrc}
+        src={displaySrc}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        decoding="async"
+        fetchPriority="high"
+        className={`max-h-[90vh] max-w-[min(96vw,1200px)] object-contain shadow-2xl ${ready ? '' : 'absolute inset-0 h-full w-full opacity-0'}`}
+        onLoad={() => setReady(true)}
+        onError={() => {
+          setReady(false)
+          setAttempt((prev) => prev + 1)
+        }}
+        draggable={false}
+      />
+    </div>
   )
 }
 
@@ -161,7 +197,7 @@ export function PreviewableThumb({
           className="absolute inset-0 z-[1] cursor-zoom-in bg-transparent"
           title={title}
           aria-label={title}
-          onClick={event => {
+          onClick={(event) => {
             event.stopPropagation()
             event.preventDefault()
             setOpen(true)

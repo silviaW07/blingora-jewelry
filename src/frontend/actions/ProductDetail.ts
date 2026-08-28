@@ -277,6 +277,30 @@ const flattenParameterJson = (parameterJson: ParameterGroup[] | null): Descripti
   return rows
 }
 
+const isBlankSpecValue = (value?: string | null) =>
+  /^(默认|默认规格|default|standard|n\/a|none|-|—|－)$/i.test(String(value || '').trim())
+
+/** When parameterJson is empty, surface SKU 规格/材质 on the Description table. */
+const descriptionParamsFromSkuAttributes = (skus: ProductSkuData[]): DescriptionParam[] => {
+  const sizes = new Set<string>()
+  const materials = new Set<string>()
+  for (const sku of skus) {
+    for (const attr of sku.attributeJson || []) {
+      const name = String(attr.name || '').trim()
+      const value = String(attr.value || '').trim()
+      if (!name || !value || isBlankSpecValue(value)) continue
+      if (/规格|尺码|尺寸|码数|size|spec|sizing/i.test(name)) sizes.add(value)
+      if (/材质|材料|面料|material|fabric|里料|lining/i.test(name)) materials.add(value)
+    }
+    const sizeLabel = String(sku.sizeLabel || '').trim()
+    if (sizeLabel && !isBlankSpecValue(sizeLabel)) sizes.add(sizeLabel)
+  }
+  const rows: DescriptionParam[] = []
+  if (sizes.size > 0) rows.push({ key: 'Size', value: Array.from(sizes).join(' / ') })
+  if (materials.size > 0) rows.push({ key: 'Material', value: Array.from(materials).join(' / ') })
+  return rows
+}
+
 const parseDescriptionParamsFromText = (raw?: string | null): DescriptionParam[] => {
   if (!raw?.trim()) return []
   const text = stripHtml(raw)
@@ -577,6 +601,10 @@ export const getProductDetail = withResult(
         variantLabel: buildSkuVariantLabel(attrs, sku.skuCode),
       }
     })
+
+    if (descriptionParams.length === 0) {
+      descriptionParams = descriptionParamsFromSkuAttributes(skus)
+    }
 
     const prices = skus.map((sku) => sku.price).filter((p) => p > 0)
     const priceMin = prices.length ? Math.min(...prices) : 0

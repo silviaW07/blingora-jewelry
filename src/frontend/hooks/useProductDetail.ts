@@ -54,7 +54,7 @@ const isColorAttributeName = (name?: string | null) => {
 
 /** 1688 常把无尺码 SKU 写成「默认/Default」——不当作真实规格维 */
 const isPlaceholderSpecValue = (value?: string | null) =>
-  /^(默认|默认规格|default|standard|n\/a|none|-|—|－)?$/i.test(String(value || '').trim())
+  /^(默认|默认规格|default|standard|n\/a|none|—|－)?$/i.test(String(value || '').trim())
 
 const hasRealSpecValues = (values: string[]) =>
   values.some((value) => Boolean(String(value || '').trim()) && !isPlaceholderSpecValue(value))

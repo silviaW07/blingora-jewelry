@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { getBuyerShowPage } from '@/frontend/actions/BuyerShow'
@@ -12,6 +12,7 @@ export default function BuyerShowView() {
   const router = useRouter()
   const [media, setMedia] = useState<StorefrontBuyerShowMedia[]>([])
   const [loading, setLoading] = useState(true)
+  const [active, setActive] = useState<StorefrontBuyerShowMedia | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +30,20 @@ export default function BuyerShowView() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!active) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActive(null)
+    }
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previous
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [active])
 
   return (
     <div className="min-h-screen bg-[#FFF5F5] text-[#111111]">
@@ -56,28 +71,33 @@ export default function BuyerShowView() {
               No photos yet. Please check back soon.
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {media.map((item) => (
                 <figure key={item.id} className="overflow-hidden rounded-2xl border border-[#f0dede] bg-white">
-                  {item.mediaType === 'VIDEO' ? (
-                    <video
-                      src={item.mediaUrl}
-                      className="aspect-square w-full bg-black object-cover"
-                      controls
-                      playsInline
-                      preload="metadata"
-                    />
-                  ) : (
-                    <div className="relative aspect-square w-full overflow-hidden bg-[#f7f4ee]">
+                  <button
+                    type="button"
+                    className="relative block aspect-[3/4] w-full overflow-hidden bg-[#f7f4ee]"
+                    onClick={() => setActive(item)}
+                    aria-label={item.title || 'View buyer photo'}
+                  >
+                    {item.mediaType === 'VIDEO' ? (
+                      <video
+                        src={item.mediaUrl}
+                        className="h-full w-full bg-black object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
                       <OptimizedProductImage
                         src={item.mediaUrl}
                         alt={item.title || 'Buyer photo'}
-                        imageWidth={280}
-                        quality={70}
+                        imageWidth={480}
+                        quality={80}
                         priority={false}
                       />
-                    </div>
-                  )}
+                    )}
+                  </button>
                   {item.title ? (
                     <figcaption className="truncate px-3 py-2 text-sm font-semibold">{item.title}</figcaption>
                   ) : null}
@@ -87,6 +107,45 @@ export default function BuyerShowView() {
           )}
         </div>
       </main>
+
+      {active ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={active.title || 'Buyer photo'}
+          onClick={() => setActive(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 z-[81] flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white"
+            aria-label="Close"
+            onClick={() => setActive(null)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div
+            className="max-h-[90vh] max-w-[min(96vw,720px)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {active.mediaType === 'VIDEO' ? (
+              <video
+                src={active.mediaUrl}
+                className="max-h-[90vh] w-full rounded-lg bg-black object-contain"
+                controls
+                autoPlay
+                playsInline
+              />
+            ) : (
+              <img
+                src={active.mediaUrl}
+                alt={active.title || 'Buyer photo'}
+                className="max-h-[90vh] w-full rounded-lg object-contain"
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
