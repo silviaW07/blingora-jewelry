@@ -102,7 +102,7 @@ export default function ServiceInfoPageView({ config }: Props) {
               kind="block"
               className="rounded-[20px] border border-[#f0dede] bg-white px-6 py-6 shadow-[0_18px_48px_-40px_rgba(0,0,0,0.22)] sm:px-8"
             >
-              <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center">
                 <EditableImg
                   propKey={`${keyBase}_side_icon`}
                   src={config.iconSrc}
@@ -110,22 +110,6 @@ export default function ServiceInfoPageView({ config }: Props) {
                   className="size-14 shrink-0 object-contain"
                   style={{ objectFit: 'contain', aspectRatio: '1 / 1' }}
                 />
-                <div className="min-w-0">
-                  <DecorateText
-                    propKey={`${keyBase}_side_title`}
-                    as="h3"
-                    className="text-lg font-semibold text-[#111111]"
-                  >
-                    {config.title}
-                  </DecorateText>
-                  <DecorateText
-                    propKey={`${keyBase}_side_desc`}
-                    as="p"
-                    className="mt-2 text-sm leading-7 text-[#6f6a62]"
-                  >
-                    {config.description}
-                  </DecorateText>
-                </div>
               </div>
 
               <div className="mt-6 rounded-[16px] bg-[#faf8f4] p-4">

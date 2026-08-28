@@ -261,7 +261,8 @@
   overflow: hidden;
   border-radius: 2px;
   background: #f3f3f3;
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
   pointer-events: auto;
   -webkit-user-select: none;
   user-select: none;
@@ -336,6 +337,7 @@
   body {
     overflow-x: hidden;
     max-width: 100%;
+    overscroll-behavior-x: none;
   }
 
   .product-detail-layout {
@@ -444,6 +446,10 @@
   order: 3;
 }
 
+.product-detail-gallery .product-detail-desc {
+  margin-top: 0.75rem;
+}
+
 .product-detail-related {
   order: 4;
 }
@@ -461,15 +467,9 @@
     order: unset;
   }
 
-  html:not(.is-narrow) .product-detail-desc {
-    grid-column: 1;
-    grid-row: 2;
-    order: unset;
-  }
-
   html:not(.is-narrow) .product-detail-buy {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     order: unset;
   }
 
@@ -600,23 +600,32 @@
 }
 
 .product-color-grid-scroll {
+  --swatch-gap: 8px;
+  --swatch-cols: 5;
+  --swatch-rows: 5;
+  --swatch-pad-y: 1.1rem;
+  container-type: inline-size;
   width: 100%;
   max-width: 100%;
   height: auto;
   min-height: 0;
-  max-height: none;
+  /* 最多 5 行：其余在容器内滚动，不影响下方规格/购买区 */
+  max-height: calc(
+    (var(--swatch-rows) * ((100cqi - (var(--swatch-cols) - 1) * var(--swatch-gap)) / var(--swatch-cols))) +
+      ((var(--swatch-rows) - 1) * var(--swatch-gap)) + var(--swatch-pad-y)
+  );
   margin: 0;
   border-top: 1px solid #eeeeee;
   border-bottom: 1px solid #eeeeee;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .product-color-grid-scroll.is-scrollable {
-  max-height: none;
-  overflow: visible;
+  overflow-y: auto;
 }
 
 .product-sku-row {
@@ -897,9 +906,13 @@
 }
 
 @media (min-width: 1024px) {
+  html:not(.is-narrow) .product-color-grid-scroll {
+    --swatch-cols: 5;
+  }
+
   html:not(.is-narrow) .product-color-swatch-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     max-width: none;
     overflow: visible;
@@ -946,15 +959,15 @@
   }
 
   .product-detail-page .product-color-grid-scroll {
+    --swatch-cols: 4;
     height: auto;
     min-height: 0;
-    max-height: none;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .product-detail-page .product-color-grid-scroll.is-scrollable {
-    max-height: none;
-    overflow: visible;
+    overflow-y: auto;
   }
 
   .product-detail-page .product-color-swatch-list {
@@ -1990,6 +2003,7 @@ html.is-narrow body {
   width: 100% !important;
   max-width: 100% !important;
   overflow-x: hidden !important;
+  overscroll-behavior-x: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -2566,6 +2580,7 @@ html.is-narrow .product-detail-related {
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
+  overscroll-behavior-x: none;
 }
 
 html.is-narrow .product-detail-page .product-detail-layout {
@@ -2652,7 +2667,8 @@ html.is-narrow .product-detail-carousel {
   min-height: 0 !important;
   padding-bottom: 100% !important;
   overflow: hidden !important;
-  touch-action: pan-x pan-y !important;
+  touch-action: pan-y !important;
+  overscroll-behavior-x: none !important;
   pointer-events: auto !important;
 }
 
@@ -2939,15 +2955,15 @@ html.is-narrow .product-color-options {
 }
 
 html.is-narrow .product-color-grid-scroll {
+  --swatch-cols: 4;
   height: auto !important;
   min-height: 0 !important;
-  max-height: none !important;
-  overflow: visible !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 html.is-narrow .product-color-grid-scroll.is-scrollable {
-  max-height: none !important;
-  overflow: visible !important;
+  overflow-y: auto !important;
 }
 
 html.is-narrow .product-detail-page .product-color-swatch-list {
@@ -4235,6 +4251,14 @@ html.is-narrow .mobile-categories-panel__title {
   cursor: pointer;
 }
 
+.home-service-card-cell.is-static {
+  cursor: default;
+}
+
+.home-service-card-cell.is-static .home-service-card {
+  cursor: default;
+}
+
 .home-service-card {
   display: flex;
   flex: 1 1 auto;
@@ -4252,6 +4276,51 @@ html.is-narrow .mobile-categories-panel__title {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
   cursor: pointer;
+}
+
+/* Buyer Real Photos: same pink flowing ring as selected color swatches */
+.home-service-card--pink-flow {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 2px solid #f254a6 !important;
+  box-shadow: 0 0 0 1px rgba(242, 84, 166, 0.4), 0 0 12px rgba(242, 84, 166, 0.45);
+}
+
+.home-service-card--pink-flow::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 240%;
+  height: 240%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    #f254a6 0deg,
+    #ffd6ea 90deg,
+    #f254a6 180deg,
+    #c81e6a 270deg,
+    #f254a6 360deg
+  );
+  animation: product-color-swatch-spin 1.4s linear infinite;
+  pointer-events: none;
+}
+
+.home-service-card--pink-flow::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 3px;
+  border-radius: 8px;
+  background: #fff;
+  pointer-events: none;
+}
+
+.home-service-card--pink-flow > * {
+  position: relative;
+  z-index: 2;
 }
 
 .home-service-card__icon {
@@ -4352,6 +4421,14 @@ img.home-service-card__icon-img {
     text-align: left;
     border-radius: 16px;
     box-shadow: 0 18px 42px -36px rgba(0, 0, 0, 0.22);
+  }
+
+  html:not(.is-narrow) .home-service-card--pink-flow {
+    box-shadow: 0 0 0 1px rgba(242, 84, 166, 0.35), 0 0 14px rgba(242, 84, 166, 0.4);
+  }
+
+  html:not(.is-narrow) .home-service-card--pink-flow::after {
+    border-radius: 13px;
   }
 
   html:not(.is-narrow) .home-service-card__icon {

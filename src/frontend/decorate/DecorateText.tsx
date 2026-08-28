@@ -4,6 +4,7 @@ import React from 'react'
 import { DecorateFrame } from './DecorateFrame'
 import { useDecorateMode } from './DecorateContext'
 import { containsChinese } from '@/shared/productKeywordDictionary'
+import type { DecoratePatch } from './types'
 
 type DecorateTextProps = {
   propKey: string
@@ -13,6 +14,48 @@ type DecorateTextProps = {
   /** 默认超链接，可被后台装修配置中的 href 覆盖 */
   href?: string
   children: React.ReactNode
+}
+
+export function decorateBoxStyle(patch?: DecoratePatch | null): React.CSSProperties {
+  const width = typeof patch?.borderWidth === 'number' ? patch.borderWidth : undefined
+  return {
+    ...(typeof patch?.fontWeight === 'number' ? { fontWeight: patch.fontWeight } : null),
+    ...(width && width > 0
+      ? {
+          borderWidth: `${width}px`,
+          borderStyle: 'solid' as const,
+          borderColor: patch?.borderColor || '#f254a6',
+        }
+      : null),
+    ...(typeof patch?.borderRadius === 'number' ? { borderRadius: `${patch.borderRadius}px` } : null),
+  }
+}
+
+/** Newlines + *bold* / **bold** for decorate copy. */
+export function renderDecorateRichText(text: string): React.ReactNode {
+  const lines = String(text || '').split('\n')
+  return lines.map((line, lineIndex) => (
+    <React.Fragment key={lineIndex}>
+      {lineIndex > 0 ? <br /> : null}
+      {renderDecorateInline(line)}
+    </React.Fragment>
+  ))
+}
+
+function renderDecorateInline(line: string): React.ReactNode {
+  if (!line) return null
+  const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+  return parts.map((part, index) => {
+    const bold = part.match(/^\*\*([^*]+)\*\*$/) || part.match(/^\*([^*]+)\*$/)
+    if (bold) {
+      return (
+        <strong key={index} className="font-semibold">
+          {bold[1]}
+        </strong>
+      )
+    }
+    return part
+  })
 }
 
 function normalizeHref(href?: string) {
@@ -58,6 +101,7 @@ export function DecorateText({
     children,
     isDecorateMode,
   )
+  const content = typeof text === 'string' ? renderDecorateRichText(text) : text
 
   const Tag = as as React.ElementType
   const mergedStyle: React.CSSProperties = {
@@ -70,6 +114,7 @@ export function DecorateText({
     ...(typeof patch?.marginBottom === 'number' ? { marginBottom: `${patch.marginBottom}px` } : null),
     ...(typeof patch?.marginLeft === 'number' ? { marginLeft: `${patch.marginLeft}px` } : null),
     ...(typeof patch?.marginRight === 'number' ? { marginRight: `${patch.marginRight}px` } : null),
+    ...decorateBoxStyle(patch),
     ...(href && !isDecorateMode ? { cursor: 'pointer' } : null),
   }
 
@@ -89,21 +134,21 @@ export function DecorateText({
           style={Object.keys(mergedStyle).length ? mergedStyle : style}
           {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : null)}
         >
-          {text}
+          {content}
         </a>
       )
     }
 
     return (
       <Tag className={className} style={Object.keys(mergedStyle).length ? mergedStyle : style}>
-        {text}
+        {content}
       </Tag>
     )
   }
 
   return (
     <DecorateFrame propKey={propKey} kind="text" className={className} style={style}>
-      <Tag>{text}</Tag>
+      <Tag style={decorateBoxStyle(patch)}>{content}</Tag>
     </DecorateFrame>
   )
 }

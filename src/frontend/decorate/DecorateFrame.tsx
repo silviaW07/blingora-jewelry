@@ -47,6 +47,15 @@ export function DecorateFrame({
     ...(typeof patch?.marginBottom === 'number' ? { marginBottom: `${patch.marginBottom}px` } : null),
     ...(typeof patch?.marginLeft === 'number' ? { marginLeft: `${patch.marginLeft}px` } : null),
     ...(typeof patch?.marginRight === 'number' ? { marginRight: `${patch.marginRight}px` } : null),
+    ...(typeof patch?.fontWeight === 'number' ? { fontWeight: patch.fontWeight } : null),
+    ...(typeof patch?.borderWidth === 'number' && patch.borderWidth > 0
+      ? {
+          borderWidth: `${patch.borderWidth}px`,
+          borderStyle: 'solid' as const,
+          borderColor: patch.borderColor || '#f254a6',
+        }
+      : null),
+    ...(typeof patch?.borderRadius === 'number' ? { borderRadius: `${patch.borderRadius}px` } : null),
   }
 
   if (!isDecorateMode) {
@@ -57,7 +66,10 @@ export function DecorateFrame({
       typeof patch?.marginTop === 'number' ||
       typeof patch?.marginBottom === 'number' ||
       typeof patch?.marginLeft === 'number' ||
-      typeof patch?.marginRight === 'number'
+      typeof patch?.marginRight === 'number' ||
+      typeof patch?.fontWeight === 'number' ||
+      (typeof patch?.borderWidth === 'number' && patch.borderWidth > 0) ||
+      typeof patch?.borderRadius === 'number'
 
     if (isBlock) {
       return (

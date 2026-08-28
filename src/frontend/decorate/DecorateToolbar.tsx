@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Minus, Plus, Trash2, Upload } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ export function DecorateToolbar() {
   const { selectedKey, draft, updatePatch, deletePatch, select } = useDecorateMode()
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null)
   const [uploading, setUploading] = useState(false)
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const patch = selectedKey ? draft[selectedKey] : undefined
   const serviceCardIndex = parseServiceBenefitCardIndex(selectedKey)
@@ -43,8 +44,8 @@ export function DecorateToolbar() {
     if (draft[selectedKey]?.text === undefined) {
       const kindAttr = el.getAttribute('data-decorate-kind')
       if (kindAttr !== 'image' && kindAttr !== 'block') {
-        const raw = (el.textContent || '').replace(/\s+/g, ' ').trim()
-        if (raw) updatePatch(selectedKey, { text: raw })
+        const raw = (el.innerText || '').replace(/\n{3,}/g, '\n\n').trimEnd()
+        if (raw.trim()) updatePatch(selectedKey, { text: raw })
       }
     }
 
@@ -56,7 +57,7 @@ export function DecorateToolbar() {
         const fieldEl = document.querySelector(
           `[data-decorate-key="${CSS.escape(fieldKey)}"]`,
         ) as HTMLElement | null
-        const raw = (fieldEl?.textContent || '').replace(/\s+/g, ' ').trim()
+        const raw = (fieldEl?.innerText || '').replace(/\n{3,}/g, '\n\n').trimEnd()
         if (raw) updatePatch(fieldKey, { text: raw })
       })
     }
@@ -87,6 +88,9 @@ export function DecorateToolbar() {
 
   const fontSize = patch?.fontSize ?? 16
   const padding = patch?.padding ?? 0
+  const fontWeight = patch?.fontWeight ?? 400
+  const borderWidth = patch?.borderWidth ?? 0
+  const borderRadius = patch?.borderRadius ?? 0
   const marginTop = patch?.marginTop ?? 0
   const marginBottom = patch?.marginBottom ?? 0
   const marginLeft = patch?.marginLeft ?? 0
@@ -109,9 +113,28 @@ export function DecorateToolbar() {
     })
   }
 
+  const wrapBold = () => {
+    const value = patch?.text ?? ''
+    const el = textAreaRef.current
+    if (!el) {
+      updatePatch(selectedKey, { text: value ? `**${value}**` : '**bold**' })
+      return
+    }
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    if (start === end) {
+      updatePatch(selectedKey, { fontWeight: fontWeight >= 600 ? 400 : 700 })
+      return
+    }
+    const selected = value.slice(start, end)
+    updatePatch(selectedKey, {
+      text: `${value.slice(0, start)}**${selected}**${value.slice(end)}`,
+    })
+  }
+
   return (
     <div
-      className="fixed z-[110] w-[300px] rounded-2xl border border-[#93C5FD] bg-white p-3 shadow-[0_20px_50px_-24px_rgba(37,99,235,0.55)]"
+      className="fixed z-[110] w-[320px] max-h-[min(86vh,640px)] overflow-y-auto rounded-2xl border border-[#93C5FD] bg-white p-3 shadow-[0_20px_50px_-24px_rgba(37,99,235,0.55)]"
       style={{ top: anchor.top, left: anchor.left }}
       data-controller-name="可视化装修迷你配置条"
       onClick={(e) => e.stopPropagation()}
@@ -178,13 +201,26 @@ export function DecorateToolbar() {
 
       {showTextFields && !serviceKeys ? (
         <div className="mb-3 space-y-1">
-          <label className="text-[11px] font-medium text-slate-500">文本修改</label>
-          <Input
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-medium text-slate-500">文本修改</label>
+            <button
+              type="button"
+              className="rounded border border-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+              onClick={wrapBold}
+            >
+              B 加粗
+            </button>
+          </div>
+          <textarea
+            ref={textAreaRef}
             value={patch?.text ?? ''}
-            placeholder="输入展示文案"
-            className="h-9"
+            placeholder="回车换行。选中文字点加粗，或写成 *luxury items*"
+            className="min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm leading-6 shadow-sm outline-none focus-visible:border-ring"
             onChange={(e) => updatePatch(selectedKey, { text: e.target.value })}
           />
+          <p className="text-[10px] leading-4 text-slate-400">
+            回车即可分行。加粗：选中后点「B 加粗」，或用 *文字* / **文字**。
+          </p>
         </div>
       ) : null}
 
@@ -371,6 +407,78 @@ export function DecorateToolbar() {
             <Plus className="size-3.5" />
           </Button>
         </div>
+      </div>
+
+      <div className="mb-3 space-y-2">
+        <label className="text-[11px] font-medium text-slate-500">边框</label>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label className="text-[10px] text-slate-400">宽度 px</label>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => updatePatch(selectedKey, { borderWidth: Math.max(0, borderWidth - 1) })}
+              >
+                <Minus className="size-3.5" />
+              </Button>
+              <span className="flex-1 text-center text-xs text-slate-700">{borderWidth}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => updatePatch(selectedKey, { borderWidth: Math.min(12, borderWidth + 1) })}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] text-slate-400">圆角 px</label>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => updatePatch(selectedKey, { borderRadius: Math.max(0, borderRadius - 2) })}
+              >
+                <Minus className="size-3.5" />
+              </Button>
+              <span className="flex-1 text-center text-xs text-slate-700">{borderRadius}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => updatePatch(selectedKey, { borderRadius: Math.min(40, borderRadius + 2) })}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] text-slate-400">边框颜色</label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="color"
+              value={patch?.borderColor || '#f254a6'}
+              className="h-9 flex-1 cursor-pointer p-1"
+              onChange={(e) => updatePatch(selectedKey, { borderColor: e.target.value })}
+            />
+            <Input
+              value={patch?.borderColor || ''}
+              placeholder="#F254A6"
+              className="h-9 w-[96px] font-mono text-xs"
+              onChange={(e) => updatePatch(selectedKey, { borderColor: e.target.value })}
+            />
+          </div>
+        </div>
+        <p className="text-[10px] leading-4 text-slate-400">宽度为 0 时不显示边框。改完点顶部「发布并退出装修」。</p>
       </div>
 
       <div className="mt-3 border-t border-slate-100 pt-3">

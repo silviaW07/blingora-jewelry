@@ -2,7 +2,8 @@
 
 /**
  * Home service benefit cards (Shipping / Payment / Buyer show / Why choose us).
- * Shared by desktop + mobile storefront. Cards link to /shipping /payment /buyer-show /why-choose-us.
+ * Shared by desktop + mobile storefront.
+ * Shipping / Payment are display-only; Buyer show / Why choose us keep page links.
  * Layout/sizing fully split in CSS: desktop `@media (min-width: 1024px)`, mobile `max-width: 1023px`.
  * Single DOM tree so decorate propKeys (title/desc/icon/card) stay unique.
  */
@@ -50,21 +51,22 @@ export function HomeServiceBenefitGrid({
           return null
         }
 
+        const isClickable = item.slug === 'buyer-show' || item.slug === 'why-choose-us'
         const href = `/${item.slug}/`
-        const Wrapper = isDecorateMode ? 'div' : 'a'
-        const wrapperNav = isDecorateMode ? {} : hardNavProps(href)
+        const Wrapper = !isDecorateMode && isClickable ? 'a' : 'div'
+        const wrapperNav = Wrapper === 'a' ? hardNavProps(href) : {}
 
         return (
           <Wrapper
             key={keys.card}
-            className="home-service-card-cell"
+            className={cn('home-service-card-cell', !isClickable && 'is-static')}
             data-controller-name="首页服务权益卡片"
             {...wrapperNav}
           >
             <DecorateFrame
               propKey={keys.card}
               kind="block"
-              className="home-service-card"
+              className={cn('home-service-card', isClickable && 'home-service-card--pink-flow')}
             >
               <div className="home-service-card__icon">
                 <EditableImg

@@ -16,7 +16,6 @@ import {
   PackageSearch,
   Plus,
   ShoppingCart,
-  Star,
   Truck,
 } from 'lucide-react';
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
@@ -420,14 +419,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   const renderMoqLabel = (qty: number, className?: string) => {
     const unit = qty > 1 ? t('common.pieces') : t('common.piece')
     return (
-      <p
-        className={cn(
-          'mt-1 text-sm font-semibold text-[#ff0000]',
-          className,
-        )}
-      >
+      <span className={cn('text-sm font-semibold text-[#ff0000]', className)}>
         {t('common.minOrder')}: {qty} {unit}
-      </p>
+      </span>
     )
   }
 
@@ -684,6 +678,33 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 </div>
               </div>
             </div>
+
+            {/* 紧贴主图下方，避免右侧购买区撑高后留下大块空白 */}
+            <section className="product-detail-desc" data-controller-name="详情参数描述区">
+              <div className="product-detail-spec-card">
+                <h2 className="text-base font-semibold text-[#111111]">{t('product.description')}</h2>
+                {descriptionRows.length > 0 ? (
+                  <div className="product-detail-spec-table">
+                    {descriptionRows.map((row, index) => (
+                      <div key={`${row.key}-${index}`} className="product-detail-spec-cell">
+                        <div className="product-detail-spec-label">
+                          {row.label}
+                        </div>
+                        <div className="product-detail-spec-value">
+                          {row.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-[#8a8a8a]">
+                    {product.source === 'IMPORT_1688'
+                      ? t('product.noDescriptionParams')
+                      : t('product.noManualDescriptionParams')}
+                  </p>
+                )}
+              </div>
+            </section>
           </section>
 
           {/* ===== 购买区（小屏在图下，大屏右侧） ===== */}
@@ -693,25 +714,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 {product.name}
               </h1>
 
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#666]">
-                <span className="inline-flex items-center gap-1 rounded bg-[#fff7ed] px-2 py-1 font-semibold text-[#c2410c]">
-                  #{Math.max(1, Math.min(99, Math.round((5 - product.ratingAverage) * 10) || 2))}{' '}
-                  {t('common.bestSeller')}
-                </span>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666]">
+                {renderMoqLabel(displayedMinOrderQty)}
                 <span>
                   {t('common.itemNo')} {product.productCode}
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <Star className="size-3.5 fill-[#f59e0b] text-[#f59e0b]" />
-                  {product.ratingAverage?.toFixed(1) || '0.0'}
-                </span>
-                <span>
-                  {product.ratingCount || 0} {t('common.reviews')}
-                </span>
-              </div>
-
-              <div className="mt-3 text-xs font-medium uppercase tracking-wide text-[#999]">
-                {t('common.wholesale')}
               </div>
 
               <div className="mt-2 space-y-3">
@@ -723,7 +730,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           : formatUsdRange(product.priceMin, product.priceMax)}
                       </p>
                     </StorePrice>
-                    <div className="mt-1">{renderMoqLabel(displayedMinOrderQty)}</div>
                   </div>
 
                   {useTwoLevelLayout ? (
@@ -747,7 +753,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         <div
                           className={cn(
                             'product-color-grid-scroll',
-                            colorSwatches.length > 15 && 'is-scrollable',
+                            colorSwatches.length > 20 && 'is-scrollable',
                           )}
                         >
                           <div className="product-color-swatch-list">
@@ -940,33 +946,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     )}
                   </div>
                 </div>
-            </div>
-          </section>
-
-          {/* ===== 参数表（小屏在购买区下方） ===== */}
-          <section className="product-detail-desc" data-controller-name="详情参数描述区">
-            <div className="product-detail-spec-card">
-              <h2 className="text-base font-semibold text-[#111111]">{t('product.description')}</h2>
-              {descriptionRows.length > 0 ? (
-                <div className="product-detail-spec-table">
-                  {descriptionRows.map((row, index) => (
-                    <div key={`${row.key}-${index}`} className="product-detail-spec-cell">
-                      <div className="product-detail-spec-label">
-                        {row.label}
-                      </div>
-                      <div className="product-detail-spec-value">
-                        {row.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-xs text-[#8a8a8a]">
-                  {product.source === 'IMPORT_1688'
-                    ? t('product.noDescriptionParams')
-                    : t('product.noManualDescriptionParams')}
-                </p>
-              )}
             </div>
           </section>
 

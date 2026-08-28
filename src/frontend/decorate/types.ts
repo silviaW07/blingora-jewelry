@@ -30,6 +30,16 @@ export type DecoratePatch = {
 
   href?: string
 
+  /** 加粗：400 / 700 */
+  fontWeight?: number
+
+  /** 边框宽度 px，0 为无边框 */
+  borderWidth?: number
+
+  borderColor?: string
+
+  borderRadius?: number
+
   /** 删除后不渲染该装修区块；发布后永久不再加载 */
 
   hidden?: boolean

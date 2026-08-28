@@ -1060,6 +1060,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     (PENDING_PAGE_SIZE_OPTIONS as readonly number[]).includes(size) ? size : 30
   const [publishedImportMatch, setPublishedImportMatch] = useState<ProductListItem | null>(null)
   const [pendingImportSelectedIds, setPendingImportSelectedIds] = useState<string[]>([])
+  const pendingImportVisibleIdsRef = useRef<string[]>([])
   const [pendingImportNowMs, setPendingImportNowMs] = useState(() => Date.now())
   const [pendingImportInlineEditingCell, setPendingImportInlineEditingCell] = useState<PendingImportEditableCell | null>(null)
   const [pendingImportInlineEditingValue, setPendingImportInlineEditingValue] = useState('')
@@ -1295,7 +1296,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setPendingImportQueueTotal(
       typeof result.total === 'number' ? result.total : visibleItems.length,
     )
-    setPendingImportSelectedIds(prev => prev.filter(id => visibleItems.some(item => item.item_id === id)))
+    const previousPageIds = new Set(pendingImportVisibleIdsRef.current)
+    pendingImportVisibleIdsRef.current = visibleItems.map(item => item.item_id)
+    setPendingImportSelectedIds(prev => {
+      if (visibleItems.length === 0 && (typeof result.total === 'number' ? result.total : 0) > 0) {
+        return prev
+      }
+      return prev.filter(
+        id => visibleItems.some(item => item.item_id === id) || !previousPageIds.has(id),
+      )
+    })
     if (typeof result.page === 'number' && result.page > 0) {
       setPendingImportPage(result.page)
     }
@@ -3502,7 +3512,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           toast.success(mode === 'weight_gram'
             ? `待上传重量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
             : `待上传价格系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
-          setPendingImportSelectedIds([])
           setConfirmDialogOpen(false)
           await refreshPendingImportQueue({ silent: true })
           return
@@ -3552,7 +3561,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             value: qty,
           })
           toast.success(`待上传起订量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
-          setPendingImportSelectedIds([])
           setConfirmDialogOpen(false)
           await refreshPendingImportQueue({ silent: true })
           return
@@ -3589,7 +3597,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           })
           const res = await applyCalibrateCategoryEdits({ scope: 'pending', edits })
           toast.success(`待上传关联类目已批量追加，成功: ${res.success_count}，失败: ${res.fail_count}`)
-          setPendingImportSelectedIds([])
           setConfirmDialogOpen(false)
           await refreshPendingImportQueue({ silent: true })
           return
@@ -3631,7 +3638,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           })
           const res = await applyCalibrateCategoryEdits({ scope: 'pending', edits })
           toast.success(`待上传关联类目已批量移除，成功: ${res.success_count}，失败: ${res.fail_count}`)
-          setPendingImportSelectedIds([])
           setConfirmDialogOpen(false)
           await refreshPendingImportQueue({ silent: true })
           return
@@ -3651,7 +3657,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         toast.success(`关联关键词已批量绑定，成功: ${res.success_count}，失败: ${res.fail_count}`)
       }
       setConfirmDialogOpen(false)
-      setSelectedIds([])
+      if (confirmAction === 'DELETE') {
+        setSelectedIds([])
+      }
       // Scalar batch ops already patched `list`; refresh quietly without blocking the dialog close.
       const softRefreshOnly =
         confirmAction === 'WEIGHT_PRICE' ||
