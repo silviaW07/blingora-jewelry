@@ -641,7 +641,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
       <div className="storefront-container py-5">
         <div className="product-detail-layout">
-          {/* ===== 主图区 ===== */}
+          {/* 桌面：主图+描述同一左列；手机：display:contents 后描述可排到价格后 */}
+          <div className="product-detail-media">
           <section className="product-detail-gallery" data-controller-name="详情主图区">
             <div className="rounded-[4px] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-4">
               <div className="product-detail-gallery-stage">
@@ -678,8 +679,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 </div>
               </div>
             </div>
+          </section>
 
-            {/* 紧贴主图下方，避免右侧购买区撑高后留下大块空白 */}
             <section className="product-detail-desc" data-controller-name="详情参数描述区">
               <div className="product-detail-spec-card">
                 <h2 className="text-base font-semibold text-[#111111]">{t('product.description')}</h2>
@@ -705,7 +706,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                 )}
               </div>
             </section>
-          </section>
+          </div>
 
           {/* ===== 购买区（小屏在图下，大屏右侧） ===== */}
           <section className="product-detail-buy space-y-3" data-controller-name="详情右侧购买区">
@@ -753,7 +754,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         <div
                           className={cn(
                             'product-color-grid-scroll',
-                            colorSwatches.length > 20 && 'is-scrollable',
+                            colorSwatches.length > 25 && 'is-scrollable',
                           )}
                         >
                           <div className="product-color-swatch-list">

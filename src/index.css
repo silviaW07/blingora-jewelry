@@ -446,12 +446,18 @@
   order: 3;
 }
 
-.product-detail-gallery .product-detail-desc {
-  margin-top: 0.75rem;
-}
-
 .product-detail-related {
   order: 4;
+}
+
+.product-detail-media {
+  min-width: 0;
+}
+
+@media (max-width: 1023px), (max-device-width: 512px) {
+  .product-detail-media {
+    display: contents;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -461,9 +467,16 @@
     align-items: start;
   }
 
-  html:not(.is-narrow) .product-detail-gallery {
+  html:not(.is-narrow) .product-detail-media {
     grid-column: 1;
     grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  html:not(.is-narrow) .product-detail-gallery {
     order: unset;
   }
 
@@ -597,6 +610,8 @@
   width: 100%;
   max-width: 100%;
   overflow: visible;
+  container-type: inline-size;
+  container-name: color-swatches;
 }
 
 .product-color-grid-scroll {
@@ -604,14 +619,17 @@
   --swatch-cols: 5;
   --swatch-rows: 5;
   --swatch-pad-y: 1.1rem;
-  container-type: inline-size;
+  /* 5 行方图高度；cqi 取自父级 .product-color-options，不能写在自身上否则 calc 会失效 */
+  --swatch-row-size: calc(
+    (100cqi - (var(--swatch-cols) - 1) * var(--swatch-gap)) / var(--swatch-cols)
+  );
   width: 100%;
   max-width: 100%;
   height: auto;
   min-height: 0;
-  /* 最多 5 行：其余在容器内滚动，不影响下方规格/购买区 */
+  max-height: 28rem;
   max-height: calc(
-    (var(--swatch-rows) * ((100cqi - (var(--swatch-cols) - 1) * var(--swatch-gap)) / var(--swatch-cols))) +
+    (var(--swatch-rows) * var(--swatch-row-size)) +
       ((var(--swatch-rows) - 1) * var(--swatch-gap)) + var(--swatch-pad-y)
   );
   margin: 0;
@@ -908,6 +926,9 @@
 @media (min-width: 1024px) {
   html:not(.is-narrow) .product-color-grid-scroll {
     --swatch-cols: 5;
+    --swatch-rows: 5;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   html:not(.is-narrow) .product-color-swatch-list {
@@ -2587,6 +2608,10 @@ html.is-narrow .product-detail-page .product-detail-layout {
   display: flex !important;
   flex-direction: column !important;
   gap: 0.6rem !important;
+}
+
+html.is-narrow .product-detail-media {
+  display: contents !important;
 }
 
 html.is-narrow .product-detail-gallery {
