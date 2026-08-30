@@ -310,7 +310,7 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                     value={toTopPromotionDatetimeLocalValue(topBanner.end_time)}
                     onChange={(e) => handlers.setTopBannerEndTime(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">必须填写未来时间才会显示倒计时；留空只展示文案。到期后前台自动隐藏通栏。改完请点下方「保存」。
+                  <p className="text-xs text-muted-foreground">必须填写未来时间才会显示倒计时；留空只展示文案。到期后前台自动隐藏通栏。改完请点下方「保存」。</p>
                 </div>
                 <div className="space-y-2">
                   <Label>背景色</Label>
