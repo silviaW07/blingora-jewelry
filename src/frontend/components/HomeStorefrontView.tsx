@@ -296,7 +296,7 @@ const DesktopRecommendZoneProductCard = ({
                 {originalPriceToShow &&
                 typeof priceToShow === 'number' &&
                 originalPriceToShow > priceToShow + 0.009 ? (
-                  <p className="mt-1 text-sm text-[#8b8477] line-through">
+                  <p className="mt-1 text-sm text-[#e11d48] line-through">
                     {formatPrice(originalPriceToShow)}
                   </p>
                 ) : null}

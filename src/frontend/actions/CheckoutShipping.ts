@@ -24,6 +24,8 @@ export interface CheckoutShippingOption {
   billingMode: string
   shippingFee: number
   shippingFeeLabel: string
+  originalShippingFee: number
+  originalShippingFeeLabel: string
 }
 
 export interface GetCheckoutCountriesOutput {
@@ -103,7 +105,7 @@ export const getCheckoutShippingOptions = withResult(
       })
       if (fee == null) continue
       const rawShippingUsd = Math.round(toUsdFromCny(fee, exchangeRate) * 100) / 100
-      const shippingFeeUsd = applyShippingDiscount({
+      const discounted = applyShippingDiscount({
         config: pricingConfig,
         shippingUsd: rawShippingUsd,
         merchandiseSubtotalUsd,
@@ -113,8 +115,10 @@ export const getCheckoutShippingOptions = withResult(
         name: row.name,
         estimatedTime: row.estimatedTime,
         billingMode,
-        shippingFee: shippingFeeUsd,
-        shippingFeeLabel: formatUsd(shippingFeeUsd),
+        shippingFee: discounted,
+        shippingFeeLabel: formatUsd(discounted),
+        originalShippingFee: rawShippingUsd,
+        originalShippingFeeLabel: formatUsd(rawShippingUsd),
       })
     }
 

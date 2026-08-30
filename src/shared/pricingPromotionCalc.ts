@@ -276,7 +276,9 @@ export function applyShippingDiscount(params: {
   if (rule.mode === 'AMOUNT') {
     next = roundMoney(Math.max(0, base - clamp(Number(rule.value), 0, 1_000_000)))
   } else {
-    next = roundMoney(base * clamp(Number(rule.value), 0, 1))
+    const raw = Number(rule.value)
+    const coef = raw > 1 && raw <= 100 ? (100 - raw) / 100 : clamp(raw, 0, 1)
+    next = roundMoney(base * coef)
   }
   const discountUsd = roundMoney(Math.max(0, base - next))
   return { shippingUsd: next, discountUsd }

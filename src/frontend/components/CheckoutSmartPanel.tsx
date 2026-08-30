@@ -831,7 +831,13 @@ export function CheckoutSmartPanel({
                   <div>
                     <p className="text-sm font-semibold text-[#0F172A]">{item.name}</p>
                     <p className="mt-0.5 text-xs text-[#64748B]">{item.estimatedTime}</p>
-                    <p className="mt-1 text-sm font-bold text-[#f254a6]">{item.shippingFeeLabel}</p>
+                    <p className="mt-1 flex flex-wrap items-baseline justify-start gap-x-1.5">
+                      <span className="text-sm font-bold text-[#f254a6]">{item.shippingFeeLabel}</span>
+                      {typeof item.originalShippingFee === 'number' &&
+                      item.originalShippingFee > item.shippingFee + 0.009 ? (
+                        <del className="text-xs font-semibold text-[#e11d48]">{item.originalShippingFeeLabel}</del>
+                      ) : null}
+                    </p>
                   </div>
                   <span
                     className={cn(

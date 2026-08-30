@@ -419,7 +419,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
   const renderMoqLabel = (qty: number, className?: string) => {
     const unit = qty > 1 ? t('common.pieces') : t('common.piece')
     return (
-      <span className={cn('text-sm font-semibold text-[#ff0000]', className)}>
+      <span className={cn('text-sm font-semibold text-[#111111]', className)}>
         {t('common.minOrder')}: {qty} {unit}
       </span>
     )
@@ -528,7 +528,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
               <span className="product-sku-price-prefix">{priceParts.prefix}</span>
               <span className="product-sku-price-num">{priceParts.amount}</span>
               {priceShown.original != null ? (
-                <del className="ml-1 text-[11px] font-medium text-[#8b8477]">
+                <del className="ml-1 text-[11px] font-medium text-[#e11d48]">
                   {formatUsd(priceShown.original)}
                 </del>
               ) : null}
@@ -744,7 +744,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                                 : formatUsdRange(saleMin.sale, saleMax.sale)}
                             </span>
                             {saleMin.original != null ? (
-                              <del className="text-[15px] font-semibold text-[#8b8477] sm:text-[16px]">
+                              <del className="text-[15px] font-semibold text-[#e11d48] sm:text-[16px]">
                                 {selectedSku
                                   ? formatUsd(saleMin.original)
                                   : formatUsdRange(product.priceMin, product.priceMax)}
@@ -871,7 +871,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             <div key={`p-${tier.label}`} className="border-r border-[#ececec] px-2 py-2.5 last:border-r-0">
                               <span>{formatUsd(shown.sale)}</span>
                               {shown.original != null ? (
-                                <del className="mt-0.5 block text-[11px] font-medium text-[#8b8477]">
+                                <del className="mt-0.5 block text-[11px] font-medium text-[#e11d48]">
                                   {formatUsd(shown.original)}
                                 </del>
                               ) : null}
@@ -1010,7 +1010,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       <StorePrice compact className="text-sm font-bold">
                         <p className="text-sm font-bold text-[#111]">{formatUsd(item.minPrice)}</p>
                         {item.originalPrice != null && item.originalPrice > item.minPrice + 0.009 ? (
-                          <del className="text-xs font-medium text-[#8b8477]">{formatUsd(item.originalPrice)}</del>
+                          <del className="text-xs font-medium text-[#e11d48]">{formatUsd(item.originalPrice)}</del>
                         ) : null}
                       </StorePrice>
                     </div>

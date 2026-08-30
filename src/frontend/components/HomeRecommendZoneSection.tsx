@@ -292,7 +292,7 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
             {typeof item.originalPrice === 'number' &&
             typeof item.price === 'number' &&
             item.originalPrice > item.price + 0.009 ? (
-              <del className="text-xs font-semibold text-[#8b8477]">{`US$ ${item.originalPrice.toFixed(2)}`}</del>
+              <del className="text-xs font-semibold text-[#e11d48]">{`US$ ${item.originalPrice.toFixed(2)}`}</del>
             ) : null}
           </p>
         ) : (

@@ -1,5 +1,5 @@
 /** Storefront: only ACTIVE listings that were not soft-deleted / drafted / taken off. */
-export const HIDDEN_STOREFRONT_GOODS_STATUSES = ['DELETED', 'DRAFT', 'INACTIVE'] as const
+export const HIDDEN_STOREFRONT_GOODS_STATUSES = ['DELETED', 'DRAFT', 'INACTIVE', 'REVIEW'] as const
 
 export function isHiddenStorefrontGoodsStatus(goodsStatus?: string | null): boolean {
   const value = String(goodsStatus || '').trim().toUpperCase()

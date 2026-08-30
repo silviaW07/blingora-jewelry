@@ -832,7 +832,7 @@ function normalizeGoodsStatus(goodsStatus?: string | null): GoodsStatus | null {
   if (!goodsStatus) return null
   if (goodsStatus === 'DELETED') return 'DELETED'
   if (goodsStatus === 'DRAFT') return 'DRAFT'
-  if (goodsStatus === 'INACTIVE' || goodsStatus === 'LOW_STOCK' || goodsStatus === 'OUT_OF_STOCK') return 'INACTIVE'
+  if (goodsStatus === 'INACTIVE' || goodsStatus === 'LOW_STOCK' || goodsStatus === 'OUT_OF_STOCK' || goodsStatus === 'REVIEW') return 'INACTIVE'
   return 'ACTIVE'
 }
 

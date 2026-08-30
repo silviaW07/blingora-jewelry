@@ -3886,6 +3886,8 @@ export interface Check1688OfferLiveStatusResult {
   reason: string | null
   offer_id: string | null
   offer_name: string | null
+  /** 1688 页解析到的最低价（人民币元），无法解析则为空 */
+  price_min_cny?: number | null
 }
 
 const pickJsonNumberField = (html: string, key: string): number | null => {
@@ -3924,6 +3926,24 @@ const extract1688MinOrderQtyFromHtml = (html: string): number | null => {
     if (Number.isFinite(n) && n > 0) return Math.max(1, Math.round(n))
   }
   return null
+}
+
+const extract1688PriceMinFromHtml = (html: string): number | null => {
+  if (!html) return null
+  const keys = ['discountPrice', 'offerPrice', 'skuPrice', 'minPrice', 'price']
+  const raw: number[] = []
+  for (const key of keys) {
+    const n = pickJsonNumberField(html, key)
+    if (n != null && n > 0) raw.push(n)
+  }
+  for (const match of html.matchAll(/"price"\s*:\s*"?(0|[1-9]\d*(?:\.\d+)?)"?/gi)) {
+    const n = Number(match[1])
+    if (Number.isFinite(n) && n > 0) raw.push(n)
+  }
+  if (!raw.length) return null
+  const asYuan = raw.map((n) => (n >= 1000 ? n / 100 : n)).filter((n) => n > 0.5 && n < 100000)
+  if (!asYuan.length) return null
+  return Math.round(Math.min(...asYuan) * 100) / 100
 }
 
 const classify1688OfferHtml = (html: string): Check1688OfferLiveStatusResult => {
@@ -3968,7 +3988,13 @@ const classify1688OfferHtml = (html: string): Check1688OfferLiveStatusResult => 
   }
 
   if (name || pickJsonStringField(html, 'companyName')) {
-    return { status: 'NORMAL', reason: null, offer_id: null, offer_name: name ? name.slice(0, 180) : null }
+    return {
+      status: 'NORMAL',
+      reason: null,
+      offer_id: null,
+      offer_name: name ? name.slice(0, 180) : null,
+      price_min_cny: extract1688PriceMinFromHtml(html),
+    }
   }
 
   return { status: 'UNKNOWN', reason: '未能从 1688 页面识别商品状态', offer_id: null, offer_name: null }

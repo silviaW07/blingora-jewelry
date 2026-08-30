@@ -212,28 +212,51 @@ export const ProductListCard = ({
 
         {isDraft ? (
           <div className="h-5" aria-hidden="true" />
-        ) : canViewPrice ? (
-          <div className="min-h-5 space-y-1">
-            <p className="flex min-h-5 flex-wrap items-baseline gap-x-1.5 leading-5">
-              <span className="text-base font-bold text-[#c41e3a]">{formatListPrice(item.price, item.price_max)}</span>
-              {typeof item.original_price === 'number' && item.original_price > Number(item.price) + 0.009 ? (
-                <del className="text-xs font-semibold text-[#8b8477]">{formatListPrice(item.original_price)}</del>
-              ) : null}
-            </p>
-            {typeof item.min_order_quantity === 'number' && item.min_order_quantity > 0 ? (
-              <p className="truncate text-xs font-semibold leading-4 text-[#ff0000]">
-                {formatMinOrder(item.min_order_quantity)}
-              </p>
-            ) : null}
-          </div>
         ) : (
           <div className="min-h-5 space-y-1">
-            <GuestPlaceholder compact className="truncate" />
-            {typeof item.min_order_quantity === 'number' && item.min_order_quantity > 0 ? (
-              <p className="truncate text-xs font-semibold leading-4 text-[#ff0000]">
-                {formatMinOrder(item.min_order_quantity)}
+            {canViewPrice ? (
+              <p className="flex min-h-5 flex-wrap items-baseline gap-x-1.5 leading-5">
+                <span className="text-base font-bold text-[#111111]">{formatListPrice(item.price, item.price_max)}</span>
+                {typeof item.original_price === 'number' && item.original_price > Number(item.price) + 0.009 ? (
+                  <del className="text-xs font-semibold text-[#e11d48]">{formatListPrice(item.original_price)}</del>
+                ) : null}
               </p>
-            ) : null}
+            ) : (
+              <GuestPlaceholder compact className="truncate" />
+            )}
+            <div className="flex min-h-9 items-center gap-1">
+              {typeof item.min_order_quantity === 'number' && item.min_order_quantity > 0 ? (
+                <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-4 text-[#111111]">
+                  {formatMinOrder(item.min_order_quantity)}
+                </p>
+              ) : (
+                <span className="min-w-0 flex-1" />
+              )}
+              <div
+                className="home-product-card-actions ml-auto flex shrink-0 items-center gap-1"
+                data-no-hard-nav
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {onAddToWishlist ? (
+                  <WishlistHeartButton
+                    productId={item.product_id}
+                    onToggle={(favorited) => onAddToWishlist(item, favorited)}
+                    className="size-8 shrink-0"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  aria-label={t('product.addToCart')}
+                  className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
+                  {...addToCartEvents}
+                >
+                  <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
+                  <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -276,33 +299,6 @@ export const ProductListCard = ({
                 </button>
               )
             })}
-          </div>
-        ) : null}
-
-        {!isDraft ? (
-          <div
-            className="home-product-card-actions mt-1 flex shrink-0 items-center justify-end gap-2 pt-1"
-            data-no-hard-nav
-            onPointerDown={(event) => event.stopPropagation()}
-            onPointerUp={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {onAddToWishlist ? (
-              <WishlistHeartButton
-                productId={item.product_id}
-                onToggle={(favorited) => onAddToWishlist(item, favorited)}
-                className="size-9 shrink-0"
-              />
-            ) : null}
-            <button
-              type="button"
-              aria-label={t('product.addToCart')}
-              className="home-product-card-cart-btn relative z-[5] inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-              {...addToCartEvents}
-            >
-              <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
-              <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
-            </button>
           </div>
         ) : null}
       </div>
