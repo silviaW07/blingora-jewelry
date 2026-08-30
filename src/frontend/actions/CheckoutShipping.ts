@@ -14,6 +14,8 @@ import {
 } from '@/shared/shippingFeeCalc'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { formatUsd } from '@/shared/money'
+import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import { applyShippingDiscount } from '@/shared/pricingPromotionCalc'
 
 export interface CheckoutShippingOption {
   channelId: string
@@ -32,6 +34,8 @@ export interface GetCheckoutShippingOptionsInput {
   country: string
   /** 购物车总重量（kg），用于阶梯/海运计费 */
   weightKg?: number
+  /** 商品折后小计（USD），用于运费折扣门槛 */
+  merchandiseSubtotalUsd?: number
 }
 
 export interface GetCheckoutShippingOptionsOutput {
@@ -69,7 +73,11 @@ export const getCheckoutShippingOptions = withResult(
     }
 
     const weightKg = Math.max(0, Number(input.weightKg) || 0)
-    const exchangeRate = await getUsdExchangeRate(prisma)
+    const merchandiseSubtotalUsd = Math.max(0, Number(input.merchandiseSubtotalUsd) || 0)
+    const [exchangeRate, pricingConfig] = await Promise.all([
+      getUsdExchangeRate(prisma),
+      loadPricingPromotionConfig(prisma),
+    ])
 
     const rows = await prisma.shippingchannel.findMany({
       where: { isEnabled: true },
@@ -94,7 +102,12 @@ export const getCheckoutShippingOptions = withResult(
         weightKg,
       })
       if (fee == null) continue
-      const shippingFeeUsd = Math.round(toUsdFromCny(fee, exchangeRate) * 100) / 100
+      const rawShippingUsd = Math.round(toUsdFromCny(fee, exchangeRate) * 100) / 100
+      const shippingFeeUsd = applyShippingDiscount({
+        config: pricingConfig,
+        shippingUsd: rawShippingUsd,
+        merchandiseSubtotalUsd,
+      }).shippingUsd
       list.push({
         channelId: row.id,
         name: row.name,

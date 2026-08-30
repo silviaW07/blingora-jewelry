@@ -112,6 +112,14 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
 
   const statusRows = [
     {
+      key: 'siteWide',
+      name: '全场折扣',
+      enabled: config.siteWide.enabled,
+      startAt: config.siteWide.startAt,
+      endAt: config.siteWide.endAt,
+      activeNow: isPromoRuleActive(config.siteWide),
+    },
+    {
       key: 'firstOrder',
       name: '首单折扣',
       enabled: config.firstOrder.enabled,
@@ -135,6 +143,14 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
       endAt: config.fullReduction.endAt,
       activeNow: isPromoRuleActive(config.fullReduction),
     },
+    {
+      key: 'shipping',
+      name: '运费折扣',
+      enabled: config.shipping.enabled,
+      startAt: config.shipping.startAt,
+      endAt: config.shipping.endAt,
+      activeNow: isPromoRuleActive(config.shipping),
+    },
   ]
 
   return (
@@ -152,7 +168,7 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
             <div>
               <h1 className="font-header text-2xl font-bold tracking-tight">促销活动管理</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                统一管理顶部促销通栏、全局汇率、批发/首单/老客折扣与阶梯满减。顶部横幅为全站唯一促销展示位。
+                统一管理顶部促销通栏、全局汇率、全场/批发/首单/老客折扣、运费折扣与阶梯满减。顶部横幅为全站唯一促销展示位。
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -401,6 +417,64 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
             <CardContent className="space-y-5 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold">全场折扣</h2>
+                  <PromoStatusBadge
+                    enabled={config.siteWide.enabled}
+                    startAt={config.siteWide.startAt}
+                    endAt={config.siteWide.endAt}
+                  />
+                  <p className="mt-1 w-full text-sm text-muted-foreground">
+                    所有客户在活动期内自动享受。先于首单/老客折扣应用在商品小计上。到达开始时间后自动生效。
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Label className="text-sm">启用</Label>
+                  <Switch checked={config.siteWide.enabled} onCheckedChange={handlers.setSiteWideEnabled} />
+                </div>
+              </div>
+
+              <ActivityTimeFields
+                startAt={config.siteWide.startAt}
+                endAt={config.siteWide.endAt}
+                onStartChange={handlers.setSiteWideStartAt}
+                onEndChange={handlers.setSiteWideEndAt}
+              />
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>折扣类型</Label>
+                  <Select
+                    value={config.siteWide.mode}
+                    onValueChange={(val) => handlers.setSiteWideMode(val as 'PERCENT' | 'AMOUNT')}
+                    disabled={!config.siteWide.enabled}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PERCENT">按系数（例如 0.90 = 9折）</SelectItem>
+                      <SelectItem value="AMOUNT">减免金额（美元）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>{config.siteWide.mode === 'AMOUNT' ? '减免金额（USD）' : '折扣系数'}</Label>
+                  <Input
+                    value={String(config.siteWide.value)}
+                    onChange={(e) => handlers.setSiteWideValue(toNumber(e.target.value))}
+                    placeholder={config.siteWide.mode === 'AMOUNT' ? '例如 5' : '例如 0.90'}
+                    inputMode="decimal"
+                    disabled={!config.siteWide.enabled}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-xs">
+            <CardContent className="space-y-5 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h2 className="text-base font-bold">首单折扣（新客优惠）</h2>
                   <PromoStatusBadge
                     enabled={config.firstOrder.enabled}
@@ -573,6 +647,74 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                   <Plus className="mr-2 h-4 w-4" />
                   新增档位
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-xs">
+            <CardContent className="space-y-5 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold">运费折扣</h2>
+                  <PromoStatusBadge
+                    enabled={config.shipping.enabled}
+                    startAt={config.shipping.startAt}
+                    endAt={config.shipping.endAt}
+                  />
+                  <p className="mt-1 w-full text-sm text-muted-foreground">
+                    活动期内对运费打折或减免。系数 0 或减免大于运费时即为免运费。可设商品小计门槛。
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Label className="text-sm">启用</Label>
+                  <Switch checked={config.shipping.enabled} onCheckedChange={handlers.setShippingPromoEnabled} />
+                </div>
+              </div>
+
+              <ActivityTimeFields
+                startAt={config.shipping.startAt}
+                endAt={config.shipping.endAt}
+                onStartChange={handlers.setShippingPromoStartAt}
+                onEndChange={handlers.setShippingPromoEndAt}
+              />
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>折扣类型</Label>
+                  <Select
+                    value={config.shipping.mode}
+                    onValueChange={(val) => handlers.setShippingPromoMode(val as 'PERCENT' | 'AMOUNT')}
+                    disabled={!config.shipping.enabled}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PERCENT">按系数（例如 0.90 = 运费9折，0 = 免运费）</SelectItem>
+                      <SelectItem value="AMOUNT">减免金额（美元）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{config.shipping.mode === 'AMOUNT' ? '减免金额（USD）' : '折扣系数'}</Label>
+                  <Input
+                    value={String(config.shipping.value)}
+                    onChange={(e) => handlers.setShippingPromoValue(toNumber(e.target.value))}
+                    placeholder={config.shipping.mode === 'AMOUNT' ? '例如 8' : '例如 0.90'}
+                    inputMode="decimal"
+                    disabled={!config.shipping.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>满额门槛（USD，0=不限）</Label>
+                  <Input
+                    value={String(config.shipping.minSubtotalUsd)}
+                    onChange={(e) => handlers.setShippingPromoMinSubtotal(toNumber(e.target.value))}
+                    placeholder="例如 50"
+                    inputMode="decimal"
+                    disabled={!config.shipping.enabled}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>

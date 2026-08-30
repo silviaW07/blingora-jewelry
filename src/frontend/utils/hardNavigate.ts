@@ -166,7 +166,7 @@ const TAP_SLOP_PX = 36
 type TapOrigin = { x: number; y: number }
 
 function tapWasScroll(origin: TapOrigin | null, x: number, y: number) {
-  if (!origin) return false
+  if (!origin) return true
   return Math.abs(x - origin.x) > TAP_SLOP_PX || Math.abs(y - origin.y) > TAP_SLOP_PX
 }
 
@@ -251,8 +251,12 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
         if (disabledRef.current) return
         const origin = originRef.current
         originRef.current = null
-        let x = origin?.x ?? 0
-        let y = origin?.y ?? 0
+        if (!origin) {
+          suppressUntil.current = Date.now() + 400
+          return
+        }
+        let x = origin.x
+        let y = origin.y
         if ('clientX' in event) {
           x = event.clientX
           y = event.clientY
@@ -261,7 +265,7 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
           y = event.changedTouches[0].clientY
         }
         if (tapWasScroll(origin, x, y)) {
-          suppressUntil.current = Date.now() + 280
+          suppressUntil.current = Date.now() + 400
           return
         }
         fire()
@@ -292,6 +296,7 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 
   const onClick = useCallback(
     (_event: ReactMouseEvent) => {
+      if (Date.now() < suppressUntil.current) return
       fire()
     },
     [fire],

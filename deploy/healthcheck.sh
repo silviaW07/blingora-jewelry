@@ -26,6 +26,12 @@ trap 'rm -f "$LOCK"' EXIT
 front_code="$(curl -s -o /dev/null -m 15 -w '%{http_code}' "$FRONT_URL" || true)"
 rpc_code="$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$RPC_URL" || true)"
 
+# Public site is nginx :443. PM2 can be healthy while nginx is down (2026-08-29).
+if ! ss -lntp 2>/dev/null | grep -qE '[:.]443 '; then
+  echo "$(date -Is) nginx :443 down, starting"
+  sudo -n systemctl start nginx 2>/dev/null || sudo -n nginx 2>/dev/null || true
+fi
+
 front_ok=0
 rpc_ok=0
 [[ "$front_code" == "200" || "$front_code" == "304" || "$front_code" == "307" || "$front_code" == "308" ]] && front_ok=1

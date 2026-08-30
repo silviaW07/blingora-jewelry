@@ -48,6 +48,17 @@ export interface PricingPromotionManagementHandlers {
   addFullReductionTier: () => void
   updateFullReductionTier: (index: number, patch: { thresholdUsd?: number; offUsd?: number }) => void
   removeFullReductionTier: (index: number) => void
+  setSiteWideEnabled: (enabled: boolean) => void
+  setSiteWideMode: (mode: 'PERCENT' | 'AMOUNT') => void
+  setSiteWideValue: (value: number) => void
+  setSiteWideStartAt: (value: string) => void
+  setSiteWideEndAt: (value: string) => void
+  setShippingPromoEnabled: (enabled: boolean) => void
+  setShippingPromoMode: (mode: 'PERCENT' | 'AMOUNT') => void
+  setShippingPromoValue: (value: number) => void
+  setShippingPromoMinSubtotal: (value: number) => void
+  setShippingPromoStartAt: (value: string) => void
+  setShippingPromoEndAt: (value: string) => void
   setTopBannerEnabled: (enabled: boolean) => void
   setTopBannerMessage: (value: string) => void
   setTopBannerEndTime: (value: string) => void
@@ -183,6 +194,40 @@ export function usePricingPromotionManagement(): {
             ...prev.fullReduction,
             tiers: (prev.fullReduction.tiers || []).filter((_, i) => i !== index),
           },
+        })),
+      setSiteWideEnabled: (enabled) =>
+        setConfig((prev) => ({ ...prev, siteWide: { ...prev.siteWide, enabled } })),
+      setSiteWideMode: (mode) =>
+        setConfig((prev) => ({ ...prev, siteWide: { ...prev.siteWide, mode } })),
+      setSiteWideValue: (value) =>
+        setConfig((prev) => ({ ...prev, siteWide: { ...prev.siteWide, value } })),
+      setSiteWideStartAt: (value) =>
+        setConfig((prev) => ({
+          ...prev,
+          siteWide: { ...prev.siteWide, startAt: normalizePromoDateTime(value) },
+        })),
+      setSiteWideEndAt: (value) =>
+        setConfig((prev) => ({
+          ...prev,
+          siteWide: { ...prev.siteWide, endAt: normalizePromoDateTime(value) },
+        })),
+      setShippingPromoEnabled: (enabled) =>
+        setConfig((prev) => ({ ...prev, shipping: { ...prev.shipping, enabled } })),
+      setShippingPromoMode: (mode) =>
+        setConfig((prev) => ({ ...prev, shipping: { ...prev.shipping, mode } })),
+      setShippingPromoValue: (value) =>
+        setConfig((prev) => ({ ...prev, shipping: { ...prev.shipping, value } })),
+      setShippingPromoMinSubtotal: (value) =>
+        setConfig((prev) => ({ ...prev, shipping: { ...prev.shipping, minSubtotalUsd: value } })),
+      setShippingPromoStartAt: (value) =>
+        setConfig((prev) => ({
+          ...prev,
+          shipping: { ...prev.shipping, startAt: normalizePromoDateTime(value) },
+        })),
+      setShippingPromoEndAt: (value) =>
+        setConfig((prev) => ({
+          ...prev,
+          shipping: { ...prev.shipping, endAt: normalizePromoDateTime(value) },
         })),
       setTopBannerEnabled: (enabled) => setTopBanner((prev) => ({ ...prev, enabled })),
       setTopBannerMessage: (value) => setTopBanner((prev) => ({ ...prev, message: value })),

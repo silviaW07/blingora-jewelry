@@ -374,13 +374,6 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     return unique
   }, [product, colorAttributeGroup])
 
-  useEffect(() => {
-    if (!colorSwatches.length || String(manualColorValue || '').trim()) return
-    const first = colorSwatches[0]
-    if (!first) return
-    handleColorSelect(first.value, first.imageUrl)
-  }, [colorSwatches, handleColorSelect, manualColorValue])
-
   // 预热主图尺寸(960)，让点击颜色后左侧大图秒出（缩略图只有 200 宽、URL 不同不会命中）
   const preheatMainImage = useCallback((url?: string | null) => {
     if (typeof window === 'undefined' || !url) return;
@@ -412,8 +405,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     : t('product.specOptions')
   const productMoq = productMinOrderQty || product?.minOrderQty || 1
   const displayedMinOrderQty = productMoq
-  const selectedColorValue =
-    String(manualColorValue || '').trim() || String(colorSwatches[0]?.value || '').trim()
+  const selectedColorValue = String(manualColorValue || '').trim()
   const isColorSelected = !colorAttribute || Boolean(selectedColorValue)
 
   const renderMoqLabel = (qty: number, className?: string) => {
@@ -918,9 +910,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       ref={addToCartTap.ref}
                       className={cn(
                         'product-detail-add-to-cart',
-                        submitting && 'is-disabled',
+                        (submitting || !canAddToCart) && 'is-disabled',
                       )}
-                      aria-disabled={submitting}
+                      aria-disabled={submitting || !canAddToCart}
                       data-no-hard-nav=""
                       onClick={addToCartTap.onClick}
                     >

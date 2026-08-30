@@ -230,6 +230,7 @@ export default function CheckoutView({ state, handlers }: Props) {
                 <CheckoutSmartPanel
                   disabled={state.actionLoading || state.isEmpty || isPlacingOrder}
                   totalWeightKg={cartTotalWeightKg}
+                  merchandiseSubtotalUsd={checkoutTotals.subtotalAfterDiscountUsd}
                   onConfirmedChange={setAddressConfirmed}
                   onConfirmAddress={({ address }) => {
                     setCheckoutAddress(address)

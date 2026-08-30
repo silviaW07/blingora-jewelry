@@ -278,6 +278,8 @@ type Props = {
   disabled?: boolean
   /** 购物车总重量（kg），用于运费阶梯/海运计算 */
   totalWeightKg?: number
+  /** 商品折后小计（USD），用于运费折扣门槛 */
+  merchandiseSubtotalUsd?: number
   onConfirmedChange?: (confirmed: boolean) => void
   onConfirmAddress?: (payload: {
     channelId: string | null
@@ -295,6 +297,7 @@ type Props = {
 export function CheckoutSmartPanel({
   disabled = false,
   totalWeightKg = 0,
+  merchandiseSubtotalUsd = 0,
   onConfirmedChange,
   onConfirmAddress,
   onShippingChange,
@@ -377,7 +380,11 @@ export function CheckoutSmartPanel({
     const requestId = ++shippingRequestRef.current
     setLoadingChannels(true)
     try {
-      const result = await getCheckoutShippingOptions({ country, weightKg })
+      const result = await getCheckoutShippingOptions({
+        country,
+        weightKg,
+        merchandiseSubtotalUsd,
+      })
       if (requestId !== shippingRequestRef.current) return
       setShippingOptions(result.list)
       const first = result.list[0] || null
@@ -452,7 +459,7 @@ export function CheckoutSmartPanel({
   useEffect(() => {
     const country = form.country || 'United States'
     void loadShippingOptions(country, Math.max(0, Number(totalWeightKg) || 0))
-  }, [form.country, totalWeightKg])
+  }, [form.country, totalWeightKg, merchandiseSubtotalUsd])
 
   useEffect(() => {
     if (!addressComplete) return

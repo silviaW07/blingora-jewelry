@@ -390,20 +390,7 @@ export const useProductDetail = (seed?: {
     setSkuQuantities(qtyMap)
     setActiveImage(product.mainImageUrl)
 
-    const first = colorAttribute?.values.find((value) => String(value || '').trim()) || null
-    setManualColorValue(first)
-    if (first && colorAttribute) {
-      setSelectedAttributes({ [colorAttribute.name]: first })
-      const matchedSkus = product.skus.filter((sku) =>
-        sku.attributeJson?.some((attr) => attr.name === colorAttribute.name && attr.value === first),
-      )
-      const primary = matchedSkus.find((sku) => Boolean(sku.imageUrl)) || matchedSkus[0] || null
-      if (primary?.imageUrl) setActiveImage(primary.imageUrl)
-      if (primary) {
-        setSelectedSku(primary)
-        setManualSizeSkuId(primary.id)
-      }
-    }
+    setManualColorValue(null)
     // colorAttribute is derived from this product; productIdKey is the reset key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdKey])
@@ -480,11 +467,7 @@ export const useProductDetail = (seed?: {
   /** 尺码通过加减号选中：有数量即视为已选规格 */
   const isSizeSelected = !sizeAttribute || totalSelectedQty > 0 || Boolean(manualSizeSkuId)
 
-  /**
-   * Pink and tappable whenever the product is on sale.
-   * Qty 0 still adds MOQ; guests go to login. Never grey the button for qty=0.
-   */
-  const canAddToCart = isPurchasable
+  const canAddToCart = isPurchasable && isColorSelected && totalSelectedQty > 0
 
   const redirectToLogin = useCallback(() => {
     openStorefrontLogin(openAuthModal)
@@ -579,21 +562,16 @@ export const useProductDetail = (seed?: {
       setActiveImage(colorImage)
     }
 
-    // 无尺码规格时：选中颜色即锁定对应 SKU
+    // 选颜色只锁定 SKU / 换主图，不自动加数量
     if (!sizeAttribute && primary) {
-      const existing = skuQuantitiesRef.current[primary.id] || 0
-      if (existing > 0 || !supportsMixedBatch) {
-        applySizeSelection(primary, value)
-      } else {
-        setManualSizeSkuId(primary.id)
-        setSelectedSku(primary)
-        const attrs: Record<string, string> = { [colorAttribute.name]: value }
-        primary.attributeJson?.forEach((attr) => {
-          if (attr.name && attr.value) attrs[attr.name] = attr.value
-        })
-        setSelectedAttributes(attrs)
-        setQuantity(0)
-      }
+      setManualSizeSkuId(primary.id)
+      setSelectedSku(primary)
+      const attrs: Record<string, string> = { [colorAttribute.name]: value }
+      primary.attributeJson?.forEach((attr) => {
+        if (attr.name && attr.value) attrs[attr.name] = attr.value
+      })
+      setSelectedAttributes(attrs)
+      setQuantity(skuQuantitiesRef.current[primary.id] || 0)
       return
     }
 
@@ -671,26 +649,11 @@ export const useProductDetail = (seed?: {
     const sourceSku = product.skus.find((item) => item.id === skuId)
     if (!sourceSku) return
 
-    const colorFromSku = colorAttribute
-      ? String(
-          sourceSku.attributeJson?.find((attr) => attr.name === colorAttribute.name)?.value || '',
-        ).trim()
-      : ''
-    const firstColor = colorAttribute
-      ? String(
-          product.skus
-            .map((item) => item.attributeJson?.find((attr) => attr.name === colorAttribute.name)?.value)
-            .find((value) => String(value || '').trim()) || '',
-        ).trim()
-      : ''
-    const colorValue = String(manualColorValue || '').trim() || colorFromSku || firstColor
+    const colorValue = String(manualColorValue || '').trim()
     if (colorAttribute && !colorValue) {
       toast.error('Please select a color')
       triggerSelectionHighlight({ color: true, size: false })
       return
-    }
-    if (colorAttribute && colorValue && !String(manualColorValue || '').trim()) {
-      setManualColorValue(colorValue)
     }
 
     const resolvedSku =
@@ -773,55 +736,19 @@ export const useProductDetail = (seed?: {
       return
     }
 
-    // Use a local color value — setState is async; Chrome users tap Add before state flushes.
-    let colorValue = String(manualColorValue || '').trim()
+    const colorValue = String(manualColorValue || '').trim()
     if (colorAttribute && !colorValue) {
-      const firstColor =
-        colorAttribute.values.find((value) => String(value || '').trim()) || null
-      if (firstColor) {
-        colorValue = String(firstColor).trim()
-        setManualColorValue(firstColor)
-      } else {
-        toast.error('Please select a color')
-        triggerSelectionHighlight({ color: true, size: false })
-        return
-      }
+      toast.error('Please select a color')
+      triggerSelectionHighlight({ color: true, size: false })
+      return
     }
 
     let lines = Object.entries(skuQuantitiesRef.current).filter(([, qty]) => qty > 0)
 
-    // Qty 0: add MOQ of the selected / first matching SKU (Chrome users often never tap +).
     if (lines.length === 0) {
-      const fallbackSku =
-        selectedSku ||
-        product?.skus.find((sku) => {
-          if (!colorAttribute || !colorValue) return true
-          return sku.attributeJson?.some(
-            (attr) => attr.name === colorAttribute.name && attr.value === colorValue,
-          )
-        }) ||
-        product?.skus[0] ||
-        null
-      if (!fallbackSku) {
-        toast.error('Please select a size')
-        if (sizeAttribute) triggerSelectionHighlight({ color: false, size: true })
-        return
-      }
-      const moq = resolveSkuMinOrderQty({
-        productMinOrderQty,
-        skuMinOrderQty: fallbackSku.minOrderQty,
-        supportsMixedBatch,
-      })
-      const qty = skuQtyCap(fallbackSku) >= moq ? moq : 0
-      if (qty <= 0) {
-        toast.error('This option is out of stock')
-        return
-      }
-      lines = [[fallbackSku.id, qty]]
-      skuQuantitiesRef.current = { ...skuQuantitiesRef.current, [fallbackSku.id]: qty }
-      setSkuQuantities({ ...skuQuantitiesRef.current })
-      setSelectedSku(fallbackSku)
-      setManualSizeSkuId(fallbackSku.id)
+      toast.error('Please select a quantity')
+      triggerSelectionHighlight({ color: false, size: true })
+      return
     }
 
     // 单规格：加购数量保底 Math.max(qty, moq)

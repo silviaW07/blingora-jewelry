@@ -2,7 +2,7 @@ import type { FullReductionTier, PricingPromotionConfig } from '@/shared/pricing
 import { isPromoRuleActive } from '@/shared/pricingPromotionConfig'
 
 export type DiscountLine = {
-  code: 'WHOLESALE' | 'FIRST_ORDER' | 'LOYAL' | 'FULL_REDUCTION'
+  code: 'WHOLESALE' | 'SITE_WIDE' | 'FIRST_ORDER' | 'LOYAL' | 'FULL_REDUCTION' | 'SHIPPING'
   label: string
   amount: number
 }
@@ -124,10 +124,36 @@ export function computeDiscounts(params: {
     discountLines.push({ code: 'WHOLESALE', label: 'Wholesale', amount: roundMoney(wholesaleDiscount) })
   }
 
+  // 1b) Site-wide merchandise discount
+  let subtotalAfterSiteWide = wholesaleSubtotal
+  if (cfg.siteWide && isPromoRuleActive(cfg.siteWide) && wholesaleSubtotal > 0) {
+    let siteWideDiscount = 0
+    if (cfg.siteWide.mode === 'AMOUNT') {
+      siteWideDiscount = roundMoney(clamp(Number(cfg.siteWide.value), 0, subtotalAfterSiteWide))
+    } else {
+      const coef = clamp(Number(cfg.siteWide.value), 0, 1)
+      siteWideDiscount = roundMoney(subtotalAfterSiteWide - subtotalAfterSiteWide * coef)
+      if (coef >= 0 && coef <= 1) {
+        for (const line of params.lines) {
+          if (!line.valid) continue
+          const wholesaleUnit = wholesaleUnitByLine[line.lineId]
+          if (!Number.isFinite(wholesaleUnit)) continue
+          const next = roundMoney(wholesaleUnit * coef)
+          wholesaleUnitByLine[line.lineId] = next
+          unitPriceByLine[line.lineId] = next
+        }
+      }
+    }
+    if (siteWideDiscount > 0) {
+      discountLines.push({ code: 'SITE_WIDE', label: 'Site-wide', amount: siteWideDiscount })
+      subtotalAfterSiteWide = roundMoney(subtotalAfterSiteWide - siteWideDiscount)
+    }
+  }
+
   // 2) Customer discount (first order OR loyal) on the subtotal
   //    enabled + 活动时间窗内才生效（空时间按原逻辑：立即/永久）
   let customerDiscount = 0
-  let subtotalAfterCustomer = wholesaleSubtotal
+  let subtotalAfterCustomer = subtotalAfterSiteWide
   let customerPercentCoef: number | null = null
   const firstOrderActive = isPromoRuleActive(cfg.firstOrder)
   const loyalActive = isPromoRuleActive(cfg.loyal)
@@ -185,5 +211,30 @@ export function computeDiscounts(params: {
     totalDiscountUsd: totalDiscount,
     payableUsd: roundMoney(Math.max(0, subtotalAfterAll)),
   }
+}
+
+export function applyShippingDiscount(params: {
+  config: PricingPromotionConfig
+  shippingUsd: number
+  merchandiseSubtotalUsd?: number
+}): { shippingUsd: number; discountUsd: number } {
+  const base = roundMoney(Math.max(0, Number(params.shippingUsd) || 0))
+  const rule = params.config?.shipping
+  if (!rule || !isPromoRuleActive(rule) || base <= 0) {
+    return { shippingUsd: base, discountUsd: 0 }
+  }
+  const minSubtotal = roundMoney(Math.max(0, Number(rule.minSubtotalUsd) || 0))
+  const merchandise = roundMoney(Math.max(0, Number(params.merchandiseSubtotalUsd) || 0))
+  if (minSubtotal > 0 && merchandise < minSubtotal) {
+    return { shippingUsd: base, discountUsd: 0 }
+  }
+  let next = base
+  if (rule.mode === 'AMOUNT') {
+    next = roundMoney(Math.max(0, base - clamp(Number(rule.value), 0, 1_000_000)))
+  } else {
+    next = roundMoney(base * clamp(Number(rule.value), 0, 1))
+  }
+  const discountUsd = roundMoney(Math.max(0, base - next))
+  return { shippingUsd: next, discountUsd }
 }
 

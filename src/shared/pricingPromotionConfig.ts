@@ -40,6 +40,21 @@ export type PricingPromotionConfig = {
     enabled: boolean
     tiers: FullReductionTier[]
   } & PromoScheduleFields
+  /** 全场商品折扣：所有客户在活动期内自动应用 */
+  siteWide: {
+    enabled: boolean
+    mode: DiscountMode
+    /** percent: 0.9 = 9折；amount: 美元减免 */
+    value: number
+  } & PromoScheduleFields
+  /** 运费折扣：活动期内对运费按系数或减免金额 */
+  shipping: {
+    enabled: boolean
+    mode: DiscountMode
+    value: number
+    /** 商品折后小计满多少 USD 才享受运费优惠；0 = 不限制 */
+    minSubtotalUsd: number
+  } & PromoScheduleFields
 }
 
 export const DEFAULT_PRICING_PROMO_CONFIG: PricingPromotionConfig = {
@@ -47,6 +62,8 @@ export const DEFAULT_PRICING_PROMO_CONFIG: PricingPromotionConfig = {
   firstOrder: { enabled: false, mode: 'PERCENT', value: 0.9, startAt: null, endAt: null },
   loyal: { enabled: false, coefficient: 0.95, startAt: null, endAt: null },
   fullReduction: { enabled: false, tiers: [], startAt: null, endAt: null },
+  siteWide: { enabled: false, mode: 'PERCENT', value: 0.9, startAt: null, endAt: null },
+  shipping: { enabled: false, mode: 'PERCENT', value: 0.9, minSubtotalUsd: 0, startAt: null, endAt: null },
 }
 
 /** 解析后台 datetime-local / ISO 字符串为 ISO；空值返回 null */
@@ -127,6 +144,8 @@ export function normalizePricingPromotionConfig(raw: unknown): PricingPromotionC
   const firstOrder = input.firstOrder && typeof input.firstOrder === 'object' ? input.firstOrder : {}
   const loyal = input.loyal && typeof input.loyal === 'object' ? input.loyal : {}
   const fullReduction = input.fullReduction && typeof input.fullReduction === 'object' ? input.fullReduction : {}
+  const siteWide = input.siteWide && typeof input.siteWide === 'object' ? input.siteWide : {}
+  const shipping = input.shipping && typeof input.shipping === 'object' ? input.shipping : {}
 
   const tiers: FullReductionTier[] = Array.isArray(fullReduction.tiers)
     ? fullReduction.tiers
@@ -175,6 +194,25 @@ export function normalizePricingPromotionConfig(raw: unknown): PricingPromotionC
       enabled: fullReduction.enabled === true,
       tiers,
       ...normalizeSchedule(fullReduction),
+    },
+    siteWide: {
+      enabled: siteWide.enabled === true,
+      mode: normalizeDiscountMode(siteWide.mode),
+      value:
+        normalizeDiscountMode(siteWide.mode) === 'AMOUNT'
+          ? roundMoney(clamp(Number(siteWide.value ?? DEFAULT_PRICING_PROMO_CONFIG.siteWide.value), 0, 1_000_000))
+          : roundMoney(clamp(Number(siteWide.value ?? DEFAULT_PRICING_PROMO_CONFIG.siteWide.value), 0, 1)),
+      ...normalizeSchedule(siteWide),
+    },
+    shipping: {
+      enabled: shipping.enabled === true,
+      mode: normalizeDiscountMode(shipping.mode),
+      value:
+        normalizeDiscountMode(shipping.mode) === 'AMOUNT'
+          ? roundMoney(clamp(Number(shipping.value ?? DEFAULT_PRICING_PROMO_CONFIG.shipping.value), 0, 1_000_000))
+          : roundMoney(clamp(Number(shipping.value ?? DEFAULT_PRICING_PROMO_CONFIG.shipping.value), 0, 1)),
+      minSubtotalUsd: roundMoney(clamp(Number(shipping.minSubtotalUsd ?? 0), 0, 1_000_000)),
+      ...normalizeSchedule(shipping),
     },
   }
 }

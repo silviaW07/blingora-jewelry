@@ -19,7 +19,7 @@ import {
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
-import { computeDiscounts } from '@/shared/pricingPromotionCalc'
+import { computeDiscounts, applyShippingDiscount } from '@/shared/pricingPromotionCalc'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
@@ -656,8 +656,14 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
     })
 
     const discountAmount = toMoney(discountResult.totalDiscountUsd)
-    const shippingAmount = toMoney(toUsdFromCny(serverShippingFee, exchangeRate))
     const discountedSubtotal = toMoney(originalSubtotalAmount - discountAmount)
+    const rawShipping = toMoney(toUsdFromCny(serverShippingFee, exchangeRate))
+    const shippingAfterPromo = applyShippingDiscount({
+      config: pricingConfig,
+      shippingUsd: rawShipping,
+      merchandiseSubtotalUsd: discountedSubtotal,
+    })
+    const shippingAmount = toMoney(shippingAfterPromo.shippingUsd)
     const totalAmount = toMoney(discountedSubtotal + shippingAmount)
     const clientFinal = toMoney(input.finalAmount)
     if (Math.abs(clientFinal - totalAmount) > 0.05) {
