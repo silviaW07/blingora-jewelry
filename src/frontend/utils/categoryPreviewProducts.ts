@@ -7,6 +7,7 @@ export type ShelfProductCard = {
   main_image_url: string
   price: number
   price_max?: number | null
+  original_price?: number | null
   variant_thumbnails?: string[]
   min_order_quantity?: number | null
 }
@@ -30,6 +31,8 @@ type ZoneProductLike = {
   priceMin?: number | null
   priceMax?: number | null
   price_max?: number | null
+  originalPrice?: number | null
+  original_price?: number | null
   latestProducts?: ZoneProductLike[]
 }
 
@@ -54,12 +57,14 @@ function toCard(item: ZoneProductLike | null | undefined): ShelfProductCard | nu
   const priceRaw = item.price ?? item.priceMin
   const price = typeof priceRaw === 'number' && Number.isFinite(priceRaw) ? priceRaw : 0
   const priceMax = item.priceMax ?? item.price_max ?? null
+  const originalRaw = item.originalPrice ?? item.original_price ?? null
   return {
     product_id: productId,
     product_name: name || 'Product',
     main_image_url: image,
     price,
     price_max: typeof priceMax === 'number' && Number.isFinite(priceMax) ? priceMax : null,
+    original_price: typeof originalRaw === 'number' && Number.isFinite(originalRaw) ? originalRaw : null,
   }
 }
 
@@ -170,6 +175,7 @@ export function slimProductCards(list: unknown): ShelfProductCard[] {
     seen.add(productId)
     const priceRaw = row.price
     const priceMaxRaw = row.price_max ?? row.priceMax
+    const originalRaw = row.original_price ?? row.originalPrice
     out.push({
       product_id: productId,
       product_name: String(row.product_name || row.productName || 'Product'),
@@ -177,6 +183,8 @@ export function slimProductCards(list: unknown): ShelfProductCard[] {
       price: typeof priceRaw === 'number' && Number.isFinite(priceRaw) ? priceRaw : 0,
       price_max:
         typeof priceMaxRaw === 'number' && Number.isFinite(priceMaxRaw) ? priceMaxRaw : null,
+      original_price:
+        typeof originalRaw === 'number' && Number.isFinite(originalRaw) ? originalRaw : null,
       variant_thumbnails: Array.isArray(row.variant_thumbnails)
         ? row.variant_thumbnails.filter((url): url is string => typeof url === 'string')
         : undefined,

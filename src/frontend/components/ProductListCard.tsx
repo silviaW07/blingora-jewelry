@@ -214,8 +214,8 @@ export const ProductListCard = ({
           <div className="h-5" aria-hidden="true" />
         ) : canViewPrice ? (
           <div className="min-h-5 space-y-1">
-            <p className="flex min-h-5 flex-wrap items-baseline gap-x-1.5 truncate text-base font-bold leading-5 text-[#111111]">
-              <span>{formatListPrice(item.price, item.price_max)}</span>
+            <p className="flex min-h-5 flex-wrap items-baseline gap-x-1.5 leading-5">
+              <span className="text-base font-bold text-[#c41e3a]">{formatListPrice(item.price, item.price_max)}</span>
               {typeof item.original_price === 'number' && item.original_price > Number(item.price) + 0.009 ? (
                 <del className="text-xs font-semibold text-[#8b8477]">{formatListPrice(item.original_price)}</del>
               ) : null}

@@ -16,13 +16,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-/** Active site-wide percent coefficient (e.g. 0.90), or null when not a unit-price campaign. */
+/** Active site-wide percent coefficient (e.g. 0.95 = 5% off), or null when not a unit-price campaign. */
 export function getSiteWidePercentCoef(config: PricingPromotionConfig | null | undefined): number | null {
   if (!config?.siteWide || !isPromoRuleActive(config.siteWide)) return null
   if (config.siteWide.mode === 'AMOUNT') return null
-  const coef = clamp(Number(config.siteWide.value), 0, 1)
+  const raw = Number(config.siteWide.value)
+  if (!Number.isFinite(raw) || raw <= 0) return null
+  // 0.95 = 95% of list price; 5 = 5% off (common admin mistake vs 0.95)
+  const coef = raw > 1 && raw <= 100 ? (100 - raw) / 100 : clamp(raw, 0, 1)
   if (coef <= 0 || coef >= 1) return null
-  return coef
+  return Math.round(coef * 10000) / 10000
 }
 
 export function applySiteWideListedUsd(params: {

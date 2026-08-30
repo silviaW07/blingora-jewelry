@@ -132,8 +132,9 @@ export function shelfCardsToProductItems(list: ShelfProductCard[]): ProductItem[
     rating_count: 0,
     stock_status: 'IN_STOCK' as StockStatusEnum,
     price: card.price,
-    original_price: null,
-    has_discount: false,
+    original_price: card.original_price ?? null,
+    has_discount:
+      typeof card.original_price === 'number' && card.original_price > Number(card.price) + 0.009,
     sku_count: 1,
     first_sku_id: '',
     first_sku_price_rmb: 0,

@@ -304,13 +304,13 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>结束时间</Label>
+                  <Label>结束时间（倒计时必填）</Label>
                   <Input
                     type="datetime-local"
                     value={toTopPromotionDatetimeLocalValue(topBanner.end_time)}
                     onChange={(e) => handlers.setTopBannerEndTime(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">留空则不显示倒计时；到期后前台自动隐藏通栏。</p>
+                  <p className="text-xs text-muted-foreground">必须填写未来时间才会显示倒计时；留空只展示文案。到期后前台自动隐藏通栏。改完请点下方「保存」。
                 </div>
                 <div className="space-y-2">
                   <Label>背景色</Label>
@@ -406,7 +406,11 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                         )
                       })}
                     </div>
-                  ) : null}
+                  ) : (
+                    <span className="shrink-0 rounded-sm border border-dashed border-current/40 px-2 py-1 text-[10px] font-semibold opacity-70">
+                      未填结束时间，不显示倒计时
+                    </span>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -531,7 +535,7 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                   <DecimalInput
                     value={config.siteWide.value}
                     onCommit={handlers.setSiteWideValue}
-                    placeholder={config.siteWide.mode === 'AMOUNT' ? '例如 5' : '例如 0.90'}
+                    placeholder={config.siteWide.mode === 'AMOUNT' ? '例如 5' : '例如 0.95（5折请填 0.95，或直接填 5 表示 5% off）'}
                     disabled={!config.siteWide.enabled}
                   />
                 </div>
