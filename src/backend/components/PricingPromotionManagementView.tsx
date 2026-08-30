@@ -35,6 +35,77 @@ function toNumber(value: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** Keep intermediate decimals like `0.` / `0.9` while typing; commit numeric on blur. */
+function DecimalInput({
+  value,
+  onCommit,
+  placeholder,
+  disabled,
+  className,
+}: {
+  value: number
+  onCommit: (n: number) => void
+  placeholder?: string
+  disabled?: boolean
+  className?: string
+}) {
+  const [focused, setFocused] = React.useState(false)
+  const [text, setText] = React.useState(() => String(value ?? ''))
+
+  React.useEffect(() => {
+    if (!focused) setText(String(value ?? ''))
+  }, [value, focused])
+
+  const commitText = (raw: string) => {
+    const trimmed = raw.trim()
+    if (trimmed === '' || trimmed === '.' || trimmed === '-' || trimmed === '-.') {
+      onCommit(0)
+      return
+    }
+    const n = Number(trimmed)
+    onCommit(Number.isFinite(n) ? n : 0)
+  }
+
+  return (
+    <Input
+      className={className}
+      value={focused ? text : String(value ?? '')}
+      placeholder={placeholder}
+      inputMode="decimal"
+      disabled={disabled}
+      autoComplete="off"
+      onFocus={() => {
+        setFocused(true)
+        setText(String(value ?? ''))
+      }}
+      onChange={(e) => {
+        const raw = e.target.value.replace(/[^\d.eE+-]/g, '')
+        const cleaned = raw.replace(/(\..*)\./g, '$1')
+        setText(cleaned)
+        if (
+          cleaned === '' ||
+          cleaned === '.' ||
+          cleaned === '-' ||
+          cleaned === '-.' ||
+          cleaned.endsWith('.') ||
+          cleaned.endsWith('e') ||
+          cleaned.endsWith('E') ||
+          cleaned.endsWith('-') ||
+          cleaned.endsWith('+')
+        ) {
+          return
+        }
+        const n = Number(cleaned)
+        if (Number.isFinite(n)) onCommit(n)
+      }}
+      onBlur={() => {
+        commitText(text)
+        setFocused(false)
+      }}
+    />
+  )
+}
+
 function scheduleStatusClass(status: PromoScheduleStatus): string {
   if (status === 'ACTIVE') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
   if (status === 'NOT_STARTED') return 'border-amber-200 bg-amber-50 text-amber-700'
@@ -198,11 +269,10 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>USD → CNY 汇率</Label>
-                  <Input
-                    value={String(state.exchangeRate)}
-                    onChange={(e) => handlers.setExchangeRate(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={state.exchangeRate}
+                    onCommit={handlers.setExchangeRate}
                     placeholder="例如 7.20"
-                    inputMode="decimal"
                   />
                 </div>
               </div>
@@ -359,11 +429,10 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>批发折扣系数</Label>
-                  <Input
-                    value={String(config.wholesale.coefficient)}
-                    onChange={(e) => handlers.setWholesaleCoefficient(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={config.wholesale.coefficient}
+                    onCommit={handlers.setWholesaleCoefficient}
                     placeholder="例如 0.90"
-                    inputMode="decimal"
                     disabled={!config.wholesale.enabled}
                   />
                 </div>
@@ -459,11 +528,10 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>{config.siteWide.mode === 'AMOUNT' ? '减免金额（USD）' : '折扣系数'}</Label>
-                  <Input
-                    value={String(config.siteWide.value)}
-                    onChange={(e) => handlers.setSiteWideValue(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={config.siteWide.value}
+                    onCommit={handlers.setSiteWideValue}
                     placeholder={config.siteWide.mode === 'AMOUNT' ? '例如 5' : '例如 0.90'}
-                    inputMode="decimal"
                     disabled={!config.siteWide.enabled}
                   />
                 </div>
@@ -517,11 +585,10 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>{config.firstOrder.mode === 'AMOUNT' ? '减免金额（USD）' : '折扣系数'}</Label>
-                  <Input
-                    value={String(config.firstOrder.value)}
-                    onChange={(e) => handlers.setFirstOrderValue(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={config.firstOrder.value}
+                    onCommit={handlers.setFirstOrderValue}
                     placeholder={config.firstOrder.mode === 'AMOUNT' ? '例如 5' : '例如 0.90'}
-                    inputMode="decimal"
                     disabled={!config.firstOrder.enabled}
                   />
                 </div>
@@ -557,11 +624,10 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>老客折扣系数</Label>
-                  <Input
-                    value={String(config.loyal.coefficient)}
-                    onChange={(e) => handlers.setLoyalCoefficient(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={config.loyal.coefficient}
+                    onCommit={handlers.setLoyalCoefficient}
                     placeholder="例如 0.95"
-                    inputMode="decimal"
                     disabled={!config.loyal.enabled}
                   />
                 </div>
@@ -603,21 +669,19 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                       <div key={idx} className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3">
                         <div className="space-y-2">
                           <Label>满（USD）</Label>
-                          <Input
+                          <DecimalInput
                             className="w-40"
-                            value={String(tier.thresholdUsd)}
-                            onChange={(e) => handlers.updateFullReductionTier(idx, { thresholdUsd: toNumber(e.target.value) })}
-                            inputMode="decimal"
+                            value={tier.thresholdUsd}
+                            onCommit={(n) => handlers.updateFullReductionTier(idx, { thresholdUsd: n })}
                             disabled={!config.fullReduction.enabled}
                           />
                         </div>
                         <div className="space-y-2">
                           <Label>减（USD）</Label>
-                          <Input
+                          <DecimalInput
                             className="w-40"
-                            value={String(tier.offUsd)}
-                            onChange={(e) => handlers.updateFullReductionTier(idx, { offUsd: toNumber(e.target.value) })}
-                            inputMode="decimal"
+                            value={tier.offUsd}
+                            onCommit={(n) => handlers.updateFullReductionTier(idx, { offUsd: n })}
                             disabled={!config.fullReduction.enabled}
                           />
                         </div>
@@ -697,21 +761,19 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                 </div>
                 <div className="space-y-2">
                   <Label>{config.shipping.mode === 'AMOUNT' ? '减免金额（USD）' : '折扣系数'}</Label>
-                  <Input
-                    value={String(config.shipping.value)}
-                    onChange={(e) => handlers.setShippingPromoValue(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={config.shipping.value}
+                    onCommit={handlers.setShippingPromoValue}
                     placeholder={config.shipping.mode === 'AMOUNT' ? '例如 8' : '例如 0.90'}
-                    inputMode="decimal"
                     disabled={!config.shipping.enabled}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>满额门槛（USD，0=不限）</Label>
-                  <Input
-                    value={String(config.shipping.minSubtotalUsd)}
-                    onChange={(e) => handlers.setShippingPromoMinSubtotal(toNumber(e.target.value))}
+                  <DecimalInput
+                    value={config.shipping.minSubtotalUsd}
+                    onCommit={handlers.setShippingPromoMinSubtotal}
                     placeholder="例如 50"
-                    inputMode="decimal"
                     disabled={!config.shipping.enabled}
                   />
                 </div>

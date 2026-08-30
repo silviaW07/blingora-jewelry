@@ -287,8 +287,13 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         {isDraft ? (
           <p className="truncate text-xs leading-4 text-[#8b8477]">{t('product.preview')}</p>
         ) : canViewPrice ? (
-          <p className="truncate text-base font-bold leading-5 text-[#111111]">
-            {priceDisplay ?? 'US$ --'}
+          <p className="flex min-h-5 flex-wrap items-baseline gap-x-1.5 truncate text-base font-bold leading-5 text-[#111111]">
+            <span>{priceDisplay ?? 'US$ --'}</span>
+            {typeof item.originalPrice === 'number' &&
+            typeof item.price === 'number' &&
+            item.originalPrice > item.price + 0.009 ? (
+              <del className="text-xs font-semibold text-[#8b8477]">{`US$ ${item.originalPrice.toFixed(2)}`}</del>
+            ) : null}
           </p>
         ) : (
           <GuestPlaceholder compact className="truncate" />

@@ -16,6 +16,47 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+/** Active site-wide percent coefficient (e.g. 0.90), or null when not a unit-price campaign. */
+export function getSiteWidePercentCoef(config: PricingPromotionConfig | null | undefined): number | null {
+  if (!config?.siteWide || !isPromoRuleActive(config.siteWide)) return null
+  if (config.siteWide.mode === 'AMOUNT') return null
+  const coef = clamp(Number(config.siteWide.value), 0, 1)
+  if (coef <= 0 || coef >= 1) return null
+  return coef
+}
+
+export function applySiteWideListedUsd(params: {
+  price: number
+  priceMax?: number | null
+  originalPrice?: number | null
+  coef: number | null
+}): {
+  price: number
+  priceMax: number | null
+  originalPrice: number | null
+  hasDiscount: boolean
+} {
+  const price = roundMoney(Math.max(0, Number(params.price) || 0))
+  const priceMax = params.priceMax != null ? roundMoney(Number(params.priceMax) || 0) : null
+  if (params.coef == null) {
+    const original = params.originalPrice != null ? roundMoney(Number(params.originalPrice) || 0) : null
+    return {
+      price,
+      priceMax,
+      originalPrice: original,
+      hasDiscount: original != null && original > price + 0.009,
+    }
+  }
+  const sale = roundMoney(price * params.coef)
+  const saleMax = priceMax != null ? roundMoney(priceMax * params.coef) : null
+  return {
+    price: sale,
+    priceMax: saleMax != null && saleMax > sale ? saleMax : saleMax,
+    originalPrice: price,
+    hasDiscount: price > sale + 0.009,
+  }
+}
+
 export function buildWholesaleSteps(minOrderQty: number): Array<{
   minQty: number
   maxQty: number | null

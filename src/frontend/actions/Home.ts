@@ -32,6 +32,8 @@ import {
 } from '@/shared/priceCoefficient'
 import { optimizeCatalogImageUrl, resolveCategoryCardImageUrl, resolveCategoryShelfImageUrl } from '@/shared/imageUrl'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
 import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 
 type HomeRecommendZoneType = 'PRODUCT' | 'CATEGORY' | 'SIDE_NAV'
@@ -166,7 +168,11 @@ export const getHomeRecommendZones = async (input?: {
     return { zones: cachedAssembled }
   }
 
-  const exchangeRate = await getUsdExchangeRate(prisma)
+  const [exchangeRate, pricingConfig] = await Promise.all([
+    getUsdExchangeRate(prisma),
+    loadPricingPromotionConfig(prisma),
+  ])
+  const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
   const zones = await readHomeRecommendZonesWithCache()
 
   // 专区结构可缓存，但分类名称会在后台改名后过期；每次请求按 ID 回源最新名称/翻译
@@ -453,6 +459,22 @@ export const getHomeRecommendZones = async (input?: {
           : defaultSku.originalPrice
             ? defaultSku.originalPrice.toNumber()
             : null
+      const originalUsd = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+      const listed = applySiteWideListedUsd({
+        price: priceMinUsd ?? 0,
+        priceMax: priceMaxUsd,
+        originalPrice: originalUsd,
+        coef: siteWideCoef,
+      })
+      const saleSkuOptions = skuOptions.map((opt) => {
+        if (opt.price == null) return opt
+        const skuListed = applySiteWideListedUsd({
+          price: opt.price,
+          originalPrice: opt.originalPrice,
+          coef: siteWideCoef,
+        })
+        return { ...opt, price: skuListed.price, originalPrice: skuListed.originalPrice }
+      })
       const translatedName = resolveProductDisplayName(
         product.name,
         product.translationsJson,
@@ -469,11 +491,11 @@ export const getHomeRecommendZones = async (input?: {
         imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 400),
         shortDescription: product.shortDescription,
         status: product.status,
-        price: priceMinUsd,
-        priceMin: priceMinUsd,
-        priceMax: priceMaxUsd,
-        skuOptions,
-        originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
+        price: listed.price > 0 ? listed.price : priceMinUsd,
+        priceMin: listed.price > 0 ? listed.price : priceMinUsd,
+        priceMax: listed.priceMax,
+        skuOptions: saleSkuOptions,
+        originalPrice: listed.originalPrice,
         ratingAverage: product.ratingAverage,
         ratingCount: product.ratingCount,
         skuCount: product.skus.length,
@@ -608,8 +630,21 @@ export const getHomeRecommendZones = async (input?: {
                   ? defaultSku.originalPrice.toNumber()
                   : null
 
-          const price = priceMin
-          const originalPrice = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+          const listed = applySiteWideListedUsd({
+            price: priceMin ?? 0,
+            priceMax,
+            originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
+            coef: siteWideCoef,
+          })
+          const saleSkuOptions = skuOptions.map((opt) => {
+            if (opt.price == null) return opt
+            const skuListed = applySiteWideListedUsd({
+              price: opt.price,
+              originalPrice: opt.originalPrice,
+              coef: siteWideCoef,
+            })
+            return { ...opt, price: skuListed.price, originalPrice: skuListed.originalPrice }
+          })
           const translatedName = resolveProductDisplayName(
             product.name,
             (product as { translationsJson?: unknown }).translationsJson,
@@ -626,11 +661,11 @@ export const getHomeRecommendZones = async (input?: {
             imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 400),
             shortDescription: product.shortDescription,
             status: product.status,
-            price,
-            priceMin,
-            priceMax,
-            skuOptions,
-            originalPrice,
+            price: listed.price > 0 ? listed.price : priceMin,
+            priceMin: listed.price > 0 ? listed.price : priceMin,
+            priceMax: listed.priceMax,
+            skuOptions: saleSkuOptions,
+            originalPrice: listed.originalPrice,
             ratingAverage: product.ratingAverage,
             ratingCount: product.ratingCount,
             skuCount: product.skus.length,
@@ -985,6 +1020,7 @@ const mapActiveProductToItem = (
 },
   exchangeRate: number,
   lang?: string,
+  siteWideCoef: number | null = null,
 ): ProductItem => {
   const skus = product.skus
   const translated = pickProductTranslation(product.translationsJson, normalizeProductLang(lang))
@@ -1022,7 +1058,6 @@ const mapActiveProductToItem = (
         : null
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
   const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
-  const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum
   const usdPrices = skus
     .map((sku) =>
       toUsdPrice(
@@ -1036,6 +1071,12 @@ const mapActiveProductToItem = (
     )
     .filter((value) => Number.isFinite(value) && value > 0)
   const priceMax = usdPrices.length > 0 ? Math.max(...usdPrices) : null
+  const listed = applySiteWideListedUsd({
+    price: priceNum,
+    priceMax: priceMax && priceMax > priceNum ? priceMax : null,
+    originalPrice: originalPriceNum,
+    coef: siteWideCoef,
+  })
   const minOrderQuantity = Math.max(1, Number((product.tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
 
   const variantThumbnails: string[] = []
@@ -1059,9 +1100,9 @@ const mapActiveProductToItem = (
     rating_average: product.ratingAverage,
     rating_count: product.ratingCount,
     stock_status: stockStatus,
-    price: priceNum,
-    original_price: originalPriceNum,
-    has_discount: hasDiscount,
+    price: listed.price,
+    original_price: listed.originalPrice,
+    has_discount: listed.hasDiscount,
     sku_count: skuCount,
     first_sku_id: defaultSku ? defaultSku.id : '',
     first_sku_price_rmb: priceRmb,
@@ -1071,7 +1112,7 @@ const mapActiveProductToItem = (
     brand_category_name: product.brandCategory?.name || null,
     variant_thumbnails: variantThumbnails,
     min_order_quantity: minOrderQuantity,
-    price_max: priceMax && priceMax > priceNum ? priceMax : null,
+    price_max: listed.priceMax && listed.priceMax > listed.price ? listed.priceMax : null,
   }
 }
 
@@ -1152,7 +1193,7 @@ export const getDailyNewArrivalProducts = withResult(async (
     createdAt: { gte: rangeStart, lt: rangeEnd },
   }
 
-  const [total, dbProducts, exchangeRate] = await Promise.all([
+  const [total, dbProducts, exchangeRate, pricingConfig] = await Promise.all([
     prisma.product.count({ where }),
     prisma.product.findMany({
       where,
@@ -1231,10 +1272,12 @@ export const getDailyNewArrivalProducts = withResult(async (
       take: pageSize,
     }),
     getUsdExchangeRate(prisma),
+    loadPricingPromotionConfig(prisma),
   ])
+  const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
 
   const result: GetDailyNewArrivalProductsOutput = {
-    list: dbProducts.map((product) => mapActiveProductToItem(product, exchangeRate, lang)),
+    list: dbProducts.map((product) => mapActiveProductToItem(product, exchangeRate, lang, siteWideCoef)),
     total,
   }
   writeDailyNewCache(dailyNewProductsCache, cacheKey, result)

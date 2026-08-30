@@ -19,6 +19,7 @@ import {
 } from '@/frontend/i18n/productTranslation'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
 import {
   formatMinOrderQtyMessage,
   resolveEffectiveSkuMinOrderQty,
@@ -158,6 +159,7 @@ export interface ProductDetailData {
     exchangeRate: number
     wholesaleEnabled: boolean
     wholesaleCoefficient: number
+    siteWideCoefficient: number | null
   }
 }
 
@@ -167,6 +169,7 @@ export interface RelatedProductItem {
   slug: string             // data-from: product-slug
   mainImageUrl: string     // data-from: product-mainImageUrl
   minPrice: number         // aggregated: skus price min
+  originalPrice?: number | null
 }
 
 // ===== Input / Output =====
@@ -664,6 +667,7 @@ export const getProductDetail = withResult(
         exchangeRate,
         wholesaleEnabled: pricingConfig.wholesale.enabled,
         wholesaleCoefficient: pricingConfig.wholesale.coefficient,
+        siteWideCoefficient: getSiteWidePercentCoef(pricingConfig),
       },
     }
 
@@ -699,7 +703,11 @@ export const getDecoratePreviewProduct = withResult(
 export const getRelatedProducts = withResult(
   async (input: GetRelatedProductsInput): Promise<GetRelatedProductsOutput> => {
     const lang = normalizeProductLang(input.lang)
-    const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
+    const [exchangeRate, pricingConfig] = await Promise.all([
+      getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
+      loadPricingPromotionConfig(prisma),
+    ])
+    const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
     const products = await prisma.product.findMany({
       where: {
         ...storefrontVisibilityWhere(),
@@ -724,10 +732,13 @@ export const getRelatedProducts = withResult(
     })
 
     const list = products.map(p => {
-      // 聚合求出最低价格
       const minPrice = p.skus.length > 0 
         ? Math.min(...p.skus.map(s => s.price.toNumber())) 
         : 0
+      const listed = applySiteWideListedUsd({
+        price: toUsdPrice(minPrice, exchangeRate),
+        coef: siteWideCoef,
+      })
 
       return {
         id: p.id,
@@ -738,7 +749,8 @@ export const getRelatedProducts = withResult(
         ),
         slug: p.slug,
         mainImageUrl: p.mainImageUrl,
-        minPrice: toUsdPrice(minPrice, exchangeRate)
+        minPrice: listed.price,
+        originalPrice: listed.originalPrice,
       }
     })
 

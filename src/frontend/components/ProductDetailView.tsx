@@ -191,6 +191,13 @@ const formatUsdRange = (min: number, max: number) => {
   return `${formatUsd(min)} - ${formatUsd(max)}`;
 };
 
+const applySiteWideDisplay = (listPrice: number, coef: number | null) => {
+  if (coef == null || !(listPrice > 0)) return { sale: listPrice, original: null as number | null };
+  const sale = Math.round(listPrice * coef * 100) / 100;
+  if (sale >= listPrice - 0.009) return { sale: listPrice, original: null };
+  return { sale, original: listPrice };
+};
+
 const isColorAttributeName = (name?: string | null) => {
   const normalized = String(name || '').trim().toLowerCase()
   return normalized === '颜色' || normalized === 'color' || normalized === 'colour'
@@ -300,7 +307,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     productMinOrderQty,
     supportsMixedBatch,
     detailPreview,
-  } = state;
+  } = state
+  const siteWideCoef = product?.pricingMeta?.siteWideCoefficient ?? null
   const {
     handleSkuQuantityChange,
     handleColorSelect,
@@ -503,7 +511,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const { sku, label: specLabel } = row
     const qty = getSkuLineQuantity(sku.id)
     const lineMoq = resolveLineMinOrderQty(sku)
-    const priceParts = formatUsdParts(sku.price)
+    const priceShown = applySiteWideDisplay(sku.price, siteWideCoef)
+    const priceParts = formatUsdParts(priceShown.sale)
     const rawModelLabel = specLabel || sku.variantLabel || sku.skuCode
     const modelLabel = translateAttributeValue(t, rawModelLabel) || rawModelLabel
     const canDecrease = supportsMixedBatch ? qty > 0 : qty > lineMoq
@@ -518,6 +527,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             <>
               <span className="product-sku-price-prefix">{priceParts.prefix}</span>
               <span className="product-sku-price-num">{priceParts.amount}</span>
+              {priceShown.original != null ? (
+                <del className="ml-1 text-[11px] font-medium text-[#8b8477]">
+                  {formatUsd(priceShown.original)}
+                </del>
+              ) : null}
             </>
           ) : (
             <GuestPricePlaceholder compact className="product-sku-guest-price" />
@@ -717,11 +731,28 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
               <div className="mt-2 space-y-3">
                   <div>
                     <StorePrice className="text-[22px] font-bold leading-none sm:text-[26px]">
-                      <p className="text-[22px] font-bold leading-none text-[#111] sm:text-[26px]">
-                        {selectedSku
-                          ? formatUsd(selectedSku.price)
-                          : formatUsdRange(product.priceMin, product.priceMax)}
-                      </p>
+                      {(() => {
+                        const listMin = selectedSku ? selectedSku.price : product.priceMin
+                        const listMax = selectedSku ? selectedSku.price : product.priceMax
+                        const saleMin = applySiteWideDisplay(listMin, siteWideCoef)
+                        const saleMax = applySiteWideDisplay(listMax, siteWideCoef)
+                        return (
+                          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[22px] font-bold leading-none text-[#111] sm:text-[26px]">
+                            <span>
+                              {selectedSku
+                                ? formatUsd(saleMin.sale)
+                                : formatUsdRange(saleMin.sale, saleMax.sale)}
+                            </span>
+                            {saleMin.original != null ? (
+                              <del className="text-[15px] font-semibold text-[#8b8477] sm:text-[16px]">
+                                {selectedSku
+                                  ? formatUsd(saleMin.original)
+                                  : formatUsdRange(product.priceMin, product.priceMax)}
+                              </del>
+                            ) : null}
+                          </p>
+                        )
+                      })()}
                     </StorePrice>
                   </div>
 
@@ -834,11 +865,19 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         style={{ gridTemplateColumns: `repeat(${product.priceTiers.length}, minmax(0, 1fr))` }}
                       >
                         {canViewPrice ? (
-                          product.priceTiers.map((tier) => (
+                          product.priceTiers.map((tier) => {
+                            const shown = applySiteWideDisplay(tier.price, siteWideCoef)
+                            return (
                             <div key={`p-${tier.label}`} className="border-r border-[#ececec] px-2 py-2.5 last:border-r-0">
-                              {formatUsd(tier.price)}
+                              <span>{formatUsd(shown.sale)}</span>
+                              {shown.original != null ? (
+                                <del className="mt-0.5 block text-[11px] font-medium text-[#8b8477]">
+                                  {formatUsd(shown.original)}
+                                </del>
+                              ) : null}
                             </div>
-                          ))
+                            )
+                          })
                         ) : (
                           <div className="col-span-full px-2 py-2.5">
                             <GuestPricePlaceholder compact className="mx-auto block text-center" />
@@ -970,6 +1009,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       <p className="line-clamp-2 min-h-[2.5rem] text-sm text-[#222]">{item.name}</p>
                       <StorePrice compact className="text-sm font-bold">
                         <p className="text-sm font-bold text-[#111]">{formatUsd(item.minPrice)}</p>
+                        {item.originalPrice != null && item.originalPrice > item.minPrice + 0.009 ? (
+                          <del className="text-xs font-medium text-[#8b8477]">{formatUsd(item.originalPrice)}</del>
+                        ) : null}
                       </StorePrice>
                     </div>
                   </a>

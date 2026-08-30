@@ -284,6 +284,8 @@ import {
   toDecimalNumber,
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
 import {
   collectBrandKeywordTexts,
   collectTranslationSearchTexts,
@@ -1231,7 +1233,7 @@ const LIST_CACHE_TTL_MS = Number(process.env.PRODUCT_LIST_CACHE_TTL_MS || 45_000
 const LIST_CACHE_MAX = 300
 const productListCache = new Map<string, { at: number; value: GetProductListOutput }>()
 
-function buildListCacheKey(input: GetProductListInput, lang: string): string {
+function buildListCacheKey(input: GetProductListInput, lang: string, siteWideCoef: number | null): string {
   return JSON.stringify({
     c: input.category_id || '',
     b: input.brand_category_id || '',
@@ -1247,6 +1249,7 @@ function buildListCacheKey(input: GetProductListInput, lang: string): string {
     p: input.page || 1,
     ps: input.page_size || 60,
     lang,
+    sw: siteWideCoef,
   })
 }
 
@@ -1287,6 +1290,7 @@ function mapProductRecordToItem(
     skuPriceMinRmb?: number | null
     skuPriceMaxRmb?: number | null
     stockStatus?: StockStatusEnum
+    siteWideCoef?: number | null
   },
 ): ProductItem {
   const skus = p.skus
@@ -1321,7 +1325,6 @@ function mapProductRecordToItem(
         : null
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
   const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
-  const hasDiscount = originalPriceNum !== null && originalPriceNum > priceNum
   const usdPrices =
     opts?.skuPriceMinRmb != null && opts?.skuPriceMaxRmb != null
       ? [
@@ -1355,6 +1358,12 @@ function mapProductRecordToItem(
           )
           .filter((value: number) => Number.isFinite(value) && value > 0)
   const priceMax = usdPrices.length > 0 ? Math.max(...usdPrices) : null
+  const listed = applySiteWideListedUsd({
+    price: priceNum,
+    priceMax: priceMax && priceMax > priceNum ? priceMax : null,
+    originalPrice: originalPriceNum,
+    coef: opts?.siteWideCoef ?? null,
+  })
   const minOrderQuantity = Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
   const translated = pickProductTranslation((p as { translationsJson?: unknown }).translationsJson, lang)
 
@@ -1371,9 +1380,9 @@ function mapProductRecordToItem(
     rating_average: p.ratingAverage,
     rating_count: p.ratingCount,
     stock_status: stockStatus,
-    price: priceNum,
-    original_price: originalPriceNum,
-    has_discount: hasDiscount,
+    price: listed.price,
+    original_price: listed.originalPrice,
+    has_discount: listed.hasDiscount,
     sku_count: skuCount,
     first_sku_id: defaultSku ? defaultSku.id : '',
     first_sku_price_rmb: priceRmb,
@@ -1383,7 +1392,7 @@ function mapProductRecordToItem(
     brand_category_name: p.brandCategory?.name || null,
     variant_thumbnails: collectVariantThumbnails(skus, p.mainImageUrl),
     min_order_quantity: minOrderQuantity,
-    price_max: priceMax && priceMax > priceNum ? priceMax : null,
+    price_max: listed.priceMax && listed.priceMax > listed.price ? listed.priceMax : null,
   }
 }
 
@@ -1399,11 +1408,16 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   )
   const lang = normalizeProductLang(input.lang)
 
-  const cacheKey = buildListCacheKey(input, lang)
+  const [exchangeRate, pricingConfig] = await Promise.all([
+    getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
+    loadPricingPromotionConfig(prisma),
+  ])
+  const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
+
+  const cacheKey = buildListCacheKey(input, lang, siteWideCoef)
   const cachedOutput = getCachedList(cacheKey)
   if (cachedOutput) return cachedOutput
 
-  const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
   const categoryContext = await resolveCategoryContext(input.category_id)
 
   const dbWhere: any = buildProductWhere(
@@ -1613,6 +1627,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
+          siteWideCoef,
         })
       }),
       total,
@@ -1686,6 +1701,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
+          siteWideCoef,
         })
       }),
       total,
@@ -1732,7 +1748,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         ...p.skus.map((sku) => sku.skuCode),
       ])
     })
-    .map((p) => mapProductRecordToItem(p, lang, exchangeRate))
+    .map((p) => mapProductRecordToItem(p, lang, exchangeRate, { siteWideCoef }))
 
   if (input.min_price !== undefined) {
     items = items.filter(i => i.price >= input.min_price!)
@@ -2038,7 +2054,11 @@ export const getWishlistProducts = withResult(async (
   if (!ids.length) return { list: [] }
 
   const lang = normalizeProductLang(input.lang)
-  const exchangeRate = await getUsdExchangeRate(prisma, { ttlMs: 60_000 })
+  const [exchangeRate, pricingConfig] = await Promise.all([
+    getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
+    loadPricingPromotionConfig(prisma),
+  ])
+  const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
 
   const rows = await prisma.product.findMany({
     where: {
@@ -2120,7 +2140,7 @@ export const getWishlistProducts = withResult(async (
   const list = ids
     .map(id => byId.get(id))
     .filter(Boolean)
-    .map(row => mapProductRecordToItem(row, lang, exchangeRate))
+    .map(row => mapProductRecordToItem(row, lang, exchangeRate, { siteWideCoef }))
 
   return { list }
 })

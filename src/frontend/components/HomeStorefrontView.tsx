@@ -293,7 +293,9 @@ const DesktopRecommendZoneProductCard = ({
 
               <StorePrice className="text-2xl font-bold">
                 <p className="text-2xl font-bold text-[#111111]">{formatPrice(priceToShow)}</p>
-                {originalPriceToShow ? (
+                {originalPriceToShow &&
+                typeof priceToShow === 'number' &&
+                originalPriceToShow > priceToShow + 0.009 ? (
                   <p className="mt-1 text-sm text-[#8b8477] line-through">
                     {formatPrice(originalPriceToShow)}
                   </p>
