@@ -8,7 +8,7 @@ import { ImportFrom1688LinkImportPanel } from '@/backend/components/ImportFrom16
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** 任务提交后的回调（关闭弹窗、切到待上传区并刷新）；解析需另点「开始解析」 */
+  /** 任务提交后的回调（关闭弹窗、切到待上传区并刷新）；分类/分页提交后仍需点「开始解析」 */
   onTaskCreated?: (taskId: string) => void
 }
 
@@ -42,7 +42,7 @@ export function ImportFrom1688CollectModal({ open, onOpenChange, onTaskCreated }
               1688 多链接采集
             </DialogTitle>
             <DialogDescription className="text-slate-500 pt-1 leading-relaxed">
-              先「提交链接」创建任务，本机跑采集器抓页后，再点「开始解析」。提交后弹窗会保留，方便你完成采集再解析。
+              粘贴商品详情或店铺分类/分页链接，提交后点「开始解析」。分类页由服务器自动抽商品。
             </DialogDescription>
           </DialogHeader>
           <ImportFrom1688LinkImportPanel state={state} handlers={handlers} />

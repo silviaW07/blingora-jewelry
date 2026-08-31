@@ -44,7 +44,7 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           1688 链接导入任务
         </CardTitle>
         <CardDescription>
-          分两步：先提交链接（支持商品详情或店铺分类页），本机采集器抓页/展开后再点解析。
+          粘贴商品详情或店铺分类/分页链接，提交后点解析。分类页由服务器自动抽商品。
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
@@ -58,8 +58,8 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
             onChange={(e) => handlers.handleCreateFormChange('urls', e.target.value)}
             placeholder={
               '商品详情：https://detail.1688.com/offer/数字.html\n' +
-              '店铺分类：https://shopXXXX.1688.com/page/offerlist_….htm\n' +
-              '支持多行批量粘贴；分类页需本机采集器展开后再解析'
+              '店铺分类/分页：https://shopXXXX.1688.com/page/offerlist.htm?beginPage=2\n' +
+              '支持多行批量粘贴；分类和分页链接可直接解析'
             }
             className="min-h-[120px] resize-none focus-visible:ring-primary"
           />
@@ -140,14 +140,13 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
         ) : (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>推荐流程：提交 → 本机采集 → 解析</AlertTitle>
+            <AlertTitle>推荐流程：提交链接 → 开始解析</AlertTitle>
             <AlertDescription className="space-y-1">
               <p>
-                1）点「提交链接」只创建任务，不会立刻抓 1688。2）本机双击
-                deploy/collect-1688.bat（或 pnpm run collect:1688）用已登录 Chrome 抓页并上传。3）回到这里点「开始解析」。
+                商品详情、店铺分类页、分页链接都可以直接粘贴。提交后点「开始解析」，服务器会用已配置的 1688 Cookie 抽商品并抓详情。
               </p>
               <p className="text-muted-foreground">
-                采集与解析之间不要重启 rpc（收件箱在内存里）。解析失败可再采集后点「重新解析」。
+                若分类页抽不出商品，请更新 secrets/1688-cookie.txt 后重启 rpc。解析失败可点「重新解析」。
               </p>
             </AlertDescription>
           </Alert>
@@ -166,7 +165,7 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
             <RefreshCw className="w-4 h-4 animate-spin" />
             <AlertTitle>正在解析</AlertTitle>
             <AlertDescription>
-              系统正在用已采集的页面解析商品。完成后会出现在【待上传区】。
+              系统正在抓取并解析商品（分类/分页会先抽成详情链接）。完成后会出现在【待上传区】。
             </AlertDescription>
           </Alert>
         ) : null}
@@ -174,9 +173,9 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
         {state.pendingParseTaskId && !state.isParsingTask ? (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>链接已提交，等待采集后解析</AlertTitle>
+            <AlertTitle>链接已提交，可开始解析</AlertTitle>
             <AlertDescription>
-              任务 {state.pendingParseTaskId.slice(0, 8)}… 已创建。请先完成本机采集，再点「开始解析」。
+              任务 {state.pendingParseTaskId.slice(0, 8)}… 已创建。点「开始解析」即可，分类/分页会自动抽商品。
             </AlertDescription>
           </Alert>
         ) : null}

@@ -317,7 +317,7 @@ export interface CreateImportTaskOutput {
   createdCount: number
   /** 因历史已导入（同 offer/goods）而跳过的链接数 */
   skippedDuplicateCount: number
-  /** 其中店铺分类页链接数（需本机采集器先展开为商品详情） */
+  /** 其中店铺分类/分页链接数（解析时由服务器抽商品） */
   categoryUrlCount?: number
 }
 
@@ -688,7 +688,11 @@ import {
   normalizeBrandTitleSync,
 } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
-import { is1688ShopCategoryUrl } from '@/shared/1688ShopCategory'
+import {
+  extract1688OfferIdsFromHtml,
+  is1688ShopCategoryUrl,
+  offerIdsTo1688DetailUrls,
+} from '@/shared/1688ShopCategory'
 import { syncProductPriceThresholdRelations } from '@/backend/lib/priceThresholdAutoClassify'
 import {
   resolveInitialStock,
@@ -4934,9 +4938,192 @@ const is1688ImportSourceUrl = (sourceUrl?: string | null) => {
   return /1688\.com/i.test(url) && /offer\/\d+/i.test(url)
 }
 
-/** 店铺分类列表页（offerlist）：提交后由本机采集器展开为多条 offer 详情 */
+/** 店铺分类/分页列表页（offerlist）：解析时由服务器抽成多条 offer 详情 */
 const is1688ShopCategorySourceUrl = (sourceUrl?: string | null) =>
   is1688ShopCategoryUrl(sourceUrl)
+
+const MAX_OFFERS_PER_CATEGORY_PAGE = 200
+
+const build1688ShopCategoryFetchUrls = (sourceUrl: string): string[] => {
+  const raw = String(sourceUrl || '').trim()
+  const urls: string[] = raw ? [raw] : []
+  try {
+    const parsed = new URL(raw)
+    const shopMatch = parsed.hostname.match(/^shop(\d+)\.1688\.com$/i)
+    if (shopMatch) {
+      const memberId = shopMatch[1]
+      const page =
+        parsed.searchParams.get('beginPage') ||
+        parsed.searchParams.get('pageNum') ||
+        parsed.searchParams.get('page') ||
+        '1'
+      urls.push(
+        `https://m.1688.com/winport/page/offerlist.html?memberId=${memberId}&page=${encodeURIComponent(page)}`,
+      )
+    }
+  } catch {
+    // keep original URL only
+  }
+  return Array.from(new Set(urls))
+}
+
+const fetch1688ShopCategoryOfferUrls = async (
+  sourceUrl: string,
+): Promise<{ urls: string[]; error?: string }> => {
+  if (!has1688CookieConfigured()) {
+    return { urls: [], error: FAILURE_REASON_NO_COOKIE }
+  }
+  const pageUrls = build1688ShopCategoryFetchUrls(sourceUrl)
+  const attempts: Array<{ url: string; ua: string }> = []
+  for (const pageUrl of pageUrls) {
+    const isMobile = /m\.1688\.com/i.test(pageUrl)
+    attempts.push({ url: pageUrl, ua: isMobile ? UA_ANDROID_CHROME : UA_DESKTOP_CHROME })
+    attempts.push({ url: pageUrl, ua: UA_BACKUP_DESKTOP })
+  }
+  let sawRisk = false
+  let sawNetwork = false
+  for (const { url: pageUrl, ua } of attempts) {
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 15_000)
+        const response = await fetch(pageUrl, {
+          signal: controller.signal,
+          redirect: 'follow',
+          headers: {
+            ...build1688RequestHeaders(ua),
+            Referer: sourceUrl,
+          },
+        })
+        clearTimeout(timer)
+        if (response.status === 403) {
+          sawRisk = true
+          continue
+        }
+        if (!response.ok) continue
+        const html = await response.text()
+        if (!html || html.length < 400) continue
+        if (is1688RiskControlHtml(html)) {
+          sawRisk = true
+          continue
+        }
+        const urls = offerIdsTo1688DetailUrls(extract1688OfferIdsFromHtml(html)).slice(
+          0,
+          MAX_OFFERS_PER_CATEGORY_PAGE,
+        )
+        if (urls.length > 0) {
+          console.warn(`[1688-category] extracted ${urls.length} offers from ${pageUrl}`)
+          return { urls }
+        }
+      } catch (error) {
+        sawNetwork = true
+        console.warn('[1688-category] fetch failed', pageUrl, error)
+      }
+  }
+  if (sawRisk) return { urls: [], error: FAILURE_REASON_RISK_CONTROL }
+  if (sawNetwork) return { urls: [], error: FAILURE_REASON_NETWORK }
+  return {
+    urls: [],
+    error: '未能从分类/分页链接抽出商品，请确认链接或更新 1688 Cookie 后重试',
+  }
+}
+
+const listExisting1688OfferIds = async (offerIds: string[]): Promise<Set<string>> => {
+  const existingIds = new Set<string>()
+  const BATCH = 80
+  for (let i = 0; i < offerIds.length; i += BATCH) {
+    const chunk = offerIds.slice(i, i + BATCH)
+    const existingRows = await prisma.importtaskitem.findMany({
+      where: {
+        OR: chunk.map((id: string) => ({ sourceUrl: { contains: `offer/${id}` } })),
+      },
+      select: { sourceUrl: true },
+      take: BATCH * 5,
+    })
+    for (const row of existingRows) {
+      const id = String(row.sourceUrl || '').match(/offer\/(\d+)/i)?.[1]
+      if (id) existingIds.add(id)
+    }
+  }
+  return existingIds
+}
+
+/** 解析前把店铺分类/分页条目展开成 offer 详情链接，失败的分类条目标 FAILED。 */
+const expand1688ShopCategoryItemsForParse = async (
+  taskId: string,
+): Promise<{ items: any[]; failedCount: number }> => {
+  const rows = await prisma.importtaskitem.findMany({
+    where: { importTaskId: taskId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const categoryRows = rows.filter((row: { sourceUrl?: string | null }) =>
+    is1688ShopCategorySourceUrl(row.sourceUrl),
+  )
+  if (categoryRows.length === 0) {
+    return { items: rows, failedCount: 0 }
+  }
+
+  let failedCount = 0
+  for (const item of categoryRows) {
+    const { urls, error } = await fetch1688ShopCategoryOfferUrls(String(item.sourceUrl || ''))
+    if (!urls.length) {
+      failedCount += 1
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: {
+          fetchStatus: 'FAILED' as any,
+          failureReason: error || '未能从分类/分页链接抽出商品',
+          fetchFinishedAt: new Date(),
+        },
+      })
+      continue
+    }
+
+    const offerIds = urls
+      .map(url => url.match(/offer\/(\d+)/i)?.[1])
+      .filter(Boolean) as string[]
+    const existingIds = await listExisting1688OfferIds(offerIds)
+    const freshUrls = urls.filter(url => {
+      const id = url.match(/offer\/(\d+)/i)?.[1]
+      return id ? !existingIds.has(id) : true
+    })
+
+    await prisma.$transaction(async (tx: any) => {
+      await tx.importtaskitem.delete({ where: { id: item.id } })
+      if (freshUrls.length) {
+        await tx.importtaskitem.createMany({
+          data: freshUrls.map((url: string) => ({
+            importTaskId: item.importTaskId,
+            operatorId: item.operatorId,
+            sourceUrl: url,
+            isSelected: true,
+            fetchStatus: 'PENDING',
+            publishStatus: 'PENDING',
+            isPublished: false,
+            targetCategoryId: item.targetCategoryId,
+            goodsStatus: item.goodsStatus,
+          })),
+        })
+      }
+      const remaining = await tx.importtaskitem.count({
+        where: { importTaskId: item.importTaskId },
+      })
+      await tx.importtask.update({
+        where: { id: item.importTaskId },
+        data: { sourceLinkCount: remaining },
+      })
+    })
+    await sleep(800)
+  }
+
+  const nextRows = await prisma.importtaskitem.findMany({
+    where: { importTaskId: taskId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const items = nextRows.filter(
+    (row: { sourceUrl?: string | null }) => !is1688ShopCategorySourceUrl(row.sourceUrl),
+  )
+  return { items, failedCount }
+}
 
 const isPinduoduoImportSourceUrl = (sourceUrl?: string | null) =>
   Boolean(sourceUrl && isPinduoduoProductUrl(String(sourceUrl)))
@@ -6985,7 +7172,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
     const categoryUrls = validUrls.filter(u => is1688ShopCategorySourceUrl(u))
     const detailOrPddUrls = validUrls.filter(u => !is1688ShopCategorySourceUrl(u))
 
-    // 历史已导入（同 offer/goods）或本次粘贴内重复：直接跳过；分类页保留待采集器展开
+    // 历史已导入（同 offer/goods）或本次粘贴内重复：直接跳过；分类/分页链接解析时再展开
     const { acceptedUrls: acceptedDetailUrls, skippedDuplicateCount } =
       await filterFreshImportUrls(detailOrPddUrls)
     const acceptedUrls = [...acceptedDetailUrls, ...categoryUrls]
@@ -7028,7 +7215,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
         }
       })
 
-      // 1688：每条独立 URL → 一条独立 pending（分类页由采集器展开为多条 offer）
+      // 1688：每条独立 URL → 一条独立 pending（分类/分页在解析时展开为多条 offer）
       await tx.importtaskitem.createMany({
         data: acceptedUrls.map(url => ({
           importTaskId: newTask.id,
@@ -7041,10 +7228,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
           targetCategoryId: input.defaultCategoryId || null,
           goodsStatus: (input.defaultStatus || 'DRAFT') as any,
           ...(is1688ShopCategorySourceUrl(url)
-            ? {
-                failureReason: '店铺分类页：请先运行本机采集器展开商品后再解析',
-                previewDataJson: { importKind: 'SHOP_CATEGORY' } as any,
-              }
+            ? { previewDataJson: { importKind: 'SHOP_CATEGORY' } as any }
             : {}),
         }))
       })
@@ -7207,9 +7391,17 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       `[startParseTask] task=${taskSnapshot.id} items=${taskSnapshot.items.length} cookieConfigured=${Boolean(cookieSnapshot)} cookieLen=${cookieSnapshot.length} hasMtopTk=${/_m_h5_tk=/.test(cookieSnapshot)} cwd=${process.cwd()}`,
     )
 
+    const expanded = await expand1688ShopCategoryItemsForParse(taskSnapshot.id)
+    failureCount += expanded.failedCount
+    const parseItems = expanded.items
+    bumpParseJobProgress(0, parseItems.length)
+    console.warn(
+      `[startParseTask] after category expand task=${taskSnapshot.id} items=${parseItems.length} categoryFailed=${expanded.failedCount}`,
+    )
+
     // 解析前再拦一层：任务内重复，或库中其它条目已采集/已发布的同 offer/goods，直接跳过抓取
-    const taskItemIds = taskSnapshot.items.map((row: { id: string }) => row.id)
-    const taskLinkKeys = taskSnapshot.items
+    const taskItemIds = parseItems.map((row: { id: string }) => row.id)
+    const taskLinkKeys = parseItems
       .map((row: { sourceUrl?: string | null }) => resolveImportLinkDedupeKey(row.sourceUrl))
       .filter((key: string | null): key is string => Boolean(key))
     const existingLinkKeysElsewhere = await findExistingImportLinkKeys(taskLinkKeys, {
@@ -7217,7 +7409,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
     })
     const seenDedupeKeysInTask = new Set<string>()
 
-    for (let index = 0; index < taskSnapshot.items.length; index += 1) {
+    for (let index = 0; index < parseItems.length; index += 1) {
       if (isParseJobCancelled()) {
         console.warn(`[startParseTask] cancelled by user at index=${index} task=${taskSnapshot.id}`)
         await prisma.importtaskitem.updateMany({
@@ -7236,29 +7428,14 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           data: {
             status: 'RETRY_PENDING' as any,
             finishedAt: new Date(),
-            progressPercent: Math.min(100, Math.round((index / Math.max(1, taskSnapshot.items.length)) * 100)),
+            progressPercent: Math.min(100, Math.round((index / Math.max(1, parseItems.length)) * 100)),
           },
         })
         break
       }
 
-      const item = taskSnapshot.items[index]
+      const item = parseItems[index]
       const sourceUrl = String(item.sourceUrl || '')
-
-      // 分类页必须先由本机采集器展开为 offer 详情；直接解析只会失败
-      if (is1688ShopCategorySourceUrl(sourceUrl)) {
-        await prisma.importtaskitem.update({
-          where: { id: item.id },
-          data: {
-            fetchStatus: 'FAILED' as any,
-            failureReason: '店铺分类页尚未展开：请先运行本机采集器（collect-1688），再点开始解析',
-            fetchFinishedAt: new Date(),
-          },
-        })
-        failureCount += 1
-        bumpParseJobProgress(index + 1, taskSnapshot.items.length)
-        continue
-      }
 
       const dedupeKey = resolveImportLinkDedupeKey(sourceUrl)
       if (dedupeKey) {
@@ -7272,7 +7449,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             },
           })
           failureCount += 1
-          bumpParseJobProgress(index + 1, taskSnapshot.items.length)
+          bumpParseJobProgress(index + 1, parseItems.length)
           continue
         }
         seenDedupeKeysInTask.add(dedupeKey)
@@ -7600,8 +7777,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       }
 
       const processedCount = index + 1
-      bumpParseJobProgress(processedCount, taskSnapshot.items.length)
-      const progressPercent = Math.min(100, Math.round((processedCount / taskSnapshot.items.length) * 100))
+      bumpParseJobProgress(processedCount, parseItems.length)
+      const progressPercent = Math.min(100, Math.round((processedCount / Math.max(1, parseItems.length)) * 100))
       await prisma.importtask.update({
         where: { id: taskSnapshot.id },
         data: {
@@ -7612,7 +7789,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
         }
       })
 
-      if (index < taskSnapshot.items.length - 1) {
+      if (index < parseItems.length - 1) {
         await sleep(randomDelayMs(minDelaySec, maxDelaySec))
       }
     }

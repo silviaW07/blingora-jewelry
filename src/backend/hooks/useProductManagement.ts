@@ -2033,13 +2033,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const createdCount = Number(created.createdCount ?? urls.length)
       const skippedDuplicateCount = Number(created.skippedDuplicateCount ?? 0)
       const categoryUrlCount = Number(created.categoryUrlCount ?? 0)
-      // 分类页必须先本机展开，不能立刻解析（否则会标失败并把任务打成 FAILED）
-      if (categoryUrlCount === 0) {
-        await startPendingImportTaskForProductManagement({ taskId: created.taskId })
-      }
+      await startPendingImportTaskForProductManagement({ taskId: created.taskId })
       if (categoryUrlCount > 0) {
         toast.success(
-          `已创建任务（含 ${categoryUrlCount} 个分类页）。请运行本机采集器展开并抓详情，完成后到导入工作台点「开始解析」`,
+          `已创建任务（含 ${categoryUrlCount} 个分类/分页），正在自动抽商品并解析`,
         )
       } else if (skippedDuplicateCount > 0) {
         toast.success(

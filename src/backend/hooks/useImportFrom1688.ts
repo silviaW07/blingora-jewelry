@@ -1068,7 +1068,7 @@ export const useImportFrom1688 = (
       showFeedbackDialog({
         variant: 'error',
         title: urlCheck.message,
-        description: '请粘贴完整的 1688 商品详情页链接后再试，例如：https://detail.1688.com/offer/1033325306700.html',
+        description: '请粘贴 1688 商品详情、店铺分类或分页链接后再试。',
         details: []
       })
       return
@@ -1093,18 +1093,17 @@ export const useImportFrom1688 = (
       const categoryUrlCount = Number(res.categoryUrlCount ?? 0)
       if (categoryUrlCount > 0) {
         toast.success(
-          `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个店铺分类页）。请运行本机采集器展开分类并抓详情，再点「开始解析」`,
+          `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个分类/分页）。点「开始解析」即可自动抽商品`,
         )
       } else if (skippedDuplicateCount > 0) {
         toast.success(
           `已提交 ${createdCount} 条新链接；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
         )
       } else {
-        toast.success('链接已提交。请先在本机运行采集器，完成后再点「开始解析」')
+        toast.success('链接已提交。点「开始解析」即可')
       }
 
       if (embedded) {
-        // Keep modal open so the operator can run the collector then click 开始解析.
         return
       }
 

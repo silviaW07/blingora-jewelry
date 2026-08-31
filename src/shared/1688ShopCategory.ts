@@ -1,6 +1,6 @@
 /**
  * 1688 店铺分类页（offerlist）识别与 offerId 抽取。
- * 分类页不能在服务器直接打开（风控），需本机采集器展开后再走详情解析。
+ * 解析时服务器用 Cookie 抓分类/分页 HTML，抽出 offer 后再走详情解析。
  */
 
 export function is1688ShopCategoryUrl(sourceUrl?: string | null): boolean {
@@ -24,6 +24,7 @@ export function extract1688OfferIdsFromHtml(html: string): string[] {
     /["']offerId["']\s*[:=]\s*["']?(\d{8,})/gi,
     /offerId(?:=|%3D)(\d{8,})/gi,
     /\boffer_id["']?\s*[:=]\s*["']?(\d{8,})/gi,
+    /data-offer[-_]?id=["']?(\d{8,})/gi,
   ]
   for (const pattern of patterns) {
     for (const match of text.matchAll(pattern)) {
