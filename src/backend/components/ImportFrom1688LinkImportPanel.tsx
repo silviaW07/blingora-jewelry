@@ -44,7 +44,7 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           1688 链接导入任务
         </CardTitle>
         <CardDescription>
-          粘贴商品详情或店铺分类/分页链接，提交后点解析。分类页由服务器自动抽商品。
+          粘贴商品详情或店铺分类/分页链接后点提交，系统会自动抽商品并解析。
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
@@ -140,10 +140,10 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
         ) : (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>推荐流程：提交链接 → 开始解析</AlertTitle>
+            <AlertTitle>推荐流程：粘贴链接 → 提交</AlertTitle>
             <AlertDescription className="space-y-1">
               <p>
-                商品详情、店铺分类页、分页链接都可以直接粘贴。提交后点「开始解析」，服务器会用已配置的 1688 Cookie 抽商品并抓详情。
+                商品详情、店铺分类页、分页链接都可以直接粘贴。提交后会自动抽商品并解析，完成后出现在【待上传区】。
               </p>
               <p className="text-muted-foreground">
                 若分类页抽不出商品，请更新 secrets/1688-cookie.txt 后重启 rpc。解析失败可点「重新解析」。

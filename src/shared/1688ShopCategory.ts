@@ -25,6 +25,7 @@ export function extract1688OfferIdsFromHtml(html: string): string[] {
     /offerId(?:=|%3D)(\d{8,})/gi,
     /\boffer_id["']?\s*[:=]\s*["']?(\d{8,})/gi,
     /data-offer[-_]?id=["']?(\d{8,})/gi,
+    /"(?:id|offerId)"\s*:\s*"(\d{10,14})"/gi,
   ]
   for (const pattern of patterns) {
     for (const match of text.matchAll(pattern)) {
@@ -33,6 +34,23 @@ export function extract1688OfferIdsFromHtml(html: string): string[] {
     }
   }
   return Array.from(ids)
+}
+
+/** 店铺 memberId：页面 JSON，或 shopXXXX.1688.com 主机名。 */
+export function extract1688ShopMemberId(sourceUrl: string, html = ''): string | null {
+  const text = String(html || '')
+  const fromHtml =
+    text.match(/["'](?:seller)?MemberId["']\s*[:=]\s*["']([^"']+)["']/i)?.[1] ||
+    text.match(/[?&]memberId=([^&"'#]+)/i)?.[1]
+  if (fromHtml) return fromHtml.trim()
+  try {
+    const host = new URL(String(sourceUrl || '').trim()).hostname
+    const shopMatch = host.match(/^shop([a-z0-9]+)\.1688\.com$/i)
+    if (shopMatch?.[1]) return shopMatch[1]
+  } catch {
+    // ignore invalid URL
+  }
+  return null
 }
 
 export function to1688OfferDetailUrl(offerId: string): string {

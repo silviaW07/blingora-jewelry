@@ -42,7 +42,7 @@ export function ImportFrom1688CollectModal({ open, onOpenChange, onTaskCreated }
               1688 多链接采集
             </DialogTitle>
             <DialogDescription className="text-slate-500 pt-1 leading-relaxed">
-              粘贴商品详情或店铺分类/分页链接，提交后点「开始解析」。分类页由服务器自动抽商品。
+              粘贴商品详情或店铺分类/分页链接后提交，系统会自动抽商品并解析。
             </DialogDescription>
           </DialogHeader>
           <ImportFrom1688LinkImportPanel state={state} handlers={handlers} />

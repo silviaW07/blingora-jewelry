@@ -690,6 +690,7 @@ import {
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
 import {
   extract1688OfferIdsFromHtml,
+  extract1688ShopMemberId,
   is1688ShopCategoryUrl,
   offerIdsTo1688DetailUrls,
 } from '@/shared/1688ShopCategory'
@@ -716,6 +717,7 @@ import {
 } from '@/backend/parsers/PinduoduoParser'
 import {
   fetch1688OfferViaMtop,
+  fetch1688ShopOfferIdsViaMtop,
   normalize1688Cookie,
 } from '@/backend/parsers/1688MtopClient'
 import {
@@ -4949,16 +4951,19 @@ const build1688ShopCategoryFetchUrls = (sourceUrl: string): string[] => {
   const urls: string[] = raw ? [raw] : []
   try {
     const parsed = new URL(raw)
-    const shopMatch = parsed.hostname.match(/^shop(\d+)\.1688\.com$/i)
-    if (shopMatch) {
-      const memberId = shopMatch[1]
-      const page =
-        parsed.searchParams.get('beginPage') ||
-        parsed.searchParams.get('pageNum') ||
-        parsed.searchParams.get('page') ||
-        '1'
+    const page =
+      parsed.searchParams.get('beginPage') ||
+      parsed.searchParams.get('pageNum') ||
+      parsed.searchParams.get('page') ||
+      '1'
+    const memberId = extract1688ShopMemberId(raw)
+    if (memberId) {
       urls.push(
-        `https://m.1688.com/winport/page/offerlist.html?memberId=${memberId}&page=${encodeURIComponent(page)}`,
+        `https://m.1688.com/winport/page/offerlist.html?memberId=${encodeURIComponent(memberId)}&page=${encodeURIComponent(page)}`,
+      )
+      urls.push(`https://m.1688.com/winport/${encodeURIComponent(memberId)}/`)
+      urls.push(
+        `https://widget.1688.com/front/queryProductList.json?memberId=${encodeURIComponent(memberId)}&pageNum=${encodeURIComponent(page)}&pageSize=40`,
       )
     }
   } catch {
@@ -4966,6 +4971,9 @@ const build1688ShopCategoryFetchUrls = (sourceUrl: string): string[] => {
   }
   return Array.from(new Set(urls))
 }
+
+const collectOfferUrlsFromText = (text: string): string[] =>
+  offerIdsTo1688DetailUrls(extract1688OfferIdsFromHtml(text)).slice(0, MAX_OFFERS_PER_CATEGORY_PAGE)
 
 const fetch1688ShopCategoryOfferUrls = async (
   sourceUrl: string,
@@ -4982,43 +4990,60 @@ const fetch1688ShopCategoryOfferUrls = async (
   }
   let sawRisk = false
   let sawNetwork = false
+  let lastHtml = ''
   for (const { url: pageUrl, ua } of attempts) {
-      try {
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 15_000)
-        const response = await fetch(pageUrl, {
-          signal: controller.signal,
-          redirect: 'follow',
-          headers: {
-            ...build1688RequestHeaders(ua),
-            Referer: sourceUrl,
-          },
-        })
-        clearTimeout(timer)
-        if (response.status === 403) {
-          sawRisk = true
-          continue
-        }
-        if (!response.ok) continue
-        const html = await response.text()
-        if (!html || html.length < 400) continue
-        if (is1688RiskControlHtml(html)) {
-          sawRisk = true
-          continue
-        }
-        const urls = offerIdsTo1688DetailUrls(extract1688OfferIdsFromHtml(html)).slice(
-          0,
-          MAX_OFFERS_PER_CATEGORY_PAGE,
-        )
-        if (urls.length > 0) {
-          console.warn(`[1688-category] extracted ${urls.length} offers from ${pageUrl}`)
-          return { urls }
-        }
-      } catch (error) {
-        sawNetwork = true
-        console.warn('[1688-category] fetch failed', pageUrl, error)
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 15_000)
+      const response = await fetch(pageUrl, {
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: {
+          ...build1688RequestHeaders(ua),
+          Referer: sourceUrl,
+        },
+      })
+      clearTimeout(timer)
+      if (response.status === 403) {
+        sawRisk = true
+        continue
       }
+      if (!response.ok) continue
+      const html = await response.text()
+      if (!html || html.length < 200) continue
+      if (is1688RiskControlHtml(html)) {
+        sawRisk = true
+        continue
+      }
+      lastHtml = html
+      const urls = collectOfferUrlsFromText(html)
+      if (urls.length > 0) {
+        console.warn(`[1688-category] extracted ${urls.length} offers from ${pageUrl}`)
+        return { urls }
+      }
+    } catch (error) {
+      sawNetwork = true
+      console.warn('[1688-category] fetch failed', pageUrl, error)
+    }
   }
+
+  const memberId = extract1688ShopMemberId(sourceUrl, lastHtml)
+  if (memberId) {
+    try {
+      const mtopIds = await fetch1688ShopOfferIdsViaMtop(memberId, resolve1688Cookie(), 1)
+      const urls = offerIdsTo1688DetailUrls(mtopIds).slice(0, MAX_OFFERS_PER_CATEGORY_PAGE)
+      if (urls.length > 0) {
+        console.warn(`[1688-category] extracted ${urls.length} offers via mtop memberId=${memberId}`)
+        return { urls }
+      }
+    } catch (error) {
+      console.warn('[1688-category] mtop shop list failed', error)
+    }
+  }
+
+  console.warn(
+    `[1688-category] no offers url=${sourceUrl} htmlLen=${lastHtml.length} memberId=${memberId || ''} risk=${sawRisk}`,
+  )
   if (sawRisk) return { urls: [], error: FAILURE_REASON_RISK_CONTROL }
   if (sawNetwork) return { urls: [], error: FAILURE_REASON_NETWORK }
   return {
@@ -5045,6 +5070,76 @@ const listExisting1688OfferIds = async (offerIds: string[]): Promise<Set<string>
     }
   }
   return existingIds
+}
+
+/** 把分类条目改写成第一条 offer，其余新建条目；返回还要继续解析的新 item id。 */
+const rewriteCategoryItemAsOffers = async (
+  item: {
+    id: string
+    importTaskId: string
+    operatorId: string
+    sourceUrl: string | null
+    targetCategoryId: string | null
+    goodsStatus: string | null
+  },
+  offerUrls: string[],
+): Promise<{ firstUrl: string; extraItemIds: string[] }> => {
+  const offerIds = offerUrls
+    .map(url => url.match(/offer\/(\d+)/i)?.[1])
+    .filter(Boolean) as string[]
+  const existingIds = await listExisting1688OfferIds(offerIds)
+  const currentOfferId = String(item.sourceUrl || '').match(/offer\/(\d+)/i)?.[1]
+  const freshUrls = offerUrls.filter(url => {
+    const id = url.match(/offer\/(\d+)/i)?.[1]
+    if (!id) return true
+    if (currentOfferId && id === currentOfferId) return true
+    return !existingIds.has(id)
+  })
+  if (!freshUrls.length) {
+    throw new Error('该分类/分页里的商品此前已导入，已跳过')
+  }
+  const [firstUrl, ...restUrls] = freshUrls
+  await prisma.importtaskitem.update({
+    where: { id: item.id },
+    data: {
+      sourceUrl: firstUrl,
+      failureReason: null,
+      previewDataJson: {
+        importKind: 'SHOP_CATEGORY',
+        expandedFrom: item.sourceUrl,
+      } as any,
+    },
+  })
+  if (!restUrls.length) return { firstUrl, extraItemIds: [] }
+
+  await prisma.importtaskitem.createMany({
+    data: restUrls.map(url => ({
+      importTaskId: item.importTaskId,
+      operatorId: item.operatorId,
+      sourceUrl: url,
+      isSelected: true,
+      fetchStatus: 'PENDING',
+      publishStatus: 'PENDING',
+      isPublished: false,
+      targetCategoryId: item.targetCategoryId,
+      goodsStatus: item.goodsStatus,
+    })),
+  })
+  const created = await prisma.importtaskitem.findMany({
+    where: {
+      importTaskId: item.importTaskId,
+      sourceUrl: { in: restUrls },
+    },
+    select: { id: true },
+  })
+  const remaining = await prisma.importtaskitem.count({
+    where: { importTaskId: item.importTaskId },
+  })
+  await prisma.importtask.update({
+    where: { id: item.importTaskId },
+    data: { sourceLinkCount: remaining },
+  })
+  return { firstUrl, extraItemIds: created.map(row => row.id) }
 }
 
 /** 解析前把店铺分类/分页条目展开成 offer 详情链接，失败的分类条目标 FAILED。 */
@@ -9302,7 +9397,41 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
               continue
             }
 
-            const sourceUrl = normalizeText(item.sourceUrl)
+            let sourceUrl = normalizeText(item.sourceUrl)
+            if (is1688ShopCategorySourceUrl(sourceUrl)) {
+              const { urls, error } = await fetch1688ShopCategoryOfferUrls(sourceUrl)
+              if (!urls.length) {
+                fail += 1
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: error || '未能从分类/分页链接抽出商品',
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                continue
+              }
+              try {
+                const rewritten = await rewriteCategoryItemAsOffers(item, urls)
+                sourceUrl = rewritten.firstUrl
+                item.sourceUrl = rewritten.firstUrl
+                for (const extraId of rewritten.extraItemIds) {
+                  if (!itemIds.includes(extraId)) itemIds.push(extraId)
+                }
+              } catch (expandError: any) {
+                fail += 1
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: expandError?.message || '分类页展开失败',
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                continue
+              }
+            }
             const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
             const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
             if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {

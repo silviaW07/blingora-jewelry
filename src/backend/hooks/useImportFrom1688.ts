@@ -1091,19 +1091,26 @@ export const useImportFrom1688 = (
       const createdCount = Number(res.createdCount ?? 0)
       const skippedDuplicateCount = Number(res.skippedDuplicateCount ?? 0)
       const categoryUrlCount = Number(res.categoryUrlCount ?? 0)
-      if (categoryUrlCount > 0) {
-        toast.success(
-          `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个分类/分页）。点「开始解析」即可自动抽商品`,
-        )
-      } else if (skippedDuplicateCount > 0) {
-        toast.success(
-          `已提交 ${createdCount} 条新链接；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
-        )
-      } else {
-        toast.success('链接已提交。点「开始解析」即可')
+      toast.success(
+        categoryUrlCount > 0
+          ? `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个分类/分页），正在自动抽商品并解析`
+          : skippedDuplicateCount > 0
+            ? `已提交 ${createdCount} 条新链接并开始解析；跳过 ${skippedDuplicateCount} 条重复链接`
+            : `已提交 ${createdCount} 条，正在解析`,
+      )
+
+      setIsParsingTask(true)
+      parseResultNotifiedRef.current = null
+      setParseWatchTaskId(res.taskId)
+      try {
+        await startParseTask({ taskId: res.taskId })
+        setPendingParseTaskId(null)
+      } catch (parseError) {
+        toast.error(`解析进行中或请求超时：${(parseError as Error).message}`)
       }
 
       if (embedded) {
+        onTaskCreatedRef.current?.(res.taskId)
         return
       }
 

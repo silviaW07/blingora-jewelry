@@ -3,6 +3,7 @@
  * Sign: md5(token + "&" + t + "&" + appKey + "&" + data) where token is from `_m_h5_tk`.
  */
 import { createHash } from 'crypto'
+import { extract1688OfferIdsFromHtml } from '@/shared/1688ShopCategory'
 
 const MTOP_APP_KEY = '12574478'
 
@@ -315,4 +316,50 @@ export async function fetch1688OfferViaMtop(
   }
 
   return { ok: false, reason: 'mtop_failed', detail: lastDetail }
+}
+
+/** 店铺商品列表（分类/分页展开用）。未知 API 名会立刻跳过，避免空耗风控。 */
+export async function fetch1688ShopOfferIdsViaMtop(
+  memberId: string,
+  cookieRaw: string,
+  pageNum = 1,
+): Promise<string[]> {
+  const id = String(memberId || '').trim()
+  if (!id) return []
+  let cookie = normalize1688Cookie(cookieRaw)
+  if (!cookie) return []
+  if (!extractMtopToken(cookie)) {
+    cookie = await bootstrap1688MtopCookies(cookie)
+  }
+  if (!extractMtopToken(cookie)) return []
+
+  const page = String(Math.max(1, pageNum))
+  const candidates: MtopApiCandidate[] = [
+    {
+      api: 'mtop.1688.shop.data.get',
+      version: '1.0',
+      data: { memberId: id, pageNum: page, pageSize: '30' },
+    },
+  ]
+
+  for (const candidate of candidates) {
+    const result = await callSignedMtop(cookie, candidate)
+    if (!result) continue
+    cookie = result.cookieHeader
+    const record =
+      result.payload && typeof result.payload === 'object'
+        ? (result.payload as Record<string, unknown>)
+        : null
+    const retText = Array.isArray(record?.ret) ? record!.ret.join(',') : String(record?.ret || '')
+    if (/API_NOT_FOUNDED|API_LOCKED|FAIL_SYS_ILLEGAL_ACCESS/i.test(retText)) {
+      console.warn(`[1688-mtop] shop list ${candidate.api} -> ${retText}`)
+      continue
+    }
+    const ids = extract1688OfferIdsFromHtml(JSON.stringify(result.payload || {}))
+    if (ids.length) {
+      console.warn(`[1688-mtop] shop list ${candidate.api} extracted ${ids.length} offers`)
+      return ids
+    }
+  }
+  return []
 }
