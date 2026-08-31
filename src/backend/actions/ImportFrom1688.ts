@@ -716,6 +716,7 @@ import {
   type PinduoduoProductPreview,
 } from '@/backend/parsers/PinduoduoParser'
 import {
+  bootstrap1688MtopCookies,
   fetch1688OfferViaMtop,
   fetch1688ShopOfferIdsViaMtop,
   normalize1688Cookie,
@@ -2411,12 +2412,39 @@ const build1688FetchCandidates = (
   ]
 }
 
-/** 风控后自动重试：5s → 30s → 60s+备用 UA（共 3 次，最坏约 95s） */
+/** 风控后自动重试：5s → 30s → 60s+备用 UA（共 3 次，最坏约 95s）。批量解析时跳过，避免把机房 IP 打爆。 */
 const RISK_CONTROL_RETRY_SCHEDULE: Array<{ waitMs: number; useBackupUa: boolean; label: string }> = [
   { waitMs: 5_000, useBackupUa: false, label: 'retry-1/3 after 5s' },
   { waitMs: 30_000, useBackupUa: false, label: 'retry-2/3 after 30s' },
   { waitMs: 60_000, useBackupUa: true, label: 'retry-3/3 after 60s + backup UA' },
 ]
+
+const FAILURE_REASON_RISK_STORM =
+  '1688 风控已触发，已暂停本批后续抓取以免继续封 IP。请等待 15 分钟后再勾选失败项重新解析'
+
+let riskStormUntilMs = 0
+const mark1688RiskStorm = (holdMs = 12 * 60_000) => {
+  riskStormUntilMs = Math.max(riskStormUntilMs, Date.now() + holdMs)
+  console.warn(`[1688] risk storm until ${new Date(riskStormUntilMs).toISOString()}`)
+}
+const is1688RiskStormActive = () => Date.now() < riskStormUntilMs
+
+const pauseRemaining1688Items = async (itemIds: string[], reason: string) => {
+  if (!itemIds.length) return 0
+  const result = await prisma.importtaskitem.updateMany({
+    where: {
+      id: { in: itemIds },
+      fetchStatus: { in: ['PENDING', 'RUNNING'] as any },
+      isPublished: false,
+    },
+    data: {
+      fetchStatus: 'RETRY_PENDING' as any,
+      failureReason: reason,
+      fetchFinishedAt: new Date(),
+    },
+  })
+  return result.count || itemIds.length
+}
 
 type Fetch1688AttemptKind = 'parsed' | 'risk_control' | 'expired' | 'empty' | 'http_error' | 'network_error'
 
@@ -3716,7 +3744,10 @@ const takeCapturedOfferHtml = (sourceUrl: string): string | null => {
   return entry.html
 }
 
-const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch1688OfferPreviewResult> => {
+const fetch1688OfferPreviewDetailed = async (
+  sourceUrl: string,
+  options?: { skipLongRetry?: boolean },
+): Promise<Fetch1688OfferPreviewResult> => {
   const capturedHtml = takeCapturedOfferHtml(sourceUrl)
   if (capturedHtml) {
     const preview = await buildPreviewFromParsedHtml(capturedHtml)
@@ -3728,6 +3759,8 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     }
     console.warn(`[fetch1688OfferPreview] captured HTML unparseable for ${sourceUrl}; falling back to fetch`)
   }
+
+  const skipLongRetry = Boolean(options?.skipLongRetry) || is1688RiskStormActive()
 
   // Paid OneBound API is the primary source. Browser-captured HTML stays first
   // (already available / free). When OneBound is configured but fails, do NOT
@@ -3761,6 +3794,29 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     const mtopAttempt = await fetch1688OfferPreviewViaMtop(sourceUrl)
     if (mtopAttempt?.kind === 'parsed') {
       return { preview: mtopAttempt.preview, outcome: 'ok', failureReason: null }
+    }
+  }
+
+  // 批量/风控风暴：不再走 95s HTML 重试，避免把机房 IP 继续打进验证码
+  if (skipLongRetry) {
+    if (!is1688RiskStormActive()) {
+      const attempt = await fetch1688OfferPreviewOnce(sourceUrl, { attemptLabel: 'batch-once' })
+      if (attempt.kind === 'parsed') {
+        return { preview: attempt.preview, outcome: 'ok', failureReason: null }
+      }
+      if (attempt.kind === 'expired') {
+        return { preview: attempt.preview, outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
+      }
+      if (attempt.kind === 'risk_control' || attempt.kind === 'empty' || attempt.kind === 'http_error') {
+        mark1688RiskStorm()
+      }
+    } else {
+      mark1688RiskStorm()
+    }
+    return {
+      preview: empty1688OfferPreview(),
+      outcome: 'risk_control',
+      failureReason: cookieReady ? FAILURE_REASON_RISK_CONTROL : FAILURE_REASON_NO_COOKIE,
     }
   }
 
@@ -3872,6 +3928,7 @@ const fetch1688OfferPreviewDetailed = async (sourceUrl: string): Promise<Fetch16
     return { preview: attempt.preview, outcome: 'expired', failureReason: FAILURE_REASON_EXPIRED }
   }
   console.warn(`[fetch1688OfferPreview] all retries exhausted (risk-control) for ${sourceUrl}`)
+  mark1688RiskStorm()
   return {
     preview: attempt.preview,
     outcome: 'risk_control',
@@ -4980,6 +5037,9 @@ const fetch1688ShopCategoryOfferUrls = async (
 ): Promise<{ urls: string[]; error?: string }> => {
   if (!has1688CookieConfigured()) {
     return { urls: [], error: FAILURE_REASON_NO_COOKIE }
+  }
+  if (is1688RiskStormActive()) {
+    return { urls: [], error: FAILURE_REASON_RISK_STORM }
   }
   const pageUrls = build1688ShopCategoryFetchUrls(sourceUrl)
   const attempts: Array<{ url: string; ua: string }> = []
@@ -7494,6 +7554,14 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       `[startParseTask] after category expand task=${taskSnapshot.id} items=${parseItems.length} categoryFailed=${expanded.failedCount}`,
     )
 
+    const batchMode = parseItems.length > 3
+    if (batchMode && cookieSnapshot) {
+      await bootstrap1688MtopCookies(cookieSnapshot).catch(() => cookieSnapshot)
+      await sleep(6_000)
+    }
+
+    let consecutiveRisk = 0
+
     // 解析前再拦一层：任务内重复，或库中其它条目已采集/已发布的同 offer/goods，直接跳过抓取
     const taskItemIds = parseItems.map((row: { id: string }) => row.id)
     const taskLinkKeys = parseItems
@@ -7611,7 +7679,14 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             }
           })
         } else {
-          const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
+          if (batchMode && is1688RiskStormActive()) {
+            const remainingIds = parseItems.slice(index).map((row: { id: string }) => row.id)
+            const paused = await pauseRemaining1688Items(remainingIds, FAILURE_REASON_RISK_STORM)
+            rateLimitedCount += paused
+            console.warn(`[startParseTask] risk storm: paused ${paused} remaining items`)
+            break
+          }
+          const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl, { skipLongRetry: batchMode })
           const fetched = fetchResult.preview
           const hasRealParse = Boolean(
             fetched.name ||
@@ -7635,8 +7710,22 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
                 fetchFinishedAt: new Date(),
               },
             })
+            if (fetchResult.outcome === 'risk_control') {
+              consecutiveRisk += 1
+              if (consecutiveRisk >= 2) {
+                const remainingIds = parseItems.slice(index + 1).map((row: { id: string }) => row.id)
+                const paused = await pauseRemaining1688Items(remainingIds, FAILURE_REASON_RISK_STORM)
+                rateLimitedCount += paused
+                console.warn(`[startParseTask] circuit-break after risk, paused ${paused}`)
+                bumpParseJobProgress(parseItems.length, parseItems.length)
+                break
+              }
+            } else {
+              consecutiveRisk = 0
+            }
           } else {
           successCount += 1
+          consecutiveRisk = 0
           const rawPriceMin = fetched.priceMin ?? basePrice
           const rawPriceMax = fetched.priceMax ?? (rawPriceMin + 20)
           const offerId = extract1688OfferId(sourceUrl) || item.id.slice(0, 6)
@@ -7885,7 +7974,13 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
       })
 
       if (index < parseItems.length - 1) {
-        await sleep(randomDelayMs(minDelaySec, maxDelaySec))
+        const delayMs =
+          consecutiveRisk > 0
+            ? randomDelayMs(12, 18)
+            : batchMode
+              ? randomDelayMs(Math.max(6, minDelaySec), Math.max(10, maxDelaySec))
+              : randomDelayMs(minDelaySec, maxDelaySec)
+        await sleep(delayMs)
       }
     }
 
@@ -9329,6 +9424,13 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
         const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
         const categoryMap = await loadImportPricingCategories(prisma)
         const exchangeRate = await getGlobalExchangeRate(prisma)
+        const batchMode = itemIds.length > 3
+        let consecutiveRisk = 0
+        if (batchMode && !is1688RiskStormActive()) {
+          const cookie = resolve1688Cookie()
+          if (cookie) await bootstrap1688MtopCookies(cookie).catch(() => cookie)
+          await sleep(5_000)
+        }
 
         for (let index = 0; index < itemIds.length; index += 1) {
           if (isParseJobCancelled()) {
@@ -9353,6 +9455,12 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
 
           bumpParseJobProgress(index, itemIds.length)
           const itemId = itemIds[index]
+          if (batchMode && is1688RiskStormActive()) {
+            const paused = await pauseRemaining1688Items(itemIds.slice(index), FAILURE_REASON_RISK_STORM)
+            fail += paused
+            console.warn(`[reparsePendingImportItems] risk storm: paused ${paused}`)
+            break
+          }
           let displayName = itemId
 
           try {
@@ -9490,7 +9598,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
               continue
             }
 
-            const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl)
+            const fetchResult = await fetch1688OfferPreviewDetailed(sourceUrl, { skipLongRetry: batchMode })
             const fetched = fetchResult.preview
             const hasRealParse = Boolean(
               fetched.name ||
@@ -9506,28 +9614,23 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
                   fetchStatus: 'FAILED' as any,
                   failureReason: reason,
                   fetchFinishedAt: new Date(),
-                  ...(isClassicMock1688SkuSummary(item.skuSummaryText) ||
-                  isClassicMock1688SkuTable(((item.previewDataJson || {}) as PreviewDataJson).skuTable)
-                    ? {
-                        skuSummaryText: '默认规格',
-                        specSummaryJson: [{ name: '规格', values: ['默认规格'] }] as any,
-                        previewDataJson: {
-                          ...((item.previewDataJson || {}) as PreviewDataJson),
-                          colors: [],
-                          sizesByColor: {},
-                          skuTable: [
-                            buildNeutralFallbackSkuRow({
-                              costPrice: toNumberOrNull(item.costPrice) ?? 50,
-                              price: toNumberOrNull(item.costPrice) ?? 50,
-                              stock: resolveInitialStock(item.availableStock),
-                            }),
-                          ],
-                        } as any,
-                      }
-                    : {}),
                 },
               })
               fail += 1
+              if (fetchResult.outcome === 'risk_control') {
+                consecutiveRisk += 1
+                if (consecutiveRisk >= 2) {
+                  const paused = await pauseRemaining1688Items(
+                    itemIds.slice(index + 1),
+                    FAILURE_REASON_RISK_STORM,
+                  )
+                  fail += paused
+                  console.warn(`[reparsePendingImportItems] circuit-break after risk, paused ${paused}`)
+                  break
+                }
+              } else {
+                consecutiveRisk = 0
+              }
             } else {
               await applyReparsed1688PreviewToItem({
                 item: item as any,
@@ -9537,6 +9640,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
                 exchangeRate,
               })
               success += 1
+              consecutiveRisk = 0
             }
           } catch (error: any) {
             fail += 1
@@ -9554,7 +9658,13 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
           bumpParseJobProgress(index + 1, itemIds.length)
 
           if (index < itemIds.length - 1) {
-            await sleep(900)
+            const delayMs =
+              consecutiveRisk > 0
+                ? randomDelayMs(12, 18)
+                : batchMode
+                  ? randomDelayMs(6, 10)
+                  : 900
+            await sleep(delayMs)
           }
         }
 
