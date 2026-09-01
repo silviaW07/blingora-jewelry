@@ -144,14 +144,11 @@ export const resolveCategoryShelfImageUrl = (
 }
 
 export const resolveCategoryCardImageUrl = (
-  imageUrl?: string | null,
-  bannerImageUrl?: string | null,
-  iconUrl?: string | null,
-  /** @deprecated 类目卡不再回退商品主图，保留参数仅为兼容旧调用 */
-  _productImageUrl?: string | null,
+  _imageUrl?: string | null,
+  _bannerImageUrl?: string | null,
+  _iconUrl?: string | null,
+  /** 前台推荐类目卡：优先该类目最新一个商品主图 */
+  productImageUrl?: string | null,
 ): string => {
-  return (
-    resolveCategoryShelfImageUrl(imageUrl, bannerImageUrl, iconUrl) ||
-    CATEGORY_CARD_PLACEHOLDER_URL
-  )
+  return optimizeCatalogImageUrl(productImageUrl, 640) || CATEGORY_CARD_PLACEHOLDER_URL
 }

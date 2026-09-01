@@ -44,7 +44,9 @@ import { StorefrontBrandNavList } from '@/frontend/components/StorefrontBrandNav
 import { StorefrontFloatingSideNav } from '@/frontend/components/StorefrontFloatingSideNav';
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival';
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav';
-import { isStorefrontHomeContentZone } from '@/frontend/utils/recommendZoneDisplay';
+import { isStorefrontHomeContentZone, limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay';
+import { pickRecommendCategoryCoverSrc } from '@/frontend/utils/categoryPreviewProducts';
+import { CATEGORY_CARD_PLACEHOLDER_URL } from '@/shared/imageUrl';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar, ListingBrandFilter } from '@/frontend/components/ProductListToolbar';
 import { ListingPageHead } from '@/frontend/components/ListingPageHead';
@@ -131,28 +133,8 @@ const getCategoryCardGridClassName = (zone: HomeRecommendZoneSection) =>
     zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-4 xl:grid-cols-5' : 'md:grid-cols-4',
   );
 
-const CATEGORY_CARD_PLACEHOLDER = '/category-covers/placeholder.svg';
+const CATEGORY_CARD_PLACEHOLDER = CATEGORY_CARD_PLACEHOLDER_URL;
 const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 1200;
-
-const resolveCategoryCardSrc = (imageUrl?: string | null) => {
-  const text = String(imageUrl || '').trim();
-  return text || CATEGORY_CARD_PLACEHOLDER;
-};
-
-const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
-  const fallback = String(item.fallbackImageUrl || '').trim();
-  const primary = String(item.imageUrl || '').trim();
-  if (
-    fallback &&
-    fallback !== primary &&
-    fallback !== CATEGORY_CARD_PLACEHOLDER
-  ) {
-    return fallback;
-  }
-  return '';
-};
-
-import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay'
 
 type DesktopRecommendZoneProductCardProps = {
   item: HomeRecommendProductCard
@@ -376,8 +358,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
     return (
       <div className={getCategoryCardGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格">
         {categoryItems.map((item) => {
-          const imageSrc = resolveCategoryCardSrc(item.imageUrl);
-          const shelfFallback = resolveCategoryCardFallback(item);
+          const imageSrc = pickRecommendCategoryCoverSrc(item);
+          const waitingForProduct = imageSrc !== CATEGORY_CARD_PLACEHOLDER;
           return (
             <button
               key={item.itemId}
@@ -393,8 +375,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
                   alt={item.categoryName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
-                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
+                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  slowFallbackMs={waitingForProduct ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading="lazy"
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                 />

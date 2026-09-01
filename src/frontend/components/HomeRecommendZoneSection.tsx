@@ -22,6 +22,8 @@ import {
 } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
 import { categoryHref, hardNavProps, productHref, useChromeActivate, useStorefrontLink } from '@/frontend/utils/hardNavigate'
+import { pickRecommendCategoryCoverSrc } from '@/frontend/utils/categoryPreviewProducts'
+import { CATEGORY_CARD_PLACEHOLDER_URL } from '@/shared/imageUrl'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -96,26 +98,8 @@ const getCategoryCardGridClassName = (zone: HomeRecommendZoneSectionType) =>
     zone.pcCols === 3 ? 'md:grid-cols-3' : zone.pcCols === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4',
   )
 
-const CATEGORY_CARD_PLACEHOLDER = '/category-covers/placeholder.svg'
+const CATEGORY_CARD_PLACEHOLDER = CATEGORY_CARD_PLACEHOLDER_URL
 const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 1200
-
-const resolveCategoryCardSrc = (imageUrl?: string | null) => {
-  const text = String(imageUrl || '').trim()
-  return text || CATEGORY_CARD_PLACEHOLDER
-}
-
-const resolveCategoryCardFallback = (item: RecommendCategoryCard) => {
-  const fallback = String(item.fallbackImageUrl || '').trim()
-  const primary = String(item.imageUrl || '').trim()
-  if (
-    fallback &&
-    fallback !== primary &&
-    fallback !== CATEGORY_CARD_PLACEHOLDER
-  ) {
-    return fallback
-  }
-  return ''
-}
 
 const MOBILE_COMING_SOON_COLS = 5
 const MOBILE_COMING_SOON_ROWS = 3
@@ -174,6 +158,7 @@ const MobileCategorySquircleLink = ({
   categoryId: string
 }) => {
   const link = useStorefrontLink(href)
+  const usePlaceholderOnly = imageSrc === CATEGORY_CARD_PLACEHOLDER
   return (
     <a {...link} className="mobile-zone-squircle" data-controller-name="移动端推荐类目图标">
       <span className="mobile-zone-squircle__media">
@@ -183,6 +168,8 @@ const MobileCategorySquircleLink = ({
           imageWidth={320}
           quality={85}
           priority={false}
+          fallbackSrc={usePlaceholderOnly ? undefined : CATEGORY_CARD_PLACEHOLDER}
+          slowFallbackMs={usePlaceholderOnly ? 0 : CATEGORY_PRODUCT_IMAGE_SLOW_MS}
         />
       </span>
       <span className="mobile-zone-squircle__label">
@@ -450,7 +437,7 @@ const renderMobileSquircleContent = (
       categoryItems.length,
       categoryItems.map((item) => {
         const displayName = translateCatalogLabel(t, item.categoryName)
-        const imageSrc = resolveCategoryCardSrc(item.imageUrl)
+        const imageSrc = pickRecommendCategoryCoverSrc(item)
         return (
           <MobileCategorySquircleLink
             key={item.itemId}
@@ -525,8 +512,8 @@ const renderRecommendZoneContent = (
       <div className={getCategoryCardGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格">
         {categoryItems.map((item, index) => {
           const displayName = translateCatalogLabel(t, item.categoryName)
-          const imageSrc = resolveCategoryCardSrc(item.imageUrl)
-          const shelfFallback = resolveCategoryCardFallback(item)
+          const imageSrc = pickRecommendCategoryCoverSrc(item)
+          const waitingForProduct = imageSrc !== CATEGORY_CARD_PLACEHOLDER
           return (
             <button
               key={item.itemId}
@@ -544,8 +531,8 @@ const renderRecommendZoneContent = (
                   alt={displayName}
                   keywords={undefined}
                   disableKeywordSearch
-                  fallbackSrc={shelfFallback || CATEGORY_CARD_PLACEHOLDER}
-                  slowFallbackMs={shelfFallback ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
+                  fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
+                  slowFallbackMs={waitingForProduct ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading={index < 4 ? 'eager' : 'lazy'}
                   proxyWidth={240}
                   proxyQuality={70}

@@ -18,6 +18,8 @@ import type {
   HomeRecommendZoneSection
 } from '@/frontend/actions/Home';
 import { limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay';
+import { pickRecommendCategoryCoverSrc } from '@/frontend/utils/categoryPreviewProducts';
+import { CATEGORY_CARD_PLACEHOLDER_URL } from '@/shared/imageUrl';
 
 interface Props {
   state: HomeState;
@@ -143,9 +145,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
       {categoryItems.length > 0 ? (
         <div className={getZoneGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格" data-api-unique-id='homeview-rzone-category-grid-s1535147481' data-api-unique-page-name='src/frontend/components/HomeView'>
           {categoryItems.map((item) => {
-            const imageSrc = String(item.imageUrl || '').trim() || '/category-covers/placeholder.svg'
-            const shelfFallback = String(item.fallbackImageUrl || '').trim()
-            const hasRealShelf = Boolean(shelfFallback && shelfFallback !== imageSrc && shelfFallback !== '/category-covers/placeholder.svg')
+            const imageSrc = pickRecommendCategoryCoverSrc(item)
+            const waitingForProduct = imageSrc !== CATEGORY_CARD_PLACEHOLDER_URL
             return (
               <button
                 key={item.itemId}
@@ -159,8 +160,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                     src={imageSrc}
                     keywords={undefined}
                     disableKeywordSearch
-                    fallbackSrc={hasRealShelf ? shelfFallback : '/category-covers/placeholder.svg'}
-                    slowFallbackMs={hasRealShelf ? 1200 : 0}
+                    fallbackSrc={CATEGORY_CARD_PLACEHOLDER_URL}
+                    slowFallbackMs={waitingForProduct ? 1200 : 0}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </div>

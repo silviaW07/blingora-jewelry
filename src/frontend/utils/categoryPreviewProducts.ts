@@ -1,5 +1,6 @@
 import { isComingSoonRecommendZoneTitle } from '@/frontend/utils/recommendZoneDisplay'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { CATEGORY_CARD_PLACEHOLDER_URL } from '@/shared/imageUrl'
 
 export type ShelfProductCard = {
   product_id: string
@@ -143,17 +144,32 @@ export function buildCategoryPreviewProducts(
   return result
 }
 
+/** 推荐类目卡封面：最新一个商品图；尚未拉到则用默认占位封面 */
+export function pickRecommendCategoryCoverSrc(item: {
+  imageUrl?: string | null
+  latestProducts?: ZoneProductLike[]
+}): string {
+  if (Array.isArray(item.latestProducts)) {
+    const latest = item.latestProducts[0]
+    const fromLatest = String(latest?.imageUrl || latest?.main_image_url || '').trim()
+    if (fromLatest) return fromLatest
+    return CATEGORY_CARD_PLACEHOLDER_URL
+  }
+  const existing = String(item.imageUrl || '').trim()
+  return existing || CATEGORY_CARD_PLACEHOLDER_URL
+}
+
 export function findZoneItemImage(categoryId: string, zones: ZoneLike[] | null | undefined): string | null {
   const id = String(categoryId || '').trim()
   if (!id) return null
   for (const zone of Array.isArray(zones) ? zones : []) {
     for (const item of zone.items || []) {
       if (item.entityType === 'CATEGORY' && String(item.categoryId || '') === id) {
-        const self = String(item.imageUrl || item.main_image_url || '').trim()
-        if (self) return self
         const latest = item.latestProducts?.[0]
         const fromLatest = String(latest?.imageUrl || latest?.main_image_url || '').trim()
         if (fromLatest) return fromLatest
+        const self = String(item.imageUrl || item.main_image_url || '').trim()
+        if (self && self !== CATEGORY_CARD_PLACEHOLDER_URL) return self
       }
       if ((item.entityType === 'PRODUCT' || item.productId) && String(item.categoryId || '') === id) {
         const url = String(item.imageUrl || item.main_image_url || '').trim()

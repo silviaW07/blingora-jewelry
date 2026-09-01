@@ -30,7 +30,7 @@ import {
   resolveFrontRmbSellingPrice,
   toDecimalNumber,
 } from '@/shared/priceCoefficient'
-import { optimizeCatalogImageUrl, resolveCategoryCardImageUrl, resolveCategoryShelfImageUrl } from '@/shared/imageUrl'
+import { CATEGORY_CARD_PLACEHOLDER_URL, optimizeCatalogImageUrl, resolveCategoryCardImageUrl } from '@/shared/imageUrl'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
@@ -79,7 +79,7 @@ export interface HomeRecommendCategoryCard {
   categoryName: string
   categorySlug: string | null
   imageUrl: string | null
-  /** 后台分类主图；商品图加载慢/失败时前端用它兜底 */
+  /** 默认封面；最新商品图未拉到或加载过慢时用它兜底 */
   fallbackImageUrl: string | null
   description: string | null
   productCount: number
@@ -276,13 +276,6 @@ export const getHomeRecommendZones = async (input?: {
           .map((zone) => normalizePcCols(zone.pcCols) * Math.max(2, (zone as { pcRows?: number }).pcRows ?? 2)),
       )
     : 0
-  const maxLatestPerCategory = Math.max(
-    DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT,
-    ...zones
-      .filter((zone) => zone.zoneType === 'CATEGORY')
-      .map((zone) => normalizePcCols(zone.pcCols)),
-    maxProductZoneItemsPerCategory,
-  )
   const productCountByCategoryId = new Map<string, number>()
   const loadProductCounts = async () => {
     if (categoryIds.length === 0) return
@@ -315,17 +308,21 @@ export const getHomeRecommendZones = async (input?: {
   const latestProductsByCategoryId = new Map<string, HomeRecommendProductCard[]>()
 
   if (fetchCategoryIds.length > 0) {
-    const latestTake = Math.min(800, Math.max(24, fetchCategoryIds.length * Math.max(maxLatestPerCategory, 8)))
-    const [, latestCandidates] = await Promise.all([
-      loadProductCounts(),
+    const takeForCategory = (categoryId: string) => {
+      if (productZoneQueryIds.includes(categoryId)) {
+        return Math.max(maxProductZoneItemsPerCategory, DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT)
+      }
+      return Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, 8)
+    }
+    const fetchLatestForCategory = (categoryId: string) =>
       prisma.product.findMany({
       where: {
         ...storefrontVisibilityWhere(),
         mainImageUrl: { not: '' },
         OR: [
-          { categoryId: { in: fetchCategoryIds } },
-          { brandCategoryId: { in: fetchCategoryIds } },
-          { relationCategories: { some: { categoryId: { in: fetchCategoryIds } } } },
+          { categoryId },
+          { brandCategoryId: categoryId },
+          { relationCategories: { some: { categoryId } } },
         ],
         skus: { some: {} },
       },
@@ -390,12 +387,35 @@ export const getHomeRecommendZones = async (input?: {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: latestTake,
-    }),
+      take: takeForCategory(categoryId),
+    })
+
+    const fetchAllLatestByCategory = async () => {
+      const rows: Array<{
+        categoryId: string
+        products: Awaited<ReturnType<typeof fetchLatestForCategory>>
+      }> = []
+      const concurrency = 6
+      for (let i = 0; i < fetchCategoryIds.length; i += concurrency) {
+        const chunk = fetchCategoryIds.slice(i, i + concurrency)
+        const part = await Promise.all(
+          chunk.map(async (id) => ({
+            categoryId: id,
+            products: await fetchLatestForCategory(id),
+          })),
+        )
+        rows.push(...part)
+      }
+      return rows
+    }
+
+    const [, perCategoryRows] = await Promise.all([
+      loadProductCounts(),
+      fetchAllLatestByCategory(),
     ])
 
     const mapLatestProductCard = (
-      product: (typeof latestCandidates)[number],
+      product: (typeof perCategoryRows)[number]['products'][number],
       itemIdPrefix: string,
     ): HomeRecommendProductCard | null => {
       const sortedSkus = [...product.skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
@@ -507,28 +527,13 @@ export const getHomeRecommendZones = async (input?: {
       }
     }
 
-    for (const product of latestCandidates) {
-      const linkedCategoryIds = new Set<string>()
-      if (product.categoryId && fetchCategoryIds.includes(product.categoryId)) {
-        linkedCategoryIds.add(product.categoryId)
+    for (const { categoryId, products } of perCategoryRows) {
+      const cards: HomeRecommendProductCard[] = []
+      for (const product of products) {
+        const card = mapLatestProductCard(product, `cat-latest-${categoryId}`)
+        if (card) cards.push(card)
       }
-      if (product.brandCategoryId && fetchCategoryIds.includes(product.brandCategoryId)) {
-        linkedCategoryIds.add(product.brandCategoryId)
-      }
-      for (const relation of product.relationCategories) {
-        if (fetchCategoryIds.includes(relation.categoryId)) {
-          linkedCategoryIds.add(relation.categoryId)
-        }
-      }
-
-      for (const linkedCategoryId of linkedCategoryIds) {
-        const bucket = latestProductsByCategoryId.get(linkedCategoryId) || []
-        if (bucket.length >= maxLatestPerCategory) continue
-        const card = mapLatestProductCard(product, `cat-latest-${linkedCategoryId}`)
-        if (!card) continue
-        bucket.push(card)
-        latestProductsByCategoryId.set(linkedCategoryId, bucket)
-      }
+      latestProductsByCategoryId.set(categoryId, cards)
     }
   } else {
     await loadProductCounts()
@@ -715,10 +720,9 @@ export const getHomeRecommendZones = async (input?: {
           return acc
         }
 
-        const shelfImage = resolveCategoryShelfImageUrl(
-          category.imageUrl,
-          category.bannerImageUrl,
-          (category as { iconUrl?: string | null }).iconUrl,
+        const latestProducts = (latestProductsByCategoryId.get(category.id) || []).slice(
+          0,
+          categoryLatestLimit,
         )
         acc.push({
           itemId: item.id,
@@ -727,14 +731,15 @@ export const getHomeRecommendZones = async (input?: {
           categoryName,
           categorySlug: category.slug,
           imageUrl: resolveCategoryCardImageUrl(
-            category.imageUrl,
-            category.bannerImageUrl,
-            (category as { iconUrl?: string | null }).iconUrl,
+            null,
+            null,
+            null,
+            latestProducts[0]?.imageUrl,
           ),
-          fallbackImageUrl: shelfImage,
+          fallbackImageUrl: CATEGORY_CARD_PLACEHOLDER_URL,
           description: category.description,
           productCount: productCountByCategoryId.get(category.id) ?? category._count.products,
-          latestProducts: (latestProductsByCategoryId.get(category.id) || []).slice(0, categoryLatestLimit),
+          latestProducts,
         })
 
         return acc

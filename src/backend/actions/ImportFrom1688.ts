@@ -725,6 +725,8 @@ import {
   fetchOneBound1688Preview,
   hasOneBound1688Configured,
 } from '@/backend/onebound1688'
+import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
+import { invalidateStorefrontCatalogCaches } from '@/frontend/actions/ProductCategory'
 
 const buildImportSkuSegments = (sku: PendingImportSkuItem, index: number) => {
   const attrs = Array.isArray(sku.attributes) ? sku.attributes : []
@@ -9062,6 +9064,11 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
       },
     )
     await Promise.all(workers)
+
+    if (success > 0) {
+      invalidateHomeRecommendZoneCache()
+      invalidateStorefrontCatalogCaches()
+    }
 
     return { success_count: success, fail_count: fail, failures }
   })

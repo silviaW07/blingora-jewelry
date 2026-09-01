@@ -23,7 +23,7 @@ import {
   resolveFrontRmbSellingPrice,
   toDecimalNumber,
 } from '@/shared/priceCoefficient'
-import { optimizeCatalogImageUrl, resolveCategoryCardImageUrl } from '@/shared/imageUrl'
+import { CATEGORY_CARD_PLACEHOLDER_URL, optimizeCatalogImageUrl, resolveCategoryCardImageUrl } from '@/shared/imageUrl'
 
 type HomeRecommendZoneType = 'PRODUCT' | 'CATEGORY' | 'SIDE_NAV'
 
@@ -481,25 +481,21 @@ export const getHomeRecommendZones = async (input?: {
           return acc
         }
 
+        const latestProducts = (latestProductsByCategoryId.get(category.id) || []).slice(
+          0,
+          categoryLatestLimit,
+        )
         acc.push({
           itemId: item.id,
           entityType: 'CATEGORY' as const,
           categoryId: category.id,
           categoryName,
           categorySlug: category.slug,
-          imageUrl: resolveCategoryCardImageUrl(
-            category.imageUrl,
-            category.bannerImageUrl,
-            (category as any).iconUrl,
-          ),
-          fallbackImageUrl:
-            optimizeCatalogImageUrl(category.imageUrl, 640) ||
-            optimizeCatalogImageUrl(category.bannerImageUrl, 640) ||
-            optimizeCatalogImageUrl((category as any).iconUrl, 640) ||
-            null,
+          imageUrl: resolveCategoryCardImageUrl(null, null, null, latestProducts[0]?.imageUrl),
+          fallbackImageUrl: CATEGORY_CARD_PLACEHOLDER_URL,
           description: category.description,
           productCount: productCountByCategoryId.get(category.id) ?? category._count.products,
-          latestProducts: (latestProductsByCategoryId.get(category.id) || []).slice(0, categoryLatestLimit),
+          latestProducts,
         })
 
         return acc

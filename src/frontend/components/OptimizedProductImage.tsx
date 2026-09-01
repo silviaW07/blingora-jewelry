@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
 
@@ -17,6 +17,9 @@ type Props = {
   priority?: boolean
   imageWidth?: number
   quality?: number
+  fallbackSrc?: string | null
+  /** 主图超过该毫秒仍未完成加载时切到 fallbackSrc */
+  slowFallbackMs?: number
 }
 
 /**
@@ -33,27 +36,42 @@ export function OptimizedProductImage({
   priority = false,
   imageWidth = 400,
   quality = 85,
+  fallbackSrc = null,
+  slowFallbackMs = 0,
 }: Props) {
   const primary = toProxiedImageUrl(src, { width: imageWidth, quality })
   const raw = String(src || '').trim()
+  const fallback = String(fallbackSrc || '').trim()
   const [attempt, setAttempt] = useState(0)
-  const [failed, setFailed] = useState(false)
+  const [useFallback, setUseFallback] = useState(false)
+  const loadedRef = useRef(false)
+  const hasSrc = Boolean(primary || raw)
 
   useEffect(() => {
+    loadedRef.current = false
     setAttempt(0)
-    setFailed(false)
-  }, [src, imageWidth, quality])
+    setUseFallback(false)
+  }, [src, imageWidth, quality, fallback])
 
+  useEffect(() => {
+    if (!(slowFallbackMs > 0) || !fallback || !hasSrc || fallback === raw) return
+    const timer = window.setTimeout(() => {
+      if (!loadedRef.current) setUseFallback(true)
+    }, slowFallbackMs)
+    return () => window.clearTimeout(timer)
+  }, [src, fallback, slowFallbackMs, hasSrc, raw])
   const displaySrc =
-    attempt === 0
-      ? primary
-      : attempt === 1
-        ? toProxiedImageUrl(src, { width: Math.max(240, imageWidth), quality: 80 }) || raw || primary
-        : toProxiedImageUrl(src, { width: 0 }) || raw || primary
+    !hasSrc || useFallback
+      ? fallback
+      : attempt === 0
+        ? primary
+        : attempt === 1
+          ? toProxiedImageUrl(src, { width: Math.max(240, imageWidth), quality: 80 }) || raw || primary
+          : toProxiedImageUrl(src, { width: 0 }) || raw || primary
 
   const shellClass = fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]'
 
-  if ((!primary && !raw) || failed || !displaySrc) {
+  if (!displaySrc) {
     return <div className={cn(shellClass, className)} aria-hidden />
   }
 
@@ -78,9 +96,18 @@ export function OptimizedProductImage({
         fetchPriority={priority ? 'high' : 'auto'}
         referrerPolicy="no-referrer"
         onContextMenu={(event) => event.preventDefault()}
+        onLoad={() => {
+          loadedRef.current = true
+        }}
         onError={() => {
-          if (attempt < 2) setAttempt((n) => n + 1)
-          else setFailed(true)
+          if (!useFallback && attempt < 2 && hasSrc) {
+            setAttempt((n) => n + 1)
+            return
+          }
+          if (fallback && displaySrc !== fallback) {
+            setUseFallback(true)
+            return
+          }
         }}
       />
     </div>

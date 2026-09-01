@@ -5,9 +5,10 @@ import { loadStorefrontBootstrap } from '@/frontend/lib/loadStorefrontBootstrap'
 /**
  * Homepage has no [param] segment — `generateStaticParams` does not apply here.
  * ISR HTML includes category/banner/zone payload so Chrome does not wait on RPC.
+ * 60s so homepage category-card covers refresh after new listings.
  */
 export const dynamic = 'force-static'
-export const revalidate = 300
+export const revalidate = 60
 
 export default async function HomePage() {
   const bootstrap = await loadStorefrontBootstrap()
