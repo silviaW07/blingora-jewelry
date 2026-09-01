@@ -38,6 +38,7 @@ import {
   duplicatePendingImportSkuColorGroup,
   deletePendingImportSkuColorGroup,
   updatePendingImportGallery,
+  batchMosaicGalleryWatermarks,
   publishPendingImportItems,
   reparsePendingImportItems,
   cancelPendingImportParseJob,
@@ -625,7 +626,7 @@ export interface ProductManagementState {
   pendingImportReparsing: boolean
   /** True while cancel RPC is in flight. */
   pendingImportParseCancelling: boolean
-  /** Collect task or row reparse is actively running. */
+  /** Collect/reparse job is running — only the parse button becomes「终止解析」; other actions stay enabled. */
   pendingImportParseActive: boolean
   /** Short human label for what is currently being parsed. */
   pendingImportParseStatusLabel: string
@@ -699,6 +700,7 @@ export interface ProductManagementState {
   }>
   priceThresholdClassifyRunning: boolean
   titleFilterBackfillRunning: boolean
+  mosaicGalleryRunning: boolean
   spanishTitleBackfillRunning: boolean
   titleSuffixRunning: boolean
   productStockEditingId: string | null
@@ -848,6 +850,7 @@ export interface ProductManagementHandlers {
   saveCalibrateResultEdits: () => Promise<void>
   handleAutoClassifyPriceThresholdProducts: () => Promise<void>
   handleBackfillAllTitleFilterCategories: () => Promise<void>
+  handleBatchMosaicGalleries: () => Promise<void>
   handleBatchTranslateTitlesToSpanish: () => Promise<void>
   handleBatchAppendTitleSuffix: (suffix: string) => Promise<void>
   handleBatchAppendPendingTitleSuffix: (suffix: string) => Promise<void>
@@ -1075,6 +1078,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [productSkuSaving, setProductSkuSaving] = useState(false)
   const [pendingImportSkuEditingCell, setPendingImportSkuEditingCell] = useState<PendingImportSkuEditableCell | null>(null)
   const [pendingImportSkuEditingValue, setPendingImportSkuEditingValue] = useState('')
+  const pendingImportInlineEditingCellRef = useRef<PendingImportEditableCell | null>(null)
+  const pendingImportSkuEditingCellRef = useRef<PendingImportSkuEditableCell | null>(null)
+  const pendingCategoryPickerRef = useRef<{ itemId: string; selectedId: string } | null>(null)
+  pendingImportInlineEditingCellRef.current = pendingImportInlineEditingCell
+  pendingImportSkuEditingCellRef.current = pendingImportSkuEditingCell
+  pendingCategoryPickerRef.current = pendingCategoryPicker
   const [pendingImportSkuSaving, setPendingImportSkuSaving] = useState(false)
   const [sync1688PanelOpen, setSync1688PanelOpen] = useState(false)
   const [sync1688Syncing, setSync1688Syncing] = useState(false)
@@ -1111,6 +1120,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }>>([])
   const [priceThresholdClassifyRunning, setPriceThresholdClassifyRunning] = useState(false)
   const [titleFilterBackfillRunning, setTitleFilterBackfillRunning] = useState(false)
+  const [mosaicGalleryRunning, setMosaicGalleryRunning] = useState(false)
   const [spanishTitleBackfillRunning, setSpanishTitleBackfillRunning] = useState(false)
   const [titleSuffixRunning, setTitleSuffixRunning] = useState(false)
   const [productStockEditingId, setProductStockEditingId] = useState<string | null>(null)
@@ -1292,8 +1302,23 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const applyPendingImportQueueResult = useCallback((result: ProductManagementPendingImportQueueOutput) => {
     setPendingImportActiveTask(result.activeTask || null)
     const visibleItems = (result.list || []).filter(item => !item.item_isPublished)
-    // Server already paginates; keep current page rows as the queue snapshot.
-    setPendingImportQueue(visibleItems)
+    // Server already paginates. While the operator is editing a cell, keep that row's
+    // local snapshot so 3s parse polling cannot steal focus or overwrite in-progress input.
+    const freezeIds = new Set(
+      [
+        pendingImportInlineEditingCellRef.current?.itemId,
+        pendingImportSkuEditingCellRef.current?.itemId,
+        pendingCategoryPickerRef.current?.itemId,
+      ].filter(Boolean) as string[],
+    )
+    const localById = freezeIds.size
+      ? new Map(pendingImportQueueRef.current.map((item) => [item.item_id, item]))
+      : null
+    const mergedItems =
+      freezeIds.size && localById
+        ? visibleItems.map((item) => (freezeIds.has(item.item_id) ? localById.get(item.item_id) || item : item))
+        : visibleItems
+    setPendingImportQueue(mergedItems)
     setPendingImportQueueTotal(
       typeof result.total === 'number' ? result.total : visibleItems.length,
     )
@@ -1354,6 +1379,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   pendingImportQueueErrorRef.current = pendingImportQueueError
   pendingImportQueueRef.current = pendingImportQueue
 
+  const pendingImportKeywordRef = useRef('')
+  pendingImportKeywordRef.current = filterKeyword
+
   const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number; page_size?: number }) => {
     const silent = options?.silent ?? false
     const page = Math.max(1, options?.page ?? pendingImportPageRef.current)
@@ -1372,6 +1400,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         {
           page,
           page_size: pageSizeForFetch,
+          keyword: pendingImportKeywordRef.current.trim() || undefined,
           // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
           skip_maintenance: true,
         } as any,
@@ -1532,6 +1561,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }, [])
 
   const handleSearch = () => {
+    if (activeTab === 'pending_imports') {
+      pendingImportPageRef.current = 1
+      setPendingImportPage(1)
+      void refreshPendingImportQueue({ silent: false, page: 1 })
+      return
+    }
     setCurrentPage(1)
     ProductManagement.navigateToWithFilters(router, {
       name: filterKeyword,
@@ -1552,6 +1587,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const handleReset = () => {
     setFilterKeyword('')
+    pendingImportKeywordRef.current = ''
     setFilterCategoryId('ALL')
     setFilterStatus('ALL')
     setFilterGoodsStatus('ALL')
@@ -1559,7 +1595,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setFilterSupplierName('')
     setFilterBrandKeyword('')
     setCurrentPage(1)
+    pendingImportPageRef.current = 1
+    setPendingImportPage(1)
     ProductManagement.navigateToAll(router)
+    if (activeTab === 'pending_imports') {
+      void refreshPendingImportQueue({ silent: false, page: 1 })
+    }
   }
 
   const handleSelectAll = (checked: boolean) => {
@@ -2321,8 +2362,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       return
     }
 
-    if (pendingImportParseActive) {
-      toast.error('当前正在解析中，请先点「终止解析」')
+    if (pendingImportParseJob?.busy) {
+      toast.error('后台已有解析任务在跑。其它操作不受影响；若要改解析这批，请先点「终止解析」')
       return
     }
 
@@ -3104,6 +3145,38 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const handleBatchMosaicGalleries = async () => {
+    if (mosaicGalleryRunning) return
+    const pendingScope = activeTab === 'pending_imports'
+    const ids = pendingScope
+      ? pendingImportSelectedIds
+      : selectedIds.filter((id) => !isSkuSelectionId(id))
+    if (!ids.length) {
+      toast.error('请先勾选要处理的商品')
+      return
+    }
+    const confirmed = window.confirm(
+      `将对已勾选的 ${ids.length} 个${pendingScope ? '待上传' : ''}商品：主图轮播 + SKU/色图（每件最多 8 张主图、24 张 SKU 图）。系统会先识别右下角是否像 1688 水印，有水印才打马赛克。是否继续？`,
+    )
+    if (!confirmed) return
+    setMosaicGalleryRunning(true)
+    try {
+      const result = await batchMosaicGalleryWatermarks({
+        scope: pendingScope ? 'pending' : 'product',
+        ids,
+      })
+      toast.success(
+        `马赛克完成：商品成功 ${result.success_count}、失败 ${result.fail_count}；打码 ${result.images_ok} 张，跳过无水印 ${result.images_skipped || 0} 张，失败 ${result.images_fail} 张`,
+      )
+      if (pendingScope) await refreshPendingImportQueue({ silent: true })
+      else await fetchList()
+    } catch (err: any) {
+      toast.error(err?.message || '批量马赛克失败')
+    } finally {
+      setMosaicGalleryRunning(false)
+    }
+  }
+
   const handleAutoClassifyPriceThresholdProducts = async () => {
     if (priceThresholdClassifyRunning) return
     const confirmed = window.confirm(
@@ -3435,7 +3508,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         toast.success(`已退回待上传，成功: ${res.success_count}，失败: ${res.fail_count}`)
         setSelectedIds([])
         setConfirmDialogOpen(false)
-        await Promise.all([fetchList(), refreshPendingImportQueue({ silent: true })])
+        const firstCode = (res.product_codes || []).filter(Boolean)[0]
+        if (firstCode) {
+          setFilterKeyword(firstCode)
+          pendingImportKeywordRef.current = firstCode
+        }
+        pendingImportPageRef.current = 1
+        setPendingImportPage(1)
+        await Promise.all([fetchList(), refreshPendingImportQueue({ silent: true, page: 1 })])
         if (res.success_count > 0) {
           setActiveTab('pending_imports')
         }
@@ -4505,6 +4585,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       calibrateResultDrafts,
       priceThresholdClassifyRunning,
       titleFilterBackfillRunning,
+      mosaicGalleryRunning,
       spanishTitleBackfillRunning,
       titleSuffixRunning,
       productStockEditingId,
@@ -4655,6 +4736,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       saveCalibrateResultEdits,
       handleAutoClassifyPriceThresholdProducts,
       handleBackfillAllTitleFilterCategories,
+      handleBatchMosaicGalleries,
       handleBatchTranslateTitlesToSpanish,
       handleBatchAppendTitleSuffix,
       handleBatchAppendPendingTitleSuffix,

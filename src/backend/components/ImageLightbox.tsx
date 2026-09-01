@@ -165,21 +165,24 @@ type PreviewableThumbProps = {
   alt?: string
   className?: string
   title?: string
+  overlayClassName?: string
   children: React.ReactNode
-  /** Called after opening is prevented (e.g. stop row expand). */
   onPreviewOpen?: () => void
 }
 
-/** Wrap a thumbnail: click opens ImageLightbox. */
+/** Wrap a thumbnail: click opens ImageLightbox. Overlay is a div so parent `draggable` can reorder. */
 export function PreviewableThumb({
   src,
   alt = '',
   className,
   title = '点击查看大图',
+  overlayClassName,
   children,
   onPreviewOpen,
 }: PreviewableThumbProps) {
   const [open, setOpen] = useState(false)
+  const dragMovedRef = React.useRef(false)
+  const pointerRef = React.useRef<{ x: number; y: number } | null>(null)
   const safeSrc = String(src || '').trim()
 
   if (!safeSrc) {
@@ -189,19 +192,40 @@ export function PreviewableThumb({
   return (
     <>
       <div className={`relative ${className || 'block h-full w-full'}`}>
-        <div className="pointer-events-none h-full w-full [&>*]:h-full [&>*]:w-full">
+        <div className="pointer-events-none h-full w-full [&>*]:h-full [&>*]:w-full [&>img]:[-webkit-user-drag:none]">
           {children}
         </div>
-        <button
-          type="button"
-          className="absolute inset-0 z-[1] cursor-zoom-in bg-transparent"
+        <div
+          role="button"
+          tabIndex={0}
+          className={`absolute inset-0 z-[1] cursor-zoom-in bg-transparent ${overlayClassName || ''}`}
           title={title}
           aria-label={title}
+          onPointerDown={(event) => {
+            dragMovedRef.current = false
+            pointerRef.current = { x: event.clientX, y: event.clientY }
+          }}
+          onPointerMove={(event) => {
+            const start = pointerRef.current
+            if (!start) return
+            if (Math.abs(event.clientX - start.x) > 6 || Math.abs(event.clientY - start.y) > 6) {
+              dragMovedRef.current = true
+            }
+          }}
           onClick={(event) => {
             event.stopPropagation()
             event.preventDefault()
+            if (dragMovedRef.current) return
+            if ((event.currentTarget as HTMLElement).closest('[data-gallery-dragging="true"]')) return
             setOpen(true)
             onPreviewOpen?.()
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setOpen(true)
+              onPreviewOpen?.()
+            }
           }}
         />
       </div>

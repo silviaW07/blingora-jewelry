@@ -272,6 +272,8 @@ export interface PendingImportItemRecord {
   item_availableStock: number | null
   item_parsedName: string | null
   item_parsedMainImageUrl: string | null
+  /** SPU / 表格货号 / 退回待上传时带回的 productCode */
+  item_productCode: string | null
   item_createdAt: Date
   item_updatedAt: Date
   item_skus: PendingImportSkuItem[]
@@ -365,6 +367,8 @@ export interface GetPendingImportQueueInput {
   page_size?: number
   /** skip charset/mock repair side-effects on hot path */
   skip_maintenance?: boolean
+  /** 名称 / SPU / 1688 offerId / 退回货号 */
+  keyword?: string
 }
 
 export interface GetPendingImportQueueOutput {
@@ -1177,6 +1181,17 @@ const decodeJsonLikeString = (value: unknown) =>
 const pickJsonStringField = (html: string, key: string) => {
   const matched = html.match(new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'i'))
   return matched?.[1] ? decodeJsonLikeString(matched[1]) : null
+}
+
+const pickJsonStringFieldAll = (html: string, key: string): string[] => {
+  const re = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'gi')
+  const out: string[] = []
+  let matched: RegExpExecArray | null
+  while ((matched = re.exec(html))) {
+    const value = decodeJsonLikeString(matched[1])
+    if (value) out.push(value)
+  }
+  return out
 }
 
 /** 从 1688 HTML 中尽量抓取属性对（Style / Material 等）写入 parameterJson */
@@ -2103,41 +2118,91 @@ const resolveSkuTableOrExpandFromColors = (params: {
       ]
 }
 
+const strip1688SiteSuffix = (raw: string) =>
+  String(raw || '')
+    .replace(/\s*[-_|]\s*(1688(?:\.com)?|阿里巴巴|Alibaba).*$/i, '')
+    .trim()
+
+const isJunk1688Title = (name: string) => {
+  const n = name.replace(/\s+/g, '')
+  if (!n || n.length < 2) return true
+  if (/^(1688(\.com)?|阿里巴巴|Alibaba|商品详情|详情页|验证码|登录)$/i.test(n)) return true
+  if (/punish|access denied|_____tmd_____|滑块验证|人机验证/i.test(name)) return true
+  if (/^(登录|login)$/i.test(n)) return true
+  // Site chrome like "1688.com" — not a product name that merely mentions 1688
+  if (/^1688(\.com)?[-_ ].{0,12}$/i.test(name) && name.length < 20) return true
+  return false
+}
+
+const score1688Title = (name: string) => {
+  const cjk = (name.match(/[\u4e00-\u9fff]/g) || []).length
+  return name.length + cjk * 2
+}
+
+const titleFrom1688SkuLabels = (params: {
+  colors?: Array<{ label?: string | null }>
+  skuTable?: Array<{ spec?: string | null }>
+}): string | null => {
+  const colorLabels = (params.colors || [])
+    .map((row) => normalizeText(row.label))
+    .filter((label) => label.length >= 4 && /[\u4e00-\u9fff]/.test(label) && !isJunk1688Title(label))
+  const uniqueColors = Array.from(new Set(colorLabels))
+  const longColors = uniqueColors.filter((label) => label.replace(/\s+/g, '').length >= 6)
+  if (longColors.length) return longColors.slice(0, 3).join(' / ').slice(0, 180)
+  const skuSpecs = (params.skuTable || [])
+    .map((row) => normalizeText(row.spec))
+    .filter((spec) => spec.length >= 8 && /[\u4e00-\u9fff]/.test(spec) && !isJunk1688Title(spec))
+  if (skuSpecs[0]) return skuSpecs[0].slice(0, 180)
+  return null
+}
+
 /** 从 HTML 尽量提取商品标题（多字段 + meta + title） */
 const extract1688OfferTitleFromHtml = (html: string): string | null => {
-  const titleTag = (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || '')
-    .replace(/\s*[-_|].*$/, '')
-    .trim()
-  const ogTitle = (html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1]
-    || '')
-    .replace(/\s*[-_|].*$/, '')
-    .trim()
-  const metaTitle = (html.match(/<meta[^>]+name=["']title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']title["']/i)?.[1]
-    || '')
-    .replace(/\s*[-_|].*$/, '')
-    .trim()
+  const titleTag = strip1688SiteSuffix(
+    decodeJsonLikeString(html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || ''),
+  )
+  const ogTitle = strip1688SiteSuffix(
+    decodeJsonLikeString(
+      html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ||
+        '',
+    ),
+  )
+  const metaTitle = strip1688SiteSuffix(
+    decodeJsonLikeString(
+      html.match(/<meta[^>]+name=["']title["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']title["']/i)?.[1] ||
+        '',
+    ),
+  )
+  const h1Title = strip1688SiteSuffix(
+    decodeJsonLikeString((html.match(/<h1[^>]*>([\s\S]{2,120}?)<\/h1>/i)?.[1] || '').replace(/<[^>]+>/g, '')),
+  )
+  const nestedTitle = (() => {
+    const matched = html.match(
+      /"(?:offerTitle|productTitle|itemTitle|titleObj)"\s*:\s*\{[^}]{0,400}?"(?:name|text|value|title|subject)"\s*:\s*"((?:\\.|[^"\\])*)"/i,
+    )
+    return matched?.[1] ? decodeJsonLikeString(matched[1]) : null
+  })()
 
-  const candidates = [
-    pickJsonStringField(html, 'subject'),
-    pickJsonStringField(html, 'offerTitle'),
-    pickJsonStringField(html, 'offerSubject'),
-    pickJsonStringField(html, 'title'),
-    pickJsonStringField(html, 'productTitle'),
-    pickJsonStringField(html, 'offerName'),
-    ogTitle || null,
-    metaTitle || null,
-    titleTag || null,
+  const jsonKeys = [
+    'subject',
+    'offerTitle',
+    'offerSubject',
+    'productTitle',
+    'offerName',
+    'itemName',
+    'productName',
+    'title',
   ]
+  const jsonValues = jsonKeys.flatMap((key) => pickJsonStringFieldAll(html, key))
 
-  for (const candidate of candidates) {
-    const name = normalizeText(candidate)
-    if (!name || name.length < 2) continue
-    if (/1688|阿里巴巴|验证|punish|登录|login|access denied/i.test(name)) continue
-    return name.slice(0, 180)
-  }
-  return null
+  const ranked = [...jsonValues, nestedTitle, h1Title, ogTitle, metaTitle, titleTag]
+    .map((candidate) => normalizeText(candidate))
+    .filter((name) => name.length >= 2 && !isJunk1688Title(name))
+    .sort((a, b) => score1688Title(b) - score1688Title(a))
+
+  return ranked[0] ? ranked[0].slice(0, 180) : null
 }
 
 export interface Fetched1688OfferPreview {
@@ -2274,8 +2339,8 @@ const buildFakeHtmlFromMtopPayload = (payload: unknown): string => {
 
 const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688OfferPreview | null> => {
   if (!html || html.length < 40) return null
-  const name = extract1688OfferTitleFromHtml(html)
   const multiSpec = parse1688MultiSpecFromHtml(html)
+  const name = extract1688OfferTitleFromHtml(html) || titleFrom1688SkuLabels(multiSpec)
   const { hdCandidates, watermarkedFallback } = extract1688ImageCandidates(html)
   const resolvedImages = await resolve1688ImageUrls({
     hdCandidates,
@@ -3613,9 +3678,9 @@ const fetch1688OfferPreviewOnce = async (
         }
       }
 
-      const name = extract1688OfferTitleFromHtml(html)
       // multiSpec 必须先解析：后面色图候选会读 colors/skuTable，避免 TDZ ReferenceError
       const multiSpec = parse1688MultiSpecFromHtml(html)
+      const name = extract1688OfferTitleFromHtml(html) || titleFrom1688SkuLabels(multiSpec)
 
       const { hdCandidates, watermarkedFallback } = extract1688ImageCandidates(html)
       const resolvedImages = await resolve1688ImageUrls({
@@ -4753,8 +4818,8 @@ const buildPendingItemStructure = (
     ...(mainImage ? [mainImage] : []),
     ...((Array.isArray(preview.detailImages) ? preview.detailImages : []).filter(Boolean)),
   ])
-  // List payload: cap gallery + truncate detail HTML so queue open stays under RPC timeout.
-  const galleryUrls = rawGallery.slice(0, 6)
+  // Keep the full carousel in the pending row so operators can see and drag every main image.
+  const galleryUrls = rawGallery.slice(0, 40)
   const rawDetail = String(item.productDetail || '')
   const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail
   const priced = enrich
@@ -4806,6 +4871,7 @@ const buildPendingItemStructure = (
   item_availableStock: resolveInitialStock(item.availableStock),
   item_parsedName: normalizeBrandTitleSync(item.parsedName || null) || null,
   item_parsedMainImageUrl: item.parsedMainImageUrl || null,
+  item_productCode: pickPendingProductCode(item, preview),
   item_createdAt: item.createdAt,
   item_updatedAt: item.updatedAt || item.createdAt,
   item_skus: priced?.skus ?? resolvePendingSkuDrafts(item),
@@ -4826,6 +4892,21 @@ const buildPendingTaskSummary = (task: any): PendingImportQueueTaskSummary => ({
   task_startedAt: task.startedAt || null,
   task_finishedAt: task.finishedAt || null
 })
+
+const pickPendingProductCode = (item: any, preview: PreviewDataJson): string | null => {
+  const fromPreview = String(
+    (preview as any)?.returnedProductCode ||
+      preview.inboundIdentity?.excelProductCode ||
+      '',
+  ).trim()
+  if (fromPreview) return fromPreview.slice(0, 80)
+  const sourceUrl = String(item?.sourceUrl || '')
+  if (sourceUrl.startsWith('table-import://')) {
+    const code = sourceUrl.replace('table-import://', '').replace(/^return-/, '').trim()
+    if (code) return code.slice(0, 80)
+  }
+  return null
+}
 
 const PENDING_IMPORT_QUEUE_WHERE = {
   isPublished: false,
@@ -4893,9 +4974,30 @@ const PENDING_QUEUE_ITEM_SELECT = {
   },
 } as const
 
+const buildPendingQueueWhere = (keyword?: string) => {
+  const kw = String(keyword || '').trim()
+  if (!kw) return PENDING_IMPORT_QUEUE_WHERE
+  return {
+    AND: [
+      PENDING_IMPORT_QUEUE_WHERE,
+      {
+        OR: [
+          { parsedName: { contains: kw } },
+          { sourceUrl: { contains: kw } },
+          { skuSummaryText: { contains: kw } },
+          { supplierName: { contains: kw } },
+          { productDetail: { contains: kw } },
+          { previewDataJson: { string_contains: kw } },
+        ],
+      },
+    ],
+  }
+}
+
 const loadPendingImportQueueSnapshot = async (opts?: {
   page?: number
   page_size?: number
+  keyword?: string
 }): Promise<PendingImportQueueSnapshot & { total: number }> => {
   const page = Math.max(1, Number(opts?.page) || 1)
   const pageSize = Math.min(
@@ -4903,6 +5005,7 @@ const loadPendingImportQueueSnapshot = async (opts?: {
     Math.max(1, Number(opts?.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE),
   )
   const skip = (page - 1) * pageSize
+  const where = buildPendingQueueWhere(opts?.keyword) as any
 
   // 预热品牌别名缓存，使列表展示的 normalizeBrandTitleSync 用到 DB 最新映射
   await loadBrandAliasRules()
@@ -4948,9 +5051,9 @@ const loadPendingImportQueueSnapshot = async (opts?: {
         finishedAt: true,
       },
     }),
-    prisma.importtaskitem.count({ where: PENDING_IMPORT_QUEUE_WHERE as any }),
+    prisma.importtaskitem.count({ where }),
     prisma.importtaskitem.findMany({
-      where: PENDING_IMPORT_QUEUE_WHERE as any,
+      where,
       // 按导入时间正序，保留 Excel 原始行顺序
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       skip,
@@ -6726,7 +6829,11 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       }
     }
 
-    const snapshot = await loadPendingImportQueueSnapshot({ page, page_size: pageSize })
+    const snapshot = await loadPendingImportQueueSnapshot({
+      page,
+      page_size: pageSize,
+      keyword: input?.keyword,
+    })
 
     // Self-heal stale in-memory mutex when DB has no RUNNING work (e.g. crash / multi-worker drift).
     if (parseJobBusy) {

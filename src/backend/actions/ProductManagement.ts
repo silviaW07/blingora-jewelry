@@ -305,6 +305,8 @@ export interface PendingImportQueueItem {
   item_availableStock: number | null
   item_parsedName: string | null
   item_parsedMainImageUrl: string | null
+  /** SPU / 表格货号 / 退回待上传时带回的 productCode */
+  item_productCode?: string | null
   item_createdAt: Date
   item_updatedAt: Date
   item_skus: PendingImportSkuDraftItem[]
@@ -632,6 +634,7 @@ export interface ProductBindingMetaOutput {
 }
 
 import prisma from '@/tools/prisma'
+import { mosaicImageUrlIfWatermark, mapPool } from '@/lib/mosaicRemoteImage'
 import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
@@ -729,6 +732,7 @@ export interface ReturnProductsToPendingUploadInput {
 
 export interface ReturnProductsToPendingUploadOutput extends BatchOperateOutput {
   pending_item_ids: string[]
+  product_codes: string[]
 }
 
 export interface ReclassifyPublishedProductsInput {
@@ -3199,6 +3203,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
     page?: number
     page_size?: number
     skip_maintenance?: boolean
+    keyword?: string
   }): Promise<ProductManagementPendingImportQueueOutput> => {
     const queue = await getImportFrom1688PendingImportQueue(input)
     return queue as ProductManagementPendingImportQueueOutput
@@ -3303,6 +3308,208 @@ export const updatePendingImportGallery = requireRole([UserRole.ADMIN])(
     await updateImportFrom1688PendingImportGallery(input)
     return { success: true }
   })
+)
+
+export interface BatchMosaicGalleryWatermarksInput {
+  scope: 'product' | 'pending'
+  ids: string[]
+}
+
+export interface BatchMosaicGalleryWatermarksOutput {
+  success_count: number
+  fail_count: number
+  images_ok: number
+  images_fail: number
+  images_skipped: number
+}
+
+export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
+  withResult(async (input: BatchMosaicGalleryWatermarksInput): Promise<BatchMosaicGalleryWatermarksOutput> => {
+    const scope = input.scope === 'pending' ? 'pending' : 'product'
+    const ids = Array.from(new Set((input.ids || []).map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 30)
+    if (!ids.length) throw new Error('请先勾选要处理的商品')
+
+    const urlCache = new Map<string, { url: string; mosaicked: boolean }>()
+    let imagesOk = 0
+    let imagesFail = 0
+    let imagesSkipped = 0
+
+    const mosaicOne = async (raw: string): Promise<string> => {
+      const url = String(raw || '').trim()
+      if (!url || url.startsWith('blob:')) return url
+      const cached = urlCache.get(url)
+      if (cached) return cached.url
+      try {
+        const result = await mosaicImageUrlIfWatermark(url)
+        urlCache.set(url, result)
+        if (result.mosaicked) imagesOk += 1
+        else imagesSkipped += 1
+        return result.url
+      } catch {
+        imagesFail += 1
+        return url
+      }
+    }
+
+    let success = 0
+    let fail = 0
+
+    if (scope === 'pending') {
+      const items = await prisma.importtaskitem.findMany({
+        where: { id: { in: ids }, isPublished: false },
+        select: {
+          id: true,
+          mainImageUrl: true,
+          parsedMainImageUrl: true,
+          previewDataJson: true,
+        },
+      })
+      const found = new Set(items.map((row) => row.id))
+      fail += ids.filter((id) => !found.has(id)).length
+
+      for (const item of items) {
+        try {
+          const preview = ((item.previewDataJson || {}) as {
+            mainImageUrl?: string
+            detailImages?: string[]
+            colors?: Array<{ label: string; imageUrl?: string | null }>
+            skuTable?: Array<{ imageUrl?: string | null; [key: string]: unknown }>
+          }) || {}
+          const gallery = Array.from(
+            new Set(
+              [
+                item.mainImageUrl,
+                item.parsedMainImageUrl,
+                preview.mainImageUrl,
+                ...(Array.isArray(preview.detailImages) ? preview.detailImages : []),
+              ]
+                .map((url) => String(url || '').trim())
+                .filter(Boolean),
+            ),
+          ).slice(0, 8)
+          const skuUrls = Array.from(
+            new Set(
+              [
+                ...(Array.isArray(preview.colors) ? preview.colors.map((c) => c.imageUrl) : []),
+                ...(Array.isArray(preview.skuTable) ? preview.skuTable.map((row) => row.imageUrl) : []),
+              ]
+                .map((url) => String(url || '').trim())
+                .filter(Boolean),
+            ),
+          ).slice(0, 24)
+          const allUrls = Array.from(new Set([...gallery, ...skuUrls]))
+          if (!allUrls.length) {
+            fail += 1
+            continue
+          }
+          const remapped = new Map<string, string>()
+          const processed = await mapPool(allUrls, 2, async (url) => {
+            const next = await mosaicOne(url)
+            remapped.set(url, next)
+            return next
+          })
+          const replace = (url?: string | null) => {
+            const key = String(url || '').trim()
+            return key ? remapped.get(key) || key : url
+          }
+          const nextGallery = gallery.map((url) => remapped.get(url) || url)
+          const mainImageUrl = nextGallery[0] || replace(item.mainImageUrl) || processed[0]
+          await prisma.importtaskitem.update({
+            where: { id: item.id },
+            data: {
+              mainImageUrl: mainImageUrl || item.mainImageUrl,
+              parsedMainImageUrl: mainImageUrl || item.parsedMainImageUrl,
+              previewDataJson: {
+                ...preview,
+                mainImageUrl: mainImageUrl || preview.mainImageUrl,
+                detailImages: nextGallery.length ? nextGallery : preview.detailImages,
+                colors: Array.isArray(preview.colors)
+                  ? preview.colors.map((color) => ({ ...color, imageUrl: replace(color.imageUrl) || color.imageUrl }))
+                  : preview.colors,
+                skuTable: Array.isArray(preview.skuTable)
+                  ? preview.skuTable.map((row) => ({ ...row, imageUrl: replace(row.imageUrl) || row.imageUrl }))
+                  : preview.skuTable,
+              } as any,
+            },
+          })
+          success += 1
+        } catch {
+          fail += 1
+        }
+      }
+    } else {
+      const products = await prisma.product.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          mainImageUrl: true,
+          galleryJson: true,
+          skus: { select: { id: true, imageUrl: true } },
+        },
+      })
+      const found = new Set(products.map((row) => row.id))
+      fail += ids.filter((id) => !found.has(id)).length
+
+      for (const product of products) {
+        try {
+          const gallery = extractGalleryUrls(product.galleryJson, product.mainImageUrl).slice(0, 8)
+          const skuUrls = Array.from(
+            new Set((product.skus || []).map((sku) => String(sku.imageUrl || '').trim()).filter(Boolean)),
+          ).slice(0, 24)
+          const allUrls = Array.from(new Set([...gallery, ...skuUrls]))
+          if (!allUrls.length) {
+            fail += 1
+            continue
+          }
+          const remapped = new Map<string, string>()
+          await mapPool(allUrls, 2, async (url) => {
+            const next = await mosaicOne(url)
+            remapped.set(url, next)
+            return next
+          })
+          const nextGallery = gallery.map((url) => remapped.get(url) || url)
+          const galleryJson = nextGallery.map((url, index) => ({ url, sort: index + 1 }))
+          await prisma.product.update({
+            where: { id: product.id },
+            data: {
+              ...(nextGallery.length
+                ? {
+                    mainImageUrl: nextGallery[0],
+                    galleryJson: galleryJson as any,
+                  }
+                : {}),
+            },
+          })
+          const skuUpdates = (product.skus || []).filter((sku) => {
+            const prev = String(sku.imageUrl || '').trim()
+            return prev && remapped.get(prev) && remapped.get(prev) !== prev
+          })
+          if (skuUpdates.length) {
+            await prisma.$transaction(
+              skuUpdates.map((sku) =>
+                prisma.productsku.update({
+                  where: { id: sku.id },
+                  data: { imageUrl: remapped.get(String(sku.imageUrl || '').trim()) },
+                }),
+              ),
+            )
+          }
+          success += 1
+        } catch {
+          fail += 1
+        }
+      }
+      if (success > 0) invalidateStorefrontAfterCategoryBind()
+    }
+
+    return {
+      success_count: success,
+      fail_count: fail,
+      images_ok: imagesOk,
+      images_fail: imagesFail,
+      images_skipped: imagesSkipped,
+    }
+  }),
 )
 
 export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
@@ -3569,7 +3776,7 @@ async function returnOneProductToPendingUpload(
   productId: string,
   userId: string,
   sharedTaskId: string | null,
-): Promise<{ pendingItemId: string; taskId: string; createdNew: boolean }> {
+): Promise<{ pendingItemId: string; taskId: string; createdNew: boolean; productCode: string }> {
   const product = await tx.product.findUnique({
     where: { id: productId },
     include: {
@@ -3668,7 +3875,7 @@ async function returnOneProductToPendingUpload(
   })
   await tx.cartitem.updateMany({ where: { productId }, data: { status: 'INVALID' } })
 
-  return { pendingItemId, taskId, createdNew }
+  return { pendingItemId, taskId, createdNew, productCode: String(product.productCode || '') }
 }
 
 /**
@@ -3686,6 +3893,7 @@ export const returnProductsToPendingUpload = requireRole([UserRole.ADMIN])(
     let success = 0
     let fail = 0
     const pendingItemIds: string[] = []
+    const productCodes: string[] = []
     let sharedTaskId: string | null = null
 
     for (const productId of productIds) {
@@ -3695,6 +3903,7 @@ export const returnProductsToPendingUpload = requireRole([UserRole.ADMIN])(
         })
         if (result.createdNew && !sharedTaskId) sharedTaskId = result.taskId
         pendingItemIds.push(result.pendingItemId)
+        if (result.productCode) productCodes.push(result.productCode)
         success += 1
       } catch {
         fail += 1
@@ -3705,6 +3914,7 @@ export const returnProductsToPendingUpload = requireRole([UserRole.ADMIN])(
       success_count: success,
       fail_count: fail,
       pending_item_ids: pendingItemIds,
+      product_codes: productCodes,
     }
   })
 )

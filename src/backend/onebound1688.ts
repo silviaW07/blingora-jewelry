@@ -270,9 +270,17 @@ export const mapOneBound1688Item = (item: UnknownRecord): OneBound1688Preview | 
     featureAttributes.find(prop => /商品类型|品类|类目/.test(prop.key))?.value ||
     null
 
-  if (!(name || mainImageUrl || skuTable.length)) return null
+  const resolvedName =
+    name ||
+    (() => {
+      const longColors = colors
+        .map((row) => cleanText(row.label))
+        .filter((label) => label.length >= 6)
+      return longColors.length ? longColors.slice(0, 3).join(' / ').slice(0, 180) : null
+    })()
+  if (!(resolvedName || mainImageUrl || skuTable.length)) return null
   return {
-    name,
+    name: resolvedName,
     mainImageUrl: mainImageUrl || gallery[0] || null,
     detailImages: gallery,
     supplierName:

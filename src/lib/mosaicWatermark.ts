@@ -78,3 +78,91 @@ export async function mosaicWatermarkCorners(input: Buffer): Promise<Buffer> {
   const composites = await Promise.all(regions.map((r) => mosaicPatch(input, r)))
   return sharp(input).composite(composites).jpeg({ quality: 88 }).toBuffer()
 }
+
+function meanSatAndEdges(
+  data: Buffer,
+  width: number,
+  height: number,
+  channels: number,
+): { sat: number; edge: number; luma: number } {
+  let satSum = 0
+  let lumaSum = 0
+  let edgeSum = 0
+  let n = 0
+  const step = Math.max(1, Math.floor(Math.min(width, height) / 80))
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const i = (y * width + x) * channels
+      const r = data[i]
+      const g = data[i + Math.min(1, channels - 1)]
+      const b = data[i + Math.min(2, channels - 1)]
+      const max = Math.max(r, g, b)
+      const min = Math.min(r, g, b)
+      satSum += max === 0 ? 0 : (max - min) / max
+      lumaSum += 0.299 * r + 0.587 * g + 0.114 * b
+      if (x + step < width) {
+        const j = (y * width + x + step) * channels
+        const r2 = data[j]
+        const g2 = data[j + Math.min(1, channels - 1)]
+        const b2 = data[j + Math.min(2, channels - 1)]
+        const l1 = 0.299 * r + 0.587 * g + 0.114 * b
+        const l2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2
+        edgeSum += Math.abs(l1 - l2)
+      }
+      n += 1
+    }
+  }
+  return {
+    sat: n ? satSum / n : 0,
+    edge: n ? edgeSum / n : 0,
+    luma: n ? lumaSum / n : 0,
+  }
+}
+
+/**
+ * Heuristic 1688-style corner watermark:
+ * faint gray/white URL text in the bottom-right (desaturated overlay + extra horizontal edges).
+ * Not OCR — no guarantee on every shop mark, but skips clean studio shots.
+ */
+export async function detectCornerWatermark(input: Buffer): Promise<boolean> {
+  const meta = await sharp(input).metadata()
+  const width = meta.width
+  const height = meta.height
+  if (!width || !height || width < 40 || height < 40) return false
+
+  const br = clampRegion(
+    {
+      left: Math.floor(width * 0.55),
+      top: Math.floor(height * 0.72),
+      width: Math.max(8, Math.floor(width * 0.45)),
+      height: Math.max(8, Math.floor(height * 0.28)),
+    },
+    width,
+    height,
+  )
+  const bl = clampRegion(
+    {
+      left: Math.floor(width * 0.02),
+      top: Math.floor(height * 0.72),
+      width: Math.max(8, Math.floor(width * 0.28)),
+      height: Math.max(8, Math.floor(height * 0.28)),
+    },
+    width,
+    height,
+  )
+  if (!br || !bl) return false
+
+  const [brRaw, blRaw] = await Promise.all([
+    sharp(input).extract(br).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+    sharp(input).extract(bl).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ])
+  const a = meanSatAndEdges(brRaw.data, brRaw.info.width, brRaw.info.height, brRaw.info.channels)
+  const b = meanSatAndEdges(blRaw.data, blRaw.info.width, blRaw.info.height, blRaw.info.channels)
+
+  const satDrop = b.sat - a.sat
+  const lumaLift = a.luma - b.luma
+  const edgeBoost = b.edge > 1 ? a.edge / b.edge : a.edge > 6 ? 1.2 : 0
+
+  // Desaturated + slightly brighter overlay, or extra fine edges typical of URL text
+  return satDrop >= 0.035 || (lumaLift >= 8 && satDrop >= 0.015) || (edgeBoost >= 1.18 && satDrop >= 0.02)
+}

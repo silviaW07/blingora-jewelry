@@ -56,8 +56,10 @@ function formatUsdRange(min: number | null | undefined, max: number | null | und
 }
 
 function extractExternalProductCode(item: PendingImportQueueItem) {
+  const returnedCode = String(item.item_productCode || '').trim()
+  if (returnedCode) return returnedCode
   if (item.item_sourceUrl?.startsWith('table-import://')) {
-    return item.item_sourceUrl.replace('table-import://', '').trim() || '--'
+    return item.item_sourceUrl.replace('table-import://', '').replace(/^return-/, '').trim() || '--'
   }
   // 1688：展示 offerId，保证相似标题在待上传区仍可区分多行独立父商品
   const offerFromUrl = String(item.item_sourceUrl || '').match(/offer\/(\d+)/i)?.[1]
@@ -85,6 +87,15 @@ function PendingImportTableRowsInner({
   const [detailOpen, setDetailOpen] = useState(false)
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null)
   const [dropImageIndex, setDropImageIndex] = useState<number | null>(null)
+  const handlersRef = React.useRef(handlers)
+  handlersRef.current = handlers
+  const pointerDragRef = React.useRef<{
+    from: number
+    pointerId: number
+    started: boolean
+    startX: number
+    startY: number
+  } | null>(null)
   const expanded = state.expandedPendingImportIds.includes(item.item_id)
   const pendingSkus = item.item_skus || []
   const targetCategoryOption =
@@ -184,13 +195,21 @@ function PendingImportTableRowsInner({
         <TableCell className="whitespace-normal">
           <div className="flex items-start gap-3">
             <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2 max-w-[280px]">
+              <div className="flex flex-wrap items-center gap-2 max-w-[520px]">
                 {(() => {
                   const allUrls = item.item_galleryUrls?.length
                     ? item.item_galleryUrls
                     : (item.item_mainImageUrl || item.item_parsedMainImageUrl
                       ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
                       : [])
+                  const finishPointerDrag = (toIndex: number | null) => {
+                    const drag = pointerDragRef.current
+                    pointerDragRef.current = null
+                    setDragImageIndex(null)
+                    setDropImageIndex(null)
+                    if (!drag?.started || toIndex == null || toIndex === drag.from) return
+                    void handlersRef.current.reorderPendingImportImages(item.item_id, drag.from, toIndex)
+                  }
                   return (
                     <>
                       {allUrls.map((url, imageIndex) => {
@@ -201,41 +220,48 @@ function PendingImportTableRowsInner({
                   return (
                   <div
                     key={`${item.item_id}-${imageIndex}-${url}`}
+                    data-pending-gallery-index={imageIndex}
+                    data-gallery-dragging={dragImageIndex !== null ? 'true' : undefined}
                     className={cn(
-                      'relative w-12 h-12 rounded border overflow-hidden flex-shrink-0 bg-slate-50 cursor-grab active:cursor-grabbing',
+                      'relative w-12 h-12 rounded border overflow-hidden flex-shrink-0 bg-slate-50 cursor-grab active:cursor-grabbing select-none',
                       isMain ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-100',
                       isDragging && 'opacity-40',
                       isDropTarget && 'ring-2 ring-sky-400',
                     )}
-                    draggable
-                    title={isMain ? '主图 · 可拖拽排序' : '拖到第一张位置设为主图'}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = 'move'
-                      event.dataTransfer.setData('text/plain', String(imageIndex))
-                      setDragImageIndex(imageIndex)
+                    title={isMain ? '主图 · 按住拖动可排序，单击看大图' : '按住拖到第一张设为主图，单击看大图'}
+                    onPointerDown={(event) => {
+                      if ((event.target as HTMLElement).closest('button')) return
+                      if (event.button !== 0) return
+                      pointerDragRef.current = {
+                        from: imageIndex,
+                        pointerId: event.pointerId,
+                        started: false,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                      }
+                      event.currentTarget.setPointerCapture(event.pointerId)
                     }}
-                    onDragOver={(event) => {
-                      event.preventDefault()
-                      event.dataTransfer.dropEffect = 'move'
-                      if (dropImageIndex !== imageIndex) setDropImageIndex(imageIndex)
+                    onPointerMove={(event) => {
+                      const drag = pointerDragRef.current
+                      if (!drag || drag.pointerId !== event.pointerId) return
+                      const dist = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY)
+                      if (!drag.started && dist > 8) {
+                        drag.started = true
+                        setDragImageIndex(drag.from)
+                      }
+                      if (!drag.started) return
+                      const hit = document.elementFromPoint(event.clientX, event.clientY)
+                      const idxRaw = hit?.closest('[data-pending-gallery-index]')?.getAttribute('data-pending-gallery-index')
+                      const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
+                      if (idx != null && Number.isFinite(idx) && idx !== dropImageIndex) setDropImageIndex(idx)
                     }}
-                    onDragLeave={() => {
-                      if (dropImageIndex === imageIndex) setDropImageIndex(null)
+                    onPointerUp={(event) => {
+                      const hit = document.elementFromPoint(event.clientX, event.clientY)
+                      const idxRaw = hit?.closest('[data-pending-gallery-index]')?.getAttribute('data-pending-gallery-index')
+                      const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
+                      finishPointerDrag(idx != null && Number.isFinite(idx) ? idx : dropImageIndex)
                     }}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      const parsed = Number.parseInt(event.dataTransfer.getData('text/plain'), 10)
-                      const fromIndex = Number.isFinite(parsed) ? parsed : dragImageIndex
-                      setDragImageIndex(null)
-                      setDropImageIndex(null)
-                      if (fromIndex == null || fromIndex === imageIndex) return
-                      void handlers.reorderPendingImportImages(item.item_id, fromIndex, imageIndex)
-                    }}
-                    onDragEnd={() => {
-                      setDragImageIndex(null)
-                      setDropImageIndex(null)
-                    }}
+                    onPointerCancel={() => finishPointerDrag(null)}
                   >
                     {isMain ? (
                       <span className="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-emerald-600/90 py-px text-center text-[8px] font-semibold leading-none text-white">
@@ -246,7 +272,8 @@ function PendingImportTableRowsInner({
                       src={url}
                       alt={item.item_productName || item.item_parsedName || '商品图片'}
                       className="h-full w-full"
-                      title="点击查看大图"
+                      overlayClassName="cursor-grab"
+                      title="单击看大图，按住拖动排序"
                     >
                       <EditableImg
                         propKey={`pending-${item.item_id}-${imageIndex}`}
@@ -328,7 +355,7 @@ function PendingImportTableRowsInner({
                   onChange={e => handlers.uploadPendingImportImages(item.item_id, e)}
                 />
                 <div className="mt-1 text-[11px] text-slate-400">
-                  主图轮播 · {(item.item_galleryUrls?.length || (item.item_mainImageUrl ? 1 : 0))} 张 · 拖到第一张设为主图
+                  主图轮播 · {(item.item_galleryUrls?.length || (item.item_mainImageUrl ? 1 : 0))} 张全部显示 · 按住拖到第一张即主图
                   {state.pendingImportImageUploadingIds.includes(item.item_id) ? ' · 后台上传中' : ''}
                 </div>
               </div>

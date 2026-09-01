@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages, Square } from 'lucide-react';
+import { Search, RotateCcw, Plus, Trash2, Package, ArrowUpCircle, ArrowDownCircle, Info, Layers, Image as ImageIcon, Settings2, AlertCircle, TableProperties, Upload, FileSpreadsheet, Percent, Coins, FolderTree, Sparkles, Tags, Link2, Unlink, ChevronDown, RefreshCw, Languages, Square, Eraser } from 'lucide-react';
 import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Checkbox, Sheet, SheetContent, SheetHeader, SheetTitle, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Textarea, Badge, Card, CardContent, Separator, Alert, AlertTitle, AlertDescription, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/backend/components/ui';
 import EditableImg from '@/@base/EditableImg';
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement';
@@ -301,6 +301,17 @@ export const ProductManagementView = ({
       <Button variant="outline" size="sm" className="h-9 border-slate-200 shrink-0 min-w-[8.5rem]" disabled={!hasCategoryProductSelected} onClick={() => handlers.openConfirmDialog('UNBIND_CATEGORIES', selectedCategoryProductIds)} data-api-unique-id='productmanagementview-runbindcats-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
         <Unlink className="w-4 h-4 mr-2 shrink-0 text-rose-600" data-api-unique-id='productmanagementview-runbindcatsicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />批量移除类目
       </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 border-fuchsia-300 bg-fuchsia-50 text-fuchsia-950 hover:bg-fuchsia-100 shrink-0"
+        disabled={!hasProductSelected || state.mosaicGalleryRunning}
+        onClick={() => void handlers.handleBatchMosaicGalleries()}
+        title="勾选商品后，识别主图/色图右下角 1688 水印并打马赛克"
+      >
+        <Eraser className={cn('w-4 h-4 mr-2 shrink-0', state.mosaicGalleryRunning && 'animate-pulse')} />
+        {state.mosaicGalleryRunning ? '马赛克处理中...' : '马赛克'}
+      </Button>
       <SharedProductBatchUtilityButtons
         selectedCount={selectedProductIds.length}
         titleSuffixLoading={state.titleSuffixRunning}
@@ -359,7 +370,7 @@ export const ProductManagementView = ({
   // 待上传区批量工具条（与商品列表同槽位叠放，切换 Tab 不挤动下方 Tab 行）
   const pendingBatchToolbar = (
     <div className="flex items-center gap-2 flex-wrap" data-api-unique-id='productmanagementview-rpendingactionrow-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-      <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700 shrink-0 min-w-[9.5rem] justify-center" disabled={!hasPendingSelected || state.pendingImportPublishing || pendingParseActive} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+      <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700 shrink-0 min-w-[9.5rem] justify-center" disabled={!hasPendingSelected || state.pendingImportPublishing} onClick={handlers.publishSelectedPendingImportItems} data-api-unique-id='productmanagementview-rpendingbulkpublish-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
         <ArrowUpCircle className="w-4 h-4 mr-2 shrink-0" data-api-unique-id='productmanagementview-rpendingbulkpublishicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
         <span className="inline-block min-w-[6.5rem] text-left">{state.pendingImportPublishing ? '发布中...' : '批量发布并上架'}</span>
       </Button>
@@ -376,6 +387,17 @@ export const ProductManagementView = ({
           ? <Square className="w-4 h-4 mr-2 shrink-0 fill-current" />
           : <RefreshCw className="w-4 h-4 mr-2 shrink-0" data-api-unique-id='productmanagementview-rpendingbulkreparseicon-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />}
         <span className="inline-block min-w-[3rem] text-left">{pendingParseButtonLabel}</span>
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 border-fuchsia-300 bg-fuchsia-50 text-fuchsia-950 hover:bg-fuchsia-100 shrink-0"
+        disabled={!hasPendingSelected || state.pendingImportPublishing || state.mosaicGalleryRunning}
+        onClick={() => void handlers.handleBatchMosaicGalleries()}
+        title="勾选待上传商品后，识别主图/色图右下角 1688 水印并打马赛克"
+      >
+        <Eraser className={cn('w-4 h-4 mr-2 shrink-0', state.mosaicGalleryRunning && 'animate-pulse')} />
+        {state.mosaicGalleryRunning ? '马赛克处理中...' : '马赛克'}
       </Button>
       <span className={cn('text-xs text-sky-700 max-w-[280px] leading-snug', state.pendingImportParseStatusLabel ? 'opacity-100' : 'opacity-0')} aria-hidden={!state.pendingImportParseStatusLabel}>
         {state.pendingImportParseStatusLabel || ' '}
@@ -414,7 +436,7 @@ export const ProductManagementView = ({
         variant="outline"
         size="sm"
         className="h-9 border-sky-200 bg-sky-50/70 text-sky-800 hover:bg-sky-100 shrink-0 min-w-[8.5rem] justify-center"
-        disabled={!hasPendingSelected || state.reclassifyRunning || state.pendingImportPublishing || pendingParseActive}
+        disabled={!hasPendingSelected || state.reclassifyRunning || state.pendingImportPublishing}
         onClick={() => void handlers.handleCalibratePendingImportItems()}
       >
         <Tags className={cn('w-4 h-4 mr-2 shrink-0', state.reclassifyRunning && 'animate-pulse')} />
@@ -463,7 +485,7 @@ export const ProductManagementView = ({
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(220px,1fr)_220px_180px_180px_150px_160px_auto] gap-4 items-end" data-api-unique-id='productmanagementview-r3db458e81e302023-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
             <div className="min-w-[240px]" data-api-unique-id='productmanagementview-r5f9b22dc687f7f42-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block" data-api-unique-id='productmanagementview-r3d2c37a52a3ea9b9-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>商品名称 / SPU / SKU</label>
-              <Input className="h-10 px-3" placeholder="搜索名称、SPU（如 CUP2026080005）、SKU..." value={state.filterKeyword} onChange={e => handlers.setFilterKeyword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handlers.handleSearch() } }} data-api-unique-id='productmanagementview-r81d0f01239989219-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
+              <Input className="h-10 px-3" placeholder={isPendingTab ? '待上传区搜索名称、SPU（如 HAND2026090034）、1688货号' : '搜索名称、SPU（如 CUP2026080005）、SKU...'} value={state.filterKeyword} onChange={e => handlers.setFilterKeyword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handlers.handleSearch() } }} data-api-unique-id='productmanagementview-r81d0f01239989219-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />
             </div>
             <div data-api-unique-id='productmanagementview-r925450a500205bd7-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 block" data-api-unique-id='productmanagementview-rf1e8fb25ffd9b9ff-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>类目层级</label>
@@ -670,51 +692,36 @@ export const ProductManagementView = ({
                   </AlertDescription>
                 </Alert>}
 
-              {/* 仅在真正有进行中的解析作业时展示进度；卡住的「导入任务」统计条已移除 */}
+              {/* Compact status only — parse runs in background and does not lock other actions */}
               {state.pendingImportParseJob?.busy ? (
-                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3" data-controller-name="当前解析进度">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wider text-sky-700">当前解析进度</div>
-                      <div className="mt-1 text-base font-semibold text-sky-950">
-                        {state.pendingImportParseStatusLabel || '正在解析…'}
-                      </div>
-                      {state.pendingImportParseJob.label ? (
-                        <div className="mt-1 text-xs text-sky-700/80 font-mono">{state.pendingImportParseJob.label}</div>
-                      ) : null}
-                    </div>
-                    <Button
-                      variant="destructive"
-                      className="h-10"
-                      disabled={state.pendingImportParseCancelling}
-                      onClick={() => void handlers.cancelPendingImportParse()}
-                    >
-                      <Square className="w-4 h-4 mr-2 fill-current" />
-                      {state.pendingImportParseCancelling ? '终止中…' : '终止解析'}
-                    </Button>
-                  </div>
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2" data-controller-name="当前解析进度">
+                  <span className="text-xs font-semibold text-sky-800 shrink-0">后台解析中</span>
+                  <span className="text-sm text-sky-950 min-w-0 flex-1 truncate">
+                    {state.pendingImportParseStatusLabel || '正在解析…'}
+                    {state.pendingImportParseJob.total > 0
+                      ? ` · ${Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100))}%`
+                      : ''}
+                  </span>
                   {state.pendingImportParseJob.total > 0 ? (
-                    <>
-                      <div className="flex items-end justify-between gap-3">
-                        <div className="text-3xl font-header font-bold text-sky-900">
-                          {Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100))}%
-                        </div>
-                        <span className="text-xs text-sky-700">
-                          已完成 {state.pendingImportParseJob.done} / {state.pendingImportParseJob.total}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-sky-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-sky-600 transition-all"
-                          style={{
-                            width: `${Math.max(0, Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100)))}%`,
-                          }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-sm text-sky-800">后台正在处理，进度会每几秒自动刷新。若长时间无变化可点「终止解析」后重试。</p>
-                  )}
+                    <div className="h-1.5 w-28 rounded-full bg-sky-100 overflow-hidden shrink-0">
+                      <div
+                        className="h-full rounded-full bg-sky-600 transition-all"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, Math.round((state.pendingImportParseJob.done / Math.max(1, state.pendingImportParseJob.total)) * 100)))}%`,
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-rose-700 hover:text-rose-800 hover:bg-rose-50 shrink-0"
+                    disabled={state.pendingImportParseCancelling}
+                    onClick={() => void handlers.cancelPendingImportParse()}
+                  >
+                    <Square className="w-3.5 h-3.5 mr-1 fill-current" />
+                    {state.pendingImportParseCancelling ? '终止中…' : '终止'}
+                  </Button>
                 </div>
               ) : null}
 
