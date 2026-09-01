@@ -101,7 +101,10 @@ async function main() {
         },
       ],
     },
-    externals: { express: 'commonjs express' },
+    externals: {
+      express: 'commonjs express',
+      sharp: 'commonjs sharp',
+    },
     plugins: [
       new webpack.IgnorePlugin({ resourceRegExp: /^pg-native$/ }),
     ],
