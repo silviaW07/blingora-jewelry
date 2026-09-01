@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { ArrowUpCircle, ImagePlus, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
-import { PreviewableThumb } from '@/backend/components/ImageLightbox'
+import { ImageLightbox, PreviewableThumb } from '@/backend/components/ImageLightbox'
 import {
   PendingImport1688DetailDialog,
   PendingImport1688DetailTrigger,
@@ -87,6 +87,7 @@ function PendingImportTableRowsInner({
   const [detailOpen, setDetailOpen] = useState(false)
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null)
   const [dropImageIndex, setDropImageIndex] = useState<number | null>(null)
+  const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null)
   const handlersRef = React.useRef(handlers)
   handlersRef.current = handlers
   const pointerDragRef = React.useRef<{
@@ -239,7 +240,6 @@ function PendingImportTableRowsInner({
                         startX: event.clientX,
                         startY: event.clientY,
                       }
-                      event.currentTarget.setPointerCapture(event.pointerId)
                     }}
                     onPointerMove={(event) => {
                       const drag = pointerDragRef.current
@@ -248,6 +248,11 @@ function PendingImportTableRowsInner({
                       if (!drag.started && dist > 8) {
                         drag.started = true
                         setDragImageIndex(drag.from)
+                        try {
+                          event.currentTarget.setPointerCapture(event.pointerId)
+                        } catch {
+                          /* ignore */
+                        }
                       }
                       if (!drag.started) return
                       const hit = document.elementFromPoint(event.clientX, event.clientY)
@@ -256,6 +261,21 @@ function PendingImportTableRowsInner({
                       if (idx != null && Number.isFinite(idx) && idx !== dropImageIndex) setDropImageIndex(idx)
                     }}
                     onPointerUp={(event) => {
+                      const drag = pointerDragRef.current
+                      try {
+                        event.currentTarget.releasePointerCapture(event.pointerId)
+                      } catch {
+                        /* ignore */
+                      }
+                      if (!drag?.started) {
+                        pointerDragRef.current = null
+                        setDragImageIndex(null)
+                        setDropImageIndex(null)
+                        if (!(event.target as HTMLElement).closest('button')) {
+                          setGalleryPreviewUrl(url)
+                        }
+                        return
+                      }
                       const hit = document.elementFromPoint(event.clientX, event.clientY)
                       const idxRaw = hit?.closest('[data-pending-gallery-index]')?.getAttribute('data-pending-gallery-index')
                       const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
@@ -272,7 +292,7 @@ function PendingImportTableRowsInner({
                       src={url}
                       alt={item.item_productName || item.item_parsedName || '商品图片'}
                       className="h-full w-full"
-                      overlayClassName="cursor-grab"
+                      overlayClassName="pointer-events-none cursor-grab"
                       title="单击看大图，按住拖动排序"
                     >
                       <EditableImg
@@ -679,6 +699,12 @@ function PendingImportTableRowsInner({
         sourceUrl={item.item_sourceUrl}
         productDetail={item.item_productDetail}
         featureAttributes={item.item_featureAttributes}
+      />
+      <ImageLightbox
+        src={galleryPreviewUrl || ''}
+        alt={item.item_productName || item.item_parsedName || '商品图片'}
+        open={Boolean(galleryPreviewUrl)}
+        onClose={() => setGalleryPreviewUrl(null)}
       />
     </>
   )

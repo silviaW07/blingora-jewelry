@@ -198,7 +198,7 @@ export function PreviewableThumb({
         <div
           role="button"
           tabIndex={0}
-          className={`absolute inset-0 z-[1] cursor-zoom-in bg-transparent ${overlayClassName || ''}`}
+          className={`absolute inset-0 z-[1] bg-transparent ${overlayClassName || 'cursor-zoom-in'}`}
           title={title}
           aria-label={title}
           onPointerDown={(event) => {
@@ -214,9 +214,7 @@ export function PreviewableThumb({
           }}
           onClick={(event) => {
             event.stopPropagation()
-            event.preventDefault()
             if (dragMovedRef.current) return
-            if ((event.currentTarget as HTMLElement).closest('[data-gallery-dragging="true"]')) return
             setOpen(true)
             onPreviewOpen?.()
           }}
