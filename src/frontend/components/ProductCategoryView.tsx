@@ -13,6 +13,7 @@ import { ListingPageHead } from '@/frontend/components/ListingPageHead';
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader';
 import { useTranslation } from 'react-i18next';
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels';
+import { listingPriceBoundMaxUsd } from '@/shared/priceThreshold';
 interface Props {
   state: ProductCategoryState;
   handlers: ProductCategoryHandlers;
@@ -214,6 +215,13 @@ export const ProductCategoryView = ({
                     minPrice={queryState.minPrice}
                     maxPrice={queryState.maxPrice}
                     sortBy={queryState.sortBy}
+                    priceBoundMax={listingPriceBoundMaxUsd(
+                      categoryDetail?.category_name,
+                      categories.find((category) => category.category_id === queryState.categoryId)?.category_name,
+                      categories
+                        .flatMap((category) => category.children)
+                        .find((child) => child.category_id === queryState.categoryId)?.category_name,
+                    )}
                     onPriceRangeChange={handlers.handlePriceRangeChange}
                     onSortChange={handlers.handleSortChange}
                   />

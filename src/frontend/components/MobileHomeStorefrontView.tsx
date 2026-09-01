@@ -28,6 +28,7 @@ import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { categoryHref, hardNavigate, hardNavProps, useChromeActivate, useStorefrontLink } from '@/frontend/utils/hardNavigate'
 import { isAbsoluteHttpUrl, normalizePosterLinkUrl } from '@/shared/posterLink'
+import { listingPriceBoundMaxUsd } from '@/shared/priceThreshold'
 import type { HomeBannerItem } from '@/frontend/hooks/useHome'
 
 const isDefaultHomeQueryState = (state: HomeState) => {
@@ -503,6 +504,12 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 minPrice={queryState.minPrice}
                 maxPrice={queryState.maxPrice}
                 sortBy={queryState.sortBy}
+                priceBoundMax={listingPriceBoundMaxUsd(
+                  categoryDetail?.category_name,
+                  categories.find((item) => item.category_id === queryState.categoryId)?.category_name,
+                  selectedParentCategory?.children.find((c) => c.category_id === queryState.categoryId)
+                    ?.category_name,
+                )}
                 onPriceRangeChange={handlers.handlePriceRangeChange}
                 onSortChange={handlers.handleSortChange}
                 brandOptions={state.availableBrandFilters}

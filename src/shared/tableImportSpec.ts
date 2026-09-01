@@ -183,3 +183,95 @@ export function collectTableImportSkuPairs(
 
   return pairs
 }
+
+const COLOR_DIMENSION_NAMES = new Set([
+  '颜色',
+  '颜色规格',
+  '颜色分类',
+  '花色',
+  '花色分类',
+  '款式颜色',
+  'color',
+  'colour',
+  'colors',
+])
+
+export function isColorDimensionName(name?: string | null): boolean {
+  const normalized = String(name || '').trim().toLowerCase()
+  if (!normalized) return false
+  if (COLOR_DIMENSION_NAMES.has(normalized) || COLOR_DIMENSION_NAMES.has(String(name || '').trim())) {
+    return true
+  }
+  if (normalized.includes('颜色') && !normalized.includes('尺码') && !normalized.includes('尺寸')) {
+    return true
+  }
+  return false
+}
+
+const CLASSIC_SIZE_TOKEN_RE =
+  /^(xxs|xs|s|m|l|xl|xxl|xxxl|2xl|3xl|4xl|均码|大号|中号|小号|free\s*size)$/i
+
+export function looksLikeSizeToken(value?: string | null): boolean {
+  const text = String(value || '').trim()
+  if (!text) return false
+  if (DIMENSION_RE.test(text.replace(/\s+/g, '').replace(/[xX×]/g, '*'))) return true
+  if (CLASSIC_SIZE_TOKEN_RE.test(text)) return true
+  if (/^\d{1,2}(\.\d)?$/.test(text)) return true
+  if (/\d+\s*(cm|mm|ml|oz|kg|g)$/i.test(text)) return true
+  return false
+}
+
+/** 把「颜色规格」等别名、打包色码拆成前台能识别的 颜色 / Size */
+export function enrichSkuColorSizeAttributes(
+  attrs: Array<{ name: string; value: string }>,
+  extra?: { sizeLabel?: string | null },
+): Array<{ name: string; value: string }> {
+  const out: Array<{ name: string; value: string }> = []
+  const push = (name: string, value: string) => {
+    const label = isColorDimensionName(name) ? '颜色' : name
+    const token = String(value || '').trim()
+    if (!label || !token) return
+    if (out.some((row) => row.name === label && row.value === token)) return
+    out.push({ name: label, value: token })
+  }
+
+  for (const attr of attrs) {
+    const packed = parsePackedColorSize(attr.value)
+    if (packed?.color && packed.size) {
+      push('颜色', packed.color)
+      push('Size', packed.size)
+      continue
+    }
+    if (isColorDimensionName(attr.name)) {
+      push('颜色', attr.value)
+      continue
+    }
+    push(attr.name, attr.value)
+  }
+
+  const stored = String(extra?.sizeLabel || '').trim()
+  if (stored) {
+    const packed = parsePackedColorSize(stored)
+    if (packed?.color) push('颜色', packed.color)
+    if (packed?.size) {
+      push('Size', packed.size)
+    } else if (!out.some((row) => isColorDimensionName(row.name))) {
+      if (!looksLikeSizeToken(stored)) push('颜色', stored)
+      else if (!out.some((row) => looksLikeSizeToken(row.value))) push('Size', stored)
+    } else if (looksLikeSizeToken(stored) && !out.some((row) => looksLikeSizeToken(row.value))) {
+      push('Size', stored)
+    }
+  }
+
+  // 仅有「规格」且取值不像尺码时，当作颜色（耳环/珠宝常见）
+  const hasColor = out.some((row) => row.name === '颜色')
+  if (!hasColor) {
+    for (const row of out) {
+      if (!/^(规格|spec)$/i.test(row.name)) continue
+      if (looksLikeSizeToken(row.value)) continue
+      row.name = '颜色'
+    }
+  }
+
+  return out
+}

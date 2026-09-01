@@ -83,6 +83,8 @@ function PendingImportTableRowsInner({
   sourceConfig,
 }: PendingImportTableRowsProps) {
   const [detailOpen, setDetailOpen] = useState(false)
+  const [dragImageIndex, setDragImageIndex] = useState<number | null>(null)
+  const [dropImageIndex, setDropImageIndex] = useState<number | null>(null)
   const expanded = state.expandedPendingImportIds.includes(item.item_id)
   const pendingSkus = item.item_skus || []
   const targetCategoryOption =
@@ -182,21 +184,64 @@ function PendingImportTableRowsInner({
         <TableCell className="whitespace-normal">
           <div className="flex items-start gap-3">
             <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2 max-w-[260px]">
+              <div className="flex flex-wrap items-center gap-2 max-w-[280px]">
                 {(() => {
                   const allUrls = item.item_galleryUrls?.length
                     ? item.item_galleryUrls
                     : (item.item_mainImageUrl || item.item_parsedMainImageUrl
                       ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
                       : [])
-                  const visibleUrls = allUrls.slice(0, 4)
-                  const hiddenCount = Math.max(0, allUrls.length - visibleUrls.length)
                   return (
                     <>
-                      {visibleUrls.map((url, imageIndex) => {
+                      {allUrls.map((url, imageIndex) => {
                   const canDelete = allUrls.length > 1
+                  const isMain = imageIndex === 0
+                  const isDragging = dragImageIndex === imageIndex
+                  const isDropTarget = dropImageIndex === imageIndex && dragImageIndex !== null && dragImageIndex !== imageIndex
                   return (
-                  <div key={`${item.item_id}-${imageIndex}-${url}`} className="relative w-12 h-12 rounded border border-slate-100 overflow-hidden flex-shrink-0 bg-slate-50">
+                  <div
+                    key={`${item.item_id}-${imageIndex}-${url}`}
+                    className={cn(
+                      'relative w-12 h-12 rounded border overflow-hidden flex-shrink-0 bg-slate-50 cursor-grab active:cursor-grabbing',
+                      isMain ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-100',
+                      isDragging && 'opacity-40',
+                      isDropTarget && 'ring-2 ring-sky-400',
+                    )}
+                    draggable
+                    title={isMain ? '主图 · 可拖拽排序' : '拖到第一张位置设为主图'}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move'
+                      event.dataTransfer.setData('text/plain', String(imageIndex))
+                      setDragImageIndex(imageIndex)
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                      if (dropImageIndex !== imageIndex) setDropImageIndex(imageIndex)
+                    }}
+                    onDragLeave={() => {
+                      if (dropImageIndex === imageIndex) setDropImageIndex(null)
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      const parsed = Number.parseInt(event.dataTransfer.getData('text/plain'), 10)
+                      const fromIndex = Number.isFinite(parsed) ? parsed : dragImageIndex
+                      setDragImageIndex(null)
+                      setDropImageIndex(null)
+                      if (fromIndex == null || fromIndex === imageIndex) return
+                      void handlers.reorderPendingImportImages(item.item_id, fromIndex, imageIndex)
+                    }}
+                    onDragEnd={() => {
+                      setDragImageIndex(null)
+                      setDropImageIndex(null)
+                    }}
+                  >
+                    {isMain ? (
+                      <span className="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-emerald-600/90 py-px text-center text-[8px] font-semibold leading-none text-white">
+                        主图
+                      </span>
+                    ) : null}
                     <PreviewableThumb
                       src={url}
                       alt={item.item_productName || item.item_parsedName || '商品图片'}
@@ -216,6 +261,7 @@ function PendingImportTableRowsInner({
                       type="button"
                       className="absolute left-0 top-0 z-[2] flex h-4 w-4 items-center justify-center rounded-br bg-black/70 text-[9px] text-white"
                       title="替换图片"
+                      onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation()
                         event.preventDefault()
@@ -233,6 +279,7 @@ function PendingImportTableRowsInner({
                       )}
                       title={canDelete ? '删除图片' : '至少保留一张主图，请先上传新图再删'}
                       disabled={!canDelete}
+                      onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation()
                         event.preventDefault()
@@ -254,11 +301,6 @@ function PendingImportTableRowsInner({
                   </div>
                   )
                 })}
-                      {hiddenCount > 0 ? (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-500">
-                          +{hiddenCount}
-                        </div>
-                      ) : null}
                     </>
                   )
                 })()}
@@ -286,7 +328,7 @@ function PendingImportTableRowsInner({
                   onChange={e => handlers.uploadPendingImportImages(item.item_id, e)}
                 />
                 <div className="mt-1 text-[11px] text-slate-400">
-                  主图轮播 · {(item.item_galleryUrls?.length || (item.item_mainImageUrl ? 1 : 0))} 张 · 可多选
+                  主图轮播 · {(item.item_galleryUrls?.length || (item.item_mainImageUrl ? 1 : 0))} 张 · 拖到第一张设为主图
                   {state.pendingImportImageUploadingIds.includes(item.item_id) ? ' · 后台上传中' : ''}
                 </div>
               </div>

@@ -1198,6 +1198,8 @@ model product_category_relations {
   id         String   @id @default(uuid()) @db.VarChar(36)
   productId  String   @db.VarChar(36)
   categoryId String   @db.VarChar(36)
+  /** 类目内优先展示权重；0 表示不置顶，沿用前台原排序 */
+  sortWeight Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt @default(now())
 
@@ -1207,6 +1209,7 @@ model product_category_relations {
   @@unique([productId, categoryId])
   @@index([productId])
   @@index([categoryId])
+  @@index([categoryId, sortWeight])
 }
 
 model product_keyword_relations {

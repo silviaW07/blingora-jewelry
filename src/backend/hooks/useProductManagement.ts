@@ -779,6 +779,7 @@ export interface ProductManagementHandlers {
   uploadPendingImportImages: (itemId: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   replacePendingImportImage: (itemId: string, imageIndex: number, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   removePendingImportImage: (itemId: string, imageIndex: number) => Promise<void>
+  reorderPendingImportImages: (itemId: string, fromIndex: number, toIndex: number) => Promise<void>
   uploadPendingImportSkuImage: (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   replacePendingImportSkuImage: (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   removePendingImportSkuImage: (itemId: string, skuKey: string) => Promise<void>
@@ -4158,6 +4159,36 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
   }
 
+  const reorderPendingImportImages = async (itemId: string, fromIndex: number, toIndex: number) => {
+    if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || fromIndex === toIndex) return
+    const item =
+      pendingImportQueueRef.current.find(row => row.item_id === itemId) ||
+      pendingImportQueue.find(row => row.item_id === itemId)
+    const current = readPendingGalleryUrls(item)
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) return
+    const next = [...current]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    const previousMain = current[0]
+    setPendingImportQueue(prev => prev.map(row =>
+      row.item_id === itemId
+        ? {
+            ...row,
+            item_galleryUrls: next,
+            item_mainImageUrl: next[0] || row.item_mainImageUrl,
+            item_parsedMainImageUrl: next[0] || row.item_parsedMainImageUrl,
+          }
+        : row,
+    ))
+    try {
+      await persistPendingImportGallery(itemId, next)
+      toast.success(next[0] !== previousMain ? '已设为主图并保存顺序' : '图片顺序已保存')
+    } catch (err: any) {
+      toast.error(err.message || '图片排序失败')
+      await refreshPendingImportQueue({ silent: true }).catch(() => undefined)
+    }
+  }
+
   const syncPendingImportSkuImage = (itemId: string, skuKey: string, imageUrl: string | null) => {
     setPendingImportQueue(prev => prev.map(item => {
       if (item.item_id !== itemId) return item
@@ -4555,6 +4586,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       uploadPendingImportImages,
       replacePendingImportImage,
       removePendingImportImage,
+      reorderPendingImportImages,
       uploadPendingImportSkuImage,
       replacePendingImportSkuImage,
       removePendingImportSkuImage,

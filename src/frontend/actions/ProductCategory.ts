@@ -297,6 +297,7 @@ import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isProductTypeCategory } from '@/shared/categoryMatchGuards'
 import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
+import { priceThresholdMaxUsdForCategory, productFitsPriceThresholdUsd } from '@/shared/priceThreshold'
 
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION'
@@ -1396,6 +1397,31 @@ function mapProductRecordToItem(
   }
 }
 
+async function loadCategoryPinIds(categoryId?: string | null): Promise<string[]> {
+  const id = String(categoryId || '').trim()
+  if (!id) return []
+  try {
+    const rows = await prisma.product_category_relations.findMany({
+      where: { categoryId: id, sortWeight: { gt: 0 } },
+      orderBy: [{ sortWeight: 'desc' }, { updatedAt: 'desc' }],
+      select: { productId: true },
+      take: 60,
+    })
+    return rows.map((row) => row.productId)
+  } catch {
+    return []
+  }
+}
+
+function applyPinOrderToIds(pinIds: string[], orderedIds: string[]): string[] {
+  if (!pinIds.length || !orderedIds.length) return orderedIds
+  const present = new Set(orderedIds)
+  const pinned = pinIds.filter((id) => present.has(id))
+  if (!pinned.length) return orderedIds
+  const pinSet = new Set(pinned)
+  return [...pinned, ...orderedIds.filter((id) => !pinSet.has(id))]
+}
+
 /**
  * 获取商品列表，支持多重条件筛选、排序和分页。
  */
@@ -1408,11 +1434,18 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   )
   const lang = normalizeProductLang(input.lang)
 
-  const [exchangeRate, pricingConfig] = await Promise.all([
+  const [exchangeRate, pricingConfig, listingCategory] = await Promise.all([
     getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
     loadPricingPromotionConfig(prisma),
+    input.category_id
+      ? prisma.category.findUnique({
+          where: { id: input.category_id },
+          select: { name: true, slug: true },
+        })
+      : Promise.resolve(null),
   ])
   const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
+  const thresholdCap = priceThresholdMaxUsdForCategory(listingCategory?.name, listingCategory?.slug)
 
   const cacheKey = buildListCacheKey(input, lang, siteWideCoef)
   const cachedOutput = getCachedList(cacheKey)
@@ -1539,6 +1572,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     input.min_price === undefined &&
     input.max_price === undefined &&
     !input.has_discount &&
+    thresholdCap == null &&
     (sortBy === 'NEWEST' || sortBy === 'POPULARITY' || wantsPriceSort)
 
   if (input.stock_status && input.stock_status.length > 0) {
@@ -1548,8 +1582,13 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     ]
   }
 
+  const pinIds = await loadCategoryPinIds(input.category_id)
+  const restWhere = pinIds.length
+    ? { AND: [dbWhere, { id: { notIn: pinIds } }] }
+    : dbWhere
+
   // Slow-path ceiling: never pull thousands of fat product+SKU rows for Accessories-scale L1s.
-  const listTake = searchTokens.length > 0 ? 500 : 800
+  const listTake = thresholdCap != null ? 2500 : searchTokens.length > 0 ? 500 : 800
 
   if (canPushdownPaginate && wantsPriceSort) {
     const [total, priceRows] = await Promise.all([
@@ -1570,8 +1609,12 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         sortBy === 'PRICE_DESC' ? b.minPrice - a.minPrice : a.minPrice - b.minPrice,
       )
 
+    const rankedIds = applyPinOrderToIds(
+      pinIds,
+      ranked.map((row) => row.productId),
+    )
     const skip = (page - 1) * pageSize
-    const pageIds = ranked.slice(skip, skip + pageSize).map((row) => row.productId)
+    const pageIds = rankedIds.slice(skip, skip + pageSize)
     const pageRows =
       pageIds.length > 0
         ? await prisma.product.findMany({
@@ -1644,16 +1687,42 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
           ? [{ sortWeight: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }]
           : [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
 
-    const [total, pageRows] = await Promise.all([
-      prisma.product.count({ where: dbWhere }),
-      prisma.product.findMany({
-        where: dbWhere,
-        select: listSelect,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
+    const pinnedHits = pinIds.length
+      ? await prisma.product.findMany({
+          where: { AND: [dbWhere, { id: { in: pinIds } }] },
+          select: { id: true },
+        })
+      : []
+    const pinnedOrderedIds = pinIds.filter((id) => pinnedHits.some((row) => row.id === id))
+    const restSkip = Math.max(0, (page - 1) * pageSize - pinnedOrderedIds.length)
+    const restTake =
+      page === 1 ? Math.max(0, pageSize - pinnedOrderedIds.length) : pageSize
+
+    const [restTotal, restRows, pinnedRows] = await Promise.all([
+      prisma.product.count({ where: restWhere }),
+      restTake > 0
+        ? prisma.product.findMany({
+            where: restWhere,
+            select: listSelect,
+            orderBy,
+            skip: restSkip,
+            take: restTake,
+          })
+        : Promise.resolve([]),
+      page === 1 && pinnedOrderedIds.length
+        ? prisma.product.findMany({
+            where: { id: { in: pinnedOrderedIds } },
+            select: listSelect,
+          })
+        : Promise.resolve([]),
     ])
+
+    const pinnedById = new Map(pinnedRows.map((row) => [row.id, row]))
+    const orderedPinned = page === 1
+      ? pinnedOrderedIds.map((id) => pinnedById.get(id)).filter(Boolean)
+      : []
+    const pageRows = [...orderedPinned, ...restRows] as typeof restRows
+    const total = restTotal + pinnedOrderedIds.length
 
     const productIds = pageRows.map((p) => p.id)
     const [skuPriceAggs, skuStockRows] =
@@ -1750,6 +1819,12 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     })
     .map((p) => mapProductRecordToItem(p, lang, exchangeRate, { siteWideCoef }))
 
+  if (thresholdCap != null) {
+    items = items.filter((item) =>
+      productFitsPriceThresholdUsd(item.price, item.price_max, thresholdCap),
+    )
+  }
+
   if (input.min_price !== undefined) {
     items = items.filter(i => i.price >= input.min_price!)
   }
@@ -1781,6 +1856,15 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         return b.created_at_timestamp - a.created_at_timestamp
     }
   })
+
+  if (pinIds.length) {
+    const pinIndex = new Map(pinIds.map((id, index) => [id, index]))
+    const pinnedItems = items
+      .filter((item) => pinIndex.has(item.product_id))
+      .sort((a, b) => (pinIndex.get(a.product_id) ?? 0) - (pinIndex.get(b.product_id) ?? 0))
+    const restItems = items.filter((item) => !pinIndex.has(item.product_id))
+    items = [...pinnedItems, ...restItems]
+  }
 
   const total = items.length
   const skip = (page - 1) * pageSize

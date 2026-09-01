@@ -36,6 +36,7 @@ import {
   resolveSkuMinOrderQty,
 } from '@/shared/minOrderQty'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
+import { isColorDimensionName } from '@/shared/tableImportSpec'
 
 /**
  * 数字感知的自然排序：让「颜色1、颜色2 … 颜色10」按数值升序而非字符串序，
@@ -47,10 +48,7 @@ const naturalCompareLabels = (a: string, b: string): number =>
     sensitivity: 'base',
   })
 
-const isColorAttributeName = (name?: string | null) => {
-  const normalized = String(name || '').trim().toLowerCase()
-  return normalized === '颜色' || normalized === 'color' || normalized === 'colour'
-}
+const isColorAttributeName = (name?: string | null) => isColorDimensionName(name)
 
 /** 1688 常把无尺码 SKU 写成「默认/Default」——不当作真实规格维 */
 const isPlaceholderSpecValue = (value?: string | null) =>
@@ -394,6 +392,28 @@ export const useProductDetail = (seed?: {
     // colorAttribute is derived from this product; productIdKey is the reset key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdKey])
+
+  useEffect(() => {
+    if (!product || !colorAttribute) return
+    const first = colorAttribute.values.find((value) => String(value || '').trim())
+    if (!first) return
+    setManualColorValue(first)
+    setSelectedAttributes({ [colorAttribute.name]: first })
+    const sameAttr = (left?: string | null, right?: string | null) =>
+      String(left || '').trim().toLowerCase() === String(right || '').trim().toLowerCase()
+    const matched = product.skus.filter((sku) =>
+      sku.attributeJson?.some(
+        (attr) => sameAttr(attr.name, colorAttribute.name) && sameAttr(attr.value, first),
+      ),
+    )
+    const primary = matched.find((sku) => Boolean(sku.imageUrl)) || matched[0] || null
+    if (primary?.imageUrl) setActiveImage(primary.imageUrl)
+    if (!sizeAttribute && primary) {
+      setManualSizeSkuId(primary.id)
+      setSelectedSku(primary)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productIdKey, colorAttribute, sizeAttribute])
 
   const sortedGallery = useMemo(() => {
     if (!product) return []

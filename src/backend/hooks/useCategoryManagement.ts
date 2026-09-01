@@ -24,6 +24,7 @@ import type {
   CreateKeywordItemInput,
   UpdateKeywordItemInput,
   BatchApplyKeywordsInput,
+  CategoryPinProductItem,
 } from '@/backend/actions/CategoryManagement';
 import {
   getCategoryList,
@@ -52,6 +53,8 @@ import {
   updateCategorySortWeight,
   updateCategoryPriceCoefficient,
   batchUpdateCategorySortWeight,
+  listCategoryPinProducts,
+  saveCategoryProductPinOrder,
 } from '@/backend/actions/CategoryManagement';
 import { toast } from 'sonner';
 import { canEditCategoryPriceCoefficient } from '@/shared/categoryPricing';
@@ -337,6 +340,10 @@ export interface CategoryManagementState {
   coefficientInputs: Record<string, string>;
   isDrawerOpen: boolean;
   editingId: string | null;
+  categoryPinPinned: CategoryPinProductItem[];
+  categoryPinCatalog: CategoryPinProductItem[];
+  categoryPinLoading: boolean;
+  categoryPinSaving: boolean;
   formData: FormFields;
   isSubmitting: boolean;
   deleteItem: CategoryItem | null;
@@ -418,6 +425,11 @@ export interface CategoryManagementHandlers {
   setDeleteItem: (item: CategoryItem | null) => void;
   confirmDelete: () => Promise<void>;
   navigateToDetail: (categoryId: string) => void;
+  onCategoryPinDragStart: (productId: string, from: 'pinned' | 'catalog') => void;
+  onCategoryPinDragEnter: (productId: string, zone: 'pinned' | 'catalog') => void;
+  onCategoryPinDragEnd: () => Promise<void>;
+  unpinCategoryProduct: (productId: string) => Promise<void>;
+  pinCategoryProduct: (productId: string) => Promise<void>;
   /** 分类主图拖拽/本地上传（更新 category.image_url） */
   uploadCategoryMainImageFile: (item: CategoryItem, file: File) => Promise<void>;
   /** 分类详情抽屉里：拖拽/本地上传主图（更新 formData.image_url） */
@@ -689,6 +701,10 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
   const [coefficientInputs, setCoefficientInputs] = useState<Record<string, string>>({});
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [categoryPinPinned, setCategoryPinPinned] = useState<CategoryPinProductItem[]>([]);
+  const [categoryPinCatalog, setCategoryPinCatalog] = useState<CategoryPinProductItem[]>([]);
+  const [categoryPinLoading, setCategoryPinLoading] = useState(false);
+  const [categoryPinSaving, setCategoryPinSaving] = useState(false);
   const [formData, setFormData] = useState<FormFields>(createDefaultFormData());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteItem, setDeleteItem] = useState<CategoryItem | null>(null);
@@ -744,6 +760,8 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
   const level1DragFromId = useRef<string | null>(null);
   const level1DragOverId = useRef<string | null>(null);
   const isSavingLevel1Sort = useRef(false);
+  const pinDragFrom = useRef<{ id: string; zone: 'pinned' | 'catalog' } | null>(null);
+  const pinDragOver = useRef<{ id: string; zone: 'pinned' | 'catalog' } | null>(null);
   const [uploadingMainImageCategoryId, setUploadingMainImageCategoryId] = useState<string | null>(null);
   const [isUploadingFormMainImage, setIsUploadingFormMainImage] = useState(false);
 
@@ -892,6 +910,8 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     setIsDrawerOpen(false);
     setEditingId(null);
     setFormData(createDefaultFormData());
+    setCategoryPinPinned([]);
+    setCategoryPinCatalog([]);
   };
 
   const handleFormChange = <K extends keyof FormFields>(field: K, value: FormFields[K]) => {
@@ -1203,6 +1223,106 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     setEditingId(targetCategoryId);
     setFormData(mapCategoryToForm(current));
     setIsDrawerOpen(true);
+  };
+
+  const loadCategoryPinProducts = useCallback(async (categoryId: string) => {
+    setCategoryPinLoading(true);
+    try {
+      const result = await listCategoryPinProducts({ category_id: categoryId });
+      setCategoryPinPinned(result.pinned || []);
+      setCategoryPinCatalog(result.catalog || []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+      setCategoryPinPinned([]);
+      setCategoryPinCatalog([]);
+    } finally {
+      setCategoryPinLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDrawerOpen || !editingId) return;
+    void loadCategoryPinProducts(editingId);
+  }, [isDrawerOpen, editingId, loadCategoryPinProducts]);
+
+  const persistCategoryPins = async (nextPinned: CategoryPinProductItem[]) => {
+    if (!editingId) return;
+    setCategoryPinSaving(true);
+    try {
+      await saveCategoryProductPinOrder({
+        category_id: editingId,
+        product_ids: nextPinned.map(item => item.product_id),
+      });
+      toast.success(nextPinned.length ? '已保存该类目前台优先顺序' : '已取消优先，前台恢复原排序');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+      await loadCategoryPinProducts(editingId);
+    } finally {
+      setCategoryPinSaving(false);
+    }
+  };
+
+  const onCategoryPinDragStart = (productId: string, from: 'pinned' | 'catalog') => {
+    pinDragFrom.current = { id: productId, zone: from };
+  };
+
+  const onCategoryPinDragEnter = (productId: string, zone: 'pinned' | 'catalog') => {
+    pinDragOver.current = { id: productId, zone };
+  };
+
+  const onCategoryPinDragEnd = async () => {
+    const from = pinDragFrom.current;
+    const over = pinDragOver.current;
+    pinDragFrom.current = null;
+    pinDragOver.current = null;
+    if (!from || !over || categoryPinSaving) return;
+
+    const nextPinned = [...categoryPinPinned];
+    const nextCatalog = [...categoryPinCatalog];
+
+    if (from.zone === 'pinned' && over.zone === 'pinned') {
+      const fromIndex = nextPinned.findIndex(item => item.product_id === from.id);
+      const toIndex = nextPinned.findIndex(item => item.product_id === over.id);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+      const [moved] = nextPinned.splice(fromIndex, 1);
+      nextPinned.splice(toIndex, 0, moved);
+      setCategoryPinPinned(nextPinned);
+      await persistCategoryPins(nextPinned);
+      return;
+    }
+
+    if (from.zone === 'catalog' && (over.zone === 'pinned' || over.id === '__pin-zone__')) {
+      const catalogIndex = nextCatalog.findIndex(item => item.product_id === from.id);
+      if (catalogIndex < 0) return;
+      const [moved] = nextCatalog.splice(catalogIndex, 1);
+      let insertAt = nextPinned.length;
+      if (over.zone === 'pinned' && over.id !== '__pin-zone__') {
+        const toIndex = nextPinned.findIndex(item => item.product_id === over.id);
+        insertAt = toIndex < 0 ? nextPinned.length : toIndex;
+      }
+      nextPinned.splice(insertAt, 0, { ...moved, pin_weight: 1 });
+      setCategoryPinPinned(nextPinned);
+      setCategoryPinCatalog(nextCatalog);
+      await persistCategoryPins(nextPinned);
+    }
+  };
+
+  const unpinCategoryProduct = async (productId: string) => {
+    const item = categoryPinPinned.find(row => row.product_id === productId);
+    if (!item) return;
+    const nextPinned = categoryPinPinned.filter(row => row.product_id !== productId);
+    setCategoryPinPinned(nextPinned);
+    setCategoryPinCatalog(prev => [{ ...item, pin_weight: 0 }, ...prev]);
+    await persistCategoryPins(nextPinned);
+  };
+
+  const pinCategoryProduct = async (productId: string) => {
+    const item = categoryPinCatalog.find(row => row.product_id === productId);
+    if (!item) return;
+    const nextPinned = [...categoryPinPinned, { ...item, pin_weight: 1 }];
+    setCategoryPinPinned(nextPinned);
+    setCategoryPinCatalog(prev => prev.filter(row => row.product_id !== productId));
+    await persistCategoryPins(nextPinned);
   };
 
   const openPosterDrawer = (item: CategoryItem) => {
@@ -1970,9 +2090,13 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     isInlineNameSaving,
     weightInputs,
     coefficientInputs,
-    isDrawerOpen,
-    editingId,
-    formData,
+  isDrawerOpen,
+  editingId,
+  categoryPinPinned,
+  categoryPinCatalog,
+  categoryPinLoading,
+  categoryPinSaving,
+  formData,
     isSubmitting,
     deleteItem,
     isDeleting,
@@ -2055,6 +2179,11 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
     setDeleteItem,
     confirmDelete,
     navigateToDetail,
+    onCategoryPinDragStart,
+    onCategoryPinDragEnter,
+    onCategoryPinDragEnd,
+    unpinCategoryProduct,
+    pinCategoryProduct,
     openPosterDrawer,
     closePosterDrawer,
     addPosterItem,

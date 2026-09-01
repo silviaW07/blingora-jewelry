@@ -47,6 +47,7 @@ import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav';
 import { isStorefrontHomeContentZone, limitRecommendZoneItems } from '@/frontend/utils/recommendZoneDisplay';
 import { pickRecommendCategoryCoverSrc } from '@/frontend/utils/categoryPreviewProducts';
 import { CATEGORY_CARD_PLACEHOLDER_URL } from '@/shared/imageUrl';
+import { listingPriceBoundMaxUsd } from '@/shared/priceThreshold';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar, ListingBrandFilter } from '@/frontend/components/ProductListToolbar';
 import { ListingPageHead } from '@/frontend/components/ListingPageHead';
@@ -1242,6 +1243,11 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                   minPrice={queryState.minPrice}
                   maxPrice={queryState.maxPrice}
                   sortBy={queryState.sortBy}
+                  priceBoundMax={listingPriceBoundMaxUsd(
+                    categoryDetail?.category_name,
+                    categories.find((item) => item.category_id === queryState.categoryId)?.category_name,
+                    selectedParentCategory?.children.find((child) => child.category_id === queryState.categoryId)?.category_name,
+                  )}
                   onPriceRangeChange={handlers.handlePriceRangeChange}
                   onSortChange={handlers.handleSortChange}
                 />

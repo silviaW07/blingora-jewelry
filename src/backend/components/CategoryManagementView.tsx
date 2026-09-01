@@ -837,6 +837,95 @@ export const CategoryManagementView = ({
                   </div>
                 </div>
               </div>
+
+              {state.editingId ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-l-4 border-primary pl-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">前台优先展示</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    拖到「优先」区的商品会排在该类目前台最前面；不拖则仍按上新 / 热度 / 价格原规则。仅对本类目生效。
+                  </p>
+                  {state.categoryPinLoading ? (
+                    <p className="text-xs text-muted-foreground">商品列表载入中...</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      <div
+                        className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 min-h-[72px]"
+                        onDragOver={e => e.preventDefault()}
+                        onDragEnter={() => handlers.onCategoryPinDragEnter('__pin-zone__', 'pinned')}
+                      >
+                        <p className="mb-2 text-[11px] font-semibold uppercase text-emerald-800">优先（可拖拽排序）</p>
+                        {state.categoryPinPinned.length === 0 ? (
+                          <p className="text-xs text-emerald-700/80">把下方商品拖到这里，或点「优先」</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {state.categoryPinPinned.map(product => (
+                              <div
+                                key={product.product_id}
+                                draggable
+                                onDragStart={() => handlers.onCategoryPinDragStart(product.product_id, 'pinned')}
+                                onDragEnter={() => handlers.onCategoryPinDragEnter(product.product_id, 'pinned')}
+                                onDragOver={e => e.preventDefault()}
+                                onDragEnd={() => void handlers.onCategoryPinDragEnd()}
+                                className="flex cursor-grab items-center gap-2 rounded-lg border border-emerald-100 bg-white px-2 py-1.5 active:cursor-grabbing"
+                              >
+                                <GripVertical className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                {product.image_url ? (
+                                  <img src={product.image_url} alt="" className="h-9 w-9 rounded object-cover" />
+                                ) : (
+                                  <div className="h-9 w-9 rounded bg-slate-100" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-medium text-slate-900">{product.product_name}</p>
+                                  <p className="truncate font-mono text-[10px] text-slate-400">{product.product_code}</p>
+                                </div>
+                                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" disabled={state.categoryPinSaving} onClick={() => void handlers.unpinCategoryProduct(product.product_id)}>
+                                  取消优先
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="mb-2 text-[11px] font-semibold uppercase text-slate-500">其余商品（原规则）</p>
+                        {state.categoryPinCatalog.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">没有更多候选，或都已优先</p>
+                        ) : (
+                          <div className="max-h-64 space-y-2 overflow-auto">
+                            {state.categoryPinCatalog.map(product => (
+                              <div
+                                key={product.product_id}
+                                draggable
+                                onDragStart={() => handlers.onCategoryPinDragStart(product.product_id, 'catalog')}
+                                onDragEnter={() => handlers.onCategoryPinDragEnter(product.product_id, 'catalog')}
+                                onDragOver={e => e.preventDefault()}
+                                onDragEnd={() => void handlers.onCategoryPinDragEnd()}
+                                className="flex cursor-grab items-center gap-2 rounded-lg border border-slate-100 bg-white px-2 py-1.5 active:cursor-grabbing"
+                              >
+                                <GripVertical className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                {product.image_url ? (
+                                  <img src={product.image_url} alt="" className="h-9 w-9 rounded object-cover" />
+                                ) : (
+                                  <div className="h-9 w-9 rounded bg-slate-100" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-medium text-slate-900">{product.product_name}</p>
+                                  <p className="truncate font-mono text-[10px] text-slate-400">{product.product_code}</p>
+                                </div>
+                                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" disabled={state.categoryPinSaving} onClick={() => void handlers.pinCategoryProduct(product.product_id)}>
+                                  优先
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </fieldset>
 
             <SheetFooter className="px-8 py-5 border-t bg-white absolute bottom-0 left-0 right-0" data-api-unique-id='categorymanagementview-r2a1c378e1d8ebcb9-s2437821645' data-api-unique-page-name='src/backend/components/CategoryManagementView'>

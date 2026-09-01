@@ -665,6 +665,9 @@ import {
   isAttributeOrFilterCategory,
   isGluedFilterSuffixToken,
   isProductTypeCategory,
+  isShelfSpecificQualityPhrase,
+  isStrictFilterTitleToken,
+  detectQualityShelfKind,
 } from '@/shared/categoryMatchGuards'
 import { detectShelfFamily, shelfFamiliesCompatible } from '@/shared/categoryShelfFamily'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
@@ -6065,13 +6068,19 @@ export function matchSecondaryCategoriesByTitle(
   const scoreCategory = (
     category: AutoMatchedSecondaryCategory,
     corpus: string,
-    options?: { allowGeneric?: boolean },
+    options?: { allowGeneric?: boolean; filterTokensOnly?: boolean },
   ) => {
     if (!corpus) return null
     const allowGeneric = options?.allowGeneric || (category.level || 0) === 1
     const tokens = [category.name, ...category.keywords]
       .map((token) => String(token || '').trim())
       .filter((token) => isUsableCategoryMatchToken(token, { allowGeneric }))
+      .filter((token) => {
+        if (!options?.filterTokensOnly) return true
+        const shelf = detectQualityShelfKind(category.name)
+        if (shelf) return isShelfSpecificQualityPhrase(token, shelf)
+        return isStrictFilterTitleToken(token)
+      })
     const matchedTokens = tokens.filter((token) => containsCategoryMatchToken(corpus, token))
     if (!matchedTokens.length) return null
     const bestTokenLength = Math.max(
@@ -6094,7 +6103,9 @@ export function matchSecondaryCategoriesByTitle(
   // 材质/品质类目仍可挂关联标签，但不参与「最长命中」抢主类目
   const attrScored = categories
     .filter((category) => !isBrandParentSecondaryCategory(category) && isAttrCategory(category))
-    .map((category) => scoreCategory(category, titleCorpus, { allowGeneric: false }))
+    .map((category) =>
+      scoreCategory(category, titleCorpus, { allowGeneric: false, filterTokensOnly: true }),
+    )
     .filter(
       (item): item is { category: AutoMatchedSecondaryCategory; bestTokenLength: number } =>
         Boolean(item),

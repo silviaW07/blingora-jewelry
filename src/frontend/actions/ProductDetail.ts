@@ -28,6 +28,7 @@ import {
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
+import { enrichSkuColorSizeAttributes } from '@/shared/tableImportSpec'
 
 // ===== Enums =====
 /** 商品状态：草稿(DRAFT) | 上架(ACTIVE) | 下架(INACTIVE) */
@@ -349,11 +350,6 @@ const isRealSizeValue = (value?: string | null) => {
   return Boolean(normalized) && !/^(默认|默认规格|default|standard|n\/a|none)$/i.test(normalized)
 }
 
-const isSizeAttributeName = (name?: string | null) => {
-  const normalized = String(name || '').trim().toLowerCase()
-  return ['尺码', '鞋码', '尺寸', '码数', 'size', 'sizing', '规格', 'spec'].includes(normalized)
-}
-
 const buildPriceTiers = (prices: number[], minOrderQty: number): PriceTierItem[] => {
   const valid = prices.filter((p) => Number.isFinite(p) && p > 0)
   if (valid.length === 0) return []
@@ -559,19 +555,16 @@ export const getProductDetail = withResult(
       const rawAttrs = Array.isArray(sku.attributeJson)
         ? (sku.attributeJson as unknown as SkuAttribute[])
         : []
-      const attrs = rawAttrs
-        .map(attr => ({
-          name: String(attr?.name || '').trim(),
-          value: String(attr?.value || '').trim(),
-        }))
-        .filter(attr => attr.name && attr.value)
+      const attrs = enrichSkuColorSizeAttributes(
+        rawAttrs
+          .map(attr => ({
+            name: String(attr?.name || '').trim(),
+            value: String(attr?.value || '').trim(),
+          }))
+          .filter(attr => attr.name && attr.value),
+        { sizeLabel: String(sku.sizeLabel || '').trim() },
+      )
       const storedSizeLabel = String(sku.sizeLabel || '').trim()
-      if (
-        isRealSizeValue(storedSizeLabel) &&
-        !attrs.some(attr => isSizeAttributeName(attr.name) && isRealSizeValue(attr.value))
-      ) {
-        attrs.push({ name: 'Size', value: storedSizeLabel })
-      }
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: sku.price.toNumber(),
         costPrice: product.costPrice,

@@ -5009,12 +5009,14 @@ export const applyCalibrateCategoryEdits = requireRole([UserRole.ADMIN])(
 
 /**
  * 价格阈值自动分类：关联「Below 13usd / Below 3 usd」类目（一级或二级均可），不改主类目
- * - 归属一级「包/Bags」且售价 ≤ 13 USD → 关联 below13 标签类目
- * - 归属一级「饰品/Jewelry」且售价 ≤ 3 USD → 关联 below3 标签类目
+ * - 归属一级「包/Bags」且最高售价 ≤ 13 USD → 关联 below13 标签类目
+ * - 归属一级「饰品/Jewelry」且最高售价 ≤ 3 USD → 关联 below3 标签类目
  */
 export const autoClassifyPriceThresholdProducts = requireRole([UserRole.ADMIN])(
   withResult(async (): Promise<AutoClassifyPriceThresholdSummary> => {
-    return autoClassifyAllProductsByPriceThreshold(prisma)
+    const summary = await autoClassifyAllProductsByPriceThreshold(prisma)
+    invalidateStorefrontAfterCategoryBind()
+    return summary
   }),
 )
 

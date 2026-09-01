@@ -104,6 +104,7 @@ import { computeDiscounts } from '@/shared/pricingPromotionCalc'
 import { isStorefrontInStock, isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
+import { isColorDimensionName } from '@/shared/tableImportSpec'
 
 const resolveProductMinOrderQty = (tradeInfoJson: unknown) => Math.max(1, Number((tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
 const resolveEffectiveSkuMinOrderQty = (productMinOrderQty: number, skuMinOrderQty: unknown) => {
@@ -111,10 +112,7 @@ const resolveEffectiveSkuMinOrderQty = (productMinOrderQty: number, skuMinOrderQ
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : productMinOrderQty
 }
 
-const isColorAttributeName = (name?: string | null) => {
-  const normalized = String(name || '').trim().toLowerCase()
-  return normalized === '颜色' || normalized === 'color' || normalized === 'colour'
-}
+const isColorAttributeName = (name?: string | null) => isColorDimensionName(name)
 
 /**
  * Prefer the cart-line SKU thumbnail; if empty (common for size variants),

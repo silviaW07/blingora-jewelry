@@ -3,7 +3,13 @@
  * 独立模块，供运维脚本直连 DB，不依赖 ImportFrom1688 / RPC。
  */
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
-import { canonicalizeQualityMatchText, isAttributeOrFilterCategory } from '@/shared/categoryMatchGuards'
+import {
+  canonicalizeQualityMatchText,
+  detectQualityShelfKind,
+  isAttributeOrFilterCategory,
+  isShelfSpecificQualityPhrase,
+  isStrictFilterTitleToken,
+} from '@/shared/categoryMatchGuards'
 import {
   detectShelfFamily,
   shelfFamiliesCompatible,
@@ -84,15 +90,22 @@ export function matchFilterCategoriesByTitle(
 
   const matched: FilterCategoryRow[] = []
   for (const category of categories) {
+    if (isPriceThresholdTagCategoryName(category.name)) continue
     const tagFamily = detectShelfFamily(category.name, category.parentName)
     if (!shelfFamiliesCompatible(productFamily, tagFamily)) continue
 
     const tokens = Array.from(
       new Set([category.name, ...resolveCategorySynonyms(category.name)].map((t) => String(t || '').trim()).filter(Boolean)),
     )
+    const shelf = detectQualityShelfKind(category.name)
     const hit = tokens.some((token) => {
+      if (shelf) {
+        if (!isShelfSpecificQualityPhrase(token, shelf)) return false
+      } else if (!isStrictFilterTitleToken(token)) {
+        return false
+      }
       const key = normalizeToken(token)
-      return key.length >= 3 && corpus.includes(key)
+      return key.length >= 4 && corpus.includes(key)
     })
     if (hit) matched.push(category)
   }

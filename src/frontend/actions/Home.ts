@@ -35,6 +35,7 @@ import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
 import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
+import { priceThresholdMaxUsdForCategory, productFitsPriceThresholdUsd } from '@/shared/priceThreshold'
 
 type HomeRecommendZoneType = 'PRODUCT' | 'CATEGORY' | 'SIDE_NAV'
 
@@ -533,7 +534,16 @@ export const getHomeRecommendZones = async (input?: {
         const card = mapLatestProductCard(product, `cat-latest-${categoryId}`)
         if (card) cards.push(card)
       }
-      latestProductsByCategoryId.set(categoryId, cards)
+      const cap = priceThresholdMaxUsdForCategory(
+        freshCategoryMap.get(categoryId)?.name,
+        freshCategoryMap.get(categoryId)?.slug,
+      )
+      latestProductsByCategoryId.set(
+        categoryId,
+        cap == null
+          ? cards
+          : cards.filter((card) => productFitsPriceThresholdUsd(card.price, card.priceMax, cap)),
+      )
     }
   } else {
     await loadProductCounts()

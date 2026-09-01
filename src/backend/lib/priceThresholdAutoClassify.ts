@@ -3,8 +3,9 @@
  * Never changes product.categoryId / brandCategoryId (primary shelf stays intact).
  *
  * Rules:
- * - Product under L1 Bags/包 + min sell USD <= 13 → relate tag "Below 13usd" (L1 or L2)
- * - Product under L1 Jewelry/饰品 + min sell USD <= 3 → relate tag "Below 3 usd" (L1 or L2)
+ * - Product under L1 Bags/包 + max sell USD <= 13 → relate tag "Below 13usd" (L1 or L2)
+ * - Product under L1 Jewelry/饰品 + max sell USD <= 3 → relate tag "Below 3 usd" (L1 or L2)
+ * Membership uses the primary shelf only (not quality/price relation tags).
  */
 import { randomUUID } from 'crypto'
 import {
@@ -50,7 +51,7 @@ export const PRICE_THRESHOLD_RULES: PriceThresholdRule[] = [
   },
   {
     key: 'jewelry_below3',
-    l1Aliases: ['jewelry', 'jewellery', '饰品', '首饰', 'accessories', 'accessory', '配件'],
+    l1Aliases: ['jewelry', 'jewellery', '饰品', '首饰'],
     l2CanonicalName: BELOW3_USD_CATEGORY_NAME,
     l2NameAliases: [
       'below3 usd',
@@ -172,7 +173,7 @@ function resolveL1Id(
   return null
 }
 
-/** Product belongs to an L1 shelf if primary or any linked category resolves under that L1. */
+/** Product belongs to an L1 shelf only via primary categoryId (relation tags do not count). */
 export function productBelongsToL1(
   product: {
     categoryId: string
@@ -181,11 +182,8 @@ export function productBelongsToL1(
   l1Id: string,
   categoryMap: Map<string, CategoryNode>,
 ): boolean {
-  const ids = [product.categoryId, ...(product.relationCategoryIds || [])].filter(Boolean)
-  for (const id of ids) {
-    if (resolveL1Id(id, categoryMap) === l1Id) return true
-  }
-  return false
+  void product.relationCategoryIds
+  return resolveL1Id(product.categoryId, categoryMap) === l1Id
 }
 
 /**
@@ -214,6 +212,30 @@ export function resolveProductMinUsdPrice(
   }
   if (minCny === null) return null
   return toUsdFromCny(minCny, usdExchangeRate)
+}
+
+/** Highest SKU (or cost×coeff) USD — Below* shelves use this so a $3 add-on SKU cannot pull in a $38 bag. */
+export function resolveProductMaxUsdPrice(
+  product: {
+    skus?: Array<{ price?: unknown }>
+    costPrice?: unknown
+    priceCoefficient?: unknown
+  },
+  usdExchangeRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): number | null {
+  const skuPrices = (product.skus || [])
+    .map((sku) => toNumber(sku.price))
+    .filter((n): n is number => n !== null && n >= 0)
+  let maxCny: number | null = null
+  if (skuPrices.length > 0) {
+    maxCny = Math.max(...skuPrices)
+  } else {
+    const cost = toNumber(product.costPrice)
+    const coeff = toNumber(product.priceCoefficient) ?? 2
+    if (cost !== null && cost >= 0) maxCny = cost * coeff
+  }
+  if (maxCny === null) return null
+  return toUsdFromCny(maxCny, usdExchangeRate)
 }
 
 async function uniqueCategorySlug(db: DbLike, baseName: string): Promise<string> {
@@ -370,6 +392,7 @@ async function loadCategoryMap(db: DbLike): Promise<Map<string, CategoryNode>> {
 export interface SyncPriceThresholdResult {
   productId: string
   minUsd: number | null
+  maxUsd: number | null
   addedCategoryIds: string[]
   removedCategoryIds: string[]
   matchedKeys: PriceThresholdRuleKey[]
@@ -391,6 +414,7 @@ export async function syncProductPriceThresholdRelations(
   const empty: SyncPriceThresholdResult = {
     productId,
     minUsd: null,
+    maxUsd: null,
     addedCategoryIds: [],
     removedCategoryIds: [],
     matchedKeys: [],
@@ -419,13 +443,13 @@ export async function syncProductPriceThresholdRelations(
     usdExchangeRate = DEFAULT_USD_EXCHANGE_RATE
   }
   const minUsd = resolveProductMinUsdPrice(product, usdExchangeRate)
+  const maxUsd = resolveProductMaxUsdPrice(product, usdExchangeRate)
   const relationCategoryIds = (product.relationCategories || []).map(
     (rel: { categoryId: string }) => rel.categoryId,
   )
 
   const shouldHaveIds: string[] = []
   const matchedKeys: PriceThresholdRuleKey[] = []
-  const titleCorpus = String(product.name || '')
 
   for (const rule of ensured) {
     const belongs = productBelongsToL1(
@@ -433,9 +457,8 @@ export async function syncProductPriceThresholdRelations(
       rule.parentId,
       categoryMap,
     )
-    const titleClaim = titleClaimsPriceThresholdTag(titleCorpus, rule)
-    const priceClaim = minUsd !== null && belongs && minUsd <= rule.maxUsd
-    if (priceClaim || (titleClaim && belongs)) {
+    const priceClaim = maxUsd !== null && belongs && maxUsd <= rule.maxUsd
+    if (priceClaim) {
       shouldHaveIds.push(rule.categoryId)
       matchedKeys.push(rule.key)
     }
@@ -445,15 +468,7 @@ export async function syncProductPriceThresholdRelations(
     thresholdIds.includes(id),
   )
   const toAdd = shouldHaveIds.filter((id) => !existingThreshold.includes(id))
-  const toRemove = existingThreshold.filter((id: string) => {
-    if (!shouldHaveIds.includes(id)) {
-      // 标题显式写了 below13/below3 后缀时，不因售价超标而摘掉标签
-      const rule = ensured.find((item) => item.categoryId === id)
-      if (rule && titleClaimsPriceThresholdTag(titleCorpus, rule)) return false
-      return true
-    }
-    return false
-  })
+  const toRemove = existingThreshold.filter((id: string) => !shouldHaveIds.includes(id))
 
   if (toRemove.length > 0) {
     await db.product_category_relations.deleteMany({
@@ -476,6 +491,7 @@ export async function syncProductPriceThresholdRelations(
   return {
     productId,
     minUsd,
+    maxUsd,
     addedCategoryIds: toAdd,
     removedCategoryIds: toRemove,
     matchedKeys,

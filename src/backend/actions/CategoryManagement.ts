@@ -14,6 +14,7 @@ import {
   resolveCategorySlug as resolveCategorySlugShared,
 } from '@/shared/categorySlug'
 import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
+import { invalidateStorefrontCatalogCaches } from '@/frontend/actions/ProductCategory'
 
 export type CategoryStatus = 'ACTIVE' | 'INACTIVE'
 export type CategoryLevel = 1 | 2
@@ -2703,6 +2704,134 @@ export const batchMoveCategoryParent = requireRole([UserRole.ADMIN])(
       message: failedMessages.join('; '),
     }
   })
+)
+
+export interface CategoryPinProductItem {
+  product_id: string
+  product_name: string
+  product_code: string
+  image_url: string
+  pin_weight: number
+}
+
+export interface ListCategoryPinProductsInput {
+  category_id: string
+}
+
+export interface ListCategoryPinProductsOutput {
+  pinned: CategoryPinProductItem[]
+  catalog: CategoryPinProductItem[]
+}
+
+export interface SaveCategoryProductPinOrderInput {
+  category_id: string
+  product_ids: string[]
+}
+
+function mapPinProductRow(
+  product: { id: string; name: string; productCode: string; mainImageUrl: string },
+  pinWeight: number,
+): CategoryPinProductItem {
+  return {
+    product_id: product.id,
+    product_name: product.name,
+    product_code: product.productCode,
+    image_url: product.mainImageUrl,
+    pin_weight: pinWeight,
+  }
+}
+
+/** 类目内商品：已置顶 + 其余候选（未置顶仍按创建时间，供拖入优先区） */
+export const listCategoryPinProducts = requireRole([UserRole.ADMIN])(
+  withResult(async (input: ListCategoryPinProductsInput): Promise<ListCategoryPinProductsOutput> => {
+    const categoryId = String(input.category_id || '').trim()
+    if (!categoryId) throw new Error('缺少分类')
+
+    const [primaryProducts, relationRows] = await Promise.all([
+      prisma.product.findMany({
+        where: {
+          OR: [
+            { categoryId },
+            { brandCategoryId: categoryId },
+          ],
+          status: 'ACTIVE',
+        },
+        select: { id: true, name: true, productCode: true, mainImageUrl: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 80,
+      }),
+      prisma.product_category_relations.findMany({
+        where: { categoryId },
+        select: {
+          productId: true,
+          sortWeight: true,
+          product: {
+            select: { id: true, name: true, productCode: true, mainImageUrl: true, createdAt: true, status: true },
+          },
+        },
+      }),
+    ])
+
+    const byId = new Map<string, { product: CategoryPinProductItem['product_id'] extends string ? typeof primaryProducts[number] : never; pin: number }>()
+    const weightById = new Map<string, number>()
+    for (const row of relationRows) {
+      weightById.set(row.productId, Number(row.sortWeight) || 0)
+      if (row.product?.status === 'ACTIVE') {
+        byId.set(row.product.id, { product: row.product as any, pin: Number(row.sortWeight) || 0 })
+      }
+    }
+    for (const product of primaryProducts) {
+      if (!byId.has(product.id)) {
+        byId.set(product.id, { product, pin: weightById.get(product.id) || 0 })
+      }
+    }
+
+    const all = Array.from(byId.values()).map(({ product, pin }) =>
+      mapPinProductRow(product, pin),
+    )
+    const pinned = all
+      .filter((item) => item.pin_weight > 0)
+      .sort((a, b) => b.pin_weight - a.pin_weight)
+    const pinnedIds = new Set(pinned.map((item) => item.product_id))
+    const catalog = all
+      .filter((item) => !pinnedIds.has(item.product_id))
+      .slice(0, 60)
+
+    return { pinned, catalog }
+  }),
+)
+
+/** 保存该类目优先展示顺序；未出现在列表中的商品 sortWeight 归零，前台继续走原规则 */
+export const saveCategoryProductPinOrder = requireRole([UserRole.ADMIN])(
+  withResult(async (input: SaveCategoryProductPinOrderInput): Promise<void> => {
+    const categoryId = String(input.category_id || '').trim()
+    if (!categoryId) throw new Error('缺少分类')
+    const productIds = Array.from(new Set((input.product_ids || []).map((id) => String(id || '').trim()).filter(Boolean)))
+
+    await prisma.$transaction(async (tx) => {
+      await tx.product_category_relations.updateMany({
+        where: { categoryId, sortWeight: { gt: 0 } },
+        data: { sortWeight: 0 },
+      })
+      if (!productIds.length) return
+
+      await tx.product_category_relations.createMany({
+        data: productIds.map((productId) => ({ productId, categoryId, sortWeight: 0 })),
+        skipDuplicates: true,
+      })
+
+      const base = Math.max(productIds.length * 10, 10)
+      for (let index = 0; index < productIds.length; index += 1) {
+        await tx.product_category_relations.updateMany({
+          where: { productId: productIds[index], categoryId },
+          data: { sortWeight: base - index * 10 },
+        })
+      }
+    })
+
+    invalidateStorefrontCatalogCaches()
+    invalidateHomeRecommendZoneCache()
+  }),
 )
 
 export const getKeywordGroupTypeLabels = requireRole([UserRole.ADMIN])(

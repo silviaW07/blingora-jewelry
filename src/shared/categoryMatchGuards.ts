@@ -33,6 +33,47 @@ export function isGluedFilterSuffixToken(normalizedToken: string) {
   )
 }
 
+/** 品质/材质标签只允许用这些词撞标题，禁止用 jewelry/earring 等品类词误挂 */
+export function isStrictFilterTitleToken(token?: string | null): boolean {
+  const raw = String(token || '').trim()
+  if (!raw) return false
+  if (isAttributeOrFilterCategoryName(raw) && isGluedFilterSuffixToken(canonicalizeQualityMatchText(raw))) {
+    return true
+  }
+  const key = canonicalizeQualityMatchText(raw)
+  if (key.length < 4) return false
+  return isGluedFilterSuffixToken(key) || ATTRIBUTE_EXACT_NAMES.has(compact(raw))
+}
+
+export type QualityShelfKind = 'jewelry' | 'bags' | null
+
+/** high quality jewelry / high quality bag：必须整段品质+货架，不能只用 high quality */
+export function detectQualityShelfKind(name?: string | null): QualityShelfKind {
+  const key = compact(name)
+  if (!key) return null
+  const hasQuality = key.includes('quality') || key.includes('品质') || key.includes('质量')
+  if (!hasQuality) return null
+  if (key.includes('jewelry') || key.includes('jewellery') || key.includes('饰品') || key.includes('首饰')) {
+    return 'jewelry'
+  }
+  if (key.includes('bag') || /品质包|质量包/.test(key) || key.endsWith('包')) {
+    return 'bags'
+  }
+  return null
+}
+
+export function isShelfSpecificQualityPhrase(token: string, shelf: QualityShelfKind): boolean {
+  if (!shelf) return false
+  const key = canonicalizeQualityMatchText(token)
+  if (!key) return false
+  const hasQuality = key.includes('QUALITY') || key.includes('品质') || key.includes('质量')
+  if (!hasQuality) return false
+  if (shelf === 'jewelry') {
+    return key.includes('JEWELR') || key.includes('饰品') || key.includes('首饰')
+  }
+  return key.includes('BAG') || key.includes('包')
+}
+
 /** Parent shelves that hold material/quality filters rather than sellable product types. */
 const ATTRIBUTE_PARENT_NAMES = new Set(
   ['material', 'materials', '材质', '材料', 'quality', 'qualities', '品质', '成色', 'filter', 'filters', '筛选'].map(

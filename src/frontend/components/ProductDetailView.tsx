@@ -33,7 +33,8 @@ import {
 } from '@/frontend/i18n/productSpecTranslate';
 import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelist';
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
-import { imageIdentity, imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl';
+import { imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl';
+import { isColorDimensionName } from '@/shared/tableImportSpec';
 
 /** Local helper — production webpack left `cn` as a free global and crashed the PDP. */
 function cn(...parts: Array<string | false | null | undefined>) {
@@ -198,10 +199,7 @@ const applySiteWideDisplay = (listPrice: number, coef: number | null) => {
   return { sale, original: listPrice };
 };
 
-const isColorAttributeName = (name?: string | null) => {
-  const normalized = String(name || '').trim().toLowerCase()
-  return normalized === '颜色' || normalized === 'color' || normalized === 'colour'
-}
+const isColorAttributeName = (name?: string | null) => isColorDimensionName(name)
 
 const isSizeAttributeName = (name?: string | null) => {
   const normalized = String(name || '').trim().toLowerCase()
@@ -368,15 +366,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
       .filter((item): item is { value: string; sku: typeof product.skus[number]; imageUrl: string } => Boolean(item))
 
     const seenValue = new Set<string>()
-    const seenImage = new Set<string>()
     const unique: typeof mapped = []
     for (const swatch of mapped) {
       const valueKey = String(swatch.value || '').trim().toLowerCase()
       if (!valueKey || seenValue.has(valueKey)) continue
-      const imgKey = imageIdentity(swatch.imageUrl)
-      if (imgKey && seenImage.has(imgKey)) continue
       seenValue.add(valueKey)
-      if (imgKey) seenImage.add(imgKey)
       unique.push(swatch)
     }
     return unique
@@ -450,7 +444,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     // Color selected, no dedicated size axis: still list every SKU of that color
     // (bags/jewelry often keep size in sizeLabel / 规格 / variantLabel).
     if (colorName && !sizeName) {
-      const colorValue = selectedColorValue
+      const colorValue = selectedColorValue || colorAttributeGroup?.values[0] || ''
       if (!colorValue) return []
       const matched = product.skus.filter((sku) =>
         attrEquals(getSkuAttributeValue(sku, colorName), colorValue),
