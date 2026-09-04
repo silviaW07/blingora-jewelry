@@ -115,6 +115,11 @@ function toMoney(n: number) {
   return Math.round((Number(n) || 0) * 100) / 100
 }
 
+function clipDb(value: string, max: number) {
+  const text = String(value || '')
+  return text.length <= max ? text : text.slice(0, max)
+}
+
 function cleanSpaces(value: unknown) {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
 }
@@ -741,7 +746,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
                 paymentMethod: 'BANK_TRANSFER',
                 paymentStatus: 'PENDING_CONFIRMATION',
                 shipMethod: 'STANDARD',
-                trackingCarrier: channel.name,
+                trackingCarrier: clipDb(channel.name, 255),
                 note: [
                   `Shipping channel: ${channel.name} (${channel.id})`,
                   `Billing mode: ${billingMode}`,
@@ -761,7 +766,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
               orderId: order.id,
               productId: row.productId,
               productSkuId: row.productSkuId,
-              productName: row.productName,
+              productName: clipDb(row.productName, 200),
               skuCode: row.skuCode,
               materialLabel: row.materialLabel,
               sizeLabel: row.sizeLabel,

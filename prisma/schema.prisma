@@ -751,7 +751,7 @@ model orderrecord {
   installmentInfo   String?            @db.VarChar(100)
   couponId          String?            @db.VarChar(36)
   shipMethod        ordershipmethod    @default(STANDARD)
-  trackingCarrier   String?            @db.VarChar(60)
+  trackingCarrier   String?            @db.VarChar(255)
   trackingNumber    String?            @db.VarChar(100)
   estimatedArrivalAt DateTime?
   shippedAt         DateTime?
