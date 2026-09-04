@@ -647,13 +647,26 @@ async function tryFetchImageBuffer(url: string): Promise<{ buffer: Buffer; exten
           process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://sourcingjewelry.com',
         ).toString()
       : normalized
-    const res = await fetch(requestUrl, { cache: 'no-store' })
+    const res = await fetch(requestUrl, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(4000),
+    })
     if (!res.ok) return null
     const ab = await res.arrayBuffer()
+    if (ab.byteLength > 800_000) return null
     const buffer = Buffer.from(ab)
     const extension = inferExcelImageExtension(res.headers.get('content-type'), requestUrl)
     if (!extension) return null
     return { buffer, extension }
+  } catch {
+    return null
+  }
+}
+
+function loadExcelJS(): any | null {
+  try {
+    const loaded = require('exceljs') as { default?: unknown } | undefined
+    return (loaded as { default?: unknown })?.default || loaded || null
   } catch {
     return null
   }
@@ -920,37 +933,41 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
   }
 }
 
+async function buildPlainXlsxFile(
+  rows: ExportOrdersExcelOutput['rows'],
+  fileName: string,
+): Promise<ExportOrdersExcelFileOutput> {
+  const XLSX = await import('xlsx')
+  const sheetRows = rows.map((row) => ({
+    '商品 ID': row.productId,
+    SKU: row.sku,
+    SPU: row.spu,
+    图片: row.imageUrl,
+    '原价(美金)': row.originalPriceUsd,
+    '折扣价(美金)': row.discountPriceUsd ?? row.originalPriceUsd,
+    数量: row.quantity,
+    '总价(美金)': row.totalPriceUsd,
+    采购价: row.costPrice ?? '',
+    供应商名称: row.supplierName,
+    供应商链接: row.supplierUrl,
+    商品名称: row.productName,
+  }))
+  const worksheet = XLSX.utils.json_to_sheet(sheetRows)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '订单明细')
+  const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+  return {
+    fileName,
+    fileBase64: Buffer.from(buf).toString('base64'),
+    embeddedThumbnails: false,
+  }
+}
+
 async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExcelFileOutput> {
   const { rows, fileName } = await buildOrderExcelRows(orderIds)
-
-  let ExcelJS: any
-  try {
-    ExcelJS = (await import('exceljs')).default
-  } catch {
-    const XLSX = await import('xlsx')
-    const sheetRows = rows.map((row) => ({
-      '商品 ID': row.productId,
-      SKU: row.sku,
-      SPU: row.spu,
-      图片: row.imageUrl,
-      '原价(美金)': row.originalPriceUsd,
-      '折扣价(美金)': row.discountPriceUsd ?? row.originalPriceUsd,
-      数量: row.quantity,
-      '总价(美金)': row.totalPriceUsd,
-      采购价: row.costPrice ?? '',
-      供应商名称: row.supplierName,
-      供应商链接: row.supplierUrl,
-      商品名称: row.productName,
-    }))
-    const worksheet = XLSX.utils.json_to_sheet(sheetRows)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, '订单明细')
-    const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
-    return {
-      fileName,
-      fileBase64: Buffer.from(buf).toString('base64'),
-      embeddedThumbnails: false,
-    }
+  const ExcelJS = loadExcelJS()
+  if (!ExcelJS?.Workbook) {
+    return buildPlainXlsxFile(rows, fileName)
   }
 
   const workbook = new ExcelJS.Workbook()
@@ -1010,6 +1027,8 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
 
   // Embed procurement-sized SKU images into the "图片" column.
   const imageIdByUrl = new Map<string, number>()
+  const imageDeadline = Date.now() + 8_000
+  let embeddedCount = 0
   for (let i = 0; i < rows.length; i++) {
     const rowNumber = i + 2 // 1-based row index; row 1 is header
     const excelRow = worksheet.getRow(rowNumber)
@@ -1017,6 +1036,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
     excelRow.alignment = { vertical: 'middle', wrapText: true }
 
     const imageUrl = rows[i]?.imageUrl || ''
+    if (!imageUrl || Date.now() > imageDeadline) continue
     let imageId = imageIdByUrl.get(imageUrl)
     if (imageId == null) {
       const img = await tryFetchImageBuffer(imageUrl)
@@ -1032,11 +1052,12 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
       ext: { width: 168, height: 168 },
       editAs: 'oneCell',
     })
+    embeddedCount += 1
   }
 
   const out = await workbook.xlsx.writeBuffer()
   const fileBase64 = Buffer.from(out as any).toString('base64')
-  return { fileName, fileBase64, embeddedThumbnails: true }
+  return { fileName, fileBase64, embeddedThumbnails: embeddedCount > 0 }
 }
 
 /**
@@ -1044,6 +1065,15 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
  */
 export const exportOrdersExcel = requireRole([UserRole.ADMIN])(
   withResult(async (input: ExportOrdersExcelInput): Promise<ExportOrdersExcelFileOutput> => {
-    return buildOrderExcelFile(input.orderIds || [])
+    try {
+      return await buildOrderExcelFile(input.orderIds || [])
+    } catch (error) {
+      const { rows, fileName } = await buildOrderExcelRows(input.orderIds || [])
+      try {
+        return await buildPlainXlsxFile(rows, fileName)
+      } catch {
+        throw error
+      }
+    }
   }),
 )

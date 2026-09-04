@@ -309,7 +309,7 @@ export const OrderManagementView = ({
                                 onClick={() => handlers.handleExportExcel([row.id])}
                               >
                                 <Download className="h-3.5 w-3.5 mr-1" />
-                                下载
+                                {state.exportLoading ? '导出中…' : '下载'}
                               </Button>
                             </div>
                           </TableCell>

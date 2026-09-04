@@ -104,6 +104,7 @@ async function main() {
     externals: {
       express: 'commonjs express',
       sharp: 'commonjs sharp',
+      exceljs: 'commonjs exceljs',
     },
     plugins: [
       new webpack.IgnorePlugin({ resourceRegExp: /^pg-native$/ }),

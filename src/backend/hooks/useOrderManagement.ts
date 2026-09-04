@@ -401,8 +401,11 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
     try {
       setExportLoading(true)
-      // Server builds workbook with exceljs (embedded thumbs in 图片链接); falls back to URL text if needed.
-      const result = await exportOrdersExcel({ orderIds: ids })
+      toast.loading('正在导出订单 Excel…', { id: 'order-excel-export' })
+      const result = await exportOrdersExcel(
+        { orderIds: ids },
+        { __rpcTimeoutMs: 90_000 },
+      )
       const bytes = decodeExcelBase64(result?.fileBase64)
       const blob = new Blob([bytes], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -411,13 +414,16 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       const anchor = document.createElement('a')
       anchor.href = url
       anchor.download = result.fileName || `orders-export-${Date.now()}.xlsx`
+      anchor.rel = 'noopener'
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
-      URL.revokeObjectURL(url)
-      toast.success(result.embeddedThumbnails ? 'Excel 已导出（含商品缩略图）' : 'Excel 已导出')
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast.success(result.embeddedThumbnails ? 'Excel 已导出（含商品缩略图）' : 'Excel 已导出', {
+        id: 'order-excel-export',
+      })
     } catch (err: any) {
-      toast.error(err.message || '导出失败')
+      toast.error(err.message || '导出失败', { id: 'order-excel-export' })
     } finally {
       setExportLoading(false)
     }
