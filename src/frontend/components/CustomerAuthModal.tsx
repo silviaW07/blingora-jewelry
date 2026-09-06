@@ -19,6 +19,11 @@ import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { registerCustomer } from '@/frontend/actions/CustomerRegister';
 import { useUserSession } from '@/tools/FrontendSession';
 import { redirectAfterStorefrontAuth } from '@/frontend/utils/hardNavigate';
+import {
+  rememberLoginAccount,
+  readRememberedLoginAccount,
+  writeCustomerSession,
+} from '@/frontend/utils/customerSessionPersist';
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { DecorateInput } from '@/frontend/decorate/DecorateInput';
@@ -72,7 +77,7 @@ export function CustomerAuthModal() {
     isDecorateMode && (authDecorate === 'login' || authDecorate === 'register');
   const dialogOpen = isOpen || isDecorateAuthOpen;
 
-  const [loginAccount, setLoginAccount] = useState('');
+  const [loginAccount, setLoginAccount] = useState(() => readRememberedLoginAccount());
   const [loginPassword, setLoginPassword] = useState('');
   const [loginShowPassword, setLoginShowPassword] = useState(false);
   const [loginRememberMe, setLoginRememberMe] = useState(false);
@@ -111,6 +116,11 @@ export function CustomerAuthModal() {
     }
   }, [isOpen, isDecorateMode]);
 
+  useEffect(() => {
+    if (!dialogOpen) return
+    setLoginAccount((current) => current.trim() || readRememberedLoginAccount())
+  }, [dialogOpen]);
+
   const handleDialogOpenChange = (open: boolean) => {
     if (open) return;
     if (isDecorateAuthOpen) return;
@@ -134,18 +144,21 @@ export function CustomerAuthModal() {
         sysuser_password: loginPassword,
       });
 
-      setSession({
+      const nextSession = {
         token: result.token,
         user_id: result.sysuser_id,
         username: result.sysuser_name || result.sysuser_account,
         email: result.sysuser_email,
         preferredLocale: result.preferred_locale || 'en',
-        role: 'CUSTOMER',
-      });
+        role: 'CUSTOMER' as const,
+      };
+      writeCustomerSession(nextSession);
+      rememberLoginAccount(loginAccount.trim());
+      setSession(nextSession);
 
       toast.success(t('auth.loginSuccess'));
       closeAuthModal();
-      redirectAfterStorefrontAuth();
+      window.setTimeout(() => redirectAfterStorefrontAuth(), 80);
     } catch (error: unknown) {
       const message = sanitizeAuthErrorMessage(
         error instanceof Error ? error.message : null,
@@ -186,18 +199,21 @@ export function CustomerAuthModal() {
               sysuser_password: registerForm.sysuser_password,
             });
 
-      setSession({
+      const nextSession = {
         token: sessionResult.token,
         user_id: sessionResult.sysuser_id,
         username: sessionResult.sysuser_name || sessionResult.sysuser_account,
         email: sessionResult.sysuser_email,
         preferredLocale: sessionResult.preferred_locale || 'en',
-        role: 'CUSTOMER',
-      });
+        role: 'CUSTOMER' as const,
+      };
+      writeCustomerSession(nextSession);
+      rememberLoginAccount(registerForm.sysuser_email.trim() || registerForm.sysuser_phone.trim());
+      setSession(nextSession);
 
       // 注册即登录：刷新页面让价格/账户与网页端一致
       closeAuthModal();
-      redirectAfterStorefrontAuth();
+      window.setTimeout(() => redirectAfterStorefrontAuth(), 80);
     } catch (error: unknown) {
       const message = sanitizeAuthErrorMessage(
         error instanceof Error ? error.message : null,

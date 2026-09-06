@@ -11,6 +11,11 @@ import { loginCustomer } from '@/frontend/actions/CustomerLogin'
 import { registerCustomer } from '@/frontend/actions/CustomerRegister'
 import { useUserSession } from '@/tools/FrontendSession'
 import { redirectAfterStorefrontAuth } from '@/frontend/utils/hardNavigate'
+import {
+  rememberLoginAccount,
+  readRememberedLoginAccount,
+  writeCustomerSession,
+} from '@/frontend/utils/customerSessionPersist'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { DecorateInput } from '@/frontend/decorate/DecorateInput'
 
@@ -32,7 +37,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
   const { set: setSession, token, user_id } = useUserSession()
   const [tab, setTab] = useState<Tab>(initialTab)
 
-  const [loginAccount, setLoginAccount] = useState('')
+  const [loginAccount, setLoginAccount] = useState(() => readRememberedLoginAccount())
   const [loginPassword, setLoginPassword] = useState('')
   const [loginShowPassword, setLoginShowPassword] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
@@ -72,16 +77,19 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
         sysuser_account: loginAccount.trim(),
         sysuser_password: loginPassword,
       })
-      setSession({
+      const nextSession = {
         token: result.token,
         user_id: result.sysuser_id,
         username: result.sysuser_name || result.sysuser_account,
         email: result.sysuser_email,
         preferredLocale: result.preferred_locale || 'en',
-        role: 'CUSTOMER',
-      })
+        role: 'CUSTOMER' as const,
+      }
+      writeCustomerSession(nextSession)
+      rememberLoginAccount(loginAccount.trim())
+      setSession(nextSession)
       toast.success(t('auth.loginSuccess'))
-      redirectAfterStorefrontAuth()
+      window.setTimeout(() => redirectAfterStorefrontAuth(), 80)
     } catch (error: unknown) {
       setLoginError(error instanceof Error ? error.message : t('auth.loginFailed'))
     } finally {
@@ -115,16 +123,19 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
               registerForm.sysuser_phone.trim(),
             sysuser_password: registerForm.sysuser_password,
           })
-      setSession({
+      const nextSession = {
         token: sessionResult.token,
         user_id: sessionResult.sysuser_id,
         username: sessionResult.sysuser_name || sessionResult.sysuser_account,
         email: sessionResult.sysuser_email,
         preferredLocale: sessionResult.preferred_locale || 'en',
-        role: 'CUSTOMER',
-      })
+        role: 'CUSTOMER' as const,
+      }
+      writeCustomerSession(nextSession)
+      rememberLoginAccount(registerForm.sysuser_email.trim() || registerForm.sysuser_phone.trim())
+      setSession(nextSession)
       toast.success(t('auth.registerSuccess', { defaultValue: 'Account created' }))
-      redirectAfterStorefrontAuth()
+      window.setTimeout(() => redirectAfterStorefrontAuth(), 80)
     } catch (error: unknown) {
       setRegisterError(error instanceof Error ? error.message : t('auth.registerFailed'))
     } finally {
@@ -170,8 +181,10 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
                 <DecorateInput
                   propKey="auth_login_account_placeholder"
                   id="guest-login-account"
+                  name="username"
                   type="text"
                   autoComplete="username"
+                  inputMode="email"
                   placeholder={t('auth.emailOrPhonePlaceholder')}
                   disabled={isLoginSubmitting}
                   value={loginAccount}
@@ -190,6 +203,7 @@ export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab 
                   <DecorateInput
                     propKey="auth_login_password_placeholder"
                     id="guest-login-password"
+                    name="password"
                     type={loginShowPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     placeholder={t('auth.passwordPlaceholder')}

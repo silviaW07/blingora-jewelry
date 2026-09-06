@@ -2,6 +2,11 @@
 // 使用该文件需要import导入，导入别名：@/tools/storeFactory
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  clearCustomerSession,
+  readCustomerSession,
+  writeCustomerSession,
+} from '@/frontend/utils/customerSessionPersist';
 
 /**
  * 获取租户隔离的存储 key
@@ -10,6 +15,22 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 const getTenantKey = (name: string): string => {
   return "clash Ver_" + name;
 };
+
+const isCustomerSessionStore = (name: string) => name === 'UserSession';
+
+function syncCustomerSession(next: { token?: string; user_id?: string; username?: string; email?: string; preferredLocale?: string }) {
+  const token = String(next.token || '').trim()
+  const userId = String(next.user_id || '').trim()
+  if (!token || !userId) return
+  writeCustomerSession({
+    token,
+    user_id: userId,
+    username: String(next.username || ''),
+    email: String(next.email || ''),
+    preferredLocale: String(next.preferredLocale || 'en') || 'en',
+    role: 'CUSTOMER',
+  })
+}
 
 /**
  * 创建带持久化的 Zustand Store
@@ -35,24 +56,47 @@ export function createPersistStore<T extends object>(
     if (!isBrowser) return initialState;
     try {
       const raw = localStorage.getItem(storageKey);
-      if (!raw) return initialState;
-      const parsed = JSON.parse(raw) as { state?: T };
-      if (!parsed?.state) return initialState;
-      return { ...initialState, ...parsed.state };
+      if (raw) {
+        const parsed = JSON.parse(raw) as { state?: T };
+        if (parsed?.state && (!isCustomerSessionStore(name) || String((parsed.state as { token?: string }).token || '').trim())) {
+          return { ...initialState, ...parsed.state };
+        }
+      }
     } catch {
-      return initialState;
+      /* fall through to cookie backup */
     }
+    if (isCustomerSessionStore(name)) {
+      const backup = readCustomerSession();
+      if (backup) return { ...initialState, ...backup };
+    }
+    return initialState;
   };
   const initialHydratedState = getInitialState();
   // 如果已经从 localStorage 同步读取到了数据，说明已经 hydrated
-  const hasInitialData = isBrowser && localStorage.getItem(storageKey);
+  const hasInitialData =
+    isBrowser &&
+    Boolean(localStorage.getItem(storageKey) || (isCustomerSessionStore(name) && readCustomerSession()));
   return create<T & { set: (partial: Partial<T>) => void; reset: () => void; _hasHydrated: boolean }>()(
     persist(
       (set) => ({
         ...initialHydratedState,
         _hasHydrated: !!hasInitialData,
-        set: (partial) => set((state) => ({ ...state, ...partial })),
-        reset: () => set(() => ({ ...initialState, _hasHydrated: true })),
+        set: (partial) => set((state) => {
+          const next = { ...state, ...partial };
+          if (isCustomerSessionStore(name)) {
+            const token = String((next as { token?: string }).token || '').trim();
+            if (token) {
+              syncCustomerSession(next as { token?: string; user_id?: string; username?: string; email?: string; preferredLocale?: string });
+            } else if (Object.prototype.hasOwnProperty.call(partial, 'token')) {
+              clearCustomerSession();
+            }
+          }
+          return next;
+        }),
+        reset: () => {
+          if (isCustomerSessionStore(name)) clearCustomerSession();
+          set(() => ({ ...initialState, _hasHydrated: true }));
+        },
       }),
       {
         name: getTenantKey(name),
@@ -62,9 +106,15 @@ export function createPersistStore<T extends object>(
           removeItem: () => {},
         }),
         onRehydrateStorage: () => (state) => {
-          if (state) {
-            state.set({ _hasHydrated: true } as unknown as Partial<T>);
+          if (!state) return;
+          if (isCustomerSessionStore(name) && !String((state as { token?: string }).token || '').trim()) {
+            const backup = readCustomerSession();
+            if (backup) {
+              state.set({ ...backup, _hasHydrated: true } as unknown as Partial<T>);
+              return;
+            }
           }
+          state.set({ _hasHydrated: true } as unknown as Partial<T>);
         },
       }
     )

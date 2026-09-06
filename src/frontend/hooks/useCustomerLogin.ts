@@ -4,6 +4,7 @@ import type { LoginCustomerInput } from '@/frontend/actions/CustomerLogin';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { useUserSession } from '@/tools/FrontendSession';
 import { hardNavigate } from '@/frontend/utils/hardNavigate';
+import { rememberLoginAccount, writeCustomerSession } from '@/frontend/utils/customerSessionPersist';
 import { toast } from "sonner";
 
 // Export States
@@ -81,20 +82,23 @@ export const useCustomerLogin = (): {
 
     try {
       const result = await loginCustomer(formData);
-      
-      setSession({
+      const nextSession = {
         token: result.token,
         user_id: result.sysuser_id,
         username: result.sysuser_name || result.sysuser_account,
         email: result.sysuser_email,
         preferredLocale: result.preferred_locale || 'en',
-        role: 'CUSTOMER'
-      });
+        role: 'CUSTOMER' as const,
+      };
+      writeCustomerSession(nextSession);
+      rememberLoginAccount(formData.sysuser_account);
+      setSession(nextSession);
 
       toast.success('Signed in successfully');
 
       const target = returnTo ? decodeURIComponent(returnTo) : '/'
-      hardNavigate(target.startsWith('/') ? target : '/')
+      const nextPath = target.startsWith('/') ? target : '/'
+      window.setTimeout(() => hardNavigate(nextPath), 80)
     } catch (error: any) {
       const raw = String(error?.message || '');
       // Prisma / engine dumps → friendly copy; business errors pass through

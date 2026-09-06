@@ -6,6 +6,7 @@ import { registerCustomer } from '@/frontend/actions/CustomerRegister';
 import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { useTranslation } from 'react-i18next';
 import { useUserSession } from '@/tools/FrontendSession';
+import { rememberLoginAccount, writeCustomerSession } from '@/frontend/utils/customerSessionPersist';
 
 interface FormFields {
   sysuser_name: string;
@@ -89,18 +90,22 @@ export const useCustomerRegister = (): { state: CustomerRegisterState, handlers:
               sysuser_password: form.sysuser_password,
             });
 
-      setSession({
+      const nextSession = {
         token: sessionResult.token,
         user_id: sessionResult.sysuser_id,
         username: sessionResult.sysuser_name || sessionResult.sysuser_account,
         email: sessionResult.sysuser_email,
         preferredLocale: sessionResult.preferred_locale || 'en',
-        role: 'CUSTOMER',
-      });
+        role: 'CUSTOMER' as const,
+      };
+      writeCustomerSession(nextSession);
+      rememberLoginAccount(form.sysuser_email.trim() || form.sysuser_phone.trim());
+      setSession(nextSession);
 
       setIsSuccess(true);
       const target = returnTo ? decodeURIComponent(returnTo) : '/'
-      hardNavigate(target.startsWith('/') ? target : '/')
+      const nextPath = target.startsWith('/') ? target : '/'
+      window.setTimeout(() => hardNavigate(nextPath), 80)
     } catch (error: any) {
       setGlobalError(error.message || t('auth.registerFailed'));
     } finally {
