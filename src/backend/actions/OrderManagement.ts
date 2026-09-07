@@ -942,7 +942,7 @@ async function buildPlainXlsxFile(
     '商品 ID': row.productId,
     SKU: row.sku,
     SPU: row.spu,
-    图片: row.imageUrl,
+    图片: '',
     '原价(美金)': row.originalPriceUsd,
     '折扣价(美金)': row.discountPriceUsd ?? row.originalPriceUsd,
     数量: row.quantity,
@@ -976,12 +976,15 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
     views: [{ state: 'frozen', ySplit: 1 }],
   })
 
+  // Keep the image column roughly square so two-cell anchors do not stretch photos.
+  const imageColWidth = 20
+  const imageRowHeight = 105
+
   worksheet.columns = [
     { header: '商品 ID', key: 'productId', width: 18 },
     { header: 'SKU', key: 'sku', width: 18 },
     { header: 'SPU', key: 'spu', width: 18 },
-    { header: '图片', key: 'image', width: 27 },
-    { header: '__图片链接URL', key: 'imageUrlRaw', width: 40, hidden: true },
+    { header: '图片', key: 'image', width: imageColWidth },
     { header: '原价(美金)', key: 'originalPriceUsd', width: 14 },
     { header: '折扣价(美金)', key: 'discountPriceUsd', width: 14 },
     { header: '数量', key: 'quantity', width: 10 },
@@ -1008,7 +1011,6 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
       sku: row.sku,
       spu: row.spu,
       image: '',
-      imageUrlRaw: row.imageUrl,
       originalPriceUsd: row.originalPriceUsd,
       discountPriceUsd: row.discountPriceUsd ?? row.originalPriceUsd,
       quantity: row.quantity,
@@ -1021,9 +1023,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
   }
 
   const imageColIndex = worksheet.getColumn('image').number
-  const imageUrlRawColIndex = worksheet.getColumn('imageUrlRaw').number
   worksheet.getColumn(imageColIndex).alignment = { vertical: 'middle', horizontal: 'center' }
-  worksheet.getColumn(imageUrlRawColIndex).hidden = true
 
   // Embed procurement-sized SKU images into the "图片" column.
   const imageIdByUrl = new Map<string, number>()
@@ -1032,7 +1032,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
   for (let i = 0; i < rows.length; i++) {
     const rowNumber = i + 2 // 1-based row index; row 1 is header
     const excelRow = worksheet.getRow(rowNumber)
-    excelRow.height = 132
+    excelRow.height = imageRowHeight
     excelRow.alignment = { vertical: 'middle', wrapText: true }
 
     const imageUrl = rows[i]?.imageUrl || ''
@@ -1047,10 +1047,12 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
       })
       imageIdByUrl.set(imageUrl, imageId)
     }
+    // Pin to the cell rectangle. Fractional tl + pixel ext is calculated against
+    // ExcelJS default row height, so images float into the row above in WPS/Excel.
     worksheet.addImage(imageId, {
-      tl: { col: imageColIndex - 1 + 0.08, row: rowNumber - 1 + 0.08 },
-      ext: { width: 168, height: 168 },
-      editAs: 'oneCell',
+      tl: { col: imageColIndex - 1, row: rowNumber - 1 },
+      br: { col: imageColIndex, row: rowNumber },
+      editAs: 'twoCell',
     })
     embeddedCount += 1
   }

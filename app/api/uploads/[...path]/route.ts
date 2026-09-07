@@ -12,6 +12,11 @@ import { Readable } from 'node:stream'
 import { NextResponse, type NextRequest } from 'next/server'
 
 import { contentTypeForKey, resolveStoredFile } from '@/lib/uploadStorage'
+import {
+  canResizeUpload,
+  getOrCreateUploadThumb,
+  parseUploadThumbParams,
+} from '@/lib/uploadImageThumb'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,6 +51,25 @@ export async function GET(
     'X-Content-Type-Options': 'nosniff',
     // Uploaded SVGs must not be able to run scripts when opened same-origin
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  }
+
+  const thumb = parseUploadThumbParams(request.nextUrl.searchParams)
+  if (thumb && canResizeUpload(filePath)) {
+    try {
+      const resized = await getOrCreateUploadThumb(filePath, thumb.width, thumb.quality)
+      const thumbEtag = `"${resized.etagSeed}"`
+      headers['Content-Type'] = resized.contentType
+      headers.ETag = thumbEtag
+      if (request.headers.get('if-none-match') === thumbEtag) {
+        return new NextResponse(null, { status: 304, headers })
+      }
+      return new NextResponse(resized.body, {
+        status: 200,
+        headers: { ...headers, 'Content-Length': String(resized.body.byteLength) },
+      })
+    } catch {
+      // Fall through to the original file if resize fails.
+    }
   }
 
   if (request.headers.get('if-none-match') === etag) {

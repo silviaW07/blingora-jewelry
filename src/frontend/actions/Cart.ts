@@ -105,6 +105,7 @@ import { isStorefrontInStock, isStorefrontQtyAllowed } from '@/shared/storefront
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 import { isColorDimensionName } from '@/shared/tableImportSpec'
+import { touchCustomerLastSeen } from '@/frontend/lib/touchCustomerLastSeen'
 
 const resolveProductMinOrderQty = (tradeInfoJson: unknown) => Math.max(1, Number((tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
 const resolveEffectiveSkuMinOrderQty = (productMinOrderQty: number, skuMinOrderQty: unknown) => {
@@ -165,6 +166,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
     const [exchangeRate, pricingConfig] = await Promise.all([
       getUsdExchangeRate(prisma),
       loadPricingPromotionConfig(prisma),
+      touchCustomerLastSeen(userId),
     ])
 
     // 1. 获取或创建用户的购物车

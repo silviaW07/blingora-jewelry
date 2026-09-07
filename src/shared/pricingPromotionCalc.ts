@@ -28,6 +28,11 @@ export function getSiteWidePercentCoef(config: PricingPromotionConfig | null | u
   return Math.round(coef * 10000) / 10000
 }
 
+/** Admin historically writes original = list * 1.1 whenever cost exists. That is not a promotion. */
+function isPlaceholderCompareAt(listPrice: number, originalPrice: number): boolean {
+  return Math.abs(originalPrice - roundMoney(listPrice * 1.1)) <= 0.02
+}
+
 export function applySiteWideListedUsd(params: {
   price: number
   priceMax?: number | null
@@ -42,12 +47,15 @@ export function applySiteWideListedUsd(params: {
   const price = roundMoney(Math.max(0, Number(params.price) || 0))
   const priceMax = params.priceMax != null ? roundMoney(Number(params.priceMax) || 0) : null
   if (params.coef == null) {
-    const original = params.originalPrice != null ? roundMoney(Number(params.originalPrice) || 0) : null
+    let original = params.originalPrice != null ? roundMoney(Number(params.originalPrice) || 0) : null
+    if (original != null && (original <= price + 0.009 || isPlaceholderCompareAt(price, original))) {
+      original = null
+    }
     return {
       price,
       priceMax,
       originalPrice: original,
-      hasDiscount: original != null && original > price + 0.009,
+      hasDiscount: original != null,
     }
   }
   const sale = roundMoney(price * params.coef)

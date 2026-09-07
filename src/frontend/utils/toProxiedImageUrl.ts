@@ -97,6 +97,47 @@ export function toRelativeImgProxyPath(url: string): string | null {
   return null
 }
 
+const UPLOAD_PATH = '/api/uploads/'
+const SKIP_UPLOAD_THUMB = /\.(gif|svg|svgz|mp4|webm|mov|m4v)$/i
+
+function isSelfHostedUploadPath(pathname: string): boolean {
+  return pathname.startsWith(UPLOAD_PATH)
+}
+
+/** Grid/list thumbs for `/api/uploads/...` — originals stay 300KB–1MB+ at 2K/4K. */
+function withUploadThumb(url: string, width: number, quality: number): string | null {
+  const raw = String(url || '').trim()
+  if (!raw) return null
+  try {
+    const base =
+      typeof window !== 'undefined' ? window.location.origin : 'https://sourcingjewelry.com'
+    const parsed = raw.startsWith('/') ? new URL(raw, base) : new URL(raw)
+    if (!isSelfHostedUploadPath(parsed.pathname)) return null
+    if (SKIP_UPLOAD_THUMB.test(parsed.pathname)) {
+      parsed.searchParams.delete('w')
+      parsed.searchParams.delete('q')
+      const search = parsed.searchParams.toString()
+      const next = `${parsed.pathname}${search ? `?${search}` : ''}`
+      return raw.startsWith('http') ? `${parsed.origin}${next}` : next
+    }
+    if (width <= 0) {
+      parsed.searchParams.delete('w')
+      parsed.searchParams.delete('q')
+    } else {
+      parsed.searchParams.set('w', String(Math.min(1600, Math.max(80, Math.round(width)))))
+      parsed.searchParams.set(
+        'q',
+        String(Math.min(90, Math.max(40, Math.round(quality)))),
+      )
+    }
+    const search = parsed.searchParams.toString()
+    const next = `${parsed.pathname}${search ? `?${search}` : ''}`
+    return raw.startsWith('http') ? `${parsed.origin}${next}` : next
+  } catch {
+    return null
+  }
+}
+
 function proxyPathForHost(host: string, pathname: string, search: string): string | null {
   if (host === 'cbu01.alicdn.com') return `/img-proxy/cbu01${pathname}${search}`
   if (host === 'cbu02.alicdn.com') return `/img-proxy/cbu02${pathname}${search}`
@@ -132,6 +173,9 @@ export function toProxiedImageUrl(
 
   const width = options.width ?? 1200
   const quality = options.quality ?? 90
+
+  const uploadThumb = withUploadThumb(raw, width, quality)
+  if (uploadThumb) return uploadThumb
 
   // Already on our CDN — apply size suffix if missing
   if (IMAGE_CDN_BASE && raw.startsWith(IMAGE_CDN_BASE)) {

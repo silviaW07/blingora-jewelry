@@ -28,7 +28,6 @@ import { normalizeProductLang, pickProductTranslation, resolveCategoryDisplayNam
 import {
   pickFrontPricingCategoryCoeffs,
   resolveFrontRmbSellingPrice,
-  toDecimalNumber,
 } from '@/shared/priceCoefficient'
 import { CATEGORY_CARD_PLACEHOLDER_URL, optimizeCatalogImageUrl, resolveCategoryCardImageUrl } from '@/shared/imageUrl'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
@@ -530,13 +529,6 @@ export const getHomeRecommendZones = async (input?: {
       const priceMinUsd = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null
       const priceMaxUsd = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null
 
-      const priceRmb = priceMinRmb !== null ? priceMinRmb : resolveFrontRmbSellingPrice({
-        skuPriceRmb: defaultSku.price.toNumber(),
-        costPrice: product.costPrice,
-        ...pricingCoeffs,
-      })
-
-      const cost = toDecimalNumber(product.costPrice)
       const skuOptions = sortedSkus
         .map((sku, index) => {
           const priceRmb = resolveFrontRmbSellingPrice({
@@ -545,33 +537,20 @@ export const getHomeRecommendZones = async (input?: {
             ...pricingCoeffs,
           })
           const priceUsd = priceRmb > 0 ? toUsdPrice(priceRmb, exchangeRate) : null
-          const originalPriceRmb =
-            cost !== null && cost > 0
-              ? Number((priceRmb * 1.1).toFixed(2))
-              : sku.originalPrice
-                ? sku.originalPrice.toNumber()
-                : null
           return {
             skuId: sku.id,
             label: buildSkuOptionLabel(sku, index),
             price: priceUsd,
-            originalPrice: originalPriceRmb !== null && originalPriceRmb > 0 ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
+            originalPrice: null,
           }
         })
         .filter((opt) => opt.skuId && opt.price !== null)
         .slice(0, 6)
 
-      const originalPriceRmb =
-        cost !== null && cost > 0
-          ? Number((priceRmb * 1.1).toFixed(2))
-          : defaultSku.originalPrice
-            ? defaultSku.originalPrice.toNumber()
-            : null
-      const originalUsd = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
       const listed = applySiteWideListedUsd({
         price: priceMinUsd ?? 0,
         priceMax: priceMaxUsd,
-        originalPrice: originalUsd,
+        originalPrice: null,
         coef: siteWideCoef,
       })
       const saleSkuOptions = skuOptions.map((opt) => {
@@ -690,17 +669,6 @@ export const getHomeRecommendZones = async (input?: {
           const priceMin = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null
           const priceMax = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null
 
-          const priceRmb = priceMinRmb !== null
-            ? priceMinRmb
-            : defaultSku
-              ? resolveFrontRmbSellingPrice({
-                  skuPriceRmb: defaultSku.price.toNumber(),
-                  costPrice: product.costPrice,
-                  ...pricingCoeffs,
-                })
-              : null
-
-          const cost = toDecimalNumber(product.costPrice)
           const skuOptions = sortedSkus
             .map((sku, index) => {
               const skuPriceRmb = resolveFrontRmbSellingPrice({
@@ -709,37 +677,20 @@ export const getHomeRecommendZones = async (input?: {
                 ...pricingCoeffs,
               })
               const priceUsd = skuPriceRmb > 0 ? toUsdPrice(skuPriceRmb, exchangeRate) : null
-              const originalPriceRmb =
-                cost !== null && cost > 0
-                  ? Number((skuPriceRmb * 1.1).toFixed(2))
-                  : sku.originalPrice
-                    ? sku.originalPrice.toNumber()
-                    : null
               return {
                 skuId: sku.id,
                 label: buildSkuOptionLabel(sku, index),
                 price: priceUsd,
-                originalPrice:
-                  originalPriceRmb !== null && originalPriceRmb > 0
-                    ? toUsdPrice(originalPriceRmb, exchangeRate)
-                    : null,
+                originalPrice: null,
               }
             })
             .filter((opt) => opt.skuId && opt.price !== null)
             .slice(0, 6)
-          const originalPriceRmb =
-            priceRmb === null
-              ? null
-              : cost !== null && cost > 0
-                ? Number((priceRmb * 1.1).toFixed(2))
-                : defaultSku?.originalPrice
-                  ? defaultSku.originalPrice.toNumber()
-                  : null
 
           const listed = applySiteWideListedUsd({
             price: priceMin ?? 0,
             priceMax,
-            originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
+            originalPrice: null,
             coef: siteWideCoef,
           })
           const saleSkuOptions = skuOptions.map((opt) => {
@@ -1196,15 +1147,8 @@ const mapActiveProductToItem = (
     costPrice: product.costPrice,
     ...pricingCoeffs,
   })
-  const cost = toDecimalNumber(product.costPrice)
-  const originalPriceRmb =
-    cost !== null && cost > 0
-      ? Number((priceRmb * 1.1).toFixed(2))
-      : defaultSku?.originalPrice
-        ? defaultSku.originalPrice.toNumber()
-        : null
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
-  const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+  const originalPriceNum = null
   const usdPrices = skus
     .map((sku) =>
       toUsdPrice(

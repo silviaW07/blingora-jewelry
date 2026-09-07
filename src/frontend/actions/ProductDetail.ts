@@ -10,7 +10,6 @@ import {
 import {
   pickFrontPricingCategoryCoeffs,
   resolveFrontRmbSellingPrice,
-  toDecimalNumber,
 } from '@/shared/priceCoefficient'
 import {
   normalizeProductLang,
@@ -29,6 +28,7 @@ import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 import { enrichSkuColorSizeAttributes } from '@/shared/tableImportSpec'
+import { touchCustomerLastSeen } from '@/frontend/lib/touchCustomerLastSeen'
 
 // ===== Enums =====
 /** 商品状态：草稿(DRAFT) | 上架(ACTIVE) | 下架(INACTIVE) */
@@ -570,13 +570,6 @@ export const getProductDetail = withResult(
         costPrice: product.costPrice,
         ...pricingCoeffs,
       })
-      const cost = toDecimalNumber(product.costPrice)
-      const originalPriceRmb =
-        cost !== null && cost > 0
-          ? Number((priceRmb * 1.1).toFixed(2))
-          : sku.originalPrice
-            ? sku.originalPrice.toNumber()
-            : null
       const price = toUsdPrice(priceRmb, exchangeRate)
       return {
         id: sku.id,
@@ -587,7 +580,7 @@ export const getProductDetail = withResult(
             ? Math.max(1, Math.round(Number(sku.minOrderQty)))
             : null,
         price,
-        originalPrice: originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null,
+        originalPrice: null,
         stockStatus: sku.stockStatus as StockStatus,
         attributeJson: attrs,
         deliveryDays: sku.deliveryDays,
@@ -783,17 +776,20 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
     }
 
     const skuIds = lines.map((line) => line.productSkuId)
-    const skus = await prisma.productsku.findMany({
-      where: { id: { in: skuIds } },
-      include: {
-        product: {
-          include: {
-            category: true,
-            _count: { select: { skus: true } },
+    const [skus] = await Promise.all([
+      prisma.productsku.findMany({
+        where: { id: { in: skuIds } },
+        include: {
+          product: {
+            include: {
+              category: true,
+              _count: { select: { skus: true } },
+            },
           },
         },
-      },
-    })
+      }),
+      touchCustomerLastSeen(userId),
+    ])
     const skuById = new Map(skus.map((sku) => [sku.id, sku]))
 
     for (const line of lines) {

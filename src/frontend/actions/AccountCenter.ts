@@ -8,6 +8,7 @@ import {
   UserRole,
 } from '@/frontend/action_utils'
 import { isStorefrontVisibleProduct } from '@/shared/storefrontProductVisibility'
+import { touchCustomerLastSeen } from '@/frontend/lib/touchCustomerLastSeen'
 
 // ===== Types =====
 
@@ -208,20 +209,23 @@ const resolveProductMinOrderQty = (tradeInfoJson: unknown) =>
 export const getCustomerProfile = requireRole([UserRole.CUSTOMER])(
   withResult(async (): Promise<CustomerProfile> => {
     const { userId } = getAuthContext()
-    const user = await prisma.sysuser.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        account: true,
-        username: true,
-        email: true,
-        phone: true,
-        avatarUrl: true,
-        preferredLocale: true,
-        countryCode: true,
-        countryName: true,
-      },
-    })
+    const [user] = await Promise.all([
+      prisma.sysuser.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          account: true,
+          username: true,
+          email: true,
+          phone: true,
+          avatarUrl: true,
+          preferredLocale: true,
+          countryCode: true,
+          countryName: true,
+        },
+      }),
+      touchCustomerLastSeen(userId),
+    ])
     if (!user) throw new Error('用户不存在')
     return {
       userId: user.id,

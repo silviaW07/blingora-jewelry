@@ -281,7 +281,6 @@ import {
 import {
   pickFrontPricingCategoryCoeffs,
   resolveFrontRmbSellingPrice,
-  toDecimalNumber,
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
@@ -295,6 +294,7 @@ import {
 import { normalizePosterLinkUrl } from '@/shared/posterLink'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
+import { touchCustomerLastSeen } from '@/frontend/lib/touchCustomerLastSeen'
 import { isProductTypeCategory } from '@/shared/categoryMatchGuards'
 import {
   isJewelryShelfIntruder,
@@ -1388,15 +1388,8 @@ function mapProductRecordToItem(
     costPrice: p.costPrice,
     ...pricingCoeffs,
   })
-  const cost = toDecimalNumber(p.costPrice)
-  const originalPriceRmb =
-    cost !== null && cost > 0
-      ? Number((priceRmb * 1.1).toFixed(2))
-      : defaultSku?.originalPrice
-        ? defaultSku.originalPrice.toNumber()
-        : null
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
-  const originalPriceNum = originalPriceRmb !== null ? toUsdPrice(originalPriceRmb, exchangeRate) : null
+  const originalPriceNum = null
   const usdPrices =
     opts?.skuPriceMinRmb != null && opts?.skuPriceMaxRmb != null
       ? [
@@ -2139,12 +2132,15 @@ export const addToCart = requireRole([UserRole.CUSTOMER])(
       throw storefrontError('checkout.errors.qtyInvalid')
     }
 
-    const sku = await prisma.productsku.findUnique({
-      where: { id: input.product_sku_id },
-      include: {
-        product: { include: { category: true } },
-      },
-    })
+    const [sku] = await Promise.all([
+      prisma.productsku.findUnique({
+        where: { id: input.product_sku_id },
+        include: {
+          product: { include: { category: true } },
+        },
+      }),
+      touchCustomerLastSeen(userId),
+    ])
 
     if (
       !sku ||
