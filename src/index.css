@@ -1808,18 +1808,14 @@
   background: #f7f4ee;
 }
 
-/* padding-bottom 方框的 content-box 高是 0，height:100% 会算成 0，竖图只铺上半截。用 inset 拉满。 */
-.home-product-card .home-product-card-media [data-media-fill],
+.home-product-card .home-product-card-media > *,
 .home-product-card .home-product-card-media img {
-  position: absolute !important;
-  inset: 0 !important;
+  position: absolute;
+  inset: 0;
   display: block;
-  width: auto !important;
-  height: auto !important;
-  min-width: 100% !important;
-  min-height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
   aspect-ratio: auto !important;
   object-fit: cover !important;
   object-position: center center;
@@ -2348,18 +2344,14 @@ html.is-narrow .home-product-card .home-product-card-media {
   overflow: hidden !important;
 }
 
-html.is-narrow .home-product-card .home-product-card-media [data-media-fill],
+html.is-narrow .home-product-card .home-product-card-media > *,
 html.is-narrow .home-product-card .home-product-card-media img {
   position: absolute !important;
   inset: 0 !important;
-  width: auto !important;
-  height: auto !important;
-  min-width: 100% !important;
-  min-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
   max-width: none !important;
-  max-height: none !important;
   object-fit: cover !important;
-  object-position: center center !important;
 }
 
 html.is-narrow .home-product-card .home-product-card-media > .mobile-coming-product-card__heart {
@@ -2383,18 +2375,14 @@ html.is-narrow .mobile-coming-product-card__media {
   overflow: hidden !important;
 }
 
-html.is-narrow .mobile-coming-product-card__media [data-media-fill],
+html.is-narrow .mobile-coming-product-card__media > *,
 html.is-narrow .mobile-coming-product-card__media img {
   position: absolute !important;
   inset: 0 !important;
-  width: auto !important;
-  height: auto !important;
-  min-width: 100% !important;
-  min-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
   max-width: none !important;
-  max-height: none !important;
   object-fit: cover !important;
-  object-position: center center !important;
 }
 
 html.is-narrow .mobile-coming-product-card__media > .mobile-coming-product-card__heart,
