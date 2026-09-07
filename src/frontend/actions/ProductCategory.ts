@@ -497,9 +497,15 @@ const jewelryShelfExcludeWhere = () => {
     'headband',
     'hairband',
     'hair band',
+    'hair clip',
+    'hairpin',
     'mini bag',
     'coin purse',
     'cardholder',
+    'card holder',
+    '腰带',
+    '皮带',
+    'belt',
   ]
   return {
     AND: [
@@ -1742,17 +1748,14 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     }
 
     const priceSortOutput: GetProductListOutput = {
-      list: orderedRows.flatMap((p) => {
-        if (jewelryShelf && !keepJewelryShelfRecord(p)) return []
+      list: orderedRows.map((p) => {
         const agg = skuPriceAggByProduct.get(p.id)
-        const item = mapProductRecordToItem(p, lang, exchangeRate, {
+        return mapProductRecordToItem(p, lang, exchangeRate, {
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
           siteWideCoef,
         })
-        if (jewelryShelf && !keepJewelryShelfItem(item)) return []
-        return [item]
       }),
       total,
     }
@@ -1845,17 +1848,14 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     }
 
     const fastOutput: GetProductListOutput = {
-      list: pageRows.flatMap((p) => {
-        if (jewelryShelf && !keepJewelryShelfRecord(p)) return []
+      list: pageRows.map((p) => {
         const agg = skuPriceAggByProduct.get(p.id)
-        const item = mapProductRecordToItem(p, lang, exchangeRate, {
+        return mapProductRecordToItem(p, lang, exchangeRate, {
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
           siteWideCoef,
         })
-        if (jewelryShelf && !keepJewelryShelfItem(item)) return []
-        return [item]
       }),
       total,
     }

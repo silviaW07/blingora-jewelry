@@ -44,7 +44,6 @@ import { loadSideNavZonesCached, peekCachedSideNavZones } from '@/frontend/utils
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
-import { isJewelryShelfIntruder, isJewelryShelfName } from '@/shared/categoryShelfFamily'
 import { normalizePosterLinkUrl, isAbsoluteHttpUrl } from '@/shared/posterLink'
 
 type CategoryChildItem = {
@@ -90,21 +89,6 @@ type CategoryPosterItem = {
 
 type ProductCardItem = ProductItem & {
   brand_category_name: string | null
-}
-
-function filterJewelryListingItems(
-  list: ProductCardItem[],
-  opts: { search?: string; categoryName?: string | null; parentName?: string | null; slug?: string | null },
-) {
-  if (String(opts.search || '').trim()) return list
-  if (
-    !isJewelryShelfName(opts.categoryName) &&
-    !isJewelryShelfName(opts.parentName) &&
-    !isJewelryShelfName(opts.slug)
-  ) {
-    return list
-  }
-  return list.filter((item) => !isJewelryShelfIntruder(item.product_name, item.short_description))
 }
 
 function mergeListingPage(
@@ -442,7 +426,7 @@ export const useProductCategory = (
       stockStatus: (routeParams.stockStatus ? routeParams.stockStatus.split(',').filter(Boolean) : []).filter((status): status is StockStatusEnum => status === 'IN_STOCK' || status === 'LOW_STOCK') as StockStatusEnum[],
       sortBy: (routeParams.sortBy as SortByEnum) || 'NEWEST',
       page: routeParams.page ? parseInt(routeParams.page) : 1,
-      pageSize: 30,
+      pageSize: 60,
       minPrice: routeParams.minPrice ? parseFloat(routeParams.minPrice) : undefined,
       maxPrice: routeParams.maxPrice ? parseFloat(routeParams.maxPrice) : undefined,
       hasDiscount: false,
@@ -941,10 +925,10 @@ export const useProductCategory = (
     if (!isMobile) {
       setExpandedTopNavCategoryIds([])
     }
-    // Cap page size so list image fan-out doesn't starve below-fold mains.
     setQueryState((prev) => {
-      const target = isMobile ? 24 : 30
-      return prev.pageSize <= target ? prev : { ...prev, pageSize: target, page: 1 }
+      const target = isMobile ? 30 : 60
+      if (prev.pageSize === target) return prev
+      return { ...prev, pageSize: target, page: 1 }
     })
   }, [isMobile])
 
@@ -1113,19 +1097,13 @@ export const useProductCategory = (
     })
       .then(({ list, total }) => {
         if (productFetchGenRef.current !== gen) return
-        const parent = queryState.categoryId
-          ? categories.find((cat) => cat.category_id === queryState.categoryId) ||
-            categories.find((cat) => cat.children.some((child) => child.category_id === queryState.categoryId))
-          : null
-        const childName = parent?.children.find((child) => child.category_id === queryState.categoryId)?.category_name
-        const nextList = filterJewelryListingItems(list as ProductCardItem[], {
-          search: queryState.searchKeyword,
-          categoryName: childName || parent?.category_name,
-          parentName: parent?.category_name,
-          slug: routeCategorySlug,
-        })
         setProducts((prev) =>
-          mergeListingPage(prev, nextList, queryState.page, isMobile || isNarrowViewport()),
+          mergeListingPage(
+            prev,
+            list as ProductCardItem[],
+            queryState.page,
+            isMobile || isNarrowViewport(),
+          ),
         )
         setTotalCount(total)
       })
