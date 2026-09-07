@@ -10,8 +10,38 @@ import { resolveStoredFile, saveUploadedImage } from '@/lib/uploadStorage'
 
 const MAX_FETCH_BYTES = 12 * 1024 * 1024
 
+const IMG_PROXY_ORIGIN: Record<string, string> = {
+  cbu01: 'https://cbu01.alicdn.com',
+  cbu02: 'https://cbu02.alicdn.com',
+  gw: 'https://gw.alicdn.com',
+  img: 'https://img.alicdn.com',
+}
+
+/** `/img-proxy/cbu01/foo.jpg` → `https://cbu01.alicdn.com/foo.jpg` */
+function rewriteImgProxyToAlicdn(pathname: string, search = ''): string | null {
+  const parts = String(pathname || '').split('/').filter(Boolean)
+  if (parts[0] !== 'img-proxy' || parts.length < 3) return null
+  const origin = IMG_PROXY_ORIGIN[parts[1]]
+  if (!origin) return null
+  return `${origin}/${parts.slice(2).join('/')}${search || ''}`
+}
+
+function isOwnHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  for (const raw of [siteOrigin(), String(process.env.NEXT_PUBLIC_IMAGE_CDN_BASE || '').trim()]) {
+    if (!raw) continue
+    try {
+      if (new URL(raw).hostname.toLowerCase() === host) return true
+    } catch {
+      // ignore bad env
+    }
+  }
+  return false
+}
+
 function isAllowedRemoteHost(hostname: string): boolean {
   const host = hostname.toLowerCase()
+  if (isOwnHost(host)) return true
   return (
     host.endsWith('.alicdn.com') ||
     host === 'alicdn.com' ||
@@ -48,7 +78,12 @@ function resolveFetchUrl(raw: string): string | null {
   if (!text) return null
   const origin = siteOrigin()
 
-  if (text.startsWith('/img-proxy/') || text.startsWith('/api/uploads/')) {
+  if (text.startsWith('/img-proxy/')) {
+    const [pathPart, ...queryParts] = text.split('?')
+    const search = queryParts.length ? `?${queryParts.join('?')}` : ''
+    return rewriteImgProxyToAlicdn(pathPart, search) || (origin ? `${origin}${text}` : null)
+  }
+  if (text.startsWith('/api/uploads/')) {
     if (!origin) return null
     return `${origin}${text}`
   }
@@ -56,7 +91,10 @@ function resolveFetchUrl(raw: string): string | null {
   try {
     const url = new URL(text)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-    if (url.pathname.startsWith('/img-proxy/') || url.pathname.startsWith('/api/uploads/')) {
+    if (url.pathname.startsWith('/img-proxy/')) {
+      return rewriteImgProxyToAlicdn(url.pathname, url.search) || url.toString()
+    }
+    if (url.pathname.startsWith('/api/uploads/')) {
       return url.toString()
     }
     if (!isAllowedRemoteHost(url.hostname)) return null

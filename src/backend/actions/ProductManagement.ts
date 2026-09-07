@@ -634,7 +634,7 @@ export interface ProductBindingMetaOutput {
 }
 
 import prisma from '@/tools/prisma'
-import { mosaicImageUrlIfWatermark, mapPool } from '@/lib/mosaicRemoteImage'
+import { mosaicImageUrlToUpload, mapPool } from '@/lib/mosaicRemoteImage'
 import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
 import { isAttributeOrFilterCategory, isProductTypeCategory } from '@/shared/categoryMatchGuards'
@@ -3340,13 +3340,15 @@ export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
       const cached = urlCache.get(url)
       if (cached) return cached.url
       try {
-        const result = await mosaicImageUrlIfWatermark(url)
-        urlCache.set(url, result)
-        if (result.mosaicked) imagesOk += 1
-        else imagesSkipped += 1
-        return result.url
+        // Explicit toolbar action: always cover corners. Heuristic detect often
+        // misses faint 1688 marks on white jewelry shots, so the UI looked unchanged.
+        const next = await mosaicImageUrlToUpload(url)
+        urlCache.set(url, { url: next, mosaicked: true })
+        imagesOk += 1
+        return next
       } catch {
         imagesFail += 1
+        urlCache.set(url, { url, mosaicked: false })
         return url
       }
     }
@@ -3386,7 +3388,7 @@ export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
                 .map((url) => String(url || '').trim())
                 .filter(Boolean),
             ),
-          ).slice(0, 8)
+          ).slice(0, 40)
           const skuUrls = Array.from(
             new Set(
               [
@@ -3396,7 +3398,7 @@ export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
                 .map((url) => String(url || '').trim())
                 .filter(Boolean),
             ),
-          ).slice(0, 24)
+          ).slice(0, 40)
           const allUrls = Array.from(new Set([...gallery, ...skuUrls]))
           if (!allUrls.length) {
             fail += 1
@@ -3452,10 +3454,10 @@ export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
 
       for (const product of products) {
         try {
-          const gallery = extractGalleryUrls(product.galleryJson, product.mainImageUrl).slice(0, 8)
+          const gallery = extractGalleryUrls(product.galleryJson, product.mainImageUrl).slice(0, 40)
           const skuUrls = Array.from(
             new Set((product.skus || []).map((sku) => String(sku.imageUrl || '').trim()).filter(Boolean)),
-          ).slice(0, 24)
+          ).slice(0, 40)
           const allUrls = Array.from(new Set([...gallery, ...skuUrls]))
           if (!allUrls.length) {
             fail += 1

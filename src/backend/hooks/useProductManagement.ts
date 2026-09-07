@@ -3156,7 +3156,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       return
     }
     const confirmed = window.confirm(
-      `将对已勾选的 ${ids.length} 个${pendingScope ? '待上传' : ''}商品：主图轮播 + SKU/色图（每件最多 8 张主图、24 张 SKU 图）。系统会先识别右下角是否像 1688 水印，有水印才打马赛克。是否继续？`,
+      `将对已勾选的 ${ids.length} 个${pendingScope ? '待上传' : ''}商品的主图轮播和 SKU/色图右下角打马赛克并保存为新图（每件最多 40 张主图、40 张 SKU 图）。是否继续？`,
     )
     if (!confirmed) return
     setMosaicGalleryRunning(true)
@@ -3165,9 +3165,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         scope: pendingScope ? 'pending' : 'product',
         ids,
       })
-      toast.success(
-        `马赛克完成：商品成功 ${result.success_count}、失败 ${result.fail_count}；打码 ${result.images_ok} 张，跳过无水印 ${result.images_skipped || 0} 张，失败 ${result.images_fail} 张`,
-      )
+      const summary =
+        `商品成功 ${result.success_count}、失败 ${result.fail_count}；打码 ${result.images_ok} 张，失败 ${result.images_fail} 张`
+      if (result.images_ok === 0) {
+        toast.error(
+          result.images_fail
+            ? `马赛克未生效：${summary}。请确认图片能打开后再试`
+            : `马赛克未改写任何图片。${summary}`,
+        )
+      } else {
+        toast.success(`马赛克完成：${summary}`)
+      }
       if (pendingScope) await refreshPendingImportQueue({ silent: true })
       else await fetchList()
     } catch (err: any) {

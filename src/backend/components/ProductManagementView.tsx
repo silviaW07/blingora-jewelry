@@ -307,7 +307,7 @@ export const ProductManagementView = ({
         className="h-9 border-fuchsia-300 bg-fuchsia-50 text-fuchsia-950 hover:bg-fuchsia-100 shrink-0"
         disabled={!hasProductSelected || state.mosaicGalleryRunning}
         onClick={() => void handlers.handleBatchMosaicGalleries()}
-        title="勾选商品后，识别主图/色图右下角 1688 水印并打马赛克"
+        title="勾选商品后，对主图/色图右下角打马赛克"
       >
         <Eraser className={cn('w-4 h-4 mr-2 shrink-0', state.mosaicGalleryRunning && 'animate-pulse')} />
         {state.mosaicGalleryRunning ? '马赛克处理中...' : '马赛克'}
@@ -394,7 +394,7 @@ export const ProductManagementView = ({
         className="h-9 border-fuchsia-300 bg-fuchsia-50 text-fuchsia-950 hover:bg-fuchsia-100 shrink-0"
         disabled={!hasPendingSelected || state.pendingImportPublishing || state.mosaicGalleryRunning}
         onClick={() => void handlers.handleBatchMosaicGalleries()}
-        title="勾选待上传商品后，识别主图/色图右下角 1688 水印并打马赛克"
+        title="勾选待上传商品后，对主图/色图右下角打马赛克"
       >
         <Eraser className={cn('w-4 h-4 mr-2 shrink-0', state.mosaicGalleryRunning && 'animate-pulse')} />
         {state.mosaicGalleryRunning ? '马赛克处理中...' : '马赛克'}
