@@ -27,6 +27,7 @@ import {
   writeCachedProductDetail,
   writeProductDetailPreview,
 } from '@/frontend/utils/productDetailCache'
+import { bumpCartBadgeCount, refreshCartBadgeCount } from '@/frontend/utils/cartBadgeStore'
 import {
   clampSelectedQuantityToMoq,
   formatMinOrderQtyMessage,
@@ -69,6 +70,16 @@ const isSizeAttributeName = (name?: string | null) => {
     normalized === 'spec' ||
     normalized === 'sizing'
   )
+}
+
+/** 里料/材质等是描述属性，不能当成尺码维，否则数量会停在 0 且规格露出中文。 */
+const isDescriptiveSkuDimensionName = (name?: string | null) => {
+  const compact = String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s/／·\-_|｜]/g, '')
+  if (!compact) return false
+  return /里料|质地|材质|材料|面料|内里|内衬|lining|texture|material|fabric/.test(compact)
 }
 
 export interface SelectionHighlight {
@@ -358,13 +369,17 @@ export const useProductDetail = (seed?: {
       (group) =>
         isSizeAttributeName(group.name) &&
         !isColorAttributeName(group.name) &&
+        !isDescriptiveSkuDimensionName(group.name) &&
         hasRealSpecValues(group.values),
     )
     if (named) return named
-    // 回退：第一个「有真实取值」的非颜色规格维；全是 Default/默认 则视为仅颜色商品
+    // 回退：第一个「有真实取值」的非颜色、非描述规格维；全是 Default/默认 则视为仅颜色商品
     return (
       availableAttributes.find(
-        (group) => !isColorAttributeName(group.name) && hasRealSpecValues(group.values),
+        (group) =>
+          !isColorAttributeName(group.name) &&
+          !isDescriptiveSkuDimensionName(group.name) &&
+          hasRealSpecValues(group.values),
       ) || null
     )
   }, [availableAttributes])
@@ -392,28 +407,6 @@ export const useProductDetail = (seed?: {
     // colorAttribute is derived from this product; productIdKey is the reset key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdKey])
-
-  useEffect(() => {
-    if (!product || !colorAttribute) return
-    const first = colorAttribute.values.find((value) => String(value || '').trim())
-    if (!first) return
-    setManualColorValue(first)
-    setSelectedAttributes({ [colorAttribute.name]: first })
-    const sameAttr = (left?: string | null, right?: string | null) =>
-      String(left || '').trim().toLowerCase() === String(right || '').trim().toLowerCase()
-    const matched = product.skus.filter((sku) =>
-      sku.attributeJson?.some(
-        (attr) => sameAttr(attr.name, colorAttribute.name) && sameAttr(attr.value, first),
-      ),
-    )
-    const primary = matched.find((sku) => Boolean(sku.imageUrl)) || matched[0] || null
-    if (primary?.imageUrl) setActiveImage(primary.imageUrl)
-    if (!sizeAttribute && primary) {
-      setManualSizeSkuId(primary.id)
-      setSelectedSku(primary)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productIdKey, colorAttribute, sizeAttribute])
 
   const sortedGallery = useMemo(() => {
     if (!product) return []
@@ -557,6 +550,27 @@ export const useProductDetail = (seed?: {
     [colorAttribute, productMinOrderQty, supportsMixedBatch],
   )
 
+  useEffect(() => {
+    if (!product || !colorAttribute) return
+    const first = colorAttribute.values.find((value) => String(value || '').trim())
+    if (!first) return
+    setManualColorValue(first)
+    setSelectedAttributes({ [colorAttribute.name]: first })
+    const sameAttr = (left?: string | null, right?: string | null) =>
+      String(left || '').trim().toLowerCase() === String(right || '').trim().toLowerCase()
+    const matched = product.skus.filter((sku) =>
+      sku.attributeJson?.some(
+        (attr) => sameAttr(attr.name, colorAttribute.name) && sameAttr(attr.value, first),
+      ),
+    )
+    const primary = matched.find((sku) => Boolean(sku.imageUrl)) || matched[0] || null
+    if (primary?.imageUrl) setActiveImage(primary.imageUrl)
+    if (primary) {
+      applySizeSelection(primary, first)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productIdKey, colorAttribute, sizeAttribute, applySizeSelection])
+
   const handleColorSelect = (value: string, imageUrl?: string | null) => {
     if (!product || !colorAttribute) return
 
@@ -582,16 +596,8 @@ export const useProductDetail = (seed?: {
       setActiveImage(colorImage)
     }
 
-    // 选颜色只锁定 SKU / 换主图，不自动加数量
-    if (!sizeAttribute && primary) {
-      setManualSizeSkuId(primary.id)
-      setSelectedSku(primary)
-      const attrs: Record<string, string> = { [colorAttribute.name]: value }
-      primary.attributeJson?.forEach((attr) => {
-        if (attr.name && attr.value) attrs[attr.name] = attr.value
-      })
-      setSelectedAttributes(attrs)
-      setQuantity(skuQuantitiesRef.current[primary.id] || 0)
+    if (primary) {
+      applySizeSelection(primary, value)
       return
     }
 
@@ -746,6 +752,7 @@ export const useProductDetail = (seed?: {
     if (!isPurchasable || submitting) return
 
     if (!session.token) {
+      toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
       if (typeof window !== 'undefined') {
         window.location.assign(
           customerLoginHref(`${window.location.pathname}${window.location.search}`),
@@ -813,10 +820,12 @@ export const useProductDetail = (seed?: {
 
     try {
       setSubmitting(true)
-      toast.success('Added to cart')
+      toast.success(t('product.addedToCart', { defaultValue: 'Added to cart' }))
       await addToCart({
         lines: lines.map(([productSkuId, quantity]) => ({ productSkuId, quantity })),
       })
+      bumpCartBadgeCount(batchTotal)
+      void refreshCartBadgeCount()
     } catch (err: any) {
       toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
     } finally {

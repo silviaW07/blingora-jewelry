@@ -215,6 +215,11 @@ const SPEC_FIELD_LABEL_KEYS: Record<string, string> = {
   内胆材质: 'productSpec.fields.innerLiner',
   外壳材质: 'productSpec.fields.outerShell',
   杯盖材质: 'productSpec.fields.lidMaterial',
+  里料质地: 'productSpec.fields.lining',
+  里料: 'productSpec.fields.lining',
+  lining: 'productSpec.fields.lining',
+  质地: 'productSpec.fields.texture',
+  texture: 'productSpec.fields.texture',
 }
 
 export function translateProductSpecLabel(
@@ -223,7 +228,11 @@ export function translateProductSpecLabel(
 ): string {
   const raw = String(label || '').trim()
   if (!raw) return ''
-  const key = SPEC_FIELD_LABEL_KEYS[raw] || SPEC_FIELD_LABEL_KEYS[raw.toLowerCase()]
+  const key =
+    SPEC_FIELD_LABEL_KEYS[raw] ||
+    SPEC_FIELD_LABEL_KEYS[raw.toLowerCase()] ||
+    (/里料/.test(raw) ? 'productSpec.fields.lining' : '') ||
+    (/质地/.test(raw) ? 'productSpec.fields.texture' : '')
   if (key) {
     const translated = t(key)
     if (translated && translated !== key && !containsChinese(translated)) return translated

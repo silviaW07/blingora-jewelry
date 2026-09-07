@@ -21,7 +21,13 @@ export const getBuyerShowPage = withResult(async (): Promise<{
       orderBy: [{ sortWeight: 'desc' }, { createdAt: 'desc' }],
       select: { id: true, mediaType: true, mediaUrl: true, title: true },
     })
-    return { media: Array.isArray(media) ? media : [] }
+    const rows = Array.isArray(media) ? media : []
+    return {
+      media: rows.filter((item) => {
+        const url = String(item.mediaUrl || '').trim()
+        return url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')
+      }),
+    }
   } catch {
     return { media: [] }
   }

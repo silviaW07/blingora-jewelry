@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next'
 import { translateColorStyleText } from './productSpecTranslate'
 import {
   containsChinese,
+  fixStorefrontLabelTypos,
   stripChineseFromTitle,
   translateTitleKeywords,
 } from '@/shared/productKeywordDictionary'
@@ -135,7 +136,7 @@ function translateByAlias(t: TFunction, map: Record<string, string>, raw?: strin
  * 无匹配且仍含中文时：关键词英化 / 剥离 CJK，避免店面露出中文。
  */
 export function translateCatalogLabel(t: TFunction, raw?: string | null): string {
-  const viaAlias = translateByAlias(t, CATEGORY_ALIASES, raw)
+  const viaAlias = translateByAlias(t, CATEGORY_ALIASES, fixStorefrontLabelTypos(raw))
   if (!viaAlias) return ''
   if (!containsChinese(viaAlias)) return viaAlias
   const healed = translateTitleKeywords(viaAlias, 'en') || ''
@@ -143,9 +144,56 @@ export function translateCatalogLabel(t: TFunction, raw?: string | null): string
   return clean || 'Category'
 }
 
+const PACKAGING_SUFFIX_RE =
+  /(?:\+|\/|,|，|-)?\s*(?:gift\s*bags?|gift\s*box(?:es)?|giftbox|airplane\s*box|ship\s*box|飞机盒|快递盒|包装盒|礼品袋|礼袋|礼盒|纸盒|盒子|box)\s*[)）]?\s*$/i
+
+function stripPackagingTail(raw: string): string {
+  let value = String(raw || '').trim()
+  for (let i = 0; i < 6; i += 1) {
+    const next = value
+      .replace(PACKAGING_SUFFIX_RE, '')
+      .replace(/[（(]\s*[,，]?\s*$/g, '')
+      .replace(/[,，;；|／/.+\s]+$/g, '')
+      .trim()
+    if (next === value) break
+    value = next
+  }
+  return value
+}
+
+/** Strip 1688 leftover wrappers like `（ ，Gift Bag）` so swatches show a real color. */
+export function sanitizeStorefrontColorLabel(raw?: string | null): string {
+  let value = String(raw || '')
+    .normalize('NFKC')
+    .trim()
+  if (!value) return ''
+
+  value = value.replace(/[（(]([^）)]*)[）)]/g, (_, inner: string) => {
+    const cleaned = stripPackagingTail(inner)
+    return cleaned ? ` ${cleaned} ` : ''
+  })
+  value = stripPackagingTail(value)
+
+  value = value
+    .replace(/^[`'""''「」]+|[`'""''「」]+$/g, '')
+    .replace(/^[（(]\s*([^）)]*?)\s*[）)]$/g, '$1')
+    .replace(/[（(]\s*[,，]\s*[）)]/g, '')
+    .replace(/^[（(\s]+|[）)\s]+$/g, '')
+    .replace(/^[,，;；|／/.\s]+|[,，;；|／/.\s]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!value || /^[,，;；.。·\-—–_|／/]+$/.test(value)) return ''
+  if (/^(option|color|colour|n\/a|none|default|null|undefined)$/i.test(value)) return ''
+  if (/^(gift\s*bags?|gift\s*box(?:es)?|giftbox|airplane\s*box|ship\s*box)$/i.test(value)) return ''
+  const compact = value.replace(/[\s（）()，,、；;·\-—–_|／/]/g, '')
+  if (!compact || /^(giftbags?|giftbox(?:es)?|box)$/i.test(compact)) return ''
+  return value
+}
+
 /** 商品颜色规格名称 */
 export function translateColorName(t: TFunction, raw?: string | null): string {
-  const value = String(raw || '').trim()
+  const value = sanitizeStorefrontColorLabel(raw)
   if (!value) return ''
 
   const normalizeColorKey = (input: string) =>
@@ -183,8 +231,9 @@ export function translateColorName(t: TFunction, raw?: string | null): string {
   //    CN token via the shared keyword dictionary + locale overrides.
   // 4) Strip any leftover CJK so EN/ES storefront never shows Chinese in color labels.
   const translated = translateColorStyleText(value, t)
-  if (!containsChinese(translated)) return translated
-  const stripped = stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim()
+  const cleanedTranslated = sanitizeStorefrontColorLabel(translated) || translated
+  if (cleanedTranslated && !containsChinese(cleanedTranslated)) return cleanedTranslated
+  const stripped = sanitizeStorefrontColorLabel(stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim())
   if (stripped && !containsChinese(stripped)) return stripped
   if (/如图|看图|见图|按图/.test(value)) {
     const pictured = t('product.asPictured')
@@ -205,7 +254,7 @@ export function translateAttributeValue(t: TFunction, raw?: string | null): stri
   if (!value) return ''
   // Reuse the color-value path first (color.wordMap + aliases), then compounds.
   const asColor = translateColorName(t, value)
-  let translated = asColor || value
+  let translated = asColor || sanitizeStorefrontColorLabel(value) || value
   // 35码 / 36.5码 → 35 / 36.5 so size rows never keep a trailing 码.
   translated = translated.replace(/(\d+(?:\.\d+)?)\s*码/g, '$1')
   translated = translated
@@ -213,8 +262,9 @@ export function translateAttributeValue(t: TFunction, raw?: string | null): stri
     .replace(/^配\s*/, 'With ')
     .replace(/\s*\+\s*/g, ' + ')
   translated = translated.replace(/\s+/g, ' ').trim()
-  if (!containsChinese(translated)) return translated
-  const stripped = stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim()
+  const cleaned = sanitizeStorefrontColorLabel(translated)
+  if (cleaned && !containsChinese(cleaned)) return cleaned
+  const stripped = sanitizeStorefrontColorLabel(stripChineseFromTitle(translated).replace(/\s+/g, ' ').trim())
   if (stripped && !containsChinese(stripped)) return stripped
-  return translateColorName(t, value) || 'Option'
+  return asColor || 'Option'
 }

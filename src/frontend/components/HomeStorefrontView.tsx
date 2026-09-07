@@ -57,11 +57,11 @@ import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
 import { StorePrice } from '@/frontend/components/GuestPricePlaceholder';
 import { HomeServiceBenefitGrid } from '@/frontend/components/HomeServiceBenefitGrid';
 import { syncNarrowHtmlClass } from '@/frontend/utils/isNarrowViewport';
-import { useChromeActivate } from '@/frontend/utils/hardNavigate';
 import { useTranslation } from 'react-i18next';
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n';
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider';
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels';
+import { polishStorefrontProductTitle } from '@/frontend/i18n/productTranslation';
 interface Props {
   state: HomeState;
   handlers: HomeHandlers;
@@ -135,7 +135,7 @@ const getCategoryCardGridClassName = (zone: HomeRecommendZoneSection) =>
   );
 
 const CATEGORY_CARD_PLACEHOLDER = CATEGORY_CARD_PLACEHOLDER_URL;
-const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 1200;
+const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 4000;
 
 type DesktopRecommendZoneProductCardProps = {
   item: HomeRecommendProductCard
@@ -157,19 +157,25 @@ const DesktopRecommendZoneProductCard = ({
   const { t } = useTranslation()
   const isDraft = item.status === 'DRAFT'
   const [currentSkuId, setCurrentSkuId] = useState<string>(selectedSkuId)
+  const displayName =
+    polishStorefrontProductTitle(item.productName, {
+      shortDescription: item.shortDescription,
+    }) || item.productName
 
   const currentOption =
     item.skuOptions?.find((opt) => opt.skuId === currentSkuId) || selectedOption
 
   const priceToShow = currentOption?.price ?? item.priceMin ?? item.price
   const originalPriceToShow = currentOption?.originalPrice ?? item.originalPrice
-  const addToCartEvents = useChromeActivate(() => {
+  const addToCart = (event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
     if (showOptions && currentSkuId) {
       void handlers.handleAddRecommendProductSkuToCart(item, currentSkuId)
       return
     }
     void handlers.handleAddRecommendProductToCart(item)
-  })
+  }
 
   return (
     <article
@@ -182,7 +188,7 @@ const DesktopRecommendZoneProductCard = ({
           <EditableImg
             propKey={`home-recommend-product-${item.productId}`}
             src={item.imageUrl || undefined}
-            alt={item.productName}
+            alt={displayName}
             keywords={item.imageUrl || undefined}
             disableKeywordSearch
             fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
@@ -192,7 +198,7 @@ const DesktopRecommendZoneProductCard = ({
           <div className="absolute right-3 top-3 z-[3]">
             <WishlistHeartButton
               productId={item.productId}
-              productName={item.productName}
+              productName={displayName}
               className="size-10 rounded-full bg-white/95 shadow-sm"
               size={20}
               onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
@@ -208,7 +214,7 @@ const DesktopRecommendZoneProductCard = ({
           <EditableImg
             propKey={`home-recommend-product-${item.productId}`}
             src={item.imageUrl || undefined}
-            alt={item.productName}
+            alt={displayName}
             keywords={item.imageUrl || undefined}
             disableKeywordSearch
             fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
@@ -221,7 +227,7 @@ const DesktopRecommendZoneProductCard = ({
       <div className="mt-5 space-y-4">
         {isDraft ? (
           <p className="home-recommend-product-name truncate text-left text-lg font-semibold leading-7 text-[#111111]">
-            {item.productName}
+            {displayName}
           </p>
         ) : (
           <button
@@ -229,7 +235,7 @@ const DesktopRecommendZoneProductCard = ({
             className="home-recommend-product-name truncate text-left text-lg font-semibold leading-7 text-[#111111] transition-colors hover:text-[#5f4b32]"
             onClick={() => handlers.handleNavigateRecommendProduct(item.productId)}
           >
-            {item.productName}
+            {displayName}
           </button>
         )}
         {!isDraft ? (
@@ -291,7 +297,8 @@ const DesktopRecommendZoneProductCard = ({
             <Button
               type="button"
               className="rounded-full bg-[#111111] px-4 py-2 text-sm font-semibold text-white hover:bg-[#262626]"
-              {...addToCartEvents}
+              data-no-hard-nav=""
+              onClick={(event) => addToCart(event)}
             >
               <ShoppingCart className="mr-2 size-4" />
               <DecorateText propKey="home_add_to_cart_label" as="span">
@@ -954,7 +961,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                       <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 text-[#6b6b6b] sm:gap-3 sm:px-5">
                         <Camera className="size-4 shrink-0 sm:size-5" />
                         <Input
-                          placeholder={t('common.pleaseInput')}
+                          placeholder={t('common.searchPlaceholder')}
                           className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-base"
                           value={searchKeyword}
                           onChange={(event) => setSearchKeyword(event.target.value)}

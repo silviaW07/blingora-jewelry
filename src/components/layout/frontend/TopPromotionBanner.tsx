@@ -42,7 +42,12 @@ function CountdownRow({ parts, compact }: { parts: TopPromotionCountdownParts; c
     { value: parts.hours, unit: 'H' },
     { value: parts.minutes, unit: 'M' },
     { value: parts.seconds, unit: 'S' },
-  ]
+  ].filter((item) => {
+    if (!compact) return true
+    if (item.unit === 'D' && item.value === '00') return false
+    if (item.unit === 'S') return false
+    return true
+  })
   return (
     <div
       className={cn(
@@ -118,7 +123,7 @@ export default function TopPromotionBanner() {
 
   return (
     <>
-      {/* Mobile: slim strip (~32px); text truly centered, countdown absolute so it doesn't shift copy */}
+      {/* Mobile: slim strip (~32px); text + countdown share one flex row so they never overlay */}
       <div
         className="top-promo-mobile sticky top-0 z-50 w-full lg:hidden"
         data-storefront-chrome="mobile"
@@ -128,18 +133,15 @@ export default function TopPromotionBanner() {
           color: softMobileFg(textColor, backgroundColor),
         }}
       >
-        <div className="relative mx-auto flex h-8 max-w-[1440px] items-center justify-center overflow-hidden px-3 text-[11px] font-semibold leading-none">
-          <div
-            className={cn(
-              'min-w-0 max-w-full truncate text-center',
-              showCountdown ? 'px-14' : null,
-            )}
-            style={{ fontWeight: 600 }}
-          >
+        <div
+          className="mx-auto flex h-8 max-w-[1440px] items-center gap-2 overflow-hidden px-2.5 text-[11px] font-semibold leading-none"
+          style={{ display: 'flex', alignItems: 'center' }}
+        >
+          <div className="min-w-0 flex-1 truncate text-left" style={{ fontWeight: 600, minWidth: 0, flex: 1 }}>
             {message}
           </div>
           {showCountdown ? (
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <div className="shrink-0" style={{ position: 'static', flexShrink: 0 }}>
               <CountdownRow parts={countdown.parts} compact />
             </div>
           ) : null}

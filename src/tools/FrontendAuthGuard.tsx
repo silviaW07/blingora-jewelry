@@ -25,7 +25,7 @@ export default function FrontendAuthGuard({ children }: { children: React.ReactN
   const guest = isStorefrontGuestSession({ token, user_id: userId });
 
   if (needsAuth(path) && guest) {
-    return <GuestAuthScreen initialTab="register" />;
+    return <GuestAuthScreen initialTab="login" />;
   }
 
   return children;

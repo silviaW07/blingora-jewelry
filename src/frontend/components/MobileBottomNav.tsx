@@ -11,17 +11,20 @@ import {
   type DailyNewArrivalCategoryHit,
 } from '@/frontend/utils/dailyNewArrival'
 import { loadCategoryListCached, peekCachedCategoryList } from '@/frontend/utils/categoryListCache'
+import { useCartBadge } from '@/frontend/hooks/useCartBadge'
 
 function BottomNavTab({
   href,
   active,
   label,
   icon: Icon,
+  badgeCount = 0,
 }: {
   href: string
   active: boolean
   label: string
   icon: typeof Home
+  badgeCount?: number
 }) {
   const go = useStorefrontLink(href)
   return (
@@ -30,7 +33,14 @@ function BottomNavTab({
       aria-current={active ? 'page' : undefined}
       {...go}
     >
-      <Icon className="pointer-events-none size-5 shrink-0" strokeWidth={active ? 2.4 : 1.9} />
+      <span className="relative">
+        <Icon className="pointer-events-none size-5 shrink-0" strokeWidth={active ? 2.4 : 1.9} />
+        {badgeCount > 0 ? (
+          <span className="mobile-bottom-nav__badge">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        ) : null}
+      </span>
       <span className="truncate">{label}</span>
     </a>
   )
@@ -59,6 +69,7 @@ export function MobileBottomNav() {
   const searchParams = useSearchParams()
   const normalized = pathname.toLowerCase().replace(/\/+$/, '') || '/'
   const { t, i18n } = useTranslation()
+  const cartBadgeCount = useCartBadge()
   const lang = i18n.language || 'en'
   const [dailyCat, setDailyCat] = useState<DailyNewArrivalCategoryHit | null>(
     () => findDailyNewArrivalCategory(peekCachedCategoryList() || []),
@@ -147,6 +158,7 @@ export function MobileBottomNav() {
                 active={tab.active}
                 label={tab.label}
                 icon={tab.icon}
+                badgeCount={tab.key === 'cart' ? cartBadgeCount : 0}
               />
             </li>
           ))}

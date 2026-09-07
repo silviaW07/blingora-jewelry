@@ -623,6 +623,14 @@ export const getProductDetail = withResult(
         product.name,
         (product as { translationsJson?: unknown }).translationsJson,
         lang,
+        {
+          categoryName: product.category?.name,
+          parentCategoryName: product.category?.parent?.name,
+          shortDescription:
+            translated?.shortDescription?.trim() ||
+            String((product as { shortDescription?: string | null }).shortDescription || '').trim() ||
+            null,
+        },
       ),
       productCode: product.productCode,
       status: product.status as ProductStatus,
@@ -717,7 +725,14 @@ export const getRelatedProducts = withResult(
         name: true,
         slug: true,
         mainImageUrl: true,
+        shortDescription: true,
         translationsJson: true,
+        category: {
+          select: {
+            name: true,
+            parent: { select: { name: true } },
+          },
+        },
         skus: {
           select: { price: true },
         },
@@ -739,6 +754,11 @@ export const getRelatedProducts = withResult(
           p.name,
           (p as { translationsJson?: unknown }).translationsJson,
           lang,
+          {
+            categoryName: p.category?.name,
+            parentCategoryName: p.category?.parent?.name,
+            shortDescription: p.shortDescription,
+          },
         ),
         slug: p.slug,
         mainImageUrl: p.mainImageUrl,

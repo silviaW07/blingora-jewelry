@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { ProductCategory, ProductDetail, RecommendZone } from '@/frontend/route-params';
-import { openStorefrontLogin } from '@/frontend/utils/hardNavigate';
+import { customerLoginHref, openStorefrontLogin } from '@/frontend/utils/hardNavigate';
+import { bumpCartBadgeCount, refreshCartBadgeCount } from '@/frontend/utils/cartBadgeStore';
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { useUserSession } from '@/tools/FrontendSession';
 import {
@@ -88,6 +90,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
   const searchParams = useSearchParams()
   const userSession = useUserSession()
   const { openAuthModal } = useCustomerAuthModal()
+  const { t } = useTranslation()
   const [recommendZones, setRecommendZones] = useState<HomeRecommendZoneSection[]>(() => {
     if (bootstrap?.recommendZones?.length) {
       seedHomeRecommendZonesCache(bootstrap.recommendZones, getClientPreferredLang())
@@ -378,6 +381,13 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     }
 
     if (!userSession.token?.trim()) {
+      toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
+      if (typeof window !== 'undefined') {
+        window.location.assign(
+          customerLoginHref(`${window.location.pathname}${window.location.search}`),
+        )
+        return
+      }
       openStorefrontLogin(openAuthModal)
       return
     }
@@ -387,13 +397,19 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
       return
     }
 
-    toast.success('Added to cart')
+    toast.success(t('product.addedToCart', { defaultValue: 'Added to cart' }))
+    bumpCartBadgeCount(1)
     void addCartItem({
       productId: item.productId,
       productSkuId: item.defaultSkuId,
-    }).catch((err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
     })
+      .then(() => {
+        void refreshCartBadgeCount()
+      })
+      .catch((err: unknown) => {
+        bumpCartBadgeCount(-1)
+        toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
+      })
   }
 
   const handleAddRecommendProductSkuToCart = async (item: HomeRecommendProductCard, productSkuId: string) => {
@@ -408,17 +424,30 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     }
 
     if (!userSession.token?.trim()) {
+      toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
+      if (typeof window !== 'undefined') {
+        window.location.assign(
+          customerLoginHref(`${window.location.pathname}${window.location.search}`),
+        )
+        return
+      }
       openStorefrontLogin(openAuthModal)
       return
     }
 
-    toast.success('Added to cart')
+    toast.success(t('product.addedToCart', { defaultValue: 'Added to cart' }))
+    bumpCartBadgeCount(1)
     void addCartItem({
       productId: item.productId,
       productSkuId: productSkuId.trim(),
-    }).catch((err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
     })
+      .then(() => {
+        void refreshCartBadgeCount()
+      })
+      .catch((err: unknown) => {
+        bumpCartBadgeCount(-1)
+        toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
+      })
   }
 
   const handleAddRecommendProductToWishlist = (_item: HomeRecommendProductCard, favorited?: boolean) => {
@@ -430,6 +459,13 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
 
   const handleAddLinkedCategoryProductToCart = async (item: HomeLinkedCategoryProduct) => {
     if (!userSession.token?.trim()) {
+      toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
+      if (typeof window !== 'undefined') {
+        window.location.assign(
+          customerLoginHref(`${window.location.pathname}${window.location.search}`),
+        )
+        return
+      }
       openStorefrontLogin(openAuthModal)
       return
     }
@@ -439,13 +475,19 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
       return
     }
 
-    toast.success('Added to cart')
+    toast.success(t('product.addedToCart', { defaultValue: 'Added to cart' }))
+    bumpCartBadgeCount(1)
     void addCartItem({
       productId: item.productId,
       productSkuId: item.defaultSkuId,
-    }).catch((err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
     })
+      .then(() => {
+        void refreshCartBadgeCount()
+      })
+      .catch((err: unknown) => {
+        bumpCartBadgeCount(-1)
+        toast.error(err instanceof Error ? err.message : 'Failed to add to cart')
+      })
   }
 
   return {

@@ -44,6 +44,7 @@ export function AccountShell({
   const pathname = usePathname()
   const { t } = useTranslation()
   const session = useUserSession()
+  const hydrated = Boolean(session._hasHydrated)
   const avatarChar = (session.username || session.email || 'A').trim().slice(0, 1).toUpperCase() || 'A'
 
   const navItems = [
@@ -95,8 +96,16 @@ export function AccountShell({
   const goBackEvents = useChromeActivate(goBack)
   const goProfileEvents = useChromeActivate(() => hardNavigate(withSlash(AccountProfile.path)))
 
+  if (isAccountRoute && !hydrated) {
+    return (
+      <div className="mobile-account-page flex min-h-screen items-center justify-center bg-[#FFF5F5] text-sm text-[#8a8073]">
+        Loading account...
+      </div>
+    )
+  }
+
   if (isAccountRoute && isStorefrontGuestSession(session)) {
-    return <GuestAuthScreen initialTab="register" />
+    return <GuestAuthScreen initialTab="login" />
   }
 
   return (

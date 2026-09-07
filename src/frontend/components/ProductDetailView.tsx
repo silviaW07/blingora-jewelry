@@ -35,6 +35,19 @@ import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelis
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
 import { imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl';
 import { isColorDimensionName } from '@/shared/tableImportSpec';
+import { polishStorefrontProductTitle } from '@/frontend/i18n/productTranslation';
+
+function displayColorLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  raw?: string | null,
+  index?: number,
+) {
+  const translated = translateColorName(t, raw)
+  const junk = !translated || /[（）]/.test(translated) || /gift\s*bag/i.test(translated)
+  if (!junk) return translated
+  const fallback = t('product.optionFallback', { defaultValue: 'Option' })
+  return typeof index === 'number' ? `${fallback} ${index + 1}` : fallback
+}
 
 /** Local helper — production webpack left `cn` as a free global and crashed the PDP. */
 function cn(...parts: Array<string | false | null | undefined>) {
@@ -307,6 +320,11 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     detailPreview,
   } = state
   const siteWideCoef = product?.pricingMeta?.siteWideCoefficient ?? null
+  const displayName =
+    polishStorefrontProductTitle(product?.name, {
+      categoryName: product?.category?.name,
+      shortDescription: product?.shortDescription,
+    }) || product?.name || ''
   const {
     handleSkuQuantityChange,
     handleColorSelect,
@@ -659,7 +677,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     >
                       <OptimizedProductImage
                         src={item.url}
-                        alt={product.name}
+                        alt={displayName}
                         className="size-full"
                         sizes="72px"
                         imageWidth={160}
@@ -673,7 +691,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       items={gallery}
                       activeUrl={activeUrl}
                       onActiveChange={setActiveImage}
-                      alt={product.name}
+                      alt={displayName}
                     />
                   </div>
                 </div>
@@ -712,7 +730,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           <section className="product-detail-buy space-y-3" data-controller-name="详情右侧购买区">
             <div className="rounded-[4px] bg-white p-4 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-5">
               <h1 className="product-detail-title text-[1.25rem] font-semibold leading-snug text-[#111111] sm:text-[1.375rem]">
-                {product.name}
+                {displayName}
               </h1>
 
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666]">
@@ -761,7 +779,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         <div className="product-size-options-head mb-2 text-sm">
                           <span className="font-semibold text-[#111]">
                             {manualColorValue
-                              ? `${t('common.color')}: ${translateColorName(t, manualColorValue)}`
+                              ? `${t('common.color')}: ${displayColorLabel(t, manualColorValue)}`
                               : t('common.color')}
                           </span>
                           <span className="product-size-options-count">
@@ -778,7 +796,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                             {colorSwatches.map((swatch, swatchIndex) => (
                               <ColorSwatchButton
                                 key={swatch.value}
-                                colorLabel={translateColorName(t, swatch.value)}
+                                colorLabel={displayColorLabel(t, swatch.value, swatchIndex)}
                                 previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
                                 isSelected={attrEquals(selectedColorValue, swatch.value)}
                                 isPurchasable={isPurchasable}
@@ -979,7 +997,9 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
             <section className="product-detail-related mt-2 rounded-[4px] bg-white p-4 sm:p-5">
               <h2 className="text-base font-semibold text-[#111]">{t('common.relatedProducts')}</h2>
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-                {relatedProducts.map((item) => (
+                {relatedProducts.map((item) => {
+                  const relatedName = polishStorefrontProductTitle(item.name) || item.name
+                  return (
                   <a
                     key={item.id}
                     href={`/productdetail/?productId=${encodeURIComponent(item.id)}`}
@@ -993,14 +1013,14 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                     <div className="relative aspect-square bg-[#f3f3f3]">
                       <OptimizedProductImage
                         src={item.mainImageUrl}
-                        alt={item.name}
+                        alt={relatedName}
                         className="size-full"
                         sizes="(max-width: 768px) 50vw, 25vw"
                         imageWidth={800}
                       />
                     </div>
                     <div className="space-y-1 p-3">
-                      <p className="line-clamp-2 min-h-[2.5rem] text-sm text-[#222]">{item.name}</p>
+                      <p className="line-clamp-2 min-h-[2.5rem] text-sm text-[#222]">{relatedName}</p>
                       <StorePrice compact className="text-sm font-bold">
                         <p className="text-sm font-bold text-[#111]">{formatUsd(item.minPrice)}</p>
                         {item.originalPrice != null && item.originalPrice > item.minPrice + 0.009 ? (
@@ -1009,7 +1029,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       </StorePrice>
                     </div>
                   </a>
-                ))}
+                  )
+                })}
               </div>
             </section>
           ) : null}

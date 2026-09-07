@@ -22,6 +22,7 @@ import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService';
 import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen';
 import { useIsStorefrontGuest } from '@/frontend/components/GuestPricePlaceholder';
 import { translateStorefrontError } from '@/frontend/utils/storefrontErrors';
+import { useUserSession } from '@/tools/FrontendSession';
 import {
   buildWhatsAppUrl,
   readCustomerServiceLocal,
@@ -86,6 +87,8 @@ export const CartView = ({
 }: Props) => {
   const { t } = useTranslation();
   const guest = useIsStorefrontGuest();
+  const session = useUserSession();
+  const hydrated = Boolean(session._hasHydrated);
   const goCheckout = useChromeActivate(() => hardNavigate('/checkout/'));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [addressConfirmed, setAddressConfirmed] = useState(false);
@@ -208,8 +211,26 @@ export const CartView = ({
   const pinkCheckboxClass =
     'size-5 rounded-[6px] border-2 border-[#ffc0cb] bg-white shadow-none data-[state=checked]:border-[#f254a6] data-[state=checked]:bg-[#f254a6] data-[state=checked]:text-white focus-visible:ring-[#f254a6]/30';
 
+  if (!hydrated) {
+    return <>
+      <CheckoutTopBar />
+      <main className="mobile-cart-page relative w-full min-h-screen bg-[#FFF5F5]">
+        <section className="w-full bg-[#FFF5F5]">
+          <div className="storefront-container py-10">
+            <div className="flex flex-col items-center justify-center py-16 space-y-4">
+              <div className="size-10 border-4 border-[#E2E8F0] border-t-[#0055FF] rounded-full animate-spin"></div>
+              <p className="font-body text-[#64748B] text-sm animate-pulse">
+                <DecorateText propKey="cart_loading_text" as="span">Loading your latest sourcing cart...</DecorateText>
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </>;
+  }
+
   if (guest) {
-    return <GuestAuthScreen initialTab="register" />;
+    return <GuestAuthScreen initialTab="login" />;
   }
 
   return <>

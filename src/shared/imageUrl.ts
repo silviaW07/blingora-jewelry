@@ -144,11 +144,17 @@ export const resolveCategoryShelfImageUrl = (
 }
 
 export const resolveCategoryCardImageUrl = (
-  _imageUrl?: string | null,
-  _bannerImageUrl?: string | null,
-  _iconUrl?: string | null,
-  /** 前台推荐类目卡：优先该类目最新一个商品主图 */
+  imageUrl?: string | null,
+  bannerImageUrl?: string | null,
+  iconUrl?: string | null,
+  /** 前台推荐类目卡：优先该类目最新一个商品主图，其次类目自己的封面 */
   productImageUrl?: string | null,
 ): string => {
-  return optimizeCatalogImageUrl(productImageUrl, 640) || CATEGORY_CARD_PLACEHOLDER_URL
+  return (
+    optimizeCatalogImageUrl(productImageUrl, 640) ||
+    optimizeCatalogImageUrl(imageUrl, 640) ||
+    optimizeCatalogImageUrl(bannerImageUrl, 640) ||
+    optimizeCatalogImageUrl(iconUrl, 640) ||
+    CATEGORY_CARD_PLACEHOLDER_URL
+  )
 }

@@ -32,6 +32,9 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '内胆材质',
   '外壳材质',
   '杯盖材质',
+  '里料质地',
+  '里料',
+  '质地',
   '北欧风',
   '过滤茶渣',
   '可拆卸',
@@ -311,6 +314,9 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   内胆材质: 'Inner liner',
   外壳材质: 'Outer shell',
   杯盖材质: 'Lid material',
+  里料质地: 'Lining',
+  里料: 'Lining',
+  质地: 'Texture',
   北欧风: 'Nordic',
   过滤茶渣: 'Tea strainer',
   可拆卸: 'Detachable',
@@ -583,6 +589,9 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   内胆材质: 'Forro interior',
   外壳材质: 'Carcasa',
   杯盖材质: 'Tapa',
+  里料质地: 'Forro',
+  里料: 'Forro',
+  质地: 'Textura',
   北欧风: 'Nórdico',
   过滤茶渣: 'Filtro de té',
   可拆卸: 'Desmontable',
@@ -850,6 +859,15 @@ export function stripChineseFromTitle(text: string | null | undefined): string {
       .replace(/\s+/g, ' ')
       .trim(),
   )
+}
+
+/** Fix known storefront category typos (slug leftovers) without renaming DB rows. */
+export function fixStorefrontLabelTypos(raw: string | null | undefined): string {
+  return String(raw || '')
+    .replace(/\bbeloe\s*13\s*usd\b/gi, 'Below 13 USD')
+    .replace(/\bbeloe\s*3\s*usd\b/gi, 'Below 3 USD')
+    .replace(/\bbeloe\b/gi, 'Below')
+    .replace(/\bothes\s+materials?\b/gi, 'Other material')
 }
 
 /**

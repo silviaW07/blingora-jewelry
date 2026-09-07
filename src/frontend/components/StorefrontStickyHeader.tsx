@@ -44,6 +44,7 @@ import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n'
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { hardNavigate, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { useCartBadge } from '@/frontend/hooks/useCartBadge'
 
 /** Pure storefront home only — listing queries / other paths enable CATEGORIES flyout. */
 export function isStorefrontHomePath(pathname: string | null, searchParams?: URLSearchParams | null) {
@@ -92,7 +93,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
   const [isLocaleMenuOpen, setIsLocaleMenuOpen] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [isSearchLoading, setIsSearchLoading] = useState(false)
-  const [cartBadgeCount] = useState(0)
+  const cartBadgeCount = useCartBadge()
   const [isFloatingSideNavOpen, setIsFloatingSideNavOpen] = useState(false)
   const [floatingBrandItems, setFloatingBrandItems] = useState<SideNavZoneItem[]>([])
 
@@ -401,7 +402,7 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                       <Input
                         ref={searchInputRef}
                         name="search"
-                        placeholder={t('common.pleaseInput')}
+                        placeholder={t('common.searchPlaceholder')}
                         className="h-10 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-base"
                         value={searchKeyword}
                         onChange={(event) => setSearchKeyword(event.target.value)}

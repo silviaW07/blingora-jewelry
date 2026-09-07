@@ -144,19 +144,23 @@ export function buildCategoryPreviewProducts(
   return result
 }
 
-/** 推荐类目卡封面：最新一个商品图；尚未拉到则用默认占位封面 */
+function isUsableCoverSrc(value?: string | null): value is string {
+  const url = String(value || '').trim()
+  return Boolean(url) && url !== CATEGORY_CARD_PLACEHOLDER_URL
+}
+
+/** 推荐类目卡封面：任一最新商品图，其次类目自己的封面，最后才占位 */
 export function pickRecommendCategoryCoverSrc(item: {
   imageUrl?: string | null
   latestProducts?: ZoneProductLike[]
 }): string {
-  if (Array.isArray(item.latestProducts)) {
-    const latest = item.latestProducts[0]
+  for (const latest of Array.isArray(item.latestProducts) ? item.latestProducts : []) {
     const fromLatest = String(latest?.imageUrl || latest?.main_image_url || '').trim()
-    if (fromLatest) return fromLatest
-    return CATEGORY_CARD_PLACEHOLDER_URL
+    if (isUsableCoverSrc(fromLatest)) return fromLatest
   }
   const existing = String(item.imageUrl || '').trim()
-  return existing || CATEGORY_CARD_PLACEHOLDER_URL
+  if (isUsableCoverSrc(existing)) return existing
+  return CATEGORY_CARD_PLACEHOLDER_URL
 }
 
 export function findZoneItemImage(categoryId: string, zones: ZoneLike[] | null | undefined): string | null {
@@ -165,9 +169,10 @@ export function findZoneItemImage(categoryId: string, zones: ZoneLike[] | null |
   for (const zone of Array.isArray(zones) ? zones : []) {
     for (const item of zone.items || []) {
       if (item.entityType === 'CATEGORY' && String(item.categoryId || '') === id) {
-        const latest = item.latestProducts?.[0]
-        const fromLatest = String(latest?.imageUrl || latest?.main_image_url || '').trim()
-        if (fromLatest) return fromLatest
+        for (const latest of item.latestProducts || []) {
+          const fromLatest = String(latest?.imageUrl || latest?.main_image_url || '').trim()
+          if (fromLatest && fromLatest !== CATEGORY_CARD_PLACEHOLDER_URL) return fromLatest
+        }
         const self = String(item.imageUrl || item.main_image_url || '').trim()
         if (self && self !== CATEGORY_CARD_PLACEHOLDER_URL) return self
       }

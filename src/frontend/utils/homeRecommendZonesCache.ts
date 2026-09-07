@@ -18,7 +18,7 @@ let inflightLang = ''
 
 /** Short TTL — zones change infrequently; names refresh on next fetch. */
 const TTL_MS = 2 * 60 * 1000
-const STORAGE_KEY = 'sj.home-zones.v2'
+const STORAGE_KEY = 'sj.home-zones.v3'
 export const HOME_RECOMMEND_ZONES_INVALIDATION_KEY = 'sj.home-zones.invalidate'
 
 function readSession(lang: string): CacheEntry | null {

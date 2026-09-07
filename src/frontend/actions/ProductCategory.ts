@@ -296,6 +296,11 @@ import { normalizePosterLinkUrl } from '@/shared/posterLink'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isProductTypeCategory } from '@/shared/categoryMatchGuards'
+import {
+  isJewelryShelfIntruder,
+  isJewelryShelfName,
+  productDoesNotBelongOnJewelryShelf,
+} from '@/shared/categoryShelfFamily'
 import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 import { priceThresholdMaxUsdForCategory, productFitsPriceThresholdUsd } from '@/shared/priceThreshold'
 
@@ -465,11 +470,65 @@ const parseCategoryTopPromotion = (rawContent: unknown, fallbackActive: boolean)
 
 type ResolvedCategoryContext = {
   rootCategoryId?: string
+  rootCategoryName?: string
   matchedCategoryId?: string
+  matchedCategoryName?: string
   matchedCategoryLevel?: number
   descendantCategoryIds: string[]
   categoryIdsForQuery: string[]
 }
+
+const isJewelryListContext = (context: ResolvedCategoryContext) =>
+  isJewelryShelfName(context.matchedCategoryName) || isJewelryShelfName(context.rootCategoryName)
+
+const jewelryShelfExcludeWhere = () => {
+  const nameNeedles = [
+    '钥匙扣',
+    '钥匙链',
+    '发箍',
+    '发带',
+    '发圈',
+    '发夹',
+    '小皮包',
+    '零钱包',
+    'keychain',
+    'key chain',
+    'keyring',
+    'headband',
+    'hairband',
+    'hair band',
+    'mini bag',
+    'coin purse',
+    'cardholder',
+  ]
+  return {
+    AND: [
+      ...nameNeedles.map((needle) => ({ NOT: { name: { contains: needle } } })),
+      { NOT: { category: { name: { contains: 'bag' } } } },
+      { NOT: { category: { parent: { name: { contains: 'bag' } } } } },
+      { NOT: { category: { name: { contains: '鞋' } } } },
+      { NOT: { category: { name: { contains: 'shoe' } } } },
+    ],
+  }
+}
+
+const keepJewelryShelfRecord = (p: {
+  name?: string | null
+  shortDescription?: string | null
+  category?: { name?: string | null; parent?: { name?: string | null } | null } | null
+  relationCategories?: Array<{ category?: { name?: string | null } | null }>
+}, displayName?: string) =>
+  !productDoesNotBelongOnJewelryShelf({
+    name: p.name,
+    displayName,
+    shortDescription: p.shortDescription,
+    categoryName: p.category?.name,
+    parentCategoryName: p.category?.parent?.name,
+    relatedCategoryNames: (p.relationCategories || []).map((rel) => rel.category?.name),
+  })
+
+const keepJewelryShelfItem = (item: { product_name: string; short_description: string | null }) =>
+  !isJewelryShelfIntruder(item.product_name, item.short_description)
 
 const hasCategoryParentId = (parentId?: string | null) => {
   const text = String(parentId || '').trim()
@@ -518,12 +577,14 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     where: { id: categoryId },
     select: {
       id: true,
+      name: true,
       level: true,
       parentId: true,
       status: true,
       parent: {
         select: {
           id: true,
+          name: true,
           status: true
         }
       }
@@ -554,7 +615,9 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     const descendantCategoryIds = descendants.map((child) => child.id)
     const resolved = {
       rootCategoryId: currentCategory.id,
+      rootCategoryName: currentCategory.name,
       matchedCategoryId: currentCategory.id,
+      matchedCategoryName: currentCategory.name,
       matchedCategoryLevel: currentCategory.level || 1,
       descendantCategoryIds,
       categoryIdsForQuery: Array.from(new Set([currentCategory.id, ...descendantCategoryIds]))
@@ -565,7 +628,9 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
 
   const resolved = {
     rootCategoryId: currentCategory.parent?.status === 'ACTIVE' ? currentCategory.parent.id : currentCategory.parentId || undefined,
+    rootCategoryName: currentCategory.parent?.status === 'ACTIVE' ? currentCategory.parent.name : undefined,
     matchedCategoryId: currentCategory.id,
+    matchedCategoryName: currentCategory.name,
     matchedCategoryLevel: currentCategory.level,
     descendantCategoryIds: [],
     categoryIdsForQuery: [currentCategory.id]
@@ -1375,6 +1440,11 @@ function mapProductRecordToItem(
       p.name,
       (p as { translationsJson?: unknown }).translationsJson,
       lang,
+      {
+        categoryName: p.category?.name,
+        parentCategoryName: p.category?.parent?.name,
+        shortDescription: translated?.shortDescription?.trim() || p.shortDescription,
+      },
     ),
     main_image_url: p.mainImageUrl,
     short_description: translated?.shortDescription?.trim() || p.shortDescription,
@@ -1484,6 +1554,14 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     dbWhere.AND = [
       ...(Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [dbWhere.AND] : []),
       { OR: searchTokens.map(tokenOr) },
+    ]
+  }
+
+  const jewelryShelf = isJewelryListContext(categoryContext)
+  if (jewelryShelf) {
+    dbWhere.AND = [
+      ...(Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [dbWhere.AND] : []),
+      jewelryShelfExcludeWhere(),
     ]
   }
 
@@ -1664,14 +1742,17 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     }
 
     const priceSortOutput: GetProductListOutput = {
-      list: orderedRows.map((p) => {
+      list: orderedRows.flatMap((p) => {
+        if (jewelryShelf && !keepJewelryShelfRecord(p)) return []
         const agg = skuPriceAggByProduct.get(p.id)
-        return mapProductRecordToItem(p, lang, exchangeRate, {
+        const item = mapProductRecordToItem(p, lang, exchangeRate, {
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
           siteWideCoef,
         })
+        if (jewelryShelf && !keepJewelryShelfItem(item)) return []
+        return [item]
       }),
       total,
     }
@@ -1764,14 +1845,17 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     }
 
     const fastOutput: GetProductListOutput = {
-      list: pageRows.map((p) => {
+      list: pageRows.flatMap((p) => {
+        if (jewelryShelf && !keepJewelryShelfRecord(p)) return []
         const agg = skuPriceAggByProduct.get(p.id)
-        return mapProductRecordToItem(p, lang, exchangeRate, {
+        const item = mapProductRecordToItem(p, lang, exchangeRate, {
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
           siteWideCoef,
         })
+        if (jewelryShelf && !keepJewelryShelfItem(item)) return []
+        return [item]
       }),
       total,
     }
@@ -1818,6 +1902,15 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       ])
     })
     .map((p) => mapProductRecordToItem(p, lang, exchangeRate, { siteWideCoef }))
+
+  if (jewelryShelf) {
+    const allowedIds = new Set(
+      dbProducts.filter((row) => keepJewelryShelfRecord(row)).map((row) => row.id),
+    )
+    items = items.filter(
+      (item) => allowedIds.has(item.product_id) && keepJewelryShelfItem(item),
+    )
+  }
 
   if (thresholdCap != null) {
     items = items.filter((item) =>

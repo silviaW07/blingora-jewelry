@@ -102,3 +102,65 @@ export function shelfFamiliesCompatible(
   if (productFamily === 'unknown' || tagFamily === 'unknown') return true
   return productFamily === tagFamily
 }
+
+const JEWELRY_SHELF_NAMES = new Set(['jewelry', 'jewellery', '饰品', '首饰', '珠宝'].map(compact))
+
+const JEWELRY_INTRUDER_HINTS = [
+  'keychain',
+  'key chain',
+  'keyring',
+  'key ring',
+  '钥匙扣',
+  '钥匙链',
+  'headband',
+  'hairband',
+  'hair band',
+  'hair hoop',
+  'hair clip',
+  'hairpin',
+  'scrunchie',
+  '发箍',
+  '发带',
+  '发圈',
+  '发夹',
+  'coin purse',
+  'cardholder',
+  'card holder',
+  'mini bag',
+  '小皮包',
+  '零钱包',
+  '腰带',
+  '皮带',
+  'belt',
+].map(compact)
+
+export function isJewelryShelfName(name?: string | null): boolean {
+  const key = compact(name)
+  return JEWELRY_SHELF_NAMES.has(key) || key === 'jewlery' || key === 'jewelery'
+}
+
+export function productDoesNotBelongOnJewelryShelf(input: {
+  name?: string | null
+  displayName?: string | null
+  shortDescription?: string | null
+  categoryName?: string | null
+  parentCategoryName?: string | null
+  relatedCategoryNames?: Array<string | null | undefined>
+}): boolean {
+  const primaryFamily = detectShelfFamily(input.categoryName, input.parentCategoryName)
+  if (primaryFamily === 'bags' || primaryFamily === 'shoes') return true
+  const relatedFamily = detectShelfFamily(...(input.relatedCategoryNames || []))
+  if (primaryFamily === 'unknown' && (relatedFamily === 'bags' || relatedFamily === 'shoes')) {
+    return true
+  }
+  return isJewelryShelfIntruder(input.displayName, input.name, input.shortDescription)
+}
+
+/** 钥匙扣 / 发箍 / 小皮包 不应出现在 Jewelry 一级列表。 */
+export function isJewelryShelfIntruder(...parts: Array<string | null | undefined>): boolean {
+  const family = detectShelfFamily(...parts)
+  if (family === 'bags' || family === 'shoes') return true
+  const key = compact(parts.filter(Boolean).join(' '))
+  if (!key) return false
+  return JEWELRY_INTRUDER_HINTS.some((hint) => hint.length >= 2 && key.includes(hint))
+}

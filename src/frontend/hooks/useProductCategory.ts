@@ -8,7 +8,14 @@ import { useClientSearchParams } from '@/frontend/utils/useClientSearchParams'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { Home, ProductCategory, ProductDetail, Cart } from '@/frontend/route-params'
-import { openStorefrontLogin, openStorefrontRegister, notifyStorefrontUrl } from '@/frontend/utils/hardNavigate'
+import {
+  customerLoginHref,
+  openStorefrontLogin,
+  openStorefrontRegister,
+  notifyStorefrontUrl,
+} from '@/frontend/utils/hardNavigate'
+import { useCartBadge } from '@/frontend/hooks/useCartBadge'
+import { bumpCartBadgeCount, refreshCartBadgeCount } from '@/frontend/utils/cartBadgeStore'
 import { useUserSession, UserSession } from '@/tools/FrontendSession'
 import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext'
 import { getClientPreferredLang } from '@/frontend/i18n'
@@ -37,6 +44,7 @@ import { loadSideNavZonesCached, peekCachedSideNavZones } from '@/frontend/utils
 import { pickBrandSideNavZone } from '@/frontend/utils/brandSideNav'
 import { getDailyNewArrivalProducts } from '@/frontend/actions/Home'
 import { findDailyNewArrivalCategoryId, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { isJewelryShelfIntruder, isJewelryShelfName } from '@/shared/categoryShelfFamily'
 import { normalizePosterLinkUrl, isAbsoluteHttpUrl } from '@/shared/posterLink'
 
 type CategoryChildItem = {
@@ -82,6 +90,21 @@ type CategoryPosterItem = {
 
 type ProductCardItem = ProductItem & {
   brand_category_name: string | null
+}
+
+function filterJewelryListingItems(
+  list: ProductCardItem[],
+  opts: { search?: string; categoryName?: string | null; parentName?: string | null; slug?: string | null },
+) {
+  if (String(opts.search || '').trim()) return list
+  if (
+    !isJewelryShelfName(opts.categoryName) &&
+    !isJewelryShelfName(opts.parentName) &&
+    !isJewelryShelfName(opts.slug)
+  ) {
+    return list
+  }
+  return list.filter((item) => !isJewelryShelfIntruder(item.product_name, item.short_description))
 }
 
 function mergeListingPage(
@@ -474,7 +497,7 @@ export const useProductCategory = (
   const [activeBannerIndex, setActiveBannerIndex] = useState(0)
   const [promotionConfig, setPromotionConfig] = useState<PromotionConfig | null>(null)
   const [promotionNow, setPromotionNow] = useState(() => Date.now())
-  const [cartBadgeCount] = useState(0)
+  const cartBadgeCount = useCartBadge()
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [hoveredTopCategoryId, setHoveredTopCategoryId] = useState<string | null>(null)
   const [expandedTopNavCategoryIds, setExpandedTopNavCategoryIds] = useState<string[]>([])
@@ -1090,8 +1113,19 @@ export const useProductCategory = (
     })
       .then(({ list, total }) => {
         if (productFetchGenRef.current !== gen) return
+        const parent = queryState.categoryId
+          ? categories.find((cat) => cat.category_id === queryState.categoryId) ||
+            categories.find((cat) => cat.children.some((child) => child.category_id === queryState.categoryId))
+          : null
+        const childName = parent?.children.find((child) => child.category_id === queryState.categoryId)?.category_name
+        const nextList = filterJewelryListingItems(list as ProductCardItem[], {
+          search: queryState.searchKeyword,
+          categoryName: childName || parent?.category_name,
+          parentName: parent?.category_name,
+          slug: routeCategorySlug,
+        })
         setProducts((prev) =>
-          mergeListingPage(prev, list as ProductCardItem[], queryState.page, isMobile || isNarrowViewport()),
+          mergeListingPage(prev, nextList, queryState.page, isMobile || isNarrowViewport()),
         )
         setTotalCount(total)
       })
@@ -1691,6 +1725,13 @@ export const useProductCategory = (
 
   const handleAddToCart = async (item: ProductCardItem) => {
     if (!userSession.token?.trim()) {
+      toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
+      if (typeof window !== 'undefined') {
+        window.location.assign(
+          customerLoginHref(`${window.location.pathname}${window.location.search}`),
+        )
+        return
+      }
       openStorefrontLogin(openAuthModal)
       return
     }
@@ -1707,15 +1748,20 @@ export const useProductCategory = (
     }
 
     const qty = Math.max(1, Math.floor(Number(item.min_order_quantity) || 1))
-    // Optimistic feedback — don't block the tap on mobile RTT
-    toast.success('Added to cart')
+    toast.success(t('product.addedToCart'))
+    bumpCartBadgeCount(qty)
     void addToCart({
       product_id: item.product_id,
       product_sku_id: item.first_sku_id,
       quantity: qty,
-    }).catch((err: unknown) => {
-      toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
     })
+      .then(() => {
+        void refreshCartBadgeCount()
+      })
+      .catch((err: unknown) => {
+        bumpCartBadgeCount(-qty)
+        toast.error(translateStorefrontError(t, err, 'product.errors.unavailable'))
+      })
   }
 
   const handleAddToWishlist = useCallback((item: ProductCardItem, favorited?: boolean) => {

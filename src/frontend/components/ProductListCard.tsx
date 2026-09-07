@@ -11,8 +11,9 @@ import {
   useCanViewStorePrice,
 } from '@/frontend/components/GuestPricePlaceholder'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { hardNavProps, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { hardNavProps, productHref, useReliableTap } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
+import { polishStorefrontProductTitle } from '@/frontend/i18n/productTranslation'
 
 export type ProductListCardItem = Pick<
   ProductItem,
@@ -25,6 +26,7 @@ export type ProductListCardItem = Pick<
   | 'variant_thumbnails'
   | 'min_order_quantity'
 > & {
+  short_description?: string | null
   variant_thumbnails?: string[]
   price_max?: number | null
   min_order_quantity?: number | null
@@ -102,6 +104,10 @@ export const ProductListCard = ({
 }: ProductListCardProps) => {
   const { t } = useTranslation()
   const canViewPrice = useCanViewStorePrice()
+  const displayName =
+    polishStorefrontProductTitle(item.product_name, {
+      shortDescription: item.short_description,
+    }) || item.product_name
   const thumbnails = resolveThumbnails(item)
   /** Multi-color row: show all when available; hide when only a single main fallback. */
   const showColorThumbs = thumbnails.length >= 2
@@ -118,17 +124,14 @@ export const ProductListCard = ({
   const goToDetail = () => {
     writeProductDetailPreview({
       id: item.product_id,
-      name: item.product_name,
+      name: displayName,
       image: previewImage || item.main_image_url || '',
     })
     onNavigate(item.product_id)
   }
-  const addToCart = (event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
-    event?.preventDefault?.()
-    event?.stopPropagation?.()
+  const addToCartTap = useReliableTap<HTMLButtonElement>(() => {
     onAddToCart(item)
-  }
-  const addToCartEvents = useChromeActivate(() => addToCart())
+  })
 
   const prefetchDetail = () => {
     // Touch / coarse pointers: hover prefetch competes with scroll + add-to-cart bandwidth
@@ -173,12 +176,12 @@ export const ProductListCard = ({
     >
       <a
         {...hardNavProps(detailHref)}
-        aria-label={item.product_name}
+        aria-label={displayName}
         className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
         onPointerDown={() => {
           writeProductDetailPreview({
             id: item.product_id,
-            name: item.product_name,
+            name: displayName,
             image: previewImage || item.main_image_url || '',
           })
         }}
@@ -188,7 +191,7 @@ export const ProductListCard = ({
         <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
           <OptimizedProductImage
             src={previewImage || item.main_image_url}
-            alt={item.product_name}
+            alt={displayName}
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
             imageWidth={400}
             quality={85}
@@ -198,9 +201,9 @@ export const ProductListCard = ({
         <h3
           className="w-full truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111] no-underline sm:px-2.5"
           style={{ color: '#111111', textDecoration: 'none' }}
-          title={item.product_name}
+          title={displayName}
         >
-          {item.product_name}
+          {displayName}
         </h3>
       </a>
 
@@ -248,9 +251,17 @@ export const ProductListCard = ({
                 ) : null}
                 <button
                   type="button"
+                  ref={addToCartTap.ref}
                   aria-label={t('product.addToCart')}
                   className="home-product-card-cart-btn relative z-[5] inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-                  {...addToCartEvents}
+                  data-no-hard-nav=""
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerUp={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    addToCartTap.onClick(event)
+                  }}
                 >
                   <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
                   <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />

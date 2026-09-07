@@ -72,23 +72,29 @@ export function OptimizedProductImage({
   const shellClass = fill ? 'absolute inset-0 bg-[#f0ebe3]' : 'bg-[#f0ebe3]'
 
   if (!displaySrc) {
-    return <div className={cn(shellClass, className)} aria-hidden />
+    return <div className={cn(shellClass, className)} aria-hidden data-media-fill={fill ? '' : undefined} />
   }
 
   const imgClass = fill
-    ? cn('absolute inset-0 z-[1] h-full w-full max-w-full object-cover', className)
+    ? cn(
+        'absolute inset-0 z-[1] h-auto w-auto min-h-full min-w-full object-cover',
+        className,
+      )
     : cn('relative z-[1] max-w-full object-cover', className)
 
   return (
-    <div className={fill ? 'absolute inset-0' : 'relative'}>
+    <div
+      className={fill ? 'absolute inset-0 h-auto w-auto min-h-full min-w-full' : 'relative'}
+      data-media-fill={fill ? '' : undefined}
+    >
       <div className={cn(shellClass)} aria-hidden />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={`${attempt}-${displaySrc}`}
         src={displaySrc}
         alt={alt}
-        width={fill ? imageWidth : width || imageWidth}
-        height={fill ? imageWidth : height || imageWidth}
+        width={fill ? undefined : width || imageWidth}
+        height={fill ? undefined : height || imageWidth}
         className={imgClass}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"

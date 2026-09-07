@@ -1148,6 +1148,11 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         p.name,
         (p as { translationsJson?: unknown }).translationsJson,
         lang,
+        {
+          categoryName: p.category?.name,
+          parentCategoryName: p.category?.parent?.name,
+          shortDescription: translated?.shortDescription?.trim() || p.shortDescription,
+        },
       ),
       main_image_url: p.mainImageUrl,
       short_description: p.shortDescription,

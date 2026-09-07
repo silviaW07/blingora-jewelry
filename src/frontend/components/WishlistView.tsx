@@ -16,7 +16,8 @@ import { useLocalWishlistIds } from '@/frontend/hooks/useLocalWishlist'
 import { getClientPreferredLang } from '@/frontend/i18n'
 import { ProductDetail } from '@/frontend/route-params'
 import { useUserSession } from '@/tools/FrontendSession'
-import { openStorefrontLogin } from '@/frontend/utils/hardNavigate'
+import { customerLoginHref, openStorefrontLogin } from '@/frontend/utils/hardNavigate'
+import { bumpCartBadgeCount, refreshCartBadgeCount } from '@/frontend/utils/cartBadgeStore'
 
 /**
  * 心愿单 / Love：读取本地收藏 ID，展示可点击的商品卡片。
@@ -70,6 +71,13 @@ export default function WishlistView() {
   const handleAddToCart = useCallback(
     async (item: ProductItem) => {
       if (!session.token?.trim()) {
+        toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
+        if (typeof window !== 'undefined') {
+          window.location.assign(
+            customerLoginHref(`${window.location.pathname}${window.location.search}`),
+          )
+          return
+        }
         openStorefrontLogin()
         return
       }
@@ -87,6 +95,8 @@ export default function WishlistView() {
           product_sku_id: item.first_sku_id,
           quantity: 1,
         })
+        bumpCartBadgeCount(1)
+        void refreshCartBadgeCount()
         toast.success(t('product.addedToCart'))
       } catch (err: any) {
         toast.error(err?.message || t('wishlist.addToCartFailed'))

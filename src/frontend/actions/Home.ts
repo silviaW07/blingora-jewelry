@@ -113,6 +113,19 @@ export interface HomeRecommendZoneSection {
   items: Array<HomeRecommendProductCard | HomeRecommendCategoryCard | HomeRecommendSideNavItem>
 }
 
+const pickProductCoverUrl = (
+  mainImageUrl?: string | null,
+  skus?: Array<{ imageUrl?: string | null } | null> | null,
+): string | null => {
+  const fromMain = optimizeCatalogImageUrl(mainImageUrl, 400)
+  if (fromMain) return fromMain
+  for (const sku of skus || []) {
+    const fromSku = optimizeCatalogImageUrl(sku?.imageUrl, 400)
+    if (fromSku) return fromSku
+  }
+  return null
+}
+
 const toUsdPrice = (rmbPrice: number | null | undefined, exchangeRate: number): number => {
   if (typeof rmbPrice !== 'number' || Number.isNaN(rmbPrice) || rmbPrice <= 0) {
     return 0
@@ -242,6 +255,27 @@ export const getHomeRecommendZones = async (input?: {
         ),
     ),
   )
+  const categoryZoneChildCategories =
+    categoryZoneCategoryIds.length > 0
+      ? await prisma.category.findMany({
+          where: {
+            parentId: { in: categoryZoneCategoryIds },
+            status: 'ACTIVE',
+          },
+          select: { id: true, parentId: true },
+        })
+      : []
+  const categoryZoneChildIds = categoryZoneChildCategories.map((item) => item.id)
+  const categoryZoneGrandchildCategories =
+    categoryZoneChildIds.length > 0
+      ? await prisma.category.findMany({
+          where: {
+            parentId: { in: categoryZoneChildIds },
+            status: 'ACTIVE',
+          },
+          select: { id: true, parentId: true },
+        })
+      : []
   const productZoneChildCategories =
     productZoneSourceCategoryIds.length > 0
       ? await prisma.category.findMany({
@@ -252,6 +286,25 @@ export const getHomeRecommendZones = async (input?: {
           select: { id: true, parentId: true },
         })
       : []
+  const categoryZoneExpandMap = new Map<string, Set<string>>()
+  for (const categoryId of categoryZoneCategoryIds) {
+    categoryZoneExpandMap.set(categoryId, new Set([categoryId]))
+  }
+  for (const child of categoryZoneChildCategories) {
+    if (!child.parentId) continue
+    const bucket = categoryZoneExpandMap.get(child.parentId) || new Set([child.parentId])
+    bucket.add(child.id)
+    categoryZoneExpandMap.set(child.parentId, bucket)
+  }
+  for (const grandchild of categoryZoneGrandchildCategories) {
+    if (!grandchild.parentId) continue
+    const parentBucket = categoryZoneExpandMap.get(grandchild.parentId) || new Set([grandchild.parentId])
+    parentBucket.add(grandchild.id)
+    categoryZoneExpandMap.set(grandchild.parentId, parentBucket)
+    for (const bucket of categoryZoneExpandMap.values()) {
+      if (bucket.has(grandchild.parentId)) bucket.add(grandchild.id)
+    }
+  }
   const productZoneExpandMap = new Map<string, Set<string>>()
   for (const categoryId of productZoneSourceCategoryIds) {
     productZoneExpandMap.set(categoryId, new Set([categoryId]))
@@ -268,7 +321,14 @@ export const getHomeRecommendZones = async (input?: {
       ...productZoneChildCategories.map((item) => item.id),
     ]),
   )
-  const fetchCategoryIds = Array.from(new Set([...categoryZoneCategoryIds, ...productZoneQueryIds]))
+  const fetchCategoryIds = Array.from(
+    new Set([
+      ...categoryZoneCategoryIds,
+      ...categoryZoneChildIds,
+      ...categoryZoneGrandchildCategories.map((item) => item.id),
+      ...productZoneQueryIds,
+    ]),
+  )
   const maxProductZoneItemsPerCategory = productZoneSourceCategoryIds.length > 0
     ? Math.max(
         80,
@@ -319,13 +379,11 @@ export const getHomeRecommendZones = async (input?: {
       prisma.product.findMany({
       where: {
         ...storefrontVisibilityWhere(),
-        mainImageUrl: { not: '' },
         OR: [
           { categoryId },
           { brandCategoryId: categoryId },
           { relationCategories: { some: { categoryId } } },
         ],
-        skus: { some: {} },
       },
       select: {
         id: true,
@@ -347,6 +405,7 @@ export const getHomeRecommendZones = async (input?: {
             skuCode: true,
             price: true,
             originalPrice: true,
+            imageUrl: true,
           },
           orderBy: { price: 'asc' },
           take: 6,
@@ -421,7 +480,35 @@ export const getHomeRecommendZones = async (input?: {
     ): HomeRecommendProductCard | null => {
       const sortedSkus = [...product.skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
       const defaultSku = sortedSkus[0]
-      if (!defaultSku) return null
+      const coverUrl = pickProductCoverUrl(product.mainImageUrl, product.skus)
+      if (!defaultSku) {
+        if (!coverUrl) return null
+        return {
+          itemId: `${itemIdPrefix}-${product.id}`,
+          entityType: 'PRODUCT' as const,
+          productId: product.id,
+          categoryId: product.categoryId,
+          productName: resolveProductDisplayName(product.name, product.translationsJson, lang, {
+            categoryName: (product as { category?: { name?: string | null } }).category?.name,
+            shortDescription: product.shortDescription,
+          }),
+          productSlug: product.slug,
+          imageUrl: coverUrl,
+          shortDescription: product.shortDescription,
+          status: product.status,
+          price: null,
+          priceMin: null,
+          priceMax: null,
+          skuOptions: [],
+          originalPrice: null,
+          ratingAverage: product.ratingAverage,
+          ratingCount: product.ratingCount,
+          skuCount: 0,
+          defaultSkuId: null,
+          rawProductName: product.name || null,
+          createdAtTimestamp: product.createdAt ? new Date(product.createdAt).getTime() : null,
+        }
+      }
 
       const pricingCoeffs = pickFrontPricingCategoryCoeffs({
         primary: product.category,
@@ -500,6 +587,10 @@ export const getHomeRecommendZones = async (input?: {
         product.name,
         product.translationsJson,
         lang,
+        {
+          categoryName: (product as { category?: { name?: string | null } }).category?.name,
+          shortDescription: product.shortDescription,
+        },
       )
 
       return {
@@ -509,7 +600,7 @@ export const getHomeRecommendZones = async (input?: {
         categoryId: product.categoryId,
         productName: translatedName,
         productSlug: product.slug,
-        imageUrl: optimizeCatalogImageUrl(product.mainImageUrl, 400),
+        imageUrl: coverUrl,
         shortDescription: product.shortDescription,
         status: product.status,
         price: listed.price > 0 ? listed.price : priceMinUsd,
@@ -664,6 +755,7 @@ export const getHomeRecommendZones = async (input?: {
             product.name,
             (product as { translationsJson?: unknown }).translationsJson,
             lang,
+            { shortDescription: (product as { shortDescription?: string | null }).shortDescription },
           )
 
           acc.push({
@@ -730,10 +822,21 @@ export const getHomeRecommendZones = async (input?: {
           return acc
         }
 
-        const latestProducts = (latestProductsByCategoryId.get(category.id) || []).slice(
-          0,
-          categoryLatestLimit,
-        )
+        const ownLatest = latestProductsByCategoryId.get(category.id) || []
+        const latestProducts = (() => {
+          if (ownLatest.length > 0) return ownLatest.slice(0, categoryLatestLimit)
+          const merged: HomeRecommendProductCard[] = []
+          const seen = new Set<string>()
+          for (const relatedId of categoryZoneExpandMap.get(category.id) || [category.id]) {
+            for (const card of latestProductsByCategoryId.get(relatedId) || []) {
+              if (seen.has(card.productId)) continue
+              seen.add(card.productId)
+              merged.push(card)
+            }
+          }
+          merged.sort((a, b) => Number(Boolean(String(b.imageUrl || '').trim())) - Number(Boolean(String(a.imageUrl || '').trim())))
+          return merged.slice(0, categoryLatestLimit)
+        })()
         acc.push({
           itemId: item.id,
           entityType: 'CATEGORY' as const,
@@ -741,10 +844,10 @@ export const getHomeRecommendZones = async (input?: {
           categoryName,
           categorySlug: category.slug,
           imageUrl: resolveCategoryCardImageUrl(
-            null,
-            null,
-            null,
-            latestProducts[0]?.imageUrl,
+            category.imageUrl,
+            category.bannerImageUrl,
+            category.iconUrl,
+            latestProducts.find((card) => String(card.imageUrl || '').trim())?.imageUrl,
           ),
           fallbackImageUrl: CATEGORY_CARD_PLACEHOLDER_URL,
           description: category.description,
@@ -782,6 +885,30 @@ export const getHomeRecommendZones = async (input?: {
           items = [...productItems, ...dynamicProducts]
         } else {
           items = productItems
+        }
+      }
+
+      if (zone.zoneType === 'CATEGORY') {
+        const pooledCover = items.reduce<string | null>((found, item) => {
+          if (found || item.entityType !== 'CATEGORY') return found
+          const fromLatest = item.latestProducts.find((card) => {
+            const url = String(card.imageUrl || '').trim()
+            return url && url !== CATEGORY_CARD_PLACEHOLDER_URL
+          })?.imageUrl
+          if (fromLatest) return fromLatest
+          const self = String(item.imageUrl || '').trim()
+          return self && self !== CATEGORY_CARD_PLACEHOLDER_URL ? self : found
+        }, null)
+        if (pooledCover) {
+          items = items.map((item) => {
+            if (item.entityType !== 'CATEGORY') return item
+            const current = String(item.imageUrl || '').trim()
+            if (current && current !== CATEGORY_CARD_PLACEHOLDER_URL) return item
+            return {
+              ...item,
+              imageUrl: resolveCategoryCardImageUrl(null, null, null, pooledCover),
+            }
+          })
         }
       }
 
@@ -1043,6 +1170,11 @@ const mapActiveProductToItem = (
     product.name,
     product.translationsJson,
     lang,
+    {
+      categoryName: product.category?.name,
+      parentCategoryName: product.category?.parent?.name,
+      shortDescription: translated?.shortDescription?.trim() || product.shortDescription,
+    },
   )
   const skuCount = skus.length
   const sortedSkus = [...skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
@@ -1416,7 +1548,9 @@ const mapComingSoonProductItem = (
 ): ComingSoonProductItem => ({
   product_id: product.id,
   product_slug: product.slug || null,
-  product_name: resolveProductDisplayName(product.name, product.translationsJson, lang),
+  product_name: resolveProductDisplayName(product.name, product.translationsJson, lang, {
+    shortDescription: (product as { shortDescription?: string | null }).shortDescription,
+  }),
   main_image_url: product.mainImageUrl || '',
   status: product.status || null,
 })

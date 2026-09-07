@@ -135,8 +135,19 @@ export default function AccountProfileView() {
   const fieldInputClass =
     'mobile-account-field__input h-9 min-w-0 w-full max-w-none border-[#e8e2d8] bg-white text-[0.8125rem] whitespace-nowrap shadow-none focus-visible:ring-[#d8d0c4] md:h-10 md:text-[0.875rem]'
 
+  if (!session._hasHydrated) {
+    return (
+      <AccountShell title={t('accountProfile.title')} description={t('accountProfile.description')}>
+        <div className="flex min-h-[120px] items-center justify-center gap-2 text-sm text-[#7a756c] md:min-h-[240px]">
+          <Loader2 className="size-4 animate-spin" />
+          {t('accountProfile.loading')}
+        </div>
+      </AccountShell>
+    )
+  }
+
   if (isStorefrontGuestSession(session)) {
-    return <GuestAuthScreen initialTab="register" />
+    return <GuestAuthScreen initialTab="login" />
   }
 
   return (

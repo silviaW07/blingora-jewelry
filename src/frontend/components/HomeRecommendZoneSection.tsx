@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -21,9 +21,13 @@ import {
   zoneLooksLikeComingSoon,
 } from '@/frontend/utils/recommendZoneDisplay'
 import { prefetchProductDetail, writeProductDetailPreview } from '@/frontend/utils/productDetailCache'
-import { categoryHref, hardNavProps, productHref, useChromeActivate, useStorefrontLink } from '@/frontend/utils/hardNavigate'
-import { pickRecommendCategoryCoverSrc } from '@/frontend/utils/categoryPreviewProducts'
+import { categoryHref, hardNavProps, productHref, useChromeActivate, useReliableTap, useStorefrontLink } from '@/frontend/utils/hardNavigate'
+import { findZoneItemImage, pickRecommendCategoryCoverSrc } from '@/frontend/utils/categoryPreviewProducts'
+import { peekCachedHomeRecommendZones } from '@/frontend/utils/homeRecommendZonesCache'
+import { getProductList } from '@/frontend/actions/ProductCategory'
+import { getClientPreferredLang } from '@/frontend/i18n'
 import { CATEGORY_CARD_PLACEHOLDER_URL } from '@/shared/imageUrl'
+import { polishStorefrontProductTitle } from '@/frontend/i18n/productTranslation'
 
 type RecommendProductCard = HomeRecommendProductCard
 type RecommendCategoryCard = HomeRecommendCategoryCard
@@ -99,7 +103,88 @@ const getCategoryCardGridClassName = (zone: HomeRecommendZoneSectionType) =>
   )
 
 const CATEGORY_CARD_PLACEHOLDER = CATEGORY_CARD_PLACEHOLDER_URL
-const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 1200
+const CATEGORY_PRODUCT_IMAGE_SLOW_MS = 4000
+
+function resolveZoneCategoryCover(
+  item: RecommendCategoryCard,
+  coverByCategoryId?: Record<string, string>,
+) {
+  const filled = String(coverByCategoryId?.[item.categoryId] || '').trim()
+  if (filled && filled !== CATEGORY_CARD_PLACEHOLDER) return filled
+  return pickRecommendCategoryCoverSrc(item)
+}
+
+function useRecommendCategoryCovers(zone: HomeRecommendZoneSectionType) {
+  const [covers, setCovers] = useState<Record<string, string>>({})
+  const attemptedRef = React.useRef<Set<string>>(new Set())
+  const missingKey = useMemo(() => {
+    if (zone.zoneType !== 'CATEGORY') return ''
+    return (zone.items || [])
+      .filter((item): item is RecommendCategoryCard => item.entityType === 'CATEGORY')
+      .filter((item) => pickRecommendCategoryCoverSrc(item) === CATEGORY_CARD_PLACEHOLDER)
+      .map((item) => item.categoryId)
+      .join('|')
+  }, [zone.zoneType, zone.items])
+
+  useEffect(() => {
+    if (zone.zoneType !== 'CATEGORY' || !missingKey) return
+    const needIds = missingKey.split('|').filter(Boolean)
+    const pending = needIds.filter((id) => !attemptedRef.current.has(id))
+    if (pending.length === 0) return
+    pending.forEach((id) => attemptedRef.current.add(id))
+
+    let cancelled = false
+    const lang = getClientPreferredLang()
+    const zones = peekCachedHomeRecommendZones(lang) || []
+    const next: Record<string, string> = {}
+
+    for (const categoryId of pending) {
+      const fromZones = findZoneItemImage(categoryId, zones)
+      if (fromZones && fromZones !== CATEGORY_CARD_PLACEHOLDER) next[categoryId] = fromZones
+    }
+
+    const still = pending.filter((id) => !next[id])
+    if (Object.keys(next).length) {
+      setCovers((prev) => ({ ...prev, ...next }))
+    }
+
+    void (async () => {
+      const concurrency = 3
+      for (let i = 0; i < still.length; i += concurrency) {
+        if (cancelled) return
+        const chunk = still.slice(i, i + concurrency)
+        await Promise.all(
+          chunk.map(async (categoryId) => {
+            try {
+              const res = await getProductList({
+                category_id: categoryId,
+                page: 1,
+                page_size: 6,
+                sort_by: 'NEWEST',
+                lang,
+              })
+              const img = (res.list || [])
+                .map((row) => String(row.main_image_url || '').trim())
+                .find((url) => url && url !== CATEGORY_CARD_PLACEHOLDER)
+              if (img) next[categoryId] = img
+            } catch {
+              /* keep placeholder */
+            }
+          }),
+        )
+      }
+      if (!cancelled && Object.keys(next).length) {
+        setCovers((prev) => ({ ...prev, ...next }))
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [missingKey, zone.zoneType])
+
+  return covers
+}
 
 const MOBILE_COMING_SOON_COLS = 5
 const MOBILE_COMING_SOON_ROWS = 3
@@ -192,16 +277,20 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
   const isDraft = item.status === 'DRAFT'
   const canViewPrice = useCanViewStorePrice()
   const href = productHref(item.productId)
+  const displayName =
+    polishStorefrontProductTitle(item.productName, {
+      shortDescription: item.shortDescription,
+    }) || item.productName
 
   const openProductEvents = useChromeActivate(() => {
     writeProductDetailPreview({
       id: item.productId,
-      name: item.productName,
+      name: displayName,
       image: item.imageUrl || '',
     })
     handlers.handleNavigateRecommendProduct(item.productId)
   })
-  const addToCartEvents = useChromeActivate(() => {
+  const addToCartTap = useReliableTap<HTMLButtonElement>(() => {
     void handlers.handleAddRecommendProductToCart(item)
   })
 
@@ -218,7 +307,7 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
     <div className="home-product-card-media relative w-full shrink-0 overflow-hidden">
       <OptimizedProductImage
         src={item.imageUrl || undefined}
-        alt={item.productName}
+        alt={displayName}
         imageWidth={400}
         quality={85}
         priority={index < 4}
@@ -227,7 +316,7 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         <div className="absolute right-2 top-2 z-[3]">
           <WishlistHeartButton
             productId={item.productId}
-            productName={item.productName}
+            productName={displayName}
             onToggle={(favorited) => handlers.handleAddRecommendProductToWishlist(item, favorited)}
             className="size-9 shrink-0 rounded-full bg-white/95 shadow-sm"
           />
@@ -246,18 +335,18 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         <div className="block text-[#111111]">
           {media}
           <p className="home-recommend-product-name truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
-            {item.productName}
+            {displayName}
           </p>
         </div>
       ) : (
         <a
           {...hardNavProps(href)}
-          aria-label={item.productName}
+          aria-label={displayName}
           className="home-product-card-link block text-[#111111] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#111111]/20"
           onPointerDown={() => {
             writeProductDetailPreview({
               id: item.productId,
-              name: item.productName,
+              name: displayName,
               image: item.imageUrl || '',
             })
           }}
@@ -265,7 +354,7 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
         >
           {media}
           <p className="home-recommend-product-name truncate px-2 pt-2 text-left text-sm font-medium leading-5 text-[#111111]">
-            {item.productName}
+            {displayName}
           </p>
         </a>
       )}
@@ -301,9 +390,17 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
             />
             <button
               type="button"
+              ref={addToCartTap.ref}
               aria-label={t('product.addToCart')}
               className="home-product-card-cart-btn relative z-[5] inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-[#ebe7de] bg-white text-[#111111] transition hover:border-[#111111] hover:bg-[#111111] hover:text-white"
-              {...addToCartEvents}
+              data-no-hard-nav=""
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                addToCartTap.onClick(event)
+              }}
             >
               <ShoppingCart className="size-3.5 pointer-events-none" aria-hidden />
               <Plus className="pointer-events-none absolute size-2 translate-x-1.5 -translate-y-1.5" aria-hidden />
@@ -321,6 +418,7 @@ const renderMobileSquircleContent = (
   t: ReturnType<typeof useTranslation>['t'],
   limitDisplay = true,
   eagerImageCount = 0,
+  coverByCategoryId?: Record<string, string>,
 ) => {
   const isComingSoon = zoneLooksLikeComingSoon(zone)
   const sourceItems = Array.isArray(zone.items) ? zone.items : []
@@ -349,6 +447,10 @@ const renderMobileSquircleContent = (
     return wrapSquircleItems(
       productItems.length,
       productItems.map((item, index) => {
+        const productTitle =
+          polishStorefrontProductTitle(item.productName, {
+            shortDescription: item.shortDescription,
+          }) || item.productName
         const isComingDraft = isComingSoon || item.status === 'DRAFT'
         if (isComingDraft) {
           return (
@@ -360,7 +462,7 @@ const renderMobileSquircleContent = (
               <span className="mobile-zone-squircle__media">
                 <OptimizedProductImage
                   src={item.imageUrl || undefined}
-                  alt={item.productName}
+                  alt={productTitle}
                   imageWidth={320}
                   quality={85}
                   priority={index < eagerImageCount}
@@ -368,7 +470,7 @@ const renderMobileSquircleContent = (
                 <span className="absolute right-1 top-1 z-[3]">
                   <WishlistHeartButton
                     productId={item.productId}
-                    productName={item.productName}
+                    productName={productTitle}
                     size={16}
                     className="!rounded-full bg-white/95 p-1.5 shadow-sm"
                     onToggle={(favorited) =>
@@ -379,7 +481,7 @@ const renderMobileSquircleContent = (
               </span>
               <span className="mobile-zone-squircle__label">
                 <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-                  {item.productName}
+                  {productTitle}
                 </DecorateText>
               </span>
             </div>
@@ -390,12 +492,12 @@ const renderMobileSquircleContent = (
           <a
             key={item.itemId}
             {...hardNavProps(href)}
-            aria-label={item.productName}
+            aria-label={productTitle}
             className="mobile-zone-squircle"
             onPointerDown={() => {
               writeProductDetailPreview({
                 id: item.productId,
-                name: item.productName,
+                name: productTitle,
                 image: item.imageUrl || '',
               })
             }}
@@ -405,7 +507,7 @@ const renderMobileSquircleContent = (
             <span className="mobile-zone-squircle__media">
               <OptimizedProductImage
                 src={item.imageUrl || undefined}
-                alt={item.productName}
+                alt={productTitle}
                 imageWidth={320}
                 quality={85}
                 priority={index < eagerImageCount}
@@ -413,7 +515,7 @@ const renderMobileSquircleContent = (
             </span>
             <span className="mobile-zone-squircle__label">
               <DecorateText propKey={`home_product_name_${item.productId}`} as="span">
-                {item.productName}
+                {productTitle}
               </DecorateText>
             </span>
           </a>
@@ -437,7 +539,7 @@ const renderMobileSquircleContent = (
       categoryItems.length,
       categoryItems.map((item) => {
         const displayName = translateCatalogLabel(t, item.categoryName)
-        const imageSrc = pickRecommendCategoryCoverSrc(item)
+        const imageSrc = resolveZoneCategoryCover(item, coverByCategoryId)
         return (
           <MobileCategorySquircleLink
             key={item.itemId}
@@ -463,6 +565,7 @@ const renderRecommendZoneContent = (
   handlers: ZoneHandlers,
   t: ReturnType<typeof useTranslation>['t'],
   limitDisplay = true,
+  coverByCategoryId?: Record<string, string>,
 ) => {
   const sourceItems = Array.isArray(zone.items) ? zone.items : []
   const limitedItems = limitDisplay
@@ -512,7 +615,7 @@ const renderRecommendZoneContent = (
       <div className={getCategoryCardGridClassName(zone)} data-controller-name="首页推荐专区类目卡片网格">
         {categoryItems.map((item, index) => {
           const displayName = translateCatalogLabel(t, item.categoryName)
-          const imageSrc = pickRecommendCategoryCoverSrc(item)
+          const imageSrc = resolveZoneCategoryCover(item, coverByCategoryId)
           const waitingForProduct = imageSrc !== CATEGORY_CARD_PLACEHOLDER
           return (
             <button
@@ -579,6 +682,7 @@ export const HomeRecommendZoneSection = ({
   const { t } = useTranslation()
   const HeadingTag = headingAs
   const isMobileSquircle = variant === 'mobile-squircle'
+  const coverByCategoryId = useRecommendCategoryCovers(zone)
 
   return (
     <section
@@ -652,8 +756,8 @@ export const HomeRecommendZoneSection = ({
         ) : null}
       </div>
       {isMobileSquircle
-        ? renderMobileSquircleContent(zone, handlers, t, limitDisplay, eagerImageCount)
-        : renderRecommendZoneContent(zone, handlers, t, limitDisplay)}
+        ? renderMobileSquircleContent(zone, handlers, t, limitDisplay, eagerImageCount, coverByCategoryId)
+        : renderRecommendZoneContent(zone, handlers, t, limitDisplay, coverByCategoryId)}
     </section>
   )
 }

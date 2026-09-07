@@ -491,7 +491,12 @@ export const getHomeRecommendZones = async (input?: {
           categoryId: category.id,
           categoryName,
           categorySlug: category.slug,
-          imageUrl: resolveCategoryCardImageUrl(null, null, null, latestProducts[0]?.imageUrl),
+          imageUrl: resolveCategoryCardImageUrl(
+            category.imageUrl,
+            category.bannerImageUrl,
+            category.iconUrl,
+            latestProducts[0]?.imageUrl,
+          ),
           fallbackImageUrl: CATEGORY_CARD_PLACEHOLDER_URL,
           description: category.description,
           productCount: productCountByCategoryId.get(category.id) ?? category._count.products,

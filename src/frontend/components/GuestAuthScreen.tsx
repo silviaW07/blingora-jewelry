@@ -32,7 +32,7 @@ interface RegisterForm {
  * In-page login/register for guests on Cart / Account.
  * Not a Dialog — Chrome Android often never shows the portaled modal.
  */
-export function GuestAuthScreen({ initialTab = 'register' }: { initialTab?: Tab }) {
+export function GuestAuthScreen({ initialTab = 'login' }: { initialTab?: Tab }) {
   const { t } = useTranslation()
   const { set: setSession, token, user_id } = useUserSession()
   const [tab, setTab] = useState<Tab>(initialTab)

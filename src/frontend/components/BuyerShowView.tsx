@@ -3,13 +3,20 @@
 import React, { useEffect, useState } from 'react'
 import { ArrowLeft, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { getBuyerShowPage } from '@/frontend/actions/BuyerShow'
 import type { StorefrontBuyerShowMedia } from '@/frontend/actions/BuyerShow'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 
+function hasBuyerShowMediaUrl(url?: string | null) {
+  const value = String(url || '').trim()
+  return value.startsWith('http') || value.startsWith('/') || value.startsWith('data:')
+}
+
 export default function BuyerShowView() {
   const router = useRouter()
+  const { t } = useTranslation()
   const [media, setMedia] = useState<StorefrontBuyerShowMedia[]>([])
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<StorefrontBuyerShowMedia | null>(null)
@@ -18,7 +25,9 @@ export default function BuyerShowView() {
     let cancelled = false
     getBuyerShowPage()
       .then((result) => {
-        if (!cancelled) setMedia(result.media || [])
+        if (!cancelled) {
+          setMedia((result.media || []).filter((item) => hasBuyerShowMediaUrl(item.mediaUrl)))
+        }
       })
       .catch(() => {
         if (!cancelled) setMedia([])
@@ -60,15 +69,17 @@ export default function BuyerShowView() {
           </button>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a8073]">Buyer Real Photos</p>
-            <h1 className="mt-2 text-[clamp(28px,4vw,44px)] font-black">Click to see</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a8073]">
+              {t('buyerShow.kicker')}
+            </p>
+            <h1 className="mt-2 text-[clamp(28px,4vw,44px)] font-black">{t('home.buyer_show')}</h1>
           </div>
 
           {loading ? (
-            <p className="text-sm text-[#8a8073]">Loading...</p>
+            <p className="text-sm text-[#8a8073]">{t('buyerShow.loading')}</p>
           ) : media.length === 0 ? (
             <p className="rounded-2xl border border-[#f0dede] bg-white p-8 text-sm text-[#6f6a62]">
-              No photos yet. Please check back soon.
+              {t('buyerShow.empty')}
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
