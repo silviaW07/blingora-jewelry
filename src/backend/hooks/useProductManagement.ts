@@ -27,7 +27,6 @@ import {
   getCategoryProductPreview,
   batchDeletePendingImportItems,
   createPendingImportTaskForProductManagement,
-  startPendingImportTaskForProductManagement,
   retryPendingImportTaskForProductManagement,
   getPendingImportQueue,
   inlineUpdatePendingImportItemField,
@@ -1041,7 +1040,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       }
       if (/^task:/.test(job.label || '')) {
         return total > 0
-          ? `正在解析采集任务 ${done}/${total}…`
+          ? `正在抓取链接 ${done}/${total}（1688 串行，约每条十余秒）…`
           : '正在解析采集任务…'
       }
       return job.label ? `正在解析（${job.label}）…` : '正在解析…'
@@ -2075,17 +2074,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const createdCount = Number(created.createdCount ?? urls.length)
       const skippedDuplicateCount = Number(created.skippedDuplicateCount ?? 0)
       const categoryUrlCount = Number(created.categoryUrlCount ?? 0)
-      await startPendingImportTaskForProductManagement({ taskId: created.taskId })
       if (categoryUrlCount > 0) {
         toast.success(
-          `已创建任务（含 ${categoryUrlCount} 个分类/分页），正在自动抽商品并解析`,
+          `已创建任务（含 ${categoryUrlCount} 个分类/分页），尚未解析，请在采集弹窗点「开始解析」`,
         )
       } else if (skippedDuplicateCount > 0) {
         toast.success(
-          `已创建 ${createdCount} 条新链接采集任务；跳过 ${skippedDuplicateCount} 条重复链接（不识别/不解析）`,
+          `已创建 ${createdCount} 条新链接采集任务（跳过 ${skippedDuplicateCount} 条重复）；请点「开始解析」`,
         )
       } else {
-        toast.success(`已创建 ${createdCount} 条 1688 采集任务，系统将异步抓取并回填待上传区`)
+        toast.success(`已创建 ${createdCount} 条 1688 采集任务，请点「开始解析」后再抓取`)
       }
       setPendingImportDialogOpen(false)
       setPendingImportTaskForm(defaultPendingImportTaskForm())
@@ -2837,7 +2835,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     setSync1688Syncing(true)
     try {
-      const result = await sync1688ProductStatus({ product_ids: productIds })
+      const result = await sync1688ProductStatus(
+        { product_ids: productIds },
+        { __rpcTimeoutMs: 180_000 } as any,
+      )
       setSync1688Delisted(result.delisted || [])
       setSync1688OutOfStock(result.out_of_stock || [])
       setSync1688Normal(result.normal || [])

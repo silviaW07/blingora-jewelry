@@ -713,6 +713,8 @@ import {
   resolveTableImportColorSpec,
   TABLE_IMPORT_SPEC_HEADER_ALIASES,
   isTableImportCategoryHeader,
+  isColorDimensionName,
+  looksLikeColorValueSet,
 } from '@/shared/tableImportSpec'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import {
@@ -2549,23 +2551,17 @@ const is1688ColorPropName = (name?: string | null) => {
     normalized === '尺寸' ||
     normalized === '鞋码' ||
     normalized === '码数' ||
+    normalized === '净含量' ||
     normalized === 'size'
   ) {
     return false
   }
+  if (isColorDimensionName(name)) return true
   return (
-    normalized === '颜色' ||
-    normalized === '颜色分类' ||
     normalized === '色彩' ||
-    normalized === '花色' ||
-    normalized === '花色分类' ||
     normalized === '色号' ||
     normalized === '色系' ||
-    normalized === '款式颜色' ||
-    normalized === 'color' ||
-    normalized === 'colour' ||
     normalized === 'pattern' ||
-    normalized.includes('颜色') ||
     normalized.includes('花色') ||
     normalized.includes('色号') ||
     normalized.includes('color') ||
@@ -2575,19 +2571,21 @@ const is1688ColorPropName = (name?: string | null) => {
 
 const is1688SizePropName = (name?: string | null) => {
   const normalized = String(name || '').trim().toLowerCase()
+  if (is1688ColorPropName(name)) return false
   return (
     normalized === '尺码' ||
     normalized === '尺寸' ||
-    normalized === '规格' ||
     normalized === '鞋码' ||
     normalized === '码数' ||
     normalized === '号码' ||
+    normalized === '净含量' ||
+    normalized === '容量' ||
     normalized === 'size' ||
-    normalized === 'spec' ||
     normalized.includes('尺码') ||
     normalized.includes('尺寸') ||
     normalized.includes('鞋码') ||
     normalized.includes('码数') ||
+    normalized.includes('净含量') ||
     normalized.includes('size')
   )
 }
@@ -3057,16 +3055,16 @@ const normalizeSkuPropsArray = (raw: unknown): Parsed1688Prop[] => {
       if (!values.length) return null
       const imageHits = values.filter(value => Boolean(value.imageUrl)).length
       const nameKey = name.trim()
-      // 「规格/款式」在 1688 上常充当色维（带独立缩略图）；纯尺码文案且无图仍走 size
+      // 「规格」在 1688 上常充当色维（带独立缩略图或色名）；纯尺码文案且无图仍走 other/size
       const specActsAsColor =
-        /^(规格|款式|款型|花样|图案)$/i.test(nameKey) &&
-        imageHits >= 2 &&
-        imageHits >= Math.ceil(values.length * 0.4)
-      // 其它非尺码维：多数 value 带独立缩略图时视为颜色维
+        /^(规格|spec)$/i.test(nameKey) &&
+        (looksLikeColorValueSet(values.map(value => value.name)) ||
+          (imageHits >= 2 && imageHits >= Math.ceil(values.length * 0.3)))
+      // 其它非尺码维：多数 value 带独立缩略图时视为颜色维（香型/套餐已在名字里认成色）
       const looksLikeColorSwatchProp =
         !is1688SizePropName(name) &&
         imageHits >= 2 &&
-        imageHits >= Math.ceil(values.length * 0.4)
+        imageHits >= Math.ceil(values.length * 0.3)
       const kind: Parsed1688Prop['kind'] = is1688ColorPropName(name) || specActsAsColor || looksLikeColorSwatchProp
         ? 'color'
         : is1688SizePropName(name)
@@ -7677,7 +7675,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
     const batchMode = parseItems.length > 3
     if (batchMode && cookieSnapshot) {
       await bootstrap1688MtopCookies(cookieSnapshot).catch(() => cookieSnapshot)
-      await sleep(6_000)
+      // Short lists should not sit 6s before the first offer fetch.
+      await sleep(parseItems.length > 10 ? 6_000 : 1_500)
     }
 
     let consecutiveRisk = 0
@@ -8098,7 +8097,9 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           consecutiveRisk > 0
             ? randomDelayMs(12, 18)
             : batchMode
-              ? randomDelayMs(Math.max(6, minDelaySec), Math.max(10, maxDelaySec))
+              ? parseItems.length > 10
+                ? randomDelayMs(Math.max(4, minDelaySec), Math.max(8, maxDelaySec))
+                : randomDelayMs(Math.max(2, minDelaySec), Math.max(4, maxDelaySec))
               : randomDelayMs(minDelaySec, maxDelaySec)
         await sleep(delayMs)
       }
@@ -9554,7 +9555,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
         if (batchMode && !is1688RiskStormActive()) {
           const cookie = resolve1688Cookie()
           if (cookie) await bootstrap1688MtopCookies(cookie).catch(() => cookie)
-          await sleep(5_000)
+          await sleep(itemIds.length > 10 ? 5_000 : 1_200)
         }
 
         for (let index = 0; index < itemIds.length; index += 1) {
@@ -9787,7 +9788,9 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
               consecutiveRisk > 0
                 ? randomDelayMs(12, 18)
                 : batchMode
-                  ? randomDelayMs(6, 10)
+                  ? itemIds.length > 10
+                    ? randomDelayMs(4, 8)
+                    : randomDelayMs(2, 4)
                   : 900
             await sleep(delayMs)
           }
