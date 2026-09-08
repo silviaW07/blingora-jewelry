@@ -2592,7 +2592,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       productSkuEditingCell.field === 'min_order_qty' ? String(sku.min_order_qty ?? '') :
       String(sku.stock ?? '')
 
-    if (productSkuEditingValue.trim() === String(original).trim()) {
+    if (
+      productSkuEditingCell.field !== 'cost_price' &&
+      productSkuEditingValue.trim() === String(original).trim()
+    ) {
       cancelProductSkuInlineEdit()
       return
     }
@@ -3022,7 +3025,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     setReclassifyRunning(true)
     try {
-      const result = await reclassifyPublishedProductsBySecondaryMatch({ product_ids: scopeIds })
+      const result = await reclassifyPublishedProductsBySecondaryMatch(
+        { product_ids: scopeIds },
+        { __rpcTimeoutMs: 180_000 } as any,
+      )
       toast.success(
         `一键校准完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
       )
@@ -3050,7 +3056,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     setReclassifyRunning(true)
     try {
-      const result = await calibratePendingImportItems({ item_ids: scopeIds })
+      const result = await calibratePendingImportItems(
+        { item_ids: scopeIds },
+        { __rpcTimeoutMs: 180_000 } as any,
+      )
       toast.success(
         `一键校准完成：命中 ${result.matched}，跳过 ${result.skipped}，失败 ${result.failed}（共 ${result.total}）`,
       )
@@ -3786,7 +3795,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     const originalValue = formatProductComparableValue(getProductFieldValue(currentItem, field), field)
     const nextComparableValue = formatProductComparableValue(value, field)
-    if (originalValue === nextComparableValue) return
+    if (
+      originalValue === nextComparableValue &&
+      field !== 'cost_price' &&
+      field !== 'price_coefficient'
+    ) {
+      return
+    }
 
     setInlineSaving(true)
     try {
@@ -3843,8 +3858,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       getProductFieldValue(currentItem, inlineEditingCell.field),
       inlineEditingCell.field
     )
+    const field = inlineEditingCell.field
+    const forceRecalc = field === 'cost_price' || field === 'price_coefficient'
 
-    if (nextRawValue === String(originalValue).trim()) {
+    if (!forceRecalc && nextRawValue === String(originalValue).trim()) {
       cancelInlineEdit()
       return
     }
@@ -3858,7 +3875,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         value: payloadValue
       })
       toast.success('商品信息已更新')
-      const field = inlineEditingCell.field
       const productId = inlineEditingCell.productId
       cancelInlineEdit()
       if (field === 'cost_price' || field === 'price_coefficient' || field === 'category_id') {
