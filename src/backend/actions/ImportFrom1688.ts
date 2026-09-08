@@ -675,6 +675,7 @@ import {
 } from '@/shared/categoryMatchGuards'
 import { detectShelfFamily, shelfFamiliesCompatible } from '@/shared/categoryShelfFamily'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
+import { getUsdExchangeRate } from '@/shared/exchangeRate'
 import {
   loadFilterCategoriesFromDb,
   matchFilterCategoriesByTitle,
@@ -883,7 +884,6 @@ const isSpuCodeCollisionError = (error: any): boolean => {
 
 const normalizeText = (value: unknown) => String(value ?? '').trim()
 const normalizeCommaText = (value: unknown) => normalizeText(value).replace(/，/g, ',')
-const DEFAULT_GLOBAL_EXCHANGE_RATE = 6.5
 const roundCurrency = (value: number) => Number(value.toFixed(2))
 
 type ImportPricingCategoryMeta = {
@@ -939,20 +939,7 @@ const resolveImportCategoryCoefficient = (
 }
 
 const getGlobalExchangeRate = async (db: typeof prisma): Promise<number> => {
-  const preferred = await db.currencysetting.findFirst({
-    where: { isActive: true, isDefault: true },
-    orderBy: { updatedAt: 'desc' },
-    select: { exchangeRate: true },
-  })
-  const fallback = preferred
-    ? null
-    : await db.currencysetting.findFirst({
-        where: { isActive: true },
-        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-        select: { exchangeRate: true },
-      })
-  const rate = toNumberOrNull(preferred?.exchangeRate ?? fallback?.exchangeRate)
-  return rate && rate > 0 ? rate : DEFAULT_GLOBAL_EXCHANGE_RATE
+  return getUsdExchangeRate(db)
 }
 
 /** 保留产品价格原始文本，禁止在此处做数值化或去逗号 */
@@ -4583,15 +4570,41 @@ const recalculatePendingSkuPrices = (
   drafts: PendingImportSkuItem[],
   fallbackCostPrice: number | null,
   coefficient: number,
+  options?: { overwriteCost?: boolean },
 ) =>
   drafts.map((sku) => {
-    const nextCost = toNumberOrNull(sku.cost_price) ?? fallbackCostPrice
+    const nextCost =
+      options?.overwriteCost && fallbackCostPrice !== null
+        ? fallbackCostPrice
+        : (toNumberOrNull(sku.cost_price) ?? fallbackCostPrice)
     return {
       ...sku,
       cost_price: nextCost,
       price: nextCost !== null ? roundCurrency(nextCost * coefficient) : sku.price,
     }
   })
+
+/** 父行改人民币/美金售价：同步写回全部 SKU 售价，另一币种由汇率跟着变 */
+const applyPendingSellPriceToDrafts = (
+  drafts: PendingImportSkuItem[],
+  nextCny: number,
+) =>
+  drafts.map((sku) => ({
+    ...sku,
+    price: nextCny,
+  }))
+
+const toPendingSkuTablePayload = (drafts: PendingImportSkuItem[]) =>
+  drafts.map((sku) => ({
+    skuKey: sku.sku_key,
+    spec: sku.spec_text,
+    costPrice: sku.cost_price,
+    price: sku.price,
+    stock: sku.stock,
+    weightGrams: sku.weight_grams,
+    imageUrl: sku.image_url || undefined,
+    attributes: sku.attributes,
+  }))
 
 const summarizePendingSkuPrices = (
   drafts: PendingImportSkuItem[],
@@ -7001,16 +7014,19 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
       throw new Error('表格导入要求每行都提供产品编号，并以它作为 SPU 合并依据')
     }
 
-    const categories = await prisma.category.findMany({
-      select: {
-        id: true,
-        name: true,
-        parentId: true,
-        level: true,
-        priceCoefficient: true,
-        isBrandCategory: true,
-      },
-    })
+    const [categories, exchangeRate] = await Promise.all([
+      prisma.category.findMany({
+        select: {
+          id: true,
+          name: true,
+          parentId: true,
+          level: true,
+          priceCoefficient: true,
+          isBrandCategory: true,
+        },
+      }),
+      getGlobalExchangeRate(prisma),
+    ])
 
     const groupedRows = groupTableImportRowsByProductCode(rows)
 
@@ -7293,8 +7309,8 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           : row.priceMax != null
             ? roundCurrency(Number(row.priceMax) * matchedCoefficient)
             : sellMin
-      const usdMin = sellMin != null ? roundCurrency(sellMin / 6.5) : null
-      const usdMax = sellMax != null ? roundCurrency(sellMax / 6.5) : null
+      const usdMin = sellMin != null ? roundCurrency(sellMin / exchangeRate) : null
+      const usdMax = sellMax != null ? roundCurrency(sellMax / exchangeRate) : null
 
       return {
         operatorId: userId,
@@ -8366,9 +8382,16 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
       const coefficient =
         input.field === 'coefficient'
           ? Number(numericValue)
-          : resolveImportCategoryCoefficient(categoryMap, nextCategoryId)
+          : input.field === 'target_category_id'
+            ? resolveImportCategoryCoefficient(categoryMap, nextCategoryId)
+            : resolvePendingItemCoefficient(item, categoryMap)
       const exchangeRate = await getGlobalExchangeRate(prisma)
-      const nextDrafts = recalculatePendingSkuPrices(resolvePendingSkuDrafts(item), nextCostPrice, coefficient)
+      const nextDrafts = recalculatePendingSkuPrices(
+        resolvePendingSkuDrafts(item),
+        nextCostPrice,
+        coefficient,
+        { overwriteCost: input.field === 'cost_price' },
+      )
       const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
       const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
 
@@ -8381,16 +8404,33 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
         ...currentPreview,
         categoryId: nextCategoryId || undefined,
         price: priceSummary.cnyMin ?? currentPreview.price,
-        skuTable: nextDrafts.map((sku) => ({
-          skuKey: sku.sku_key,
-          spec: sku.spec_text,
-          costPrice: sku.cost_price,
-          price: sku.price,
-          stock: sku.stock,
-          weightGrams: sku.weight_grams,
-          imageUrl: sku.image_url || undefined,
-          attributes: sku.attributes,
-        })),
+        skuTable: toPendingSkuTablePayload(nextDrafts),
+      } as any
+    }
+
+    if (
+      input.field === 'cny_price_min' ||
+      input.field === 'cny_price_max' ||
+      input.field === 'usd_price_min' ||
+      input.field === 'usd_price_max'
+    ) {
+      if (numericValue === null) throw new Error('请输入有效售价')
+      const exchangeRate = await getGlobalExchangeRate(prisma)
+      const nextCny =
+        input.field === 'cny_price_min' || input.field === 'cny_price_max'
+          ? numericValue
+          : roundCurrency(numericValue * exchangeRate)
+      const nextDrafts = applyPendingSellPriceToDrafts(resolvePendingSkuDrafts(item), nextCny)
+      const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
+      const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+      data.cnyPriceMin = priceSummary.cnyMin
+      data.cnyPriceMax = priceSummary.cnyMax
+      data.usdPriceMin = priceSummary.usdMin
+      data.usdPriceMax = priceSummary.usdMax
+      data.previewDataJson = {
+        ...currentPreview,
+        price: priceSummary.cnyMin ?? currentPreview.price,
+        skuTable: toPendingSkuTablePayload(nextDrafts),
       } as any
     }
 
@@ -8581,10 +8621,7 @@ export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
     const stocks = nextSkus.map(sku => toNumberOrNull(sku.stock) ?? 0)
     const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
     const categoryMap = await loadImportPricingCategories(prisma)
-    const coefficient = resolveImportCategoryCoefficient(
-      categoryMap,
-      item.targetCategoryId || null,
-    )
+    const coefficient = resolvePendingItemCoefficient(item, categoryMap)
     const exchangeRate = await getGlobalExchangeRate(prisma)
     const pricedSkus =
       input.field === 'cost_price'

@@ -3,9 +3,41 @@ import {
   isBrandShelfCategory,
   isNonPricingCategory,
 } from '@/shared/categoryPricing'
+import { toUsdFromCny } from '@/shared/exchangeRate'
 
 /** Global fallback when neither L2 nor L1 has a valid coefficient. */
 export const DEFAULT_PRICE_COEFFICIENT = 2
+
+/**
+ * Cost-linked selling prices.
+ * RMB = cost × coefficient
+ * USD = RMB ÷ 后台设定汇率  (= cost ÷ 设定汇率 × 系数)
+ * 汇率只读价格设置里填的值，不用实时牌价。
+ */
+export function resolveDisplayedPriceCoefficient(
+  productCoefficient?: number | null,
+  inheritedCoefficient?: number | null,
+): number | null {
+  const own = Number(productCoefficient)
+  if (Number.isFinite(own) && own > 0) return own
+  const inherited = Number(inheritedCoefficient)
+  if (Number.isFinite(inherited) && inherited > 0) return inherited
+  return null
+}
+
+export function calculateCostLinkedSellPrices(
+  costPrice: number,
+  coefficient: number,
+  usdExchangeRate: number,
+): { rmb: number; usd: number } {
+  const coeff = Number.isFinite(coefficient) && coefficient > 0 ? coefficient : DEFAULT_PRICE_COEFFICIENT
+  const cost = Number(costPrice)
+  const rmb = Number(((Number.isFinite(cost) ? cost : 0) * coeff).toFixed(2))
+  return {
+    rmb,
+    usd: toUsdFromCny(rmb, usdExchangeRate),
+  }
+}
 
 /**
  * Resolve category selling coefficient from the primary L1→L2 hierarchy only.

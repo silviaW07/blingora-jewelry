@@ -35,11 +35,10 @@ function normalizeUsdExchangeRate(raw: unknown): number {
 }
 
 /**
- * Load USD↔CNY exchange rate from DB.
- * - We treat `currencysetting.exchangeRate` as "CNY per 1 USD" (e.g. 7.20).
- * - Returns a positive finite number; falls back to DEFAULT_USD_EXCHANGE_RATE.
- *
- * Cache: short in-memory TTL to avoid per-call queries.
+ * Load the admin-configured USD↔CNY rate from `currencysetting`.
+ * This is the number set on the pricing page (e.g. 6.5). Never a live market rate.
+ * - Stored as CNY per 1 USD.
+ * - Falls back to DEFAULT_USD_EXCHANGE_RATE when unset.
  */
 export function invalidateUsdExchangeRateCache() {
   cachedRate = null

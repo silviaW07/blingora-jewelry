@@ -634,6 +634,7 @@ export interface ProductBindingMetaOutput {
 }
 
 import prisma from '@/tools/prisma'
+import { DEFAULT_USD_EXCHANGE_RATE, getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { mosaicImageUrlToUpload, mapPool } from '@/lib/mosaicRemoteImage'
 import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
 import { isAggregatePricingCategoryName } from '@/shared/categoryPricing'
@@ -804,8 +805,6 @@ export interface ApplyCalibrateCategoryEditsOutput {
   fail_count: number
 }
 
-const USD_EXCHANGE_RATE = 6.5
-
 function toNumber(value: any): number | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
@@ -829,9 +828,12 @@ function roundCurrency(value: number): number {
   return Number(value.toFixed(2))
 }
 
-function toUsdDisplayPrice(rmbPrice: number | null | undefined): number | null {
+function toUsdDisplayPrice(
+  rmbPrice: number | null | undefined,
+  usdExchangeRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): number | null {
   if (rmbPrice === null || rmbPrice === undefined || !Number.isFinite(rmbPrice)) return null
-  return roundCurrency(rmbPrice / USD_EXCHANGE_RATE)
+  return toUsdFromCny(rmbPrice, usdExchangeRate)
 }
 
 function normalizeGoodsStatus(goodsStatus?: string | null): GoodsStatus | null {
@@ -992,7 +994,10 @@ async function findPublishedImportProductByName(name?: string | null): Promise<P
   })
 }
 
-async function mapProductToListItem(product: PublishedImportMatchDbRecord): Promise<ProductListItem> {
+async function mapProductToListItem(
+  product: PublishedImportMatchDbRecord,
+  usdExchangeRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): Promise<ProductListItem> {
   const boundIds = [
     product.categoryId,
     product.brandCategoryId,
@@ -1007,8 +1012,6 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
       : product.categoryId)
   const primaryMeta = categoryMap.get(product.categoryId) || null
   const prices = product.skus.map(s => toNumber(s.price) ?? 0)
-  const priceMin = prices.length > 0 ? Math.min(...prices) : 0
-  const priceMax = prices.length > 0 ? Math.max(...prices) : 0
   const totalStock = product.skus.reduce((sum, s) => sum + s.stock, 0)
   const { own, parent, main, current } = getCategoryHierarchyCoefficients(
     categoryMap,
@@ -1028,6 +1031,12 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
   const mappedGoodsStatus = product.status === 'DRAFT'
     ? 'DELETED'
     : normalizeGoodsStatus(product.goodsStatus) || mapProductStatusToGoodsStatus(product.status as ProductStatus)
+  const sellRange = resolveCostLinkedSellRange(
+    toNumber(product.costPrice),
+    effectiveCoefficient,
+    usdExchangeRate,
+    prices,
+  )
 
   return {
     product_id: product.id,
@@ -1052,15 +1061,15 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
     effective_price_coefficient: effectiveCoefficient,
     min_order_qty: Math.max(1, Number((product.tradeInfoJson as any)?.minOrderQty ?? 0) || 1),
     main_image_url: String(product.mainImageUrl || '').trim() || null,
-    price_min: priceMin,
-    price_max: priceMax,
-    usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,
-    usd_display_price_max: toUsdDisplayPrice(priceMax) ?? 0,
+    price_min: sellRange.priceMin,
+    price_max: sellRange.priceMax,
+    usd_display_price_min: sellRange.usdMin,
+    usd_display_price_max: sellRange.usdMax,
     total_stock: totalStock,
     status: product.status as ProductStatus,
     created_at: product.createdAt.toISOString(),
     updated_at: product.updatedAt.toISOString(),
-    skus: mapProductSkusToListItems(product)
+    skus: mapProductSkusToListItems(product, usdExchangeRate, sellRange.linkedRmb)
   }
 }
 
@@ -1083,9 +1092,9 @@ function mapProductSkusToListItems(product: {
     materialLabel?: string | null
     attributeJson?: any
   }>
-}): ProductListSkuItem[] {
+}, usdExchangeRate: number = DEFAULT_USD_EXCHANGE_RATE, sellPriceOverride?: number | null): ProductListSkuItem[] {
   return product.skus.map(sku => {
-    const price = toNumber(sku.price) ?? 0
+    const price = sellPriceOverride != null ? sellPriceOverride : (toNumber(sku.price) ?? 0)
     const originalPrice = toNumber(sku.originalPrice)
     const weightKg = toNumber(sku.weightKg)
     const attributeJson = Array.isArray(sku.attributeJson) && sku.attributeJson.length > 0
@@ -1115,13 +1124,85 @@ function mapProductSkusToListItems(product: {
       cost_price: toNumber(product.costPrice),
       attribute_json: attributeJson,
       spec_text: formatSkuSpecText(attributeJson),
-      usd_display_price: toUsdDisplayPrice(price)
+      usd_display_price: toUsdDisplayPrice(price, usdExchangeRate)
     }
   })
 }
 
 function calculateSkuRmbPrice(costPrice: number, coefficient: number): number {
   return roundCurrency(costPrice * coefficient)
+}
+
+function resolveCostLinkedSellRange(
+  costPrice: number | null,
+  coefficient: number,
+  usdExchangeRate: number,
+  fallbackPrices: number[],
+): { priceMin: number; priceMax: number; usdMin: number; usdMax: number; linkedRmb: number | null } {
+  if (costPrice != null && Number.isFinite(costPrice) && costPrice >= 0 && coefficient > 0) {
+    const rmb = calculateSkuRmbPrice(costPrice, coefficient)
+    const usd = toUsdDisplayPrice(rmb, usdExchangeRate) ?? 0
+    return { priceMin: rmb, priceMax: rmb, usdMin: usd, usdMax: usd, linkedRmb: rmb }
+  }
+  const priceMin = fallbackPrices.length > 0 ? Math.min(...fallbackPrices) : 0
+  const priceMax = fallbackPrices.length > 0 ? Math.max(...fallbackPrices) : 0
+  return {
+    priceMin,
+    priceMax,
+    usdMin: toUsdDisplayPrice(priceMin, usdExchangeRate) ?? 0,
+    usdMax: toUsdDisplayPrice(priceMax, usdExchangeRate) ?? 0,
+    linkedRmb: null,
+  }
+}
+
+function skuPricesAreUniform(prices: number[]): boolean {
+  if (prices.length <= 1) return true
+  return prices.every(price => Math.abs(price - prices[0]) < 0.02)
+}
+
+async function persistUniformSkuPricesFromCost(
+  products: Array<{
+    id: string
+    costPrice?: any
+    priceCoefficient?: any
+    categoryId: string
+    category?: { id: string; name: string; parentId: string | null; level: number | null; priceCoefficient: any } | null
+    skus: Array<{ price: any }>
+  }>,
+  categoryMap: Map<string, CategoryMeta>,
+) {
+  const patches: Array<{ productId: string; price: number }> = []
+  for (const product of products) {
+    const costPrice = toNumber(product.costPrice)
+    if (costPrice == null || costPrice < 0 || !product.skus.length) continue
+    const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId, product.category)
+    const coefficient = resolveListDisplayCoefficient(toNumber(product.priceCoefficient), own, parent)
+    const expected = calculateSkuRmbPrice(costPrice, coefficient)
+    const prices = product.skus.map(sku => toNumber(sku.price) ?? 0)
+    if (!skuPricesAreUniform(prices)) continue
+    if (prices.every(price => Math.abs(price - expected) < 0.02)) continue
+    patches.push({ productId: product.id, price: expected })
+  }
+  if (!patches.length) return
+  await prisma.$transaction(
+    patches.map(patch =>
+      prisma.productsku.updateMany({
+        where: { productId: patch.productId },
+        data: {
+          price: patch.price,
+          originalPrice: roundCurrency(patch.price * 1.1),
+        },
+      }),
+    ),
+  )
+  const priceByProduct = new Map(patches.map(patch => [patch.productId, patch.price]))
+  for (const product of products) {
+    const nextPrice = priceByProduct.get(product.id)
+    if (nextPrice == null) continue
+    for (const sku of product.skus) {
+      sku.price = nextPrice
+    }
+  }
 }
 
 function mapSkuPriceFields(sku: { price: any; originalPrice?: any | null }) {
@@ -1957,7 +2038,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
 
     const skip = (page - 1) * page_size
 
-    const [products, total, publishedImportMatchRecord] = await Promise.all([
+    const [products, total, publishedImportMatchRecord, usdExchangeRate] = await Promise.all([
       prisma.product.findMany({
         where: whereClause,
         skip,
@@ -1967,6 +2048,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       }),
       prisma.product.count({ where: whereClause }),
       findPublishedImportProductByName(keyword),
+      getUsdExchangeRate(prisma),
     ])
 
     const allCategoryIds = products.flatMap(p => [
@@ -1975,11 +2057,10 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       ...(p.relationCategories || []).map((rel: { categoryId: string }) => rel.categoryId),
     ]).filter(Boolean) as string[]
     const { categoryMap } = await getCategoryMetaMap(prisma, allCategoryIds)
+    await persistUniformSkuPricesFromCost(products, categoryMap)
 
     const list: ProductListItem[] = products.map(p => {
       const prices = p.skus.map(s => toNumber(s.price) ?? 0)
-      const priceMin = prices.length > 0 ? Math.min(...prices) : 0
-      const priceMax = prices.length > 0 ? Math.max(...prices) : 0
       const totalStock = p.skus.reduce((sum, s) => sum + s.stock, 0)
       const boundCategories = buildBoundCategories(p, categoryMap)
       const pricingCategoryId =
@@ -2002,6 +2083,12 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         parent,
       )
       const mappedGoodsStatus = normalizeGoodsStatus(p.goodsStatus) || mapProductStatusToGoodsStatus(p.status as ProductStatus)
+      const sellRange = resolveCostLinkedSellRange(
+        toNumber(p.costPrice),
+        effectiveCoefficient,
+        usdExchangeRate,
+        prices,
+      )
 
       return {
         product_id: p.id,
@@ -2026,15 +2113,15 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         effective_price_coefficient: effectiveCoefficient,
         min_order_qty: Math.max(1, Number((p.tradeInfoJson as any)?.minOrderQty ?? 1) || 1),
         main_image_url: String(p.mainImageUrl || '').trim() || null,
-        price_min: priceMin,
-        price_max: priceMax,
-        usd_display_price_min: toUsdDisplayPrice(priceMin) ?? 0,
-        usd_display_price_max: toUsdDisplayPrice(priceMax) ?? 0,
+        price_min: sellRange.priceMin,
+        price_max: sellRange.priceMax,
+        usd_display_price_min: sellRange.usdMin,
+        usd_display_price_max: sellRange.usdMax,
         total_stock: totalStock,
         status: p.status as ProductStatus,
         created_at: p.createdAt.toISOString(),
         updated_at: p.updatedAt.toISOString(),
-        skus: mapProductSkusToListItems(p)
+        skus: mapProductSkusToListItems(p, usdExchangeRate, sellRange.linkedRmb)
       }
     }).filter(item => {
       if (!effectiveStatusList || effectiveStatusList.length === 0) {
@@ -2044,7 +2131,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
     })
 
     const published_import_match = publishedImportMatchRecord
-      ? await mapProductToListItem(publishedImportMatchRecord)
+      ? await mapProductToListItem(publishedImportMatchRecord, usdExchangeRate)
       : null
 
     if (
@@ -2054,7 +2141,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       list.unshift(published_import_match)
     }
 
-    return { list, total, published_import_match }
+    return { list, total, published_import_match, usd_exchange_rate: usdExchangeRate }
   })
 )
 
@@ -2072,7 +2159,10 @@ export const getProductDetail = requireRole([UserRole.ADMIN])(
 
     if (!p) throw new Error('商品不存在')
 
-    const { categoryMap } = await getCategoryMetaMap(prisma, [p.categoryId])
+    const [{ categoryMap }, usdExchangeRate] = await Promise.all([
+      getCategoryMetaMap(prisma, [p.categoryId]),
+      getUsdExchangeRate(prisma),
+    ])
     const { own, parent, main, current } = getCategoryHierarchyCoefficients(categoryMap, p.categoryId, p.category)
     const categoryEffectiveCoefficient =
       (own !== null && own > 0) || (parent !== null && parent > 0)
@@ -2125,8 +2215,8 @@ export const getProductDetail = requireRole([UserRole.ADMIN])(
         delivery_days: s.deliveryDays,
         weight_kg: toNumber(s.weightKg),
         volume_m3: toNumber(s.volumeM3),
-        usd_display_price: toUsdDisplayPrice(toNumber(s.price)),
-        usd_display_original_price: toUsdDisplayPrice(toNumber(s.originalPrice))
+        usd_display_price: toUsdDisplayPrice(toNumber(s.price), usdExchangeRate),
+        usd_display_original_price: toUsdDisplayPrice(toNumber(s.originalPrice), usdExchangeRate)
       }))
     }
   })
@@ -2693,9 +2783,16 @@ export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
       const nextPrice = Number(input.value)
       if (!Number.isFinite(nextPrice) || nextPrice < 0) throw new Error('售价不能小于0')
       await prisma.$transaction(async tx => {
-        await tx.productsku.update({ where: { id: sku.id }, data: { price: nextPrice } })
+        await tx.productsku.update({
+          where: { id: sku.id },
+          data: {
+            price: nextPrice,
+            originalPrice: roundCurrency(nextPrice * 1.1),
+          },
+        })
         await syncProductPriceThresholdRelations(tx, input.product_id)
       })
+      invalidateStorefrontAfterCategoryBind()
       return { success: true }
     }
 
@@ -3677,8 +3774,8 @@ function buildPendingFieldsFromProduct(product: any, userId: string) {
   const minOrderQty = Math.max(1, Number(product.tradeInfoJson?.minOrderQty ?? 1) || 1)
   const sourceUrl = resolveReturnSourceUrl(product)
   const productName = String(product.name || '').trim()
-  const usdMin = priceMin != null ? Number((priceMin / USD_EXCHANGE_RATE).toFixed(2)) : null
-  const usdMax = priceMax != null ? Number((priceMax / USD_EXCHANGE_RATE).toFixed(2)) : null
+  const usdMin = priceMin != null ? toUsdDisplayPrice(priceMin) : null
+  const usdMax = priceMax != null ? toUsdDisplayPrice(priceMax) : null
 
   const colorValues = Array.from(
     new Set(

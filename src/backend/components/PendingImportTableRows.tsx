@@ -17,6 +17,8 @@ import {
   PENDING_GOODS_STATUS_OPTIONS,
 } from '@/backend/components/PendingImportEditableCells'
 import type { ProductManagementHandlers, ProductManagementState } from '@/backend/hooks/useProductManagement'
+import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
+import { calculateCostLinkedSellPrices } from '@/shared/priceCoefficient'
 import type { PendingImportQueueItem } from '@/backend/actions/ProductManagement'
 import type { ProductSource } from '@/backend/types/ProductManagement'
 import { cn } from '@/lib/utils'
@@ -155,14 +157,17 @@ function PendingImportTableRowsInner({
     Boolean(item.item_productDetail || item.item_featureAttributes?.length || item.item_sourceUrl)
 
   const skuPrices = skuPricesList
-  const cnyMin = skuPrices.length ? Math.min(...skuPrices) : item.item_cnyPriceMin
-  const cnyMax = skuPrices.length ? Math.max(...skuPrices) : item.item_cnyPriceMax
-  const usdMin = skuPrices.length
-    ? Number((Math.min(...skuPrices) / 6.5).toFixed(2))
-    : item.item_usdPriceMin
-  const usdMax = skuPrices.length
-    ? Number((Math.max(...skuPrices) / 6.5).toFixed(2))
-    : item.item_usdPriceMax
+  const usdRate = Number(state.usdExchangeRate) > 0 ? Number(state.usdExchangeRate) : DEFAULT_USD_EXCHANGE_RATE
+  const coefficient = Number(item.item_coefficient)
+  const cost = Number(item.item_costPrice)
+  const linked =
+    Number.isFinite(coefficient) && coefficient > 0 && Number.isFinite(cost) && cost >= 0
+      ? calculateCostLinkedSellPrices(cost, coefficient, usdRate)
+      : null
+  const cnyMin = linked ? linked.rmb : (skuPrices.length ? Math.min(...skuPrices) : item.item_cnyPriceMin)
+  const cnyMax = linked ? linked.rmb : (skuPrices.length ? Math.max(...skuPrices) : item.item_cnyPriceMax)
+  const usdMin = linked ? linked.usd : (cnyMin == null ? item.item_usdPriceMin : toUsdFromCny(Number(cnyMin), usdRate))
+  const usdMax = linked ? linked.usd : (cnyMax == null ? item.item_usdPriceMax : toUsdFromCny(Number(cnyMax), usdRate))
   const totalStock = pendingSkus.length
     ? pendingSkus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
     : item.item_availableStock

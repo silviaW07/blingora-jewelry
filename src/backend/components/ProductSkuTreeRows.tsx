@@ -13,6 +13,8 @@ import {
 } from '@/backend/components/ProductInlineEditableCell'
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement'
 import type { ProductListItem, ProductBoundCategoryTag } from '@/backend/actions/ProductManagement'
+import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
+import { calculateCostLinkedSellPrices, resolveDisplayedPriceCoefficient } from '@/shared/priceCoefficient'
 import type { ProductStatus, ProductSource, GoodsStatus as ManagementGoodsStatus } from '@/backend/types/ProductManagement'
 
 type StatusConfig = Record<ProductStatus, {
@@ -40,6 +42,29 @@ interface ProductTreeRowsProps {
   sourceConfig: SourceConfig
 }
 
+function listItemSellPriceRange(item: ProductListItem, usdRate: number) {
+  const coefficient = resolveDisplayedPriceCoefficient(
+    item.price_coefficient,
+    item.effective_price_coefficient,
+  )
+  const cost = Number(item.cost_price)
+  if (coefficient != null && Number.isFinite(cost) && cost >= 0) {
+    const { rmb, usd } = calculateCostLinkedSellPrices(cost, coefficient, usdRate)
+    return { cnyMin: rmb, cnyMax: rmb, usdMin: usd, usdMax: usd }
+  }
+  const skuPrices = (item.skus || [])
+    .map((sku) => Number(sku.price))
+    .filter((n) => Number.isFinite(n))
+  const cnyMin = skuPrices.length > 0 ? Math.min(...skuPrices) : Number(item.price_min ?? 0)
+  const cnyMax = skuPrices.length > 0 ? Math.max(...skuPrices) : Number(item.price_max ?? 0)
+  return {
+    cnyMin,
+    cnyMax,
+    usdMin: toUsdFromCny(cnyMin, usdRate),
+    usdMax: toUsdFromCny(cnyMax, usdRate),
+  }
+}
+
 function ProductTreeRowsInner({
   item,
   state,
@@ -50,6 +75,12 @@ function ProductTreeRowsInner({
 }: ProductTreeRowsProps) {
   const expanded = state.expandedProductIds.includes(item.product_id)
   const skus = item.skus || []
+  const usdRate = Number(state.usdExchangeRate) > 0 ? Number(state.usdExchangeRate) : DEFAULT_USD_EXCHANGE_RATE
+  const sellRange = listItemSellPriceRange(item, usdRate)
+  const costLinkedSell =
+    resolveDisplayedPriceCoefficient(item.price_coefficient, item.effective_price_coefficient) != null &&
+    Number.isFinite(Number(item.cost_price)) &&
+    Number(item.cost_price) >= 0
   const minOrderQty = Math.max(1, Number((item as any).trade_info_json?.minOrderQty ?? item.min_order_qty ?? 1) || 1)
   const supplierName = item.supplier_name
   const goodsStatusConfig = item.goods_status
@@ -254,10 +285,10 @@ function ProductTreeRowsInner({
           })()}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
-          ￥{Number(item.price_min ?? 0).toLocaleString()} ~ {Number(item.price_max ?? 0).toLocaleString()}
+          ￥{sellRange.cnyMin.toLocaleString()} ~ {sellRange.cnyMax.toLocaleString()}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
-          ${(item.usd_display_price_min?.toFixed(2) || '0.00')} ~ ${(item.usd_display_price_max?.toFixed(2) || '0.00')}
+          ${sellRange.usdMin.toFixed(2)} ~ ${sellRange.usdMax.toFixed(2)}
         </TableCell>
         <TableCell className="text-right font-header font-medium text-slate-900">
           <ProductInlineEditableCell
@@ -415,7 +446,7 @@ function ProductTreeRowsInner({
               <SkuTreeEditableCell
                 editing={isEditing('price')}
                 value={state.productSkuEditingValue}
-                display={<span className="font-medium text-slate-900">￥{Number(sku.price || 0).toLocaleString()}</span>}
+                display={<span className="font-medium text-slate-900">￥{(costLinkedSell ? sellRange.cnyMin : Number(sku.price || 0)).toLocaleString()}</span>}
                 saving={state.productSkuSaving}
                 inputType="number"
                 className="h-8 w-24 ml-auto text-right"
@@ -426,7 +457,7 @@ function ProductTreeRowsInner({
               />
             </TableCell>
             <TableCell className="text-right text-slate-500">
-              ${sku.usd_display_price != null ? sku.usd_display_price.toFixed(2) : '--'}
+              ${costLinkedSell ? sellRange.usdMin.toFixed(2) : Number.isFinite(Number(sku.price)) ? toUsdFromCny(Number(sku.price), usdRate).toFixed(2) : '--'}
             </TableCell>
             <TableCell className="text-right">
               <SkuTreeEditableCell

@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent, createElement } from 'react'
+import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
+import { calculateCostLinkedSellPrices, resolveDisplayedPriceCoefficient } from '@/shared/priceCoefficient'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductManagement, ImportFrom1688 } from '@/backend/route-params'
 import {
@@ -383,6 +384,104 @@ const applySpuWeightToProductListItem = (item: ProductListItem, weightGram: numb
   }
 }
 
+const toUsdPreview = (value?: number | null, usdRate: number = DEFAULT_USD_EXCHANGE_RATE) => (
+  value === null || value === undefined || Number.isNaN(value)
+    ? null
+    : toUsdFromCny(Number(value), usdRate)
+)
+
+const roundListCurrency = (value: number) => Number(value.toFixed(2))
+
+const listDisplayCoefficient = (item: ProductListItem) => (
+  resolveDisplayedPriceCoefficient(item.price_coefficient, item.effective_price_coefficient) ?? 1
+)
+
+const withListItemPriceRangesFromSkus = (
+  item: ProductListItem,
+  skus: ProductListSkuItem[],
+  usdRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): ProductListItem => {
+  const prices = skus.map((sku) => Number(sku.price)).filter((n) => Number.isFinite(n))
+  if (!prices.length) return { ...item, skus }
+  const price_min = Math.min(...prices)
+  const price_max = Math.max(...prices)
+  return {
+    ...item,
+    skus,
+    price_min,
+    price_max,
+    usd_display_price_min: toUsdPreview(price_min, usdRate) ?? 0,
+    usd_display_price_max: toUsdPreview(price_max, usdRate) ?? 0,
+  }
+}
+
+const applySkuSellPriceToListItem = (
+  item: ProductListItem,
+  skuId: string,
+  nextPrice: number,
+  usdRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): ProductListItem => {
+  const price = roundListCurrency(nextPrice)
+  const skus = (item.skus || []).map((sku) =>
+    sku.sku_id === skuId
+      ? { ...sku, price, usd_display_price: toUsdPreview(price, usdRate) }
+      : sku,
+  )
+  return withListItemPriceRangesFromSkus(item, skus, usdRate)
+}
+
+/** 成本价变更后：人民币=成本×系数，美金=人民币÷后台设定汇率 */
+const applyCostRecalcToListItem = (
+  item: ProductListItem,
+  nextCost: number,
+  usdRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): ProductListItem => {
+  const cost = roundListCurrency(nextCost)
+  const { rmb: nextPrice, usd: nextUsd } = calculateCostLinkedSellPrices(
+    cost,
+    listDisplayCoefficient(item),
+    usdRate,
+  )
+  const skus = (item.skus || []).map((sku) => ({
+    ...sku,
+    cost_price: cost,
+    price: nextPrice,
+    usd_display_price: nextUsd,
+  }))
+  if (!skus.length) {
+    return {
+      ...item,
+      cost_price: cost,
+      price_min: nextPrice,
+      price_max: nextPrice,
+      usd_display_price_min: nextUsd,
+      usd_display_price_max: nextUsd,
+    }
+  }
+  return withListItemPriceRangesFromSkus({ ...item, cost_price: cost }, skus, usdRate)
+}
+
+const withPendingSkuPriceSummary = (
+  item: PendingImportQueueItem,
+  skus: NonNullable<PendingImportQueueItem['item_skus']>,
+  usdRate: number = DEFAULT_USD_EXCHANGE_RATE,
+): PendingImportQueueItem => {
+  const prices = skus
+    .map((sku) => (sku.price == null ? null : Number(sku.price)))
+    .filter((n): n is number => n !== null && Number.isFinite(n))
+  if (!prices.length) return { ...item, item_skus: skus }
+  const cnyMin = Math.min(...prices)
+  const cnyMax = Math.max(...prices)
+  return {
+    ...item,
+    item_skus: skus,
+    item_cnyPriceMin: cnyMin,
+    item_cnyPriceMax: cnyMax,
+    item_usdPriceMin: toUsdPreview(cnyMin, usdRate),
+    item_usdPriceMax: toUsdPreview(cnyMax, usdRate),
+  }
+}
+
 const formatProductComparableValue = (value: string | number | null, field: ProductInlineField) => {
   if (numberProductFields.has(field)) {
     const parsed = Number(String(value ?? '').trim())
@@ -430,11 +529,9 @@ type ProductFormData = Omit<BaseCreateProductInput, 'skus' | 'goods_status'> & {
 
 type BatchImportDraftPayload = NonNullable<Parameters<typeof batchImportProducts>[0]>['rows'][number]
 
-const USD_EXCHANGE_RATE = 6.5
 const SKU_SELECTION_PREFIX = 'sku:'
 
 const toCurrency = (value?: number | null) => (value === null || value === undefined || Number.isNaN(value) ? '--' : Number(value).toFixed(2))
-const toUsdPreview = (value?: number | null) => (value === null || value === undefined || Number.isNaN(value) ? null : Number((value / USD_EXCHANGE_RATE).toFixed(2)))
 const isSkuSelectionId = (value: string) => value.startsWith(SKU_SELECTION_PREFIX)
 const toSkuSelectionId = (skuId: string) => `${SKU_SELECTION_PREFIX}${skuId}`
 const fromSkuSelectionId = (value: string) => value.slice(SKU_SELECTION_PREFIX.length)
@@ -562,6 +659,7 @@ export interface ProductManagementState {
   loading: boolean
   list: ProductListItem[]
   total: number
+  usdExchangeRate: number
   categoryOptions: CategoryOption[]
   selectedIds: string[]
   currentPage: number
@@ -933,6 +1031,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   // Show spinner immediately on route mount so navigation doesn't feel frozen.
   const [loading, setLoading] = useState(true)
   const [list, setList] = useState<ProductListItem[]>([])
+  const [usdExchangeRate, setUsdExchangeRate] = useState(DEFAULT_USD_EXCHANGE_RATE)
   const [total, setTotal] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -1286,6 +1385,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       })
       setList(result.list)
       setTotal(result.total)
+      if (Number(result.usd_exchange_rate) > 0) {
+        setUsdExchangeRate(Number(result.usd_exchange_rate))
+      }
       setPublishedImportMatch(result.published_import_match || null)
       if (overrides?.clear_selection) {
         setSelectedIds([])
@@ -2615,15 +2717,20 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       cancelProductSkuInlineEdit()
       // cost_price may recalculate sell price server-side — full refresh.
       if (field === 'cost_price') {
+        setList((prev) =>
+          prev.map((item) =>
+            item.product_id === productId ? applyCostRecalcToListItem(item, Number(value), usdExchangeRate) : item,
+          ),
+        )
         await fetchList()
       } else {
         setList((prev) =>
           prev.map((item) => {
             if (item.product_id !== productId) return item
+            if (field === 'price') return applySkuSellPriceToListItem(item, skuId, Number(value), usdExchangeRate)
             const skus = (item.skus || []).map((sku) => {
               if (sku.sku_id !== skuId) return sku
               if (field === 'stock') return { ...sku, stock: Number(value) }
-              if (field === 'price') return { ...sku, price: Number(value) }
               if (field === 'weight_gram') {
                 const grams = Number(value)
                 return { ...sku, weight_gram: grams, weight_kg: Number((grams / 1000).toFixed(3)) }
@@ -2696,7 +2803,18 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       )
       const { itemId, skuKey, field } = pendingImportSkuEditingCell
       cancelPendingImportSkuInlineEdit()
-      if (field === 'cost_price') {
+      if (field === 'cost_price' || field === 'price') {
+        if (field === 'price') {
+          setPendingImportQueue((prev) =>
+            prev.map((row) => {
+              if (row.item_id !== itemId) return row
+              const skus = (row.item_skus || []).map((sku) =>
+                sku.sku_key === skuKey ? { ...sku, price: Number(value) } : sku,
+              )
+              return withPendingSkuPriceSummary(row, skus, usdExchangeRate)
+            }),
+          )
+        }
         await refreshPendingImportQueue({ silent: true })
       } else if (field === 'minimum_order_quantity') {
         setPendingImportQueue((prev) =>
@@ -2795,7 +2913,18 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const { itemId, field } = pendingImportSkuEditingCell
       const skuKeys = new Set(colorSkus.map((sku) => sku.sku_key))
       cancelPendingImportSkuInlineEdit()
-      if (field === 'cost_price') {
+      if (field === 'cost_price' || field === 'price') {
+        if (field === 'price') {
+          setPendingImportQueue((prev) =>
+            prev.map((item) => {
+              if (item.item_id !== itemId) return item
+              const skus = (item.item_skus || []).map((sku) =>
+                skuKeys.has(sku.sku_key) ? { ...sku, price: Number(value) } : sku,
+              )
+              return withPendingSkuPriceSummary(item, skus, usdExchangeRate)
+            }),
+          )
+        }
         await refreshPendingImportQueue({ silent: true })
       } else {
         setPendingImportQueue((prev) =>
@@ -2804,7 +2933,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             const skus = (item.item_skus || []).map((sku) => {
               if (!skuKeys.has(sku.sku_key)) return sku
               if (field === 'stock') return { ...sku, stock: Number(value) }
-              if (field === 'price') return { ...sku, price: Number(value) }
               if (field === 'weight_grams') return { ...sku, weight_grams: Number(value) }
               if (field === 'spec_text') return { ...sku, spec_text: String(value) }
               return sku
@@ -3813,7 +3941,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       })
       toast.success('商品信息已更新')
       // Scalar fields: patch locally. Price-affecting fields need a full list refresh.
-      if (field === 'cost_price' || field === 'price_coefficient' || field === 'category_id') {
+      if (field === 'cost_price') {
+        setList((prev) =>
+          prev.map((item) =>
+            item.product_id === productId ? applyCostRecalcToListItem(item, Number(payloadValue), usdExchangeRate) : item,
+          ),
+        )
+        await fetchList()
+      } else if (field === 'price_coefficient' || field === 'category_id') {
         await fetchList()
       } else {
         setList((prev) =>
@@ -3877,7 +4012,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       toast.success('商品信息已更新')
       const productId = inlineEditingCell.productId
       cancelInlineEdit()
-      if (field === 'cost_price' || field === 'price_coefficient' || field === 'category_id') {
+      if (field === 'cost_price') {
+        setList((prev) =>
+          prev.map((item) =>
+            item.product_id === productId ? applyCostRecalcToListItem(item, Number(payloadValue), usdExchangeRate) : item,
+          ),
+        )
+        await fetchList()
+      } else if (field === 'price_coefficient' || field === 'category_id') {
         await fetchList()
       } else {
         setList((prev) =>
@@ -4500,6 +4642,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       loading,
       list,
       total,
+      usdExchangeRate,
       categoryOptions,
       selectedIds,
       currentPage,
