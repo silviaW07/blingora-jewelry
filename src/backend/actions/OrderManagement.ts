@@ -624,40 +624,118 @@ const toUsdAmount = (amount: number, currencyCode: string | null | undefined, us
   return Math.round(amount * 100) / 100
 }
 
-function inferExcelImageExtension(contentType: string | null, url: string): 'png' | 'jpeg' | 'gif' | null {
-  const ct = String(contentType || '').toLowerCase()
-  if (ct.includes('image/png')) return 'png'
-  if (ct.includes('image/jpeg') || ct.includes('image/jpg')) return 'jpeg'
-  if (ct.includes('image/gif')) return 'gif'
-  const u = url.split('?')[0].toLowerCase()
-  if (u.endsWith('.png')) return 'png'
-  if (u.endsWith('.jpg') || u.endsWith('.jpeg')) return 'jpeg'
-  if (u.endsWith('.gif')) return 'gif'
-  // Many CDNs omit extension / serve webp; exceljs cannot embed webp — skip (URL kept in hidden col).
+function firstGalleryUrl(galleryJson: unknown): string {
+  if (!Array.isArray(galleryJson)) return ''
+  for (const entry of galleryJson) {
+    if (typeof entry === 'string' && entry.trim()) return entry.trim()
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      const url = String((entry as Record<string, unknown>).url || (entry as Record<string, unknown>).src || '').trim()
+      if (url) return url
+    }
+  }
+  return ''
+}
+
+function preferExcelThumbUrl(url: string): string {
+  const normalized = String(url || '').trim()
+  if (!normalized || normalized.startsWith('/') || normalized.startsWith('data:')) return normalized
+  try {
+    const parsed = new URL(normalized)
+    const host = parsed.hostname.toLowerCase()
+    if (host.includes('alicdn.com')) {
+      const pathName = parsed.pathname
+      if (!/_\d+x\d+/.test(pathName) && /\.(jpe?g|png|webp)$/i.test(pathName)) {
+        parsed.pathname = `${pathName}_240x240q90.jpg`
+      }
+    }
+    return parsed.toString()
+  } catch {
+    return normalized
+  }
+}
+
+function magicImageKind(buf: Buffer): 'jpeg' | 'png' | 'gif' | 'webp' | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg'
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png'
+  if (buf.length >= 6 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'gif'
+  if (
+    buf.length >= 12 &&
+    buf.toString('ascii', 0, 4) === 'RIFF' &&
+    buf.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'webp'
+  }
   return null
+}
+
+async function toExcelEmbedImage(buffer: Buffer): Promise<{ buffer: Buffer; extension: 'png' | 'jpeg' | 'gif' } | null> {
+  try {
+    const sharp = (await import('sharp')).default
+    const jpeg = await sharp(buffer)
+      .rotate()
+      .resize({ width: 240, height: 240, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer()
+    return { buffer: jpeg, extension: 'jpeg' }
+  } catch {
+    const kind = magicImageKind(buffer)
+    if (kind === 'jpeg' || kind === 'png' || kind === 'gif') {
+      if (buffer.length > 1_200_000) return null
+      return { buffer, extension: kind === 'jpeg' ? 'jpeg' : kind }
+    }
+    return null
+  }
+}
+
+async function readLocalUploadBuffer(url: string): Promise<Buffer | null> {
+  const text = String(url || '').trim()
+  let rel = ''
+  if (text.startsWith('/api/uploads/')) rel = text.slice('/api/uploads/'.length)
+  else {
+    try {
+      const parsed = new URL(text)
+      if (parsed.pathname.startsWith('/api/uploads/')) {
+        rel = parsed.pathname.slice('/api/uploads/'.length)
+      }
+    } catch {
+      return null
+    }
+  }
+  if (!rel) return null
+  const { readFile } = await import('node:fs/promises')
+  const path = await import('node:path')
+  const root = path.resolve(String(process.env.UPLOAD_DIR || '').trim() || path.join(process.cwd(), 'uploads'))
+  const target = path.resolve(root, ...rel.split('/').filter(Boolean))
+  if (target !== root && !target.startsWith(root + path.sep)) return null
+  try {
+    return await readFile(target)
+  } catch {
+    return null
+  }
 }
 
 async function tryFetchImageBuffer(url: string): Promise<{ buffer: Buffer; extension: 'png' | 'jpeg' | 'gif' } | null> {
   const normalized = String(url || '').trim()
-  if (!normalized) return null
+  if (!normalized || normalized.startsWith('data:')) return null
   try {
+    const local = await readLocalUploadBuffer(normalized)
+    if (local) return toExcelEmbedImage(local)
+
     const requestUrl = normalized.startsWith('/')
       ? new URL(
-          normalized,
+          preferExcelThumbUrl(normalized),
           process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://sourcingjewelry.com',
         ).toString()
-      : normalized
+      : preferExcelThumbUrl(normalized)
     const res = await fetch(requestUrl, {
       cache: 'no-store',
-      signal: AbortSignal.timeout(4000),
+      headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.1688.com/' },
+      signal: AbortSignal.timeout(6000),
     })
     if (!res.ok) return null
     const ab = await res.arrayBuffer()
-    if (ab.byteLength > 800_000) return null
-    const buffer = Buffer.from(ab)
-    const extension = inferExcelImageExtension(res.headers.get('content-type'), requestUrl)
-    if (!extension) return null
-    return { buffer, extension }
+    if (ab.byteLength > 4_000_000) return null
+    return toExcelEmbedImage(Buffer.from(ab))
   } catch {
     return null
   }
@@ -765,6 +843,7 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
                 id: true,
                 productCode: true,
                 mainImageUrl: true,
+                galleryJson: true,
                 costPrice: true,
                 supplierName: true,
                 source: true,
@@ -835,7 +914,11 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
           itemSizeLabel: item.sizeLabel,
         }),
         spu: item.product?.productCode || String(item.skuCode || '').split('-')[0] || '',
-        imageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl || '',
+        imageUrl:
+          item.productSku?.imageUrl ||
+          item.product?.mainImageUrl ||
+          firstGalleryUrl((item.product as { galleryJson?: unknown } | null)?.galleryJson) ||
+          '',
         originalPriceUsd,
         discountPriceUsd,
         quantity: item.quantity,
@@ -863,6 +946,7 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
           select: {
             productCode: true,
             mainImageUrl: true,
+            galleryJson: true,
             costPrice: true,
             supplierName: true,
             name: true,
@@ -902,7 +986,11 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
           itemSizeLabel: item.sizeLabel,
         }),
         spu: item.product?.productCode || String(item.skuCode || '').split('-')[0] || '',
-        imageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl || '',
+        imageUrl:
+          item.productSku?.imageUrl ||
+          item.product?.mainImageUrl ||
+          firstGalleryUrl((item.product as { galleryJson?: unknown } | null)?.galleryJson) ||
+          '',
         originalPriceUsd,
         discountPriceUsd,
         quantity: item.quantity,
@@ -1027,7 +1115,7 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
 
   // Embed procurement-sized SKU images into the "图片" column.
   const imageIdByUrl = new Map<string, number>()
-  const imageDeadline = Date.now() + 8_000
+  const imageDeadline = Date.now() + 45_000
   let embeddedCount = 0
   for (let i = 0; i < rows.length; i++) {
     const rowNumber = i + 2 // 1-based row index; row 1 is header
@@ -1036,9 +1124,10 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
     excelRow.alignment = { vertical: 'middle', wrapText: true }
 
     const imageUrl = rows[i]?.imageUrl || ''
-    if (!imageUrl || Date.now() > imageDeadline) continue
+    if (!imageUrl) continue
     let imageId = imageIdByUrl.get(imageUrl)
     if (imageId == null) {
+      if (Date.now() > imageDeadline) continue
       const img = await tryFetchImageBuffer(imageUrl)
       if (!img) continue
       imageId = workbook.addImage({
