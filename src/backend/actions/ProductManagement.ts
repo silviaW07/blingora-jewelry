@@ -696,6 +696,7 @@ import {
 } from '@/backend/lib/resolveProductTitleEn'
 import {
   autoClassifyAllProductsByPriceThreshold,
+  preloadPriceThresholdSyncContext,
   syncProductPriceThresholdRelations,
   type AutoClassifyPriceThresholdSummary,
 } from '@/backend/lib/priceThresholdAutoClassify'
@@ -705,6 +706,7 @@ import {
 } from '@/backend/lib/bulkTitleCategoryBackfill'
 import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
+import { resolveProduct1688Urls } from '@/shared/listed1688Inspect'
 import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
 import { invalidateStorefrontCatalogCaches } from '@/frontend/actions/ProductCategory'
 import {
@@ -1601,6 +1603,25 @@ async function applyCategoryCoefficient(tx: any, productId: string) {
   await recalculateProductSkuPrices(tx, productId, categoryCoefficient)
 }
 
+/** 与列表「当前系数」同一套：商品系数优先，否则主类目继承。 */
+async function resolveProductListCoefficient(tx: any, productId: string): Promise<number> {
+  const product = await tx.product.findUnique({
+    where: { id: productId },
+    include: {
+      category: { select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true } }
+    }
+  })
+  if (!product) throw new Error('商品不存在')
+  const { categoryMap } = await getCategoryMetaMap(tx, [product.categoryId])
+  const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId, product.category)
+  return resolveListDisplayCoefficient(toNumber(product.priceCoefficient), own, parent)
+}
+
+async function recalculateSkuPricesFromCurrentCost(tx: any, productId: string) {
+  const coefficient = await resolveProductListCoefficient(tx, productId)
+  await recalculateProductSkuPrices(tx, productId, coefficient)
+}
+
 function validateActivePreconditions(product: Omit<CreateProductInput, 'submit_action'>) {
   if (!product.name || product.name.trim() === '') throw new Error('商品名称不能为空')
   if (!product.category_id) throw new Error('商品分类不能为空')
@@ -2315,7 +2336,7 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
     await prisma.$transaction(async tx => {
       const { categoryMap } = await getCategoryMetaMap(tx, [input.category_id])
       const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, input.category_id)
-      const effectiveCoefficient = resolveEffectiveCoefficient(own, parent)
+      const effectiveCoefficient = resolveListDisplayCoefficient(input.price_coefficient, own, parent)
       const normalizedCostPrice = input.cost_price ?? 0
 
       await tx.product.update({
@@ -2615,6 +2636,8 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
           where: { id: input.product_id },
           data: { costPrice: nextCostPrice }
         })
+        await recalculateSkuPricesFromCurrentCost(tx, input.product_id)
+        await syncCartItemsValidState(tx, input.product_id)
         await syncProductPriceThresholdRelations(tx, input.product_id)
       })
       return { success: true }
@@ -2702,10 +2725,14 @@ export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
     if (input.field === 'cost_price') {
       const nextCost = Number(input.value)
       if (!Number.isFinite(nextCost) || nextCost < 0) throw new Error('成本价不能小于0')
-      // 列表层成本价目前挂在商品主表；更新主商品成本以便汇总展示
-      await prisma.product.update({
-        where: { id: input.product_id },
-        data: { costPrice: nextCost }
+      await prisma.$transaction(async tx => {
+        await tx.product.update({
+          where: { id: input.product_id },
+          data: { costPrice: nextCost }
+        })
+        await recalculateSkuPricesFromCurrentCost(tx, input.product_id)
+        await syncCartItemsValidState(tx, input.product_id)
+        await syncProductPriceThresholdRelations(tx, input.product_id)
       })
       return { success: true }
     }
@@ -3960,6 +3987,10 @@ export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
     if (productIds.length === 0) {
       throw new Error('请先选择需要同步的商品')
     }
+    const MAX_SYNC = 40
+    if (productIds.length > MAX_SYNC) {
+      throw new Error(`一次最多同步 ${MAX_SYNC} 件，请缩小勾选后再试`)
+    }
 
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
@@ -3967,14 +3998,15 @@ export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
         id: true,
         name: true,
         productCode: true,
-        sourceUrl: true,
         supplierName: true,
         status: true,
-        source: true
-      }
+        source: true,
+        tradeInfoJson: true,
+      },
     })
 
     const byId = new Map(products.map(item => [item.id, item]))
+    const urlByProductId = await resolveProduct1688Urls(prisma, products)
     const delisted: Sync1688StatusItem[] = []
     const out_of_stock: Sync1688StatusItem[] = []
     const normal: Sync1688StatusItem[] = []
@@ -3985,13 +4017,8 @@ export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
     const workItems = productIds
       .map((productId) => {
         const product = byId.get(productId)
-        if (!product) {
-          skipped_count += 1
-          return null
-        }
-        const sourceUrl = String(product.sourceUrl || '').trim()
-        const is1688Url = /1688\.com/i.test(sourceUrl) && /offer\/\d+/i.test(sourceUrl)
-        if (!is1688Url) {
+        const sourceUrl = urlByProductId.get(productId) || ''
+        if (!product || !sourceUrl) {
           skipped_count += 1
           return null
         }
@@ -4005,7 +4032,17 @@ export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
         const index = cursor++
         if (index >= workItems.length) return
         const { product, sourceUrl } = workItems[index]
-        const live = await check1688OfferLiveStatus(sourceUrl)
+        let live: Awaited<ReturnType<typeof check1688OfferLiveStatus>>
+        try {
+          live = await check1688OfferLiveStatus(sourceUrl)
+        } catch {
+          live = {
+            status: 'UNKNOWN',
+            reason: '探测 1688 页面失败',
+            offer_id: null,
+            offer_name: null,
+          }
+        }
         const item: Sync1688StatusItem = {
           product_id: product.id,
           product_name: product.name,
@@ -4376,28 +4413,60 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
     const scopedIds = Array.isArray(input?.product_ids)
       ? Array.from(new Set(input.product_ids.map(id => String(id || '').trim()).filter(Boolean)))
       : []
-    const [secondaryCategories, filterCategories, brandRules] = await Promise.all([
-      loadAutoMatchSecondaryCategories(prisma),
-      loadFilterCategoriesFromDb(prisma),
-      loadBrandAliasRules(),
-    ])
-    const products = await prisma.product.findMany({
-      where: {
-        status: { in: ['ACTIVE', 'DRAFT'] },
-        ...(scopedIds.length > 0 ? { id: { in: scopedIds } } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        detailText: true,
-        shortDescription: true,
-        categoryId: true,
-        brandCategoryId: true,
-        weightGram: true,
-        relationCategories: { select: { categoryId: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
-    })
+    if (scopedIds.length === 0) {
+      throw new Error('请先勾选要校准的商品')
+    }
+    const MAX_CALIBRATE = 40
+    if (scopedIds.length > MAX_CALIBRATE) {
+      throw new Error(`一次最多校准 ${MAX_CALIBRATE} 件，请缩小勾选后再试`)
+    }
+
+    let secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>
+    let filterCategories: Awaited<ReturnType<typeof loadFilterCategoriesFromDb>>
+    let brandRules: Awaited<ReturnType<typeof loadBrandAliasRules>>
+    let thresholdCtx: Awaited<ReturnType<typeof preloadPriceThresholdSyncContext>>
+    try {
+      ;[secondaryCategories, filterCategories, brandRules, thresholdCtx] = await Promise.all([
+        loadAutoMatchSecondaryCategories(prisma),
+        loadFilterCategoriesFromDb(prisma),
+        loadBrandAliasRules(),
+        preloadPriceThresholdSyncContext(prisma),
+      ])
+    } catch {
+      throw new Error('校准准备失败，请缩小勾选后重试')
+    }
+
+    let products: Array<{
+      id: string
+      name: string
+      detailText: string | null
+      shortDescription: string | null
+      categoryId: string
+      brandCategoryId: string | null
+      weightGram: unknown
+      relationCategories: Array<{ categoryId: string }>
+    }>
+    try {
+      products = await prisma.product.findMany({
+        where: {
+          status: { in: ['ACTIVE', 'DRAFT'] },
+          id: { in: scopedIds },
+        },
+        select: {
+          id: true,
+          name: true,
+          detailText: true,
+          shortDescription: true,
+          categoryId: true,
+          brandCategoryId: true,
+          weightGram: true,
+          relationCategories: { select: { categoryId: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      })
+    } catch {
+      throw new Error('校准准备失败，请缩小勾选后重试')
+    }
 
     let matched = 0
     let skipped = 0
@@ -4636,7 +4705,10 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
             },
           })
           await replaceProductCategoryRelations(tx, product.id, linkedCategoryIds)
-          await syncProductPriceThresholdRelations(tx, product.id)
+        }, { timeout: 20_000, maxWait: 10_000 })
+        await syncProductPriceThresholdRelations(prisma, product.id, {
+          ensured: thresholdCtx.ensured,
+          categoryMap: thresholdCtx.categoryMap,
         })
 
         const after = await prisma.product.findUnique({
