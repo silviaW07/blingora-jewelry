@@ -1568,15 +1568,13 @@ async function recalculateProductSkuPrices(tx: any, productId: string, coefficie
   const nextPrice = calculateSkuRmbPrice(costPrice, coefficient)
   const nextOriginalPrice = roundCurrency(nextPrice * 1.1)
 
-  for (const sku of product.skus) {
-    await tx.productsku.update({
-      where: { id: sku.id },
-      data: {
-        price: nextPrice,
-        originalPrice: nextOriginalPrice
-      }
-    })
-  }
+  await tx.productsku.updateMany({
+    where: { productId },
+    data: {
+      price: nextPrice,
+      originalPrice: nextOriginalPrice,
+    }
+  })
 
   return { nextPrice, nextOriginalPrice }
 }
@@ -2640,6 +2638,7 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
         await syncCartItemsValidState(tx, input.product_id)
         await syncProductPriceThresholdRelations(tx, input.product_id)
       })
+      invalidateStorefrontAfterCategoryBind()
       return { success: true }
     }
 
@@ -2653,6 +2652,7 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
         await syncCartItemsValidState(tx, input.product_id)
         await syncProductPriceThresholdRelations(tx, input.product_id)
       })
+      invalidateStorefrontAfterCategoryBind()
       return { success: true }
     }
 
@@ -2734,6 +2734,7 @@ export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
         await syncCartItemsValidState(tx, input.product_id)
         await syncProductPriceThresholdRelations(tx, input.product_id)
       })
+      invalidateStorefrontAfterCategoryBind()
       return { success: true }
     }
 

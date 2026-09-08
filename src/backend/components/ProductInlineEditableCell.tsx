@@ -137,8 +137,8 @@ export function ProductInlineEditableCell({
     <button
       type="button"
       className={`transition-colors hover:text-primary ${className}`}
-      title="双击编辑"
-      onDoubleClick={() => handlers.startInlineEdit(productId, field, value ?? '')}
+      title="点击编辑"
+      onClick={() => handlers.startInlineEdit(productId, field, value ?? '')}
     >
       {display}
     </button>
