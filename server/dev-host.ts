@@ -8,10 +8,8 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
-/** Prisma arg cleanup logs flood stdout under load and inflate RSS in production. */
-const PRISMA_CLEAN_LOG =
-  process.env.DEBUG_PRISMA_CLEAN === '1' ||
-  (process.env.NODE_ENV !== 'production' && process.env.DEBUG_PRISMA_CLEAN !== '0')
+/** Prisma arg cleanup logs flood stdout under load and inflate RSS. Opt-in only. */
+const PRISMA_CLEAN_LOG = process.env.DEBUG_PRISMA_CLEAN === '1'
 function prismaCleanLog(message: string): void {
   if (PRISMA_CLEAN_LOG) console.log(message)
 }
@@ -1383,6 +1381,19 @@ const app = express()
 app.use(cors({
   exposedHeaders: ['X-Auth-Role']  // 允许前端读取这个响应头
 }))
+
+const PORT = process.env.PORT || 3100
+// Register before the RPC router so a wedged action cannot starve probes.
+app.get('/healthz', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: 'rpc',
+    port: Number(PORT),
+    pid: process.pid,
+    uptimeSec: Math.round(process.uptime()),
+  })
+})
+
 // 12mb: browser-captured 1688 offer HTML routinely exceeds the 100kb default.
 // Route-level express.json({ limit }) does not override this global parser.
 app.use(express.json({ limit: '12mb' }))
@@ -1417,18 +1428,6 @@ try {
 } catch (e) {
   console.log('[DEV] Third-party auth not available:', (e as Error).message)
 }
-
-const PORT = process.env.PORT || 3100
-
-app.get('/healthz', (_req, res) => {
-  res.status(200).json({
-    ok: true,
-    service: 'rpc',
-    port: Number(PORT),
-    pid: process.pid,
-    uptimeSec: Math.round(process.uptime()),
-  })
-})
 
 // === Browser-captured 1688 HTML intake ===
 // 1688 only serves offer HTML to a real browser (TLS fingerprint + captcha gate),
@@ -1675,9 +1674,8 @@ app.post('/ingest/1688-expand-category', express.json({ limit: '2mb' }), async (
 })
 
 app.listen(PORT, () => {
-  prismaCleanLog(`[DEV] RPC Server running at http://localhost:${PORT}`)
-  prismaCleanLog(`[DEV] RPC endpoint: http://localhost:${PORT}${routePath}`)
-  prismaCleanLog(`[DEV] healthz: http://localhost:${PORT}/healthz`)
+  console.log(`[DEV] RPC Server running at http://localhost:${PORT}`)
+  console.log(`[DEV] healthz: http://localhost:${PORT}/healthz`)
   console.log(
     `[DEV] 1688 HTML intake: ${
       INGEST_TOKEN

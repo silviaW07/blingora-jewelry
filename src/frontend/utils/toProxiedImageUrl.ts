@@ -39,7 +39,10 @@ export function withAlicdnSize(url: string, width = 1200, quality = 90): string 
   const q = query ? `?${query}` : ''
 
   // /img-proxy/cbu01/...jpg  or absolute alicdn ...jpg
+  // 256 这类中间尺寸（尤其再加 q70）在 cbu01 上经常 404 成一张 gif，后台缩略图整列裂开。
+  // 200 和 400 已核对可用。
   if (/\.(jpe?g|png|webp)$/i.test(pathPart)) {
+    if (width < 400) return `${pathPart}_200x200.jpg${q}`
     return `${pathPart}_${width}x${width}q${quality}.jpg${q}`
   }
   return base
@@ -124,7 +127,7 @@ function withUploadThumb(url: string, width: number, quality: number): string | 
       parsed.searchParams.delete('w')
       parsed.searchParams.delete('q')
     } else {
-      parsed.searchParams.set('w', String(Math.min(1600, Math.max(80, Math.round(width)))))
+      parsed.searchParams.set('w', String(Math.min(1920, Math.max(80, Math.round(width)))))
       parsed.searchParams.set(
         'q',
         String(Math.min(90, Math.max(40, Math.round(quality)))),

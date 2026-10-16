@@ -22,7 +22,17 @@ export function isPlaceholderPendingImportTitle(name?: string | null): boolean {
 export function isPlaceholderPendingImportImage(url?: string | null): boolean {
   const normalized = String(url ?? '').trim()
   if (!normalized) return true
-  return /images\.unsplash\.com/i.test(normalized) || /photo-1581091226825-a6a2a5aee158/i.test(normalized)
+  const lower = normalized.toLowerCase()
+  if (/images\.unsplash\.com/i.test(lower) || /photo-1581091226825-a6a2a5aee158/i.test(lower)) return true
+  if (/images\.pexels\.com/i.test(lower)) return true
+  if (/\.svg(?:$|[?#])/i.test(lower)) return true
+  if (/\/category-covers\/placeholder/i.test(lower)) return true
+  // 阿里巴巴 TFS 多为默认头像 / UI 资源，不是商品图
+  if (/img\.alicdn\.com\/tfs\//i.test(lower)) return true
+  if (/(?:^|[/_-])(?:no[_-]?pic|nopic|nopicture|default[_-]?img|default[_-]?pic|placeholder|avatar)(?:[_./?#-]|$)/i.test(lower)) {
+    return true
+  }
+  return false
 }
 
 function firstRealImageUrl(snapshot: PendingImportReadinessSnapshot): string | null {

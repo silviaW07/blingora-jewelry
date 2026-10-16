@@ -35,16 +35,34 @@ import { filterDescriptionParamsByWhitelist } from '@/shared/productSpecWhitelis
 import { compareSizeLabels } from '@/utils/sortSizeLabels';
 import { imageUrlsMatch } from '@/frontend/utils/toProxiedImageUrl';
 import { isColorDimensionName } from '@/shared/tableImportSpec';
+import { isColorNameSpecValue, isProductTypeSpecValue } from '@/shared/skuDisplayGuards';
 import { polishStorefrontProductTitle } from '@/frontend/i18n/productTranslation';
+import { AddedToCartPanel } from '@/frontend/components/AddedToCartPanel';
 
 function displayColorLabel(
   t: ReturnType<typeof useTranslation>['t'],
   raw?: string | null,
   index?: number,
 ) {
+  const original = String(raw || '').trim()
   const translated = translateColorName(t, raw)
-  const junk = !translated || /[（）]/.test(translated) || /gift\s*bag/i.test(translated)
-  if (!junk) return translated
+  const volumeOnly = /^\d+(?:\.\d+)?\s*(?:ml|oz|l)$/i.test(String(translated || '').trim())
+  // 剥中文只剩容量时，用原名（详情接口会再整句翻译成英文）。
+  if (volumeOnly && /[\u4e00-\u9fff]/.test(original)) {
+    const matched = original.match(/^(.*?)(\d+(?:\.\d+)?\s*(?:ml|oz|l))\s*$/i)
+    const name = matched?.[1]?.replace(/[-–—_#\s]+$/g, '').trim()
+    const volume = matched?.[2]?.replace(/\s+/g, '').replace(/ML/gi, 'ml')
+    if (name && volume) {
+      const safeName = /[\u4e00-\u9fff]/.test(name) ? translateColorName(t, name) : name
+      if (safeName && !/[\u4e00-\u9fff]/.test(safeName)) return `${safeName} ${volume}`
+    }
+  }
+  if (translated && !/[\u4e00-\u9fff]/.test(translated)) {
+    const junk =
+      /[（）]/.test(translated) ||
+      /gift\s*bag/i.test(translated)
+    if (!junk) return translated
+  }
   const fallback = t('product.optionFallback', { defaultValue: 'Option' })
   return typeof index === 'number' ? `${fallback} ${index + 1}` : fallback
 }
@@ -187,9 +205,9 @@ const withStorefrontHeader = (content: React.ReactNode) => (
 );
 
 const formatUsd = (price?: number | null) => {
-  if (typeof price !== 'number' || Number.isNaN(price)) return 'US$ --';
+  if (typeof price !== 'number' || Number.isNaN(price) || price <= 0) return 'US$ --';
   const text = price.toFixed(2).replace(/\.?0+$/, '');
-  return `US$ ${text || '0'}`;
+  return `US$ ${text || '--'}`;
 };
 
 const formatUsdParts = (price?: number | null) => {
@@ -222,6 +240,7 @@ const isSizeAttributeName = (name?: string | null) => {
     normalized === '尺寸' ||
     normalized === '码数' ||
     normalized === '规格' ||
+    normalized === '規格' ||
     normalized === 'size' ||
     normalized === 'spec' ||
     normalized === 'sizing'
@@ -318,6 +337,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     productMinOrderQty,
     supportsMixedBatch,
     detailPreview,
+    addedCartLines,
   } = state
   const siteWideCoef = product?.pricingMeta?.siteWideCoefficient ?? null
   const displayName =
@@ -329,6 +349,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     handleSkuQuantityChange,
     handleColorSelect,
     handleAddToCart,
+    dismissAddedCart,
     handleRelatedClick,
     setActiveImage,
     getSkuLineQuantity,
@@ -377,7 +398,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           ? {
               value,
               sku: representativeSku,
-              imageUrl: representativeSku.imageUrl || product.mainImageUrl || '',
+              imageUrl: representativeSku.imageUrl || '',
             }
           : null
       })
@@ -444,80 +465,85 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const sizeName = sizeAttributeGroup?.name
     const colorName = colorAttributeGroup?.name
     const defaultLabel = t('product.defaultSpec')
-    const isPlaceholderSpec = (value?: string | null) =>
-      /^(默认|默认规格|default|standard|n\/a|none|—|－)?$/i.test(String(value || '').trim())
+    const isPlaceholderSpec = (value?: string | null) => {
+      const text = String(value || '').trim()
+      if (isProductTypeSpecValue(text)) return true
+      return /^(默认|默认规格|default|standard|n\/a|none|—|－)?$/i.test(text)
+    }
 
     const computeLabelForSku = (sku: ProductSkuData): string => {
       const fromSize = sizeName ? getSkuAttributeValue(sku, sizeName) : ''
-      if (fromSize && !isPlaceholderSpec(fromSize)) return fromSize
+      if (fromSize && !isPlaceholderSpec(fromSize) && !isColorNameSpecValue(fromSize)) return fromSize
       const label = getSpecDisplayLabel(sku, {
         sizeAttributeName: sizeName,
         colorAttributeName: colorName,
         currentColorValue: selectedColorValue || undefined,
         defaultLabel,
       })
-      return isPlaceholderSpec(label) ? defaultLabel : label
+      if (isPlaceholderSpec(label) || isColorNameSpecValue(label)) return defaultLabel
+      return label
     }
 
-    // Color selected, no dedicated size axis: still list every SKU of that color
-    // (bags/jewelry often keep size in sizeLabel / 规格 / variantLabel).
-    if (colorName && !sizeName) {
-      const colorValue = selectedColorValue || colorAttributeGroup?.values[0] || ''
-      if (!colorValue) return []
-      const matched = product.skus.filter((sku) =>
-        attrEquals(getSkuAttributeValue(sku, colorName), colorValue),
-      )
-      if (matched.length === 0) return []
-      const byKey = new Map<string, { label: string; sku: ProductSkuData }>()
-      for (const sku of matched) {
-        const label = computeLabelForSku(sku)
-        const key = `${label}::${sku.id}`
-        if (!byKey.has(key)) byKey.set(key, { label, sku })
-      }
-      return Array.from(byKey.entries()).map(([key, v]) => ({
-        key,
-        label: v.label,
-        sku: v.sku,
-        orderLabel: v.label,
-      }))
-    }
+    const normalizeSpecKey = (value: string) =>
+      String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/副本\d*$/u, '') || '__default__'
 
-    const byKey = new Map<
-      string,
-      {
-        orderLabel: string
-        displayLabel: string
-        sku: ProductSkuData
-      }
-    >()
-
-    for (const sku of product.skus) {
+    const sourceSkus = product.skus.filter((sku) => {
       if (selectedColorValue && colorName) {
-        if (!attrEquals(getSkuAttributeValue(sku, colorName), selectedColorValue)) continue
+        return attrEquals(getSkuAttributeValue(sku, colorName), selectedColorValue)
       }
+      if (colorName && !selectedColorValue) return false
+      return true
+    })
 
-      const orderLabel =
-        sizeName && (!selectedColorValue || colorName)
-          ? getSkuAttributeValue(sku, sizeName) || computeLabelForSku(sku)
-          : computeLabelForSku(sku)
-
-      if (!orderLabel || isPlaceholderSpec(orderLabel)) continue
-
-      const key = orderLabel.trim()
+    const byKey = new Map<string, { label: string; sku: ProductSkuData; orderLabel: string }>()
+    for (const sku of sourceSkus) {
+      const label = computeLabelForSku(sku)
+      const key = isPlaceholderSpec(label) || isColorNameSpecValue(label)
+        ? '__default__'
+        : normalizeSpecKey(label)
       if (!byKey.has(key)) {
-        byKey.set(key, { orderLabel: key, displayLabel: key, sku })
+        byKey.set(key, { label, sku, orderLabel: label })
       }
     }
 
     return Array.from(byKey.entries())
       .map(([key, v]) => ({
         key,
-        label: v.displayLabel,
+        label: v.label,
         sku: v.sku,
         orderLabel: v.orderLabel,
       }))
       .sort((a, b) => compareSizeLabels(a.orderLabel, b.orderLabel))
   }, [product, colorAttributeGroup, sizeAttributeGroup, selectedColorValue, t])
+
+  const isFakeSpecLabel = (label?: string | null) => {
+    const text = String(label || '').trim()
+    if (!text) return true
+    if (isProductTypeSpecValue(text) || isColorNameSpecValue(text)) return true
+    return /^(默认|默认规格|default|standard|n\/a|none|option|optiontion)$/i.test(text)
+  }
+
+  const realSpecRowCount = specListRows.filter((row) => !isFakeSpecLabel(row.label)).length
+  const showSpecOptionList = realSpecRowCount >= 1
+
+  const colorOnlyRow = useMemo(() => {
+    if (showSpecOptionList || !product) return null
+    if (colorAttributeGroup && !selectedColorValue) return null
+    if (specListRows[0]) return specListRows[0]
+    const colorName = colorAttributeGroup?.name
+    const sku =
+      (colorName && selectedColorValue
+        ? product.skus.find((item) =>
+            attrEquals(getSkuAttributeValue(item, colorName), selectedColorValue),
+          )
+        : product.skus[0]) || null
+    if (!sku) return null
+    return { key: sku.id, label: selectedColorValue || '', sku }
+  }, [showSpecOptionList, product, specListRows, colorAttributeGroup, selectedColorValue])
 
   const renderSpecRow = (row: { key: string; label: string; sku: ProductSkuData }) => {
     const { sku, label: specLabel } = row
@@ -526,7 +552,10 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
     const priceShown = applySiteWideDisplay(sku.price, siteWideCoef)
     const priceParts = formatUsdParts(priceShown.sale)
     const rawModelLabel = specLabel || sku.variantLabel || sku.skuCode
-    const modelLabel = translateAttributeValue(t, rawModelLabel) || rawModelLabel
+    const modelLabel = (translateAttributeValue(t, rawModelLabel) || rawModelLabel).replace(
+      /([*×x/])/g,
+      '$1\u200b',
+    )
     const canDecrease = supportsMixedBatch ? qty > 0 : qty > lineMoq
 
     return (
@@ -657,6 +686,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
 
   return withStorefrontHeader(
       <div className="product-detail-page bg-[#FFF5F5] text-[#111111]" data-controller-name="B2B商品详情布局">
+      <AddedToCartPanel lines={addedCartLines} onClose={dismissAddedCart} />
       <div className="storefront-container py-5">
         <div className="product-detail-layout">
           {/* 桌面：主图+描述同一左列；手机：display:contents 后描述可排到价格后 */}
@@ -744,22 +774,30 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                   <div>
                     <StorePrice className="text-[22px] font-bold leading-none sm:text-[26px]">
                       {(() => {
-                        const listMin = selectedSku ? selectedSku.price : product.priceMin
-                        const listMax = selectedSku ? selectedSku.price : product.priceMax
+                        const specPrices = specListRows
+                          .map((row) => row.sku.price)
+                          .filter((price) => typeof price === 'number' && price > 0)
+                        const rangePrices =
+                          specPrices.length > 0
+                            ? specPrices
+                            : [product.priceMin, product.priceMax].filter((price) => price > 0)
+                        const listMin = rangePrices.length ? Math.min(...rangePrices) : product.priceMin
+                        const listMax = rangePrices.length ? Math.max(...rangePrices) : product.priceMax
+                        const showRange = listMax > listMin + 0.009
                         const saleMin = applySiteWideDisplay(listMin, siteWideCoef)
                         const saleMax = applySiteWideDisplay(listMax, siteWideCoef)
                         return (
                           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[22px] font-bold leading-none text-[#111] sm:text-[26px]">
                             <span>
-                              {selectedSku
-                                ? formatUsd(saleMin.sale)
-                                : formatUsdRange(saleMin.sale, saleMax.sale)}
+                              {showRange
+                                ? formatUsdRange(saleMin.sale, saleMax.sale)
+                                : formatUsd(saleMin.sale)}
                             </span>
                             {saleMin.original != null ? (
                               <del className="text-[15px] font-semibold text-[#e11d48] sm:text-[16px]">
-                                {selectedSku
-                                  ? formatUsd(saleMin.original)
-                                  : formatUsdRange(product.priceMin, product.priceMax)}
+                                {showRange
+                                  ? formatUsdRange(saleMin.original, saleMax.original ?? saleMax.sale)
+                                  : formatUsd(saleMin.original)}
                               </del>
                             ) : null}
                           </p>
@@ -797,20 +835,21 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                               <ColorSwatchButton
                                 key={swatch.value}
                                 colorLabel={displayColorLabel(t, swatch.value, swatchIndex)}
-                                previewUrl={swatch.imageUrl || product.mainImageUrl || ''}
+                                previewUrl={swatch.imageUrl || ''}
                                 isSelected={attrEquals(selectedColorValue, swatch.value)}
                                 isPurchasable={isPurchasable}
                                 priority={swatchIndex < 4}
                                 onSelect={() => {
                                   handleColorSelect(swatch.value, swatch.imageUrl)
                                 }}
-                                onPreheat={() => preheatMainImage(swatch.imageUrl || product.mainImageUrl)}
+                                onPreheat={() => preheatMainImage(swatch.imageUrl)}
                               />
                             ))}
                           </div>
                         </div>
                       </div>
 
+                      {showSpecOptionList ? (
                       <div
                         className={cn(
                           'rounded-[8px] transition',
@@ -840,9 +879,27 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           )}
                         </div>
                       </div>
+                      ) : colorOnlyRow ? (
+                        <div className="product-sku-list">
+                          {renderSpecRow({
+                            ...colorOnlyRow,
+                            label: !isFakeSpecLabel(colorOnlyRow.label)
+                              ? colorOnlyRow.label
+                              : selectedColorValue
+                                ? displayColorLabel(t, selectedColorValue)
+                                : colorOnlyRow.label,
+                          })}
+                        </div>
+                      ) : (
+                        <div className="px-2 py-6 text-center text-sm text-[#888]">
+                          {t('product.selectColorFirst', { defaultValue: 'Please select a color first' })}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded-[8px]">
+                      {showSpecOptionList ? (
+                        <>
                       <div className="product-size-options-head mb-2 text-sm">
                         <span className="font-semibold text-[#111]">{specListTitle}</span>
                         <span className="product-size-options-count">
@@ -857,6 +914,19 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       >
                         {specListRows.map((row) => renderSpecRow(row))}
                       </div>
+                        </>
+                      ) : colorOnlyRow ? (
+                        <div className="product-sku-list">
+                          {renderSpecRow({
+                            ...colorOnlyRow,
+                            label: !isFakeSpecLabel(colorOnlyRow.label)
+                              ? colorOnlyRow.label
+                              : selectedColorValue
+                                ? displayColorLabel(t, selectedColorValue)
+                                : colorOnlyRow.label,
+                          })}
+                        </div>
+                      ) : null}
                     </div>
                   )}
 
@@ -955,6 +1025,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         ) : null}
                       </div>
                     ) : null}
+                    <div className="product-detail-add-bar">
                     {String(session?.token || '').trim() ? (
                     <button
                       type="button"
@@ -988,6 +1059,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                       {t('product.addToCart')}
                     </a>
                     )}
+                    </div>
                   </div>
                 </div>
             </div>

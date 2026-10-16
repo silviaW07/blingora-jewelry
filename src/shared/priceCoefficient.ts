@@ -150,16 +150,15 @@ export function pickFrontPricingCategoryCoeffs(input: {
 }
 
 /**
- * Front selling RMB.
- * Prefer each SKU's stored selling price (admin / import per-variant RMB).
- * Only when SKU price is missing/zero, fall back to cost × category coefficient.
- *
- * Previously always using cost×coeff when cost existed flattened every variant to the
- * same USD on the storefront, even when admin SKU rows had different prices.
+ * Front selling RMB follows the same number admin shows:
+ *   cost × current coefficient (product override → L2 → L1 → default)
+ * Stored SKU.price is only used when cost is missing.
+ * Category coefficient changes therefore show up immediately without rewriting SKUs.
  */
 export function resolveFrontRmbSellingPrice(options: {
   skuPriceRmb: number
   costPrice?: unknown
+  productCoefficient?: unknown
   ownCoefficient?: unknown
   ownCategoryName?: string | null
   ownIsBrandCategory?: boolean | null
@@ -184,17 +183,21 @@ export function resolveFrontRmbSellingPrice(options: {
     typeof options.skuPriceRmb === 'number' && Number.isFinite(options.skuPriceRmb)
       ? options.skuPriceRmb
       : 0
-  if (skuPrice > 0) {
-    return Number(skuPrice.toFixed(2))
-  }
-
   const cost = toDecimalNumber(options.costPrice)
+  const productCoeff = toDecimalNumber(options.productCoefficient)
   const coefficient = resolveCategoryPriceCoefficient(
-    ownBlocked ? null : toDecimalNumber(options.ownCoefficient),
+    productCoeff != null && productCoeff > 0
+      ? productCoeff
+      : ownBlocked
+        ? null
+        : toDecimalNumber(options.ownCoefficient),
     parentBlocked ? null : toDecimalNumber(options.parentCoefficient),
   )
   if (cost !== null && cost > 0) {
     return Number((cost * coefficient).toFixed(2))
+  }
+  if (skuPrice > 0) {
+    return Number(skuPrice.toFixed(2))
   }
   return 0
 }

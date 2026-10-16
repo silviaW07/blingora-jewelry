@@ -53,10 +53,10 @@ export function BatchRemoveTitleSuffixControl({
   const loadOptions = useCallback(async () => {
     setOptionsLoading(true)
     try {
-      const data = await listSuffixConfigs()
+      const data = await listSuffixConfigs({ __rpcTimeoutMs: 8_000 } as any)
       setOptions(Array.isArray(data) ? data : [])
     } catch (err: any) {
-      toast.error(err?.message || '获取后缀列表失败')
+      if (options.length === 0) toast.error(err?.message || '获取后缀列表失败')
     } finally {
       setOptionsLoading(false)
     }

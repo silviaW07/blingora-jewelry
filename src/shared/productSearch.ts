@@ -23,6 +23,29 @@ export function tokenizeProductSearch(raw?: string | null): string[] {
   return tokens
 }
 
+export function escapeSearchRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** MySQL REGEXP: whole latin token so `set` does not match `closet`. */
+export function mysqlTokenWordRegexp(token: string): string {
+  const escaped = escapeSearchRegExp(String(token || '').toLowerCase())
+  return `(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`
+}
+
+/**
+ * Short tokens (set / box / bag) must be whole words.
+ * Longer tokens keep historical substring contains ("handbags" ~ "handbag").
+ */
+export function tokenHitsSearchCorpus(corpus: string, token: string): boolean {
+  const needle = String(token || '').toLowerCase()
+  if (!needle) return true
+  if (!corpus) return false
+  if (needle.length >= 4) return corpus.includes(needle)
+  const escaped = escapeSearchRegExp(needle)
+  return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, 'i').test(corpus)
+}
+
 /** Collect plain-text fields from translationsJson for search. */
 export function collectTranslationSearchTexts(raw: unknown): string[] {
   if (!raw || typeof raw !== 'object') return []
@@ -85,7 +108,7 @@ export function productMatchesSearchTokens(
     .filter(Boolean)
     .join('\n')
   if (!corpus) return false
-  return tokens.every((token) => corpus.includes(token))
+  return tokens.every((token) => tokenHitsSearchCorpus(corpus, token))
 }
 
 /**
@@ -105,6 +128,7 @@ export function buildProductSearchWhereClause(
       { shortDescription: { contains: token } },
       { productCode: { contains: token } },
       { slug: { contains: token } },
+      { translationsJson: { string_contains: token } },
       { skus: { some: { skuCode: { contains: token } } } },
       { brandCategory: { name: { contains: token } } },
       { category: { name: { contains: token } } },

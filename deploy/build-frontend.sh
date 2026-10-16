@@ -34,11 +34,19 @@ fi
 unset NEXT_PUBLIC_IMAGE_UPLOAD_URL || true
 export NEXT_PUBLIC_IMAGE_UPLOAD_URL=
 
-echo "==> git pull"
-git pull --ff-only || git pull
+if [[ "${SKIP_PULL:-0}" != "1" ]]; then
+  echo "==> git pull"
+  git pull --ff-only || git pull
+else
+  echo "==> SKIP_PULL=1 -> skipping git pull"
+fi
 
-echo "==> pnpm install"
-pnpm install --frozen-lockfile || pnpm install
+if [[ "${SKIP_INSTALL:-0}" != "1" ]]; then
+  echo "==> pnpm install"
+  pnpm install --frozen-lockfile || pnpm install
+else
+  echo "==> SKIP_INSTALL=1 -> skipping pnpm install"
+fi
 
 echo "==> clean .next"
 rm -rf .next

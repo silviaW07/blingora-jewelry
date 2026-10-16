@@ -6,6 +6,8 @@ export const getUserList = (...args: Parameters<Actions["getUserList"]>) =>
   rpcCall<Awaited<ReturnType<Actions["getUserList"]>>>("src.backend.actions.UserManagement.getUserList", ...args);
 export const getUserDetail = (...args: Parameters<Actions["getUserDetail"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getUserDetail"]>>>("src.backend.actions.UserManagement.getUserDetail", ...args);
+export const updateUserVipDiscount = (...args: Parameters<Actions["updateUserVipDiscount"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateUserVipDiscount"]>>>("src.backend.actions.UserManagement.updateUserVipDiscount", ...args);
 export const updateUserAdminNote = (...args: Parameters<Actions["updateUserAdminNote"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateUserAdminNote"]>>>("src.backend.actions.UserManagement.updateUserAdminNote", ...args);
 export const updateUserCustomerType = (...args: Parameters<Actions["updateUserCustomerType"]>) => 

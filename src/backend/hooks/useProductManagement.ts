@@ -1,6 +1,10 @@
 'use client'
+import { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent, createElement } from 'react'
 import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
 import { calculateCostLinkedSellPrices, resolveDisplayedPriceCoefficient } from '@/shared/priceCoefficient'
+import { isPlaceholderSpecValue, sanitizePendingSkuCopyLabels } from '@/shared/skuDisplayGuards'
+import { applyPendingSkuSummaryToDrafts, parsePendingSkuSummaryEntries } from '@/shared/pendingSkuSummary'
+import { appendTitleSuffixIfMissing, removeTitleSuffixesIfPresent } from '@/shared/titleSuffix'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductManagement, ImportFrom1688 } from '@/backend/route-params'
 import {
@@ -30,6 +34,7 @@ import {
   createPendingImportTaskForProductManagement,
   retryPendingImportTaskForProductManagement,
   getPendingImportQueue,
+  setPendingImportReviewMark,
   inlineUpdatePendingImportItemField,
   batchUpdatePendingImportItemField,
   inlineUpdatePendingImportSkuField,
@@ -189,7 +194,7 @@ interface PendingImportTaskForm {
   urls: string
   defaultCategoryId: string
   defaultStatus: ProductStatus
-  costDeductionUsd: string
+  supplierName: string
   stockStrategyStock: string
 }
 
@@ -248,7 +253,7 @@ const defaultPendingImportTaskForm = (): PendingImportTaskForm => ({
   urls: '',
   defaultCategoryId: '',
   defaultStatus: 'DRAFT',
-  costDeductionUsd: '0',
+  supplierName: '',
   stockStrategyStock: '1'
 })
 
@@ -264,6 +269,96 @@ const is1688ImportedProductName = (value?: string | null) => {
 const normalizePendingImportNumberField = (value: PendingImportFieldValue) => {
   const parsed = Number(String(value ?? '').trim())
   return Number.isFinite(parsed) ? parsed : null
+}
+
+const PENDING_SKU_TEXT_FIELDS = new Set<PendingImportSkuEditableField>(['spec_text', 'color', 'spec'])
+const PENDING_SKU_SPEC_ATTR_NAMES = ['规格', '尺码', '尺寸']
+
+const uniquePendingImageUrls = (urls: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const url of urls) {
+    const value = String(url || '').trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    out.push(value)
+  }
+  return out
+}
+
+const recoverPendingImportGalleryUrls = (
+  item: PendingImportQueueItem,
+  local?: PendingImportQueueItem | null,
+  persistable: string[] = [],
+): string[] => {
+  const localGallery = local?.item_galleryUrls || []
+  const serverGallery = item.item_galleryUrls || []
+  let gallery = persistable
+  if (localGallery.length > gallery.length) gallery = localGallery
+  if (serverGallery.length > gallery.length) gallery = serverGallery
+  gallery = uniquePendingImageUrls(gallery)
+  if (gallery.length <= 1) {
+    const skuUrls = [
+      ...(local?.item_skus || []),
+      ...(item.item_skus || []),
+    ].map((sku) => sku.image_url)
+    const expanded = uniquePendingImageUrls([...gallery, ...skuUrls])
+    if (expanded.length > gallery.length) gallery = expanded
+  }
+  return gallery
+}
+
+const readPendingSkuColor = (sku: PendingImportSkuDraftItem) =>
+  sku.attributes?.find((attr) => attr.name === '颜色')?.value?.trim() || '默认颜色'
+
+const readPendingSkuSpec = (sku: PendingImportSkuDraftItem) => {
+  const spec = sku.attributes?.find((attr) => PENDING_SKU_SPEC_ATTR_NAMES.includes(attr.name))?.value?.trim() || ''
+  return isPlaceholderSpecValue(spec) ? '' : spec
+}
+
+const readPendingSkuField = (sku: PendingImportSkuDraftItem, field: PendingImportSkuEditableField, item?: PendingImportQueueItem) => {
+  if (field === 'color') return readPendingSkuColor(sku)
+  if (field === 'spec') return readPendingSkuSpec(sku)
+  if (field === 'spec_text') return sku.spec_text
+  if (field === 'cost_price') return String(sku.cost_price ?? '')
+  if (field === 'price') return String(sku.price ?? '')
+  if (field === 'weight_grams') return String(sku.weight_grams ?? '')
+  if (field === 'minimum_order_quantity') return String(item?.item_minimumOrderQuantity ?? '')
+  if (field === 'image_url') return sku.image_url ?? ''
+  return String(sku.stock ?? '')
+}
+
+const patchPendingSkuField = (
+  sku: PendingImportSkuDraftItem,
+  field: PendingImportSkuEditableField,
+  value: string | number,
+): PendingImportSkuDraftItem => {
+  if (field === 'stock') return { ...sku, stock: Number(value) }
+  if (field === 'price') return { ...sku, price: Number(value) }
+  if (field === 'weight_grams') return { ...sku, weight_grams: Number(value) }
+  if (field === 'cost_price') return { ...sku, cost_price: Number(value) }
+  if (field === 'spec_text') return { ...sku, spec_text: String(value) }
+  if (field === 'color' || field === 'spec') {
+    const attributes = (Array.isArray(sku.attributes) ? sku.attributes : []).map((attr) => ({ ...attr }))
+    if (field === 'color') {
+      const index = attributes.findIndex((attr) => attr.name === '颜色')
+      if (index >= 0) attributes[index] = { ...attributes[index], value: String(value) }
+      else attributes.unshift({ name: '颜色', value: String(value) })
+    } else {
+      const nextSpec = String(value || '').trim()
+      const index = attributes.findIndex((attr) => PENDING_SKU_SPEC_ATTR_NAMES.includes(attr.name))
+      if (!nextSpec) {
+        if (index >= 0) attributes.splice(index, 1)
+      } else if (index >= 0) attributes[index] = { ...attributes[index], value: nextSpec }
+      else attributes.push({ name: '规格', value: nextSpec })
+    }
+    return {
+      ...sku,
+      attributes,
+      spec_text: attributes.map((attr) => attr.value).filter(Boolean).join(' / ') || String(value),
+    }
+  }
+  return sku
 }
 
 const getPendingImportFieldValue = (item: PendingImportQueueItem, field: PendingImportEditableField): PendingImportFieldValue => {
@@ -480,6 +575,76 @@ const withPendingSkuPriceSummary = (
     item_usdPriceMin: toUsdPreview(cnyMin, usdRate),
     item_usdPriceMax: toUsdPreview(cnyMax, usdRate),
   }
+}
+
+const applyPendingImportLocalField = (
+  item: PendingImportQueueItem,
+  field: PendingImportEditableField,
+  payloadValue: PendingImportFieldValue,
+  usdRate: number,
+): PendingImportQueueItem => {
+  if (field === 'product_name') {
+    const name = String(payloadValue || '')
+    return { ...item, item_productName: name, item_parsedName: name }
+  }
+  if (field === 'product_detail') return { ...item, item_productDetail: String(payloadValue || '') }
+  if (field === 'sku_summary_text') {
+    const text = String(payloadValue || '')
+    const skus = item.item_skus || []
+    const nextSkus = applyPendingSkuSummaryToDrafts(skus, parsePendingSkuSummaryEntries(text))
+    return { ...item, item_skuSummaryText: text, item_skus: nextSkus }
+  }
+  if (field === 'supplier_name') return { ...item, item_supplierName: String(payloadValue || '') || null }
+  if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
+  if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
+  if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
+  if (field === 'coefficient') {
+    const coeff = Number(payloadValue)
+    const skus = (item.item_skus || []).map((sku) => {
+      const cost = Number(sku.cost_price)
+      if (!Number.isFinite(cost)) return sku
+      return { ...sku, price: Math.round(cost * coeff * 100) / 100 }
+    })
+    return withPendingSkuPriceSummary({ ...item, item_coefficient: coeff, item_skus: skus }, skus, usdRate)
+  }
+  if (field === 'cost_price') {
+    const cost = Number(payloadValue)
+    const coeff = Number(item.item_coefficient || 1)
+    const skus = (item.item_skus || []).map((sku) => ({
+      ...sku,
+      cost_price: cost,
+      price: Math.round(cost * coeff * 100) / 100,
+    }))
+    return withPendingSkuPriceSummary({ ...item, item_costPrice: cost, item_skus: skus }, skus, usdRate)
+  }
+  if (field === 'cny_price_min' || field === 'cny_price_max') {
+    const price = Number(payloadValue)
+    const skus = (item.item_skus || []).map((sku) => ({ ...sku, price }))
+    return withPendingSkuPriceSummary(
+      {
+        ...item,
+        item_cnyPriceMin: field === 'cny_price_min' ? price : item.item_cnyPriceMin,
+        item_cnyPriceMax: field === 'cny_price_max' ? price : item.item_cnyPriceMax,
+        item_skus: skus,
+      },
+      skus,
+      usdRate,
+    )
+  }
+  if (field === 'usd_price_min') return { ...item, item_usdPriceMin: Number(payloadValue) }
+  if (field === 'usd_price_max') return { ...item, item_usdPriceMax: Number(payloadValue) }
+  if (field === 'weight_grams') {
+    const grams = Number(payloadValue)
+    return {
+      ...item,
+      item_weightGrams: grams,
+      item_skus: (item.item_skus || []).map((sku) => ({ ...sku, weight_grams: grams })),
+    }
+  }
+  if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
+  if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
+  if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
+  return item
 }
 
 const formatProductComparableValue = (value: string | number | null, field: ProductInlineField) => {
@@ -752,6 +917,8 @@ export interface ProductManagementState {
   shouldShowPendingImportLanding: boolean
   shouldShowPublishedDraftLanding: boolean
   pendingImportSelectedIds: string[]
+  pendingImportSelectedSkuKeys: string[]
+  pendingImportReviewSavingIds: string[]
   /** Shared clock for pending readiness heuristics (avoids per-row intervals). */
   pendingImportNowMs: number
   pendingImportInlineEditingCell: PendingImportEditableCell | null
@@ -876,9 +1043,18 @@ export interface ProductManagementHandlers {
   replaceBatchImportImage: (rowIndex: number, imageIndex: number, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   removeBatchImportImage: (rowIndex: number, imageIndex: number) => void
   uploadPendingImportImages: (itemId: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
+  pastePendingImportImageUrls: (itemId: string, text: string) => Promise<void>
   replacePendingImportImage: (itemId: string, imageIndex: number, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   removePendingImportImage: (itemId: string, imageIndex: number) => Promise<void>
   reorderPendingImportImages: (itemId: string, fromIndex: number, toIndex: number) => Promise<void>
+  movePendingImportImageToItem: (
+    fromItemId: string,
+    fromIndex: number,
+    toItemId: string,
+    toIndex?: number | null,
+  ) => Promise<void>
+  expandPendingImportItem: (itemId: string) => void
+  assignPendingImportGalleryImageToSku: (itemId: string, skuKey: string, imageUrl: string) => Promise<void>
   uploadPendingImportSkuImage: (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   replacePendingImportSkuImage: (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => Promise<void>
   removePendingImportSkuImage: (itemId: string, skuKey: string) => Promise<void>
@@ -903,6 +1079,9 @@ export interface ProductManagementHandlers {
   retryPendingImportActiveTask: () => Promise<void>
   handleSelectAllPendingImport: (checked: boolean) => void
   handleSelectPendingImportRow: (id: string, checked: boolean) => void
+  handleSelectPendingImportSkuKeys: (itemId: string, skuKeys: string[], checked: boolean) => void
+  batchDeletePendingImportSelectedSkus: (itemId: string) => Promise<void>
+  togglePendingImportReviewMark: (itemId: string) => Promise<void>
   startPendingImportInlineEdit: (itemId: string, field: PendingImportEditableField, value: PendingImportFieldValue) => void
   changePendingImportInlineEditingValue: (value: string) => void
   cancelPendingImportInlineEdit: () => void
@@ -1031,6 +1210,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   // Show spinner immediately on route mount so navigation doesn't feel frozen.
   const [loading, setLoading] = useState(true)
   const [list, setList] = useState<ProductListItem[]>([])
+  const listLengthRef = useRef(0)
+  const fetchListGenRef = useRef(0)
   const [usdExchangeRate, setUsdExchangeRate] = useState(DEFAULT_USD_EXCHANGE_RATE)
   const [total, setTotal] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
@@ -1089,7 +1270,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const pendingImportImageInflightRef = useRef<Map<string, number>>(new Map())
   const pendingImportSkuImageInflightRef = useRef<Map<string, number>>(new Map())
   const pendingImportQueueRef = useRef<PendingImportQueueItem[]>([])
+  /** 运营增删 SKU 后的目标 sku_key；轮询不得把已删行补回来 */
+  const pendingImportSkuIntentRef = useRef<Map<string, { keys: string[]; at: number }>>(new Map())
+  const pendingImportSkuLocalRef = useRef<Map<string, { skus: PendingImportSkuDraftItem[]; at: number }>>(new Map())
   const pendingImportGalleryPersistableRef = useRef<Map<string, string[]>>(new Map())
+  const pendingImportForceServerIdsRef = useRef<Set<string>>(new Set())
+  const pendingImportFetchInflightRef = useRef(false)
+  const pendingImportFetchQueuedRef = useRef<{ silent?: boolean; page?: number; page_size?: number } | null>(null)
+  const pendingImportHydratingIdsRef = useRef<Set<string>>(new Set())
   const pendingImportGalleryPersistChainRef = useRef<Map<string, Promise<void>>>(new Map())
   /** Shared upload pool — raised so multi-select galleries finish quickly without starving other products. */
   const sharedImageUploadPoolRef = useRef<{
@@ -1157,11 +1345,15 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportQueueError, setPendingImportQueueError] = useState<string | null>(null)
   const [pendingImportPage, setPendingImportPage] = useState(1)
   const [pendingImportPageSize, setPendingImportPageSize] = useState(30)
-  const PENDING_PAGE_SIZE_OPTIONS = [30, 50, 100] as const
+  const PENDING_PAGE_SIZE_OPTIONS = [15, 30] as const
   const normalizePendingPageSize = (size: number) =>
     (PENDING_PAGE_SIZE_OPTIONS as readonly number[]).includes(size) ? size : 30
   const [publishedImportMatch, setPublishedImportMatch] = useState<ProductListItem | null>(null)
   const [pendingImportSelectedIds, setPendingImportSelectedIds] = useState<string[]>([])
+  const [pendingImportSelectedSkuKeys, setPendingImportSelectedSkuKeys] = useState<string[]>([])
+  const [pendingImportReviewSavingIds, setPendingImportReviewSavingIds] = useState<string[]>([])
+  const pendingImportReviewSavingIdsRef = useRef<string[]>([])
+  pendingImportReviewSavingIdsRef.current = pendingImportReviewSavingIds
   const pendingImportVisibleIdsRef = useRef<string[]>([])
   const [pendingImportNowMs, setPendingImportNowMs] = useState(() => Date.now())
   const [pendingImportInlineEditingCell, setPendingImportInlineEditingCell] = useState<PendingImportEditableCell | null>(null)
@@ -1178,6 +1370,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   const [pendingImportSkuEditingValue, setPendingImportSkuEditingValue] = useState('')
   const pendingImportInlineEditingCellRef = useRef<PendingImportEditableCell | null>(null)
   const pendingImportSkuEditingCellRef = useRef<PendingImportSkuEditableCell | null>(null)
+  const pendingImportSkuSubmitLockRef = useRef(false)
   const pendingCategoryPickerRef = useRef<{ itemId: string; selectedId: string } | null>(null)
   pendingImportInlineEditingCellRef.current = pendingImportInlineEditingCell
   pendingImportSkuEditingCellRef.current = pendingImportSkuEditingCell
@@ -1364,7 +1557,15 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     page: number
     clear_selection?: boolean
   }>) => {
-    setLoading(true)
+    const gen = ++fetchListGenRef.current
+    const hasRows = listLengthRef.current > 0
+    if (!hasRows) setLoading(true)
+    const watchdog = typeof window === 'undefined'
+      ? null
+      : window.setTimeout(() => {
+          if (gen !== fetchListGenRef.current) return
+          setLoading(false)
+        }, 8_000)
     try {
       const nextKeyword = overrides?.keyword !== undefined
         ? overrides.keyword
@@ -1373,17 +1574,22 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const nextGoodsStatus = overrides?.goods_status ?? filterGoodsStatus
       const nextPage = overrides?.page ?? currentPage
 
-      const result = await getProductList({
-        keyword: nextKeyword || undefined,
-        category_id: (overrides?.category_id ?? params.categoryId) || undefined,
-        status_filter: nextStatusFilter,
-        goods_status: nextGoodsStatus === 'ALL' ? undefined : nextGoodsStatus,
-        supplier_name: (overrides?.supplier_name ?? filterSupplierName).trim() || undefined,
-        brand_keyword: (overrides?.brand_keyword ?? filterBrandKeyword).trim() || undefined,
-        page: nextPage,
-        page_size: pageSize
-      })
+      const result = await getProductList(
+        {
+          keyword: nextKeyword || undefined,
+          category_id: (overrides?.category_id ?? params.categoryId) || undefined,
+          status_filter: nextStatusFilter,
+          goods_status: nextGoodsStatus === 'ALL' ? undefined : nextGoodsStatus,
+          supplier_name: (overrides?.supplier_name ?? filterSupplierName).trim() || undefined,
+          brand_keyword: (overrides?.brand_keyword ?? filterBrandKeyword).trim() || undefined,
+          page: nextPage,
+          page_size: pageSize
+        },
+        { __rpcTimeoutMs: 12_000 } as any,
+      )
+      if (gen !== fetchListGenRef.current) return
       setList(result.list)
+      listLengthRef.current = result.list?.length || 0
       setTotal(result.total)
       if (Number(result.usd_exchange_rate) > 0) {
         setUsdExchangeRate(Number(result.usd_exchange_rate))
@@ -1393,32 +1599,64 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         setSelectedIds([])
       }
     } catch (err: any) {
+      if (gen !== fetchListGenRef.current) return
       setPublishedImportMatch(null)
-      toast.error(err.message || '获取商品列表失败')
+      const raw = String(err?.message || '')
+      const isTimeout = /请求超时|timed out|timeout/i.test(raw)
+      if (hasRows) {
+        toast.message(isTimeout ? '商品列表刷新超时，仍显示上一页' : (raw || '获取商品列表失败'))
+      } else if (!isTimeout) {
+        toast.error(raw || '获取商品列表失败')
+      } else {
+        toast.message('后台繁忙，商品列表暂时拉不到，请点刷新')
+      }
     } finally {
-      setLoading(false)
+      if (watchdog) window.clearTimeout(watchdog)
+      if (gen === fetchListGenRef.current) {
+        setLoading(false)
+      }
     }
   }, [params.name, params.categoryId, filterKeyword, filterManagementStatus, filterGoodsStatus, filterSupplierName, filterBrandKeyword, currentPage, pageSize])
 
   const applyPendingImportQueueResult = useCallback((result: ProductManagementPendingImportQueueOutput) => {
     setPendingImportActiveTask(result.activeTask || null)
     const visibleItems = (result.list || []).filter(item => !item.item_isPublished)
-    // Server already paginates. While the operator is editing a cell, keep that row's
-    // local snapshot so 3s parse polling cannot steal focus or overwrite in-progress input.
-    const freezeIds = new Set(
-      [
-        pendingImportInlineEditingCellRef.current?.itemId,
-        pendingImportSkuEditingCellRef.current?.itemId,
-        pendingCategoryPickerRef.current?.itemId,
-      ].filter(Boolean) as string[],
-    )
-    const localById = freezeIds.size
-      ? new Map(pendingImportQueueRef.current.map((item) => [item.item_id, item]))
-      : null
-    const mergedItems =
-      freezeIds.size && localById
-        ? visibleItems.map((item) => (freezeIds.has(item.item_id) ? localById.get(item.item_id) || item : item))
-        : visibleItems
+    const localQueueById = new Map(pendingImportQueueRef.current.map((item) => [item.item_id, item]))
+    const mergedItems = visibleItems.map((item) => {
+      if (pendingImportForceServerIdsRef.current.has(item.item_id)) {
+        pendingImportForceServerIdsRef.current.delete(item.item_id)
+        pendingImportSkuLocalRef.current.delete(item.item_id)
+        pendingImportGalleryPersistableRef.current.delete(item.item_id)
+        return item
+      }
+      const local = localQueueById.get(item.item_id)
+      if (!local) return item
+      const localSnap = pendingImportSkuLocalRef.current.get(item.item_id)
+      const persistable = pendingImportGalleryPersistableRef.current.get(item.item_id) || []
+      const localSkus = (localSnap && Date.now() - localSnap.at < 24 * 60 * 60 * 1000 && localSnap.skus.length > 0)
+        ? localSnap.skus
+        : (local.item_skus || [])
+      const serverGallery = item.item_galleryUrls || []
+      const localGallery = persistable.length > 0 ? persistable : (local.item_galleryUrls || [])
+      const gallery =
+        persistable.length > 1 || persistable.length >= serverGallery.length
+          ? persistable
+          : serverGallery.length >= localGallery.length
+            ? serverGallery
+            : localGallery
+      return {
+        ...item,
+        item_productName: local.item_productName || item.item_productName,
+        item_parsedName: local.item_parsedName || item.item_parsedName,
+        item_skuSummaryText: local.item_skuSummaryText || item.item_skuSummaryText,
+        item_skus: localSkus.length > 0 ? localSkus : item.item_skus,
+        item_galleryUrls: gallery.length > 0 ? gallery : serverGallery,
+        item_mainImageUrl: gallery[0] || item.item_mainImageUrl || local.item_mainImageUrl,
+        item_parsedMainImageUrl: gallery[0] || item.item_parsedMainImageUrl || local.item_parsedMainImageUrl,
+        item_fetchStatus: item.item_fetchStatus,
+        item_failureReason: item.item_failureReason,
+      }
+    })
     setPendingImportQueue(mergedItems)
     setPendingImportQueueTotal(
       typeof result.total === 'number' ? result.total : visibleItems.length,
@@ -1484,30 +1722,40 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   pendingImportKeywordRef.current = filterKeyword
 
   const refreshPendingImportQueue = useCallback(async (options?: { silent?: boolean; page?: number; page_size?: number }) => {
-    const silent = options?.silent ?? false
+    const hasRows = pendingImportQueueLengthRef.current > 0
+    const silent = (options?.silent ?? false) || hasRows
     const page = Math.max(1, options?.page ?? pendingImportPageRef.current)
     const pageSizeForFetch = Math.min(
       100,
       Math.max(1, Number(options?.page_size) || pendingImportPageSize),
     )
+    if (pendingImportFetchInflightRef.current) {
+      const currentPage = pendingImportPageRef.current
+      if (page === currentPage) {
+        pendingImportFetchQueuedRef.current = { silent: true, page, page_size: pageSizeForFetch }
+      }
+      return
+    }
     const fetchGen = ++pendingImportFetchGenRef.current
-    if (silent) {
-      setPendingImportRefreshing(true)
-    } else {
+    pendingImportFetchInflightRef.current = true
+    if (!silent) {
       setPendingImportQueueLoading(true)
     }
+    const watchdog = window.setTimeout(() => {
+      if (fetchGen !== pendingImportFetchGenRef.current) return
+      setPendingImportQueueLoading(false)
+      setPendingImportRefreshing(false)
+    }, 12_000)
     try {
       const result = await getPendingImportQueue(
         {
           page,
           page_size: pageSizeForFetch,
           keyword: pendingImportKeywordRef.current.trim() || undefined,
-          // P0: never block pending-tab open / poll on maintenance (network backfill banned server-side too)
           skip_maintenance: true,
         } as any,
-        { __rpcTimeoutMs: 90_000 },
+        { __rpcTimeoutMs: silent ? 20_000 : 25_000 },
       )
-      // Ignore stale responses so poll/refresh cannot overwrite a newer page change.
       if (fetchGen !== pendingImportFetchGenRef.current) return
       applyPendingImportQueueResult(result)
       pendingImportLastFetchedAtRef.current = Date.now()
@@ -1515,37 +1763,74 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     } catch (err: any) {
       if (fetchGen !== pendingImportFetchGenRef.current) return
       const raw = String(err?.message || '')
-      const isTimeout = /请求超时/.test(raw)
+      const isTimeout = /请求超时|timed out|timeout/i.test(raw)
       const message = /Failed to fetch|无法连接|NetworkError|fetch failed/i.test(raw)
         ? '无法连接后台 RPC。请执行：pnpm run build:server && pm2 restart rpc'
         : raw || '获取待上传区数据失败'
-      if (!silent) {
+      if (!silent && !hasRows) {
         if (!isTimeout) {
           setPendingImportActiveTask(null)
           setPendingImportQueue([])
           setPendingImportQueueTotal(0)
           setPendingImportSelectedIds([])
         }
-      }
-      if (!silent || pendingImportQueueLengthRef.current === 0) {
         if (pendingImportQueueErrorRef.current !== message) {
           if (isTimeout) {
-            toast.message('待上传区加载超时，采集进行中时请稍后刷新；卡住超过约 20 分钟的采集任务会自动中断')
+            toast.message('待上传区加载较慢，请点击刷新')
           } else {
             toast.error(message)
           }
         }
+        setPendingImportQueueError(message)
       }
-      setPendingImportQueueError(message)
     } finally {
-      if (fetchGen !== pendingImportFetchGenRef.current) return
-      if (silent) {
+      window.clearTimeout(watchdog)
+      if (fetchGen === pendingImportFetchGenRef.current) {
+        pendingImportFetchInflightRef.current = false
         setPendingImportRefreshing(false)
-      } else {
         setPendingImportQueueLoading(false)
+        const queued = pendingImportFetchQueuedRef.current
+        pendingImportFetchQueuedRef.current = null
+        if (queued) {
+          void refreshPendingImportQueue(queued)
+        }
       }
     }
   }, [applyPendingImportQueueResult, pendingImportPageSize])
+
+  const hydratePendingImportItemDrafts = useCallback(async (itemId: string) => {
+    if (!itemId || pendingImportHydratingIdsRef.current.has(itemId)) return
+    const current = pendingImportQueueRef.current.find((item) => item.item_id === itemId)
+    if ((current?.item_skus || []).length > 0) return
+    pendingImportHydratingIdsRef.current.add(itemId)
+    try {
+      const result = await getPendingImportQueue(
+        {
+          item_ids: [itemId],
+          page_size: 1,
+          skip_maintenance: true,
+          include_drafts: true,
+        } as any,
+          { __rpcTimeoutMs: 45_000 },
+      )
+      const row = Array.isArray(result?.list) ? result.list[0] : null
+      if (!row || row.item_id !== itemId) return
+      const localSnap = pendingImportSkuLocalRef.current.get(itemId)
+      setPendingImportQueue((prev) =>
+        prev.map((item) => {
+          if (item.item_id !== itemId) return item
+          if (localSnap && Date.now() - localSnap.at < 30 * 60 * 1000 && localSnap.skus.length > 0) {
+            return { ...item, ...row, item_skus: localSnap.skus }
+          }
+          return { ...item, ...row }
+        }),
+      )
+    } catch (err: any) {
+      toast.message(err?.message || '展开规格较慢，请稍后重试')
+    } finally {
+      pendingImportHydratingIdsRef.current.delete(itemId)
+    }
+  }, [])
 
   const handleSetPendingImportPage = (page: number) => {
     const totalPages = Math.max(1, Math.ceil(pendingImportQueueTotal / pendingImportPageSize))
@@ -1605,10 +1890,11 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   // Revisit within 45s: keep existing rows visible and refresh silently (no blank spinner).
   useEffect(() => {
     if (activeTab !== 'pending_imports') return
-    const ageMs = Date.now() - pendingImportLastFetchedAtRef.current
-    const hasCachedRows = pendingImportQueueLengthRef.current > 0 && ageMs < 45_000
-    void refreshPendingImportQueue({ silent: hasCachedRows })
-  }, [activeTab, refreshPendingImportQueue])
+    if (pendingImportQueueLengthRef.current > 0) return
+    void refreshPendingImportQueue({ silent: false })
+    // Only load when switching to an empty pending tab. Edits must not retrigger a full reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   // One shared clock for pending readiness heuristics (replaces per-row 30s timers).
   useEffect(() => {
@@ -1617,26 +1903,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const timer = window.setInterval(() => setPendingImportNowMs(Date.now()), 30_000)
     return () => window.clearInterval(timer)
   }, [activeTab])
-
-  useEffect(() => {
-    if (activeTab !== 'pending_imports') return
-    const taskPolling =
-      pendingImportActiveTask && pollingTaskStatuses.includes(pendingImportActiveTask.task_status)
-    const parseJobPolling = Boolean(pendingImportParseJob?.busy) || Object.keys(reparsingItemIds).length > 0
-    if (!taskPolling && !parseJobPolling) {
-      return
-    }
-    const timer = window.setInterval(() => {
-      refreshPendingImportQueue({ silent: true })
-    }, 3000)
-    return () => window.clearInterval(timer)
-  }, [
-    activeTab,
-    pendingImportActiveTask,
-    pendingImportParseJob?.busy,
-    reparsingItemIds,
-    refreshPendingImportQueue,
-  ])
 
   const loadCategoryProductPreview = useCallback(async (categoryId: string | null) => {
     if (!categoryId) {
@@ -2170,7 +2436,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         urls: urls.join('\n'),
         defaultCategoryId: pendingImportTaskForm.defaultCategoryId,
         defaultStatus: pendingImportTaskForm.defaultStatus,
-        costDeductionUsd: pendingImportTaskForm.costDeductionUsd ? Number(pendingImportTaskForm.costDeductionUsd) : undefined,
+        supplierName: pendingImportTaskForm.supplierName.trim() || undefined,
         stockStrategyStock: pendingImportTaskForm.stockStrategyStock ? Number(pendingImportTaskForm.stockStrategyStock) : undefined
       })
       const createdCount = Number(created.createdCount ?? urls.length)
@@ -2206,8 +2472,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setPendingImportRefreshing(true)
     try {
       await retryPendingImportTaskForProductManagement({ taskId: pendingImportActiveTask.task_id })
-      toast.success('已触发当前任务重试，系统会继续刷新采集进度')
-      await refreshPendingImportQueue({ silent: true })
+      toast.success('已触发当前任务重试，请稍后点刷新查看进度')
     } catch (err: any) {
       toast.error(err.message || '重试任务失败')
     } finally {
@@ -2221,6 +2486,42 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const handleSelectPendingImportRow = (id: string, checked: boolean) => {
     setPendingImportSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(itemId => itemId !== id))
+  }
+
+  const togglePendingImportReviewMark = async (itemId: string) => {
+    const current = pendingImportQueue.find(item => item.item_id === itemId)
+    if (!current || pendingImportReviewSavingIds.includes(itemId)) return
+    const nextReviewed = !Boolean(current.item_reviewed)
+    const previousAt = current.item_reviewedAt ?? null
+    setPendingImportReviewSavingIds(prev => [...prev, itemId])
+    setPendingImportQueue(prev =>
+      prev.map(item =>
+        item.item_id === itemId
+          ? {
+              ...item,
+              item_reviewed: nextReviewed,
+              item_reviewedAt: nextReviewed ? new Date().toISOString() : null,
+            }
+          : item,
+      ),
+    )
+    try {
+      await setPendingImportReviewMark({
+        item_ids: [itemId],
+        reviewed: nextReviewed,
+      })
+    } catch (err: any) {
+      setPendingImportQueue(prev =>
+        prev.map(item =>
+          item.item_id === itemId
+            ? { ...item, item_reviewed: !nextReviewed, item_reviewedAt: previousAt }
+            : item,
+        ),
+      )
+      toast.error(err?.message || '更新审核标记失败')
+    } finally {
+      setPendingImportReviewSavingIds(prev => prev.filter(id => id !== itemId))
+    }
   }
 
   const startPendingImportInlineEdit = (itemId: string, field: PendingImportEditableField, value: PendingImportFieldValue) => {
@@ -2261,39 +2562,24 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         field,
         value: payloadValue
       })
-      toast.success('待上传条目已更新')
-      // Price/coefficient changes recalculate SKUs server-side — refresh. Scalars patch locally.
-      if (field === 'coefficient' || field === 'cost_price' || field === 'cny_price_min' || field === 'cny_price_max' || field === 'usd_price_min' || field === 'usd_price_max') {
-        await refreshPendingImportQueue({ silent: true })
-      } else {
-        setPendingImportQueue((prev) =>
-          prev.map((item) => {
-            if (item.item_id !== itemId) return item
-            if (field === 'product_name') return { ...item, item_productName: String(payloadValue || '') }
-            if (field === 'product_detail') return { ...item, item_productDetail: String(payloadValue || '') }
-            if (field === 'sku_summary_text') return { ...item, item_skuSummaryText: String(payloadValue || '') }
-            if (field === 'supplier_name') return { ...item, item_supplierName: String(payloadValue || '') || null }
-            if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
-            if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
-            if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
-            if (field === 'weight_grams') {
-              const grams = Number(payloadValue)
-              return {
-                ...item,
-                item_weightGrams: grams,
-                item_skus: (item.item_skus || []).map((sku) => ({
-                  ...sku,
-                  weight_grams: grams,
-                })),
-              }
-            }
-            if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
-            if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
-            if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
-            return item
-          }),
+      const nextItem = applyPendingImportLocalField(currentItem, field, payloadValue, usdExchangeRate)
+      if (field === 'sku_summary_text') {
+        pendingImportSkuLocalRef.current.set(itemId, { skus: nextItem.item_skus || [], at: Date.now() })
+        const entryCount = parsePendingSkuSummaryEntries(String(payloadValue || '')).length
+        const skuCount = (currentItem.item_skus || []).length
+        toast.success(
+          entryCount === skuCount
+            ? `已按顺序写入 ${skuCount} 个 SKU 颜色/规格`
+            : entryCount > skuCount
+              ? `已按顺序写入 ${skuCount} 个 SKU（摘要多出 ${entryCount - skuCount} 条已忽略）`
+              : `已按顺序写入前 ${entryCount} 个 SKU（还有 ${skuCount - entryCount} 个未改）`,
         )
+      } else {
+        toast.success('待上传条目已更新')
       }
+      setPendingImportQueue((prev) =>
+        prev.map((item) => (item.item_id === itemId ? nextItem : item)),
+      )
     } catch (err: any) {
       toast.error(err.message || '保存待上传条目失败')
       throw err
@@ -2327,48 +2613,66 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
 
     setPendingImportInlineSaving(true)
+    const field = pendingImportInlineEditingCell.field
+    const itemId = pendingImportInlineEditingCell.itemId
     try {
-      const payloadValue = buildPendingImportFieldPayload(pendingImportInlineEditingCell.field, valueToSave)
-      await inlineUpdatePendingImportItemField({
-        item_id: pendingImportInlineEditingCell.itemId,
-        field: pendingImportInlineEditingCell.field,
-        value: payloadValue
-      })
-      toast.success('待上传条目已更新')
-      const field = pendingImportInlineEditingCell.field
-      const itemId = pendingImportInlineEditingCell.itemId
-      cancelPendingImportInlineEdit()
-      if (field === 'coefficient' || field === 'cost_price' || field === 'cny_price_min' || field === 'cny_price_max' || field === 'usd_price_min' || field === 'usd_price_max') {
-        await refreshPendingImportQueue({ silent: true })
-      } else {
+      const payloadValue = buildPendingImportFieldPayload(field, valueToSave)
+      if (field === 'product_name') {
+        const previousName = String(currentItem.item_productName || currentItem.item_parsedName || '')
+        const nextName = String(payloadValue || '')
         setPendingImportQueue((prev) =>
-          prev.map((item) => {
-            if (item.item_id !== itemId) return item
-            if (field === 'product_name') return { ...item, item_productName: String(payloadValue || '') }
-            if (field === 'product_detail') return { ...item, item_productDetail: String(payloadValue || '') }
-            if (field === 'sku_summary_text') return { ...item, item_skuSummaryText: String(payloadValue || '') }
-            if (field === 'supplier_name') return { ...item, item_supplierName: String(payloadValue || '') || null }
-            if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
-            if (field === 'target_category_id') return { ...item, item_targetCategoryId: String(payloadValue || '') || null }
-            if (field === 'goods_status') return { ...item, item_goodsStatus: payloadValue as any }
-            if (field === 'weight_grams') {
-              const grams = Number(payloadValue)
-              return {
-                ...item,
-                item_weightGrams: grams,
-                item_skus: (item.item_skus || []).map((sku) => ({
-                  ...sku,
-                  weight_grams: grams,
-                })),
-              }
-            }
-            if (field === 'minimum_order_quantity') return { ...item, item_minimumOrderQuantity: Number(payloadValue) }
-            if (field === 'available_stock') return { ...item, item_availableStock: Number(payloadValue) }
-            if (field === 'main_image_url') return { ...item, item_mainImageUrl: String(payloadValue || '') || null }
-            return item
-          }),
+          prev.map((item) =>
+            item.item_id === itemId
+              ? { ...item, item_productName: nextName, item_parsedName: nextName }
+              : item,
+          ),
         )
+        cancelPendingImportInlineEdit()
+        try {
+          await inlineUpdatePendingImportItemField(
+            { item_id: itemId, field, value: payloadValue },
+            { __rpcTimeoutMs: 12_000 } as any,
+          )
+          toast.success('待上传条目已更新')
+        } catch (err: any) {
+          setPendingImportQueue((prev) =>
+            prev.map((item) =>
+              item.item_id === itemId
+                ? { ...item, item_productName: previousName, item_parsedName: previousName }
+                : item,
+            ),
+          )
+          toast.error(err.message || '保存待上传条目失败')
+        }
+        return
       }
+      await inlineUpdatePendingImportItemField(
+        {
+          item_id: itemId,
+          field,
+          value: payloadValue,
+        },
+        { __rpcTimeoutMs: 20_000 } as any,
+      )
+      const nextItem = applyPendingImportLocalField(currentItem, field, payloadValue, usdExchangeRate)
+      if (field === 'sku_summary_text') {
+        pendingImportSkuLocalRef.current.set(itemId, { skus: nextItem.item_skus || [], at: Date.now() })
+        const entryCount = parsePendingSkuSummaryEntries(String(payloadValue || '')).length
+        const skuCount = (currentItem.item_skus || []).length
+        toast.success(
+          entryCount === skuCount
+            ? `已按顺序写入 ${skuCount} 个 SKU 颜色/规格`
+            : entryCount > skuCount
+              ? `已按顺序写入 ${skuCount} 个 SKU（摘要多出 ${entryCount - skuCount} 条已忽略）`
+              : `已按顺序写入前 ${entryCount} 个 SKU（还有 ${skuCount - entryCount} 个未改）`,
+        )
+      } else {
+        toast.success('待上传条目已更新')
+      }
+      cancelPendingImportInlineEdit()
+      setPendingImportQueue((prev) =>
+        prev.map((item) => (item.item_id === itemId ? nextItem : item)),
+      )
     } catch (err: any) {
       toast.error(err.message || '保存待上传条目失败')
     } finally {
@@ -2485,133 +2789,30 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         : item,
     ))
 
-    toast.message(`已开始解析 ${idsToParse.length} 条商品…`)
+    toast.message(`已开始解析 ${idsToParse.length} 条（微购会逐条抓图，请稍等或点刷新）`)
 
     try {
-      // Server ACKs after marking RUNNING; still use a longer client timeout under load.
       await reparsePendingImportItems(
         { item_ids: idsToParse },
-        { __rpcTimeoutMs: 60_000 } as any,
+        { __rpcTimeoutMs: 20_000 } as any,
       )
     } catch (err: any) {
       const reason = err?.message || '解析失败'
-      // Timeout does not mean the server stopped — items may already be RUNNING in background.
       if (/请求超时/.test(reason)) {
-        toast.message('提交响应较慢，将继续轮询解析进度（后台可能仍在处理）')
+        toast.message('提交较慢，解析可能仍在后台进行，请稍后点刷新')
       } else {
         toast.error(reason)
+        setPendingImportQueue(prev => prev.map(item =>
+          idsToParse.includes(item.item_id)
+            ? { ...item, item_fetchStatus: 'RETRY_PENDING' as PendingImportItemFetchStatus }
+            : item,
+        ))
         setReparsingItemIds(prev => {
           const next = { ...prev }
           for (const id of idsToParse) delete next[id]
           return next
         })
-        try {
-          await refreshPendingImportQueue({ silent: true })
-        } catch {
-          // ignore
-        }
-        return
       }
-    }
-
-    const idSet = new Set(idsToParse)
-    const deadline = Date.now() + Math.max(120_000, idsToParse.length * 45_000)
-    let successCount = 0
-    let failCount = 0
-    const failureLines: string[] = []
-
-    while (Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 2500))
-      let tracked: typeof pendingImportQueue = []
-      try {
-        const result = await getPendingImportQueue(
-          {
-            page: pendingImportPageRef.current,
-            page_size: pendingImportPageSize,
-            skip_maintenance: true,
-          } as any,
-          { __rpcTimeoutMs: 60_000 },
-        )
-        applyPendingImportQueueResult(result)
-        const queue = Array.isArray(result?.list) ? result.list : []
-        tracked = queue.filter((item: any) => idSet.has(item.item_id))
-      } catch {
-        continue
-      }
-
-      const stillRunning = tracked.some((item: any) => item.item_fetchStatus === 'RUNNING')
-      if (stillRunning || tracked.length === 0) continue
-
-      successCount = tracked.filter((item: any) => item.item_fetchStatus === 'COMPLETED').length
-      const failed = tracked.filter(
-        (item: any) => item.item_fetchStatus === 'FAILED' || item.item_fetchStatus === 'RETRY_PENDING',
-      )
-      failCount = failed.length
-      for (const item of failed) {
-        failureLines.push(
-          `${item.item_productName || item.item_id}：${item.item_failureReason || '重新解析失败'}`,
-        )
-      }
-      break
-    }
-
-    setReparsingItemIds(prev => {
-      const next = { ...prev }
-      for (const id of idsToParse) delete next[id]
-      return next
-    })
-
-    // Final refresh in case the poll loop timed out mid-flight
-    try {
-      const result = await getPendingImportQueue(
-        {
-          page: pendingImportPageRef.current,
-          page_size: pendingImportPageSize,
-          skip_maintenance: true,
-        } as any,
-        { __rpcTimeoutMs: 60_000 },
-      )
-      applyPendingImportQueueResult(result)
-      if (successCount + failCount === 0) {
-        const queue = Array.isArray(result?.list) ? result.list : []
-        const tracked = queue.filter((item: any) => idSet.has(item.item_id))
-        successCount = tracked.filter((item: any) => item.item_fetchStatus === 'COMPLETED').length
-        const failed = tracked.filter(
-          (item: any) => item.item_fetchStatus === 'FAILED' || item.item_fetchStatus === 'RETRY_PENDING',
-        )
-        failCount = failed.length
-        for (const item of failed) {
-          failureLines.push(
-            `${item.item_productName || item.item_id}：${item.item_failureReason || '重新解析失败'}`,
-          )
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    const summary = `重新解析完成，成功: ${successCount}，失败: ${failCount}`
-    if (failCount > 0) {
-      toast.error(summary, {
-        description: failureLines.length > 0
-          ? createElement(
-              'div',
-              { className: 'mt-1 max-h-64 space-y-1 overflow-y-auto text-left' },
-              failureLines.map((line, index) =>
-                createElement(
-                  'div',
-                  { key: `${index}-${line.slice(0, 24)}`, className: 'text-sm leading-5' },
-                  line,
-                ),
-              ),
-            )
-          : '失败条目仍保留在待上传区，可稍后重试。',
-        duration: Math.min(20000, 6000 + failureLines.length * 1500),
-      })
-    } else if (successCount > 0) {
-      toast.success(idsToParse.length === 1 ? '解析成功' : summary)
-    } else {
-      toast.message('解析仍在进行或结果未就绪，请稍后刷新待上传区查看')
     }
   }
 
@@ -2623,7 +2824,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       setReparsingItemIds({})
       setPendingImportParseJob(null)
       toast.success(result?.message || '已终止解析')
-      await refreshPendingImportQueue({ silent: true })
     } catch (err: any) {
       toast.error(err?.message || '终止解析失败')
     } finally {
@@ -2648,8 +2848,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
     try {
       const result = await batchDeletePendingImportItems(targetItemIds)
+      const removed = new Set(targetItemIds)
       setPendingImportSelectedIds([])
-      await refreshPendingImportQueue({ silent: true })
+      setPendingImportQueue((prev) => prev.filter((item) => !removed.has(item.item_id)))
+      setPendingImportQueueTotal((prev) => Math.max(0, prev - targetItemIds.length))
       toast.success(`待上传条目已删除，成功: ${result.success_count}，失败: ${result.fail_count}`)
     } catch (err: any) {
       toast.error(err.message || '删除待上传条目失败')
@@ -2662,7 +2864,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }
 
   const togglePendingImportExpand = (itemId: string) => {
-    setExpandedPendingImportIds(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId])
+    setExpandedPendingImportIds(prev => {
+      const opening = !prev.includes(itemId)
+      if (opening) void hydratePendingImportItemDrafts(itemId)
+      return opening ? [...prev, itemId] : prev.filter(id => id !== itemId)
+    })
+  }
+
+  const expandPendingImportItem = (itemId: string) => {
+    setExpandedPendingImportIds((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]))
+    void hydratePendingImportItemDrafts(itemId)
   }
 
   const startProductSkuInlineEdit = (productId: string, skuId: string, field: ProductSkuInlineField, value: string | number | null) => {
@@ -2763,92 +2974,73 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setPendingImportSkuEditingValue('')
   }
 
+  const persistPendingImportSkuSnapshot = (itemId: string) => {
+    const skus = pendingImportQueueRef.current.find((row) => row.item_id === itemId)?.item_skus || []
+    if (!skus.length) return
+    void inlineUpdatePendingImportSkuField(
+      {
+        item_id: itemId,
+        sku_key: skus[0].sku_key,
+        field: 'spec_text',
+        value: skus[0].spec_text || '规格',
+        skus,
+      } as any,
+      { __rpcTimeoutMs: 8_000 } as any,
+    ).catch((err: any) => {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(err?.message || ''))
+      if (!isTimeout) toast.error(err.message || '保存待上传 SKU 失败')
+    })
+  }
+
   const submitPendingImportSkuInlineEdit = async () => {
-    if (!pendingImportSkuEditingCell || pendingImportSkuSaving) return
+    if (!pendingImportSkuEditingCell) return
     const item = pendingImportQueue.find(row => row.item_id === pendingImportSkuEditingCell.itemId)
-    const sku = (item?.item_skus || []).find(row => row.sku_key === pendingImportSkuEditingCell.skuKey)
+    const sku = (item?.item_skus || []).find(row =>
+      row.sku_key === pendingImportSkuEditingCell.skuKey ||
+      (row as { skuKey?: string }).skuKey === pendingImportSkuEditingCell.skuKey,
+    )
     if (!sku) {
       cancelPendingImportSkuInlineEdit()
       return
     }
 
-    const original =
-      pendingImportSkuEditingCell.field === 'spec_text' ? sku.spec_text :
-      pendingImportSkuEditingCell.field === 'cost_price' ? String(sku.cost_price ?? '') :
-      pendingImportSkuEditingCell.field === 'price' ? String(sku.price ?? '') :
-      pendingImportSkuEditingCell.field === 'weight_grams' ? String(sku.weight_grams ?? '') :
-      pendingImportSkuEditingCell.field === 'minimum_order_quantity'
-        ? String(item?.item_minimumOrderQuantity ?? '')
-      : String(sku.stock ?? '')
+    const original = readPendingSkuField(sku, pendingImportSkuEditingCell.field, item)
 
     if (pendingImportSkuEditingValue.trim() === String(original).trim()) {
       cancelPendingImportSkuInlineEdit()
       return
     }
 
-    setPendingImportSkuSaving(true)
-    try {
-      const raw = pendingImportSkuEditingValue.trim()
-      const value = pendingImportSkuEditingCell.field === 'spec_text' ? raw : Number(raw)
-      await inlineUpdatePendingImportSkuField({
-        item_id: pendingImportSkuEditingCell.itemId,
-        sku_key: pendingImportSkuEditingCell.skuKey,
-        field: pendingImportSkuEditingCell.field,
-        value
-      })
-      toast.success(
-        pendingImportSkuEditingCell.field === 'minimum_order_quantity'
-          ? '起订量已更新'
-          : '待上传 SKU 已更新',
-      )
-      const { itemId, skuKey, field } = pendingImportSkuEditingCell
-      cancelPendingImportSkuInlineEdit()
-      if (field === 'cost_price' || field === 'price') {
-        if (field === 'price') {
-          setPendingImportQueue((prev) =>
-            prev.map((row) => {
-              if (row.item_id !== itemId) return row
-              const skus = (row.item_skus || []).map((sku) =>
-                sku.sku_key === skuKey ? { ...sku, price: Number(value) } : sku,
-              )
-              return withPendingSkuPriceSummary(row, skus, usdExchangeRate)
-            }),
-          )
+    const cell = pendingImportSkuEditingCell
+    const raw = pendingImportSkuEditingValue.trim()
+    const value = PENDING_SKU_TEXT_FIELDS.has(cell.field) ? raw : Number(raw)
+    const { itemId, skuKey, field } = cell
+    cancelPendingImportSkuInlineEdit()
+    setPendingImportQueue((prev) => {
+      const nextQueue = prev.map((row) => {
+        if (row.item_id !== itemId) return row
+        if (field === 'minimum_order_quantity') {
+          return { ...row, item_minimumOrderQuantity: Number(value) }
         }
-        await refreshPendingImportQueue({ silent: true })
-      } else if (field === 'minimum_order_quantity') {
-        setPendingImportQueue((prev) =>
-          prev.map((row) =>
-            row.item_id === itemId
-              ? { ...row, item_minimumOrderQuantity: Number(value) }
-              : row,
-          ),
+        const skus = (row.item_skus || []).map((skuRow) =>
+          skuRow.sku_key !== skuKey ? skuRow : patchPendingSkuField(skuRow, field, value),
         )
-      } else {
-        setPendingImportQueue((prev) =>
-          prev.map((item) => {
-            if (item.item_id !== itemId) return item
-            const skus = (item.item_skus || []).map((sku) => {
-              if (sku.sku_key !== skuKey) return sku
-              if (field === 'stock') return { ...sku, stock: Number(value) }
-              if (field === 'price') return { ...sku, price: Number(value) }
-              if (field === 'weight_grams') return { ...sku, weight_grams: Number(value) }
-              if (field === 'spec_text') return { ...sku, spec_text: String(value) }
-              return sku
-            })
-            return { ...item, item_skus: skus }
-          }),
-        )
-      }
-    } catch (err: any) {
-      toast.error(err.message || '保存待上传 SKU 失败')
-    } finally {
-      setPendingImportSkuSaving(false)
-    }
+        pendingImportSkuLocalRef.current.set(itemId, { skus, at: Date.now() })
+        const next = {
+          ...row,
+          item_skus: skus,
+          item_skuSummaryText: skus.map((skuRow) => skuRow.spec_text).filter(Boolean).join(' | '),
+        }
+        return field === 'price' ? withPendingSkuPriceSummary(next, skus, usdExchangeRate) : next
+      })
+      pendingImportQueueRef.current = nextQueue
+      return nextQueue
+    })
+    persistPendingImportSkuSnapshot(itemId)
   }
 
   const submitPendingImportColorGroupEdit = async (colorValue: string) => {
-    if (!pendingImportSkuEditingCell || pendingImportSkuSaving) return
+    if (!pendingImportSkuEditingCell) return
     const item = pendingImportQueue.find(row => row.item_id === pendingImportSkuEditingCell.itemId)
     if (!item) {
       cancelPendingImportSkuInlineEdit()
@@ -2865,87 +3057,36 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
 
     const raw = pendingImportSkuEditingValue.trim()
-    const value = pendingImportSkuEditingCell.field === 'spec_text' ? raw : Number(raw)
-    if (pendingImportSkuEditingCell.field !== 'spec_text' && !Number.isFinite(value as number)) {
+    const value = PENDING_SKU_TEXT_FIELDS.has(pendingImportSkuEditingCell.field) ? raw : Number(raw)
+    if (!PENDING_SKU_TEXT_FIELDS.has(pendingImportSkuEditingCell.field) && !Number.isFinite(value as number)) {
       toast.error('请输入有效数字')
       return
     }
 
-    // 起订量是整单级：颜色组同步时只写一次父条目
-    if (pendingImportSkuEditingCell.field === 'minimum_order_quantity') {
-      setPendingImportSkuSaving(true)
-      try {
-        await inlineUpdatePendingImportSkuField({
-          item_id: pendingImportSkuEditingCell.itemId,
-          sku_key: pendingImportSkuEditingCell.skuKey,
-          field: 'minimum_order_quantity',
-          value,
-        })
-        toast.success('起订量已更新')
-        const itemId = pendingImportSkuEditingCell.itemId
-        cancelPendingImportSkuInlineEdit()
-        setPendingImportQueue((prev) =>
-          prev.map((row) =>
-            row.item_id === itemId
-              ? { ...row, item_minimumOrderQuantity: Number(value) }
-              : row,
-          ),
-        )
-      } catch (err: any) {
-        toast.error(err.message || '保存起订量失败')
-      } finally {
-        setPendingImportSkuSaving(false)
-      }
-      return
-    }
-
-    setPendingImportSkuSaving(true)
-    try {
-      for (const sku of colorSkus) {
-        await inlineUpdatePendingImportSkuField({
-          item_id: pendingImportSkuEditingCell.itemId,
-          sku_key: sku.sku_key,
-          field: pendingImportSkuEditingCell.field,
-          value
-        })
-      }
-      toast.success(`已同步更新 ${colorSkus.length} 个规格`)
-      const { itemId, field } = pendingImportSkuEditingCell
-      const skuKeys = new Set(colorSkus.map((sku) => sku.sku_key))
-      cancelPendingImportSkuInlineEdit()
-      if (field === 'cost_price' || field === 'price') {
-        if (field === 'price') {
-          setPendingImportQueue((prev) =>
-            prev.map((item) => {
-              if (item.item_id !== itemId) return item
-              const skus = (item.item_skus || []).map((sku) =>
-                skuKeys.has(sku.sku_key) ? { ...sku, price: Number(value) } : sku,
-              )
-              return withPendingSkuPriceSummary(item, skus, usdExchangeRate)
-            }),
-          )
+    const { itemId, skuKey, field } = pendingImportSkuEditingCell
+    const skuKeys = new Set(colorSkus.map((sku) => sku.sku_key))
+    cancelPendingImportSkuInlineEdit()
+    setPendingImportQueue((prev) => {
+      const nextQueue = prev.map((row) => {
+        if (row.item_id !== itemId) return row
+        if (field === 'minimum_order_quantity') {
+          return { ...row, item_minimumOrderQuantity: Number(value) }
         }
-        await refreshPendingImportQueue({ silent: true })
-      } else {
-        setPendingImportQueue((prev) =>
-          prev.map((item) => {
-            if (item.item_id !== itemId) return item
-            const skus = (item.item_skus || []).map((sku) => {
-              if (!skuKeys.has(sku.sku_key)) return sku
-              if (field === 'stock') return { ...sku, stock: Number(value) }
-              if (field === 'weight_grams') return { ...sku, weight_grams: Number(value) }
-              if (field === 'spec_text') return { ...sku, spec_text: String(value) }
-              return sku
-            })
-            return { ...item, item_skus: skus }
-          }),
+        const skus = (row.item_skus || []).map((sku) =>
+          skuKeys.has(sku.sku_key) ? patchPendingSkuField(sku, field, value) : sku,
         )
-      }
-    } catch (err: any) {
-      toast.error(err.message || '保存颜色组失败')
-    } finally {
-      setPendingImportSkuSaving(false)
-    }
+        pendingImportSkuLocalRef.current.set(itemId, { skus, at: Date.now() })
+        const next = {
+          ...row,
+          item_skus: skus,
+          item_skuSummaryText: skus.map((skuRow) => skuRow.spec_text).filter(Boolean).join(' | '),
+        }
+        return field === 'price' ? withPendingSkuPriceSummary(next, skus, usdExchangeRate) : next
+      })
+      pendingImportQueueRef.current = nextQueue
+      return nextQueue
+    })
+    persistPendingImportSkuSnapshot(itemId)
   }
 
   const buildDefaultSync1688Note = () => {
@@ -3193,7 +3334,6 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       )
       await Promise.all([fetchCategoryOptions(), fetchBindingMeta()])
       openCalibrateResultDialog('pending', result)
-      await refreshPendingImportQueue()
     } catch (err: any) {
       toast.error(err?.message || '一键校准失败')
     } finally {
@@ -3245,13 +3385,24 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       })
       toast.success(
         calibrateResultScope === 'pending'
-          ? `类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}。待上传区已刷新，可核对后点「上架」（仅翻译标题）。`
+          ? `类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}。可核对后点「上架」（仅翻译标题）。`
           : `类目已保存：成功 ${res.success_count}，失败 ${res.fail_count}`,
       )
       setCalibrateResultOpen(false)
       if (calibrateResultScope === 'pending') {
+        const byId = new Map(calibrateResultDrafts.map((item) => [item.id, item]))
+        setPendingImportQueue((prev) =>
+          prev.map((item) => {
+            const draft = byId.get(item.item_id)
+            if (!draft) return item
+            return {
+              ...item,
+              item_targetCategoryId: draft.primaryCategoryId,
+              item_matchedCategoryIds: draft.linkedCategoryIds,
+            }
+          }),
+        )
         setActiveTab('pending_imports')
-        await refreshPendingImportQueue()
       } else {
         await fetchList()
       }
@@ -3275,7 +3426,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       toast.success(
         `全库补关联完成：商品 ${result.products_updated}/${result.products_scanned} 条新增 ${result.relations_added} 个标签；待上传更新 ${result.pending_updated}/${result.pending_scanned} 条`,
       )
-      await Promise.all([fetchList(), refreshPendingImportQueue()])
+      await fetchList()
     } catch (err: any) {
       toast.error(err?.message || '全库补关联失败')
     } finally {
@@ -3299,10 +3450,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     if (!confirmed) return
     setMosaicGalleryRunning(true)
     try {
-      const result = await batchMosaicGalleryWatermarks({
-        scope: pendingScope ? 'pending' : 'product',
-        ids,
-      })
+      const result = await batchMosaicGalleryWatermarks(
+        {
+          scope: pendingScope ? 'pending' : 'product',
+          ids,
+        },
+        { __rpcTimeoutMs: 300_000 } as any,
+      )
       const summary =
         `商品成功 ${result.success_count}、失败 ${result.fail_count}；打码 ${result.images_ok} 张，失败 ${result.images_fail} 张`
       if (result.images_ok === 0) {
@@ -3314,8 +3468,16 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       } else {
         toast.success(`马赛克完成：${summary}`)
       }
-      if (pendingScope) await refreshPendingImportQueue({ silent: true })
-      else await fetchList()
+      if (pendingScope) {
+        ids.forEach((id) => {
+          pendingImportForceServerIdsRef.current.add(id)
+          pendingImportSkuLocalRef.current.delete(id)
+          pendingImportGalleryPersistableRef.current.delete(id)
+        })
+        await refreshPendingImportQueue({ silent: false })
+      } else {
+        await fetchList()
+      }
     } catch (err: any) {
       toast.error(err?.message || '批量马赛克失败')
     } finally {
@@ -3410,11 +3572,23 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
     setTitleSuffixRunning(true)
     try {
-      const result = await batchAppendPendingImportTitleSuffix({ ids, suffix })
+      const idSet = new Set(ids)
+      setPendingImportQueue((prev) =>
+        prev.map((item) => {
+          if (!idSet.has(item.item_id)) return item
+          const current = String(item.item_productName || item.item_parsedName || '').trim()
+          const nextName = appendTitleSuffixIfMissing(current, suffix)
+          if (!nextName) return item
+          return { ...item, item_productName: nextName, item_parsedName: nextName }
+        }),
+      )
+      const result = await batchAppendPendingImportTitleSuffix(
+        { ids, suffix },
+        { __rpcTimeoutMs: 12_000 } as any,
+      )
       toast.success(
         `批量加后缀完成：更新 ${result.success_count}，跳过 ${result.skip_count}，失败 ${result.fail_count}`,
       )
-      await refreshPendingImportQueue({ silent: true })
     } catch (err: any) {
       toast.error(err?.message || '批量加后缀失败')
       throw err
@@ -3462,11 +3636,19 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     }
     setTitleSuffixRunning(true)
     try {
+      const idSet = new Set(ids)
+      setPendingImportQueue((prev) =>
+        prev.map((item) => {
+          if (!idSet.has(item.item_id)) return item
+          const current = String(item.item_productName || item.item_parsedName || '').trim()
+          const nextName = removeTitleSuffixesIfPresent(current, suffixes) || current
+          return { ...item, item_productName: nextName, item_parsedName: nextName }
+        }),
+      )
       const result = await batchRemovePendingImportTitleSuffix({ ids, suffixes })
       toast.success(
         `批量移除后缀完成：更新 ${result.success_count}，跳过 ${result.skip_count}，失败 ${result.fail_count}`,
       )
-      await refreshPendingImportQueue({ silent: true })
     } catch (err: any) {
       toast.error(err?.message || '批量移除后缀失败')
       throw err
@@ -3670,7 +3852,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
         const res = await batchDeletePendingImportItems(confirmTargetIds)
         toast.success(`待上传条目已删除，成功: ${res.success_count}，失败: ${res.fail_count}`)
         setPendingImportSelectedIds([])
-        await refreshPendingImportQueue({ silent: true })
+        const removed = new Set(confirmTargetIds)
+        setPendingImportQueue((prev) => prev.filter((item) => !removed.has(item.item_id)))
+        setPendingImportQueueTotal((prev) => Math.max(0, prev - confirmTargetIds.length))
       } else if (confirmAction === 'PRICE_COEFFICIENT') {
         const payload = batchPriceAdjustMode === 'PRODUCT_COEFFICIENT'
           ? {
@@ -3737,7 +3921,18 @@ export const useProductManagement = (): { state: ProductManagementState, handler
             ? `待上传重量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`
             : `待上传价格系数已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
           setConfirmDialogOpen(false)
-          await refreshPendingImportQueue({ silent: true })
+          const idSet = new Set(pendingTargetIds)
+          setPendingImportQueue((prev) =>
+            prev.map((item) => {
+              if (!idSet.has(item.item_id)) return item
+              return applyPendingImportLocalField(
+                item,
+                field === 'weight_grams' ? 'weight_grams' : 'coefficient',
+                nextValue,
+                usdExchangeRate,
+              )
+            }),
+          )
           return
         } else {
           if (!targetProductIds.length) throw new Error('请先选择商品')
@@ -3786,7 +3981,12 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           })
           toast.success(`待上传起订量已批量更新，成功: ${res.success_count}，失败: ${res.fail_count}`)
           setConfirmDialogOpen(false)
-          await refreshPendingImportQueue({ silent: true })
+          const idSet = new Set(pendingTargetIds)
+          setPendingImportQueue((prev) =>
+            prev.map((item) =>
+              idSet.has(item.item_id) ? { ...item, item_minimumOrderQuantity: qty } : item,
+            ),
+          )
           return
         } else {
           const res = await batchUpdateMinOrderQty({
@@ -3822,7 +4022,14 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           const res = await applyCalibrateCategoryEdits({ scope: 'pending', edits })
           toast.success(`待上传关联类目已批量追加，成功: ${res.success_count}，失败: ${res.fail_count}`)
           setConfirmDialogOpen(false)
-          await refreshPendingImportQueue({ silent: true })
+          const extra = new Set(batchBindCategoryIds)
+          setPendingImportQueue((prev) =>
+            prev.map((item) => {
+              if (!pendingTargetIds.includes(item.item_id)) return item
+              const existing = Array.isArray(item.item_matchedCategoryIds) ? item.item_matchedCategoryIds : []
+              return { ...item, item_matchedCategoryIds: Array.from(new Set([...existing, ...extra])) }
+            }),
+          )
           return
         }
 
@@ -3863,7 +4070,17 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           const res = await applyCalibrateCategoryEdits({ scope: 'pending', edits })
           toast.success(`待上传关联类目已批量移除，成功: ${res.success_count}，失败: ${res.fail_count}`)
           setConfirmDialogOpen(false)
-          await refreshPendingImportQueue({ silent: true })
+          setPendingImportQueue((prev) =>
+            prev.map((item) => {
+              const edit = edits.find((row) => row.id === item.item_id)
+              if (!edit) return item
+              return {
+                ...item,
+                item_targetCategoryId: edit.primary_category_id,
+                item_matchedCategoryIds: edit.linked_category_ids,
+              }
+            }),
+          )
           return
         }
 
@@ -4236,23 +4453,28 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     itemId: string,
     urls: string[],
     mode: 'merge' | 'replace' = 'replace',
+    options?: { allowShrink?: boolean },
   ) => {
-    const unique = Array.from(new Set(urls.map(url => String(url || '').trim()).filter(Boolean)))
-      .filter(url => !url.startsWith('blob:'))
-    if (!unique.length) {
+    const cleaned = urls
+      .map(url => String(url || '').trim())
+      .filter(url => url && !url.startsWith('blob:'))
+    const unique = Array.from(new Set(cleaned))
+    if (!(mode === 'replace' ? cleaned : unique).length) {
       return Promise.reject(new Error('至少保留一张主图：可先点「上传/编辑图片」加新图，再删旧图'))
     }
     const fromQueue = readPendingGalleryUrls(
       pendingImportQueueRef.current.find(item => item.item_id === itemId),
     ).filter(url => !url.startsWith('blob:'))
+    const persistable = pendingImportGalleryPersistableRef.current.get(itemId) || []
+    const baseline = persistable.length >= fromQueue.length ? persistable : fromQueue
     const next =
       mode === 'merge'
-        ? Array.from(new Set([
-            ...(pendingImportGalleryPersistableRef.current.get(itemId) || []),
-            ...fromQueue,
-            ...unique,
-          ]))
-        : unique
+        ? Array.from(new Set([...persistable, ...fromQueue, ...unique]))
+        : !options?.allowShrink && unique.length < baseline.length
+          ? baseline
+          : options?.allowShrink
+            ? unique
+            : cleaned
     pendingImportGalleryPersistableRef.current.set(itemId, next)
 
     const previous = pendingImportGalleryPersistChainRef.current.get(itemId) || Promise.resolve()
@@ -4282,8 +4504,67 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     return job
   }
 
-  const persistPendingImportGallery = async (itemId: string, galleryUrls: string[]) => {
-    await enqueuePersistPendingImportGallery(itemId, galleryUrls, 'replace')
+  const persistPendingImportGallery = async (
+    itemId: string,
+    galleryUrls: string[],
+    options?: { allowShrink?: boolean },
+  ) => {
+    await enqueuePersistPendingImportGallery(itemId, galleryUrls, 'replace', options)
+  }
+
+  const pastePendingImportImageUrls = async (itemId: string, text: string) => {
+    const raw = String(text || '').trim()
+    if (!raw) {
+      toast.error('请先粘贴图片地址')
+      return
+    }
+    bumpPendingImportImageInflight(itemId, 1)
+    toast.message('正在把图链转到本站…')
+    try {
+      const res = await fetch('/api/import-remote-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: raw }),
+      })
+      const payload = (await res.json().catch(() => null)) as {
+        code?: number
+        message?: string
+        data?: { urls?: string[]; failed?: Array<{ url: string; reason: string }> }
+      } | null
+      if (!res.ok || !payload || payload.code !== 200) {
+        throw new Error(payload?.message || `图链导入失败（HTTP ${res.status}）`)
+      }
+      const uploaded = Array.isArray(payload.data?.urls) ? payload.data.urls.filter(Boolean) : []
+      if (!uploaded.length) {
+        throw new Error(payload.message || '没有成功转入的图片')
+      }
+      const itemBefore =
+        pendingImportQueueRef.current.find(row => row.item_id === itemId) ||
+        pendingImportQueue.find(row => row.item_id === itemId)
+      const current = readPendingGalleryUrls(itemBefore).filter(url => !url.startsWith('blob:'))
+      const next = Array.from(new Set([...current, ...uploaded]))
+      setPendingImportQueue(prev => prev.map(item =>
+        item.item_id === itemId
+          ? {
+              ...item,
+              item_galleryUrls: next,
+              item_mainImageUrl: next[0] || item.item_mainImageUrl,
+              item_parsedMainImageUrl: next[0] || item.item_parsedMainImageUrl,
+            }
+          : item,
+      ))
+      await enqueuePersistPendingImportGallery(itemId, next, 'merge')
+      const failedCount = payload.data?.failed?.length || 0
+      toast.success(
+        failedCount > 0
+          ? `已转入 ${uploaded.length} 张，${failedCount} 张失败`
+          : `已转入 ${uploaded.length} 张图片到网页`,
+      )
+    } catch (err: any) {
+      toast.error(err?.message || '图链导入失败')
+    } finally {
+      bumpPendingImportImageInflight(itemId, -1)
+    }
   }
 
   const uploadPendingImportImages = async (itemId: string, event: ChangeEvent<HTMLInputElement>) => {
@@ -4399,10 +4680,79 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     const current = readPendingGalleryUrls(item)
     current.splice(imageIndex, 1)
     try {
-      await persistPendingImportGallery(itemId, current)
+      await persistPendingImportGallery(itemId, current, { allowShrink: true })
       toast.success('图片已删除')
     } catch (err: any) {
       toast.error(err.message || '图片删除失败')
+    }
+  }
+
+  const applyLocalGallery = (itemId: string, next: string[]) => {
+    setPendingImportQueue((prev) => {
+      const mapped = prev.map((row) =>
+        row.item_id === itemId
+          ? {
+              ...row,
+              item_galleryUrls: next,
+              item_mainImageUrl: next[0] || row.item_mainImageUrl,
+              item_parsedMainImageUrl: next[0] || row.item_parsedMainImageUrl,
+            }
+          : row,
+      )
+      pendingImportQueueRef.current = mapped
+      return mapped
+    })
+  }
+
+  const movePendingImportImageToItem = async (
+    fromItemId: string,
+    fromIndex: number,
+    toItemId: string,
+    toIndex?: number | null,
+  ) => {
+    const sourceId = String(fromItemId || '').trim()
+    const targetId = String(toItemId || '').trim()
+    if (!sourceId || !targetId || sourceId === targetId) return
+    const source =
+      pendingImportQueueRef.current.find((row) => row.item_id === sourceId) ||
+      pendingImportQueue.find((row) => row.item_id === sourceId)
+    const target =
+      pendingImportQueueRef.current.find((row) => row.item_id === targetId) ||
+      pendingImportQueue.find((row) => row.item_id === targetId)
+    const sourceGallery = readPendingGalleryUrls(source)
+    const targetGallery = readPendingGalleryUrls(target)
+    if (fromIndex < 0 || fromIndex >= sourceGallery.length) return
+    const url = sourceGallery[fromIndex]
+    if (!url) return
+
+    const nextTarget = [...targetGallery]
+    if (!nextTarget.includes(url)) {
+      const insertAt =
+        toIndex != null && Number.isInteger(toIndex)
+          ? Math.max(0, Math.min(nextTarget.length, toIndex))
+          : nextTarget.length
+      nextTarget.splice(insertAt, 0, url)
+    }
+    const keepSource = sourceGallery.length <= 1
+    const nextSource = keepSource ? sourceGallery : sourceGallery.filter((_, index) => index !== fromIndex)
+    if (!nextSource.length) {
+      toast.error('原商品至少保留一张主图')
+      return
+    }
+
+    applyLocalGallery(targetId, nextTarget)
+    if (!keepSource) applyLocalGallery(sourceId, nextSource)
+
+    try {
+      await persistPendingImportGallery(targetId, nextTarget, { allowShrink: true })
+      if (!keepSource) {
+        await persistPendingImportGallery(sourceId, nextSource, { allowShrink: true })
+      }
+      toast.success(keepSource ? '已复制到另一件商品（原商品仅剩一张，未移走）' : '已拖到另一件商品')
+    } catch (err: any) {
+      toast.error(err.message || '跨商品拖图失败')
+      applyLocalGallery(targetId, targetGallery)
+      applyLocalGallery(sourceId, sourceGallery)
     }
   }
 
@@ -4432,30 +4782,93 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       toast.success(next[0] !== previousMain ? '已设为主图并保存顺序' : '图片顺序已保存')
     } catch (err: any) {
       toast.error(err.message || '图片排序失败')
-      await refreshPendingImportQueue({ silent: true }).catch(() => undefined)
+      setPendingImportQueue((prev) => prev.map((row) =>
+        row.item_id === itemId
+          ? {
+              ...row,
+              item_galleryUrls: current,
+              item_mainImageUrl: current[0] || row.item_mainImageUrl,
+              item_parsedMainImageUrl: current[0] || row.item_parsedMainImageUrl,
+            }
+          : row,
+      ))
     }
+  }
+
+  const applyPendingImportSkuMutation = (
+    itemId: string,
+    item_skus: PendingImportSkuDraftItem[],
+  ) => {
+    const nextSkus = item_skus.map((sku) => sanitizePendingSkuCopyLabels(sku))
+    pendingImportSkuIntentRef.current.set(itemId, {
+      keys: nextSkus.map((sku) => sku.sku_key).filter(Boolean),
+      at: Date.now(),
+    })
+    pendingImportSkuLocalRef.current.set(itemId, { skus: nextSkus, at: Date.now() })
+    setPendingImportQueue((prev) => {
+      const next = prev.map((item) => {
+        if (item.item_id !== itemId) return item
+        const totalStock = nextSkus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
+        return {
+          ...item,
+          item_skus: nextSkus,
+          item_availableStock: totalStock,
+          item_skuSummaryText: nextSkus.map((sku) => sku.spec_text).filter(Boolean).join(' | '),
+        }
+      })
+      pendingImportQueueRef.current = next
+      return next
+    })
   }
 
   const syncPendingImportSkuImage = (itemId: string, skuKey: string, imageUrl: string | null) => {
     setPendingImportQueue(prev => prev.map(item => {
       if (item.item_id !== itemId) return item
-      return {
-        ...item,
-        item_skus: (item.item_skus || []).map(sku =>
-          sku.sku_key === skuKey ? { ...sku, image_url: imageUrl } : sku
-        )
-      }
+      const item_skus = (item.item_skus || []).map(sku =>
+        sku.sku_key === skuKey ? { ...sku, image_url: imageUrl } : sku
+      )
+      pendingImportSkuLocalRef.current.set(itemId, { skus: item_skus, at: Date.now() })
+      return { ...item, item_skus }
     }))
   }
 
   const persistPendingImportSkuImage = async (itemId: string, skuKey: string, imageUrl: string | null) => {
-    await inlineUpdatePendingImportSkuField({
-      item_id: itemId,
-      sku_key: skuKey,
-      field: 'image_url',
-      value: imageUrl || ''
-    })
+    const item = pendingImportQueueRef.current.find((row) => row.item_id === itemId)
+    const gallery = readPendingGalleryUrls(item)
+    if (gallery.length > 1) {
+      pendingImportGalleryPersistableRef.current.set(itemId, gallery)
+    }
+    const previous =
+      item?.item_skus?.find((sku) => sku.sku_key === skuKey)?.image_url ?? null
     syncPendingImportSkuImage(itemId, skuKey, imageUrl)
+    try {
+      await inlineUpdatePendingImportSkuField(
+        {
+          item_id: itemId,
+          sku_key: skuKey,
+          field: 'image_url',
+          value: imageUrl || '',
+          skus: pendingImportQueueRef.current.find((row) => row.item_id === itemId)?.item_skus || [],
+        } as any,
+        { __rpcTimeoutMs: 8_000 } as any,
+      )
+    } catch (error: any) {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(error?.message || ''))
+      if (isTimeout) return
+      syncPendingImportSkuImage(itemId, skuKey, previous)
+      throw error
+    }
+  }
+
+  const assignPendingImportGalleryImageToSku = async (itemId: string, skuKey: string, imageUrl: string) => {
+    const url = String(imageUrl || '').trim()
+    if (!url) return
+    try {
+      await persistPendingImportSkuImage(itemId, skuKey, url)
+      toast.success('已设为该 SKU 代表图')
+    } catch (err: any) {
+      toast.error(err.message || '设置 SKU 代表图失败')
+    }
   }
 
   const uploadPendingImportSkuImage = async (itemId: string, skuKey: string, event: ChangeEvent<HTMLInputElement>) => {
@@ -4467,9 +4880,9 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     try {
       const fileUrl = await enqueueSharedImageUpload(() => uploadImageToProject(file))
       await persistPendingImportSkuImage(itemId, skuKey, fileUrl)
-      toast.success('颜色图已上传')
+      toast.success('SKU 图已上传')
     } catch (err: any) {
-      toast.error(err.message || '颜色图上传失败')
+      toast.error(err.message || 'SKU 图上传失败')
     } finally {
       bumpPendingImportSkuImageInflight(uploadKey, -1)
     }
@@ -4484,55 +4897,91 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     bumpPendingImportSkuImageInflight(uploadKey, 1)
     try {
       await persistPendingImportSkuImage(itemId, skuKey, null)
-      toast.success('颜色图已删除')
+      toast.success('SKU 图已删除')
     } catch (err: any) {
-      toast.error(err.message || '颜色图删除失败')
+      toast.error(err.message || 'SKU 图删除失败')
     } finally {
       bumpPendingImportSkuImageInflight(uploadKey, -1)
     }
   }
 
-  const applyPendingImportSkuMutation = (
-    itemId: string,
-    item_skus: PendingImportSkuDraftItem[],
-  ) => {
-    setPendingImportQueue((prev) =>
-      prev.map((item) => {
-        if (item.item_id !== itemId) return item
-        const totalStock = item_skus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
-        return {
-          ...item,
-          item_skus,
-          item_availableStock: totalStock,
-          item_skuSummaryText: item_skus.map((sku) => sku.spec_text).filter(Boolean).join(' | '),
-        }
-      }),
-    )
-  }
-
   const duplicatePendingImportSkuRow = async (itemId: string, skuKey: string) => {
-    if (pendingImportSkuSaving) return
-    setPendingImportSkuSaving(true)
+    const current = pendingImportQueueRef.current.find((item) => item.item_id === itemId)
+    const skus = [...(current?.item_skus || [])]
+    const source = skus.find((sku) => sku.sku_key === skuKey)
+    if (!source) {
+      toast.error('找不到该规格行')
+      return
+    }
+    const clonedKey = `${skuKey}-copy-${Date.now()}`
+    const cloned = sanitizePendingSkuCopyLabels({
+      ...source,
+      sku_key: clonedKey,
+    })
+    const sourceIndex = skus.findIndex((sku) => sku.sku_key === skuKey)
+    const optimistic = [...skus]
+    optimistic.splice(sourceIndex + 1, 0, cloned)
+    applyPendingImportSkuMutation(itemId, optimistic)
     try {
-      const result = await duplicatePendingImportSku({ item_id: itemId, sku_key: skuKey })
-      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      await inlineUpdatePendingImportSkuField(
+        {
+          item_id: itemId,
+          sku_key: clonedKey,
+          field: 'spec_text',
+          value: cloned.spec_text,
+          skus: optimistic,
+        } as any,
+        { __rpcTimeoutMs: 8_000 } as any,
+      )
       toast.success('已复制规格行')
     } catch (err: any) {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(err?.message || ''))
+      if (isTimeout) {
+        toast.message('已复制，后台正在保存')
+        return
+      }
+      applyPendingImportSkuMutation(itemId, skus)
       toast.error(err.message || '复制规格行失败')
-    } finally {
-      setPendingImportSkuSaving(false)
     }
   }
 
   const deletePendingImportSkuRow = async (itemId: string, skuKey: string) => {
-    if (pendingImportSkuSaving) return
+    if (pendingImportSkuSaving) {
+      toast.error('正在保存，请稍后再删除')
+      return
+    }
     if (!window.confirm('确认删除该规格行？')) return
+    const current = pendingImportQueueRef.current.find((item) => item.item_id === itemId)
+    const previous = [...(current?.item_skus || [])]
+    const remaining = previous.filter((sku) => sku.sku_key !== skuKey)
+    if (!remaining.length) {
+      toast.error('至少保留一个规格行')
+      return
+    }
+    applyPendingImportSkuMutation(itemId, remaining)
     setPendingImportSkuSaving(true)
     try {
-      const result = await deletePendingImportSku({ item_id: itemId, sku_key: skuKey })
-      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      await inlineUpdatePendingImportSkuField(
+        {
+          item_id: itemId,
+          sku_key: remaining[0].sku_key,
+          field: 'spec_text',
+          value: remaining[0].spec_text || '规格',
+          skus: remaining,
+        } as any,
+        { __rpcTimeoutMs: 8_000 } as any,
+      )
       toast.success('已删除规格行')
+      setPendingImportSelectedSkuKeys((prev) =>
+        prev.filter((key) => key !== `${itemId}::${skuKey}`),
+      )
     } catch (err: any) {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(err?.message || ''))
+      if (isTimeout) {
+        toast.message('已删除，后台正在保存')
+        return
+      }
+      applyPendingImportSkuMutation(itemId, previous)
       toast.error(err.message || '删除规格行失败')
     } finally {
       setPendingImportSkuSaving(false)
@@ -4540,29 +4989,144 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }
 
   const duplicatePendingImportSkuColorRow = async (itemId: string, color: string) => {
-    if (pendingImportSkuSaving) return
-    setPendingImportSkuSaving(true)
+    const current = pendingImportQueueRef.current.find((item) => item.item_id === itemId)
+    const previous = [...(current?.item_skus || [])]
+    const sources = previous.filter((sku) => {
+      const skuColor = sku.attributes?.find((attr) => attr.name === '颜色')?.value?.trim() || '默认颜色'
+      return skuColor === color
+    })
+    if (!sources.length) {
+      toast.error('找不到该颜色行')
+      return
+    }
+    const stamp = Date.now()
+    const cloned = sources.map((sku, index) => sanitizePendingSkuCopyLabels({
+      ...sku,
+      sku_key: `${sku.sku_key}-copy-${stamp}-${index}`,
+    }))
+    const optimistic = [...previous]
+    const lastIndex = previous.findIndex((sku) => sku.sku_key === sources[sources.length - 1].sku_key)
+    optimistic.splice(lastIndex + 1, 0, ...cloned)
+    applyPendingImportSkuMutation(itemId, optimistic)
     try {
-      const result = await duplicatePendingImportSkuColorGroup({ item_id: itemId, color })
-      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      await inlineUpdatePendingImportSkuField(
+        {
+          item_id: itemId,
+          sku_key: cloned[0].sku_key,
+          field: 'spec_text',
+          value: cloned[0].spec_text,
+          skus: optimistic,
+        } as any,
+        { __rpcTimeoutMs: 8_000 } as any,
+      )
       toast.success('已复制颜色行')
     } catch (err: any) {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(err?.message || ''))
+      if (isTimeout) {
+        toast.message('已复制，后台正在保存')
+        return
+      }
+      applyPendingImportSkuMutation(itemId, previous)
       toast.error(err.message || '复制颜色行失败')
-    } finally {
-      setPendingImportSkuSaving(false)
     }
   }
 
   const deletePendingImportSkuColorRow = async (itemId: string, color: string) => {
-    if (pendingImportSkuSaving) return
     if (!window.confirm(`确认删除颜色「${color}」及其全部规格？`)) return
-    setPendingImportSkuSaving(true)
+    const current = pendingImportQueueRef.current.find((item) => item.item_id === itemId)
+    const previous = [...(current?.item_skus || [])]
+    const remaining = previous.filter((sku) => {
+      const skuColor = sku.attributes?.find((attr) => attr.name === '颜色')?.value?.trim() || '默认颜色'
+      return skuColor !== color
+    })
+    if (!remaining.length) {
+      toast.error('至少保留一个规格行')
+      return
+    }
+    applyPendingImportSkuMutation(itemId, remaining)
     try {
-      const result = await deletePendingImportSkuColorGroup({ item_id: itemId, color })
-      applyPendingImportSkuMutation(itemId, result.item_skus || [])
+      await inlineUpdatePendingImportSkuField(
+        {
+          item_id: itemId,
+          sku_key: remaining[0].sku_key,
+          field: 'spec_text',
+          value: remaining[0].spec_text || '规格',
+          skus: remaining,
+        } as any,
+        { __rpcTimeoutMs: 8_000 } as any,
+      )
       toast.success('已删除颜色行')
     } catch (err: any) {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(err?.message || ''))
+      if (isTimeout) {
+        toast.message('已删除，后台正在保存')
+        return
+      }
+      applyPendingImportSkuMutation(itemId, previous)
       toast.error(err.message || '删除颜色行失败')
+    }
+  }
+
+  const handleSelectPendingImportSkuKeys = (itemId: string, skuKeys: string[], checked: boolean) => {
+    const nextKeys = Array.from(
+      new Set(skuKeys.map((key) => String(key || '').trim()).filter(Boolean)),
+    ).map((key) => `${itemId}::${key}`)
+    if (!nextKeys.length) return
+    setPendingImportSelectedSkuKeys((prev) => {
+      if (checked) return Array.from(new Set([...prev, ...nextKeys]))
+      const remove = new Set(nextKeys)
+      return prev.filter((key) => !remove.has(key))
+    })
+  }
+
+  const batchDeletePendingImportSelectedSkus = async (itemId: string) => {
+    if (pendingImportSkuSaving) {
+      toast.error('正在保存，请稍后再删除')
+      return
+    }
+    const prefix = `${itemId}::`
+    const selectedKeys = new Set(
+      pendingImportSelectedSkuKeys
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => key.slice(prefix.length))
+        .filter(Boolean),
+    )
+    if (!selectedKeys.size) {
+      toast.error('请先勾选要删除的 SKU')
+      return
+    }
+    const current = pendingImportQueueRef.current.find((item) => item.item_id === itemId)
+    const previous = [...(current?.item_skus || [])]
+    const remaining = previous.filter((sku) => !selectedKeys.has(String(sku.sku_key || '').trim()))
+    if (!remaining.length) {
+      toast.error('至少保留一个规格行')
+      return
+    }
+    if (!window.confirm(`确认删除选中的 ${selectedKeys.size} 个 SKU？将保留 ${remaining.length} 个。`)) return
+    applyPendingImportSkuMutation(itemId, remaining)
+    setPendingImportSkuSaving(true)
+    try {
+      await inlineUpdatePendingImportSkuField(
+        {
+          item_id: itemId,
+          sku_key: remaining[0].sku_key,
+          field: 'spec_text',
+          value: remaining[0].spec_text || '规格',
+          skus: remaining,
+        } as any,
+        { __rpcTimeoutMs: 8_000 } as any,
+      )
+      setPendingImportSelectedSkuKeys((prev) => prev.filter((key) => !key.startsWith(prefix)))
+      toast.success(`已删除 ${selectedKeys.size} 个 SKU`)
+    } catch (err: any) {
+      const isTimeout = /请求超时|timed out|timeout/i.test(String(err?.message || ''))
+      if (isTimeout) {
+        setPendingImportSelectedSkuKeys((prev) => prev.filter((key) => !key.startsWith(prefix)))
+        toast.message('已删除，后台正在保存')
+        return
+      }
+      applyPendingImportSkuMutation(itemId, previous)
+      toast.error(err.message || '批量删除 SKU 失败')
     } finally {
       setPendingImportSkuSaving(false)
     }
@@ -4720,6 +5284,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       shouldShowPendingImportLanding,
       shouldShowPublishedDraftLanding,
       pendingImportSelectedIds,
+      pendingImportSelectedSkuKeys,
+      pendingImportReviewSavingIds,
       pendingImportNowMs,
       pendingImportInlineEditingCell,
       pendingImportInlineEditingValue,
@@ -4833,9 +5399,13 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       replaceBatchImportImage,
       removeBatchImportImage,
       uploadPendingImportImages,
+      pastePendingImportImageUrls,
       replacePendingImportImage,
       removePendingImportImage,
       reorderPendingImportImages,
+      movePendingImportImageToItem,
+      expandPendingImportItem,
+      assignPendingImportGalleryImageToSku,
       uploadPendingImportSkuImage,
       replacePendingImportSkuImage,
       removePendingImportSkuImage,
@@ -4843,6 +5413,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       deletePendingImportSkuRow,
       duplicatePendingImportSkuColorRow,
       deletePendingImportSkuColorRow,
+      handleSelectPendingImportSkuKeys,
+      batchDeletePendingImportSelectedSkus,
       addBatchImportRow,
       removeBatchImportRow,
       handleSubmitBatchImport,
@@ -4860,6 +5432,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       retryPendingImportActiveTask,
       handleSelectAllPendingImport,
       handleSelectPendingImportRow,
+      togglePendingImportReviewMark,
       startPendingImportInlineEdit,
       changePendingImportInlineEditingValue,
       cancelPendingImportInlineEdit,

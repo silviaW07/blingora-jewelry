@@ -17,6 +17,8 @@ const monoRoot = path.resolve(__dirname)
 const nextConfig = {
   // 1. 静态导出
   output: 'standalone',
+  // Category SSG hits RPC/DB; 60s default fails under 4 workers.
+  staticPageGenerationTimeout: 180,
 
   // 2. 文件追踪相关
   // Do NOT exclude **/.next/** or **/node_modules/** — that strips runtime chunks
@@ -79,7 +81,7 @@ const nextConfig = {
 
   experimental: {
     externalDir: true,
-    cpus: 4
+    cpus: 1
   },
 
   transpilePackages: ['components'],

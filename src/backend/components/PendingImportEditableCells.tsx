@@ -4,6 +4,7 @@ import React from 'react'
 import { Badge, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '@/backend/components/ui'
 import type { ProductManagementState, ProductManagementHandlers } from '@/backend/hooks/useProductManagement'
 import type { PendingImportEditableField } from '@/backend/types/ProductManagement'
+import { ClickOpenOrEditCell } from '@/backend/components/ClickOpenOrEditCell'
 
 /** 待上传区货物状态展示：草稿 → 待上传 */
 export const PENDING_GOODS_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -42,6 +43,7 @@ interface PendingImportEditableCellProps {
   multiline?: boolean
   /** 目标分类等：双击打开分类树弹窗，而不是下拉 */
   useCategoryTree?: boolean
+  href?: string | null
   renderDisplay?: (rawValue: string | number | null | undefined) => React.ReactNode
 }
 
@@ -58,6 +60,7 @@ export function PendingImportEditableCell({
   selectOptions,
   multiline = false,
   useCategoryTree = false,
+  href,
   renderDisplay,
 }: PendingImportEditableCellProps) {
   const isEditing =
@@ -119,7 +122,7 @@ export function PendingImportEditableCell({
   if (isEditing && multiline) {
     return (
       <Textarea
-        className={`min-h-[88px] text-sm ${inputClassName}`}
+        className={`min-h-[120px] resize-y whitespace-pre-wrap break-words text-sm leading-5 ${inputClassName}`}
         value={state.pendingImportInlineEditingValue}
         autoFocus
         disabled={state.pendingImportInlineSaving}
@@ -127,7 +130,7 @@ export function PendingImportEditableCell({
         onChange={e => handlers.changePendingImportInlineEditingValue(e.target.value)}
         onBlur={() => void handlers.submitPendingImportInlineEdit()}
         onKeyDown={e => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault()
             void handlers.submitPendingImportInlineEdit()
           }
@@ -156,6 +159,19 @@ export function PendingImportEditableCell({
     )
   }
 
+  if (href) {
+    return (
+      <ClickOpenOrEditCell
+        href={href}
+        className={className}
+        editTitle="双击编辑"
+        onEdit={() => handlers.startPendingImportInlineEdit(itemId, field, value ?? '')}
+      >
+        {display}
+      </ClickOpenOrEditCell>
+    )
+  }
+
   return (
     <button
       type="button"
@@ -171,7 +187,7 @@ export function PendingImportEditableCell({
 interface PendingImportSkuEditableCellProps {
   itemId: string
   skuKey: string
-  field: 'price' | 'cost_price' | 'weight_grams' | 'stock' | 'spec_text' | 'minimum_order_quantity'
+  field: 'price' | 'cost_price' | 'weight_grams' | 'stock' | 'spec_text' | 'color' | 'spec' | 'minimum_order_quantity'
   value: string | number | null | undefined
   state: ProductManagementState
   handlers: ProductManagementHandlers
@@ -213,11 +229,11 @@ export function PendingImportSkuEditableCell({
   if (isEditing) {
     return (
       <Input
-        type={field === 'spec_text' ? 'text' : 'number'}
+        type={field === 'spec_text' || field === 'color' || field === 'spec' ? 'text' : 'number'}
         className={`h-8 ${inputClassName}`}
         value={state.pendingImportSkuEditingValue}
         autoFocus
-        disabled={state.pendingImportSkuSaving}
+        disabled={false}
         placeholder={placeholder}
         onChange={e => handlers.changePendingImportSkuEditingValue(e.target.value)}
         onBlur={() => {

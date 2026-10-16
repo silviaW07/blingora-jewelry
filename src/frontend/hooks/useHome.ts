@@ -13,9 +13,16 @@ import {
   addCartItem,
   getDailyNewArrivalCalendar,
   getDailyNewArrivalProducts,
+  getHomeRecommendZones,
   type DailyNewArrivalMonthCard,
   type HomeRecommendZoneSection,
 } from '@/frontend/actions/Home'
+import { isStorefrontGuestSession } from '@/frontend/components/GuestPricePlaceholder'
+import {
+  applyCustomerCoefToHomeProductCard,
+  applyCustomerCoefToProductCard,
+} from '@/shared/applyCustomerListedPrices'
+import { useCustomerGoodsCoef } from '@/frontend/hooks/useCustomerGoodsCoef'
 import type { ProductItem } from '@/frontend/actions/ProductCategory'
 import { buildLast6Months, formatMonthLabel } from '@/frontend/utils/dailyNewArrival'
 import {
@@ -89,6 +96,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
   const router = useRouter()
   const searchParams = useSearchParams()
   const userSession = useUserSession()
+  const customerGoodsCoef = useCustomerGoodsCoef()
   const { openAuthModal } = useCustomerAuthModal()
   const { t } = useTranslation()
   const [recommendZones, setRecommendZones] = useState<HomeRecommendZoneSection[]>(() => {
@@ -161,7 +169,34 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     })
   }, [defaultRecommendCategoryId, primarySideNavZone])
 
-  const filteredRecommendZones = useMemo(() => recommendZones, [recommendZones])
+  const filteredRecommendZones = useMemo(
+    () =>
+      recommendZones.map((zone) => ({
+        ...zone,
+        items: zone.items.map((item) => {
+          if (item.entityType === 'PRODUCT') {
+            return applyCustomerCoefToHomeProductCard(item, customerGoodsCoef)
+          }
+          if (item.entityType === 'CATEGORY') {
+            return {
+              ...item,
+              latestProducts: (item.latestProducts || []).map((card) =>
+                applyCustomerCoefToHomeProductCard(card, customerGoodsCoef),
+              ),
+            }
+          }
+          return item
+        }),
+      })),
+    [recommendZones, customerGoodsCoef],
+  )
+
+  const displayedDailyNewArrivalProducts = useMemo(
+    () => dailyNewArrivalProducts.map((item) => applyCustomerCoefToProductCard(item, customerGoodsCoef)),
+    [dailyNewArrivalProducts, customerGoodsCoef],
+  )
+
+  const isLoggedInCustomer = !isStorefrontGuestSession(userSession)
 
   useEffect(() => {
     const lang = typeof window !== 'undefined' ? getClientPreferredLang() : 'en'
@@ -169,7 +204,11 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
     // Keep showing cached zones while refreshing — never flash empty on locale tick
     if (!cached?.length) setIsLoadingRecommendZones(true)
 
-    loadHomeRecommendZonesCached(lang, { force: true })
+    const request = isLoggedInCustomer
+      ? getHomeRecommendZones({ lang }).then((res) => (Array.isArray(res.zones) ? res.zones : []))
+      : loadHomeRecommendZonesCached(lang, { force: true })
+
+    request
       .then((zones) => {
         if (Array.isArray(zones) && zones.length > 0) setRecommendZones(zones)
       })
@@ -178,7 +217,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
         console.warn('[getHomeRecommendZones]', err?.message || err)
       })
       .finally(() => setIsLoadingRecommendZones(false))
-  }, [homeLocaleTick])
+  }, [homeLocaleTick, isLoggedInCustomer, userSession.user_id])
 
   // getHomeFeaturedProducts / linkedCategoryProducts: intentionally not fetched —
   // no current storefront view consumes them (was a pure waterfall after zones).
@@ -500,7 +539,7 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
       isLoadingLinkedCategoryProducts,
       dailyNewArrivalMonths,
       selectedDailyNewArrivalMonthKey,
-      dailyNewArrivalProducts,
+      dailyNewArrivalProducts: displayedDailyNewArrivalProducts,
       dailyNewArrivalTotalActiveProducts,
       isLoadingDailyNewArrivalCalendar,
       isLoadingDailyNewArrivalProducts,

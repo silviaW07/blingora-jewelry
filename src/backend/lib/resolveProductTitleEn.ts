@@ -6,6 +6,7 @@ import { translateTextTo } from '@/backend/lib/translateText'
 import {
   collapseRepeatedTitleWords,
   containsChinese,
+  isIncompleteTranslatedTitle,
   translateTitleKeywords,
 } from '@/shared/productKeywordDictionary'
 import { normalizeBrandTitle } from '@/backend/lib/brandAlias'
@@ -52,7 +53,13 @@ export async function resolveEnglishProductTitle(
   existingEn?: string | null,
 ): Promise<string> {
   const existing = collapseRepeatedTitleWords(existingEn)
-  if (existing && !containsChinese(existing)) return existing.slice(0, 200)
+  if (
+    existing &&
+    !containsChinese(existing) &&
+    !isIncompleteTranslatedTitle(existing, chineseName, 'en')
+  ) {
+    return existing.slice(0, 200)
+  }
 
   // 品牌别名归一（蔻C→Coach 等）：翻译前先替换，保证 EN 品牌名正确
   const zh = await normalizeBrandTitle(String(chineseName || '').trim())
@@ -67,7 +74,9 @@ export async function resolveEnglishProductTitle(
     if (containsChinese(en)) {
       en = collapseRepeatedTitleWords(translateTitleKeywords(en, 'en') || en)
     }
-    return en.slice(0, 200)
+    if (en && !containsChinese(en) && !isIncompleteTranslatedTitle(en, zh, 'en')) {
+      return en.slice(0, 200)
+    }
   }
 
   const fromDict = translateTitleKeywords(zh, 'en')
@@ -85,11 +94,12 @@ export async function resolveSpanishProductTitle(
   translationsJson?: unknown,
 ): Promise<string> {
   const cached = getCachedSpanishTitle(existingEs, translationsJson)
-  if (cached) return cached
+  if (cached && !isIncompleteTranslatedTitle(cached, chineseName, 'es')) return cached
 
   // 品牌别名归一（蔻C→Coach 等）：翻译前先替换，保证 ES 品牌名正确
   const zh = await normalizeBrandTitle(String(chineseName || '').trim())
   const en = getCachedEnglishTitle(englishFallback, translationsJson)
+  const enComplete = Boolean(en) && !isIncompleteTranslatedTitle(en, zh || chineseName, 'en')
 
   if (zh && containsChinese(zh)) {
     const fromZh = await translateTextTo(zh, 'es', 'zh')
@@ -98,11 +108,13 @@ export async function resolveSpanishProductTitle(
       if (containsChinese(es)) {
         es = collapseRepeatedTitleWords(translateTitleKeywords(es, 'es') || es)
       }
-      if (es && !containsChinese(es)) return es.slice(0, 200)
+      if (es && !containsChinese(es) && !isIncompleteTranslatedTitle(es, zh, 'es')) {
+        return es.slice(0, 200)
+      }
     }
   }
 
-  if (en) {
+  if (enComplete && en) {
     const fromEn = await translateTextTo(en, 'es', 'en')
     if (fromEn && fromEn.trim()) {
       return collapseRepeatedTitleWords(fromEn).slice(0, 200)
@@ -115,7 +127,7 @@ export async function resolveSpanishProductTitle(
   }
 
   // Last resort: keep English so ES locale is not Chinese
-  if (en) return en.slice(0, 200)
+  if (enComplete && en) return en.slice(0, 200)
   return collapseRepeatedTitleWords(zh).slice(0, 200)
 }
 

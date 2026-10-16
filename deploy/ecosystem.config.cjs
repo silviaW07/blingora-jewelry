@@ -71,6 +71,7 @@ function withPoolParams(url) {
 const DATABASE_URL_POOLED = withPoolParams(DATABASE_URL)
 const COOKIE_1688 = readEnvKey('COOKIE_1688') || readEnvKey('ALIBABA_COOKIE') || ''
 const COOKIE_PDD = readEnvKey('COOKIE_PDD') || readEnvKey('PDD_COOKIE') || ''
+const COOKIE_SZWEGO = readEnvKey('COOKIE_SZWEGO') || readEnvKey('COOKIE_WEISHANG') || ''
 const ONEBOUND_1688_KEY = readEnvKey('ONEBOUND_1688_KEY') || readEnvKey('ONEBOUND_KEY') || ''
 const ONEBOUND_1688_SECRET = readEnvKey('ONEBOUND_1688_SECRET') || readEnvKey('ONEBOUND_SECRET') || ''
 
@@ -122,6 +123,7 @@ module.exports = {
         ...(DATABASE_URL_POOLED ? { DATABASE_URL: DATABASE_URL_POOLED } : {}),
         ...(COOKIE_1688 ? { COOKIE_1688 } : {}),
         ...(COOKIE_PDD ? { COOKIE_PDD } : {}),
+        ...(COOKIE_SZWEGO ? { COOKIE_SZWEGO } : {}),
         ...(ONEBOUND_1688_KEY ? { ONEBOUND_1688_KEY } : {}),
         ...(ONEBOUND_1688_SECRET ? { ONEBOUND_1688_SECRET } : {}),
         TS_NODE_PROJECT: path.join(ROOT, 'tsconfig.server.json'),

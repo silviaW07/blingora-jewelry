@@ -25,6 +25,10 @@ async function rpcAction<T>(actionName: string, args: unknown[] = []): Promise<T
 const bootstrapCache = new Map<string, { at: number; data: StorefrontBootstrap }>()
 const BOOTSTRAP_TTL_MS = 60_000
 
+export function invalidateStorefrontBootstrapCache() {
+  bootstrapCache.clear()
+}
+
 export async function loadStorefrontBootstrap(
   lang = 'en',
   options?: { force?: boolean },

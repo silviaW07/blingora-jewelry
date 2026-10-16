@@ -1,9 +1,10 @@
 'use client'
 
 import React from 'react'
-import { Badge, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/backend/components/ui'
+import { Badge, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '@/backend/components/ui'
 import type { ProductManagementHandlers, ProductManagementState } from '@/backend/hooks/useProductManagement'
 import type { ProductInlineField } from '@/backend/types/ProductManagement'
+import { ClickOpenOrEditCell } from '@/backend/components/ClickOpenOrEditCell'
 
 export const PRODUCT_GOODS_STATUS_OPTIONS = [
   { value: 'ACTIVE', label: '已上架' },
@@ -42,6 +43,8 @@ interface ProductInlineEditableCellProps {
   placeholder?: string
   selectOptions?: Array<{ value: string; label: string }>
   useCategoryTree?: boolean
+  href?: string | null
+  multiline?: boolean
   renderDisplay?: (rawValue: string | number | null | undefined) => React.ReactNode
 }
 
@@ -56,6 +59,8 @@ export function ProductInlineEditableCell({
   placeholder = '',
   selectOptions,
   useCategoryTree = false,
+  href,
+  multiline = false,
   renderDisplay,
 }: ProductInlineEditableCellProps) {
   const isEditing =
@@ -114,6 +119,27 @@ export function ProductInlineEditableCell({
     )
   }
 
+  if (isEditing && multiline) {
+    return (
+      <Textarea
+        className={`min-h-[120px] resize-y whitespace-pre-wrap break-words text-sm leading-5 ${inputClassName}`}
+        value={state.inlineEditingValue}
+        autoFocus
+        disabled={state.inlineSaving}
+        placeholder={placeholder}
+        onChange={e => handlers.changeInlineEditingValue(e.target.value)}
+        onBlur={() => void handlers.submitInlineEdit()}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault()
+            void handlers.submitInlineEdit()
+          }
+          if (e.key === 'Escape') handlers.cancelInlineEdit()
+        }}
+      />
+    )
+  }
+
   if (isEditing) {
     return (
       <Input
@@ -134,14 +160,13 @@ export function ProductInlineEditableCell({
   }
 
   return (
-    <button
-      type="button"
-      className={`transition-colors hover:text-primary ${className}`}
-      title="点击编辑"
-      onClick={() => handlers.startInlineEdit(productId, field, value ?? '')}
+    <ClickOpenOrEditCell
+      href={href}
+      className={className}
+      onEdit={() => handlers.startInlineEdit(productId, field, value ?? '')}
     >
       {display}
-    </button>
+    </ClickOpenOrEditCell>
   )
 }
 

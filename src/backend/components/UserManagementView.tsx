@@ -20,7 +20,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { getCustomerTypeClassName } from '@/shared/customerType'
+import { defaultVipForCustomerType, getCustomerTypeClassName } from '@/shared/customerType'
+import { formatVipDiscount } from '@/shared/customerPromoPolicy'
 import {
   Search,
   User,
@@ -186,6 +187,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                 <TableHeader className="bg-secondary/50">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-semibold text-xs uppercase">姓名</TableHead>
+                    <TableHead className="font-semibold text-xs uppercase">VIP</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">WhatsApp号</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">邮箱</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">密码</TableHead>
@@ -201,7 +203,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                 <TableBody>
                   {state.loading ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="h-40 text-center text-muted-foreground">
+                      <TableCell colSpan={12} className="h-40 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <RefreshCcw className="h-6 w-6 animate-spin text-primary" />
                           数据加载中...
@@ -210,7 +212,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                     </TableRow>
                   ) : state.list.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="h-40 text-center text-muted-foreground">
+                      <TableCell colSpan={12} className="h-40 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <Search className="h-6 w-6 opacity-20" />
                           暂无符合条件的客户
@@ -228,6 +230,37 @@ export default function UserManagementView({ state, handlers }: Props) {
                           >
                             {user.username || user.account}
                           </button>
+                        </TableCell>
+                        <TableCell
+                          className="w-[88px]"
+                          onDoubleClick={() =>
+                            handlers.startVipEdit(
+                              user.id,
+                              user.vipDiscount > 0 ? user.vipDiscount : defaultVipForCustomerType(user.customerType),
+                            )
+                          }
+                          title="新客户默认 95vip，其余 97vip。双击可改"
+                        >
+                          {state.vipEditingId === user.id ? (
+                            <Input
+                              autoFocus
+                              className="h-8 w-[84px]"
+                              value={state.vipEditingValue}
+                              disabled={state.vipSaving}
+                              onChange={e => handlers.changeVipEditingValue(e.target.value)}
+                              onBlur={() => handlers.saveVipEdit()}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handlers.saveVipEdit()
+                                if (e.key === 'Escape') handlers.cancelVipEdit()
+                              }}
+                            />
+                          ) : (
+                            <span className="block cursor-text font-mono text-sm font-semibold text-[#111]">
+                              {formatVipDiscount(
+                                user.vipDiscount > 0 ? user.vipDiscount : defaultVipForCustomerType(user.customerType),
+                              )}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{user.whatsapp || '--'}</TableCell>
                         <TableCell className="text-muted-foreground" scrollX scrollXClassName="max-w-[260px]">

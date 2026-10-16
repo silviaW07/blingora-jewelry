@@ -44,6 +44,8 @@ type ProductListCardProps = {
   controllerName?: string
   /** 首屏（首排）卡片设为 true：主图 eager + 高 fetchPriority，改善移动端 LCP */
   priority?: boolean
+  selected?: boolean
+  onToggleSelect?: (productId: string, selected: boolean) => void
 }
 
 const formatPricePart = (price: number) => {
@@ -52,7 +54,7 @@ const formatPricePart = (price: number) => {
 }
 
 const formatListPrice = (price?: number | null, priceMax?: number | null) => {
-  if (typeof price !== 'number' || Number.isNaN(price)) return 'US$ --'
+  if (typeof price !== 'number' || Number.isNaN(price) || price <= 0) return 'US$ --'
   if (typeof priceMax === 'number' && !Number.isNaN(priceMax) && priceMax > price) {
     return `US$ ${formatPricePart(price)}-${formatPricePart(priceMax)}`
   }
@@ -101,6 +103,8 @@ export const ProductListCard = ({
   className,
   controllerName = '商品列表卡片',
   priority = false,
+  selected = false,
+  onToggleSelect,
 }: ProductListCardProps) => {
   const { t } = useTranslation()
   const canViewPrice = useCanViewStorePrice()
@@ -167,13 +171,29 @@ export const ProductListCard = ({
   return (
     <article
       className={cn(
-        'home-product-card group flex h-full flex-col overflow-visible transition duration-200',
+        'home-product-card group relative flex h-full flex-col overflow-visible transition duration-200',
         'hover:opacity-95',
+        selected && 'ring-2 ring-[#111111] ring-offset-2 ring-offset-[#fff5f5]',
         className,
       )}
       data-controller-name={controllerName}
       onPointerEnter={prefetchDetail}
     >
+      {onToggleSelect ? (
+        <label
+          className="absolute left-2 top-2 z-20 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-white/95 shadow-sm"
+          data-no-hard-nav=""
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            aria-label={t('product.selectProduct', { name: displayName })}
+            onChange={(event) => onToggleSelect(item.product_id, event.target.checked)}
+          />
+        </label>
+      ) : null}
       <a
         {...hardNavProps(detailHref)}
         aria-label={displayName}

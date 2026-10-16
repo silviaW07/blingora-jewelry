@@ -30,6 +30,8 @@ import {
   orderDetailHref,
   orderPayHref,
 } from '@/frontend/utils/hardNavigate'
+import { localizeShippingText } from '@/shared/shippingChannelI18n'
+import { normalizeProductLang } from '@/frontend/i18n/productTranslation'
 
 const STATUS_CLASS: Record<CustomerOrderStatus, string> = {
   PENDING_PAYMENT: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -199,7 +201,10 @@ export default function AccountOrdersView() {
                     </TableCell>
                     <TableCell className={`${CELL} max-w-[160px] whitespace-normal break-words text-[#6f6558]`}>
                       <span className="line-clamp-3">
-                        {order.trackingCarrier ||
+                        {localizeShippingText(
+                          order.trackingCarrier,
+                          normalizeProductLang(i18n.resolvedLanguage),
+                        ) ||
                           t(`accountOrders.shipMethods.${order.shipMethod}`)}
                       </span>
                     </TableCell>

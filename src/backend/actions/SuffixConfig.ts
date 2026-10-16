@@ -26,15 +26,6 @@ export interface SuffixConfigMutationOutput {
   success: boolean
 }
 
-/** 首次访问且表为空时，把原下拉框的固定后缀落库，保证行为不回退。 */
-const DEFAULT_SUFFIX_PRESETS: Array<{ name: string; weight: number }> = [
-  { name: '[13USD]', weight: 50 },
-  { name: '[3USD]', weight: 40 },
-  { name: '[清仓]', weight: 30 },
-  { name: '[特价]', weight: 20 },
-  { name: '[新品]', weight: 10 },
-]
-
 const normalizeSuffixName = (raw: unknown): string => String(raw ?? '').trim()
 
 const toItem = (row: {
@@ -50,16 +41,6 @@ const toItem = (row: {
 /** GET：获取所有后缀（按权重倒序、创建时间正序）。 */
 export const listSuffixConfigs = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
   withResult(async (): Promise<SuffixConfigItem[]> => {
-    const count = await prisma.suffixconfig.count()
-    if (count === 0) {
-      await prisma.suffixconfig.createMany({
-        data: DEFAULT_SUFFIX_PRESETS.map(preset => ({
-          suffixName: preset.name,
-          sortWeight: preset.weight,
-        })),
-        skipDuplicates: true,
-      })
-    }
     const rows = await prisma.suffixconfig.findMany({
       orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, suffixName: true, sortWeight: true },

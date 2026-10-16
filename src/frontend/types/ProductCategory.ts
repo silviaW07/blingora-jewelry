@@ -324,6 +324,7 @@ const collectVariantThumbnails = (
     if (!url || seen.has(url)) continue
     seen.add(url)
     urls.push(url)
+    if (urls.length >= 2) break
   }
 
   const mainUrl = mainImageUrl?.trim()
@@ -633,7 +634,7 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
       category_id: cat.id,
       category_name: resolveCategoryDisplayName(
         cat.translationsJson,
-        cat.navConfig?.navTitle?.trim() || cat.name,
+        cat.name,
         lang,
       ),
       category_slug: cat.slug,

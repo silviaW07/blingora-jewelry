@@ -5,6 +5,7 @@ import { loginCustomer } from '@/frontend/actions/CustomerLogin';
 import { useUserSession } from '@/tools/FrontendSession';
 import { hardNavigate } from '@/frontend/utils/hardNavigate';
 import { rememberLoginAccount, writeCustomerSession } from '@/frontend/utils/customerSessionPersist';
+import { sanitizeCustomerAuthError } from '@/shared/customerLoginErrors';
 import { toast } from "sonner";
 
 // Export States
@@ -100,19 +101,12 @@ export const useCustomerLogin = (): {
       const nextPath = target.startsWith('/') ? target : '/'
       window.setTimeout(() => hardNavigate(nextPath), 80)
     } catch (error: any) {
-      const raw = String(error?.message || '');
-      // Prisma / engine dumps → friendly copy; business errors pass through
-      if (
-        /Invalid `.*` invocation/i.test(raw) ||
-        /does not exist in the current database/i.test(raw) ||
-        /passwordPlain/i.test(raw) ||
-        /prisma/i.test(raw) ||
-        /Server is taking a break/i.test(raw)
-      ) {
-        setErrorMessage('Sign-in is temporarily unavailable. Please try again.');
-      } else {
-        setErrorMessage(raw || 'Sign-in failed. Please check your details');
-      }
+      setErrorMessage(
+        sanitizeCustomerAuthError(
+          error?.message,
+          'Sign-in failed. Please check your details',
+        ),
+      )
     } finally {
       setIsSubmitting(false);
     }

@@ -133,11 +133,18 @@ export const useCart = (): { state: CartState, handlers: CartHandlers } => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === 'app_preferred_locale') reload()
     }
+    const onShow = () => {
+      reload()
+    }
     window.addEventListener('app-locale-changed', onLocaleChanged as EventListener)
     window.addEventListener('storage', onStorage)
+    window.addEventListener('pageshow', onShow)
+    document.addEventListener('visibilitychange', onShow)
     return () => {
       window.removeEventListener('app-locale-changed', onLocaleChanged as EventListener)
       window.removeEventListener('storage', onStorage)
+      window.removeEventListener('pageshow', onShow)
+      document.removeEventListener('visibilitychange', onShow)
     }
   }, [loadCartData, loadRecommended])
 

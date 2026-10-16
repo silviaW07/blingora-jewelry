@@ -1,4 +1,5 @@
 import { slimProductCards, type ShelfProductCard } from '@/frontend/utils/categoryPreviewProducts'
+import { STOREFRONT_SHELF_PAGE_SIZE } from '@/frontend/utils/storefrontListPage'
 import type { ProductItem, StockStatusEnum } from '@/frontend/actions/ProductCategory'
 
 const PROJECT_ID =
@@ -169,7 +170,10 @@ export async function loadStorefrontProducts(input: {
   const daily = Boolean(input.daily)
   const page = Math.max(1, Number(input.page || 1) || 1)
   // 5 columns × 12 rows = 60 fills the xl grid without a dangling last slot
-  const pageSize = Math.min(60, Math.max(1, Number(input.pageSize || 60) || 60))
+  const pageSize = Math.min(
+    60,
+    Math.max(1, Number(input.pageSize || STOREFRONT_SHELF_PAGE_SIZE) || STOREFRONT_SHELF_PAGE_SIZE),
+  )
   let categoryId = String(input.categoryId || '').trim()
 
   try {

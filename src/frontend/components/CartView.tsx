@@ -17,7 +17,7 @@ import { useQuantityControl } from '@/frontend/hooks/useCart';
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { computeCheckoutTotals, formatUsd, sumCartWeightGram } from '@/shared/checkoutSummary';
+import { computeCheckoutTotals, formatUsd, persistCartSelectedIds, pickSelectedCartItems, sumCartWeightGram, sumSelectedCartOriginalUsd, sumSelectedCartSubtotalUsd } from '@/shared/checkoutSummary';
 import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService';
 import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen';
 import { useIsStorefrontGuest } from '@/frontend/components/GuestPricePlaceholder';
@@ -37,7 +37,15 @@ import {
 } from '@/frontend/i18n/productSpecTranslate';
 import { buildPaypalPayUrl } from '@/shared/paypalPayUrl';
 import { storefrontQtyMax } from '@/shared/storefrontQty';
+import type { CartItemData } from '@/frontend/actions/Cart';
 import { hardNavigate, productHref, useChromeActivate } from '@/frontend/utils/hardNavigate';
+
+/** MOQ-only invalid lines must still allow +/- so the shopper can reach the minimum. */
+function isCartQtyLocked(item: CartItemData) {
+  if (item.status !== 'INVALID') return false
+  const reason = String(item.invalidReason || '')
+  return !/minimum order quantity|mixed moq/i.test(reason)
+}
 
 interface Props {
   state: CartState;
@@ -71,12 +79,12 @@ const QuantityControl = ({
   } = useQuantityControl(initialValue, qtyMax, onUpdate);
   const minusEvents = useChromeActivate(handleMinus);
   const plusEvents = useChromeActivate(handlePlus);
-  return <div role="group" aria-disabled={disabled} className="mobile-cart-qty inline-flex h-8 items-center overflow-hidden rounded-full bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-      <button type="button" {...minusEvents} disabled={disabled || Number(val) <= 1} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-        <Minus className="size-3.5" data-api-unique-id='cartview-r2cdb4196d925e59d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
+  return <div role="group" aria-disabled={disabled} className="mobile-cart-qty inline-flex h-11 items-center overflow-hidden rounded-full bg-[#F1F5F9] focus-within:ring-2 focus-within:ring-[#f254a6]/35 transition-all duration-200" data-api-unique-id='cartview-r3e00996ab3a0c5ab-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+      <button type="button" {...minusEvents} disabled={disabled || Number(val) <= 1} className="flex h-11 w-11 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Decrease quantity" data-api-unique-id='cartview-rb009f8f48daf54de-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+        <Minus className="size-4" data-api-unique-id='cartview-r2cdb4196d925e59d-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
-      <Input type="text" value={val} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} disabled={disabled} className="h-full w-9 border-0 bg-transparent p-0 text-center font-body text-sm text-[#0F172A] focus-visible:outline-none focus-visible:ring-0 rounded-none" aria-label="Quantity" data-api-unique-id='cartview-r3985fe31fc48ad8b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
-      <button type="button" {...plusEvents} disabled={disabled || Number(val) >= qtyMax} className="flex h-full w-8 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Increase quantity" data-api-unique-id='cartview-r97ac9a4c6c9b44cc-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
+      <Input type="text" value={val} onChange={handleChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onCompositionStart={handleCompositionStart} onCompositionEnd={handleCompositionEnd} disabled={disabled} className="h-full w-12 border-0 bg-transparent p-0 text-center font-body text-base text-[#0F172A] focus-visible:outline-none focus-visible:ring-0 rounded-none" aria-label="Quantity" data-api-unique-id='cartview-r3985fe31fc48ad8b-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
+      <button type="button" {...plusEvents} disabled={disabled || Number(val) >= qtyMax} className="flex h-11 w-11 items-center justify-center text-[#64748B] hover:bg-[#E2E8F0] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-50 transition-colors" aria-label="Increase quantity" data-api-unique-id='cartview-r97ac9a4c6c9b44cc-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
         <Plus className="size-3.5" data-api-unique-id='cartview-rf62224822c3caf62-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' />
       </button>
     </div>;
@@ -159,38 +167,43 @@ export const CartView = ({
     [state.items],
   );
 
-  const checkoutTotals = useMemo(() => {
-    if (!state.summary) {
-      return computeCheckoutTotals({
-        originalPriceUsd: 0,
-        discountUsd: 0,
-        shippingFeeUsd: null,
-      })
-    }
-    return computeCheckoutTotals({
-      originalPriceUsd: Number(state.summary.totalPrice) || 0,
-      discountUsd: Number(state.summary.discount) || 0,
-      shippingFeeUsd: selectedShippingFee,
-    })
-  }, [selectedShippingFee, state.summary]);
-
-  const payableAmountValue = checkoutTotals.totalUsd;
-
-  const totalWeightGram = useMemo(
-    () => sumCartWeightGram(state.items, state.summary?.totalWeightGram),
-    [state.items, state.summary?.totalWeightGram],
-  );
-
-  const cartTotalWeightKg = useMemo(() => {
-    if (!Number.isFinite(totalWeightGram) || totalWeightGram <= 0) return 0;
-    return totalWeightGram / 1000;
-  }, [totalWeightGram]);
-
   const itemIds = useMemo(() => state.items.map((item) => item.cartItemId), [state.items]);
 
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => itemIds.includes(id)));
   }, [itemIds]);
+
+  useEffect(() => {
+    persistCartSelectedIds(selectedIds);
+  }, [selectedIds]);
+
+  const selectedItems = useMemo(
+    () => pickSelectedCartItems(state.items, selectedIds),
+    [selectedIds, state.items],
+  );
+
+  const selectedOriginalUsd = useMemo(() => sumSelectedCartOriginalUsd(selectedItems), [selectedItems]);
+  const selectedSubtotalUsd = useMemo(() => sumSelectedCartSubtotalUsd(selectedItems), [selectedItems]);
+  const selectedDiscountUsd = Math.max(0, selectedOriginalUsd - selectedSubtotalUsd);
+
+  const checkoutTotals = useMemo(
+    () =>
+      computeCheckoutTotals({
+        originalPriceUsd: selectedOriginalUsd,
+        discountUsd: selectedDiscountUsd,
+        shippingFeeUsd: selectedItems.length ? selectedShippingFee : null,
+      }),
+    [selectedDiscountUsd, selectedItems.length, selectedOriginalUsd, selectedShippingFee],
+  );
+
+  const payableAmountValue = checkoutTotals.totalUsd;
+
+  const totalWeightGram = useMemo(() => sumCartWeightGram(selectedItems), [selectedItems]);
+
+  const cartTotalWeightKg = useMemo(() => {
+    if (!Number.isFinite(totalWeightGram) || totalWeightGram <= 0) return 0;
+    return totalWeightGram / 1000;
+  }, [totalWeightGram]);
 
   const allSelected = itemIds.length > 0 && itemIds.every((id) => selectedIds.includes(id));
   const someSelected = selectedIds.length > 0 && !allSelected;
@@ -382,9 +395,9 @@ export const CartView = ({
                               </div>}
 
                             <div className="mobile-cart-line__actions flex items-center justify-between gap-2 pt-0.5" data-api-unique-id='cartview-r9e65d6e4ae1298b7-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                              <QuantityControl initialValue={item.quantity} max={item.stock} disabled={state.actionLoading || item.status === 'INVALID'} onUpdate={val => handlers.handleUpdateQuantity(item.cartItemId, val)} data-api-unique-id='cartview-r12e15f99691ee10a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
-                              <Button variant="ghost" size="icon" onClick={() => handlers.handleRemoveItem(item.cartItemId)} disabled={state.actionLoading} className="size-8 shrink-0 rounded-none text-[#64748B] hover:bg-[#EF4444]/10 hover:text-[#EF4444]" aria-label={t('common.cancel')} data-api-unique-id='cartview-r8e026a7a0a7e016e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
-                                  <Trash2 className="size-4" data-api-unique-id='cartview-r54c7ac71d33e46d6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
+                              <QuantityControl initialValue={item.quantity} max={item.stock} disabled={state.actionLoading || isCartQtyLocked(item)} onUpdate={val => handlers.handleUpdateQuantity(item.cartItemId, val)} data-api-unique-id='cartview-r12e15f99691ee10a-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
+                              <Button variant="ghost" size="icon" onClick={() => handlers.handleRemoveItem(item.cartItemId)} disabled={state.actionLoading} className="size-11 shrink-0 rounded-full text-[#64748B] hover:bg-[#EF4444]/10 hover:text-[#EF4444]" aria-label={t('common.cancel')} data-api-unique-id='cartview-r8e026a7a0a7e016e-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1'>
+                                  <Trash2 className="size-5" data-api-unique-id='cartview-r54c7ac71d33e46d6-s3843595280' data-api-unique-page-name='src/frontend/components/CartView' data-api-in-loop='1' />
                                 </Button>
                             </div>
                           </div>
@@ -399,25 +412,6 @@ export const CartView = ({
                     <span className="break-all text-right font-header text-base font-bold text-[#0F172A]">
                       {formatUsd(checkoutTotals.originalPriceUsd)}
                     </span>
-                  </div>
-
-                  {/* Mobile: go to address + shipping page (not inline expand) */}
-                  <div className="mobile-cart-checkout-cta px-1 pb-3 xl:hidden" data-controller-name="移动端去结算">
-                    <Button
-                      type="button"
-                      disabled={
-                        state.actionLoading ||
-                        state.isEmpty ||
-                        state.items.every((item) => item.status === 'INVALID')
-                      }
-                      {...goCheckout}
-                      className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#f254a6] py-5 text-base font-bold text-white hover:bg-[#e44798] disabled:opacity-50"
-                    >
-                      <DecorateText propKey="cart_go_checkout_btn" as="span">
-                        {t('checkout.goCheckout', { defaultValue: 'Checkout' })}
-                      </DecorateText>
-                      <ArrowRight className="size-4 shrink-0" />
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -479,6 +473,7 @@ export const CartView = ({
                           state.actionLoading ||
                           isPlacingOrder ||
                           state.isEmpty ||
+                          selectedItems.length === 0 ||
                           state.hasInvalidItems ||
                           !addressConfirmed ||
                           !checkoutAddress ||
@@ -494,8 +489,8 @@ export const CartView = ({
                             toast.error(t('checkout.selectShipping'))
                             return
                           }
-                          const validItems = state.items.filter((item) => item.status !== 'INVALID')
-                          if (validItems.length === 0) {
+                          const orderItems = selectedItems
+                          if (orderItems.length === 0) {
                             toast.error(t('checkout.noOrderableItems'))
                             return
                           }
@@ -509,7 +504,8 @@ export const CartView = ({
                                 channelName: selectedChannelName || 'Shipping',
                                 shippingFee: selectedShippingFee,
                               },
-                              items: validItems.map((item) => ({
+                              items: orderItems.map((item) => ({
+                                cartItemId: item.cartItemId,
                                 productId: item.productId,
                                 productSkuId: item.productSkuId,
                                 quantity: item.quantity,
@@ -629,9 +625,9 @@ export const CartView = ({
                     <OptimizedProductImage
                       src={prod.mainImageUrl}
                       alt={prod.name}
-                      sizes="(max-width: 768px) 45vw, 20vw"
-                      imageWidth={240}
-                      quality={85}
+                      sizes="(max-width: 1023px) 50vw, 360px"
+                      imageWidth={1200}
+                      quality={90}
                       priority
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
                     />
@@ -780,10 +776,41 @@ export const CartView = ({
           type="button"
           aria-label="Back to top"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-6 z-50 flex size-11 items-center justify-center rounded-full border border-[#f0dede] bg-white text-[#f254a6] shadow-md transition hover:bg-[#fff0f5] active:scale-95"
+          className="mobile-cart-scroll-top fixed z-50 flex size-11 items-center justify-center rounded-full border border-[#f0dede] bg-white text-[#f254a6] shadow-md transition hover:bg-[#fff0f5] active:scale-95"
         >
           <ChevronUp className="size-5" strokeWidth={2.5} />
         </button>
+      ) : null}
+
+      {!state.loading && !state.isEmpty ? (
+        <div className="mobile-cart-checkout-cta xl:hidden" data-controller-name="移动端去结算">
+          <div className="mobile-cart-checkout-cta__inner">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-[#64748B]">
+                {t('common.selectedCount', { selected: selectedIds.length, total: state.items.length })}
+              </p>
+              <p className="truncate font-header text-base font-bold text-[#0F172A]">
+                {formatUsd(checkoutTotals.originalPriceUsd)}
+              </p>
+            </div>
+            <Button
+              type="button"
+              disabled={
+                state.actionLoading ||
+                state.isEmpty ||
+                selectedItems.length === 0 ||
+                state.items.every((item) => item.status === 'INVALID')
+              }
+              {...goCheckout}
+              className="flex h-11 min-w-[44%] shrink-0 items-center justify-center gap-2 rounded-[10px] bg-[#f254a6] px-4 text-sm font-bold text-white hover:bg-[#e44798] disabled:opacity-50"
+            >
+              <DecorateText propKey="cart_go_checkout_btn" as="span">
+                {t('checkout.goCheckout', { defaultValue: 'Checkout' })}
+              </DecorateText>
+              <ArrowRight className="size-4 shrink-0" />
+            </Button>
+          </div>
+        </div>
       ) : null}
     </main>
   </>;

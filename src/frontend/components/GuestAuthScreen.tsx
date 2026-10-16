@@ -18,6 +18,7 @@ import {
 } from '@/frontend/utils/customerSessionPersist'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { DecorateInput } from '@/frontend/decorate/DecorateInput'
+import { sanitizeCustomerAuthError } from '@/shared/customerLoginErrors'
 
 type Tab = 'login' | 'register'
 
@@ -91,7 +92,12 @@ export function GuestAuthScreen({ initialTab = 'login' }: { initialTab?: Tab }) 
       toast.success(t('auth.loginSuccess'))
       window.setTimeout(() => redirectAfterStorefrontAuth(), 80)
     } catch (error: unknown) {
-      setLoginError(error instanceof Error ? error.message : t('auth.loginFailed'))
+      setLoginError(
+        sanitizeCustomerAuthError(
+          error instanceof Error ? error.message : null,
+          t('auth.loginFailed', { defaultValue: 'Sign-in failed. Please check your details' }),
+        ),
+      )
     } finally {
       setIsLoginSubmitting(false)
     }
@@ -137,7 +143,12 @@ export function GuestAuthScreen({ initialTab = 'login' }: { initialTab?: Tab }) 
       toast.success(t('auth.registerSuccess', { defaultValue: 'Account created' }))
       window.setTimeout(() => redirectAfterStorefrontAuth(), 80)
     } catch (error: unknown) {
-      setRegisterError(error instanceof Error ? error.message : t('auth.registerFailed'))
+      setRegisterError(
+        sanitizeCustomerAuthError(
+          error instanceof Error ? error.message : null,
+          t('auth.registerFailed', { defaultValue: 'Registration failed. Please try again later' }),
+        ),
+      )
     } finally {
       setIsRegisterSubmitting(false)
     }

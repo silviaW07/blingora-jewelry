@@ -58,6 +58,8 @@ export const updatePendingImportGallery = (...args: Parameters<Actions["updatePe
   rpcCall<Awaited<ReturnType<Actions["updatePendingImportGallery"]>>>("src.backend.actions.ImportFrom1688.updatePendingImportGallery", ...args);
 export const inlineUpdatePendingImportItemField = (...args: Parameters<Actions["inlineUpdatePendingImportItemField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportItemField"]>>>("src.backend.actions.ImportFrom1688.inlineUpdatePendingImportItemField", ...args);
+export const setPendingImportReviewMark = (...args: Parameters<Actions["setPendingImportReviewMark"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["setPendingImportReviewMark"]>>>("src.backend.actions.ImportFrom1688.setPendingImportReviewMark", ...args);
 export const batchUpdatePendingImportItemField = (...args: Parameters<Actions["batchUpdatePendingImportItemField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchUpdatePendingImportItemField"]>>>("src.backend.actions.ImportFrom1688.batchUpdatePendingImportItemField", ...args);
 export const inlineUpdatePendingImportSkuField = (...args: Parameters<Actions["inlineUpdatePendingImportSkuField"]>) => 

@@ -28,10 +28,21 @@ import {
 } from '@/backend/actions/SuffixConfig'
 
 /**
- * Fallback presets, only used before the API responds / when the request fails.
- * The live data source is the `suffix_config` table via {@link listSuffixConfigs}.
+ * Live data source is the `suffix_config` table via {@link listSuffixConfigs}.
+ * Never invent placeholders like [13USD] when the request fails — that hid the operator's real suffixes.
  */
-export const SUFFIX_OPTIONS = ['[13USD]', '[3USD]', '[清仓]', '[特价]', '[新品]'] as const
+const SUFFIX_OPTIONS_CACHE_KEY = 'admin-title-suffix-options'
+
+function readCachedSuffixes(): SuffixConfigItem[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(SUFFIX_OPTIONS_CACHE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.suffix_name) : []
+  } catch {
+    return []
+  }
+}
 
 export interface BatchAppendTitleSuffixControlProps {
   /** Disable when nothing selected / parent busy */
@@ -72,12 +83,28 @@ export function BatchAppendTitleSuffixControl({
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
 
   const loadOptions = useCallback(async () => {
-    setOptionsLoading(true)
+    const cached = readCachedSuffixes()
+    if (cached.length > 0) {
+      setOptions((prev) => (prev.length > 0 ? prev : cached))
+      setOptionsLoading(false)
+    } else {
+      setOptionsLoading(true)
+    }
     try {
-      const data = await listSuffixConfigs()
-      setOptions(Array.isArray(data) ? data : [])
+      const data = await listSuffixConfigs({ __rpcTimeoutMs: 8_000 } as any)
+      const next = Array.isArray(data) ? data : []
+      setOptions(next)
+      try {
+        window.localStorage.setItem(SUFFIX_OPTIONS_CACHE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore quota / private mode */
+      }
     } catch (err: any) {
-      toast.error(err?.message || '获取后缀列表失败')
+      const fallback = cached.length > 0 ? cached : readCachedSuffixes()
+      setOptions((prev) => (prev.length > 0 ? prev : fallback))
+      if (fallback.length === 0) {
+        toast.error(err?.message || '获取后缀列表失败，请点「管理后缀」重试')
+      }
     } finally {
       setOptionsLoading(false)
     }
@@ -279,7 +306,7 @@ export function BatchAppendTitleSuffixControl({
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1" align="start">
                   <ul className="max-h-56 overflow-y-auto">
-                    {optionsLoading ? (
+                    {optionsLoading && options.length === 0 ? (
                       <li className="px-2 py-3 text-center text-sm text-slate-400">加载中…</li>
                     ) : options.length === 0 ? (
                       <li className="px-2 py-3 text-center text-sm text-slate-400">暂无后缀，请在“管理后缀”中新增</li>

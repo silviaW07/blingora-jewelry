@@ -115,6 +115,8 @@ const ATTRIBUTE_EXACT_NAMES = new Set(
     '皮革',
     'high quality',
     'high quality jewelry',
+    'high quality bag',
+    'high quality bags',
     'normal quality',
     'normal quality jewelry',
     'normal quality bag',

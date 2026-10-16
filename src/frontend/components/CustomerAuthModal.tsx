@@ -28,39 +28,13 @@ import { useCustomerAuthModal } from '@/frontend/auth/CustomerAuthModalContext';
 import { DecorateText } from '@/frontend/decorate/DecorateText';
 import { DecorateInput } from '@/frontend/decorate/DecorateInput';
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext';
+import { sanitizeCustomerAuthError } from '@/shared/customerLoginErrors';
 
 interface RegisterForm {
   sysuser_name: string;
   sysuser_email: string;
   sysuser_phone: string;
   sysuser_password: string;
-}
-
-/** Hide Prisma schema/engine dumps from end-user login UI */
-const sanitizeAuthErrorMessage = (raw: unknown, fallback: string): string => {
-  const message = String(raw || '').trim()
-  if (!message) return fallback
-  // Keep business messages that register/login already mapped
-  if (/该邮箱已被注册|Email already|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户/i.test(message)) {
-    return message.replace(/该邮箱已被注册[^。]*/u, 'This email is already registered. Please sign in or use another email.')
-      .replace(/数据库结构未同步[^。]*/u, 'Database schema is out of date. Please contact support.')
-      .replace(/账号或密码错误/u, 'Incorrect account or password')
-      .replace(/账户状态受限[^。]*/u, 'Account restricted. Please contact support.')
-      .replace(/该账号非前台客户账号[^。]*/u, 'This account cannot sign in on the storefront.')
-  }
-  if (/P2002|Unique constraint/i.test(message)) {
-    return 'This email is already registered. Please sign in or use another email.'
-  }
-  if (
-    /Invalid `.*` invocation/i.test(message) ||
-    /does not exist in the current database/i.test(message) ||
-    /passwordPlain/i.test(message) ||
-    /prisma/i.test(message) ||
-    /ECONNREFUSED|ENOTFOUND|P20\d{2}/i.test(message)
-  ) {
-    return fallback
-  }
-  return message
 }
 
 export function CustomerAuthModal() {
@@ -160,9 +134,9 @@ export function CustomerAuthModal() {
       closeAuthModal();
       window.setTimeout(() => redirectAfterStorefrontAuth(), 80);
     } catch (error: unknown) {
-      const message = sanitizeAuthErrorMessage(
+      const message = sanitizeCustomerAuthError(
         error instanceof Error ? error.message : null,
-        t('auth.loginFailed'),
+        t('auth.loginFailed', { defaultValue: 'Sign-in failed. Please check your details' }),
       )
       setLoginError(message)
     } finally {
@@ -215,9 +189,9 @@ export function CustomerAuthModal() {
       closeAuthModal();
       window.setTimeout(() => redirectAfterStorefrontAuth(), 80);
     } catch (error: unknown) {
-      const message = sanitizeAuthErrorMessage(
+      const message = sanitizeCustomerAuthError(
         error instanceof Error ? error.message : null,
-        t('auth.registerFailed'),
+        t('auth.registerFailed', { defaultValue: 'Registration failed. Please try again later' }),
       )
       setRegisterError(message)
     } finally {

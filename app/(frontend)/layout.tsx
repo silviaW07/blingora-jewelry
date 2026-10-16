@@ -24,7 +24,7 @@ const FULLSCREEN_PATHS = ['/customerlogin', '/customerregister']
 /** 结账/购物车页：隐藏全站粉色促销倒计时条，改用页面内专用导航头 */
 const CHECKOUT_PATHS = ['/cart', '/checkout']
 /** Coming 等精简单页：不显示促销横幅 / 搜索顶栏冗余 */
-const MINIMAL_STORE_PATHS = ['/coming', '/brand']
+const MINIMAL_STORE_PATHS = ['/coming', '/brand', '/promo-catalog']
 
 interface RootLayoutProps {
   children: React.ReactNode

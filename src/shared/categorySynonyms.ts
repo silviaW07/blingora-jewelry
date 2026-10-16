@@ -178,7 +178,11 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
 
   // —— 配饰 / Accessories ——
   { names: ['Belt', 'Belts', '皮带'], synonyms: ['皮带', '腰带', '腰封'] },
-  { names: ['Glasses', 'Sunglasses', '眼镜'], synonyms: ['眼镜', '墨镜', '太阳镜', '近视镜'] },
+  { names: ['Glasses', 'Sunglasses', '眼镜'], synonyms: ['眼镜', '墨镜', '太阳镜', '平光镜', '近视镜'] },
+  {
+    names: ['Louis Vuitton', 'LV', '路易威登'],
+    synonyms: ['Louis Vuitton', 'LV', '路易威登', '老花'],
+  },
   { names: ['Watch', 'Watches', '手表'], synonyms: ['手表', '腕表', '石英表', '机械表'] },
   { names: ['Phone Case', '手机壳'], synonyms: ['手机壳', '手机套', '保护壳', '保护套'] },
   { names: ['Keychain', 'Key Chain', '钥匙扣'], synonyms: ['钥匙扣', '钥匙链', '包挂', '挂饰'] },
@@ -235,8 +239,8 @@ const SYNONYM_GROUPS: Array<{ names: string[]; synonyms: string[] }> = [
     synonyms: ['high quality jewelry', 'highqualityjewelry', '高品质饰品', '高质量饰品'],
   },
   {
-    names: ['High quality bag', 'high quality bag', 'High Quality Bag'],
-    synonyms: ['high quality bag', 'highqualitybag', '高品质包', '高质量包'],
+    names: ['High quality bag', 'high quality bag', 'High Quality Bag', 'High quality bags', 'high quality bags'],
+    synonyms: ['high quality bag', 'highqualitybag', 'high quality bags', '高品质包', '高质量包'],
   },
   {
     names: ['Normal Quality', 'normal quality', 'Normal quality'],

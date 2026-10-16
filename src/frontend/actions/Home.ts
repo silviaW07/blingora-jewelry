@@ -33,6 +33,8 @@ import { CATEGORY_CARD_PLACEHOLDER_URL, optimizeCatalogImageUrl, resolveCategory
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
+import { combinePriceCoef, resolveGoodsCoef } from '@/shared/customerPromoPolicy'
+import { loadCustomerPromo } from '@/frontend/lib/loadCustomerPromoKind'
 import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 import { priceThresholdMaxUsdForCategory, productFitsPriceThresholdUsd } from '@/shared/priceThreshold'
 
@@ -88,6 +90,59 @@ export interface HomeRecommendCategoryCard {
 }
 
 const DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT = 4
+
+function scaleListedUsd(price: number | null, coef: number): { price: number | null; originalPrice: number | null } | null {
+  if (price == null || !(price > 0)) return null
+  const sale = Math.round(price * coef * 100) / 100
+  if (sale >= price - 0.009) return null
+  return { price: sale, originalPrice: price }
+}
+
+function scaleHomeProductCard(card: HomeRecommendProductCard, coef: number): HomeRecommendProductCard {
+  const scaled = scaleListedUsd(card.price, coef)
+  const min = scaleListedUsd(card.priceMin, coef)
+  const max = scaleListedUsd(card.priceMax, coef)
+  return {
+    ...card,
+    price: scaled?.price ?? card.price,
+    priceMin: min?.price ?? card.priceMin,
+    priceMax: max?.price ?? card.priceMax,
+    originalPrice: card.originalPrice != null && card.originalPrice > (scaled?.price ?? card.price ?? 0)
+      ? card.originalPrice
+      : scaled?.originalPrice ?? card.originalPrice,
+    skuOptions: (card.skuOptions || []).map((opt) => {
+      const next = scaleListedUsd(opt.price, coef)
+      if (!next) return opt
+      return {
+        ...opt,
+        price: next.price,
+        originalPrice: opt.originalPrice != null && opt.originalPrice > (next.price ?? 0)
+          ? opt.originalPrice
+          : next.originalPrice,
+      }
+    }),
+  }
+}
+
+function applyCustomerCoefToZones(
+  zones: HomeRecommendZoneSection[],
+  coef: number | null,
+): HomeRecommendZoneSection[] {
+  if (coef == null) return zones
+  return zones.map((zone) => ({
+    ...zone,
+    items: zone.items.map((item) => {
+      if (item.entityType === 'PRODUCT') return scaleHomeProductCard(item, coef)
+      if (item.entityType === 'CATEGORY') {
+        return {
+          ...item,
+          latestProducts: (item.latestProducts || []).map((card) => scaleHomeProductCard(card, coef)),
+        }
+      }
+      return item
+    }),
+  }))
+}
 
 export interface HomeRecommendSideNavItem {
   itemId: string
@@ -176,9 +231,11 @@ export const getHomeRecommendZones = async (input?: {
   lang?: string
 }): Promise<{ zones: HomeRecommendZoneSection[] }> => {
   const lang = normalizeProductLang(input?.lang)
+  const customerPromo = await loadCustomerPromo()
+  const customerCoef = resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount)
   const cachedAssembled = readAssembledHomeRecommendZones<HomeRecommendZoneSection[]>(lang)
   if (cachedAssembled?.length) {
-    return { zones: cachedAssembled }
+    return { zones: applyCustomerCoefToZones(cachedAssembled, customerCoef) }
   }
 
   const [exchangeRate, pricingConfig] = await Promise.all([
@@ -394,6 +451,7 @@ export const getHomeRecommendZones = async (input?: {
         categoryId: true,
         brandCategoryId: true,
         costPrice: true,
+        priceCoefficient: true,
         ratingAverage: true,
         ratingCount: true,
         translationsJson: true,
@@ -518,6 +576,7 @@ export const getHomeRecommendZones = async (input?: {
           resolveFrontRmbSellingPrice({
             skuPriceRmb: sku.price.toNumber(),
             costPrice: product.costPrice,
+            productCoefficient: product.priceCoefficient,
             ...pricingCoeffs,
           }),
         )
@@ -534,6 +593,7 @@ export const getHomeRecommendZones = async (input?: {
           const priceRmb = resolveFrontRmbSellingPrice({
             skuPriceRmb: sku.price.toNumber(),
             costPrice: product.costPrice,
+            productCoefficient: product.priceCoefficient,
             ...pricingCoeffs,
           })
           const priceUsd = priceRmb > 0 ? toUsdPrice(priceRmb, exchangeRate) : null
@@ -658,6 +718,7 @@ export const getHomeRecommendZones = async (input?: {
               resolveFrontRmbSellingPrice({
                 skuPriceRmb: sku.price.toNumber(),
                 costPrice: product.costPrice,
+                productCoefficient: product.priceCoefficient,
                 ...pricingCoeffs,
               }),
             )
@@ -674,6 +735,7 @@ export const getHomeRecommendZones = async (input?: {
               const skuPriceRmb = resolveFrontRmbSellingPrice({
                 skuPriceRmb: sku.price.toNumber(),
                 costPrice: product.costPrice,
+                productCoefficient: product.priceCoefficient,
                 ...pricingCoeffs,
               })
               const priceUsd = skuPriceRmb > 0 ? toUsdPrice(skuPriceRmb, exchangeRate) : null
@@ -878,7 +940,7 @@ export const getHomeRecommendZones = async (input?: {
 
   writeAssembledHomeRecommendZones(lang, result)
   return {
-    zones: result,
+    zones: applyCustomerCoefToZones(result, customerCoef),
   }
 }
 
@@ -1145,6 +1207,7 @@ const mapActiveProductToItem = (
   const priceRmb = resolveFrontRmbSellingPrice({
     skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
     costPrice: product.costPrice,
+    productCoefficient: product.priceCoefficient,
     ...pricingCoeffs,
   })
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
@@ -1155,6 +1218,7 @@ const mapActiveProductToItem = (
         resolveFrontRmbSellingPrice({
           skuPriceRmb: sku.price.toNumber(),
           costPrice: product.costPrice,
+          productCoefficient: product.priceCoefficient,
           ...pricingCoeffs,
         }),
         exchangeRate,
@@ -1177,6 +1241,7 @@ const mapActiveProductToItem = (
     if (!url || seen.has(url)) continue
     seen.add(url)
     variantThumbnails.push(url)
+    if (variantThumbnails.length >= 2) break
   }
   if (variantThumbnails.length === 0 && product.mainImageUrl?.trim()) {
     variantThumbnails.push(product.mainImageUrl.trim())
@@ -1275,7 +1340,9 @@ export const getDailyNewArrivalProducts = withResult(async (
   const pageSize = Math.min(60, Math.max(1, Number(input.page_size) || 60))
   const skip = (page - 1) * pageSize
   const lang = normalizeProductLang(input.lang)
-  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}`
+  const customerPromo = await loadCustomerPromo()
+  const customerCoef = resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount)
+  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef ?? 1}`
   const cached = readDailyNewCache(dailyNewProductsCache, cacheKey)
   if (cached) return cached
 
@@ -1296,6 +1363,7 @@ export const getDailyNewArrivalProducts = withResult(async (
         shortDescription: true,
         status: true,
         costPrice: true,
+        priceCoefficient: true,
         ratingAverage: true,
         ratingCount: true,
         sortWeight: true,
@@ -1365,7 +1433,7 @@ export const getDailyNewArrivalProducts = withResult(async (
     getUsdExchangeRate(prisma),
     loadPricingPromotionConfig(prisma),
   ])
-  const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
+  const siteWideCoef = combinePriceCoef(getSiteWidePercentCoef(pricingConfig), customerCoef)
 
   const result: GetDailyNewArrivalProductsOutput = {
     list: dbProducts.map((product) => mapActiveProductToItem(product, exchangeRate, lang, siteWideCoef)),

@@ -8,6 +8,7 @@ import {
   UserRole
 } from '@/backend/action_utils'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import { isPlaceholderCompareAt, resolveListedCompareAt } from '@/shared/pricingPromotionCalc'
 
 // ===== Enums =====
 
@@ -624,6 +625,43 @@ const toUsdAmount = (amount: number, currencyCode: string | null | undefined, us
   return Math.round(amount * 100) / 100
 }
 
+function resolveExportUnitPricesUsd(params: {
+  unitPrice: number
+  currencyCode: string | null | undefined
+  usdExchangeRate: number
+  skuPriceCny?: number | null
+  skuOriginalCny?: number | null
+  orderDiscountUsd?: number | null
+}): { originalPriceUsd: number; discountPriceUsd: number } {
+  const paidUsd = toUsdAmount(params.unitPrice, params.currencyCode, params.usdExchangeRate)
+  const orderDiscountUsd = Number(params.orderDiscountUsd || 0)
+  const skuPriceCny = params.skuPriceCny != null ? Number(params.skuPriceCny) : null
+  const skuOriginalCny = params.skuOriginalCny != null ? Number(params.skuOriginalCny) : null
+  const listUsd =
+    skuPriceCny != null && Number.isFinite(skuPriceCny)
+      ? toUsdFromCny(skuPriceCny, params.usdExchangeRate)
+      : paidUsd
+  const originalUsd =
+    skuOriginalCny != null && Number.isFinite(skuOriginalCny)
+      ? toUsdFromCny(skuOriginalCny, params.usdExchangeRate)
+      : null
+  // No live campaign: SKU originalPrice is often list*1.1 from import, not a sale.
+  if (!(orderDiscountUsd > 0.009)) {
+    return { originalPriceUsd: paidUsd, discountPriceUsd: paidUsd }
+  }
+  if (
+    originalUsd != null &&
+    (isPlaceholderCompareAt(paidUsd, originalUsd) || isPlaceholderCompareAt(listUsd, originalUsd))
+  ) {
+    return { originalPriceUsd: paidUsd, discountPriceUsd: paidUsd }
+  }
+  const realCompareAt = resolveListedCompareAt(listUsd, originalUsd)
+  return {
+    originalPriceUsd: realCompareAt ?? paidUsd,
+    discountPriceUsd: paidUsd,
+  }
+}
+
 function firstGalleryUrl(galleryJson: unknown): string {
   if (!Array.isArray(galleryJson)) return ''
   for (const entry of galleryJson) {
@@ -827,6 +865,28 @@ function resolveSkuSpecification(params: {
   return values.join('-') || '默认规格'
 }
 
+
+/** 采购表：同一 SPU 的规格排在一起。组的先后按该 SPU 第一次出现的位置。 */
+function groupExcelRowsBySpu(rows: OrderExcelExportRow[]): OrderExcelExportRow[] {
+  const groups = new Map<string, OrderExcelExportRow[]>()
+  const order: string[] = []
+  for (const row of rows) {
+    const spu = String(row.spu || '').trim().toLowerCase()
+    const productId = String(row.productId || '').trim().toLowerCase()
+    const key = spu || productId || `__empty_${order.length}`
+    let bucket = groups.get(key)
+    if (!bucket) {
+      bucket = []
+      groups.set(key, bucket)
+      order.push(key)
+    }
+    bucket.push(row)
+  }
+  const grouped: OrderExcelExportRow[] = []
+  for (const key of order) grouped.push(...(groups.get(key) || []))
+  return grouped
+}
+
 async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrdersExcelOutput> {
   const orderIds = Array.from(new Set((orderIdsInput || []).filter(Boolean)))
   if (!orderIds.length) throw new Error('请至少选择一笔订单')
@@ -889,13 +949,20 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
       const unitPrice = item.unitPrice.toNumber()
       const lineAmount = item.lineAmount.toNumber()
       const skuOriginal = item.productSku?.originalPrice != null ? Number(item.productSku.originalPrice) : null
+      const skuPrice = item.productSku?.price != null ? Number(item.productSku.price) : null
       // SKU price fields are always CNY; order item snapshots use the order currency.
-      const originalPriceUsd = skuOriginal != null
-        ? toUsdFromCny(skuOriginal, usdExchangeRate)
-        : toUsdAmount(unitPrice, order.currencyCode, usdExchangeRate)
-      // 无独立折扣价时回退到原价
-      const discountPriceUsd =
-        skuOriginal != null ? toUsdAmount(unitPrice, order.currencyCode, usdExchangeRate) : originalPriceUsd
+      const { originalPriceUsd, discountPriceUsd } = resolveExportUnitPricesUsd({
+        unitPrice,
+        currencyCode: order.currencyCode,
+        usdExchangeRate,
+        skuPriceCny: skuPrice,
+        skuOriginalCny: skuOriginal,
+        orderDiscountUsd: toUsdAmount(
+          order.discountAmount != null ? Number(order.discountAmount) : 0,
+          order.currencyCode,
+          usdExchangeRate,
+        ),
+      })
       const totalPriceUsd = toUsdAmount(lineAmount, order.currencyCode, usdExchangeRate)
       const importSourceUrl =
         item.product?.importTaskItems?.find((row) => /1688\.com/i.test(String(row.sourceUrl || '')))?.sourceUrl ||
@@ -941,7 +1008,7 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
     const fallbackItems = await prisma.orderitem.findMany({
       where: { orderId: { in: orderIds } },
       include: {
-        order: { select: { orderNo: true, currencyCode: true } },
+        order: { select: { orderNo: true, currencyCode: true, discountAmount: true } },
         product: {
           select: {
             productCode: true,
@@ -971,11 +1038,19 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
       const lineAmount = item.lineAmount.toNumber()
       const currency = item.order?.currencyCode || 'USD'
       const skuOriginal = item.productSku?.originalPrice != null ? Number(item.productSku.originalPrice) : null
-      const originalPriceUsd = skuOriginal != null
-        ? toUsdFromCny(skuOriginal, usdExchangeRate)
-        : toUsdAmount(unitPrice, currency, usdExchangeRate)
-      const discountPriceUsd =
-        skuOriginal != null ? toUsdAmount(unitPrice, currency, usdExchangeRate) : originalPriceUsd
+      const skuPrice = item.productSku?.price != null ? Number(item.productSku.price) : null
+      const { originalPriceUsd, discountPriceUsd } = resolveExportUnitPricesUsd({
+        unitPrice,
+        currencyCode: currency,
+        usdExchangeRate,
+        skuPriceCny: skuPrice,
+        skuOriginalCny: skuOriginal,
+        orderDiscountUsd: toUsdAmount(
+          item.order?.discountAmount != null ? Number(item.order.discountAmount) : 0,
+          currency,
+          usdExchangeRate,
+        ),
+      })
       rows.push({
         productId: item.productId,
         sku: resolveSkuSpecification({
@@ -1013,7 +1088,7 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
 
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
   return {
-    rows,
+    rows: groupExcelRowsBySpu(rows),
     fileName:
       orderIds.length === 1
         ? `order-export-${orders[0]?.orderNo || stamp}.xlsx`

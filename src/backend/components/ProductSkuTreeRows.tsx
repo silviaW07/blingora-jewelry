@@ -43,6 +43,21 @@ interface ProductTreeRowsProps {
 }
 
 function listItemSellPriceRange(item: ProductListItem, usdRate: number) {
+  const skuPrices = (item.skus || [])
+    .map((sku) => Number(sku.price))
+    .filter((n) => Number.isFinite(n))
+  const skuSpread =
+    skuPrices.length > 1 && skuPrices.some((price) => Math.abs(price - skuPrices[0]) >= 0.02)
+  if (skuSpread) {
+    const cnyMin = Math.min(...skuPrices)
+    const cnyMax = Math.max(...skuPrices)
+    return {
+      cnyMin,
+      cnyMax,
+      usdMin: toUsdFromCny(cnyMin, usdRate),
+      usdMax: toUsdFromCny(cnyMax, usdRate),
+    }
+  }
   const coefficient = resolveDisplayedPriceCoefficient(
     item.price_coefficient,
     item.effective_price_coefficient,
@@ -52,9 +67,6 @@ function listItemSellPriceRange(item: ProductListItem, usdRate: number) {
     const { rmb, usd } = calculateCostLinkedSellPrices(cost, coefficient, usdRate)
     return { cnyMin: rmb, cnyMax: rmb, usdMin: usd, usdMax: usd }
   }
-  const skuPrices = (item.skus || [])
-    .map((sku) => Number(sku.price))
-    .filter((n) => Number.isFinite(n))
   const cnyMin = skuPrices.length > 0 ? Math.min(...skuPrices) : Number(item.price_min ?? 0)
   const cnyMax = skuPrices.length > 0 ? Math.max(...skuPrices) : Number(item.price_max ?? 0)
   return {
@@ -77,12 +89,17 @@ function ProductTreeRowsInner({
   const skus = item.skus || []
   const usdRate = Number(state.usdExchangeRate) > 0 ? Number(state.usdExchangeRate) : DEFAULT_USD_EXCHANGE_RATE
   const sellRange = listItemSellPriceRange(item, usdRate)
+  const skuSpread =
+    skus.length > 1 &&
+    skus.some((sku) => Math.abs(Number(sku.price) - Number(skus[0].price)) >= 0.02)
   const costLinkedSell =
+    !skuSpread &&
     resolveDisplayedPriceCoefficient(item.price_coefficient, item.effective_price_coefficient) != null &&
     Number.isFinite(Number(item.cost_price)) &&
     Number(item.cost_price) >= 0
   const minOrderQty = Math.max(1, Number((item as any).trade_info_json?.minOrderQty ?? item.min_order_qty ?? 1) || 1)
   const supplierName = item.supplier_name
+  const supplierHref = item.source_url || null
   const goodsStatusConfig = item.goods_status
     ? goodsStatusConfigMap[item.goods_status as keyof typeof goodsStatusConfigMap]
     : undefined
@@ -128,11 +145,9 @@ function ProductTreeRowsInner({
                   />
                 </PreviewableThumb>
               ) : (
-                <EditableImg
-                  propKey={`prod-${item.product_id}`}
-                  keywords={item.sku_code_base || 'industrial product'}
-                  description={item.product_name}
-                />
+                <div className="flex h-full w-full items-center justify-center bg-slate-50 text-[9px] text-slate-400">
+                  无图
+                </div>
               )}
             </div>
             <div className="flex flex-col overflow-hidden">
@@ -142,8 +157,9 @@ function ProductTreeRowsInner({
                 value={item.product_name}
                 state={state}
                 handlers={handlers}
-                className="font-semibold text-slate-900 truncate max-w-[220px] text-left"
-                inputClassName="max-w-[220px]"
+                multiline
+                className="font-semibold text-slate-900 whitespace-normal break-words max-w-[280px] text-left"
+                inputClassName="min-w-[280px] w-[min(36vw,420px)] max-w-[420px]"
                 placeholder="请输入商品名称"
               />
               <span className="text-xs text-muted-foreground font-mono">
@@ -165,11 +181,14 @@ function ProductTreeRowsInner({
             value={supplierName || ''}
             state={state}
             handlers={handlers}
+            href={supplierHref}
             className="text-left text-sm font-medium text-slate-800 max-w-[140px] truncate"
             placeholder="供应商名称"
             renderDisplay={rawValue => rawValue
-              ? <span className="text-sm font-medium text-slate-800 truncate max-w-[140px]">{String(rawValue)}</span>
-              : <span className="text-xs text-slate-400">未录入</span>}
+              ? <span className="text-sm font-medium truncate max-w-[140px]">{String(rawValue)}</span>
+              : supplierHref
+                ? <span className="text-sm font-medium truncate max-w-[140px]">打开链接</span>
+                : <span className="text-xs text-slate-400">未录入</span>}
           />
         </TableCell>
         <TableCell>

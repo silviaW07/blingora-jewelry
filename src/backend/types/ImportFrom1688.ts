@@ -28,6 +28,7 @@ export interface CategoryOption {
 export interface StockStrategyJson {
   type?: string
   stock?: number
+  defaultSupplierName?: string
 }
 
 export interface SpecSummaryJson {
@@ -263,6 +264,7 @@ export interface CreateImportTaskInput {
   urls: string
   defaultCategoryId?: string
   costDeductionUsd?: number
+  supplierName?: string
   defaultStatus: ProductStatusType
   stockStrategyStock?: number
 }

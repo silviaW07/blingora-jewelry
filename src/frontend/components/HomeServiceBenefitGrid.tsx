@@ -17,7 +17,10 @@ import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefi
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { hardNavProps } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavProps } from '@/frontend/utils/hardNavigate'
+
+/** Same L1 category as the nav item “Send Now”. */
+const SEND_NOW_CATEGORY_SLUG = 'in-stock'
 
 const serviceBenefitItems = SERVICE_PAGE_CONFIGS.map((cfg) => ({
   slug: cfg.slug,
@@ -52,7 +55,8 @@ export function HomeServiceBenefitGrid({
         }
 
         const isClickable = item.slug === 'buyer-show' || item.slug === 'why-choose-us'
-        const href = `/${item.slug}/`
+        const href =
+          item.slug === 'why-choose-us' ? categoryHref(SEND_NOW_CATEGORY_SLUG) : `/${item.slug}/`
         const Wrapper = !isDecorateMode && isClickable ? 'a' : 'div'
         const wrapperNav = Wrapper === 'a' ? hardNavProps(href) : {}
 

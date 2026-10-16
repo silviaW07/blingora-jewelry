@@ -56,5 +56,9 @@ export const batchUpdateCategoryStatus = (...args: Parameters<Actions["batchUpda
   rpcCall<Awaited<ReturnType<Actions["batchUpdateCategoryStatus"]>>>("src.backend.actions.CategoryManagement.batchUpdateCategoryStatus", ...args);
 export const batchMoveCategoryParent = (...args: Parameters<Actions["batchMoveCategoryParent"]>) => 
   rpcCall<Awaited<ReturnType<Actions["batchMoveCategoryParent"]>>>("src.backend.actions.CategoryManagement.batchMoveCategoryParent", ...args);
+export const listCategoryPinProducts = (...args: Parameters<Actions["listCategoryPinProducts"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["listCategoryPinProducts"]>>>("src.backend.actions.CategoryManagement.listCategoryPinProducts", ...args);
+export const saveCategoryProductPinOrder = (...args: Parameters<Actions["saveCategoryProductPinOrder"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["saveCategoryProductPinOrder"]>>>("src.backend.actions.CategoryManagement.saveCategoryProductPinOrder", ...args);
 export const getKeywordGroupTypeLabels = (...args: Parameters<Actions["getKeywordGroupTypeLabels"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getKeywordGroupTypeLabels"]>>>("src.backend.actions.CategoryManagement.getKeywordGroupTypeLabels", ...args);

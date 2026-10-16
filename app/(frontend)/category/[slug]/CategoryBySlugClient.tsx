@@ -9,14 +9,17 @@ export default function CategoryBySlugClient({
   bootstrap,
   initialCategoryId,
   initialProducts,
+  initialTotal,
 }: {
   bootstrap?: StorefrontBootstrap | null
   initialCategoryId?: string
   initialProducts?: ProductItem[]
+  initialTotal?: number
 }) {
   const { state, handlers } = useProductCategory(bootstrap, {
     categoryId: initialCategoryId,
     products: initialProducts,
+    totalCount: initialTotal,
   })
   return <ProductCategoryView state={state} handlers={handlers} />
 }

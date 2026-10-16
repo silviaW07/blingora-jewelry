@@ -80,6 +80,7 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '皮',
   // colors (compound first)
   '咖啡色',
+  '咖色',
   '土黄色',
   '卡其色',
   '经典黑',
@@ -105,6 +106,12 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '焦糖',
   '黑白色',
   '黑白',
+  '黑色带樱桃',
+  '蓝色带樱桃',
+  '黑色格子',
+  '带樱桃',
+  '格子',
+  '樱桃',
   '黑色',
   '白色',
   '红色',
@@ -166,7 +173,27 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '童鞋',
   '平底',
   '包包',
+  '子母托特两件套',
+  '子母托特包',
+  '子母托特',
+  '子母包',
+  '手提单肩包',
+  '手提斜挎包',
+  '单肩斜挎包',
+  '单肩腋下包',
+  '手提戴妃包',
+  '手提托特包',
+  '戴妃包',
+  '腋下包',
+  '托特包',
+  '手拎包',
+  '邮差包',
+  '链条包',
+  '水桶包',
+  '斜背包',
+  '手袋',
   '单肩包',
+  '单包',
   '斜挎包',
   '手提包',
   '双肩包',
@@ -174,7 +201,9 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '首饰',
   '项链',
   '手链',
+  '耳饰',
   '耳环',
+  '饰品',
   '戒指',
   '手镯',
   // style vibes
@@ -212,6 +241,11 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '魔术贴',
   '牛仔布',
   '印花',
+  '碎花',
+  '花朵',
+  '花纹',
+  '花',
+  '颜色',
   '刺绣',
   '外穿',
   '增高',
@@ -265,6 +299,23 @@ export const PRODUCT_KEYWORD_ORDER: readonly string[] = [
   '耳夹',
   '吊坠',
   '项圈',
+  '带挂件',
+  '六件套',
+  '五件套',
+  '四件套',
+  '三件套',
+  '两件套',
+  '二件套',
+  '件套',
+  '白盒',
+  '红盒',
+  '黄盒',
+  '银盒',
+  '黑盒',
+  '小样',
+  'Q版',
+  '心动',
+  '邂逅',
   '套装',
   '开口',
   '款式',
@@ -361,6 +412,7 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   丝绸: 'Silk',
   皮: 'Leather',
   咖啡色: 'Coffee',
+  咖色: 'Coffee',
   土黄色: 'Khaki',
   卡其色: 'Khaki',
   经典黑: 'Classic Black',
@@ -386,6 +438,12 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   焦糖: 'Caramel',
   黑白色: 'Black & White',
   黑白: 'Black & White',
+  黑色带樱桃: 'Black Cherry',
+  蓝色带樱桃: 'Blue Cherry',
+  黑色格子: 'Black Plaid',
+  带樱桃: 'Cherry',
+  格子: 'Plaid',
+  樱桃: 'Cherry',
   黑色: 'Black',
   白色: 'White',
   红色: 'Red',
@@ -446,7 +504,27 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   童鞋: "Kids' Shoes",
   平底: 'Flat',
   包包: 'Bag',
+  子母托特两件套: 'Mommy Tote 2-piece set',
+  子母托特包: 'Mommy Tote',
+  子母托特: 'Mommy Tote',
+  子母包: 'Combo Bag',
+  手提单肩包: 'Shoulder Bag',
+  手提斜挎包: 'Crossbody Bag',
+  单肩斜挎包: 'Crossbody Bag',
+  单肩腋下包: 'Underarm Bag',
+  手提戴妃包: 'Lady Bag',
+  手提托特包: 'Tote Bag',
+  戴妃包: 'Lady Bag',
+  腋下包: 'Underarm Bag',
+  托特包: 'Tote Bag',
+  手拎包: 'Handbag',
+  邮差包: 'Messenger Bag',
+  链条包: 'Chain Bag',
+  水桶包: 'Bucket Bag',
+  斜背包: 'Crossbody Bag',
+  手袋: 'Handbag',
   单肩包: 'Shoulder Bag',
+  单包: 'Pouch',
   斜挎包: 'Crossbody Bag',
   手提包: 'Handbag',
   双肩包: 'Backpack',
@@ -454,7 +532,9 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   首饰: 'Jewelry',
   项链: 'Necklace',
   手链: 'Bracelet',
+  耳饰: 'Earrings',
   耳环: 'Earrings',
+  饰品: 'Jewelry',
   戒指: 'Ring',
   手镯: 'Bangle',
   休闲风: 'Casual',
@@ -491,6 +571,11 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   魔术贴: 'Hook-and-Loop',
   牛仔布: 'Denim',
   印花: 'Print',
+  碎花: 'Floral',
+  花朵: 'Floral',
+  花纹: 'Floral',
+  花: 'Floral',
+  颜色: 'Color',
   刺绣: 'Embroidery',
   外穿: 'Outdoor',
   增高: 'Height Boost',
@@ -565,6 +650,23 @@ export const PRODUCT_KEYWORD_EN: Record<string, string> = {
   耳夹: 'Ear Cuff',
   吊坠: 'Pendant',
   项圈: 'Choker',
+  带挂件: 'with charm',
+  六件套: '6-piece set',
+  五件套: '5-piece set',
+  四件套: '4-piece set',
+  三件套: '3-piece set',
+  两件套: '2-piece set',
+  二件套: '2-piece set',
+  件套: 'piece set',
+  白盒: 'White Box',
+  红盒: 'Red Box',
+  黄盒: 'Yellow Box',
+  银盒: 'Silver Box',
+  黑盒: 'Black Box',
+  小样: 'Sample',
+  Q版: 'Q version',
+  心动: 'Heartbeat',
+  邂逅: 'Encounter',
   套装: 'Set',
   开口: 'Open',
 }
@@ -636,6 +738,7 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   丝绸: 'Seda',
   皮: 'Cuero',
   咖啡色: 'Café',
+  咖色: 'Café',
   土黄色: 'Caqui',
   卡其色: 'Caqui',
   经典黑: 'Negro clásico',
@@ -661,6 +764,12 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   焦糖: 'Caramelo',
   黑白色: 'Blanco y negro',
   黑白: 'Blanco y negro',
+  黑色带樱桃: 'Negro cereza',
+  蓝色带樱桃: 'Azul cereza',
+  黑色格子: 'Negro a cuadros',
+  带樱桃: 'Cereza',
+  格子: 'Cuadros',
+  樱桃: 'Cereza',
   黑色: 'Negro',
   白色: 'Blanco',
   红色: 'Rojo',
@@ -721,7 +830,27 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   童鞋: 'Zapatos infantiles',
   平底: 'Plano',
   包包: 'Bolso',
+  子母托特两件套: 'Tote madre-hijo de 2 piezas',
+  子母托特包: 'Tote madre-hijo',
+  子母托特: 'Tote madre-hijo',
+  子母包: 'Bolso combo',
+  手提单肩包: 'Bolso de hombro',
+  手提斜挎包: 'Bolso cruzado',
+  单肩斜挎包: 'Bolso cruzado',
+  单肩腋下包: 'Bolso de axila',
+  手提戴妃包: 'Bolso Lady',
+  手提托特包: 'Bolso tote',
+  戴妃包: 'Bolso Lady',
+  腋下包: 'Bolso de axila',
+  托特包: 'Bolso tote',
+  手拎包: 'Bolso de mano',
+  邮差包: 'Bolso mensajero',
+  链条包: 'Bolso de cadena',
+  水桶包: 'Bolso cubo',
+  斜背包: 'Bolso cruzado',
+  手袋: 'Bolso de mano',
   单肩包: 'Bolso de hombro',
+  单包: 'Sobre',
   斜挎包: 'Bolso cruzado',
   手提包: 'Bolso de mano',
   双肩包: 'Mochila',
@@ -729,7 +858,9 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   首饰: 'Joyería',
   项链: 'Collar',
   手链: 'Pulsera',
+  耳饰: 'Pendientes',
   耳环: 'Pendientes',
+  饰品: 'Joyería',
   戒指: 'Anillo',
   手镯: 'Brazalete',
   休闲风: 'Casual',
@@ -766,6 +897,11 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   魔术贴: 'Velcro',
   牛仔布: 'Denim',
   印花: 'Estampado',
+  碎花: 'Floral',
+  花朵: 'Floral',
+  花纹: 'Floral',
+  花: 'Floral',
+  颜色: 'Color',
   刺绣: 'Bordado',
   外穿: 'Exterior',
   增高: 'Aumenta altura',
@@ -840,6 +976,23 @@ export const PRODUCT_KEYWORD_ES: Record<string, string> = {
   耳夹: 'Clip de oreja',
   吊坠: 'Colgante',
   项圈: 'Gargantilla',
+  带挂件: 'con dije',
+  六件套: 'Set de 6 piezas',
+  五件套: 'Set de 5 piezas',
+  四件套: 'Set de 4 piezas',
+  三件套: 'Set de 3 piezas',
+  两件套: 'Set de 2 piezas',
+  二件套: 'Set de 2 piezas',
+  件套: 'set',
+  白盒: 'Caja blanca',
+  红盒: 'Caja roja',
+  黄盒: 'Caja amarilla',
+  银盒: 'Caja plateada',
+  黑盒: 'Caja negra',
+  小样: 'Muestra',
+  Q版: 'Version Q',
+  心动: 'Heartbeat',
+  邂逅: 'Encounter',
   套装: 'Conjunto',
   开口: 'Abierto',
 }
@@ -861,13 +1014,85 @@ export function stripChineseFromTitle(text: string | null | undefined): string {
   )
 }
 
+const QUALITY_TITLE_TAIL_RE =
+  /(?:high|normal|low|premium)[\s-]*quality(?:[\s-]+(?:bag|bags|jewelry|jewellery|jewelery))?\s*$/gi
+
+function stripQualityTitleTail(raw: string): string {
+  let value = String(raw || '').replace(/\s+/g, ' ').trim()
+  for (let i = 0; i < 3; i += 1) {
+    const next = value.replace(QUALITY_TITLE_TAIL_RE, '').replace(/\s+/g, ' ').trim()
+    if (next === value) break
+    value = next
+  }
+  return value
+}
+
+/** Model / 货号 tokens from the admin title (8892, H-601, 9359A, C90-3L). */
+export function extractTitleModelAnchors(raw: string | null | undefined): string[] {
+  const text = stripQualityTitleTail(String(raw || ''))
+  const matches = text.match(/[A-Za-z]{0,8}\d{2,}[A-Za-z0-9]*(?:-[A-Za-z0-9]+)*/g) || []
+  return Array.from(
+    new Set(
+      matches
+        .map((item) => item.replace(/#/g, '').toLowerCase())
+        .filter((item) => item.replace(/\D/g, '').length >= 3),
+    ),
+  )
+}
+
+/**
+ * True when a cached EN/ES title dropped 货号 or Chinese type words from the admin title.
+ * Storefront / publish should then re-translate from the backend name instead of keeping the stub.
+ */
+export function isIncompleteTranslatedTitle(
+  translated: string | null | undefined,
+  source: string | null | undefined,
+  locale: KeywordLocale = 'en',
+  translatedSource?: string | null,
+): boolean {
+  const src = stripQualityTitleTail(String(source || ''))
+  const dst = stripQualityTitleTail(String(translated || ''))
+  if (!src) return false
+  if (!dst) return true
+  const dstNorm = dst.replace(/[#\s]/g, '').toLowerCase()
+  if (extractTitleModelAnchors(src).some((anchor) => !dstNorm.includes(anchor))) return true
+  if (!containsChinese(src) || locale === 'zh') return false
+  const fromDict = stripQualityTitleTail(
+    String(translatedSource || translateTitleKeywords(src, locale) || ''),
+  )
+  if (!fromDict) return false
+  const dictWords = fromDict.split(/\s+/).filter(Boolean).length
+  const dstWords = dst.split(/\s+/).filter(Boolean).length
+  return dictWords >= dstWords + 1
+}
+
 /** Fix known storefront category typos (slug leftovers) without renaming DB rows. */
 export function fixStorefrontLabelTypos(raw: string | null | undefined): string {
   return String(raw || '')
-    .replace(/\bbeloe\s*13\s*usd\b/gi, 'Below 13 USD')
-    .replace(/\bbeloe\s*3\s*usd\b/gi, 'Below 3 USD')
+    .replace(/\bbeloe[\s\-]*13[\s\-]*usd\b/gi, 'Below 13 USD')
+    .replace(/\bbeloe[\s\-]*3[\s\-]*usd\b/gi, 'Below 3 USD')
+    .replace(/\bbeloe3usd\b/gi, 'Below 3 USD')
+    .replace(/\bbeloe13usd\b/gi, 'Below 13 USD')
     .replace(/\bbeloe\b/gi, 'Below')
     .replace(/\bothes\s+materials?\b/gi, 'Other material')
+}
+
+export function compactStorefrontLabel(raw: string | null | undefined): string {
+  return fixStorefrontLabelTypos(raw)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+/** True when two labels are the same shelf after typo/punctuation healing (Beloe 3 usd ≈ below 3). */
+export function isEquivalentStorefrontLabel(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  const a = compactStorefrontLabel(left)
+  const b = compactStorefrontLabel(right)
+  if (!a || !b) return false
+  if (a === b) return true
+  return a.startsWith(b) || b.startsWith(a)
 }
 
 /**
@@ -936,6 +1161,7 @@ function startsKeywordAt(raw: string, index: number): boolean {
  * Single left-to-right pass, longest-match only — never re-scans replaced text,
  * never advances by 0 (empty keyword rows cannot loop into Flat Flat Flat…).
  * Unmatched pure-CJK segments are dropped for en/es (no mixed titles).
+ * Keep adding longer compounds to PRODUCT_KEYWORD_ORDER so type words translate instead of vanishing.
  */
 export function translateTitleKeywords(
   text: string | null | undefined,
@@ -968,8 +1194,11 @@ export function translateTitleKeywords(
     let j = i + 1
     while (j < raw.length && !startsKeywordAt(raw, j)) j += 1
     const segment = raw.slice(i, j)
-    // Latin locales: drop unmatched pure-CJK chunks to avoid "中文 + Español" titles
-    if (/^[\u4e00-\u9fff\s]+$/.test(segment)) {
+    // Latin locales: drop unmatched CJK so storefront never keeps mixed leftovers
+    // like `5个起` → `5`. Pure-CJK chunks vanish; Latin/digits stay.
+    if (/[\u4e00-\u9fff]/.test(segment)) {
+      const kept = segment.replace(/[\u4e00-\u9fff]+/g, ' ').replace(/\s+/g, ' ').trim()
+      if (kept) pieces.push(kept)
       i = j
       continue
     }

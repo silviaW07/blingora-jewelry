@@ -15,10 +15,19 @@ import {
   normalizeProductLang,
   pickProductTranslation,
   resolveProductDisplayName,
+  polishStorefrontProductTitle,
 } from '@/frontend/i18n/productTranslation'
+import { leftoverIsVolumeOnly } from '@/shared/storefrontLabel'
+import { containsChinese } from '@/shared/productKeywordDictionary'
+import {
+  applyTranslatedValue,
+  translateChineseStorefrontValues,
+} from '@/backend/lib/translateStorefrontValues'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
+import { combinePriceCoef, resolveGoodsCoef } from '@/shared/customerPromoPolicy'
+import { loadCustomerPromo } from '@/frontend/lib/loadCustomerPromoKind'
 import {
   formatMinOrderQtyMessage,
   resolveEffectiveSkuMinOrderQty,
@@ -28,6 +37,7 @@ import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { isStorefrontVisibleProduct, storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
 import { enrichSkuColorSizeAttributes } from '@/shared/tableImportSpec'
+import { filterSellableSkuAttributes, isColorNameSpecValue, isProductTypeSpecValue } from '@/shared/skuDisplayGuards'
 import { touchCustomerLastSeen } from '@/frontend/lib/touchCustomerLastSeen'
 
 // ===== Enums =====
@@ -292,12 +302,12 @@ const descriptionParamsFromSkuAttributes = (skus: ProductSkuData[]): Description
     for (const attr of sku.attributeJson || []) {
       const name = String(attr.name || '').trim()
       const value = String(attr.value || '').trim()
-      if (!name || !value || isBlankSpecValue(value)) continue
-      if (/规格|尺码|尺寸|码数|size|spec|sizing/i.test(name)) sizes.add(value)
+      if (!name || !value || isBlankSpecValue(value) || isProductTypeSpecValue(value)) continue
+      if (/规格|尺码|尺寸|码数|size|spec|sizing/i.test(name) && !isColorNameSpecValue(value)) sizes.add(value)
       if (/材质|材料|面料|material|fabric|里料|lining/i.test(name)) materials.add(value)
     }
     const sizeLabel = String(sku.sizeLabel || '').trim()
-    if (sizeLabel && !isBlankSpecValue(sizeLabel)) sizes.add(sizeLabel)
+    if (sizeLabel && !isBlankSpecValue(sizeLabel) && !isColorNameSpecValue(sizeLabel)) sizes.add(sizeLabel)
   }
   const rows: DescriptionParam[] = []
   if (sizes.size > 0) rows.push({ key: 'Size', value: Array.from(sizes).join(' / ') })
@@ -347,7 +357,8 @@ const buildSkuVariantLabel = (attrs: SkuAttribute[], fallback: string) => {
 
 const isRealSizeValue = (value?: string | null) => {
   const normalized = String(value || '').trim()
-  return Boolean(normalized) && !/^(默认|默认规格|default|standard|n\/a|none)$/i.test(normalized)
+  if (!normalized || isProductTypeSpecValue(normalized)) return false
+  return !/^(默认|默认规格|default|standard|n\/a|none)$/i.test(normalized)
 }
 
 const buildPriceTiers = (prices: number[], minOrderQty: number): PriceTierItem[] => {
@@ -421,7 +432,7 @@ export const getProductDetail = withResult(
       : { slug: input.slug! }
     const now = new Date()
 
-    const [exchangeRate, pricingConfig, product, couponCampaigns] = await Promise.all([
+    const [exchangeRate, pricingConfig, product, couponCampaigns, customerPromo] = await Promise.all([
       getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
       loadPricingPromotionConfig(prisma),
       prisma.product.findUnique({
@@ -445,6 +456,7 @@ export const getProductDetail = withResult(
           ratingCount: true,
           categoryId: true,
           costPrice: true,
+          priceCoefficient: true,
           category: {
             select: {
               id: true,
@@ -522,6 +534,7 @@ export const getProductDetail = withResult(
           contentJson: true,
         },
       }),
+      loadCustomerPromo(),
     ])
 
     if (!product || !isStorefrontVisibleProduct(product) || product.category?.status !== 'ACTIVE') {
@@ -546,6 +559,7 @@ export const getProductDetail = withResult(
     }
 
     const productMinOrderQty = resolveProductMinOrderQty(tradeInfoJson)
+    const lang = normalizeProductLang(input.lang)
 
     const pricingCoeffs = pickFrontPricingCategoryCoeffs({
       primary: product.category,
@@ -556,18 +570,21 @@ export const getProductDetail = withResult(
         ? (sku.attributeJson as unknown as SkuAttribute[])
         : []
       const attrs = enrichSkuColorSizeAttributes(
-        rawAttrs
-          .map(attr => ({
-            name: String(attr?.name || '').trim(),
-            value: String(attr?.value || '').trim(),
-          }))
-          .filter(attr => attr.name && attr.value),
-        { sizeLabel: String(sku.sizeLabel || '').trim() },
+        filterSellableSkuAttributes(
+          rawAttrs
+            .map(attr => ({
+              name: String(attr?.name || '').trim(),
+              value: String(attr?.value || '').trim(),
+            }))
+            .filter(attr => attr.name && attr.value),
+        ),
+        { sizeLabel: isRealSizeValue(sku.sizeLabel) ? String(sku.sizeLabel || '').trim() : '' },
       )
       const storedSizeLabel = String(sku.sizeLabel || '').trim()
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: sku.price.toNumber(),
         costPrice: product.costPrice,
+        productCoefficient: product.priceCoefficient,
         ...pricingCoeffs,
       })
       const price = toUsdPrice(priceRmb, exchangeRate)
@@ -595,11 +612,36 @@ export const getProductDetail = withResult(
       descriptionParams = descriptionParamsFromSkuAttributes(skus)
     }
 
+    const storefrontTranslations = await translateChineseStorefrontValues(
+      [
+        product.name,
+        ...descriptionParams.map((row) => row.value),
+        ...skus.flatMap((sku) => [
+          sku.sizeLabel || '',
+          ...sku.attributeJson.map((attr) => String(attr.value || '')),
+        ]),
+      ],
+      lang,
+    )
+    for (const sku of skus) {
+      sku.attributeJson = sku.attributeJson.map((attr) => ({
+        ...attr,
+        value: applyTranslatedValue(storefrontTranslations, attr.value),
+      }))
+      sku.sizeLabel = sku.sizeLabel
+        ? applyTranslatedValue(storefrontTranslations, sku.sizeLabel)
+        : null
+      sku.variantLabel = buildSkuVariantLabel(sku.attributeJson, sku.skuCode)
+    }
+    descriptionParams = descriptionParams.map((row) => ({
+      ...row,
+      value: applyTranslatedValue(storefrontTranslations, row.value),
+    }))
+
     const prices = skus.map((sku) => sku.price).filter((p) => p > 0)
     const priceMin = prices.length ? Math.min(...prices) : 0
     const priceMax = prices.length ? Math.max(...prices) : 0
     const minOrderQty = productMinOrderQty
-    const lang = normalizeProductLang(input.lang)
     const translated = pickProductTranslation((product as { translationsJson?: unknown }).translationsJson, lang)
 
     const baseTiers = buildPriceTiers(prices, minOrderQty)
@@ -612,19 +654,34 @@ export const getProductDetail = withResult(
 
     const detailData: ProductDetailData = {
       id: product.id,
-      name: resolveProductDisplayName(
-        product.name,
-        (product as { translationsJson?: unknown }).translationsJson,
-        lang,
-        {
+      name: (() => {
+        const titleExtra = {
           categoryName: product.category?.name,
           parentCategoryName: product.category?.parent?.name,
           shortDescription:
             translated?.shortDescription?.trim() ||
             String((product as { shortDescription?: string | null }).shortDescription || '').trim() ||
             null,
-        },
-      ),
+        }
+        const resolved = resolveProductDisplayName(
+          product.name,
+          (product as { translationsJson?: unknown }).translationsJson,
+          lang,
+          titleExtra,
+        )
+        if (
+          containsChinese(product.name) &&
+          (!resolved || resolved === 'Product' || leftoverIsVolumeOnly(resolved))
+        ) {
+          return (
+            polishStorefrontProductTitle(
+              applyTranslatedValue(storefrontTranslations, product.name),
+              titleExtra,
+            ) || resolved
+          )
+        }
+        return resolved
+      })(),
       productCode: product.productCode,
       status: product.status as ProductStatus,
       source: String(product.source || ''),
@@ -661,7 +718,10 @@ export const getProductDetail = withResult(
         exchangeRate,
         wholesaleEnabled: pricingConfig.wholesale.enabled,
         wholesaleCoefficient: pricingConfig.wholesale.coefficient,
-        siteWideCoefficient: getSiteWidePercentCoef(pricingConfig),
+        siteWideCoefficient: combinePriceCoef(
+          getSiteWidePercentCoef(pricingConfig),
+          resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount),
+        ),
       },
     }
 
@@ -701,7 +761,11 @@ export const getRelatedProducts = withResult(
       getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
       loadPricingPromotionConfig(prisma),
     ])
-    const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
+    const relatedPromo = await loadCustomerPromo()
+    const siteWideCoef = combinePriceCoef(
+      getSiteWidePercentCoef(pricingConfig),
+      resolveGoodsCoef(relatedPromo.kind, relatedPromo.vipDiscount),
+    )
     const products = await prisma.product.findMany({
       where: {
         ...storefrontVisibilityWhere(),
@@ -732,6 +796,10 @@ export const getRelatedProducts = withResult(
       },
     })
 
+    const relatedNameMap = await translateChineseStorefrontValues(
+      products.map((item) => item.name),
+      lang,
+    )
     const list = products.map(p => {
       const minPrice = p.skus.length > 0 
         ? Math.min(...p.skus.map(s => s.price.toNumber())) 
@@ -740,19 +808,28 @@ export const getRelatedProducts = withResult(
         price: toUsdPrice(minPrice, exchangeRate),
         coef: siteWideCoef,
       })
+      const titleExtra = {
+        categoryName: p.category?.name,
+        parentCategoryName: p.category?.parent?.name,
+        shortDescription: p.shortDescription,
+      }
+      const resolved = resolveProductDisplayName(
+        p.name,
+        (p as { translationsJson?: unknown }).translationsJson,
+        lang,
+        titleExtra,
+      )
+      const name =
+        containsChinese(p.name) && (!resolved || resolved === 'Product' || leftoverIsVolumeOnly(resolved))
+          ? polishStorefrontProductTitle(
+              applyTranslatedValue(relatedNameMap, p.name),
+              titleExtra,
+            ) || resolved
+          : resolved
 
       return {
         id: p.id,
-        name: resolveProductDisplayName(
-          p.name,
-          (p as { translationsJson?: unknown }).translationsJson,
-          lang,
-          {
-            categoryName: p.category?.name,
-            parentCategoryName: p.category?.parent?.name,
-            shortDescription: p.shortDescription,
-          },
-        ),
+        name,
         slug: p.slug,
         mainImageUrl: p.mainImageUrl,
         minPrice: listed.price,

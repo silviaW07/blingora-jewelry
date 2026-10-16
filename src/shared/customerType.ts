@@ -42,3 +42,26 @@ export function getCustomerTypeLabel(value: string | null | undefined): string {
   const target = normalizeCustomerType(value)
   return CUSTOMER_TYPE_OPTIONS.find(o => o.value === target)?.label || '新客户'
 }
+
+/** 商品 VIP：只有「新客户」95vip，其余客户类型 97vip。后台未手改时用这个默认值。 */
+export function defaultVipForCustomerType(value: string | null | undefined): number {
+  return normalizeCustomerType(value) === 'NEW' ? 95 : 97
+}
+
+/** 首单折扣：仅客户类型「新客户」。 */
+export const FIRST_ORDER_DISCOUNT_CUSTOMER_TYPES = ['NEW'] as const
+
+export function isFirstOrderDiscountCustomerType(value: string | null | undefined): boolean {
+  return normalizeCustomerType(value) === 'NEW'
+}
+
+export function resolveCustomerPromoEligibility(params: {
+  customerType?: string | null
+  hasPaidOrder: boolean
+}): { isFirstOrderEligible: boolean; isLoyalCustomer: boolean } {
+  const isFirstOrderEligible = isFirstOrderDiscountCustomerType(params.customerType)
+  return {
+    isFirstOrderEligible,
+    isLoyalCustomer: !isFirstOrderEligible,
+  }
+}

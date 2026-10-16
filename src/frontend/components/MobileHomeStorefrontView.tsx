@@ -4,11 +4,9 @@
  * Mobile-only home stream. Desktop keeps HomeStorefrontView layout.
  * Order: chrome → search → L1 chips → banner → services → recommend zones
  */
-import React, { useCallback, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Package,
 } from 'lucide-react'
@@ -112,6 +110,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
     queryState,
     products,
     isLoadingProducts,
+    isLoadingMore,
     totalCount,
     categoryDetail,
     isSecondaryCategoryResults,
@@ -124,6 +123,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   } = state
 
   const categoryProductsRef = useRef<HTMLElement | null>(null)
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null)
 
   // Banner swipe support (Chrome mobile often doesn't respond to overlay button clicks reliably).
   // We detect a horizontal swipe and switch poster index; during swipe we block banner click.
@@ -135,9 +135,18 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
   } | null>(null)
 
   const isDefaultHomeState = isDefaultHomeQueryState(state)
-  const prevBannerEvents = useChromeActivate(() => handlers.handleBannerChange(activeBannerIndex - 1))
-  const nextBannerEvents = useChromeActivate(() => handlers.handleBannerChange(activeBannerIndex + 1))
 
+  useEffect(() => {
+    const hasMore = products.length > 0 && products.length < totalCount
+    if (!hasMore) return
+    const el = loadMoreSentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) handlers.handleLoadMore()
+    }, { rootMargin: '280px 0px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [handlers, products.length, totalCount])
   const handleBannerLinkClick = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>, banner: HomeBannerItem) => {
       if (bannerTouchRef.current?.isSwiping) {
@@ -316,7 +325,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                           alt={banner.title || 'Banner'}
                           disableKeywordSearch
                           loading={index === 0 ? 'eager' : 'lazy'}
-                          proxyWidth={index === 0 ? 720 : 640}
+                          proxyWidth={index === 0 ? 1080 : 960}
                           proxyQuality={85}
                           className="mobile-home__banner-media absolute inset-0 h-full w-full object-cover"
                         />
@@ -347,22 +356,6 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                   </div>
                   {posters.length > 1 ? (
                     <>
-                      <button
-                        type="button"
-                        className="absolute left-2 top-1/2 z-[2] flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111]"
-                        {...prevBannerEvents}
-                        aria-label="Previous banner"
-                      >
-                        <ChevronLeft className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 z-[2] flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#111]"
-                        {...nextBannerEvents}
-                        aria-label="Next banner"
-                      >
-                        <ChevronRight className="size-4" />
-                      </button>
                       <div className="absolute bottom-2 left-1/2 z-[2] flex -translate-x-1/2 gap-1.5">
                         {posters.map((banner, index) => (
                           <BannerDotButton
@@ -522,6 +515,7 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                 }
               />
               {products.length > 0 ? (
+                <>
                 <div className="storefront-product-grid mt-3 grid grid-cols-2 gap-2.5">
                   {products.map((item, index) => (
                     <ProductListCard
@@ -538,6 +532,12 @@ export function MobileHomeStorefrontView({ state, handlers }: Props) {
                     />
                   ))}
                 </div>
+                {products.length < totalCount ? (
+                  <div ref={loadMoreSentinelRef} className="flex justify-center py-6">
+                    {isLoadingMore ? <Loader2 className="size-5 animate-spin text-[#7a756c]" /> : null}
+                  </div>
+                ) : null}
+                </>
               ) : isLoadingProducts ? (
                 <div className="mt-8 flex flex-col items-center gap-2 text-[0.875rem] text-[#7a756c]">
                   <Loader2 className="size-5 animate-spin" />

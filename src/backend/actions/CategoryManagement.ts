@@ -7,14 +7,23 @@ import {
   withResult,
   UserRole,
 } from '@/backend/action_utils'
-import { canEditCategoryPriceCoefficient, isAggregatePricingCategoryName } from '@/shared/categoryPricing'
-import { DEFAULT_PRICE_COEFFICIENT } from '@/shared/priceCoefficient'
+import {
+  canEditCategoryPriceCoefficient,
+  isAggregatePricingCategoryName,
+  isNonPricingCategory,
+} from '@/shared/categoryPricing'
+import { DEFAULT_PRICE_COEFFICIENT, resolveCategoryPriceCoefficient, toDecimalNumber } from '@/shared/priceCoefficient'
 import {
   normalizeOptionalSlug,
   resolveCategorySlug as resolveCategorySlugShared,
 } from '@/shared/categorySlug'
 import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
 import { invalidateStorefrontCatalogCaches } from '@/frontend/actions/ProductCategory'
+import {
+  PAGE_DECORATE_SETTING_TITLE,
+  normalizeStore,
+} from '@/frontend/decorate/pageDecorateShared'
+import { isEquivalentStorefrontLabel } from '@/shared/productKeywordDictionary'
 
 export type CategoryStatus = 'ACTIVE' | 'INACTIVE'
 export type CategoryLevel = 1 | 2
@@ -732,6 +741,40 @@ function toCategoryWriteData(input: {
       weight: Math.max(1, normalizedBrandKeywords.length - index),
     })) as Prisma.InputJsonValue,
   }
+}
+
+async function syncHomeCategoryCardDecorateName(
+  categoryId: string,
+  previousName: string,
+  nextName: string,
+) {
+  const setting = await prisma.sitesetting.findFirst({
+    where: {
+      settingType: 'STATIC_COPY',
+      title: PAGE_DECORATE_SETTING_TITLE,
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+  if (!setting) return
+
+  const store = normalizeStore(setting.contentJson)
+  const key = `home_category_card_name_${categoryId}`
+  const patch = store[key]
+  const previousText = typeof patch?.text === 'string' ? patch.text.trim() : ''
+  if (!previousText) return
+  if (
+    !isEquivalentStorefrontLabel(previousText, previousName) &&
+    !isEquivalentStorefrontLabel(previousText, nextName) &&
+    !/beloe/i.test(previousText)
+  ) {
+    return
+  }
+
+  store[key] = { ...patch, text: nextName }
+  await prisma.sitesetting.update({
+    where: { id: setting.id },
+    data: { contentJson: store as Prisma.InputJsonValue },
+  })
 }
 
 async function parsePosterConfigs(): Promise<HomepagePosterConfig[]> {
@@ -1841,6 +1884,14 @@ export const updateCategory = requireRole([UserRole.ADMIN])(
         data: updateData,
       })
     }
+    if (trimmedName !== category.name) {
+      await syncHomeCategoryCardDecorateName(category_id, category.name, trimmedName)
+      await prisma.categorynavconfig.updateMany({
+        where: { categoryId: category_id },
+        data: { navTitle: trimmedName },
+      })
+    }
+    invalidateStorefrontCatalogCaches()
     invalidateHomeRecommendZoneCache()
   })
 )
@@ -1874,11 +1925,128 @@ export const updateCategorySortWeight = requireRole([UserRole.ADMIN])(
   })
 )
 
+function positiveCoeff(value: unknown): number | null {
+  const n = toDecimalNumber(value)
+  return n !== null && n > 0 ? n : null
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/** Products whose storefront selling price is driven by this category's coefficient. */
+async function collectProductsPricedByCategory(category: {
+  id: string
+  level: number | null
+}): Promise<string[]> {
+  const ids = new Set<string>()
+  const withoutProductOverride = {
+    OR: [{ priceCoefficient: null }, { priceCoefficient: { lte: 0 } }],
+  }
+
+  const primary = await prisma.product.findMany({
+    where: { categoryId: category.id, ...withoutProductOverride },
+    select: { id: true },
+  })
+  primary.forEach((row) => ids.add(row.id))
+
+  if (category.level === 1) {
+    const inheritingChildren = await prisma.category.findMany({
+      where: {
+        parentId: category.id,
+        OR: [{ priceCoefficient: null }, { priceCoefficient: { lte: 0 } }],
+      },
+      select: { id: true },
+    })
+    if (inheritingChildren.length > 0) {
+      const childProducts = await prisma.product.findMany({
+        where: {
+          categoryId: { in: inheritingChildren.map((row) => row.id) },
+          ...withoutProductOverride,
+        },
+        select: { id: true },
+      })
+      childProducts.forEach((row) => ids.add(row.id))
+    }
+  }
+
+  const related = await prisma.product_category_relations.findMany({
+    where: { categoryId: category.id },
+    select: {
+      product: {
+        select: {
+          id: true,
+          priceCoefficient: true,
+          category: {
+            select: {
+              name: true,
+              isBrandCategory: true,
+              parent: { select: { name: true, isBrandCategory: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+  for (const row of related) {
+    const product = row.product
+    if (!product || positiveCoeff(product.priceCoefficient) != null) continue
+    if (
+      isNonPricingCategory({
+        name: product.category?.name,
+        isBrandCategory: product.category?.isBrandCategory,
+        parentName: product.category?.parent?.name,
+        parentIsBrandCategory: product.category?.parent?.isBrandCategory,
+      })
+    ) {
+      ids.add(product.id)
+    }
+  }
+
+  return [...ids]
+}
+
+async function rescaleSkuPricesByCoefficientRatio(productIds: string[], ratio: number) {
+  if (productIds.length === 0 || !Number.isFinite(ratio) || ratio <= 0) return
+  if (Math.abs(ratio - 1) < 0.0001) return
+
+  const ID_CHUNK = 400
+  for (let i = 0; i < productIds.length; i += ID_CHUNK) {
+    const chunkIds = productIds.slice(i, i + ID_CHUNK)
+    const skus = await prisma.productsku.findMany({
+      where: { productId: { in: chunkIds } },
+      select: { id: true, price: true, originalPrice: true },
+    })
+    const SKU_CHUNK = 80
+    for (let j = 0; j < skus.length; j += SKU_CHUNK) {
+      const skuChunk = skus.slice(j, j + SKU_CHUNK)
+      await prisma.$transaction(
+        skuChunk.map((sku) => {
+          const price = Number(sku.price)
+          const nextPrice = roundMoney(price * ratio)
+          const orig = sku.originalPrice == null ? null : Number(sku.originalPrice)
+          const nextOriginal =
+            orig != null && Number.isFinite(orig) && orig > 0
+              ? roundMoney(orig * ratio)
+              : roundMoney(nextPrice * 1.1)
+          return prisma.productsku.update({
+            where: { id: sku.id },
+            data: { price: nextPrice, originalPrice: nextOriginal },
+          })
+        }),
+      )
+    }
+  }
+}
+
 export const updateCategoryPriceCoefficient = requireRole([UserRole.ADMIN])(
   withResult(async (input: UpdateCategoryPriceCoefficientInput): Promise<void> => {
     const { category_id, price_coefficient } = input
 
-    const category = await prisma.category.findUnique({ where: { id: category_id } })
+    const category = await prisma.category.findUnique({
+      where: { id: category_id },
+      include: { parent: { select: { priceCoefficient: true } } },
+    })
     if (!category) throw new Error('分类不存在')
 
     const canEdit = canEditCategoryPriceCoefficient({
@@ -1902,11 +2070,21 @@ export const updateCategoryPriceCoefficient = requireRole([UserRole.ADMIN])(
       nextCoefficient = DEFAULT_PRICE_COEFFICIENT
     }
 
+    const parentCoeff = positiveCoeff(category.parent?.priceCoefficient)
+    const oldEff = resolveCategoryPriceCoefficient(positiveCoeff(category.priceCoefficient), parentCoeff)
+    const newEff = resolveCategoryPriceCoefficient(nextCoefficient, parentCoeff)
+
     await prisma.category.update({
       where: { id: category_id },
       data: { priceCoefficient: nextCoefficient },
     })
 
+    if (Math.abs(newEff - oldEff) >= 0.0001) {
+      const productIds = await collectProductsPricedByCategory(category)
+      await rescaleSkuPricesByCoefficientRatio(productIds, newEff / oldEff)
+    }
+
+    invalidateStorefrontCatalogCaches()
     invalidateHomeRecommendZoneCache()
   })
 )

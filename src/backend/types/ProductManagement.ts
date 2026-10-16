@@ -75,6 +75,7 @@ export interface ProductListItem {
   sku_code_base: string
   source: ProductSource
   supplier_name: string | null
+  source_url?: string | null
   brand_keyword: string | null
   category_id: string
   category_name: string
@@ -261,6 +262,8 @@ export interface PendingImportQueueItem {
   item_availableStock: number | null
   item_parsedName: string | null
   item_parsedMainImageUrl: string | null
+  item_reviewed?: boolean
+  item_reviewedAt?: string | null
   item_createdAt: Date
   item_skus?: Array<{
     sku_key: string
@@ -629,6 +632,7 @@ async function mapProductToListItem(product: PublishedImportMatchDbRecord): Prom
     sku_code_base: product.productCode,
     source: product.source as ProductSource,
     supplier_name: product.supplierName || null,
+    source_url: null,
     brand_keyword: product.brandName || null,
     category_id: product.categoryId,
     category_name: current?.name || product.category?.name || '--',
@@ -991,6 +995,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         sku_code_base: p.productCode,
         source: p.source as ProductSource,
         supplier_name: p.supplierName || null,
+        source_url: null,
         brand_keyword: p.brandName || null,
         category_id: p.categoryId,
         category_name: current?.name || p.category?.name || '--',

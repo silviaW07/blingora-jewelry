@@ -162,6 +162,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, _state: Home
                     disableKeywordSearch
                     fallbackSrc={CATEGORY_CARD_PLACEHOLDER_URL}
                     slowFallbackMs={waitingForProduct ? 1200 : 0}
+                    proxyWidth={720}
+                    proxyQuality={85}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </div>

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import EditableImg from '@/@base/EditableImg';
-import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Package } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, Flame, Heart, Package } from 'lucide-react';
 import type { ProductCategoryState, ProductCategoryHandlers, ProductCategoryBannerItem, ProductCategoryKeywordItem } from '@/frontend/hooks/useProductCategory';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { StorefrontPagination } from '@/frontend/components/StorefrontPagination';
@@ -14,6 +14,11 @@ import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefro
 import { useTranslation } from 'react-i18next';
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels';
 import { listingPriceBoundMaxUsd } from '@/shared/priceThreshold';
+import { hardNavigate } from '@/frontend/utils/hardNavigate';
+import { addProductWishlistIds, removeProductWishlistIds } from '@/frontend/hooks/useLocalWishlist';
+import { toast } from 'sonner';
+
+const LOOKBOOK_MAX = 80;
 interface Props {
   state: ProductCategoryState;
   handlers: ProductCategoryHandlers;
@@ -59,14 +64,57 @@ export const ProductCategoryView = ({
       );
   const selectedStockStatuses = queryState.stockStatus || [];
   const handleGoToPage = (nextPage: number) => {
-    handlers.handleFilterChange('page', nextPage);
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+    handlers.handleGoToPage(nextPage);
   };
   const handleChangePageSize = (nextSize: number) => {
     handlers.handleFilterChange('pageSize', nextSize);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  const pageIds = useMemo(() => products.map((item) => item.product_id), [products]);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every((id) => pickedIds.includes(id));
+  const togglePicked = (productId: string, selected: boolean) => {
+    setPickedIds((prev) => {
+      const next = selected
+        ? prev.includes(productId)
+          ? prev
+          : [...prev, productId]
+        : prev.filter((id) => id !== productId);
+      if (next.length > LOOKBOOK_MAX) {
+        toast.error(t('product.lookbookMax', { count: LOOKBOOK_MAX }));
+        return next.slice(0, LOOKBOOK_MAX);
+      }
+      return next;
+    });
+  };
+  const toggleSelectPage = () => {
+    setPickedIds((prev) => {
+      const set = new Set(prev);
+      if (pageAllSelected) {
+        pageIds.forEach((id) => set.delete(id));
+        removeProductWishlistIds(pageIds);
+      } else {
+        pageIds.forEach((id) => set.add(id));
+        addProductWishlistIds(pageIds);
+      }
+      const next = Array.from(set);
+      if (next.length > LOOKBOOK_MAX) {
+        toast.error(t('product.lookbookMax', { count: LOOKBOOK_MAX }));
+        return next.slice(0, LOOKBOOK_MAX);
+      }
+      return next;
+    });
+  };
+  const openLookbookDownload = () => {
+    const ids = (pickedIds.length ? pickedIds : pageIds).slice(0, LOOKBOOK_MAX);
+    if (!ids.length) {
+      toast.error(t('lookbook.selectFirst'));
+      return;
+    }
+    addProductWishlistIds(ids);
+    hardNavigate(`/promo-catalog/?ids=${encodeURIComponent(ids.join(','))}`);
+  };
   const hasMoreProducts = products.length < totalCount;
   useEffect(() => {
     if (!hasMoreProducts) return;
@@ -190,6 +238,32 @@ export const ProductCategoryView = ({
                         router.push('/')
                       }}
                     />
+                    {products.length > 0 ? (
+                      <div className="mt-3 flex min-w-0 flex-col items-start gap-1.5" data-no-hard-nav="">
+                        <button
+                          type="button"
+                          onClick={toggleSelectPage}
+                          className="flex flex-col items-start gap-1 text-left"
+                          aria-pressed={pageAllSelected}
+                        >
+                          <Heart
+                            className="size-11 stroke-[1.6]"
+                            fill={pageAllSelected ? '#e11d48' : 'none'}
+                            color={pageAllSelected ? '#e11d48' : '#111111'}
+                          />
+                          <span className="text-sm font-semibold text-[#111111]">
+                            {pageAllSelected ? t('product.clearThisPage') : t('product.selectThisPage')}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openLookbookDownload}
+                          className="text-left text-sm font-medium leading-5 text-[#111111] underline-offset-2 hover:underline"
+                        >
+                          {t('product.batchDownload')}
+                        </button>
+                      </div>
+                    ) : null}
                     {selectedStockStatuses.length > 0 ? <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[#6f6a62]" data-api-unique-id='productcategoryview-r6414cea585b640ff-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                       <span className="rounded-full border border-[#e6e0d5] bg-[#faf8f3] px-4 py-2" data-api-unique-id='productcategoryview-r4c9c835c0e945511-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>{selectedStockStatuses.map((status) => stockStatusLabels[status]).join(' · ')}</span>
                     </div> : null}
@@ -236,7 +310,7 @@ export const ProductCategoryView = ({
                       </div>
                     ))}
                   </div> : products.length > 0 ? <div className={`storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 ${isLoadingProducts && !isLoadingMore ? 'opacity-60 transition-opacity' : ''}`} data-api-unique-id='productcategoryview-r14d0c19cf3b6eaf2-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
-                    {products.map((item, index) => <ProductListCard key={item.product_id} item={item} imagePropKey={`category-product-${item.product_id}`} onNavigate={handlers.handleNavigateToDetail} onAddToCart={handlers.handleAddToCart} onAddToWishlist={handlers.handleAddToWishlist} controllerName={isSecondaryCategoryResults ? '二级类目商品图片名称卡片' : '分类商品信息卡片'} priority={index < 12} />)}
+                    {products.map((item, index) => <ProductListCard key={item.product_id} item={item} imagePropKey={`category-product-${item.product_id}`} onNavigate={handlers.handleNavigateToDetail} onAddToCart={handlers.handleAddToCart} onAddToWishlist={handlers.handleAddToWishlist} controllerName={isSecondaryCategoryResults ? '二级类目商品图片名称卡片' : '分类商品信息卡片'} priority={index < 4} selected={pickedIds.includes(item.product_id)} onToggleSelect={togglePicked} />)}
                   </div> : <div className="mt-6 rounded-[28px] border border-dashed border-[#ddd6c8] bg-[#faf8f3] px-6 py-14 text-center" data-api-unique-id='productcategoryview-rf8e519298f81db85-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                     <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#ebe7de] text-[#111111]" data-api-unique-id='productcategoryview-re1ac063fbce010dd-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView'>
                       <Package className="size-6" data-api-unique-id='productcategoryview-r6345d54118218303-s780999859' data-api-unique-page-name='src/frontend/components/ProductCategoryView' />

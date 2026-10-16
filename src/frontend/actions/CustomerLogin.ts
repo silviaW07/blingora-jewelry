@@ -31,6 +31,12 @@ import {
   UserRole
 } from '@/frontend/action_utils'
 import { saveCustomerPasswordPlain } from '@/shared/customerPasswordPlain'
+import {
+  CUSTOMER_LOGIN_INCORRECT_PASSWORD,
+  CUSTOMER_LOGIN_NOT_STOREFRONT,
+  CUSTOMER_LOGIN_RESTRICTED,
+  customerLoginNotFoundMessage,
+} from '@/shared/customerLoginErrors'
 
 /** Fields required for login only — skip schema-lag columns like passwordPlain */
 const loginUserSelect = {
@@ -62,23 +68,23 @@ export const loginCustomer = withResult(
     }
 
     if (!user) {
-      throw new Error('账号或密码错误')
+      throw new Error(customerLoginNotFoundMessage(accountOrEmail))
     }
 
     // 2. 校验密码
     const hashedInputPassword = hashPassword(input.sysuser_password)
     if (user.password !== hashedInputPassword) {
-      throw new Error('账号或密码错误')
+      throw new Error(CUSTOMER_LOGIN_INCORRECT_PASSWORD)
     }
 
     // 3. 校验账号角色：前台登录页仅允许 CUSTOMER 登录
     if (user.role !== UserRole.CUSTOMER) {
-      throw new Error('该账号非前台客户账号，禁止登录')
+      throw new Error(CUSTOMER_LOGIN_NOT_STOREFRONT)
     }
 
     // 4. 校验账号状态：被禁用的账号禁止登录
     if (user.status === 'DISABLED') {
-      throw new Error('账户状态受限 (DISABLED)，请联系站点管理员')
+      throw new Error(CUSTOMER_LOGIN_RESTRICTED)
     }
 
     // 5. 业务闭环：登录成功瞬间更新最后登录时间，并回填明文密码供后台展示

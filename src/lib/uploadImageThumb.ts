@@ -4,7 +4,7 @@ import path from 'node:path'
 import { resolveUploadDir } from '@/lib/uploadStorage'
 
 const RESIZABLE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp'])
-const MAX_CONCURRENCY = 2
+const MAX_CONCURRENCY = 4
 
 let active = 0
 const waiters: Array<() => void> = []
@@ -27,7 +27,7 @@ async function withLimit<T>(fn: () => Promise<T>): Promise<T> {
 export function parseUploadThumbParams(search: URLSearchParams): { width: number; quality: number } | null {
   const rawWidth = Number(search.get('w') || 0)
   if (!Number.isFinite(rawWidth) || rawWidth <= 0) return null
-  const width = Math.min(1600, Math.max(80, Math.round(rawWidth)))
+  const width = Math.min(1920, Math.max(80, Math.round(rawWidth)))
   const rawQuality = Number(search.get('q') || 75)
   const quality = Number.isFinite(rawQuality) ? Math.min(90, Math.max(40, Math.round(rawQuality))) : 75
   return { width, quality }

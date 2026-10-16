@@ -302,7 +302,7 @@ export function CheckoutSmartPanel({
   onConfirmAddress,
   onShippingChange,
 }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { token, user_id: userId } = useUserSession()
   const [smartText, setSmartText] = useState('')
   const [form, setForm] = useState<CheckoutAddressForm>({ ...EMPTY_CHECKOUT_ADDRESS })
@@ -384,6 +384,7 @@ export function CheckoutSmartPanel({
         country,
         weightKg,
         merchandiseSubtotalUsd,
+        lang: i18n.language,
       })
       if (requestId !== shippingRequestRef.current) return
       setShippingOptions(result.list)
@@ -459,7 +460,7 @@ export function CheckoutSmartPanel({
   useEffect(() => {
     const country = form.country || 'United States'
     void loadShippingOptions(country, Math.max(0, Number(totalWeightKg) || 0))
-  }, [form.country, totalWeightKg, merchandiseSubtotalUsd])
+  }, [form.country, totalWeightKg, merchandiseSubtotalUsd, i18n.language])
 
   useEffect(() => {
     if (!addressComplete) return
@@ -576,23 +577,23 @@ export function CheckoutSmartPanel({
           disabled={disabled}
           onClick={handleEditAddress}
           className={cn(
-            'w-full rounded-[10px] border border-[#f0dede] bg-[#fff5f8] px-3 py-3 text-left transition',
-            'hover:border-[#f254a6]/40 hover:bg-[#fff0f5]',
+            'flex min-h-16 w-full items-center rounded-[10px] border border-[#f0dede] bg-[#fff5f8] px-3.5 py-3.5 text-left transition',
+            'hover:border-[#f254a6]/40 hover:bg-[#fff0f5] active:bg-[#fff0f5]',
             disabled && 'cursor-not-allowed opacity-60',
           )}
           aria-label={t('checkout.clickEditAddress')}
         >
-          <div className="flex items-start gap-2">
-            <MapPin className="mt-0.5 size-3.5 shrink-0 text-[#f254a6]" />
+          <div className="flex w-full items-center gap-3">
+            <MapPin className="size-5 shrink-0 text-[#f254a6]" />
             <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-sm font-semibold text-[#0F172A]">
+              <p className="text-base font-semibold leading-5 text-[#0F172A]">
                 {t('checkout.recipient', { name: recipientName })}
                 {form.phone ? ` / ${form.phone}` : ''}
               </p>
-              <p className="text-xs leading-5 text-[#64748B]">
+              <p className="text-sm leading-5 text-[#64748B]">
                 {addressSummaryLine || '—'}
               </p>
-              <p className="pt-0.5 text-[11px] font-medium text-[#f254a6]">{t('checkout.clickEditAddress')}</p>
+              <p className="pt-0.5 text-sm font-semibold text-[#f254a6]">{t('checkout.clickEditAddress')}</p>
             </div>
           </div>
         </button>
@@ -821,16 +822,20 @@ export function CheckoutSmartPanel({
                   disabled={disabled}
                   onClick={() => handleSelectChannel(item)}
                   className={cn(
-                    'flex items-center justify-between rounded-[10px] border px-3 py-2.5 text-left transition',
+                    'flex items-start justify-between rounded-[10px] border px-3 py-2.5 text-left transition',
                     active
                       ? 'border-[#f254a6] bg-[#fff5f8]'
                       : 'border-[#e8e8e8] bg-white hover:border-[#f0dede]',
                     (disabled) && 'cursor-not-allowed opacity-60',
                   )}
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-[#0F172A]">{item.name}</p>
-                    <p className="mt-0.5 text-xs text-[#64748B]">{item.estimatedTime}</p>
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-sm font-semibold leading-5 text-[#0F172A] break-words whitespace-normal">
+                      {item.name}
+                    </p>
+                    <p className="mt-0.5 text-xs leading-4 text-[#64748B] break-words whitespace-normal">
+                      {item.estimatedTime}
+                    </p>
                     <p className="mt-1 flex flex-wrap items-baseline justify-start gap-x-1.5">
                       <span className="text-sm font-bold text-[#f254a6]">{item.shippingFeeLabel}</span>
                       {typeof item.originalShippingFee === 'number' &&

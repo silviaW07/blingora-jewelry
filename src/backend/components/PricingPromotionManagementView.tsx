@@ -554,7 +554,7 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                     endAt={config.firstOrder.endAt}
                   />
                   <p className="mt-1 w-full text-sm text-muted-foreground">
-                    若客户名下已有已付款订单则不可用；第一次结账时自动应用。到达开始时间后自动生效。
+                    仅客户类型为「新客户」或「未转化」可用；已标为首单 / 多单 / 高危 / 流失，或名下已有已付款订单，则不可用。到达开始时间后自动生效。
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

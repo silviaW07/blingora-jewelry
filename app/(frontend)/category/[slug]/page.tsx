@@ -6,6 +6,7 @@ import {
   resolveCategoryIdFromTree,
   shelfCardsToProductItems,
 } from '@/frontend/lib/loadStorefrontProducts'
+import { STOREFRONT_SHELF_PAGE_SIZE } from '@/frontend/utils/storefrontListPage'
 import { buildCategoryPreviewProducts } from '@/frontend/utils/categoryPreviewProducts'
 import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
 
@@ -15,7 +16,7 @@ import { isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
  */
 export const dynamic = 'force-static'
 export const dynamicParams = true
-export const revalidate = 300
+export const revalidate = 60
 
 export async function generateStaticParams() {
   try {
@@ -53,7 +54,7 @@ export default async function CategoryBySlugPage({
     slug,
     categoryTree: bootstrap.categories,
     recommendZones: bootstrap.recommendZones,
-    pageSize: 24,
+    pageSize: STOREFRONT_SHELF_PAGE_SIZE,
     daily,
   })
   const categoryId =
@@ -67,9 +68,14 @@ export default async function CategoryBySlugPage({
 
   return (
     <CategoryBySlugClient
-      bootstrap={bootstrap}
+      bootstrap={{
+        categories: bootstrap.categories,
+        posters: bootstrap.posters,
+        recommendZones: [],
+      }}
       initialCategoryId={loaded.categoryId || categoryId}
       initialProducts={shelfCardsToProductItems(list)}
+      initialTotal={loaded.total}
     />
   )
 }

@@ -28,7 +28,28 @@ export interface CategoryOption {
 export interface StockStrategyJson {
   type?: string
   stock?: number
+  /** 选填：本批链接统一供应商，解析时覆盖源站店铺名 */
+  defaultSupplierName?: string
 }
+
+const normalizeDefaultSupplierName = (raw?: string | null) => {
+  const value = String(raw || '').trim()
+  return value ? value.slice(0, 120) : null
+}
+
+const readTaskDefaultSupplierName = (task: { stockStrategyJson?: unknown } | null | undefined) => {
+  const strategy = (task?.stockStrategyJson || null) as StockStrategyJson | null
+  return normalizeDefaultSupplierName(strategy?.defaultSupplierName)
+}
+
+const resolveBatchSupplierName = (
+  task: { stockStrategyJson?: unknown } | null | undefined,
+  fetched?: string | null,
+  existing?: string | null,
+) =>
+  readTaskDefaultSupplierName(task) ||
+  normalizeDefaultSupplierName(fetched) ||
+  normalizeDefaultSupplierName(existing)
 
 export interface SpecSummaryJson {
   name?: string
@@ -49,27 +70,77 @@ export interface PreviewDataJson {
    * 上架时应信任这些结果，不再按标题重新扫类目覆盖。
    */
   categoryCalibrated?: boolean
+  /**
+   * 运营在待上传区手改过价格系数。
+   * 上架时用这条系数，不再按类目默认系数重算覆盖。
+   */
+  coefficientCalibrated?: boolean
   price?: number
   mainImageUrl?: string
   detailImages?: string[]
   shortDescription?: string
   featureAttributes?: Array<{ key: string; value: string }>
   skuTable?: PreviewSkuTableRow[]
+  /** 运营在待上传区增删/改过 SKU 后锁定，禁止解析或后台拆色把删掉的规格写回来 */
+  operatorSkuTable?: boolean
   /** 1688 颜色选项（含独立缩略图；无图时 imageUrl 为空，待运营补填） */
   colors?: Array<{ label: string; imageUrl?: string | null }>
   /** 颜色 → 可用尺码列表（来自 skuMap 真实组合，不臆造） */
   sizesByColor?: Record<string, string[]>
   /** 表格导入排序；1688 链路不使用产品编号合并 */
   importSortIndex?: number
+  /** Yupoo 主图盒子/背景色识别到的品牌 */
+  backdropBrand?: string | null
   /** 入库身份：1688 每条链接独立；表格按产品编号合并后写入 */
   inboundIdentity?: {
-    mode: 'LINK_1688_INDEPENDENT' | 'LINK_PDD_INDEPENDENT' | 'TABLE_PRODUCT_CODE_MERGED'
+    mode: 'LINK_1688_INDEPENDENT' | 'LINK_PDD_INDEPENDENT' | 'LINK_YUPOO_INDEPENDENT' | 'LINK_WEISHANG_INDEPENDENT' | 'TABLE_PRODUCT_CODE_MERGED'
     offerId?: string | null
     goodsId?: string | null
+    albumId?: string | null
+    itemId?: string | null
+    shopId?: string | null
+    shopName?: string | null
     sourceUrl?: string | null
     excelProductCode?: string | null
   }
+  /** 运营人工审核过（与货物状态 DRAFT/ACTIVE 无关） */
+  reviewed?: boolean
+  reviewedAt?: string
 }
+
+export type PendingImportReviewFilter = 'all' | 'reviewed' | 'unreviewed'
+
+const pickPersistedReviewMark = (preview: unknown): Pick<PreviewDataJson, 'reviewed' | 'reviewedAt'> => {
+  const prev = (preview || {}) as PreviewDataJson
+  if (!prev.reviewed) return {}
+  return {
+    reviewed: true,
+    ...(prev.reviewedAt ? { reviewedAt: String(prev.reviewedAt) } : {}),
+  }
+}
+
+const withPersistedReviewMark = (next: PreviewDataJson, previous: unknown): PreviewDataJson => ({
+  ...next,
+  ...pickPersistedReviewMark(previous),
+})
+
+const isPreviewReviewed = (preview: unknown): boolean =>
+  Boolean((preview as PreviewDataJson | null | undefined)?.reviewed)
+
+const stripReviewMark = (preview: PreviewDataJson): PreviewDataJson => {
+  const next = { ...preview }
+  delete next.reviewed
+  delete next.reviewedAt
+  return next
+}
+
+const PENDING_REVIEWED_JSON_WHERE = {
+  OR: [
+    { previewDataJson: { path: ['reviewed'], equals: true } },
+    { previewDataJson: { string_contains: '"reviewed":true' } },
+    { previewDataJson: { string_contains: '"reviewed": true' } },
+  ],
+} as const
 
 export interface PreviewSkuTableRow {
   skuKey?: string
@@ -274,6 +345,9 @@ export interface PendingImportItemRecord {
   item_parsedMainImageUrl: string | null
   /** SPU / 表格货号 / 退回待上传时带回的 productCode */
   item_productCode: string | null
+  /** 运营已审核（previewDataJson.reviewed） */
+  item_reviewed: boolean
+  item_reviewedAt: string | null
   item_createdAt: Date
   item_updatedAt: Date
   item_skus: PendingImportSkuItem[]
@@ -309,8 +383,16 @@ export interface CreateImportTaskInput {
   urls: string
   defaultCategoryId?: string
   costDeductionUsd?: number
+  /** 选填；填写后本批每条链接都用这个供应商 */
+  supplierName?: string
   defaultStatus: ProductStatusType
   stockStrategyStock?: number
+  /** 微购/微商相册登录 Cookie，写入 secrets/szwego-cookie.txt 供本次及之后解析使用 */
+  weishangCookie?: string
+  /** Yupoo 加密店铺访问密码，写入 secrets/yupoo-password.txt */
+  yupooPassword?: string
+  /** Yupoo 浏览器 Cookie（可选，密码不够时用） */
+  yupooCookie?: string
 }
 
 export interface CreateImportTaskOutput {
@@ -367,8 +449,14 @@ export interface GetPendingImportQueueInput {
   page_size?: number
   /** skip charset/mock repair side-effects on hot path */
   skip_maintenance?: boolean
+  /** Load preview JSON + SKU drafts (off for list; on for a single expanded row). */
+  include_drafts?: boolean
+  /** Fetch specific items (expand/hydrate). Ignores pagination when set. */
+  item_ids?: string[]
   /** 名称 / SPU / 1688 offerId / 退回货号 */
   keyword?: string
+  /** 人工审核标记：全部 / 已审核 / 未审核 */
+  review_filter?: PendingImportReviewFilter
 }
 
 export interface GetPendingImportQueueOutput {
@@ -469,13 +557,26 @@ export interface InlineUpdatePendingImportItemFieldInput {
   value: string | number
 }
 
-export type PendingImportSkuEditableField = 'cost_price' | 'price' | 'weight_grams' | 'stock' | 'spec_text' | 'image_url' | 'minimum_order_quantity'
+export type PendingImportSkuEditableField =
+  | 'cost_price'
+  | 'price'
+  | 'weight_grams'
+  | 'stock'
+  | 'spec_text'
+  | 'color'
+  | 'spec'
+  | 'image_url'
+  | 'minimum_order_quantity'
 
 export interface InlineUpdatePendingImportSkuFieldInput {
   itemId: string
   skuKey: string
+  /** When set, apply the same field/value to every listed SKU in one persist. */
+  skuKeys?: string[]
   field: PendingImportSkuEditableField
   value: string | number
+  /** Client snapshot. Persist this and never re-read previewDataJson. */
+  skus?: PendingImportSkuItem[]
 }
 
 export interface DuplicatePendingImportSkuInput {
@@ -521,6 +622,7 @@ export interface PublishPendingImportItemsOutput {
 
 export interface ReparsePendingImportItemsInput {
   itemIds: string[]
+  yupooPassword?: string
 }
 
 export interface ReparsePendingImportItemResult {
@@ -590,7 +692,7 @@ const buildRepairedMockImportTexts = (itemId: string) => {
     previewDataJson: {
       name,
       price: 50,
-      mainImageUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158',
+      mainImageUrl: undefined,
       shortDescription: '自动抓取的商品简介内容，请根据需要修改。'
     },
     specSummaryJson: [{ name: '规格', values: ['标准版'] }]
@@ -675,7 +777,7 @@ import {
 } from '@/shared/categoryMatchGuards'
 import { detectShelfFamily, shelfFamiliesCompatible } from '@/shared/categoryShelfFamily'
 import { resolveCategoryPriceCoefficient } from '@/shared/priceCoefficient'
-import { getUsdExchangeRate } from '@/shared/exchangeRate'
+import { DEFAULT_USD_EXCHANGE_RATE, getUsdExchangeRate } from '@/shared/exchangeRate'
 import {
   loadFilterCategoriesFromDb,
   matchFilterCategoriesByTitle,
@@ -685,7 +787,11 @@ import { resolveProductWeightGrams } from '@/shared/categoryWeight'
 import { resolveCategorySynonyms } from '@/shared/categorySynonyms'
 import { ensureCategorySlugPersisted } from '@/shared/categorySlug'
 import { buildSkuIdentifier, formatIdentifierYearMonth, resolveCategoryShortCode } from '@/shared/productIdentifiers'
-import { isPendingImportEffectivelyReady, hasPendingImportCoreFields } from '@/backend/utils/pendingImportReadiness'
+import {
+  hasPendingImportCoreFields,
+  isPendingImportEffectivelyReady,
+  isPlaceholderPendingImportImage,
+} from '@/backend/utils/pendingImportReadiness'
 import {
   buildProductTranslationsJson,
   resolveEnglishProductTitle,
@@ -696,6 +802,8 @@ import {
   normalizeBrandTitleSync,
 } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
+import { applyPendingSkuSummaryToDrafts, parsePendingSkuSummaryEntries } from '@/shared/pendingSkuSummary'
+import { extractAlbumTitlePrice, pickAlbumCostFromTitleAndFetched, titleHasStrongPriceHint } from '@/shared/albumTitlePrice'
 import {
   extract1688OfferIdsFromHtml,
   extract1688ShopMemberId,
@@ -716,8 +824,17 @@ import {
   isTableImportCategoryHeader,
   isColorDimensionName,
   looksLikeColorValueSet,
+  extractProductDimensionSpec,
+  isTruncatedDimensionOf,
 } from '@/shared/tableImportSpec'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
+import {
+  isWeishangAlbumPageUrl,
+  isWeishangFeedUrl,
+  parseWeishangAlbumRef,
+  weishangDedupeKey,
+} from '@/shared/weishangAlbum'
+import { splitPastedImportUrls } from '@/shared/importSourceUrls'
 import {
   extractPinduoduoGoodsId,
   fetchPinduoduoProductPreview,
@@ -725,6 +842,54 @@ import {
   isPinduoduoProductUrl,
   type PinduoduoProductPreview,
 } from '@/backend/parsers/PinduoduoParser'
+import {
+  extractYupooAlbumId,
+  extractYupooShopName,
+  fetchYupooAlbumPreview,
+  fetchYupooCategoryAlbumUrls,
+  isYupooAlbumUrl,
+  isYupooCategoryUrl,
+  persistYupooCookie,
+  persistYupooPassword,
+  type YupooAlbumPreview,
+} from '@/backend/parsers/YupooParser'
+import {
+  applyBackdropBrandToTitle,
+  backdropBrandMatchText,
+  titleHasBackdropBrand,
+} from '@/shared/brandFromBackdrop'
+import { detectBrandFromBackdropUrls } from '@/backend/lib/detectBrandFromBackdropImage'
+import { describeProductFromBackdropUrls } from '@/backend/lib/describeProductFromImage'
+import {
+  analyzeYupooAlbumImages,
+  clusterYupooImagesIntoColorSkus,
+  dropIconLikeProductImages,
+  isIconLikeProductImage,
+  nameColorFromHostedImage,
+} from '@/backend/lib/clusterYupooColorSkus'
+import { baseColorLabel } from '@/shared/yupooColorSkus'
+import {
+  composeImportProductTitle,
+  inferProductTypeLabel,
+  isWeakProductTitle,
+} from '@/shared/importTitleCompose'
+import { composeFullImportTitle, extractColorLabelsFromCopy, extractSpecLabelsFromCopy } from '@/shared/importSpecFromCopy'
+import {
+  filterSellableSkuAttributes,
+  isColorNameSpecValue,
+  isNonSellableSkuDimensionName,
+  isPlaceholderSpecValue,
+  isProductTypeSpecValue,
+  sanitizePendingSkuCopyLabels,
+  stripSkuCopyLabel,
+} from '@/shared/skuDisplayGuards'
+import {
+  expandWeishangFeedUrls,
+  fetchWeishangAlbumPreview,
+  persistWeishangCookie,
+  type WeishangAlbumPreview,
+} from '@/backend/parsers/WeishangParser'
+import { importRemoteImageUrls } from '@/lib/importRemoteImages'
 import {
   bootstrap1688MtopCookies,
   fetch1688OfferViaMtop,
@@ -1047,16 +1212,54 @@ const mapTaskItem = (item: any): ImportTaskItemRecord => ({
 
 const parseSpecAttributes = (specText: string): Array<{ name: string; value: string }> => {
   const normalized = normalizeText(specText)
-  if (!normalized) return [{ name: '规格', value: '默认规格' }]
+  if (!normalized || isPlaceholderSpecValue(normalized)) return []
   if (normalized.includes('/')) {
     const [color, size] = normalized.split('/').map(part => part.trim()).filter(Boolean)
     const attrs: Array<{ name: string; value: string }> = []
-    if (color) attrs.push({ name: '颜色', value: color })
-    if (size) attrs.push({ name: '尺码', value: size })
+    if (color && !isProductTypeSpecValue(color)) attrs.push({ name: '颜色', value: color })
+    if (size && !isProductTypeSpecValue(size)) attrs.push({ name: '尺码', value: size })
     return attrs.length > 0 ? attrs : [{ name: '规格', value: normalized }]
   }
   return [{ name: '规格', value: normalized }]
 }
+
+const sanitizeImportedSkuAttributes = (
+  attrs?: Array<{ name?: string | null; value?: string | null }> | null,
+  specText?: string | null,
+): Array<{ name: string; value: string }> => {
+  const mapped =
+    Array.isArray(attrs) && attrs.length > 0
+      ? attrs
+          .map((attr) => ({
+            name: normalizeText(attr?.name) || '规格',
+            value: normalizeText(attr?.value) || '',
+          }))
+          .filter((attr) => attr.value)
+      : parseSpecAttributes(specText || '')
+  const cleaned = mapped.filter((attr) => {
+    const name = normalizeText(attr.name)
+    if ((name === '规格' || name === '尺码' || name === '尺寸') && /^(默认规格|默认|default|standard)$/i.test(attr.value)) {
+      return false
+    }
+    return Boolean(attr.value)
+  })
+  const sellable = filterSellableSkuAttributes(cleaned)
+  return sellable.length > 0 ? sellable : cleaned.filter((attr) => !isProductTypeSpecValue(attr.value))
+}
+
+const sanitizeSpecSummaryJson = (rows?: SpecSummaryJson[] | null): SpecSummaryJson[] =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      name: normalizeText(row?.name),
+      values: Array.from(
+        new Set(
+          (row?.values || [])
+            .map((value) => normalizeText(value))
+            .filter((value) => value && !isProductTypeSpecValue(value)),
+        ),
+      ),
+    }))
+    .filter((row) => row.name && !isNonSellableSkuDimensionName(row.name) && row.values.length > 0)
 
 const formatSpecText = (attributes: Array<{ name: string; value: string }>, fallback = '默认规格') => {
   const values = attributes.map(attr => normalizeText(attr.value)).filter(Boolean)
@@ -1068,13 +1271,18 @@ const extract1688OfferId = (sourceUrl?: string | null) => {
   return matched?.[1] || null
 }
 
-/** 归一化导入去重键：1688 按 offerId，拼多多按 goods_id（忽略 query/spm 差异） */
+/** 归一化导入去重键：1688 按 offerId，拼多多按 goods_id，Yupoo 按相册 id，微商按动态 id */
 const resolveImportLinkDedupeKey = (sourceUrl?: string | null): string | null => {
   const offerId = extract1688OfferId(sourceUrl)
   if (offerId) return `1688:${offerId}`
   const goodsId = extractPinduoduoGoodsId(String(sourceUrl || ''))
   if (goodsId) return `pdd:${goodsId}`
-  return null
+  const albumId = extractYupooAlbumId(sourceUrl)
+  if (albumId) {
+    const shop = extractYupooShopName(sourceUrl) || '_'
+    return `yupoo:${shop}:${albumId}`
+  }
+  return weishangDedupeKey(sourceUrl)
 }
 
 /**
@@ -1091,9 +1299,19 @@ const findExistingImportLinkKeys = async (
 
   const offerIds = uniqueKeys.filter((key) => key.startsWith('1688:')).map((key) => key.slice(5))
   const goodsIds = uniqueKeys.filter((key) => key.startsWith('pdd:')).map((key) => key.slice(4))
+  const albumIds = uniqueKeys
+    .filter((key) => key.startsWith('yupoo:'))
+    .map((key) => key.split(':')[2])
+    .filter(Boolean)
+  const weishangIds = uniqueKeys
+    .filter((key) => key.startsWith('weishang:'))
+    .map((key) => key.slice('weishang:'.length))
+    .filter((id) => id.length >= 8)
   const orClauses: Array<{ sourceUrl: { contains: string } }> = [
     ...offerIds.map((id) => ({ sourceUrl: { contains: `offer/${id}` } })),
     ...goodsIds.map((id) => ({ sourceUrl: { contains: `goods_id=${id}` } })),
+    ...albumIds.map((id) => ({ sourceUrl: { contains: `albums/${id}` } })),
+    ...weishangIds.map((id) => ({ sourceUrl: { contains: id } })),
   ]
   if (!orClauses.length) return existing
 
@@ -1218,11 +1436,17 @@ const parse1688FeatureAttributes = (html: string): Array<{ key: string; value: s
 }
 
 const buildParameterJsonFromAttrs = (attrs: Array<{ key: string; value: string }>) => {
-  if (!attrs.length) return null
+  const items = (attrs || []).filter(
+    (item) =>
+      item.key &&
+      item.value &&
+      !(isSizeDimensionName(item.key) && isColorNameSpecValue(item.value)),
+  )
+  if (!items.length) return null
   return [
     {
       group: 'Description',
-      items: attrs.map((item) => ({ key: item.key, value: item.value })),
+      items: items.map((item) => ({ key: item.key, value: item.value })),
     },
   ]
 }
@@ -1863,8 +2087,125 @@ const parsePriceRangeText = (raw?: string | null) => {
   const nums = Array.from(text.matchAll(/(\d+(?:\.\d+)?)/g))
     .map(item => Number(item[1]))
     .filter(num => Number.isFinite(num) && num > 0)
-  if (!nums.length) return { min: null as number | null, max: null as number | null }
-  return { min: Math.min(...nums), max: Math.max(...nums) }
+  if (!nums.length) {
+    return { min: null as number | null, max: null as number | null, single: null as number | null }
+  }
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const single = Math.abs(min - max) < 0.009 ? min : null
+  return { min, max, single }
+}
+
+const tableImportSkuPriceKey = (color?: string | null, spec?: string | null) =>
+  `${normalizeText(color)}||${normalizeText(spec)}`
+
+const lookupTableImportSkuPrice = (
+  color: string | null,
+  spec: string | null,
+  priceBySkuKey: Map<string, number>,
+  priceByColor: Map<string, number>,
+  priceBySpecOnly: Map<string, number>,
+  fallback: number | null,
+): number | null => {
+  const exact = priceBySkuKey.get(tableImportSkuPriceKey(color, spec))
+  if (exact != null) return exact
+  if (color) {
+    const byColor = priceByColor.get(normalizeText(color))
+    if (byColor != null) return byColor
+  }
+  if (spec) {
+    const bySpec = priceBySpecOnly.get(normalizeText(spec))
+    if (bySpec != null) return bySpec
+  }
+  return fallback
+}
+
+/** 多数规格的实际价（众数，否则中位数）。不要用最低价当成本，1688 页面价往往不是 min SKU。 */
+const pickTypicalPositivePrice = (prices: number[]): number | null => {
+  const vals = prices.filter((n) => Number.isFinite(n) && n > 0)
+  if (!vals.length) return null
+  const counts = new Map<string, { value: number; count: number }>()
+  for (const n of vals) {
+    const key = n.toFixed(2)
+    const row = counts.get(key) || { value: n, count: 0 }
+    row.count += 1
+    counts.set(key, row)
+  }
+  let best: { value: number; count: number } | null = null
+  for (const row of counts.values()) {
+    if (!best || row.count > best.count) best = row
+  }
+  if (best && (best.count >= 2 || vals.length === 1)) return best.value
+  const sorted = [...vals].sort((a, b) => a - b)
+  return sorted[Math.floor((sorted.length - 1) / 2)] ?? null
+}
+
+const read1688OfferDisplayPrice = (html: string): number | null => {
+  const text =
+    pickJsonStringField(html, 'priceDisplay') ||
+    pickJsonStringField(html, 'offerPrice')
+  const parsed = parsePriceRangeText(text)
+  if (parsed.single != null && parsed.single > 0.5) return parsed.single
+  return null
+}
+
+const resolve1688PreviewPrices = (
+  html: string,
+  multiSpec: { priceMin: number | null; priceMax: number | null; skuTable: PreviewSkuTableRow[] },
+) => {
+  const skuPrices = (multiSpec.skuTable || [])
+    .map((row) => toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price))
+    .filter((n): n is number => n != null && n > 0)
+  const fromText = parsePriceRangeText(
+    pickJsonStringField(html, 'priceDisplay') ||
+      pickJsonStringField(html, 'offerPrice') ||
+      pickJsonStringField(html, 'price'),
+  )
+  const priceMin = multiSpec.priceMin ?? fromText.min
+  const priceMax = multiSpec.priceMax ?? fromText.max ?? priceMin
+  const display = read1688OfferDisplayPrice(html)
+  const typical = pickTypicalPositivePrice(skuPrices)
+  const skuMin = skuPrices.length ? Math.min(...skuPrices) : null
+  // 「¥5.00 起」是未登录最低档/礼盒，不是腰带等主规格实价（skuMap 里多数是 13.88）
+  const displayIsStartFromFloor =
+    display != null &&
+    skuMin != null &&
+    typical != null &&
+    Math.abs(display - skuMin) <= 0.05 &&
+    typical - display >= 1
+  const costPrice = displayIsStartFromFloor
+    ? typical
+    : (typical ?? display ?? priceMin)
+  return { priceMin, priceMax, costPrice }
+}
+
+const resolveFetchedOfferCost = (
+  fetched: {
+    costPrice?: number | null
+    priceMin?: number | null
+    skuTable?: Array<{ costPrice?: number | null; price?: number | null }> | null
+  },
+  fallback?: number | null,
+) => {
+  const skuPrices = (fetched.skuTable || [])
+    .map((row) => toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price))
+    .filter((n): n is number => n != null && n > 0)
+  const typical = pickTypicalPositivePrice(skuPrices)
+  const stated = toNumberOrNull(fetched.costPrice)
+  const skuMin = skuPrices.length ? Math.min(...skuPrices) : null
+  const statedIsFloor =
+    stated != null &&
+    skuMin != null &&
+    typical != null &&
+    Math.abs(stated - skuMin) <= 0.05 &&
+    typical - stated >= 1
+  return (
+    (statedIsFloor ? typical : stated) ??
+    typical ??
+    toNumberOrNull(fetched.priceMin) ??
+    toNumberOrNull(fallback) ??
+    null
+  )
 }
 
 const isPlaceholderPendingName = (name?: string | null) =>
@@ -1873,10 +2214,12 @@ const isPlaceholderPendingName = (name?: string | null) =>
   /^\[1688\?+\]/.test(name) ||
   isCharsetCorruptedText(name)
 
-const isPlaceholderPendingImage = (url?: string | null) =>
-  !url ||
-  /images\.unsplash\.com/i.test(url) ||
-  /photo-1581091226825-a6a2a5aee158/i.test(url)
+const isPlaceholderPendingImage = (url?: string | null) => isPlaceholderPendingImportImage(url)
+
+const realProductImageUrl = (url?: string | null) => {
+  const text = normalizeText(url)
+  return text && !isPlaceholderPendingImage(text) ? text : null
+}
 
 /** 旧版空解析路径硬编码的演示 SKU：红色/M | 蓝色/L | 黑色/XL */
 const isClassicMock1688SkuSummary = (text?: string | null) => {
@@ -1974,7 +2317,11 @@ const expandSkuTableFromColors = (params: {
   let index = 0
   for (const color of colors) {
     const sizes = Array.from(
-      new Set((sizesByColor[color.label] || []).map(size => normalizeText(size)).filter(Boolean)),
+      new Set(
+        (sizesByColor[color.label] || [])
+          .map(size => normalizeText(size))
+          .filter((size) => size && !isPlaceholderSpecValue(size)),
+      ),
     )
     const sizeList = sizes.length > 0 ? sizes : [null]
     for (const size of sizeList) {
@@ -1991,12 +2338,35 @@ const expandSkuTableFromColors = (params: {
         stock: params.stock,
         // 颜色展开的行不写死 500，交由上层「提取/分类兜底」决定，避免默认重量失效
         weightGrams: params.weightGrams ?? null,
-        imageUrl: color.imageUrl,
+        imageUrl: realProductImageUrl(color.imageUrl),
         attributes,
       })
     }
   }
   return rows
+}
+
+const applyTitleDimensionToSkuTable = (
+  rows: PreviewSkuTableRow[],
+  texts: Array<string | null | undefined>,
+  featureAttributes?: Array<{ key?: string; value?: string } | null> | null,
+): PreviewSkuTableRow[] => {
+  if (!rows.length) return rows
+  const fromAttrs = (featureAttributes || [])
+    .map((attr) => `${attr?.key || ''} ${attr?.value || ''}`)
+    .join('\n')
+  const dimension = extractProductDimensionSpec(...texts, fromAttrs)
+  if (!dimension) return rows
+  return rows.map((row) => {
+    const attributes = [...(row.attributes || [])]
+    const sizeIndex = attributes.findIndex((attr) => isSizeDimensionName(attr.name))
+    const current = sizeIndex >= 0 ? normalizeText(attributes[sizeIndex].value) : ''
+    const canFill = !current || isPlaceholderSpecValue(current) || isTruncatedDimensionOf(current, dimension)
+    if (!canFill) return row
+    if (sizeIndex >= 0) attributes[sizeIndex] = { ...attributes[sizeIndex], value: dimension }
+    else attributes.push({ name: '规格', value: dimension })
+    return { ...row, attributes, spec: formatSpecText(attributes) }
+  })
 }
 
 const isSizeDimensionName = (raw?: string | null) => {
@@ -2040,13 +2410,19 @@ const resolveRecoverableSizesByColor = (
   const globalSizes = new Set<string>()
   for (const attr of preview.featureAttributes || []) {
     if (!isSizeDimensionName(attr.key)) continue
-    for (const value of splitRecoverableSizeValues(attr.value)) globalSizes.add(value)
+    for (const value of splitRecoverableSizeValues(attr.value)) {
+      if (!isColorNameSpecValue(value)) globalSizes.add(value)
+    }
   }
   for (const group of specSummary || []) {
     if (!isSizeDimensionName(group.name)) continue
     for (const value of group.values || []) {
       const normalized = normalizeText(value)
-      if (normalized && !/^(默认|默认规格|default|standard)$/i.test(normalized)) {
+      if (
+        normalized &&
+        !/^(默认|默认规格|default|standard)$/i.test(normalized) &&
+        !isColorNameSpecValue(normalized)
+      ) {
         globalSizes.add(normalized)
       }
     }
@@ -2060,6 +2436,58 @@ const resolveRecoverableSizesByColor = (
     }
   }
   return resolved
+}
+
+const isYupooPendingItem = (item: any, preview?: PreviewDataJson | null) => {
+  const mode = (preview as { inboundIdentity?: { mode?: string } } | null)?.inboundIdentity?.mode
+  return mode === 'LINK_YUPOO_INDEPENDENT' || isYupooAlbumUrl(item?.sourceUrl)
+}
+
+const listYupooPendingGalleryUrls = (item: any, preview?: PreviewDataJson | null) =>
+  Array.from(
+    new Set(
+      [
+        ...(Array.isArray(preview?.detailImages) ? preview.detailImages : []),
+        preview?.mainImageUrl,
+        item?.parsedMainImageUrl,
+        item?.mainImageUrl,
+      ]
+        .map((url) => realProductImageUrl(url))
+        .filter((url): url is string => Boolean(url)),
+    ),
+  )
+
+const expandYupooGalleryIntoColorSkuRows = (
+  item: any,
+  preview?: PreviewDataJson | null,
+): PreviewSkuTableRow[] => {
+  const images = listYupooPendingGalleryUrls(item, preview)
+  if (images.length < 4) return []
+  // 读路径不能跑 sharp；不要把全部相册图按「两张一色」硬拆成 SKU。
+  // 礼盒摆拍分色由 persist / sanitize 的 clusterYupooImagesIntoColorSkus 完成。
+  const previewGroups = (preview?.colors || [])
+    .map((color) => ({
+      label: normalizeText(color.label),
+      imageUrl: normalizeText(color.imageUrl),
+    }))
+    .filter((color) => color.label && color.label !== '默认颜色' && color.imageUrl)
+  if (previewGroups.length < 2) return []
+  const groups = previewGroups
+  if (groups.length < 2) return []
+  const cost = toNumberOrNull(item?.costPrice) ?? 50
+  const price = toNumberOrNull(item?.cnyPriceMin ?? item?.parsedPriceMin) ?? cost
+  const stock = resolveInitialStock(item?.availableStock)
+  const weight = toNumberOrNull(item?.weightGrams)
+  return groups.map((group, index) => ({
+    skuKey: `sku-${index + 1}`,
+    spec: group.label,
+    costPrice: cost,
+    price,
+    stock,
+    weightGrams: weight,
+    imageUrl: group.imageUrl,
+    attributes: [{ name: '颜色', value: group.label }],
+  }))
 }
 
 /** 解析/发布共用：有色则展开；否则才允许默认规格占位 */
@@ -2203,6 +2631,8 @@ export interface Fetched1688OfferPreview {
   sourceCategoryName: string | null
   priceMin: number | null
   priceMax: number | null
+  /** 商品成本：页面展示价或多数 SKU 价，不是最低价 */
+  costPrice: number | null
   /** 1688 起订量（beginAmount 等）；缺省由调用方回落 DEFAULT_MIN_ORDER_QTY */
   minOrderQty: number | null
   featureAttributes: Array<{ key: string; value: string }>
@@ -2231,6 +2661,7 @@ const empty1688OfferPreview = (): Fetched1688OfferPreview => ({
   sourceCategoryName: null,
   priceMin: null,
   priceMax: null,
+  costPrice: null,
   minOrderQty: null,
   featureAttributes: [],
   skuTable: [],
@@ -2350,14 +2781,8 @@ const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688Offe
     pickJsonStringField(html, 'description') || pickJsonStringField(html, 'offerDescription') || null
   const sourceCategoryName =
     pickJsonStringField(html, 'leafCategoryName') || pickJsonStringField(html, 'categoryName') || null
-  const priceText =
-    pickJsonStringField(html, 'price') ||
-    pickJsonStringField(html, 'priceDisplay') ||
-    pickJsonStringField(html, 'offerPrice')
-  const { min: priceMinFromText, max: priceMaxFromText } = parsePriceRangeText(priceText)
+  const { priceMin, priceMax, costPrice } = resolve1688PreviewPrices(html, multiSpec)
   const featureAttributes = parse1688FeatureAttributes(html)
-  const priceMin = multiSpec.priceMin ?? priceMinFromText
-  const priceMax = multiSpec.priceMax ?? priceMaxFromText ?? priceMin
 
   if (!(name || mainImageUrl || multiSpec.skuTable.length > 0)) return null
 
@@ -2370,9 +2795,14 @@ const buildPreviewFromParsedHtml = async (html: string): Promise<Fetched1688Offe
     sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
     priceMin,
     priceMax,
+    costPrice,
     minOrderQty: extract1688MinOrderQtyFromHtml(html),
     featureAttributes,
-    skuTable: multiSpec.skuTable,
+    skuTable: applyTitleDimensionToSkuTable(
+      multiSpec.skuTable,
+      [name, productDetail],
+      featureAttributes,
+    ),
     colors: multiSpec.colors,
     sizesByColor: multiSpec.sizesByColor,
     specSummary: multiSpec.specSummary,
@@ -2693,6 +3123,10 @@ const scoreSkuPropsRaw = (raw: unknown): number => {
 }
 
 const scoreSkuMapRaw = (raw: unknown): number => {
+  if (Array.isArray(raw)) {
+    const converted = convert1688SkuListToMap(raw)
+    return converted ? Object.keys(converted).length : 0
+  }
   const record = asRecord(raw)
   return record ? Object.keys(record).length : 0
 }
@@ -2715,8 +3149,15 @@ const build1688SkuListMapKey = (row: Record<string, unknown>): string | null => 
         // pid:vid 形式（如 1627207:28320）需保留 pid，供后续映射回 label
         if (/^\d+:\d+$/.test(trimmed)) return trimmed
         // 「颜色>米白」或「颜色:米白」→ 取属性值
-        const segs = trimmed.split(/[:>]/)
-        if (segs.length >= 2) return segs.slice(1).join(':').trim()
+        const segs = trimmed.split(/[:>]/).map(seg => seg.trim()).filter(Boolean)
+        if (segs.length >= 2) {
+          const dim = segs[0]
+          // 「颜色>米白」才剥维名；「咖花黑扣>100cm」两段都是规格值，必须保留
+          if (is1688ColorPropName(dim) || is1688SizePropName(dim) || dim === '规格' || dim === '款式') {
+            return segs.slice(1).join('>')
+          }
+          return segs.join('>')
+        }
         return trimmed
       })
       .filter(Boolean)
@@ -2793,11 +3234,12 @@ const digSkuBlobsFromUnknown = (
   if (record.skuProps != null) acc.props.push(record.skuProps)
   if (record.sku_props != null) acc.props.push(record.sku_props)
   if (record.skuMap != null) acc.maps.push(record.skuMap)
+  if (record.skuMapOriginal != null) acc.maps.push(record.skuMapOriginal)
   if (record.skuInfoMap != null) acc.maps.push(record.skuInfoMap)
   if (record.sku_map != null) acc.maps.push(record.sku_map)
   if (record.skuPriceMap != null) acc.maps.push(record.skuPriceMap)
 
-  for (const listKey of ['skuList', 'sku_list', 'skuInfoList']) {
+  for (const listKey of ['skuList', 'sku_list', 'skuInfoList', 'skuMapOriginal']) {
     if (record[listKey] != null) {
       const converted = convert1688SkuListToMap(record[listKey])
       if (converted) acc.maps.push(converted)
@@ -2838,16 +3280,19 @@ const collectRichest1688SkuBlobs = (html: string): { propsRaw: unknown | null; m
   ]
   const mapCandidates: unknown[] = [
     ...extractAllBalancedJsonValues(html, 'skuMap'),
+    ...extractAllBalancedJsonValues(html, 'skuMapOriginal'),
     ...extractAllBalancedJsonValues(html, 'skuInfoMap'),
     ...extractAllBalancedJsonValues(html, 'sku_map'),
     ...extractAllBalancedJsonValues(html, 'skuPriceMap'),
   ]
 
-  // 隐藏 JSON 里的 skuList：转成 map 参与「最丰富」竞选
+  // 隐藏 JSON 里的 skuList / skuMapOriginal 数组：转成 map 参与「最丰富」竞选
   for (const listRaw of [
     ...extractAllBalancedJsonValues(html, 'skuList'),
     ...extractAllBalancedJsonValues(html, 'sku_list'),
     ...extractAllBalancedJsonValues(html, 'skuInfoList'),
+    ...extractAllBalancedJsonValues(html, 'skuMapOriginal'),
+    ...mapCandidates.filter(Array.isArray),
   ]) {
     const converted = convert1688SkuListToMap(listRaw)
     if (converted) mapCandidates.push(converted)
@@ -3042,6 +3487,9 @@ const normalizeSkuPropsArray = (raw: unknown): Parsed1688Prop[] => {
       if (!values.length) return null
       const imageHits = values.filter(value => Boolean(value.imageUrl)).length
       const nameKey = name.trim()
+      if (isNonSellableSkuDimensionName(name)) {
+        return { name, kind: 'other' as const, values, propId }
+      }
       // 「规格」在 1688 上常充当色维（带独立缩略图或色名）；纯尺码文案且无图仍走 other/size
       const specActsAsColor =
         /^(规格|spec)$/i.test(nameKey) &&
@@ -3256,12 +3704,24 @@ const parse1688MultiSpecFromHtml = (html: string): {
             : mergedColorValues,
       }
     : colorPropFromProps
-  const sizeCandidates = props.filter(prop => prop.kind === 'size')
+  const sizeCandidates = props.filter(
+    (prop) =>
+      prop.kind === 'size' &&
+      !isNonSellableSkuDimensionName(prop.name) &&
+      !prop.values.every((value) => isProductTypeSpecValue(value.name)),
+  )
   const sizeProp =
     (sizeCandidates.length
       ? [...sizeCandidates].sort((a, b) => b.values.length - a.values.length)[0]
       : null) ||
-    props.find(prop => prop.kind === 'other' && prop !== colorPropFromProps && prop.values.length > 1) ||
+    props.find(
+      (prop) =>
+        prop.kind === 'other' &&
+        prop !== colorPropFromProps &&
+        prop.values.length > 1 &&
+        !isNonSellableSkuDimensionName(prop.name) &&
+        !prop.values.every((value) => isProductTypeSpecValue(value.name)),
+    ) ||
     null
 
   const colorImageByLabel = new Map<string, string | null>()
@@ -3298,7 +3758,9 @@ const parse1688MultiSpecFromHtml = (html: string): {
       sizeLabelSet.add(part)
     }
   }
-  const allSizeLabels = sortSizeLabels(Array.from(sizeLabelSet))
+  const allSizeLabels = sortSizeLabels(
+    Array.from(sizeLabelSet).filter((label) => !isProductTypeSpecValue(label)),
+  )
   const sizesByColor: Record<string, string[]> = {}
   const skuTable: PreviewSkuTableRow[] = []
   const prices: number[] = []
@@ -3332,7 +3794,7 @@ const parse1688MultiSpecFromHtml = (html: string): {
     skuKey?: string | null
   }) => {
     const color = normalizeText(params.color)
-    const size = normalizeText(params.size)
+    const size = isProductTypeSpecValue(params.size) ? '' : normalizeText(params.size)
     const attributes: Array<{ name: string; value: string }> = []
     if (color) attributes.push({ name: '颜色', value: color })
     if (size) attributes.push({ name: '尺码', value: size })
@@ -3543,8 +4005,8 @@ const parse1688MultiSpecFromHtml = (html: string): {
     const expanded = expandSkuTableFromColors({
       colors,
       sizesByColor,
-      costPrice: prices.length ? Math.min(...prices) : 0,
-      price: prices.length ? Math.min(...prices) : 0,
+      costPrice: prices.length ? pickTypicalPositivePrice(prices) || Math.min(...prices) : 0,
+      price: prices.length ? pickTypicalPositivePrice(prices) || Math.min(...prices) : 0,
       stock: DEFAULT_AVAILABLE_STOCK,
     })
     for (const row of expanded) {
@@ -3700,14 +4162,8 @@ const fetch1688OfferPreviewOnce = async (
         pickJsonStringField(html, 'categoryName') ||
         null
 
-      const priceText =
-        pickJsonStringField(html, 'price') ||
-        pickJsonStringField(html, 'priceDisplay') ||
-        pickJsonStringField(html, 'offerPrice')
-      const { min: priceMinFromText, max: priceMaxFromText } = parsePriceRangeText(priceText)
+      const { priceMin, priceMax, costPrice } = resolve1688PreviewPrices(html, multiSpec)
       const featureAttributes = parse1688FeatureAttributes(html)
-      const priceMin = multiSpec.priceMin ?? priceMinFromText
-      const priceMax = multiSpec.priceMax ?? priceMaxFromText ?? priceMin
 
       if (name || mainImageUrl || multiSpec.skuTable.length > 0) {
         return {
@@ -3721,6 +4177,7 @@ const fetch1688OfferPreviewOnce = async (
             sourceCategoryName: sourceCategoryName ? sourceCategoryName.slice(0, 120) : null,
             priceMin,
             priceMax,
+            costPrice,
             minOrderQty: extract1688MinOrderQtyFromHtml(html),
             featureAttributes,
             skuTable: multiSpec.skuTable,
@@ -4048,7 +4505,9 @@ const extract1688MinOrderQtyFromHtml = (html: string): number | null => {
 
 const extract1688PriceMinFromHtml = (html: string): number | null => {
   if (!html) return null
-  const keys = ['discountPrice', 'offerPrice', 'skuPrice', 'minPrice', 'price']
+  const display = read1688OfferDisplayPrice(html)
+  if (display != null) return Math.round(display * 100) / 100
+  const keys = ['discountPrice', 'offerPrice', 'skuPrice']
   const raw: number[] = []
   for (const key of keys) {
     const n = pickJsonNumberField(html, key)
@@ -4061,7 +4520,8 @@ const extract1688PriceMinFromHtml = (html: string): number | null => {
   if (!raw.length) return null
   const asYuan = raw.map((n) => (n >= 1000 ? n / 100 : n)).filter((n) => n > 0.5 && n < 100000)
   if (!asYuan.length) return null
-  return Math.round(Math.min(...asYuan) * 100) / 100
+  const typical = pickTypicalPositivePrice(asYuan)
+  return typical == null ? null : Math.round(typical * 100) / 100
 }
 
 const classify1688OfferHtml = (html: string): Check1688OfferLiveStatusResult => {
@@ -4286,13 +4746,15 @@ const backfillPendingImportOriginalMeta = async (limit = 6) => {
     const nextPriceMin = meta.priceMin ?? toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin)
     const nextPriceMax = meta.priceMax ?? toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax) ?? nextPriceMin
 
-    const shouldReplaceSkus = meta.skuTable.length > 0 || meta.colors.length > 0 || hadMockSkus
+    const skuTableLocked = Boolean(currentPreview.operatorSkuTable) && !hadMockSkus
+    const shouldReplaceSkus =
+      !skuTableLocked && (meta.skuTable.length > 0 || meta.colors.length > 0 || hadMockSkus)
     const nextSkuTable = resolveSkuTableOrExpandFromColors({
       skuTable: meta.skuTable.length > 0 ? meta.skuTable : hadMockSkus ? [] : currentPreview.skuTable,
       colors: meta.colors.length ? meta.colors : currentPreview.colors || [],
       sizesByColor: Object.keys(meta.sizesByColor).length ? meta.sizesByColor : currentPreview.sizesByColor,
-      costPrice: nextPriceMin ?? 50,
-      price: nextPriceMin ?? 50,
+      costPrice: toNumberOrNull(meta.costPrice) ?? nextPriceMin ?? 50,
+      price: toNumberOrNull(meta.costPrice) ?? nextPriceMin ?? 50,
       stock: resolveInitialStock(item.availableStock),
     })
     let nextSpecSummary: SpecSummaryJson[] =
@@ -4336,7 +4798,7 @@ const backfillPendingImportOriginalMeta = async (limit = 6) => {
         cnyPriceMax: nextPriceMax,
         parsedPriceMin: nextPriceMin,
         parsedPriceMax: nextPriceMax,
-        costPrice: toNumberOrNull(item.costPrice) ?? nextPriceMin,
+        costPrice: toNumberOrNull(item.costPrice) ?? toNumberOrNull(meta.costPrice) ?? nextPriceMin,
         ...(shouldReplaceSkus
           ? {
               skuSummaryText: nextSkuSummary,
@@ -4372,13 +4834,138 @@ const backfillPendingImportOriginalMeta = async (limit = 6) => {
   return updated
 }
 
+const readPreviewSkuKey = (row: PreviewSkuTableRow | Record<string, unknown> | null | undefined, index = 0) =>
+  normalizeText(
+    (row as { skuKey?: string; sku_key?: string } | null | undefined)?.skuKey ||
+      (row as { sku_key?: string } | null | undefined)?.sku_key,
+  ) || `sku-${index + 1}`
+
+const findPendingSkuDraftIndex = (drafts: PendingImportSkuItem[], skuKey?: string | null) => {
+  const wanted = normalizeText(skuKey)
+  if (!wanted) return -1
+  const exact = drafts.findIndex((sku) => sku.sku_key === wanted || sku.sku_key === skuKey)
+  if (exact >= 0) return exact
+  if (wanted.length < 6) return -1
+  return drafts.findIndex(
+    (sku) => sku.sku_key.endsWith(wanted) || wanted.endsWith(sku.sku_key),
+  )
+}
+
+const pendingSkuDraftsFromSkuTable = (
+  item: any,
+  table: PreviewSkuTableRow[],
+): PendingImportSkuItem[] =>
+  table.map((row, index) => {
+    const attributes = Array.isArray(row.attributes)
+      ? row.attributes
+          .map((attr) => ({
+            name: normalizeText(attr?.name),
+            value: normalizeText(attr?.value),
+          }))
+          .filter((attr) => attr.name && attr.value)
+      : []
+    return {
+      sku_key: readPreviewSkuKey(row, index),
+      spec_text: normalizeText(row.spec) || formatSpecText(attributes),
+      cost_price: toNumberOrNull(row.costPrice ?? item.costPrice),
+      price: toNumberOrNull(row.price ?? item.cnyPriceMin ?? item.parsedPriceMin),
+      weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
+      stock: resolveInitialStock(row.stock ?? item.availableStock),
+      image_url: normalizeText(row.imageUrl) || null,
+      attributes,
+    }
+  })
+
+const parseOperatorSkuJson = (raw: unknown): PreviewSkuTableRow[] => {
+  if (!raw) return []
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(parsed) ? (parsed as PreviewSkuTableRow[]) : []
+  } catch {
+    return []
+  }
+}
+
+const parseOperatorGalleryJson = (raw: unknown): string[] => {
+  if (!raw) return []
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((url) => String(url || '').trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+const mergePendingGalleryUrls = (operator: string[], preview: string[], main?: string | null) => {
+  const fromPreview = Array.from(
+    new Set([main, ...(preview || [])].map((url) => String(url || '').trim()).filter(Boolean)),
+  )
+  const fromOperator = Array.from(
+    new Set((operator || []).map((url) => String(url || '').trim()).filter(Boolean)),
+  )
+  // 只有 1 张的运营稿多半是误写入，不能盖掉采集轮播
+  if (fromOperator.length <= 1 && fromPreview.length > fromOperator.length) {
+    return fromPreview
+  }
+  if (fromOperator.length > 0) return fromOperator
+  return fromPreview
+}
+
 const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
-  const preview = (item.previewDataJson || {}) as PreviewDataJson
+  const operatorTable = parseOperatorSkuJson(item.operatorSkuJson)
+  const preview = {
+    ...((item.previewDataJson || {}) as PreviewDataJson),
+    ...(operatorTable.length > 0 ? { skuTable: operatorTable, operatorSkuTable: true } : {}),
+  } as PreviewDataJson
   const table = Array.isArray(preview.skuTable) ? preview.skuTable : []
   const recoverableSizesByColor = resolveRecoverableSizesByColor(
     preview,
     Array.isArray(item.specSummaryJson) ? (item.specSummaryJson as SpecSummaryJson[]) : [],
   )
+  const mapPreviewSkuRow = (row: PreviewSkuTableRow, index: number): PendingImportSkuItem => {
+    let attributes = sanitizeImportedSkuAttributes(row.attributes, row.spec || '')
+    if (!attributes.length) {
+      attributes = parseSpecAttributes(normalizeText(row.spec) || '')
+    }
+    const dimension = extractProductDimensionSpec(
+      item.productName,
+      item.parsedName,
+      item.productDetail,
+      preview.shortDescription,
+      ...(preview.featureAttributes || []).map((attr) => `${attr.key || ''} ${attr.value || ''}`),
+    )
+    if (dimension) {
+      const sizeIndex = attributes.findIndex((attr) => isSizeDimensionName(attr.name))
+      const current = sizeIndex >= 0 ? normalizeText(attributes[sizeIndex].value) : ''
+      if (!current || isPlaceholderSpecValue(current) || isTruncatedDimensionOf(current, dimension)) {
+        attributes =
+          sizeIndex >= 0
+            ? attributes.map((attr, index) => (index === sizeIndex ? { ...attr, value: dimension } : attr))
+            : [...attributes, { name: '规格', value: dimension }]
+      }
+    }
+    return {
+      sku_key: readPreviewSkuKey(row, index),
+      spec_text: formatSpecText(attributes, normalizeText(row.spec) || ''),
+      cost_price: toNumberOrNull(row.costPrice ?? item.costPrice),
+      price: toNumberOrNull(row.price ?? item.cnyPriceMin ?? item.parsedPriceMin),
+      weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
+      stock: resolveInitialStock(row.stock ?? item.availableStock),
+      image_url: normalizeText(row.imageUrl) || null,
+      attributes,
+    }
+  }
+
+  // 运营锁定或已有多条真实 SKU：按表原样读写，禁止再按颜色展开把删掉的行补回来
+  if (
+    table.length > 0 &&
+    !isClassicMock1688SkuTable(table) &&
+    (preview.operatorSkuTable || table.length >= 2)
+  ) {
+    return table.map(mapPreviewSkuRow)
+  }
+
   const hadMock =
     isClassicMock1688SkuTable(table) || isClassicMock1688SkuSummary(item.skuSummaryText)
 
@@ -4403,12 +4990,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
         weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
         stock: resolveInitialStock(row.stock ?? item.availableStock),
         image_url: normalizeText(row.imageUrl) || null,
-        attributes: Array.isArray(row.attributes)
-          ? row.attributes.map(attr => ({
-              name: normalizeText(attr?.name) || '规格',
-              value: normalizeText(attr?.value) || '默认',
-            }))
-          : parseSpecAttributes(row.spec || ''),
+        attributes: sanitizeImportedSkuAttributes(row.attributes, row.spec || ''),
       }))
     }
     const fallback = buildNeutralFallbackSkuRow({
@@ -4430,6 +5012,29 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
     ]
   }
 
+  if (
+    isYupooPendingItem(item, preview) &&
+    isDefaultOnlySkuTable(table) &&
+    (preview.colors || []).filter((color) => {
+      const label = normalizeText(color.label)
+      return Boolean(label) && label !== '默认颜色'
+    }).length < 2
+  ) {
+    const galleryRows = expandYupooGalleryIntoColorSkuRows(item, preview)
+    if (galleryRows.length >= 2) {
+      return galleryRows.map((row, index) => ({
+        sku_key: normalizeText(row.skuKey) || `sku-${index + 1}`,
+        spec_text: normalizeText(row.spec) || formatSpecText(row.attributes || []),
+        cost_price: toNumberOrNull(row.costPrice ?? item.costPrice),
+        price: toNumberOrNull(row.price ?? item.cnyPriceMin ?? item.parsedPriceMin),
+        weight_grams: toNumberOrNull(row.weightGrams ?? item.weightGrams),
+        stock: resolveInitialStock(row.stock ?? item.availableStock),
+        image_url: normalizeText(row.imageUrl) || null,
+        attributes: row.attributes || [{ name: '颜色', value: row.spec || `颜色${index + 1}` }],
+      }))
+    }
+  }
+
   const resolvedTable = resolveSkuTableOrExpandFromColors({
     skuTable: table,
     colors: preview.colors || [],
@@ -4442,9 +5047,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
 
   if (resolvedTable.length > 0 && !isDefaultOnlySkuTable(resolvedTable)) {
     return resolvedTable.map((row, index) => {
-      const attributes = Array.isArray(row.attributes) && row.attributes.length > 0
-        ? row.attributes.map(attr => ({ name: normalizeText(attr.name) || '规格', value: normalizeText(attr.value) || '默认' }))
-        : parseSpecAttributes(row.spec || '')
+      const attributes = sanitizeImportedSkuAttributes(row.attributes, row.spec || '')
       return {
         sku_key: normalizeText(row.skuKey) || `sku-${index + 1}`,
         spec_text: normalizeText(row.spec) || formatSpecText(attributes),
@@ -4460,9 +5063,7 @@ const resolvePendingSkuDrafts = (item: any): PendingImportSkuItem[] => {
 
   if (table.length > 0) {
     return table.map((row, index) => {
-      const attributes = Array.isArray(row.attributes) && row.attributes.length > 0
-        ? row.attributes.map(attr => ({ name: normalizeText(attr.name) || '规格', value: normalizeText(attr.value) || '默认' }))
-        : parseSpecAttributes(row.spec || '')
+      const attributes = sanitizeImportedSkuAttributes(row.attributes, row.spec || '')
       return {
         sku_key: normalizeText(row.skuKey) || `sku-${index + 1}`,
         spec_text: normalizeText(row.spec) || formatSpecText(attributes),
@@ -4560,23 +5161,551 @@ const sanitizeClassicMockPendingImportItems = async (limit = 40) => {
   return updated
 }
 
-const getColorAttrValue = (sku: PendingImportSkuItem) =>
-  normalizeText(
-    sku.attributes?.find(attr => normalizeText(attr.name) === '颜色')?.value ||
-    sku.spec_text.split('/')[0],
+/** 清掉 Unsplash / SVG / 剪影占位图，避免当成商品图或灰色 SKU。 */
+const sanitizePlaceholderPendingImages = async (limit = 40) => {
+  const candidates = await prisma.importtaskitem.findMany({
+    where: {
+      isPublished: false,
+      importedProductId: null,
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 120,
+    select: {
+      id: true,
+      sourceUrl: true,
+      mainImageUrl: true,
+      parsedMainImageUrl: true,
+      skuSummaryText: true,
+      previewDataJson: true,
+    },
+  })
+
+  let updated = 0
+  let visualBudget = 80
+  for (const item of candidates) {
+    if (updated >= limit) break
+    if (is1688ImportSourceUrl(item.sourceUrl)) continue
+    const preview = (item.previewDataJson || {}) as PreviewDataJson
+    const rawDetails = (Array.isArray(preview.detailImages) ? preview.detailImages : [])
+      .map((url) => realProductImageUrl(url))
+      .filter((url): url is string => Boolean(url))
+    const suspectUrls = Array.from(
+      new Set(
+        [
+          ...(preview.skuTable || []).map((row) => row.imageUrl),
+          ...(preview.colors || []).map((color) => color.imageUrl),
+          ...rawDetails,
+        ]
+          .map((url) => realProductImageUrl(url))
+          .filter((url): url is string => Boolean(url)),
+      ),
+    )
+    const iconUrls = new Set<string>()
+    for (const url of suspectUrls) {
+      if (visualBudget <= 0) break
+      visualBudget -= 1
+      if (await isIconLikeProductImage(url)) iconUrls.add(url)
+    }
+    if (!iconUrls.size) continue
+    const dropIfIcon = (url?: string | null) => {
+      const text = realProductImageUrl(url)
+      return text && !iconUrls.has(text) ? text : null
+    }
+    const skuColorValue = (row: PreviewSkuTableRow) =>
+      normalizeText(row.attributes?.find((attr) => attr.name === '颜色')?.value || '')
+    const iconBackedColors = new Set<string>()
+    for (const row of preview.skuTable || []) {
+      const url = realProductImageUrl(row.imageUrl)
+      const color = skuColorValue(row)
+      if (url && iconUrls.has(url) && color) iconBackedColors.add(color)
+    }
+    for (const color of preview.colors || []) {
+      const url = realProductImageUrl(color.imageUrl)
+      const label = normalizeText(color.label)
+      if (url && iconUrls.has(url) && label) iconBackedColors.add(label)
+    }
+    const nextDetails = rawDetails.filter((url) => !iconUrls.has(url))
+    const filteredSkuTable = (preview.skuTable || []).filter((row) => {
+      const color = skuColorValue(row)
+      if (color && iconBackedColors.has(color)) return false
+      const url = realProductImageUrl(row.imageUrl)
+      return !(url && iconUrls.has(url))
+    })
+    const nextSkuTable = (filteredSkuTable.length ? filteredSkuTable : preview.skuTable || []).map((row) => ({
+      ...row,
+      imageUrl: dropIfIcon(row.imageUrl),
+    }))
+    const nextColors = (preview.colors || [])
+      .filter((color) => !iconBackedColors.has(normalizeText(color.label)))
+      .map((color) => ({
+        ...color,
+        imageUrl: dropIfIcon(color.imageUrl),
+      }))
+    const nextColorLabels = nextColors.map((color) => color.label).filter(Boolean)
+    const nextSizesByColor = Object.fromEntries(
+      Object.entries(preview.sizesByColor || {}).filter(([label]) => !iconBackedColors.has(normalizeText(label))),
+    )
+    const nextPreviewMain = dropIfIcon(preview.mainImageUrl) || nextDetails[0] || null
+    const nextMain = dropIfIcon(item.mainImageUrl) || nextPreviewMain
+    const nextParsed = dropIfIcon(item.parsedMainImageUrl) || nextPreviewMain
+    const nextSpecValues = (preview.featureAttributes || [])
+      .filter((attr) => attr.key === '尺寸' || attr.key === '规格')
+      .map((attr) => attr.value)
+      .filter(Boolean)
+    const nextSkuSummary = [nextColorLabels.join(' / ') || '默认颜色', nextSpecValues.join(' / ')].filter(Boolean).join(' · ')
+    const changed =
+      nextMain !== (item.mainImageUrl || null) ||
+      nextParsed !== (item.parsedMainImageUrl || null) ||
+      nextPreviewMain !== (preview.mainImageUrl || null) ||
+      nextDetails.join('\n') !== (preview.detailImages || []).join('\n') ||
+      nextSkuTable.length !== (preview.skuTable || []).length ||
+      nextSkuTable.some((row, index) => row.imageUrl !== (preview.skuTable?.[index]?.imageUrl || null)) ||
+      nextColors.length !== (preview.colors || []).length ||
+      nextColors.some((color, index) => color.imageUrl !== (preview.colors?.[index]?.imageUrl || null))
+    if (!changed) continue
+    await prisma.importtaskitem.update({
+      where: { id: item.id },
+      data: {
+        mainImageUrl: nextMain,
+        parsedMainImageUrl: nextParsed,
+        skuSummaryText: nextSkuSummary || item.skuSummaryText,
+        specSummaryJson: [
+          { name: '颜色', values: nextColorLabels },
+          ...(nextSpecValues.length ? [{ name: '规格', values: nextSpecValues }] : []),
+        ] as any,
+        previewDataJson: {
+          ...preview,
+          mainImageUrl: nextPreviewMain || undefined,
+          detailImages: nextDetails,
+          skuTable: nextSkuTable,
+          colors: nextColors,
+          sizesByColor: nextSizesByColor,
+        } as any,
+      },
+    })
+    updated += 1
+  }
+  return updated
+}
+
+/** 已解析待上传：相册图能拆出更多颜色时，按图色补 SKU（仅 Yupoo / 微商；1688 保持源站色图） */
+const sanitizeYupooSingleSkuPendingItems = async (limit = 15) => {
+  const candidates = await prisma.importtaskitem.findMany({
+    where: {
+      isPublished: false,
+      importedProductId: null,
+      fetchStatus: 'COMPLETED' as any,
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 80,
+    select: {
+      id: true,
+      sourceUrl: true,
+      parsedName: true,
+      productDetail: true,
+      skuSummaryText: true,
+      availableStock: true,
+      cnyPriceMin: true,
+      parsedPriceMin: true,
+      costPrice: true,
+      weightGrams: true,
+      previewDataJson: true,
+    },
+  })
+
+  let updated = 0
+  for (const item of candidates) {
+    if (updated >= limit) break
+    if (is1688ImportSourceUrl(item.sourceUrl)) continue
+    const preview = (item.previewDataJson || {}) as PreviewDataJson
+    if (preview.operatorSkuTable) continue
+    const images = listYupooPendingGalleryUrls(item, preview)
+    if (images.length < 3) continue
+    const skuTable = Array.isArray(preview.skuTable) ? preview.skuTable : []
+    const collapsedAlbumColors =
+      countDistinctSkuColors(skuTable) <= 1 ||
+      skuTable.some((row) =>
+        (row.attributes || []).some(
+          (attr) =>
+            ['规格', '尺码', '尺寸'].includes(normalizeText(attr.name)) &&
+            isColorNameSpecValue(attr.value),
+        ),
+      )
+    // 已有多条真实 SKU 且颜色不像被收成一条时，禁止后台再拆色
+    if (skuTable.length >= 2 && !isDefaultOnlySkuTable(skuTable) && !collapsedAlbumColors) continue
+    const existingColorCount = countDistinctSkuColors(skuTable)
+    const existingLabels = Array.from(
+      new Set(
+        skuTable
+          .map((sku) => normalizeText(sku.attributes?.find((attr) => attr.name === '颜色')?.value || ''))
+          .filter(Boolean),
+      ),
+    )
+    const existingNoisy = existingLabels.some((label) => /-\d+$/.test(label) || /^颜色/.test(label))
+    const existingSameBase =
+      existingLabels.length >= 2 &&
+      new Set(existingLabels.map((label) => baseColorLabel(label) || label)).size === 1
+    if (existingLabels.some((label) => /副本|樱桃|格子|棋盘/.test(label))) continue
+    if (skuTable.some((row) => /copy/i.test(String(row.skuKey || '')))) continue
+    if (existingColorCount >= 2 && !existingNoisy && !existingSameBase) continue
+    const specLabels = collectSkuSpecLabels(
+      preview.skuTable || [],
+      preview.sizesByColor || {},
+      [preview.name, item.parsedName, item.productDetail],
+    )
+    const richer = await applyRicherGalleryColorSkus({
+      images,
+      title: [preview.name, item.parsedName, item.productDetail].filter(Boolean).join(' '),
+      existingColorCount,
+      existingLabels,
+      specLabels,
+      costMin: toNumberOrNull(item.costPrice) ?? 50,
+      finalPriceMin: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin) ?? toNumberOrNull(item.costPrice) ?? 50,
+      stock: resolveInitialStock(item.availableStock),
+      weightGrams: toNumberOrNull(item.weightGrams),
+    })
+    if (!richer) continue
+    const currentHeroes = (preview.skuTable || []).map((row) => String(row.imageUrl || '').trim()).filter(Boolean)
+    const nextHeroes = richer.skuTable.map((row) => String(row.imageUrl || '').trim()).filter(Boolean)
+    const currentLabels = existingLabels.join('|')
+    const nextLabels = richer.colorLabels.join('|')
+    if (
+      currentHeroes.length === nextHeroes.length &&
+      currentHeroes.every((url, index) => url === nextHeroes[index]) &&
+      currentLabels === nextLabels &&
+      !isDefaultOnlySkuTable(preview.skuTable)
+    ) {
+      continue
+    }
+    await prisma.importtaskitem.update({
+      where: { id: item.id },
+      data: {
+        skuSummaryText: richer.colorLabels.join(' / ') || item.skuSummaryText,
+        specSummaryJson: [
+          { name: '颜色', values: richer.colorLabels },
+          ...(richer.specLabels.length ? [{ name: '规格', values: richer.specLabels }] : []),
+        ] as any,
+        previewDataJson: {
+          ...preview,
+          colors: richer.colorLabels.map((label) => ({
+            label,
+            imageUrl:
+              richer.skuTable.find((row) =>
+                row.attributes?.some((attr) => attr.name === '颜色' && attr.value === label),
+              )?.imageUrl || null,
+          })),
+          sizesByColor: richer.sizesByColor,
+          skuTable: richer.skuTable,
+        } as any,
+      },
+    })
+    updated += 1
+  }
+  return updated
+}
+
+/** 已解析的 Yupoo 货：礼盒/背景色认出品牌后，必须写进标题和 Brand 货架 */
+const sanitizeYupooPendingBrandTitles = async (limit = 20) => {
+  const candidates = await prisma.importtaskitem.findMany({
+    where: {
+      isPublished: false,
+      importedProductId: null,
+      fetchStatus: 'COMPLETED' as any,
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 80,
+    select: {
+      id: true,
+      sourceUrl: true,
+      parsedName: true,
+      productDetail: true,
+      previewDataJson: true,
+    },
+  })
+
+  let secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>> | null = null
+  let updated = 0
+  for (const item of candidates) {
+    if (updated >= limit) break
+    const preview = (item.previewDataJson || {}) as PreviewDataJson
+    if (!isYupooPendingItem(item, preview)) continue
+    const rawName = String(preview.name || item.parsedName || '').trim()
+    if (!rawName) continue
+    const images = listYupooPendingGalleryUrls(item, preview)
+    if (!images.length) continue
+    const brand = await detectBrandFromBackdropUrls(images)
+    if (!brand) continue
+    if (titleHasBackdropBrand(rawName, brand) && preview.backdropBrand === brand) continue
+    const inferredType = inferProductTypeLabel(rawName, preview.shortDescription, item.productDetail)
+    const brandedName =
+      composeImportProductTitle({
+        rawTitle: rawName,
+        brand,
+        typeZh: inferredType?.labelZh || null,
+      }) || applyBackdropBrandToTitle(rawName, brand)
+    if (!brandedName || brandedName === rawName) continue
+    if (!secondaryCategories) {
+      secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
+    }
+    const brandCorpus = [item.productDetail, preview.shortDescription, backdropBrandMatchText(brand)]
+      .filter(Boolean)
+      .join('\n')
+    const brandCategory = pickBestBrandCategoryFromTitle(brandedName, secondaryCategories, brandCorpus)
+    const matchedIds = Array.from(
+      new Set([...(preview.matchedCategoryIds || []), brandCategory?.id].filter(Boolean) as string[]),
+    )
+    const matchedNames = Array.from(
+      new Set([...(preview.matchedCategoryNames || []), brandCategory?.name].filter(Boolean) as string[]),
+    )
+    await prisma.importtaskitem.update({
+      where: { id: item.id },
+      data: {
+        parsedName: brandedName,
+        previewDataJson: {
+          ...preview,
+          name: brandedName,
+          backdropBrand: brand,
+          matchedCategoryIds: matchedIds,
+          matchedCategoryNames: matchedNames,
+        } as any,
+      },
+    })
+    updated += 1
+  }
+  return updated
+}
+
+const PENDING_SPEC_ATTR_NAMES = ['规格', '尺码', '尺寸']
+
+const getColorAttrValue = (sku: PendingImportSkuItem) => {
+  const fromAttr = normalizeText(
+    sku.attributes?.find((attr) => /^(颜色|顏色|color|colour)$/i.test(normalizeText(attr.name)))?.value,
   )
+  if (fromAttr) return fromAttr
+  const prefix = normalizeText((sku.spec_text || '').split('/')[0])
+  if (prefix && (isColorNameSpecValue(prefix) || prefix === '默认颜色')) return prefix
+  return ''
+}
+
+/** 与待上传区颜色行展示一致：色属性优先，色名规格兜底 */
+const pendingSkuMatchesColor = (sku: PendingImportSkuItem, color: string) => {
+  const wanted = normalizeText(color) || '默认颜色'
+  const attr = getColorAttrValue(sku)
+  if (attr === wanted) return true
+  if (attr && attr !== '默认颜色' && attr !== '其他') return false
+  const spec = getSpecAttrValue(sku)
+  return Boolean(spec) && (isColorNameSpecValue(spec) || spec === wanted) && spec === wanted
+}
+
+const getSpecAttrValue = (sku: PendingImportSkuItem) =>
+  normalizeText(
+    sku.attributes?.find((attr) => PENDING_SPEC_ATTR_NAMES.includes(normalizeText(attr.name)))?.value ||
+      (sku.spec_text.includes('/') ? sku.spec_text.split('/').slice(1).join('/').trim() : sku.spec_text),
+  )
+
+const stripSkuCopySuffix = (value: string) => String(value || '').replace(/\s*副本\d*$/u, '').trim()
+
+const skuImageFingerprint = (url?: string | null) => {
+  const text = normalizeText(url)
+  if (!text) return ''
+  const file = text.split('?')[0].split('/').pop() || text
+  return file.toLowerCase()
+}
+
+const isGenericPendingColor = (color?: string | null) => {
+  const text = normalizeText(color)
+  return !text || text === '默认颜色' || text === '其他' || text === '银色'
+}
+
+const isManualLockedColor = (color?: string | null) => {
+  const text = normalizeText(color)
+  if (!text || isGenericPendingColor(text)) return false
+  return /樱桃|格子|棋盘|千鸟|副本/.test(text)
+}
+
+/**
+ * Merge only duplicate color rows that share an image.
+ * Distinct 尺码/规格 (35/36/37…) must stay separate even when they reuse one photo —
+ * table-imported shoes were collapsing 7 sizes into 3 thumbs.
+ */
+const dedupeDuplicateColorSkus = (skus: PendingImportSkuItem[]): PendingImportSkuItem[] => {
+  const seen = new Map<string, PendingImportSkuItem>()
+  for (const sku of skus) {
+    const color = getColorAttrValue(sku) || normalizeText(sku.spec_text) || sku.sku_key
+    const spec = getSpecAttrValue(sku)
+    const realSize =
+      spec &&
+      !isPlaceholderSpecValue(spec) &&
+      !isColorNameSpecValue(spec)
+        ? spec
+        : ''
+    const image = skuImageFingerprint(sku.image_url)
+    const key = realSize
+      ? `${color}::size:${realSize}`
+      : `${color}::${image || sku.sku_key || seen.size}`
+    if (!seen.has(key)) seen.set(key, sku)
+  }
+  return Array.from(seen.values())
+}
+
+const upsertPendingSkuNamedAttribute = (
+  attributes: Array<{ name: string; value: string }> | undefined,
+  name: string,
+  value: string,
+) => {
+  const next = (Array.isArray(attributes) ? attributes : []).map((attr) => ({ ...attr }))
+  const index = next.findIndex((attr) => normalizeText(attr.name) === name)
+  if (index >= 0) next[index] = { ...next[index], value }
+  else if (name === '颜色') next.unshift({ name, value })
+  else next.push({ name, value })
+  return next
+}
+
+const upsertPendingSkuSpecAttribute = (
+  attributes: Array<{ name: string; value: string }> | undefined,
+  value: string,
+) => {
+  const next = (Array.isArray(attributes) ? attributes : []).map((attr) => ({ ...attr }))
+  const index = next.findIndex((attr) => PENDING_SPEC_ATTR_NAMES.includes(normalizeText(attr.name)))
+  if (index >= 0) {
+    next[index] = { ...next[index], value }
+    return next
+  }
+  next.push({ name: '规格', value })
+  return next
+}
+
+const applySkuColorAndSpec = (
+  sku: PendingImportSkuItem,
+  color: string,
+  spec?: string | null,
+): PendingImportSkuItem => {
+  let attributes = upsertPendingSkuNamedAttribute(sku.attributes, '颜色', color)
+  const nextSpec = stripSkuCopySuffix(spec === '' ? '' : spec || getSpecAttrValue(sku))
+  if (nextSpec && !isPlaceholderSpecValue(nextSpec)) {
+    attributes = upsertPendingSkuSpecAttribute(attributes, nextSpec)
+  } else {
+    attributes = attributes.filter((attr) => !PENDING_SPEC_ATTR_NAMES.includes(normalizeText(attr.name)))
+  }
+  return {
+    ...sku,
+    attributes,
+    spec_text: formatSpecText(attributes, sku.spec_text || color),
+  }
+}
+
+const dropColorNamedSizeAttributes = (sku: PendingImportSkuItem): PendingImportSkuItem => {
+  const color = getColorAttrValue(sku)
+  const attributes = (Array.isArray(sku.attributes) ? sku.attributes : [])
+    .filter((attr) => {
+      const name = normalizeText(attr.name)
+      if (!PENDING_SPEC_ATTR_NAMES.includes(name)) return true
+      return !isPlaceholderSpecValue(attr.value)
+    })
+    .map((attr) => ({ ...attr }))
+  if (color) {
+    const colorIndex = attributes.findIndex((attr) => normalizeText(attr.name) === '颜色')
+    if (colorIndex >= 0) attributes[colorIndex] = { name: '颜色', value: color }
+    else attributes.unshift({ name: '颜色', value: color })
+  }
+  return {
+    ...sku,
+    attributes,
+    spec_text: formatSpecText(attributes, color || ''),
+  }
+}
+
+/** 颜色全写在规格、颜色列却是同一个默认值时，把规格里的色名收回颜色，规格留空。手动写的黑色樱桃等不改。 */
+const reclaimMisplacedColorSpecs = (skus: PendingImportSkuItem[]): PendingImportSkuItem[] => {
+  if (!skus.length) return skus
+  const realColors = new Set(
+    skus.map((sku) => getColorAttrValue(sku)).filter((color) => color && !isGenericPendingColor(color)),
+  )
+  const colorNamedSpecs = new Set(
+    skus.map((sku) => getSpecAttrValue(sku)).filter((spec) => isColorNameSpecValue(spec)),
+  )
+  const shouldPromote =
+    colorNamedSpecs.size >= 2 && realColors.size <= 1
+    || (realColors.size === 0 && colorNamedSpecs.size > 0)
+  return skus.map((sku) => {
+    const spec = getSpecAttrValue(sku)
+    const color = getColorAttrValue(sku)
+    const locked = isManualLockedColor(color)
+    const nextColor =
+      !locked && shouldPromote && isColorNameSpecValue(spec) ? normalizeText(spec) : color
+    if (!locked && shouldPromote && isColorNameSpecValue(spec)) {
+      return dropColorNamedSizeAttributes(applySkuColorAndSpec(sku, nextColor || normalizeText(spec), null))
+    }
+    return sku
+  })
+}
+
+const promoteDistinctSkuImagesToColors = async (params: {
+  skus: PendingImportSkuItem[]
+  sourceUrl?: string | null
+  images?: string[]
+  title?: string | null
+}): Promise<PendingImportSkuItem[]> => {
+  const skus = params.skus || []
+  if (!skus.length || is1688ImportSourceUrl(params.sourceUrl)) return skus
+  const next: PendingImportSkuItem[] = []
+  for (const sku of skus) {
+    const cleaned = dropColorNamedSizeAttributes(sku)
+    const current = getColorAttrValue(cleaned)
+    const generic = !current || current === '默认颜色' || current === '其他' || current === '银色'
+    if (!generic) {
+      next.push(cleaned)
+      continue
+    }
+    const labeled = cleaned.image_url ? await nameColorFromHostedImage(cleaned.image_url) : null
+    next.push(labeled ? applySkuColorAndSpec(cleaned, labeled, getSpecAttrValue(cleaned) || null) : cleaned)
+  }
+  return next
+}
+
+const rebuildPendingPreviewColorMeta = (skus: PendingImportSkuItem[]) => {
+  const colors: Array<{ label: string; imageUrl?: string | null }> = []
+  const sizesByColor: Record<string, string[]> = {}
+  const specValues: string[] = []
+  for (const sku of skus) {
+    const color = getColorAttrValue(sku) || '默认颜色'
+    const spec = getSpecAttrValue(sku)
+    if (!colors.some((item) => item.label === color)) {
+      colors.push({ label: color, imageUrl: sku.image_url || null })
+    }
+    if (spec && !isColorNameSpecValue(spec)) {
+      if (!specValues.includes(spec)) specValues.push(spec)
+      const list = sizesByColor[color] || (sizesByColor[color] = [])
+      if (!list.includes(spec)) list.push(spec)
+    }
+  }
+  return {
+    colors,
+    sizesByColor,
+    featureAttributes: specValues.map((value) => ({ key: '尺寸', value })),
+    specSummaryJson: [
+      ...(colors.length ? [{ name: '颜色', values: colors.map((item) => item.label) }] : []),
+      ...(specValues.length ? [{ name: '规格', values: specValues }] : []),
+    ],
+  }
+}
 
 const recalculatePendingSkuPrices = (
   drafts: PendingImportSkuItem[],
   fallbackCostPrice: number | null,
   coefficient: number,
-  options?: { overwriteCost?: boolean },
+  options?: { replaceMatchingCost?: number | null },
 ) =>
   drafts.map((sku) => {
-    const nextCost =
-      options?.overwriteCost && fallbackCostPrice !== null
-        ? fallbackCostPrice
-        : (toNumberOrNull(sku.cost_price) ?? fallbackCostPrice)
+    const currentCost = toNumberOrNull(sku.cost_price)
+    const usableCurrent = currentCost != null && currentCost > 0 ? currentCost : null
+    const match = options?.replaceMatchingCost
+    const shouldReplaceCost =
+      fallbackCostPrice !== null &&
+      match !== undefined &&
+      (usableCurrent === null ||
+        (match !== null && Math.abs(usableCurrent - match) < 0.021))
+    const nextCost = shouldReplaceCost ? fallbackCostPrice : (usableCurrent ?? fallbackCostPrice)
     return {
       ...sku,
       cost_price: nextCost,
@@ -4729,11 +5858,272 @@ const repairPendingImportPricesMissingCoefficient = async (opts?: {
   return updated
 }
 
+const isPendingCostMissing = (
+  drafts: PendingImportSkuItem[],
+  itemCost: number | null,
+) => {
+  const costs = drafts.length
+    ? drafts.map((sku) => toNumberOrNull(sku.cost_price) ?? itemCost)
+    : [itemCost]
+  return costs.length > 0 && costs.every((value) => value == null || value <= 0)
+}
+
+/** 微商/Yupoo 标题里的 38# / 35 GUCCI / 120 代工 → 回填待上传成本与售价 */
+const repairPendingImportZeroCostsFromTitle = async (opts?: {
+  maxScan?: number
+  maxUpdate?: number
+}) => {
+  const maxScan = Math.max(1, opts?.maxScan ?? 500)
+  const maxUpdate = Math.max(1, opts?.maxUpdate ?? 200)
+  const exchangeRate = await getGlobalExchangeRate(prisma)
+  const categoryMap = await loadImportPricingCategories(prisma)
+  let updated = 0
+  let scanned = 0
+  let cursor: string | undefined
+  const batchSize = 50
+
+  for (;;) {
+    if (scanned >= maxScan || updated >= maxUpdate) break
+    const take = Math.min(batchSize, maxScan - scanned)
+    const items = await prisma.importtaskitem.findMany({
+      where: {
+        isPublished: false,
+        fetchStatus: 'COMPLETED' as any,
+        OR: [{ costPrice: null }, { costPrice: { lte: 0 } }],
+      },
+      select: {
+        id: true,
+        parsedName: true,
+        productDetail: true,
+        costPrice: true,
+        coefficient: true,
+        targetCategoryId: true,
+        cnyPriceMin: true,
+        cnyPriceMax: true,
+        previewDataJson: true,
+        skuSummaryText: true,
+        availableStock: true,
+        weightGrams: true,
+        parsedPriceMin: true,
+        operatorSkuJson: true,
+      },
+      orderBy: { id: 'desc' },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    })
+    if (!items.length) break
+    cursor = items[items.length - 1]?.id
+    scanned += items.length
+
+    for (const item of items) {
+      if (updated >= maxUpdate) break
+      const drafts = resolvePendingSkuDrafts(item)
+      const itemCost = toNumberOrNull(item.costPrice)
+      if (!isPendingCostMissing(drafts, itemCost)) continue
+      const preview = (item.previewDataJson || {}) as PreviewDataJson
+      const inferred = extractAlbumTitlePrice(
+        item.parsedName,
+        preview.name,
+        item.productDetail,
+        preview.shortDescription,
+      )
+      if (inferred == null || inferred <= 0) continue
+
+      const coefficient = resolvePendingItemCoefficient(item, categoryMap)
+      const nextDrafts = drafts.length
+        ? recalculatePendingSkuPrices(drafts, inferred, coefficient > 0 ? coefficient : 1, {
+            replaceMatchingCost: 0,
+          })
+        : drafts
+      const fallbackSell = roundCurrency(inferred * (coefficient > 0 ? coefficient : 1))
+      const priceSummary = summarizePendingSkuPrices(
+        nextDrafts.length
+          ? nextDrafts
+          : [
+              {
+                sku_key: 'sku-1',
+                spec_text: '',
+                cost_price: inferred,
+                price: fallbackSell,
+                stock: 0,
+                weight_grams: item.weightGrams ?? null,
+                image_url: null,
+                attributes: [],
+              },
+            ],
+        exchangeRate,
+      )
+      const skuTable = toPendingSkuTablePayload(nextDrafts)
+      const hasOperatorTable = parseOperatorSkuJson(item.operatorSkuJson).length > 0
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: {
+          costPrice: inferred,
+          parsedPriceMin: inferred,
+          parsedPriceMax: inferred,
+          ...(coefficient > 0 ? { coefficient } : {}),
+          cnyPriceMin: priceSummary.cnyMin,
+          cnyPriceMax: priceSummary.cnyMax,
+          usdPriceMin: priceSummary.usdMin,
+          usdPriceMax: priceSummary.usdMax,
+          previewDataJson: {
+            ...preview,
+            price: priceSummary.cnyMin ?? fallbackSell,
+            ...(skuTable.length ? { skuTable } : {}),
+          } as any,
+          ...(hasOperatorTable && skuTable.length
+            ? { operatorSkuJson: JSON.stringify(skuTable) }
+            : {}),
+        },
+      })
+      updated += 1
+    }
+
+    if (items.length < take) break
+  }
+  return updated
+}
+
+/** `477# p21` 曾把货号 477 当成本 → 改回标题 P/批价 */
+const repairPendingImportMisreadModelCosts = async (opts?: {
+  maxScan?: number
+  maxUpdate?: number
+}) => {
+  const maxScan = Math.max(1, opts?.maxScan ?? 800)
+  const maxUpdate = Math.max(1, opts?.maxUpdate ?? 200)
+  const exchangeRate = await getGlobalExchangeRate(prisma)
+  const categoryMap = await loadImportPricingCategories(prisma)
+  let updated = 0
+  let scanned = 0
+  let cursor: string | undefined
+  const batchSize = 50
+
+  for (;;) {
+    if (scanned >= maxScan || updated >= maxUpdate) break
+    const take = Math.min(batchSize, maxScan - scanned)
+    const items = await prisma.importtaskitem.findMany({
+      where: {
+        isPublished: false,
+        fetchStatus: 'COMPLETED' as any,
+        costPrice: { gt: 0 },
+      },
+      select: {
+        id: true,
+        parsedName: true,
+        productDetail: true,
+        costPrice: true,
+        coefficient: true,
+        targetCategoryId: true,
+        previewDataJson: true,
+        operatorSkuJson: true,
+        weightGrams: true,
+      },
+      orderBy: { id: 'desc' },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    })
+    if (!items.length) break
+    cursor = items[items.length - 1]?.id
+    scanned += items.length
+
+    for (const item of items) {
+      if (updated >= maxUpdate) break
+      const preview = (item.previewDataJson || {}) as PreviewDataJson
+      const inferred = extractAlbumTitlePrice(
+        item.parsedName,
+        preview.name,
+        item.productDetail,
+        preview.shortDescription,
+      )
+      const itemCost = toNumberOrNull(item.costPrice)
+      if (inferred == null || inferred <= 0 || itemCost == null) continue
+      if (Math.abs(inferred - itemCost) < 0.021) continue
+      if (!titleHasStrongPriceHint(item.parsedName, preview.name, item.productDetail, preview.shortDescription)) {
+        continue
+      }
+
+      const drafts = resolvePendingSkuDrafts(item)
+      const coefficient = resolvePendingItemCoefficient(item, categoryMap)
+      const nextDrafts = drafts.length
+        ? recalculatePendingSkuPrices(drafts, inferred, coefficient > 0 ? coefficient : 1, {
+            replaceMatchingCost: itemCost,
+          })
+        : drafts
+      const fallbackSell = roundCurrency(inferred * (coefficient > 0 ? coefficient : 1))
+      const priceSummary = summarizePendingSkuPrices(
+        nextDrafts.length
+          ? nextDrafts
+          : [
+              {
+                sku_key: 'sku-1',
+                spec_text: '',
+                cost_price: inferred,
+                price: fallbackSell,
+                stock: 0,
+                weight_grams: item.weightGrams ?? null,
+                image_url: null,
+                attributes: [],
+              },
+            ],
+        exchangeRate,
+      )
+      const skuTable = toPendingSkuTablePayload(nextDrafts)
+      const hasOperatorTable = parseOperatorSkuJson(item.operatorSkuJson).length > 0
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: {
+          costPrice: inferred,
+          parsedPriceMin: inferred,
+          parsedPriceMax: inferred,
+          cnyPriceMin: priceSummary.cnyMin,
+          cnyPriceMax: priceSummary.cnyMax,
+          usdPriceMin: priceSummary.usdMin,
+          usdPriceMax: priceSummary.usdMax,
+          previewDataJson: {
+            ...preview,
+            price: priceSummary.cnyMin ?? fallbackSell,
+            ...(skuTable.length ? { skuTable } : {}),
+          } as any,
+          ...(hasOperatorTable && skuTable.length
+            ? { operatorSkuJson: JSON.stringify(skuTable) }
+            : {}),
+        },
+      })
+      updated += 1
+    }
+
+    if (items.length < take) break
+  }
+  return updated
+}
+
 type PendingListEnrichContext = {
   exchangeRate: number
   categoryMap: Map<string, ImportPricingCategoryMeta>
   secondaryCategories: AutoMatchedSecondaryCategory[]
   filterCategories: FilterCategoryRow[]
+}
+
+let pendingListEnrichCache: { at: number; data: PendingListEnrichContext } | null = null
+const PENDING_LIST_ENRICH_TTL_MS = 60_000
+let lastPendingReclaimAt = 0
+let lastPendingLightQueueCache: { key: string; at: number; result: GetPendingImportQueueOutput } | null = null
+const PENDING_RECLAIM_INTERVAL_MS = 60_000
+
+const loadPendingListEnrichContext = async (): Promise<PendingListEnrichContext> => {
+  const now = Date.now()
+  if (pendingListEnrichCache && now - pendingListEnrichCache.at < PENDING_LIST_ENRICH_TTL_MS) {
+    return pendingListEnrichCache.data
+  }
+  const [exchangeRate, categoryMap, secondaryCategories, filterCategories] = await Promise.all([
+    getUsdExchangeRate(prisma, { ttlMs: 60_000 }),
+    loadImportPricingCategories(prisma),
+    loadAutoMatchSecondaryCategories(prisma),
+    loadFilterCategoriesFromDb(prisma),
+  ])
+  const data = { exchangeRate, categoryMap, secondaryCategories, filterCategories }
+  pendingListEnrichCache = { at: now, data }
+  return data
 }
 
 const resolvePendingItemCoefficient = (
@@ -4753,7 +6143,7 @@ const resolvePendingItemPricedSkus = (
 ) => {
   const coefficient = resolvePendingItemCoefficient(item, context.categoryMap)
   const itemCost = toNumberOrNull(item.costPrice)
-  let drafts = resolvePendingSkuDrafts(item)
+  let drafts = reclaimMisplacedColorSpecs(resolvePendingSkuDrafts(item))
   if (isPendingSellPriceStuckAtCost(drafts, itemCost, coefficient)) {
     drafts = recalculatePendingSkuPrices(drafts, itemCost, coefficient)
   }
@@ -4818,25 +6208,153 @@ const enrichPendingMatchedCategoriesFromTitle = (
   return { ids: mergedIds, names: mergedNames }
 }
 
+/** 上架时按当前标题补挂品质/材质筛选类目，不改主类目。校准过的商品也要补，因为标题常后加 high quality bag。 */
+const mergeFilterCategoryIdsFromTitle = (
+  title: string,
+  existingIds: string[],
+  filterCategories: FilterCategoryRow[],
+  detailText?: string | null,
+) => {
+  const hits = matchFilterCategoriesByTitle(title, filterCategories, detailText)
+  if (!hits.length) return existingIds
+  return Array.from(new Set([...existingIds, ...hits.map((hit) => hit.id)]))
+}
+
+const parseMysqlJsonField = (value: unknown): any => {
+  if (value == null) return null
+  const raw = Buffer.isBuffer(value) ? value.toString('utf8') : value
+  if (typeof raw === 'object') return raw
+  const text = String(raw).trim()
+  if (!text || text === 'null') return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+const asStringArray = (value: unknown): string[] => {
+  let parsed: unknown = Array.isArray(value) ? value : parseMysqlJsonField(value)
+  if (typeof parsed === 'string') {
+    const inner = parseMysqlJsonField(parsed)
+    parsed = inner == null ? parsed : inner
+    if (typeof parsed === 'string') {
+      const text = parsed.trim()
+      return text ? [text] : []
+    }
+  }
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .map((entry) => {
+      if (typeof entry === 'string') return entry.trim()
+      if (entry && typeof entry === 'object') {
+        const rec = entry as Record<string, unknown>
+        return String(rec.url || rec.imageUrl || rec.src || '').trim()
+      }
+      return String(entry || '').trim()
+    })
+    .filter(Boolean)
+}
+
+const asNumberArray = (value: unknown): Array<number | null> => {
+  const parsed = Array.isArray(value) ? value : parseMysqlJsonField(value)
+  if (!Array.isArray(parsed)) return []
+  return parsed.map((entry) => {
+    if (entry == null || entry === '') return null
+    const num = Number(entry)
+    return Number.isFinite(num) ? num : null
+  })
+}
+
+const zipCompactSkuTable = (row: Record<string, unknown>): PreviewSkuTableRow[] => {
+  const keys = asStringArray(row.skuKeys)
+  const specs = asStringArray(row.skuSpecs)
+  const costs = asNumberArray(row.skuCosts)
+  const prices = asNumberArray(row.skuPrices)
+  const images = asStringArray(row.skuImages)
+  const attrsRaw = parseMysqlJsonField(row.skuAttrs)
+  const attrRows = Array.isArray(attrsRaw) ? attrsRaw : []
+  const count = Math.min(
+    40,
+    Math.max(keys.length, specs.length, costs.length, prices.length, images.length, attrRows.length),
+  )
+  if (count < 1) return []
+  return Array.from({ length: count }, (_, index) => {
+    const attributes = Array.isArray(attrRows[index])
+      ? (attrRows[index] as Array<{ name?: string; value?: string }>)
+          .map((attr) => ({
+            name: String(attr?.name || '').trim(),
+            value: String(attr?.value || '').trim(),
+          }))
+          .filter((attr) => attr.name && attr.value)
+      : undefined
+    return {
+      skuKey: keys[index] || `sku-${index + 1}`,
+      spec: specs[index] || '',
+      costPrice: costs[index],
+      price: prices[index],
+      imageUrl: images[index] || undefined,
+      attributes,
+    }
+  })
+}
+
+const yieldEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
+
 const buildPendingItemStructure = (
   item: any,
   task?: any,
   enrich?: PendingListEnrichContext,
+  options?: { light?: boolean },
 ): PendingImportItemRecord => {
+  const operatorGallery = parseOperatorGalleryJson(item.operatorGalleryJson)
   const preview = (item.previewDataJson as unknown as PreviewDataJson) || {}
-  const mainImage = item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null
-  const rawGallery = dedupeImageUrls([
-    ...(mainImage ? [mainImage] : []),
-    ...((Array.isArray(preview.detailImages) ? preview.detailImages : []).filter(Boolean)),
-  ])
-  // Keep the full carousel in the pending row so operators can see and drag every main image.
-  const galleryUrls = rawGallery.slice(0, 40)
+  const previewGallery = [
+    item.mainImageUrl,
+    item.parsedMainImageUrl,
+    preview.mainImageUrl,
+    ...((Array.isArray(preview.detailImages) ? preview.detailImages : []) as string[]),
+  ]
+  const mergedGallery = mergePendingGalleryUrls(operatorGallery, previewGallery)
+  const mainImage = mergedGallery[0] || operatorGallery[0] || item.mainImageUrl || item.parsedMainImageUrl || preview.mainImageUrl || null
   const rawDetail = String(item.productDetail || '')
-  const listDetail = rawDetail.length > 2000 ? `${rawDetail.slice(0, 2000)}\n…` : rawDetail
-  const priced = enrich
+  const listDetail = options?.light
+    ? ''
+    : rawDetail.length > 2000
+      ? `${rawDetail.slice(0, 2000)}\n…`
+      : rawDetail
+  const priced = !options?.light && enrich
     ? resolvePendingItemPricedSkus(item, enrich)
     : null
-  const matchedCategories = enrich
+  const rawDrafts = priced?.skus ?? resolvePendingSkuDrafts(item)
+  const summaryParts = String(item.skuSummaryText || '')
+    .split('|')
+    .map((part: string) => String(part || '').trim())
+    .filter(Boolean)
+  const filledDrafts = rawDrafts.map((sku, index) => {
+    if ((sku.attributes || []).length > 0) return sku
+    const fromSpec = parseSpecAttributes(sku.spec_text || summaryParts[index] || '')
+    if (!fromSpec.length) return sku
+    return {
+      ...sku,
+      attributes: fromSpec,
+      spec_text: sku.spec_text || formatSpecText(fromSpec),
+    }
+  })
+  const skuDrafts = (options?.light || preview.operatorSkuTable ? filledDrafts : reclaimMisplacedColorSpecs(filledDrafts))
+    .slice(0, 40)
+    .map((sku) => sanitizePendingSkuCopyLabels({
+      ...sku,
+      image_url: realProductImageUrl(sku.image_url),
+    }))
+  const rawGallery = dedupeImageUrls(
+    mergedGallery
+      .map((url) => realProductImageUrl(url))
+      .filter((url): url is string => Boolean(url)),
+  )
+  const galleryUrls = rawGallery.slice(0, 24)
+  const matchedCategories =
+    enrich && !options?.light
     ? enrichPendingMatchedCategoriesFromTitle(item, preview, enrich)
     : {
         ids: Array.from(new Set((preview.matchedCategoryIds || []).filter(Boolean))),
@@ -4873,7 +6391,10 @@ const buildPendingItemStructure = (
         .filter(attr => attr.key && attr.value)
         .slice(0, 40)
     : [],
-  item_skuSummaryText: item.skuSummaryText || null,
+  item_skuSummaryText:
+    skuDrafts.map((sku) => sku.spec_text).filter(Boolean).join(' | ') ||
+    stripSkuCopyLabel(item.skuSummaryText) ||
+    null,
   item_cnyPriceMin: priced?.cnyMin ?? toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
   item_cnyPriceMax: priced?.cnyMax ?? toNumberOrNull(item.cnyPriceMax ?? item.parsedPriceMax),
   item_usdPriceMin: priced?.usdMin ?? toNumberOrNull(item.usdPriceMin),
@@ -4883,9 +6404,11 @@ const buildPendingItemStructure = (
   item_parsedName: normalizeBrandTitleSync(item.parsedName || null) || null,
   item_parsedMainImageUrl: item.parsedMainImageUrl || null,
   item_productCode: pickPendingProductCode(item, preview),
+  item_reviewed: isPreviewReviewed(preview),
+  item_reviewedAt: preview.reviewedAt ? String(preview.reviewedAt) : null,
   item_createdAt: item.createdAt,
   item_updatedAt: item.updatedAt || item.createdAt,
-  item_skus: priced?.skus ?? resolvePendingSkuDrafts(item),
+  item_skus: skuDrafts,
   }
 }
 
@@ -4930,8 +6453,8 @@ const PENDING_IMPORT_QUEUE_WHERE = {
 } as const
 
 /** Soft cap so admin open never pulls unbounded preview JSON (table import / 1688 drafts). */
-const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 30
-const MAX_PENDING_QUEUE_PAGE_SIZE = 100
+const DEFAULT_PENDING_QUEUE_PAGE_SIZE = 15
+const MAX_PENDING_QUEUE_PAGE_SIZE = 30
 const PUBLISH_PENDING_CONCURRENCY = 3
 
 const PENDING_QUEUE_ITEM_SELECT = {
@@ -4953,7 +6476,6 @@ const PENDING_QUEUE_ITEM_SELECT = {
   targetCategoryId: true,
   coefficient: true,
   goodsStatus: true,
-  productDetail: true,
   skuSummaryText: true,
   cnyPriceMin: true,
   cnyPriceMax: true,
@@ -4967,6 +6489,8 @@ const PENDING_QUEUE_ITEM_SELECT = {
   updatedAt: true,
   previewDataJson: true,
   specSummaryJson: true,
+  operatorSkuJson: true,
+  operatorGalleryJson: true,
   importTask: {
     select: {
       id: true,
@@ -4985,43 +6509,65 @@ const PENDING_QUEUE_ITEM_SELECT = {
   },
 } as const
 
-const buildPendingQueueWhere = (keyword?: string) => {
-  const kw = String(keyword || '').trim()
-  if (!kw) return PENDING_IMPORT_QUEUE_WHERE
-  return {
-    AND: [
-      PENDING_IMPORT_QUEUE_WHERE,
-      {
-        OR: [
-          { parsedName: { contains: kw } },
-          { sourceUrl: { contains: kw } },
-          { skuSummaryText: { contains: kw } },
-          { supplierName: { contains: kw } },
-          { productDetail: { contains: kw } },
-          { previewDataJson: { string_contains: kw } },
-        ],
-      },
-    ],
+const PENDING_QUEUE_ITEM_SELECT_LIGHT = Object.fromEntries(
+  Object.entries(PENDING_QUEUE_ITEM_SELECT).filter(([key]) => key !== 'previewDataJson'),
+) as Omit<typeof PENDING_QUEUE_ITEM_SELECT, 'previewDataJson'>
+
+const buildPendingQueueWhere = (
+  keyword?: string,
+  reviewFilter?: PendingImportReviewFilter,
+  itemIds?: string[],
+) => {
+  const parts: Record<string, unknown>[] = [PENDING_IMPORT_QUEUE_WHERE as Record<string, unknown>]
+  const ids = (itemIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 5)
+  if (ids.length > 0) {
+    parts.push({ id: { in: ids } })
   }
+  const kw = String(keyword || '').trim()
+  if (kw) {
+    parts.push({
+      OR: [
+        { parsedName: { contains: kw } },
+        { sourceUrl: { contains: kw } },
+        { skuSummaryText: { contains: kw } },
+        { supplierName: { contains: kw } },
+        { productDetail: { contains: kw } },
+        { previewDataJson: { string_contains: kw } },
+      ],
+    })
+  }
+  if (reviewFilter === 'reviewed') {
+    parts.push(PENDING_REVIEWED_JSON_WHERE as Record<string, unknown>)
+  } else if (reviewFilter === 'unreviewed') {
+    parts.push({ NOT: PENDING_REVIEWED_JSON_WHERE })
+  }
+  return parts.length === 1 ? parts[0] : { AND: parts }
 }
 
 const loadPendingImportQueueSnapshot = async (opts?: {
   page?: number
   page_size?: number
   keyword?: string
+  review_filter?: PendingImportReviewFilter
+  light?: boolean
+  item_ids?: string[]
 }): Promise<PendingImportQueueSnapshot & { total: number }> => {
   const page = Math.max(1, Number(opts?.page) || 1)
   const pageSize = Math.min(
     MAX_PENDING_QUEUE_PAGE_SIZE,
     Math.max(1, Number(opts?.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE),
   )
-  const skip = (page - 1) * pageSize
-  const where = buildPendingQueueWhere(opts?.keyword) as any
+  const itemIds = (opts?.item_ids || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 5)
+  const skip = itemIds.length > 0 ? 0 : (page - 1) * pageSize
+  const take = itemIds.length > 0 ? itemIds.length : pageSize
+  const where = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, itemIds) as any
+  const light = Boolean(opts?.light)
 
-  // 预热品牌别名缓存，使列表展示的 normalizeBrandTitleSync 用到 DB 最新映射
-  await loadBrandAliasRules()
+  if (!light) {
+    await loadBrandAliasRules()
+  }
 
-  const [activeTask, fallbackTask, total, items, exchangeRate, categoryMap, secondaryCategories, filterCategories] =
+  const [activeTask, total, items, enrichContext] =
     await Promise.all([
     prisma.importtask.findFirst({
       where: {
@@ -5045,46 +6591,81 @@ const loadPendingImportQueueSnapshot = async (opts?: {
         finishedAt: true,
       },
     }),
-    prisma.importtask.findFirst({
-      orderBy: [{ createdAt: 'desc' }],
-      select: {
-        id: true,
-        taskName: true,
-        status: true,
-        sourceLinkCount: true,
-        successCount: true,
-        failureCount: true,
-        progressPercent: true,
-        defaultStatus: true,
-        defaultCategoryId: true,
-        lastRateLimitedAt: true,
-        startedAt: true,
-        finishedAt: true,
-      },
-    }),
     prisma.importtaskitem.count({ where }),
     prisma.importtaskitem.findMany({
       where,
       // 按导入时间正序，保留 Excel 原始行顺序
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       skip,
-      take: pageSize,
-      select: PENDING_QUEUE_ITEM_SELECT,
+      take,
+      select: light ? PENDING_QUEUE_ITEM_SELECT_LIGHT : PENDING_QUEUE_ITEM_SELECT,
     }),
-    getGlobalExchangeRate(prisma),
-    loadImportPricingCategories(prisma),
-    loadAutoMatchSecondaryCategories(prisma),
-    loadFilterCategoriesFromDb(prisma),
+    light ? Promise.resolve(null) : loadPendingListEnrichContext(),
   ])
 
-  const enrichContext: PendingListEnrichContext = {
-    exchangeRate,
-    categoryMap,
-    secondaryCategories,
-    filterCategories,
+  if (light && items.length > 0) {
+    try {
+      const ids = items.map((item) => item.id)
+      const flags = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `SELECT id,
+          JSON_EXTRACT(previewDataJson, '$.reviewed') AS reviewed,
+          JSON_UNQUOTE(JSON_EXTRACT(previewDataJson, '$.reviewedAt')) AS reviewedAt,
+          JSON_UNQUOTE(JSON_EXTRACT(previewDataJson, '$.inboundIdentity.excelProductCode')) AS excelCode,
+          JSON_UNQUOTE(JSON_EXTRACT(previewDataJson, '$.returnedProductCode')) AS returnedCode,
+          JSON_UNQUOTE(JSON_EXTRACT(previewDataJson, '$.mainImageUrl')) AS previewMainImage,
+          JSON_EXTRACT(previewDataJson, '$.detailImages') AS detailImages,
+          JSON_EXTRACT(previewDataJson, '$.operatorSkuTable') AS operatorSkuTable,
+          JSON_EXTRACT(previewDataJson, '$.matchedCategoryIds') AS matchedCategoryIds,
+          JSON_EXTRACT(previewDataJson, '$.matchedCategoryNames') AS matchedCategoryNames,
+          JSON_EXTRACT(previewDataJson, '$.importSortIndex') AS importSortIndex,
+          JSON_EXTRACT(previewDataJson, '$.skuTable[*].skuKey') AS skuKeys,
+          JSON_EXTRACT(previewDataJson, '$.skuTable[*].spec') AS skuSpecs,
+          JSON_EXTRACT(previewDataJson, '$.skuTable[*].costPrice') AS skuCosts,
+          JSON_EXTRACT(previewDataJson, '$.skuTable[*].price') AS skuPrices,
+          JSON_EXTRACT(previewDataJson, '$.skuTable[*].imageUrl') AS skuImages,
+          JSON_EXTRACT(previewDataJson, '$.skuTable[*].attributes') AS skuAttrs
+         FROM importtaskitem
+         WHERE id IN (${ids.map(() => '?').join(',')})`,
+        ...ids,
+      )
+        const byId = new Map(flags.map((row) => [String(row.id), row]))
+        for (const item of items) {
+          const row = byId.get(String(item.id))
+          if (!row) continue
+          const operatorTable = parseOperatorSkuJson((item as any).operatorSkuJson)
+          const operatorGallery = parseOperatorGalleryJson((item as any).operatorGalleryJson)
+          ;(item as any).previewDataJson = {
+            reviewed:
+              row.reviewed === true ||
+              row.reviewed === 1 ||
+              row.reviewed === 'true' ||
+              parseMysqlJsonField(row.reviewed) === true,
+            reviewedAt: row.reviewedAt ? String(row.reviewedAt) : undefined,
+            inboundIdentity: row.excelCode ? { excelProductCode: String(row.excelCode) } : undefined,
+            returnedProductCode: row.returnedCode ? String(row.returnedCode) : undefined,
+            mainImageUrl: mergePendingGalleryUrls(
+              operatorGallery,
+              [row.previewMainImage ? String(row.previewMainImage) : '', ...asStringArray(row.detailImages)],
+            )[0] || (row.previewMainImage ? String(row.previewMainImage) : undefined),
+            detailImages: mergePendingGalleryUrls(
+              operatorGallery,
+              asStringArray(row.detailImages),
+              row.previewMainImage ? String(row.previewMainImage) : null,
+            ).slice(0, 24),
+            skuTable: operatorTable.length > 0 ? operatorTable.slice(0, 40) : zipCompactSkuTable(row),
+            operatorSkuTable: operatorTable.length > 0 || parseMysqlJsonField(row.operatorSkuTable) === true,
+            matchedCategoryIds: asStringArray(row.matchedCategoryIds),
+            matchedCategoryNames: asStringArray(row.matchedCategoryNames),
+            importSortIndex: Number(parseMysqlJsonField(row.importSortIndex) ?? row.importSortIndex),
+          } as PreviewDataJson
+        }
+        await yieldEventLoop()
+    } catch (error) {
+      console.error('[getPendingImportQueue] failed to load compact pending drafts', error)
+    }
   }
 
-  const task = activeTask || fallbackTask
+  const task = activeTask
 
   const sortedItems = [...items].sort((a, b) => {
     const timeA = new Date(a.createdAt).getTime()
@@ -5102,7 +6683,7 @@ const loadPendingImportQueueSnapshot = async (opts?: {
   // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
   return {
     activeTask: task ? buildPendingTaskSummary(task) : null,
-    items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask, enrichContext)),
+    items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask, enrichContext || undefined, { light })),
     total,
   }
 }
@@ -5302,6 +6883,7 @@ const rewriteCategoryItemAsOffers = async (
       isPublished: false,
       targetCategoryId: item.targetCategoryId,
       goodsStatus: item.goodsStatus,
+      supplierName: item.supplierName || null,
     })),
   })
   const created = await prisma.importtaskitem.findMany({
@@ -5375,6 +6957,7 @@ const expand1688ShopCategoryItemsForParse = async (
             isPublished: false,
             targetCategoryId: item.targetCategoryId,
             goodsStatus: item.goodsStatus,
+            supplierName: item.supplierName || null,
           })),
         })
       }
@@ -5399,13 +6982,170 @@ const expand1688ShopCategoryItemsForParse = async (
   return { items, failedCount }
 }
 
+/** 解析前把微购店铺/相册列表拆成单条动态。 */
+const expandWeishangFeedItemsForParse = async (
+  taskId: string,
+): Promise<{ items: any[]; failedCount: number }> => {
+  const rows = await prisma.importtaskitem.findMany({
+    where: { importTaskId: taskId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const feedRows = rows.filter((row: { sourceUrl?: string | null }) => isWeishangFeedUrl(row.sourceUrl))
+  if (feedRows.length === 0) {
+    return { items: rows, failedCount: 0 }
+  }
+
+  let failedCount = 0
+  for (const item of feedRows) {
+    const { urls, error } = await expandWeishangFeedUrls(String(item.sourceUrl || ''))
+    if (!urls.length) {
+      failedCount += 1
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: {
+          fetchStatus: 'FAILED' as any,
+          failureReason: error || '未能从微购相册列表抽出商品',
+          fetchFinishedAt: new Date(),
+        },
+      })
+      continue
+    }
+
+    const existingKeys = await findExistingImportLinkKeys(urls.map((url) => weishangDedupeKey(url)).filter(Boolean) as string[])
+    const freshUrls = urls.filter((url) => {
+      const key = weishangDedupeKey(url)
+      return key ? !existingKeys.has(key) : true
+    })
+
+    await prisma.$transaction(async (tx: any) => {
+      await tx.importtaskitem.delete({ where: { id: item.id } })
+      if (freshUrls.length) {
+        await tx.importtaskitem.createMany({
+          data: freshUrls.map((url: string) => ({
+            importTaskId: item.importTaskId,
+            operatorId: item.operatorId,
+            sourceUrl: url,
+            isSelected: true,
+            fetchStatus: 'PENDING',
+            publishStatus: 'PENDING',
+            isPublished: false,
+            targetCategoryId: item.targetCategoryId,
+            goodsStatus: item.goodsStatus,
+            supplierName: item.supplierName || null,
+          })),
+        })
+      }
+      const remaining = await tx.importtaskitem.count({
+        where: { importTaskId: item.importTaskId },
+      })
+      await tx.importtask.update({
+        where: { id: item.importTaskId },
+        data: { sourceLinkCount: remaining },
+      })
+    })
+    await sleep(400)
+  }
+
+  const nextRows = await prisma.importtaskitem.findMany({
+    where: { importTaskId: taskId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const items = nextRows.filter(
+    (row: { sourceUrl?: string | null }) => !isWeishangFeedUrl(row.sourceUrl),
+  )
+  return { items, failedCount }
+}
+
+const expandYupooCategoryItemsForParse = async (
+  taskId: string,
+): Promise<{ items: any[]; failedCount: number }> => {
+  const rows = await prisma.importtaskitem.findMany({
+    where: { importTaskId: taskId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const categoryRows = rows.filter((row: { sourceUrl?: string | null }) => isYupooCategoryUrl(row.sourceUrl))
+  if (categoryRows.length === 0) {
+    return { items: rows, failedCount: 0 }
+  }
+
+  let failedCount = 0
+  for (const item of categoryRows) {
+    const { urls, error } = await fetchYupooCategoryAlbumUrls(String(item.sourceUrl || ''))
+    if (!urls.length) {
+      failedCount += 1
+      await prisma.importtaskitem.update({
+        where: { id: item.id },
+        data: {
+          fetchStatus: 'FAILED' as any,
+          failureReason: error || '未能从 Yupoo 分类页抽出相册',
+          fetchFinishedAt: new Date(),
+        },
+      })
+      continue
+    }
+
+    const existingKeys = await findExistingImportLinkKeys(
+      urls.map((url) => resolveImportLinkDedupeKey(url)).filter(Boolean) as string[],
+    )
+    const freshUrls = urls.filter((url) => {
+      const key = resolveImportLinkDedupeKey(url)
+      return key ? !existingKeys.has(key) : true
+    })
+
+    await prisma.$transaction(async (tx: any) => {
+      await tx.importtaskitem.delete({ where: { id: item.id } })
+      if (freshUrls.length) {
+        await tx.importtaskitem.createMany({
+          data: freshUrls.map((url: string) => ({
+            importTaskId: item.importTaskId,
+            operatorId: item.operatorId,
+            sourceUrl: url,
+            isSelected: true,
+            fetchStatus: 'PENDING',
+            publishStatus: 'PENDING',
+            isPublished: false,
+            targetCategoryId: item.targetCategoryId,
+            goodsStatus: item.goodsStatus,
+            supplierName: item.supplierName || null,
+          })),
+        })
+      }
+      const remaining = await tx.importtaskitem.count({
+        where: { importTaskId: item.importTaskId },
+      })
+      await tx.importtask.update({
+        where: { id: item.importTaskId },
+        data: { sourceLinkCount: remaining },
+      })
+    })
+    await sleep(800)
+  }
+
+  const nextRows = await prisma.importtaskitem.findMany({
+    where: { importTaskId: taskId },
+    orderBy: { createdAt: 'asc' },
+  })
+  const items = nextRows.filter(
+    (row: { sourceUrl?: string | null }) => !isYupooCategoryUrl(row.sourceUrl),
+  )
+  return { items, failedCount }
+}
+
 const isPinduoduoImportSourceUrl = (sourceUrl?: string | null) =>
   Boolean(sourceUrl && isPinduoduoProductUrl(String(sourceUrl)))
+
+const isYupooImportSourceUrl = (sourceUrl?: string | null) =>
+  Boolean(sourceUrl && isYupooAlbumUrl(String(sourceUrl)))
+
+const isWeishangImportSourceUrl = (sourceUrl?: string | null) =>
+  Boolean(sourceUrl && isWeishangAlbumPageUrl(String(sourceUrl)))
 
 const resolvePendingCreationSource = (sourceUrl?: string | null): ProductCreationSourceType => {
   if (isTableImportSourceUrl(sourceUrl)) return 'TABLE_IMPORT'
   if (is1688ImportSourceUrl(sourceUrl)) return 'IMPORT_1688'
   if (isPinduoduoImportSourceUrl(sourceUrl)) return 'IMPORT_1688'
+  if (isYupooImportSourceUrl(sourceUrl)) return 'IMPORT_1688'
+  if (isWeishangImportSourceUrl(sourceUrl)) return 'IMPORT_1688'
   // 兜底：非 table-import 前缀一律按链接导入独立建品，避免误走产品编号合并
   return 'IMPORT_1688'
 }
@@ -5423,7 +7163,7 @@ const resolvePinduoduoMarkupMultiplier = (task: { markupRate?: unknown; stockStr
  * 售价 = 采集价 × (1 + 加价百分比)；成本保留采集价。
  */
 const persistPinduoduoParsedItem = async (params: {
-  item: { id: string; sourceUrl: string | null }
+  item: { id: string; sourceUrl: string | null; previewDataJson?: unknown }
   task: {
     id: string
     defaultCategoryId?: string | null
@@ -5518,7 +7258,8 @@ const persistPinduoduoParsedItem = async (params: {
     categoryNames: matchedSecondaryCategoryNames || [],
   })
 
-  const skuTable: PreviewSkuTableRow[] = baseSkuRows.map((row, index) => {
+  const skuTable: PreviewSkuTableRow[] = applyTitleDimensionToSkuTable(
+    baseSkuRows.map((row, index) => {
     const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawPriceMin
     const nextCost = Math.max(0, roundCurrency(sourceCost))
     const nextPrice = roundCurrency(nextCost * markupMultiplier)
@@ -5538,7 +7279,10 @@ const persistPinduoduoParsedItem = async (params: {
             }))
           : parseSpecAttributes(row.spec || '默认规格'),
     }
-  })
+  }),
+    [productName, productDetail],
+    fetched.featureAttributes,
+  )
 
   const colors =
     colorsEarly.length > 0
@@ -5628,10 +7372,14 @@ const persistPinduoduoParsedItem = async (params: {
     where: { id: item.id },
     data: {
       parsedName: productName,
-      supplierName: fetched.supplierName || null,
+      supplierName: resolveBatchSupplierName(task, fetched.supplierName),
       mainImageUrl,
       parsedMainImageUrl: mainImageUrl,
-      costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? costMin,
+      costPrice: pickTypicalPositivePrice(
+        skuTable
+          .map((sku) => toNumberOrNull(sku.costPrice) ?? toNumberOrNull(sku.price))
+          .filter((value): value is number => value !== null && value > 0),
+      ) ?? costMin,
       weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? fallbackWeightGrams,
       sourceCategoryName: null,
       coefficient: resolvedCoefficient,
@@ -5649,7 +7397,540 @@ const persistPinduoduoParsedItem = async (params: {
       parsedPriceMin: rawPriceMin,
       parsedPriceMax: rawPriceMax,
       specSummaryJson: specSummary as any,
-      previewDataJson: previewData as any,
+      previewDataJson: withPersistedReviewMark(previewData, params.item.previewDataJson) as any,
+      fetchStatus: 'COMPLETED' as any,
+      failureReason: null,
+      fetchFinishedAt: new Date(),
+    },
+  })
+
+  return { productName }
+}
+
+function buildColorSpecSkuTable(params: {
+  colorGroups: Array<{ label: string; imageUrl: string }>
+  specLabels: string[]
+  costMin: number
+  finalPriceMin: number
+  stock: number
+  weightGrams: number | null
+}): {
+  skuTable: PreviewSkuTableRow[]
+  colorLabels: string[]
+  specLabels: string[]
+  sizesByColor: Record<string, string[]>
+} {
+  const colors = params.colorGroups.length
+    ? params.colorGroups
+    : [{ label: '默认颜色', imageUrl: '' }]
+  const specs = params.specLabels.filter((value) => value && !isPlaceholderSpecValue(value) && !isColorNameSpecValue(value))
+  const skuTable: PreviewSkuTableRow[] = []
+  const sizesByColor: Record<string, string[]> = {}
+  let index = 0
+  for (const group of colors) {
+    const color = group.label || '默认颜色'
+    const variants = specs.length ? specs : [null]
+    if (specs.length) sizesByColor[color] = [...specs]
+    for (const spec of variants) {
+      index += 1
+      const attributes = [
+        { name: '颜色', value: color },
+        ...(spec ? [{ name: '规格', value: spec }] : []),
+      ]
+      skuTable.push({
+        skuKey: `sku-${index}`,
+        spec: spec ? `${color} / ${spec}` : color,
+        costPrice: params.costMin,
+        price: params.finalPriceMin,
+        stock: params.stock,
+        weightGrams: params.weightGrams,
+        imageUrl: group.imageUrl,
+        attributes,
+      })
+    }
+  }
+  return {
+    skuTable,
+    colorLabels: colors.map((group) => group.label || '默认颜色'),
+    specLabels: specs,
+    sizesByColor,
+  }
+}
+
+const countDistinctSkuColors = (skuTable: PreviewSkuTableRow[] | undefined) =>
+  new Set(
+    (skuTable || [])
+      .map((sku) => sku.attributes?.find((attr) => attr.name === '颜色')?.value || '')
+      .map((value) => normalizeText(value))
+      .filter(Boolean),
+  ).size
+
+const collectSkuSpecLabels = (
+  skuTable: PreviewSkuTableRow[],
+  sizesByColor: Record<string, string[]>,
+  extraTexts: Array<string | null | undefined>,
+) =>
+  Array.from(
+    new Set(
+      [
+        ...skuTable.flatMap((sku) =>
+          (sku.attributes || [])
+            .filter((attr) => ['规格', '尺码', '尺寸'].includes(attr.name))
+            .map((attr) => normalizeText(attr.value)),
+        ),
+        ...Object.values(sizesByColor || {}).flat().map((value) => normalizeText(value)),
+        ...extractSpecLabelsFromCopy(...extraTexts),
+      ].filter((value) => value && !isPlaceholderSpecValue(value) && !isColorNameSpecValue(value)),
+    ),
+  ).filter((value, _index, all) => !all.some((other) => other !== value && isTruncatedDimensionOf(value, other)))
+
+const collapseSameBaseColorSkus = (params: {
+  existingLabels: string[]
+  preview: PreviewDataJson
+  specLabels: string[]
+  costMin: number
+  finalPriceMin: number
+  stock: number
+  weightGrams: number | null
+}): ReturnType<typeof buildColorSpecSkuTable> | null => {
+  const labels = (params.existingLabels || []).filter(Boolean)
+  if (labels.length < 2) return null
+  const bases = labels
+    .map((label) => baseColorLabel(label))
+    .filter((label) => label && label !== '默认颜色' && !/^颜色/.test(label))
+  const unique = Array.from(new Set(bases))
+  if (unique.length !== 1) return null
+  const label = unique[0]
+  const hero =
+    params.preview.colors?.find((color) => baseColorLabel(color.label) === label)?.imageUrl ||
+    params.preview.skuTable?.find((row) =>
+      (row.attributes || []).some((attr) => attr.name === '颜色' && baseColorLabel(attr.value) === label),
+    )?.imageUrl ||
+    params.preview.mainImageUrl ||
+    ''
+  if (!hero) return null
+  return buildColorSpecSkuTable({
+    colorGroups: [{ label, imageUrl: hero }],
+    specLabels: params.specLabels,
+    costMin: params.costMin,
+    finalPriceMin: params.finalPriceMin,
+    stock: params.stock,
+    weightGrams: params.weightGrams,
+  })
+}
+
+/** Yupoo / 微商相册拆色用。1688 禁止调用，必须保持源站 skuProps 色图。 */
+const applyRicherGalleryColorSkus = async (params: {
+  images: string[]
+  title: string
+  existingColorCount: number
+  existingLabels?: string[]
+  specLabels: string[]
+  costMin: number
+  finalPriceMin: number
+  stock: number
+  weightGrams: number | null
+}): Promise<ReturnType<typeof buildColorSpecSkuTable> | null> => {
+  const images = Array.from(
+    new Set(
+      (params.images || [])
+        .map((url) => realProductImageUrl(url))
+        .filter((url): url is string => Boolean(url)),
+    ),
+  ).slice(0, 24)
+  if (images.length < 3) return null
+  const existingLabelsEarly = (params.existingLabels || []).filter(Boolean)
+  const existingNoisyEarly = existingLabelsEarly.some((label) => /-\d+$/.test(label) || /^颜色/.test(label))
+  const existingSameBaseEarly =
+    existingLabelsEarly.length >= 2 &&
+    new Set(existingLabelsEarly.map((label) => baseColorLabel(label) || label)).size === 1
+  if (existingLabelsEarly.some((label) => /副本/.test(label))) return null
+  if (params.existingColorCount >= 2 && !existingNoisyEarly && !existingSameBaseEarly) return null
+  const analysis = await analyzeYupooAlbumImages(images, { albumTitle: params.title })
+  const groups = (analysis.groups || []).filter((group) => group.label && group.label !== '默认颜色' && group.imageUrl)
+  const nextLabels = groups.map((group) => group.label)
+  const existingLabels = (params.existingLabels || []).filter(Boolean)
+  const sameLabels =
+    existingLabels.length === nextLabels.length &&
+    existingLabels.every((label, index) => label === nextLabels[index])
+  const existingNoisy = existingLabels.some((label) => /-\d+$/.test(label) || /^颜色/.test(label))
+  const existingSameBase =
+    existingLabels.length >= 2 &&
+    new Set(existingLabels.map((label) => baseColorLabel(label) || label)).size === 1
+  const nextClean = nextLabels.every(
+    (label) => label && label !== '默认颜色' && !/^颜色\d*$/.test(label) && !/-\d+$/.test(label),
+  )
+  const canCollapseToOne =
+    groups.length === 1 && nextClean && (existingNoisy || existingSameBase)
+  if (!groups.length) return null
+  if (groups.length < 2 && !canCollapseToOne) return null
+  if (sameLabels) return null
+  if (groups.length < params.existingColorCount && !(existingNoisy && nextClean) && !existingSameBase && !canCollapseToOne) {
+    return null
+  }
+  if (groups.length === params.existingColorCount && !existingLabels.length) return null
+  return buildColorSpecSkuTable({
+    colorGroups: groups.map((group) => ({ label: group.label, imageUrl: group.imageUrl })),
+    specLabels: params.specLabels,
+    costMin: params.costMin,
+    finalPriceMin: params.finalPriceMin,
+    stock: params.stock,
+    weightGrams: params.weightGrams,
+  })
+}
+
+/**
+ * Yupoo 相册：一页一品，标题 + 全套图转存到本站。
+ * 成本优先页上 P 价（如 P7.5）；没有 P 价时取标题货号前两位（131000920 → 13）。
+ * 礼盒摆拍各开一条颜色 SKU；白底特写、手持、全家福只进相册，不另开 SKU。
+ */
+const persistYupooParsedItem = async (params: {
+  item: { id: string; sourceUrl: string | null; previewDataJson?: unknown }
+  task: {
+    id: string
+    defaultCategoryId?: string | null
+    defaultStatus?: string | null
+    stockStrategyJson?: unknown
+  }
+  fetched: YupooAlbumPreview
+  secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>
+  categoryMap: Awaited<ReturnType<typeof loadImportPricingCategories>>
+  exchangeRate: number
+  importSortIndex?: number
+}) => {
+  const { item, task, fetched, secondaryCategories, categoryMap, exchangeRate } = params
+  const sourceUrl = item.sourceUrl || ''
+  const albumId = fetched.albumId || extractYupooAlbumId(sourceUrl) || item.id.slice(0, 6)
+  const shopName = fetched.shopName || extractYupooShopName(sourceUrl)
+  const productName = fetched.name || `Yupoo ${albumId}`
+  const productDetail =
+    fetched.productDetail || [productName, shopName ? `Yupoo ${shopName}` : 'Yupoo', sourceUrl].filter(Boolean).join('\n')
+
+  const remoteImages = Array.from(
+    new Set(
+      [...(fetched.mainImageUrl ? [fetched.mainImageUrl] : []), ...(fetched.detailImages || [])]
+        .map((url) => String(url || '').trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 40)
+
+  const hosted = remoteImages.length ? await importRemoteImageUrls(remoteImages) : { urls: [] as string[], failed: [] }
+  const hostedWithoutIcons = await dropIconLikeProductImages(hosted.urls)
+  const detailImages = hostedWithoutIcons.length ? hostedWithoutIcons : hosted.urls
+  const mainImageUrl = detailImages[0] || null
+  if (!mainImageUrl) {
+    throw new Error(hosted.failed[0]?.reason || 'Yupoo 图片转存失败')
+  }
+
+  const backdropBrand = await detectBrandFromBackdropUrls(detailImages)
+  const needImageCaption = isWeakProductTitle(productName) || !backdropBrand
+  const visionGuess = needImageCaption ? await describeProductFromBackdropUrls([mainImageUrl, detailImages[1]]) : null
+  const resolvedBrand = backdropBrand || visionGuess?.brand || null
+  const inferredType = inferProductTypeLabel(
+    productName,
+    fetched.categoryName,
+    productDetail,
+    visionGuess?.category,
+    visionGuess?.titleZh,
+  )
+  const brandedName =
+    composeImportProductTitle({
+      rawTitle: productName,
+      brand: resolvedBrand,
+      typeZh: inferredType?.labelZh || null,
+      visionTitle: visionGuess?.titleZh || null,
+    }) || applyBackdropBrandToTitle(productName, resolvedBrand)
+  const brandCorpus = [
+    productDetail,
+    fetched.categoryName,
+    inferredType?.labelZh,
+    inferredType?.labelEn,
+    backdropBrandMatchText(resolvedBrand),
+    visionGuess?.titleZh,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(
+    brandedName,
+    secondaryCategories,
+    brandCorpus,
+  )
+  const backdropBrandCategory = resolvedBrand
+    ? pickBestBrandCategoryFromTitle(brandedName, secondaryCategories, brandCorpus)
+    : null
+  const matchedSecondaryCategoryIds = Array.from(
+    new Set(
+      [...matchedSecondaryCategories, backdropBrandCategory]
+        .filter((category): category is NonNullable<typeof category> => Boolean(category))
+        .map((category) => category.id),
+    ),
+  )
+  const matchedSecondaryCategoryNames = Array.from(
+    new Set(
+      [...matchedSecondaryCategories, backdropBrandCategory]
+        .filter((category): category is NonNullable<typeof category> => Boolean(category))
+        .map((category) => category.name),
+    ),
+  )
+  const targetCategoryId = pickImportPricingTargetCategory(
+    matchedSecondaryCategories,
+    task.defaultCategoryId,
+  )
+  const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
+  const strategyStock = resolveInitialStock((task.stockStrategyJson as StockStrategyJson | null)?.stock)
+  const inferredCost = pickAlbumCostFromTitleAndFetched(
+    fetched.priceMin,
+    productName,
+    productDetail,
+    fetched.name,
+  )
+  const costMin = Math.max(0, roundCurrency(inferredCost ?? 0))
+  const finalPriceMin = roundCurrency(costMin * resolvedCoefficient)
+  const fallbackWeightGrams = resolveProductWeightGrams({
+    text: [brandedName, productDetail, backdropBrandMatchText(resolvedBrand)].filter(Boolean).join(' '),
+    categoryNames: matchedSecondaryCategoryNames || [],
+  })
+  const albumAnalysis = await analyzeYupooAlbumImages(detailImages, {
+    albumTitle: [fetched.name, fetched.categoryName, brandedName].filter(Boolean).join(' '),
+  })
+  const persistMainImageUrl = albumAnalysis.mainImageUrl || mainImageUrl
+  const specLabels = extractSpecLabelsFromCopy(fetched.name, brandedName, productDetail).filter(
+    (value) => !isPlaceholderSpecValue(value) && !isColorNameSpecValue(value),
+  )
+  const builtSkus = buildColorSpecSkuTable({
+    colorGroups: (albumAnalysis.groups.length
+      ? albumAnalysis.groups
+      : [{ label: '默认颜色', imageUrl: persistMainImageUrl }]),
+    specLabels,
+    costMin,
+    finalPriceMin,
+    stock: strategyStock,
+    weightGrams: fallbackWeightGrams,
+  })
+  const skuTable = builtSkus.skuTable
+  const colorLabels = builtSkus.colorLabels
+  const resolvedUsdMin = roundCurrency(finalPriceMin / exchangeRate)
+  const previewData: PreviewDataJson = {
+    name: brandedName,
+    categoryId: targetCategoryId || undefined,
+    matchedCategoryIds: matchedSecondaryCategoryIds,
+    matchedCategoryNames: matchedSecondaryCategoryNames,
+    price: finalPriceMin,
+    mainImageUrl: persistMainImageUrl || undefined,
+    detailImages,
+    shortDescription: productDetail,
+    featureAttributes: builtSkus.specLabels.map((value) => ({ key: '尺寸', value })),
+    colors: builtSkus.colorLabels.map((label) => {
+      const row = skuTable.find((sku) => sku.attributes?.some((attr) => attr.name === '颜色' && attr.value === label))
+      return { label, imageUrl: row?.imageUrl || persistMainImageUrl || null }
+    }),
+    sizesByColor: builtSkus.sizesByColor,
+    backdropBrand: resolvedBrand,
+    ...(typeof params.importSortIndex === 'number' ? { importSortIndex: params.importSortIndex } : {}),
+    inboundIdentity: {
+      mode: 'LINK_YUPOO_INDEPENDENT',
+      albumId,
+      shopName,
+      sourceUrl,
+    },
+    skuTable,
+  }
+
+  await prisma.importtaskitem.update({
+    where: { id: item.id },
+    data: {
+      parsedName: brandedName,
+      supplierName: resolveBatchSupplierName(task, fetched.supplierName || shopName),
+      mainImageUrl: persistMainImageUrl,
+      parsedMainImageUrl: persistMainImageUrl,
+      costPrice: costMin,
+      weightGrams: fallbackWeightGrams,
+      sourceCategoryName: null,
+      coefficient: resolvedCoefficient,
+      goodsStatus: (task.defaultStatus || 'DRAFT') as any,
+      productDetail,
+      skuSummaryText: [
+        colorLabels.join(' / ') || '默认颜色',
+        builtSkus.specLabels.join(' / '),
+      ].filter(Boolean).join(' · '),
+      cnyPriceMin: finalPriceMin,
+      cnyPriceMax: finalPriceMin,
+      usdPriceMin: resolvedUsdMin,
+      usdPriceMax: resolvedUsdMin,
+      minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+      availableStock: strategyStock,
+      targetCategoryId,
+      parsedPriceMin: fetched.priceMin,
+      parsedPriceMax: fetched.priceMin,
+      specSummaryJson: [
+        { name: '颜色', values: colorLabels },
+        ...(builtSkus.specLabels.length ? [{ name: '规格', values: builtSkus.specLabels }] : []),
+      ] as any,
+      previewDataJson: withPersistedReviewMark(previewData, params.item.previewDataJson) as any,
+      fetchStatus: 'COMPLETED' as any,
+      failureReason: null,
+      fetchFinishedAt: new Date(),
+    },
+  })
+
+  return { productName: brandedName }
+}
+
+/**
+ * 微商/微购相册：一条动态一品，标题 + 全套图转存到本站，成本取文案里的价格。
+ * 和 Yupoo 一样按颜色自动拆 SKU（一色一条，同色补图挂在该色上）。
+ */
+const persistWeishangParsedItem = async (params: {
+  item: { id: string; sourceUrl: string | null; previewDataJson?: unknown }
+  task: {
+    id: string
+    defaultCategoryId?: string | null
+    defaultStatus?: string | null
+    stockStrategyJson?: unknown
+  }
+  fetched: WeishangAlbumPreview
+  secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>
+  categoryMap: Awaited<ReturnType<typeof loadImportPricingCategories>>
+  exchangeRate: number
+  importSortIndex?: number
+}) => {
+  const { item, task, fetched, secondaryCategories, categoryMap, exchangeRate } = params
+  const sourceUrl = item.sourceUrl || ''
+  const ref = parseWeishangAlbumRef(sourceUrl)
+  const itemId = fetched.itemId || ref.itemId || item.id.slice(0, 6)
+  const shopId = fetched.shopId || ref.shopId
+  const albumId = fetched.albumId || ref.albumId
+  const productName = composeFullImportTitle(fetched.name || fetched.productDetail || '') || `微商 ${itemId}`
+  const productDetail =
+    fetched.productDetail ||
+    [productName, fetched.supplierName ? `微购 ${fetched.supplierName}` : '微购相册', sourceUrl]
+      .filter(Boolean)
+      .join('\n')
+
+  const remoteImages = Array.from(
+    new Set(
+      [...(fetched.mainImageUrl ? [fetched.mainImageUrl] : []), ...(fetched.detailImages || [])]
+        .map((url) => String(url || '').trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 40)
+
+  const hosted = remoteImages.length ? await importRemoteImageUrls(remoteImages) : { urls: [] as string[], failed: [] }
+  const hostedWithoutIcons = await dropIconLikeProductImages(hosted.urls)
+  const detailImages = hostedWithoutIcons.length ? hostedWithoutIcons : hosted.urls
+  const mainImageUrl = detailImages[0] || null
+  if (!mainImageUrl) {
+    throw new Error(hosted.failed[0]?.reason || '微商相册图片转存失败')
+  }
+
+  const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(
+    productName,
+    secondaryCategories,
+    productDetail,
+  )
+  const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category) => category.id)
+  const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category) => category.name)
+  const targetCategoryId = pickImportPricingTargetCategory(
+    matchedSecondaryCategories,
+    task.defaultCategoryId,
+  )
+  const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
+  const strategyStock = resolveInitialStock((task.stockStrategyJson as StockStrategyJson | null)?.stock)
+  const inferredCost = pickAlbumCostFromTitleAndFetched(
+    fetched.priceMin,
+    productName,
+    productDetail,
+    fetched.name,
+  )
+  const costMin = Math.max(0, roundCurrency(inferredCost ?? 0))
+  const finalPriceMin = roundCurrency(costMin * resolvedCoefficient)
+  const fallbackWeightGrams = resolveProductWeightGrams({
+    text: [productName, productDetail].filter(Boolean).join(' '),
+    categoryNames: matchedSecondaryCategoryNames || [],
+  })
+  const albumAnalysis = await analyzeYupooAlbumImages(detailImages, {
+    albumTitle: [productName, productDetail].filter(Boolean).join(' '),
+  })
+  const persistMainImageUrl = albumAnalysis.mainImageUrl || mainImageUrl
+  const specLabels = extractSpecLabelsFromCopy(productName, productDetail).filter(
+    (value) => !isPlaceholderSpecValue(value) && !isColorNameSpecValue(value),
+  )
+  const copyColors = extractColorLabelsFromCopy(productName, productDetail)
+  const colorGroups = albumAnalysis.groups.length
+    ? albumAnalysis.groups
+    : copyColors.length
+      ? copyColors.map((label) => ({ label, imageUrl: persistMainImageUrl, extraImageUrls: [] }))
+      : [{ label: '默认颜色', imageUrl: persistMainImageUrl, extraImageUrls: [] }]
+  const builtSkus = buildColorSpecSkuTable({
+    colorGroups,
+    specLabels,
+    costMin,
+    finalPriceMin,
+    stock: strategyStock,
+    weightGrams: fallbackWeightGrams,
+  })
+  const skuTable = builtSkus.skuTable
+  const colorLabels = builtSkus.colorLabels
+  const resolvedUsdMin = roundCurrency(finalPriceMin / exchangeRate)
+  const previewData: PreviewDataJson = {
+    name: productName,
+    categoryId: targetCategoryId || undefined,
+    matchedCategoryIds: matchedSecondaryCategoryIds,
+    matchedCategoryNames: matchedSecondaryCategoryNames,
+    price: finalPriceMin,
+    mainImageUrl: persistMainImageUrl || undefined,
+    detailImages,
+    shortDescription: productDetail,
+    featureAttributes: builtSkus.specLabels.map((value) => ({ key: '尺寸', value })),
+    colors: builtSkus.colorLabels.map((label) => {
+      const row = skuTable.find((sku) => sku.attributes?.some((attr) => attr.name === '颜色' && attr.value === label))
+      return { label, imageUrl: row?.imageUrl || persistMainImageUrl || null }
+    }),
+    sizesByColor: builtSkus.sizesByColor,
+    ...(typeof params.importSortIndex === 'number' ? { importSortIndex: params.importSortIndex } : {}),
+    inboundIdentity: {
+      mode: 'LINK_WEISHANG_INDEPENDENT',
+      itemId,
+      albumId,
+      shopId,
+      shopName: fetched.supplierName || shopId,
+      sourceUrl,
+    },
+    skuTable,
+  }
+
+  await prisma.importtaskitem.update({
+    where: { id: item.id },
+    data: {
+      parsedName: productName,
+      supplierName: resolveBatchSupplierName(task, fetched.supplierName || shopId),
+      mainImageUrl: persistMainImageUrl,
+      parsedMainImageUrl: persistMainImageUrl,
+      costPrice: costMin,
+      weightGrams: fallbackWeightGrams,
+      sourceCategoryName: null,
+      coefficient: resolvedCoefficient,
+      goodsStatus: (task.defaultStatus || 'DRAFT') as any,
+      productDetail,
+      skuSummaryText: [
+        colorLabels.join(' / ') || '默认颜色',
+        builtSkus.specLabels.join(' / '),
+      ].filter(Boolean).join(' · '),
+      cnyPriceMin: finalPriceMin,
+      cnyPriceMax: finalPriceMin,
+      usdPriceMin: resolvedUsdMin,
+      usdPriceMax: resolvedUsdMin,
+      minimumOrderQuantity: DEFAULT_MIN_ORDER_QTY,
+      availableStock: strategyStock,
+      targetCategoryId,
+      parsedPriceMin: fetched.priceMin,
+      parsedPriceMax: fetched.priceMin,
+      specSummaryJson: [
+        { name: '颜色', values: colorLabels },
+        ...(builtSkus.specLabels.length ? [{ name: '规格', values: builtSkus.specLabels }] : []),
+      ] as any,
+      previewDataJson: withPersistedReviewMark(previewData, params.item.previewDataJson) as any,
       fetchStatus: 'COMPLETED' as any,
       failureReason: null,
       fetchFinishedAt: new Date(),
@@ -5734,7 +8015,8 @@ const createProductRecord = async (tx: any, params: {
   })
   // 每次调用都生成新的独立 SPU 编号，不做标题/图片/产品编号合并
   const productCode = await generateStructuredSpuCode(tx, categoryMeta.shortCode)
-  const draftSkus = Array.isArray(params.skus) && params.skus.length > 0
+  const draftSkus = dedupeDuplicateColorSkus(
+    Array.isArray(params.skus) && params.skus.length > 0
     ? params.skus
     : [{
         sku_key: 'sku-1',
@@ -5747,7 +8029,8 @@ const createProductRecord = async (tx: any, params: {
         attributes: params.skuSummaryText
           ? [{ name: '来源SKU', value: params.skuSummaryText }]
           : [{ name: '规格', value: '默认规格' }]
-      }]
+      }],
+  )
 
   const galleryUrls = dedupeImageUrls([
     params.mainImageUrl,
@@ -5805,7 +8088,12 @@ const createProductRecord = async (tx: any, params: {
             )
             const skuWeightGrams = toNumberOrNull(sku.weight_grams) ?? effectiveWeightGrams
             const sizeLabel =
-              sku.attributes?.find(attr => isSizeDimensionName(attr.name))?.value || null
+              sku.attributes?.find(
+                attr =>
+                  isSizeDimensionName(attr.name) &&
+                  !isProductTypeSpecValue(attr.value) &&
+                  !isColorNameSpecValue(attr.value),
+              )?.value || null
             const materialLabel =
               sku.attributes?.find(attr => /^(材质|材料|material)$/i.test(normalizeText(attr.name)))?.value || null
             const { specValue, colorValue } = buildImportSkuSegments(sku, index)
@@ -6035,7 +8323,7 @@ export function pickBestBrandCategoryFromTitle(
   categories: AutoMatchedSecondaryCategory[],
   detailText?: string | null,
 ): AutoMatchedSecondaryCategory | null {
-  const corpus = buildCategoryMatchCorpus(title, detailText)
+  const corpus = buildCategoryMatchCorpus(title)
   if (!corpus) return null
 
   const scored = categories
@@ -6176,7 +8464,7 @@ export function matchSecondaryCategoriesByTitle(
   detailText?: string | null,
 ): AutoMatchedSecondaryCategory[] {
   const titleCorpus = buildCategoryMatchCorpus(title)
-  const brandCorpus = buildCategoryMatchCorpus(title, detailText)
+  const brandCorpus = titleCorpus
   if (!titleCorpus && !brandCorpus) return []
 
   const scoreCategory = (
@@ -6577,6 +8865,10 @@ const PENDING_QUEUE_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000
 /** Price repair used to run on every pending-tab poll and scanned all rows — OOM flap. */
 let lastPendingPriceRepairAt = 0
 const PENDING_PRICE_REPAIR_INTERVAL_MS = 10 * 60 * 1000
+let lastPendingTitleCostRepairAt = 0
+const PENDING_TITLE_COST_REPAIR_INTERVAL_MS = 15 * 1000
+let lastPendingColorSplitAt = 0
+const PENDING_COLOR_SPLIT_INTERVAL_MS = 45 * 1000
 
 /** In-process mutex: only one 1688/PDD parse job (startParseTask or reparse) at a time. */
 let parseJobBusy = false
@@ -6687,22 +8979,51 @@ export const cancelPendingImportParseJob = requireRole([UserRole.ADMIN])(
 
 export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
   withResult(async (input?: GetPendingImportQueueInput): Promise<GetPendingImportQueueOutput> => {
+    const startedAt = Date.now()
     const page = Math.max(1, Number(input?.page) || 1)
     const pageSize = Math.min(
       MAX_PENDING_QUEUE_PAGE_SIZE,
       Math.max(1, Number(input?.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE),
     )
     const skipMaintenance = Boolean(input?.skip_maintenance)
-
-    try {
-      await prisma.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
-    } catch (error) {
-      console.error('[getPendingImportQueue] failed to set utf8mb4 session charset', error)
+    const itemIds = (input?.item_ids || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 5)
+    const includeDrafts = Boolean(input?.include_drafts) || itemIds.length > 0
+    const light = skipMaintenance && !includeDrafts
+    const lightCacheKey = light
+      ? `${page}|${pageSize}|${String(input?.keyword || '')}|${itemIds.join(',')}|${String(input?.review_filter || '')}`
+      : ''
+    if (lightCacheKey && lastPendingLightQueueCache && lastPendingLightQueueCache.key === lightCacheKey && Date.now() - lastPendingLightQueueCache.at < 3000) {
+      return lastPendingLightQueueCache.result
+    }
+    if (light && lastPendingLightQueueCache && Date.now() - lastPendingLightQueueCache.at < 400) {
+      return lastPendingLightQueueCache.result
+    }
+    if (Date.now() - lastPendingTitleCostRepairAt >= PENDING_TITLE_COST_REPAIR_INTERVAL_MS) {
+      lastPendingTitleCostRepairAt = Date.now()
+      try {
+        const filledFromTitle = await repairPendingImportZeroCostsFromTitle({
+          maxScan: 500,
+          maxUpdate: 200,
+        })
+        const fixedModelCosts = await repairPendingImportMisreadModelCosts({
+          maxScan: 800,
+          maxUpdate: 200,
+        })
+        if (filledFromTitle > 0 || fixedModelCosts > 0) {
+          lastPendingLightQueueCache = null
+          console.info(
+            `[getPendingImportQueue] filled ${filledFromTitle} pending title costs, fixed ${fixedModelCosts} model-as-price rows`,
+          )
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to fill pending costs from title', error)
+      }
     }
 
-    // Always reclaim hung RUNNING jobs — even when skip_maintenance is true.
-    // The admin UI always passes skip_maintenance, so parking this behind maintenance
-    // left "采集中" stuck for hours and blocked reparse via the in-process mutex.
+    const dueReclaim =
+      !skipMaintenance && Date.now() - lastPendingReclaimAt >= PENDING_RECLAIM_INTERVAL_MS
+    if (dueReclaim) {
+      lastPendingReclaimAt = Date.now()
     try {
       const itemStuckBefore = new Date(Date.now() - 10 * 60 * 1000)
       const taskStuckBefore = new Date(Date.now() - 20 * 60 * 1000)
@@ -6754,12 +9075,28 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
     } catch (error) {
       console.error('[getPendingImportQueue] failed to reclaim stuck RUNNING parse jobs', error)
     }
+    }
 
-    // 系数已写入但售价仍=成本：限频 + 限量扫描（admin UI 每 3s 轮询时不能全表扫）
-    const duePriceRepair = Date.now() - lastPendingPriceRepairAt >= PENDING_PRICE_REPAIR_INTERVAL_MS
+    // 系数已写入但售价仍=成本：限频 + 限量扫描（admin UI 轮询时不能全表扫）
+    const duePriceRepair =
+      !skipMaintenance && Date.now() - lastPendingPriceRepairAt >= PENDING_PRICE_REPAIR_INTERVAL_MS
     if (duePriceRepair) {
       lastPendingPriceRepairAt = Date.now()
       try {
+        const filledFromTitle = await repairPendingImportZeroCostsFromTitle({
+          maxScan: 500,
+          maxUpdate: 200,
+        })
+        const fixedModelCosts = await repairPendingImportMisreadModelCosts({
+          maxScan: 800,
+          maxUpdate: 200,
+        })
+        if (filledFromTitle > 0 || fixedModelCosts > 0) {
+          lastPendingLightQueueCache = null
+          console.info(
+            `[getPendingImportQueue] filled ${filledFromTitle} pending title costs, fixed ${fixedModelCosts} model-as-price rows`,
+          )
+        }
         const repairedPriceCount = await repairPendingImportPricesMissingCoefficient({
           maxScan: 300,
           maxUpdate: 40,
@@ -6771,6 +9108,38 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
         }
       } catch (error) {
         console.error('[getPendingImportQueue] failed to repair pending sell prices', error)
+      }
+    }
+
+    // 识图拆色绝不能挡住队列返回：后台刷新商品列表和待上传共用一个 RPC 进程。
+    const dueColorSplit =
+      !skipMaintenance && Date.now() - lastPendingColorSplitAt >= PENDING_COLOR_SPLIT_INTERVAL_MS
+    if (dueColorSplit) {
+      lastPendingColorSplitAt = Date.now()
+      const runColorSplit = async () => {
+        try {
+          const stripped = await sanitizePlaceholderPendingImages(40)
+          if (stripped > 0) {
+            console.info(`[getPendingImportQueue] stripped placeholder images from ${stripped} pending items`)
+          }
+        } catch (error) {
+          console.error('[getPendingImportQueue] failed to strip placeholder pending images', error)
+        }
+        try {
+          const splitCount = await sanitizeYupooSingleSkuPendingItems(3)
+          if (splitCount > 0) {
+            console.info(`[getPendingImportQueue] split ${splitCount} pending items into gallery color SKUs`)
+          }
+        } catch (error) {
+          console.error('[getPendingImportQueue] failed to split pending gallery colors', error)
+        }
+      }
+      if (skipMaintenance) {
+        setTimeout(() => {
+          void runColorSplit()
+        }, 0)
+      } else {
+        await runColorSplit()
       }
     }
 
@@ -6797,6 +9166,24 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
         }
       } catch (error) {
         console.error('[getPendingImportQueue] failed to sanitize classic mock SKUs', error)
+      }
+
+      try {
+        const yupooColorCount = await sanitizeYupooSingleSkuPendingItems(15)
+        if (yupooColorCount > 0) {
+          console.info(`[getPendingImportQueue] split ${yupooColorCount} Yupoo albums into color SKUs`)
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to split Yupoo color SKUs', error)
+      }
+
+      try {
+        const yupooBrandCount = await sanitizeYupooPendingBrandTitles(20)
+        if (yupooBrandCount > 0) {
+          console.info(`[getPendingImportQueue] prepended backdrop brand to ${yupooBrandCount} Yupoo titles`)
+        }
+      } catch (error) {
+        console.error('[getPendingImportQueue] failed to prepend Yupoo backdrop brands', error)
       }
 
       try {
@@ -6844,7 +9231,13 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       page,
       page_size: pageSize,
       keyword: input?.keyword,
+      review_filter: input?.review_filter,
+      light,
+      item_ids: itemIds,
     })
+    console.info(
+      `[getPendingImportQueue] light=${light} page=${page} size=${pageSize} n=${snapshot.items.length} total=${snapshot.total} ${Date.now() - startedAt}ms`,
+    )
 
     // Self-heal stale in-memory mutex when DB has no RUNNING work (e.g. crash / multi-worker drift).
     if (parseJobBusy) {
@@ -6866,7 +9259,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       }
     }
 
-    return {
+    const result = {
       activeTask: snapshot.activeTask,
       list: snapshot.items,
       total: snapshot.total,
@@ -6874,6 +9267,10 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       page_size: pageSize,
       parse_job: getParseJobRuntimeStatus(),
     }
+    if (lightCacheKey) {
+      lastPendingLightQueueCache = { key: lightCacheKey, at: Date.now(), result }
+    }
+    return result
   })
 )
 
@@ -7040,33 +9437,51 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
       const colors = dedupe(skuPairs.map(pair => pair.color))
       const specs = dedupe(skuPairs.map(pair => pair.spec))
       const scalarPrice =
+        pickTypicalPositivePrice(
+          spuRows
+            .map(row => parseSingleScalarPrice(row.productPriceText ?? ''))
+            .filter((price): price is number => price !== null),
+        ) ??
         spuRows
           .map(row => parseSingleScalarPrice(row.productPriceText ?? ''))
-          .find(price => price !== null) ?? null
-      const priceBySpec = new Map<string, number>()
+          .find(price => price !== null) ??
+        null
+      const priceBySkuKey = new Map<string, number>()
+      const priceByColor = new Map<string, number>()
+      const priceBySpecOnly = new Map<string, number>()
 
       for (const row of spuRows) {
+        const rowColors = row.colors?.length ? row.colors : splitCommaList(row.color)
         const rowSpecs = row.specs?.length ? row.specs : splitCommaList(row.spec)
         const priceList = parseDecimalList(row.productPriceText ?? '')
+        const colorList = rowColors.length > 0 ? rowColors : [null]
+        const specList = rowSpecs.length > 0 ? rowSpecs : [null]
+        const assignPrice = (color: string | null, spec: string | null, nextPrice: number) => {
+          const key = tableImportSkuPriceKey(color, spec)
+          if (!priceBySkuKey.has(key)) priceBySkuKey.set(key, nextPrice)
+          if (color) {
+            const colorKey = normalizeText(color)
+            if (colorKey && !priceByColor.has(colorKey)) priceByColor.set(colorKey, nextPrice)
+          } else if (spec) {
+            const specKey = normalizeText(spec)
+            if (specKey && !priceBySpecOnly.has(specKey)) priceBySpecOnly.set(specKey, nextPrice)
+          }
+        }
         if (rowSpecs.length > 0 && priceList.length === rowSpecs.length) {
+          const color = colorList[0] || null
           rowSpecs.forEach((spec, index) => {
-            const normalizedSpec = normalizeText(spec)
             const nextPrice = priceList[index]
-            if (normalizedSpec && nextPrice != null) {
-              priceBySpec.set(normalizedSpec, nextPrice)
-            }
+            if (nextPrice != null) assignPrice(color, spec, nextPrice)
           })
           continue
         }
         const fallbackPrice =
           priceList.length > 0 ? priceList[0] : parseSingleScalarPrice(row.productPriceText ?? '')
-        if (fallbackPrice != null) {
-          rowSpecs.forEach(spec => {
-            const normalizedSpec = normalizeText(spec)
-            if (normalizedSpec && !priceBySpec.has(normalizedSpec)) {
-              priceBySpec.set(normalizedSpec, fallbackPrice)
-            }
-          })
+        if (fallbackPrice == null) continue
+        for (const color of colorList) {
+          for (const spec of specList) {
+            assignPrice(color, spec, fallbackPrice)
+          }
         }
       }
 
@@ -7111,7 +9526,14 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         const attributes: Array<{ name: string; value: string }> = []
         if (color) attributes.push({ name: '颜色', value: color })
         if (spec) attributes.push({ name: '规格', value: spec })
-        const mappedPrice = spec ? (priceBySpec.get(normalizeText(spec)) ?? scalarPrice) : scalarPrice
+        const mappedPrice = lookupTableImportSkuPrice(
+          color,
+          spec,
+          priceBySkuKey,
+          priceByColor,
+          priceBySpecOnly,
+          scalarPrice,
+        )
         const colorKey = color ? normalizeText(color) : ''
         skuTable.push({
           skuKey: buildSkuIdentifier(productCode, spec, color, index),
@@ -7157,6 +9579,10 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         ],
         priceMin: skuPrices.length ? Math.min(...skuPrices) : scalarPrice,
         priceMax: skuPrices.length ? Math.max(...skuPrices) : scalarPrice,
+        spuCostPrice:
+          pickTypicalPositivePrice(skuPrices) ??
+          scalarPrice ??
+          (skuPrices[0] ?? null),
       }
     }
 
@@ -7321,7 +9747,7 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         parsedPriceMax: row.priceMax,
         supplierName: normalizeText(row.supplierName) || null,
         mainImageUrl,
-        costPrice: row.priceMin,
+        costPrice: row.spuCostPrice ?? row.priceMin,
         weightGrams: row.weightGrams,
         sourceCategoryName,
         targetCategoryId: categoryId,
@@ -7436,7 +9862,7 @@ const splitCommaList = (raw?: string | null) =>
 export const createImportTask = requireRole([UserRole.ADMIN])(
   withResult(async (input: CreateImportTaskInput): Promise<CreateImportTaskOutput> => {
     const { userId } = getAuthContext()
-    const rawUrls = input.urls.split('\n').map(u => u.trim()).filter(Boolean)
+    const rawUrls = splitPastedImportUrls(input.urls)
     // 仅去掉完全相同的重复粘贴；不同链接一律各自建条目，绝不按标题/货号合并
     const uniqueUrls = Array.from(new Set(rawUrls))
 
@@ -7448,18 +9874,31 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
     if (httpUrls.length === 0) {
       throw new Error('链接格式不正确，需以 http 或 https 开头')
     }
+    if (input.weishangCookie) persistWeishangCookie(input.weishangCookie)
+    if (input.yupooPassword) persistYupooPassword(input.yupooPassword)
+    if (input.yupooCookie) persistYupooCookie(input.yupooCookie)
 
     const validUrls = httpUrls.filter(
-      u => is1688ImportSourceUrl(u) || is1688ShopCategorySourceUrl(u) || isPinduoduoProductUrl(u),
+      u =>
+        is1688ImportSourceUrl(u) ||
+        is1688ShopCategorySourceUrl(u) ||
+        isPinduoduoProductUrl(u) ||
+        isYupooAlbumUrl(u) ||
+        isYupooCategoryUrl(u) ||
+        isWeishangAlbumPageUrl(u),
     )
     if (validUrls.length === 0) {
       throw new Error(
-        '请粘贴有效的1688商品详情链接（offer/数字）、店铺分类页链接（page/offerlist…）或拼多多商品链接',
+        '请粘贴有效的1688商品详情链接（offer/数字）、店铺分类页链接（page/offerlist…）、拼多多商品链接、Yupoo 相册/分类页或微购/微商相册链接',
       )
     }
 
-    const categoryUrls = validUrls.filter(u => is1688ShopCategorySourceUrl(u))
-    const detailOrPddUrls = validUrls.filter(u => !is1688ShopCategorySourceUrl(u))
+    const categoryUrls = validUrls.filter(
+      u => is1688ShopCategorySourceUrl(u) || isWeishangFeedUrl(u) || isYupooCategoryUrl(u),
+    )
+    const detailOrPddUrls = validUrls.filter(
+      u => !is1688ShopCategorySourceUrl(u) && !isWeishangFeedUrl(u) && !isYupooCategoryUrl(u),
+    )
 
     // 历史已导入（同 offer/goods）或本次粘贴内重复：直接跳过；分类/分页链接解析时再展开
     const { acceptedUrls: acceptedDetailUrls, skippedDuplicateCount } =
@@ -7473,9 +9912,15 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
       )
     }
 
-    let stockStrategyJson: any = null
-    if (typeof input.stockStrategyStock === 'number') {
-      stockStrategyJson = { type: 'fixed', stock: input.stockStrategyStock }
+    const defaultSupplierName = normalizeDefaultSupplierName(input.supplierName)
+    let stockStrategyJson: StockStrategyJson | null = null
+    if (typeof input.stockStrategyStock === 'number' || defaultSupplierName) {
+      stockStrategyJson = {
+        ...(typeof input.stockStrategyStock === 'number'
+          ? { type: 'fixed' as const, stock: input.stockStrategyStock }
+          : {}),
+        ...(defaultSupplierName ? { defaultSupplierName } : {}),
+      }
     }
 
     const taskName = `导入任务 ${new Date().toLocaleString('zh-CN')}`
@@ -7516,9 +9961,14 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
           isPublished: false,
           targetCategoryId: input.defaultCategoryId || null,
           goodsStatus: (input.defaultStatus || 'DRAFT') as any,
+          supplierName: defaultSupplierName,
           ...(is1688ShopCategorySourceUrl(url)
             ? { previewDataJson: { importKind: 'SHOP_CATEGORY' } as any }
-            : {}),
+            : isWeishangFeedUrl(url)
+              ? { previewDataJson: { importKind: 'WEISHANG_FEED' } as any }
+              : isYupooCategoryUrl(url)
+                ? { previewDataJson: { importKind: 'YUPOO_CATEGORY' } as any }
+              : {}),
         }))
       })
 
@@ -7670,7 +10120,6 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
     let successCount = 0
     let failureCount = 0
     let rateLimitedCount = 0
-    const costDeductionUsd = taskSnapshot.markupRate ? Number(taskSnapshot.markupRate) : 0
     const { minDelaySec, maxDelaySec } = getTaskDelayWindow(taskSnapshot as any)
     const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
     const categoryMap = await loadImportPricingCategories(prisma)
@@ -7682,16 +10131,22 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
     const expanded = await expand1688ShopCategoryItemsForParse(taskSnapshot.id)
     failureCount += expanded.failedCount
-    const parseItems = expanded.items
+    const expandedWeishang = await expandWeishangFeedItemsForParse(taskSnapshot.id)
+    failureCount += expandedWeishang.failedCount
+    const expandedYupoo = await expandYupooCategoryItemsForParse(taskSnapshot.id)
+    failureCount += expandedYupoo.failedCount
+    const parseItems = expandedYupoo.items
     bumpParseJobProgress(0, parseItems.length)
     console.warn(
-      `[startParseTask] after category expand task=${taskSnapshot.id} items=${parseItems.length} categoryFailed=${expanded.failedCount}`,
+      `[startParseTask] after category expand task=${taskSnapshot.id} items=${parseItems.length} categoryFailed=${expanded.failedCount} weishangFailed=${expandedWeishang.failedCount}`,
     )
 
     const batchMode = parseItems.length > 3
-    if (batchMode && cookieSnapshot) {
+    const needs1688Warmup = parseItems.some((row: { sourceUrl?: string | null }) =>
+      is1688ImportSourceUrl(row.sourceUrl),
+    )
+    if (batchMode && cookieSnapshot && needs1688Warmup) {
       await bootstrap1688MtopCookies(cookieSnapshot).catch(() => cookieSnapshot)
-      // Short lists should not sit 6s before the first offer fetch.
       await sleep(parseItems.length > 10 ? 6_000 : 1_500)
     }
 
@@ -7767,6 +10222,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
 
       try {
         const isPddUrl = isPinduoduoProductUrl(sourceUrl)
+        const isYupooUrl = isYupooAlbumUrl(sourceUrl)
+        const isWeishangUrl = isWeishangImportSourceUrl(sourceUrl)
         const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
 
         if (isPddUrl) {
@@ -7803,13 +10260,89 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               importSortIndex: index,
             })
           }
+        } else if (isYupooUrl) {
+          const fetchResult = await fetchYupooAlbumPreview(sourceUrl)
+          if (fetchResult.outcome !== 'success' || fetchResult.preview.detailImages.length === 0) {
+            failureCount += 1
+            await prisma.importtaskitem.update({
+              where: { id: item.id },
+              data: {
+                parsedName: fetchResult.preview.name || `[Yupoo] ${extractYupooAlbumId(sourceUrl) || item.id.slice(0, 6)}`,
+                fetchStatus: 'FAILED' as any,
+                failureReason: fetchResult.failureReason || '解析失败：Yupoo 相册抓取失败',
+                fetchFinishedAt: new Date(),
+              },
+            })
+          } else {
+            try {
+              await persistYupooParsedItem({
+                item,
+                task: taskSnapshot as any,
+                fetched: fetchResult.preview,
+                secondaryCategories,
+                categoryMap,
+                exchangeRate,
+                importSortIndex: index,
+              })
+              successCount += 1
+            } catch (yupooError) {
+              failureCount += 1
+              await prisma.importtaskitem.update({
+                where: { id: item.id },
+                data: {
+                  parsedName: fetchResult.preview.name || `[Yupoo] ${extractYupooAlbumId(sourceUrl) || item.id.slice(0, 6)}`,
+                  fetchStatus: 'FAILED' as any,
+                  failureReason: yupooError instanceof Error ? yupooError.message : 'Yupoo 图片转存失败',
+                  fetchFinishedAt: new Date(),
+                },
+              })
+            }
+          }
+        } else if (isWeishangUrl) {
+          const fetchResult = await fetchWeishangAlbumPreview(sourceUrl)
+          if (fetchResult.outcome !== 'success' || fetchResult.preview.detailImages.length === 0) {
+            failureCount += 1
+            await prisma.importtaskitem.update({
+              where: { id: item.id },
+              data: {
+                parsedName: fetchResult.preview.name || `[微商] ${parseWeishangAlbumRef(sourceUrl).itemId || item.id.slice(0, 6)}`,
+                fetchStatus: 'FAILED' as any,
+                failureReason: fetchResult.failureReason || '解析失败：微商相册抓取失败',
+                fetchFinishedAt: new Date(),
+              },
+            })
+          } else {
+            try {
+              await persistWeishangParsedItem({
+                item,
+                task: taskSnapshot as any,
+                fetched: fetchResult.preview,
+                secondaryCategories,
+                categoryMap,
+                exchangeRate,
+                importSortIndex: index,
+              })
+              successCount += 1
+            } catch (weishangError) {
+              failureCount += 1
+              await prisma.importtaskitem.update({
+                where: { id: item.id },
+                data: {
+                  parsedName: fetchResult.preview.name || `[微商] ${parseWeishangAlbumRef(sourceUrl).itemId || item.id.slice(0, 6)}`,
+                  fetchStatus: 'FAILED' as any,
+                  failureReason: weishangError instanceof Error ? weishangError.message : '微商相册图片转存失败',
+                  fetchFinishedAt: new Date(),
+                },
+              })
+            }
+          }
         } else if (!is1688OfferUrl) {
           failureCount += 1
           await prisma.importtaskitem.update({
             where: { id: item.id },
             data: {
               fetchStatus: 'FAILED' as any,
-              failureReason: '解析失败：链接错误，请粘贴有效的1688或拼多多商品详情页链接',
+              failureReason: '解析失败：链接错误，请粘贴有效的1688、拼多多、Yupoo 或微商相册链接',
               fetchFinishedAt: new Date()
             }
           })
@@ -7888,21 +10421,21 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             secondaryById,
           )
           const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId)
-          const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd))
-          const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd))
-          const finalPriceMin = roundCurrency(adjustedCostMin * resolvedCoefficient)
+          const rawTypicalCost = resolveFetchedOfferCost(fetched, rawPriceMin) ?? rawPriceMin
+          const adjustedTypicalCost = Math.max(0, roundCurrency(rawTypicalCost))
+          const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin))
+          const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax))
+          const finalPriceMin = roundCurrency(adjustedTypicalCost * resolvedCoefficient)
           const finalPriceMax = roundCurrency(adjustedCostMax * resolvedCoefficient)
-          const mainImageUrl =
-            fetched.mainImageUrl ||
-            (hasRealParse ? 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158' : null)
+          const mainImageUrl = realProductImageUrl(fetched.mainImageUrl)
           const detailImages =
             Array.isArray(fetched.detailImages) && fetched.detailImages.length > 0
-              ? fetched.detailImages
+              ? fetched.detailImages.map((url) => realProductImageUrl(url)).filter((url): url is string => Boolean(url))
               : mainImageUrl
                 ? [mainImageUrl]
                 : []
-          // 无真实供应商时留空，避免「假供应商」掩盖解析失败
-          const supplierName = fetched.supplierName || null
+          // 任务里填了供应商则整批覆盖；否则用源站店铺名，没有就留空
+          const supplierName = resolveBatchSupplierName(taskSnapshot, fetched.supplierName)
           const sourceCategoryName = fetched.sourceCategoryName || null
 
           const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : []
@@ -7914,7 +10447,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               ? fetched.colors
                   .map(color => ({
                     label: normalizeText(color.label),
-                    imageUrl: normalizeText(color.imageUrl) || null,
+                    imageUrl: realProductImageUrl(color.imageUrl),
                   }))
                   .filter(color => color.label)
               : []
@@ -7931,7 +10464,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             skuTable: parsedSkuRows,
             colors: colorsEarly,
             sizesByColor: sizesByColorEarly,
-            costPrice: adjustedCostMin,
+            costPrice: adjustedTypicalCost,
             price: finalPriceMin,
             stock: strategyStock,
           })
@@ -7940,11 +10473,11 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             text: [productName, productDetail, sourceCategoryName].filter(Boolean).join(' '),
             categoryNames: [...(matchedSecondaryCategoryNames || []), sourceCategoryName],
           })
-          const skuTable: PreviewSkuTableRow[] = baseSkuRows.map(
+          let skuTable: PreviewSkuTableRow[] = baseSkuRows.map(
             (row, index) => {
               // 源站价扣减后再乘类目系数；无独立价时回退到商品级源价
-              const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawPriceMin
-              const nextCost = Math.max(0, roundCurrency(sourceCost - costDeductionUsd))
+              const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawTypicalCost
+              const nextCost = Math.max(0, roundCurrency(sourceCost))
               const nextPrice = roundCurrency(nextCost * resolvedCoefficient)
               return {
                 skuKey: normalizeText(row.skuKey) || `sku-${index + 1}`,
@@ -7954,19 +10487,13 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
                 stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
                 weightGrams: toNumberOrNull(row.weightGrams) ?? fallbackWeightGrams,
                 // 无独立色图时保持空，待运营在待上传区补填；禁止回填主图冒充色图
-                imageUrl: normalizeText(row.imageUrl) || null,
-                attributes:
-                  Array.isArray(row.attributes) && row.attributes.length > 0
-                    ? row.attributes.map(attr => ({
-                        name: normalizeText(attr.name) || '规格',
-                        value: normalizeText(attr.value) || '默认',
-                      }))
-                    : parseSpecAttributes(row.spec || '默认规格'),
+                imageUrl: realProductImageUrl(row.imageUrl),
+                attributes: sanitizeImportedSkuAttributes(row.attributes, row.spec || '默认规格'),
               }
             },
           )
 
-          const colors =
+          let colors =
             colorsEarly.length > 0
               ? colorsEarly
               : parsedSkuRows.length > 0
@@ -7978,26 +10505,29 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
                     ),
                   ).map(label => ({
                     label,
-                    imageUrl:
+                    imageUrl: realProductImageUrl(
                       skuTable.find(sku => sku.attributes?.some(attr => attr.name === '颜色' && attr.value === label))
-                        ?.imageUrl || null,
+                        ?.imageUrl,
+                    ),
                   }))
                 : []
 
-          const sizesByColor: Record<string, string[]> = { ...sizesByColorEarly }
+          let sizesByColor: Record<string, string[]> = { ...sizesByColorEarly }
 
           if (Object.keys(sizesByColor).length === 0) {
             for (const sku of skuTable) {
               const color = sku.attributes?.find(attr => attr.name === '颜色')?.value
               const size = sku.attributes?.find(attr => attr.name === '尺码')?.value
-              if (!color || !size) continue
+              if (!color || !size || isProductTypeSpecValue(size)) continue
               const list = sizesByColor[color] || []
               if (!list.includes(size)) list.push(size)
               sizesByColor[color] = list
             }
           }
 
-          const specSummary: SpecSummaryJson[] =
+          // 1688 色图必须跟源站 skuProps / props_img 一致，禁止用相册聚类改色换图
+
+          let specSummary: SpecSummaryJson[] = sanitizeSpecSummaryJson(
             Array.isArray(fetched.specSummary) && fetched.specSummary.length > 0
               ? fetched.specSummary
               : [
@@ -8015,9 +10545,10 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
                     )
                     return sizeValues.length ? [{ name: '尺码', values: sizeValues }] : []
                   })(),
-                ]
+                ],
+          )
           if (specSummary.length === 0) {
-            specSummary.push({ name: '规格', values: ['默认规格'] })
+            specSummary = [{ name: '规格', values: ['默认规格'] }]
           }
 
           const skuPrices = skuTable
@@ -8057,7 +10588,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               supplierName,
               mainImageUrl,
               parsedMainImageUrl: mainImageUrl,
-              costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? adjustedCostMin,
+              costPrice: adjustedTypicalCost,
               weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? fallbackWeightGrams,
               sourceCategoryName,
               coefficient: resolvedCoefficient,
@@ -8075,7 +10606,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
               parsedPriceMin: rawPriceMin,
               parsedPriceMax: rawPriceMax,
               specSummaryJson: specSummary as any,
-              previewDataJson: previewData as any,
+              previewDataJson: withPersistedReviewMark(previewData, (item as { previewDataJson?: unknown }).previewDataJson) as any,
               fetchStatus: 'COMPLETED' as any,
               failureReason: null,
               fetchFinishedAt: new Date()
@@ -8210,37 +10741,62 @@ export const updateTaskItemPreview = requireRole([UserRole.ADMIN])(
 
 export const updatePendingImportGallery = requireRole([UserRole.ADMIN])(
   withResult(async (input: UpdatePendingImportGalleryInput): Promise<void> => {
-    const item = await prisma.importtaskitem.findUnique({
-      where: { id: input.itemId },
-      include: { importTask: true }
-    })
-
-    if (!item) throw new Error('未找到待上传明细')
-    if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
-
     const galleryUrls = Array.from(new Set((input.galleryUrls || []).map(url => String(url || '').trim()).filter(Boolean)))
     const mainImageUrl = (input.mainImageUrl || galleryUrls[0] || '').trim()
     if (!mainImageUrl) throw new Error('至少保留一张主图')
-
-    const currentPreview = (item.previewDataJson as unknown as PreviewDataJson) || {}
-    await prisma.importtaskitem.update({
+    const row = await prisma.importtaskitem.findUnique({
       where: { id: input.itemId },
-      data: {
-        mainImageUrl,
-        parsedMainImageUrl: mainImageUrl,
-        previewDataJson: {
-          ...currentPreview,
-          mainImageUrl,
-          detailImages: galleryUrls
-        } as any,
-        isSelected: true
-      }
+      select: { id: true, isPublished: true },
     })
+    if (!row) throw new Error('未找到待上传明细')
+    if (row.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+    if (galleryUrls.length <= 1) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE importtaskitem
+         SET mainImageUrl = ?,
+             parsedMainImageUrl = ?
+         WHERE id = ? AND COALESCE(isPublished, 0) = 0`,
+        mainImageUrl,
+        mainImageUrl,
+        row.id,
+      )
+      return
+    }
+    await prisma.$executeRawUnsafe(
+      `UPDATE importtaskitem
+       SET mainImageUrl = ?,
+           parsedMainImageUrl = ?,
+           operatorGalleryJson = ?
+       WHERE id = ? AND COALESCE(isPublished, 0) = 0`,
+      mainImageUrl,
+      mainImageUrl,
+      JSON.stringify(galleryUrls),
+      row.id,
+    )
   })
 )
 
 export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
   withResult(async (input: InlineUpdatePendingImportItemFieldInput): Promise<void> => {
+    if (input.field === 'product_name') {
+      const nextName = String(input.value || '').trim()
+      if (!nextName) throw new Error('商品名称不能为空')
+      const row = await prisma.importtaskitem.findUnique({
+        where: { id: input.itemId },
+        select: { id: true, isPublished: true },
+      })
+      if (!row) throw new Error('未找到待上传明细')
+      if (row.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+      await prisma.$executeRawUnsafe(
+        `UPDATE importtaskitem
+         SET parsedName = ?
+         WHERE id = ? AND COALESCE(isPublished, 0) = 0`,
+        nextName,
+        row.id,
+      )
+      return
+    }
+
     const item = await prisma.importtaskitem.findUnique({
       where: { id: input.itemId },
       include: { importTask: true }
@@ -8257,27 +10813,20 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
     const data: Record<string, any> = {}
 
     switch (input.field) {
-      case 'product_name': {
-        if (!rawValue) throw new Error('商品名称不能为空')
-        // importtaskitem 只有 parsedName，没有 productName 字段
-        data.parsedName = rawValue
-        const namePreview = ((item.previewDataJson || {}) as PreviewDataJson)
-        const nameEn = await resolveEnglishProductTitle(String(rawValue))
-        const nameEs = await resolveSpanishProductTitle(String(rawValue), null, nameEn)
-        data.previewDataJson = {
-          ...namePreview,
-          name: String(rawValue),
-          nameEn,
-          nameEs,
-        } as any
-        break
-      }
       case 'product_detail':
         data.productDetail = String(rawValue || '')
         break
-      case 'sku_summary_text':
-        data.skuSummaryText = String(rawValue || '')
+      case 'sku_summary_text': {
+        const text = String(rawValue || '')
+        data.skuSummaryText = text
+        const drafts = resolvePendingSkuDrafts(item)
+        const entries = parsePendingSkuSummaryEntries(text)
+        if (drafts.length && entries.length) {
+          await persistPendingImportSkuDrafts(item, applyPendingSkuSummaryToDrafts(drafts, entries))
+          return
+        }
         break
+      }
       case 'supplier_name':
         data.supplierName = String(rawValue || '') || null
         break
@@ -8379,18 +10928,27 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
           ? numericValue
           : toNumberOrNull(item.costPrice)
       const categoryMap = await loadImportPricingCategories(prisma)
+      const currentPreviewForPrice = ((item.previewDataJson || {}) as PreviewDataJson)
+      const keepEditedCoefficient =
+        input.field === 'target_category_id' &&
+        currentPreviewForPrice.coefficientCalibrated === true &&
+        (toNumberOrNull(item.coefficient) || 0) > 0
       const coefficient =
         input.field === 'coefficient'
           ? Number(numericValue)
-          : input.field === 'target_category_id'
-            ? resolveImportCategoryCoefficient(categoryMap, nextCategoryId)
-            : resolvePendingItemCoefficient(item, categoryMap)
+          : keepEditedCoefficient
+            ? Number(item.coefficient)
+            : input.field === 'target_category_id'
+              ? resolveImportCategoryCoefficient(categoryMap, nextCategoryId)
+              : resolvePendingItemCoefficient(item, categoryMap)
       const exchangeRate = await getGlobalExchangeRate(prisma)
       const nextDrafts = recalculatePendingSkuPrices(
         resolvePendingSkuDrafts(item),
         nextCostPrice,
         coefficient,
-        { overwriteCost: input.field === 'cost_price' },
+        input.field === 'cost_price'
+          ? { replaceMatchingCost: toNumberOrNull(item.costPrice) }
+          : undefined,
       )
       const priceSummary = summarizePendingSkuPrices(nextDrafts, exchangeRate)
       const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
@@ -8405,6 +10963,8 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
         categoryId: nextCategoryId || undefined,
         price: priceSummary.cnyMin ?? currentPreview.price,
         skuTable: toPendingSkuTablePayload(nextDrafts),
+        ...(input.field === 'coefficient' ? { coefficientCalibrated: true } : {}),
+        ...(input.field === 'target_category_id' && nextCategoryId ? { categoryCalibrated: true } : {}),
       } as any
     }
 
@@ -8439,6 +10999,48 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
       data
     })
   })
+)
+
+/** 待上传爱心审核标：只改 previewDataJson.reviewed，不改货物状态、不发布。 */
+export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    itemIds: string[]
+    reviewed: boolean
+  }): Promise<{ success_count: number; fail_count: number }> => {
+    const itemIds = Array.from(
+      new Set((input.itemIds || []).map((id) => String(id || '').trim()).filter(Boolean)),
+    )
+    if (!itemIds.length) {
+      return { success_count: 0, fail_count: 0 }
+    }
+
+    const items = await prisma.importtaskitem.findMany({
+      where: { id: { in: itemIds }, isPublished: false },
+      select: { id: true, previewDataJson: true },
+    })
+    const reviewedAt = new Date().toISOString()
+    let success = 0
+    let fail = Math.max(0, itemIds.length - items.length)
+
+    for (const item of items) {
+      try {
+        const preview = ((item.previewDataJson || {}) as PreviewDataJson)
+        const nextPreview = input.reviewed
+          ? { ...preview, reviewed: true, reviewedAt }
+          : stripReviewMark(preview)
+        await prisma.importtaskitem.update({
+          where: { id: item.id },
+          data: { previewDataJson: nextPreview as any },
+        })
+        success += 1
+      } catch (error) {
+        console.error('[setPendingImportReviewMark] failed', item.id, error)
+        fail += 1
+      }
+    }
+
+    return { success_count: success, fail_count: fail }
+  }),
 )
 
 /**
@@ -8504,6 +11106,7 @@ export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
                 ...currentPreview,
                 categoryId: nextCategoryId || undefined,
                 price: priceSummary.cnyMin ?? currentPreview.price,
+                coefficientCalibrated: true,
                 skuTable: nextDrafts.map((sku) => ({
                   skuKey: sku.sku_key,
                   spec: sku.spec_text,
@@ -8566,97 +11169,152 @@ export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
 )
 
 export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
-  withResult(async (input: InlineUpdatePendingImportSkuFieldInput): Promise<void> => {
-    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+  withResult(async (input: InlineUpdatePendingImportSkuFieldInput): Promise<MutatePendingImportSkusOutput> => {
+    const clientSkus = Array.isArray(input.skus)
+      ? input.skus
+          .map((sku) => ({
+            sku_key: String(sku.sku_key || '').trim(),
+            spec_text: String(sku.spec_text || '').trim(),
+            cost_price: toNumberOrNull(sku.cost_price),
+            price: toNumberOrNull(sku.price),
+            weight_grams: toNumberOrNull(sku.weight_grams),
+            stock: resolveInitialStock(sku.stock),
+            image_url: String(sku.image_url || '').trim() || null,
+            attributes: Array.isArray(sku.attributes) ? sku.attributes : [],
+          }))
+          .filter((sku) => sku.sku_key)
+      : []
+    if (clientSkus.length > 0) {
+      const row = await prisma.importtaskitem.findUnique({
+        where: { id: input.itemId },
+        select: { id: true, isPublished: true, weightGrams: true },
+      })
+      if (!row) throw new Error('未找到待上传明细')
+      if (row.isPublished) throw new Error('已发布商品不可在待上传区编辑')
+      if (input.field === 'minimum_order_quantity') {
+        const qty = resolveInitialMinOrderQty(input.value)
+        await prisma.importtaskitem.update({
+          where: { id: row.id },
+          data: { minimumOrderQuantity: qty },
+        })
+        return { success: true, item_skus: clientSkus }
+      }
+      const item_skus = await persistPendingImportSkuDrafts(row, clientSkus)
+      return { success: true, item_skus }
+    }
+
+    const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
     if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
 
-    const drafts = resolvePendingSkuDrafts(item)
-    const targetIndex = drafts.findIndex(sku => sku.sku_key === input.skuKey)
-    if (targetIndex < 0) throw new Error('未找到对应 SKU')
+    const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
+    const table = Array.isArray(currentPreview.skuTable) ? currentPreview.skuTable : []
+    const draftsFromTable = pendingSkuDraftsFromSkuTable(item, table)
+    // 双击改规格/颜色/图：按库里 skuTable 原样读写，禁止再展开/合并导致找不到行
+    const drafts = draftsFromTable.length > 0 ? draftsFromTable : resolvePendingSkuDrafts(item)
+    const targetKeys = Array.from(
+      new Set(
+        [input.skuKey, ...(Array.isArray(input.skuKeys) ? input.skuKeys : [])]
+          .map((key) => normalizeText(key))
+          .filter(Boolean),
+      ),
+    )
+    const targetSet = new Set(targetKeys)
+    const matched = drafts.filter((sku) => targetSet.has(normalizeText(sku.sku_key)))
+    if (matched.length === 0) throw new Error('未找到对应 SKU')
 
-    const next = { ...drafts[targetIndex] }
-    if (input.field === 'spec_text') {
-      const specText = String(input.value || '').trim()
-      if (!specText) throw new Error('规格属性不能为空')
-      next.spec_text = specText
-      next.attributes = parseSpecAttributes(specText)
-    } else if (input.field === 'cost_price') {
-      const numericValue = toNumberOrNull(input.value)
-      if (numericValue === null || numericValue < 0) throw new Error('成本价不能小于0')
-      next.cost_price = numericValue
-    } else if (input.field === 'price') {
-      const numericValue = toNumberOrNull(input.value)
-      if (numericValue === null || numericValue < 0) throw new Error('售价不能小于0')
-      next.price = numericValue
-    } else if (input.field === 'weight_grams') {
-      const numericValue = toNumberOrNull(input.value)
-      if (numericValue === null || numericValue <= 0) throw new Error('重量必须大于0')
-      next.weight_grams = numericValue
-    } else if (input.field === 'stock') {
-      const numericValue = toNumberOrNull(input.value)
-      if (numericValue === null || numericValue < 0) throw new Error('库存不能小于0')
-      next.stock = Math.round(numericValue)
-    } else if (input.field === 'image_url') {
-      next.image_url = String(input.value || '').trim() || null
-    } else if (input.field === 'minimum_order_quantity') {
-      // 1688 起订量通常是整单级；在 SKU 行双击编辑时写回父条目
+    if (input.field === 'minimum_order_quantity') {
       const qty = resolveInitialMinOrderQty(input.value)
       await prisma.importtaskitem.update({
         where: { id: item.id },
         data: { minimumOrderQuantity: qty },
       })
-      return
-    } else {
+      return { success: true, item_skus: drafts }
+    }
+
+    const applyField = (source: PendingImportSkuItem): PendingImportSkuItem => {
+      const next = { ...source }
+      if (input.field === 'image_url') {
+        next.image_url = String(input.value || '').trim() || null
+        return next
+      }
+      if (input.field === 'spec_text') {
+        const specText = String(input.value || '').trim()
+        if (!specText) throw new Error('规格属性不能为空')
+        next.spec_text = specText
+        next.attributes = parseSpecAttributes(specText)
+        return next
+      }
+      if (input.field === 'color') {
+        const color = String(input.value || '').trim()
+        if (!color) throw new Error('颜色不能为空')
+        next.attributes = upsertPendingSkuNamedAttribute(next.attributes, '颜色', color)
+        next.spec_text = formatSpecText(next.attributes, next.spec_text || color)
+        return next
+      }
+      if (input.field === 'spec') {
+        const spec = String(input.value || '').trim()
+        if (!spec || isPlaceholderSpecValue(spec)) {
+          next.attributes = (next.attributes || []).filter(
+            (attr) => !PENDING_SPEC_ATTR_NAMES.includes(normalizeText(attr.name)),
+          )
+          next.spec_text = formatSpecText(next.attributes, getColorAttrValue(next) || '')
+        } else if (isColorNameSpecValue(spec)) {
+          next.attributes = upsertPendingSkuNamedAttribute(next.attributes, '颜色', spec)
+          next.attributes = (next.attributes || []).filter(
+            (attr) => !PENDING_SPEC_ATTR_NAMES.includes(normalizeText(attr.name)),
+          )
+          next.spec_text = formatSpecText(next.attributes, spec)
+        } else {
+          next.attributes = upsertPendingSkuSpecAttribute(next.attributes, spec)
+          next.spec_text = formatSpecText(next.attributes, spec)
+        }
+        return next
+      }
+      if (input.field === 'cost_price') {
+        const numericValue = toNumberOrNull(input.value)
+        if (numericValue === null || numericValue < 0) throw new Error('成本价不能小于0')
+        next.cost_price = numericValue
+        return next
+      }
+      if (input.field === 'price') {
+        const numericValue = toNumberOrNull(input.value)
+        if (numericValue === null || numericValue < 0) throw new Error('售价不能小于0')
+        next.price = numericValue
+        return next
+      }
+      if (input.field === 'weight_grams') {
+        const numericValue = toNumberOrNull(input.value)
+        if (numericValue === null || numericValue <= 0) throw new Error('重量必须大于0')
+        next.weight_grams = numericValue
+        return next
+      }
+      if (input.field === 'stock') {
+        const numericValue = toNumberOrNull(input.value)
+        if (numericValue === null || numericValue < 0) throw new Error('库存不能小于0')
+        next.stock = Math.round(numericValue)
+        return next
+      }
       throw new Error('暂不支持的 SKU 字段')
     }
 
-    const targetColor = getColorAttrValue(next)
-    const nextSkus = drafts.map((sku, index) => {
-      if (input.field === 'image_url' && targetColor && getColorAttrValue(sku) === targetColor) {
-        return { ...sku, image_url: next.image_url }
-      }
-      return index === targetIndex ? next : sku
-    })
-    const stocks = nextSkus.map(sku => toNumberOrNull(sku.stock) ?? 0)
-    const currentPreview = ((item.previewDataJson || {}) as PreviewDataJson)
-    const categoryMap = await loadImportPricingCategories(prisma)
-    const coefficient = resolvePendingItemCoefficient(item, categoryMap)
-    const exchangeRate = await getGlobalExchangeRate(prisma)
-    const pricedSkus =
-      input.field === 'cost_price'
-        ? recalculatePendingSkuPrices(nextSkus, toNumberOrNull(item.costPrice), coefficient)
-        : nextSkus
-    const priceSummary = summarizePendingSkuPrices(pricedSkus, exchangeRate)
-
-    await prisma.importtaskitem.update({
-      where: { id: item.id },
-      data: {
-        skuSummaryText: pricedSkus.map(sku => sku.spec_text).join(' | '),
-        costPrice: pricedSkus[0]?.cost_price ?? item.costPrice,
-        weightGrams: pricedSkus[0]?.weight_grams ?? item.weightGrams,
-        availableStock: stocks.reduce((sum, value) => sum + value, 0),
-        coefficient,
-        cnyPriceMin: priceSummary.cnyMin,
-        cnyPriceMax: priceSummary.cnyMax,
-        usdPriceMin: priceSummary.usdMin,
-        usdPriceMax: priceSummary.usdMax,
-        previewDataJson: {
-          ...currentPreview,
-          price: priceSummary.cnyMin ?? currentPreview.price,
-          skuTable: pricedSkus.map(sku => ({
-            skuKey: sku.sku_key,
-            spec: sku.spec_text,
-            costPrice: sku.cost_price,
-            price: sku.price,
-            stock: sku.stock,
-            weightGrams: sku.weight_grams,
-            imageUrl: sku.image_url || undefined,
-            attributes: sku.attributes
-          }))
-        } as any
-      }
-    })
+    let nextSkus = drafts.map((sku) =>
+      targetSet.has(normalizeText(sku.sku_key)) ? applyField(sku) : sku,
+    )
+    if (input.field === 'cost_price') {
+      const categoryMap = await loadImportPricingCategories(prisma)
+      const coefficient = resolvePendingItemCoefficient(item, categoryMap)
+      nextSkus = nextSkus.map((sku) => {
+        if (!targetSet.has(normalizeText(sku.sku_key))) return sku
+        const skuCost = toNumberOrNull(sku.cost_price)
+        return {
+          ...sku,
+          price: skuCost !== null ? roundCurrency(skuCost * coefficient) : sku.price,
+        }
+      })
+    }
+    const item_skus = await persistPendingImportSkuDrafts(item, nextSkus)
+    return { success: true, item_skus }
   })
 )
 
@@ -8677,11 +11335,14 @@ const clonePendingSkuWithColor = (
   nextColor: string,
   existingKeys: Set<string>,
 ): PendingImportSkuItem => {
+  const color = stripSkuCopyLabel(nextColor) || nextColor
   const attributes = (Array.isArray(sku.attributes) ? sku.attributes : []).map((attr) =>
-    attr.name === '颜色' ? { ...attr, value: nextColor } : { ...attr },
+    attr.name === '颜色'
+      ? { ...attr, value: color }
+      : { ...attr, value: stripSkuCopyLabel(attr.value) || attr.value },
   )
   if (!attributes.some((attr) => attr.name === '颜色')) {
-    attributes.unshift({ name: '颜色', value: nextColor })
+    attributes.unshift({ name: '颜色', value: color })
   }
   return {
     ...sku,
@@ -8695,89 +11356,130 @@ const clonePendingSkuWithSpecSuffix = (
   sku: PendingImportSkuItem,
   existingKeys: Set<string>,
 ): PendingImportSkuItem => {
-  const attributes = (Array.isArray(sku.attributes) ? sku.attributes : []).map((attr) => ({ ...attr }))
-  const specAttr = attributes.find(
-    (attr) => attr.name === '规格' || attr.name === '尺码' || attr.name === '尺寸',
-  )
-  if (specAttr) {
-    const base = String(specAttr.value || '默认规格').replace(/\s*副本\d*$/, '').trim() || '默认规格'
-    let next = `${base} 副本`
-    let index = 2
-    while (attributes.some((attr) => attr !== specAttr && attr.value === next)) {
-      next = `${base} 副本${index}`
-      index += 1
-    }
-    specAttr.value = next
-  } else {
-    attributes.push({ name: '规格', value: '默认规格 副本' })
-  }
-  return {
+  const cloned = sanitizePendingSkuCopyLabels({
     ...sku,
+    attributes: (Array.isArray(sku.attributes) ? sku.attributes : []).map((attr) => ({ ...attr })),
+  })
+  return {
+    ...cloned,
     sku_key: allocatePendingSkuKey(existingKeys, sku.sku_key || 'sku'),
-    attributes,
-    spec_text: formatSpecText(attributes, sku.spec_text || '默认规格'),
+    spec_text: formatSpecText(cloned.attributes || [], cloned.spec_text || sku.spec_text || '默认规格'),
   }
 }
 
 const allocateUniqueColorName = (existingColors: Set<string>, sourceColor: string) => {
-  const base = String(sourceColor || '默认颜色').replace(/\s*副本\d*$/, '').trim() || '默认颜色'
-  let next = `${base} 副本`
-  let index = 2
-  while (existingColors.has(next)) {
-    next = `${base} 副本${index}`
-    index += 1
-  }
+  const next = stripSkuCopyLabel(sourceColor) || String(sourceColor || '默认颜色').trim() || '默认颜色'
   existingColors.add(next)
   return next
 }
 
+const ensureUniquePendingSkuKeys = (skus: PendingImportSkuItem[]) => {
+  const seen = new Set<string>()
+  return skus.map((sku, index) => {
+    let key = normalizeText(sku.sku_key) || `sku-${index + 1}`
+    if (seen.has(key)) {
+      key = allocatePendingSkuKey(seen, key)
+    } else {
+      seen.add(key)
+    }
+    return key === sku.sku_key ? sku : { ...sku, sku_key: key }
+  })
+}
+
 const persistPendingImportSkuDrafts = async (item: any, nextSkus: PendingImportSkuItem[]) => {
+  nextSkus = ensureUniquePendingSkuKeys(nextSkus).map((sku) => {
+    const cleaned = sanitizePendingSkuCopyLabels(sku)
+    return {
+      ...cleaned,
+      spec_text: formatSpecText(cleaned.attributes || [], cleaned.spec_text || sku.spec_text || ''),
+    }
+  })
   if (!nextSkus.length) throw new Error('至少保留一个规格行')
   const stocks = nextSkus.map((sku) => toNumberOrNull(sku.stock) ?? 0)
-  const currentPreview = (item.previewDataJson || {}) as PreviewDataJson
-  const categoryMap = await loadImportPricingCategories(prisma)
-  const coefficient = resolveImportCategoryCoefficient(
-    categoryMap,
-    item.targetCategoryId || null,
-  )
-  const exchangeRate = await getGlobalExchangeRate(prisma)
-  const priceSummary = summarizePendingSkuPrices(nextSkus, exchangeRate)
+  const priceSummary = summarizePendingSkuPrices(nextSkus, DEFAULT_USD_EXCHANGE_RATE)
+  const colorMeta = rebuildPendingPreviewColorMeta(nextSkus)
+  const skuTable = nextSkus.map((sku) => ({
+    skuKey: sku.sku_key,
+    spec: sku.spec_text,
+    costPrice: sku.cost_price,
+    price: sku.price,
+    stock: sku.stock,
+    weightGrams: sku.weight_grams,
+    imageUrl: sku.image_url || undefined,
+    attributes: sku.attributes,
+  }))
 
-  await prisma.importtaskitem.update({
-    where: { id: item.id },
-    data: {
-      skuSummaryText: nextSkus.map((sku) => sku.spec_text).join(' | '),
-      costPrice: nextSkus[0]?.cost_price ?? item.costPrice,
-      weightGrams: nextSkus[0]?.weight_grams ?? item.weightGrams,
-      availableStock: stocks.reduce((sum, value) => sum + value, 0),
-      coefficient,
-      cnyPriceMin: priceSummary.cnyMin,
-      cnyPriceMax: priceSummary.cnyMax,
-      usdPriceMin: priceSummary.usdMin,
-      usdPriceMax: priceSummary.usdMax,
-      previewDataJson: {
-        ...currentPreview,
-        price: priceSummary.cnyMin ?? currentPreview.price,
-        skuTable: nextSkus.map((sku) => ({
-          skuKey: sku.sku_key,
-          spec: sku.spec_text,
-          costPrice: sku.cost_price,
-          price: sku.price,
-          stock: sku.stock,
-          weightGrams: sku.weight_grams,
-          imageUrl: sku.image_url || undefined,
-          attributes: sku.attributes,
-        })),
-      } as any,
-    },
-  })
+  await prisma.$executeRawUnsafe(
+    `UPDATE importtaskitem
+     SET skuSummaryText = ?,
+         weightGrams = ?,
+         availableStock = ?,
+         cnyPriceMin = ?,
+         cnyPriceMax = ?,
+         specSummaryJson = CAST(? AS JSON),
+         operatorSkuJson = ?
+     WHERE id = ?`,
+    nextSkus.map((sku) => sku.spec_text).join(' | '),
+    nextSkus[0]?.weight_grams ?? item.weightGrams,
+    stocks.reduce((sum, value) => sum + value, 0),
+    priceSummary.cnyMin,
+    priceSummary.cnyMax,
+    JSON.stringify(colorMeta.specSummaryJson ?? []),
+    JSON.stringify(skuTable),
+    item.id,
+  )
 
   return nextSkus
 }
 
+const loadPendingItemForSkuMutation = async (itemId: string) => {
+  const item = await prisma.importtaskitem.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      isPublished: true,
+      costPrice: true,
+      weightGrams: true,
+      availableStock: true,
+      cnyPriceMin: true,
+      parsedPriceMin: true,
+      skuSummaryText: true,
+      specSummaryJson: true,
+      operatorSkuJson: true,
+    },
+  })
+  if (!item) return null
+  const operatorTable = parseOperatorSkuJson((item as any).operatorSkuJson)
+  if (operatorTable.length > 0) {
+    ;(item as any).previewDataJson = {
+      skuTable: operatorTable.slice(0, 80),
+      operatorSkuTable: true,
+    }
+    return item
+  }
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT
+       JSON_EXTRACT(previewDataJson, '$.skuTable[*].skuKey') AS skuKeys,
+       JSON_EXTRACT(previewDataJson, '$.skuTable[*].spec') AS skuSpecs,
+       JSON_EXTRACT(previewDataJson, '$.skuTable[*].costPrice') AS skuCosts,
+       JSON_EXTRACT(previewDataJson, '$.skuTable[*].price') AS skuPrices,
+       JSON_EXTRACT(previewDataJson, '$.skuTable[*].imageUrl') AS skuImages,
+       JSON_EXTRACT(previewDataJson, '$.skuTable[*].attributes') AS skuAttrs
+     FROM importtaskitem
+     WHERE id = ?`,
+    itemId,
+  )
+  const row = rows[0] || {}
+  ;(item as any).previewDataJson = {
+    skuTable: zipCompactSkuTable(row),
+    operatorSkuTable: true,
+  }
+  return item
+}
+
 export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
   withResult(async (input: DuplicatePendingImportSkuInput): Promise<MutatePendingImportSkusOutput> => {
-    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
     if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
 
@@ -8797,7 +11499,7 @@ export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
 
 export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
   withResult(async (input: DeletePendingImportSkuInput): Promise<MutatePendingImportSkusOutput> => {
-    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
     if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
 
@@ -8813,13 +11515,13 @@ export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
 
 export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
   withResult(async (input: DuplicatePendingImportSkuColorGroupInput): Promise<MutatePendingImportSkusOutput> => {
-    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
     if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
 
     const drafts = resolvePendingSkuDrafts(item)
     const color = String(input.color || '').trim() || '默认颜色'
-    const sourceSkus = drafts.filter((sku) => getColorAttrValue(sku) === color)
+    const sourceSkus = drafts.filter((sku) => pendingSkuMatchesColor(sku, color))
     if (!sourceSkus.length) throw new Error('未找到对应颜色行')
 
     const existingColors = new Set(drafts.map((sku) => getColorAttrValue(sku)))
@@ -8839,13 +11541,13 @@ export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])
 
 export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
   withResult(async (input: DeletePendingImportSkuColorGroupInput): Promise<MutatePendingImportSkusOutput> => {
-    const item = await prisma.importtaskitem.findUnique({ where: { id: input.itemId } })
+    const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
     if (item.isPublished) throw new Error('已发布商品不可在待上传区编辑')
 
     const drafts = resolvePendingSkuDrafts(item)
     const color = String(input.color || '').trim() || '默认颜色'
-    const remaining = drafts.filter((sku) => getColorAttrValue(sku) !== color)
+    const remaining = drafts.filter((sku) => !pendingSkuMatchesColor(sku, color))
     if (remaining.length === drafts.length) throw new Error('未找到对应颜色行')
     if (!remaining.length) throw new Error('至少保留一个颜色行')
 
@@ -8861,11 +11563,12 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
     }
 
     // Hoist shared lookups once — previously reloaded inside every item transaction.
-    const [secondaryCategories, exchangeRate, categoryMap, brandRules] = await Promise.all([
+    const [secondaryCategories, exchangeRate, categoryMap, brandRules, filterCategories] = await Promise.all([
       loadAutoMatchSecondaryCategories(prisma),
       getGlobalExchangeRate(prisma),
       loadImportPricingCategories(prisma),
       loadBrandAliasRules(),
+      loadFilterCategoriesFromDb(prisma),
     ])
 
     let success = 0
@@ -8881,19 +11584,44 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
       // 这样缩短事务时长、降低 SPU 撞号与连接占用；采集阶段则完全不翻译。
       let preNameEn = ''
       let preNameEs = ''
+      let resolvedPublishName = ''
       try {
         const pre = await prisma.importtaskitem.findUnique({
           where: { id: itemId },
-          select: { parsedName: true, previewDataJson: true },
+          select: { parsedName: true, previewDataJson: true, mainImageUrl: true, parsedMainImageUrl: true, sourceUrl: true },
         })
-        const preName = applyBrandAliases(normalizeText(pre?.parsedName) || '', brandRules)
         const prePreview = (pre?.previewDataJson as PreviewDataJson | null) || {}
-        preNameEn =
-          String(prePreview.nameEn || '').trim() ||
-          (await resolveEnglishProductTitle(preName))
-        preNameEs =
-          String(prePreview.nameEs || '').trim() ||
-          (await resolveSpanishProductTitle(preName, null, preNameEn))
+        resolvedPublishName = applyBrandAliases(normalizeText(pre?.parsedName) || '', brandRules)
+        if (isYupooImportSourceUrl(pre?.sourceUrl)) {
+          const imageUrls = [
+            pre?.mainImageUrl,
+            pre?.parsedMainImageUrl,
+            ...(Array.isArray(prePreview.detailImages) ? prePreview.detailImages : []),
+          ]
+          let publishBrand = prePreview.backdropBrand || (await detectBrandFromBackdropUrls(imageUrls))
+          const weakTitle = isWeakProductTitle(resolvedPublishName)
+          const visionGuess =
+            !publishBrand || weakTitle ? await describeProductFromBackdropUrls(imageUrls) : null
+          publishBrand = publishBrand || visionGuess?.brand || null
+          const inferredType = inferProductTypeLabel(
+            resolvedPublishName,
+            prePreview.shortDescription,
+            visionGuess?.category,
+            visionGuess?.titleZh,
+          )
+          resolvedPublishName = applyBrandAliases(
+            composeImportProductTitle({
+              rawTitle: resolvedPublishName,
+              brand: publishBrand,
+              typeZh: inferredType?.labelZh || null,
+              visionTitle: visionGuess?.titleZh || null,
+            }) || resolvedPublishName,
+            brandRules,
+          )
+        }
+        const preName = resolvedPublishName
+        preNameEn = await resolveEnglishProductTitle(preName, prePreview.nameEn)
+        preNameEs = await resolveSpanishProductTitle(preName, prePreview.nameEs, preNameEn)
       } catch {
         // 预翻译失败不阻断上架：事务内仍有兜底翻译/字典回落
       }
@@ -8920,7 +11648,17 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             throw new Error('该商品已发布')
           }
           if (item.isPublished) throw new Error('该商品已发布')
-          const pendingSkusForReadiness = resolvePendingSkuDrafts(item)
+          const operatorTable = parseOperatorSkuJson((item as any).operatorSkuJson)
+          const previewTable = (
+            operatorTable.length > 0
+              ? operatorTable
+              : Array.isArray((item.previewDataJson as PreviewDataJson | null)?.skuTable)
+                ? ((item.previewDataJson as PreviewDataJson).skuTable as PreviewSkuTableRow[])
+                : []
+          ) as PreviewSkuTableRow[]
+          const tableDrafts = reclaimMisplacedColorSpecs(pendingSkuDraftsFromSkuTable(item, previewTable))
+          const pendingSkusForReadiness =
+            tableDrafts.length >= 2 ? tableDrafts : reclaimMisplacedColorSpecs(resolvePendingSkuDrafts(item))
           const readinessSnapshot = {
             fetchStatus: item.fetchStatus,
             isPublished: item.isPublished,
@@ -8956,16 +11694,19 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
 
           // 品牌归一：把卖家暗语（蔻C/蔻家/古驰/LV…）替换成标准品牌名，
           // 写入商品名与后续 EN/ES 翻译都基于归一化后的标题。
-          const productName = applyBrandAliases(item.parsedName || '', brandRules)
+          const productName = applyBrandAliases(resolvedPublishName || item.parsedName || '', brandRules)
           const mainImageUrl = item.mainImageUrl || item.parsedMainImageUrl || ''
           const previewData = (item.previewDataJson as PreviewDataJson | null) || {}
           const previewMatchedIds = Array.from(
             new Set((previewData.matchedCategoryIds || []).filter(Boolean)),
           )
           const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
-          // 已一键校准（或弹窗保存过类目）：上架信任 target + matched，不再按标题重扫覆盖
+          // 已一键校准 / 待上传手改类目或系数：上架信任现有主类目与系数，不再按标题重扫覆盖
+          const operatorLockedCategory = previewData.categoryCalibrated === true
+          const operatorLockedCoefficient = previewData.coefficientCalibrated === true
           const trustCalibratedCategories =
-            previewData.categoryCalibrated === true ||
+            operatorLockedCategory ||
+            operatorLockedCoefficient ||
             (Boolean(String(item.targetCategoryId || '').trim()) && previewMatchedIds.length > 0)
 
           let rematchedSecondaryCategories = [] as typeof secondaryCategories
@@ -9041,6 +11782,12 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
                 secondaryById,
               ) || ''
           }
+          autoMatchedCategoryIds = mergeFilterCategoryIdsFromTitle(
+            productName,
+            autoMatchedCategoryIds,
+            filterCategories,
+            buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription),
+          )
           if (!selectedCategoryId) {
             throw new Error('请选择手提包等真实一/二级类目（品牌货架不能作为主类目）')
           }
@@ -9064,13 +11811,36 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           linkedCategoryIds = await pruneNoBrandCatchAllLinks(tx, linkedCategoryIds, {
             hasRealBrand: Boolean(brandCategoryId),
           })
-          const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, categoryId)
+          const itemCoefficient = toNumberOrNull(item.coefficient)
+          const keepOperatorCoefficient =
+            (operatorLockedCategory || operatorLockedCoefficient) &&
+            itemCoefficient != null &&
+            itemCoefficient > 0
+          const resolvedCoefficient = keepOperatorCoefficient
+            ? itemCoefficient
+            : resolveImportCategoryCoefficient(categoryMap, categoryId)
           const baseCostPrice = toNumberOrNull(item.costPrice)
-          const pendingSkus = recalculatePendingSkuPrices(
-            pendingSkusForReadiness,
-            baseCostPrice,
-            resolvedCoefficient,
-          )
+          const pricedDrafts =
+            operatorLockedCategory || operatorLockedCoefficient
+              ? pendingSkusForReadiness
+              : recalculatePendingSkuPrices(
+                  pendingSkusForReadiness,
+                  baseCostPrice,
+                  resolvedCoefficient,
+                )
+          const userLockedColors = pricedDrafts.some((sku) => isManualLockedColor(getColorAttrValue(sku)))
+          const pendingSkus =
+            tableDrafts.length >= 2 || userLockedColors
+              ? pricedDrafts.map((sku) => dropColorNamedSizeAttributes(sku))
+              : await promoteDistinctSkuImagesToColors({
+                  skus: pricedDrafts,
+                  sourceUrl: item.sourceUrl,
+                  images: [
+                    mainImageUrl,
+                    ...((Array.isArray(previewData.detailImages) ? previewData.detailImages : []).filter(Boolean)),
+                  ],
+                  title: productName,
+                })
           const priceSummary = summarizePendingSkuPrices(pendingSkus, exchangeRate)
           const price = priceSummary.cnyMin ?? priceSummary.cnyMax ?? toNumberOrNull((item.previewDataJson as any)?.price)
 
@@ -9097,23 +11867,27 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             ? ((previewData as any).featureAttributes as Array<{ key: string; value: string }>)
             : []
           const parameterJson = buildParameterJsonFromAttrs(featureAttrs)
+          const operatorGallery = parseOperatorGalleryJson((item as any).operatorGalleryJson)
           const galleryUrls = Array.from(new Set([
-            mainImageUrl,
-            ...((Array.isArray(previewData.detailImages) ? previewData.detailImages : []).filter(Boolean))
+            ...(operatorGallery.length > 0 ? operatorGallery : [
+              mainImageUrl,
+              ...((Array.isArray(previewData.detailImages) ? previewData.detailImages : []).filter(Boolean)),
+            ]),
           ].filter(Boolean)))
           // 1688 / 表格发布共用 createProductRecord，但各自独立建 SPU：
           // - 1688：每条 pending item（= 每条链接）→ 一个新父商品，绝不按标题/图/货号合并
           // - 表格：合并已在 createProductsFromTable 完成，此处一对一发布
           const creationSource = resolvePendingCreationSource(item.sourceUrl)
-          // 优先用事务外预翻译结果；仅当预翻译为空时才在事务内兜底翻译（极少发生）
-          const nameEn =
-            String(previewData.nameEn || '').trim() ||
-            preNameEn ||
-            (await resolveEnglishProductTitle(productName))
-          const nameEs =
-            String(previewData.nameEs || '').trim() ||
-            preNameEs ||
-            (await resolveSpanishProductTitle(productName, null, nameEn))
+          // 预翻译结果走 resolve*：截短的缓存 EN/ES 会按后台标题重新翻译
+          const nameEn = await resolveEnglishProductTitle(
+            productName,
+            String(previewData.nameEn || '').trim() || preNameEn,
+          )
+          const nameEs = await resolveSpanishProductTitle(
+            productName,
+            String(previewData.nameEs || '').trim() || preNameEs,
+            nameEn,
+          )
           const newProduct = await createProductRecord(tx, {
             categoryId,
             name: productName,
@@ -9133,7 +11907,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             goodsStatus: 'ACTIVE',
             detailText: item.productDetail || null,
             parameterJson,
-            priceCoefficient: null,
+            priceCoefficient: keepOperatorCoefficient ? itemCoefficient : null,
             minOrderQty: resolveInitialMinOrderQty(item.minimumOrderQuantity),
             skuSummaryText: item.skuSummaryText || null,
             skus: pendingSkus,
@@ -9263,7 +12037,6 @@ const applyReparsed1688PreviewToItem = async (params: {
 }) => {
   const { item, fetched, categoryMap, secondaryCategories, exchangeRate } = params
   const sourceUrl = item.sourceUrl
-  const costDeductionUsd = item.importTask.markupRate ? Number(item.importTask.markupRate) : 0
   const strategyStock =
     toNumberOrNull((item.importTask.stockStrategyJson as StockStrategyJson | null)?.stock) ??
     toNumberOrNull(item.availableStock) ??
@@ -9310,30 +12083,37 @@ const applyReparsed1688PreviewToItem = async (params: {
 
   const rawPriceMin = fetched.priceMin ?? toNumberOrNull(item.costPrice) ?? 50
   const rawPriceMax = fetched.priceMax ?? rawPriceMin
-  const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin - costDeductionUsd))
-  const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax - costDeductionUsd))
-  const finalPriceMin = roundCurrency(adjustedCostMin * resolvedCoefficient)
+  const rawTypicalCost = resolveFetchedOfferCost(fetched, rawPriceMin) ?? rawPriceMin
+  const adjustedTypicalCost = Math.max(0, roundCurrency(rawTypicalCost))
+  const adjustedCostMin = Math.max(0, roundCurrency(rawPriceMin))
+  const adjustedCostMax = Math.max(adjustedCostMin, roundCurrency(rawPriceMax))
+  const finalPriceMin = roundCurrency(adjustedTypicalCost * resolvedCoefficient)
   const finalPriceMax = roundCurrency(adjustedCostMax * resolvedCoefficient)
 
   const mainImageUrl =
-    fetched.mainImageUrl ||
-    (!isPlaceholderPendingImage(item.mainImageUrl || item.parsedMainImageUrl)
-      ? (item.mainImageUrl || item.parsedMainImageUrl)
-      : null)
+    realProductImageUrl(fetched.mainImageUrl) ||
+    realProductImageUrl(item.mainImageUrl || item.parsedMainImageUrl)
   // Successful reparse must replace the gallery — merging kept the old flood of duplicates.
-  const detailImages = hasRealParse
-    ? dedupeImageUrls([
-        ...(mainImageUrl ? [mainImageUrl] : []),
-        ...(Array.isArray(fetched.detailImages) ? fetched.detailImages : []),
-      ]).slice(0, 12)
-    : dedupeImageUrls([
-        mainImageUrl,
-        ...((Array.isArray(currentPreview.detailImages) ? currentPreview.detailImages : []) as string[]),
-      ]).slice(0, 12)
+  const detailImages = (
+    hasRealParse
+      ? dedupeImageUrls([
+          ...(mainImageUrl ? [mainImageUrl] : []),
+          ...(Array.isArray(fetched.detailImages) ? fetched.detailImages : []),
+        ])
+      : dedupeImageUrls([
+          mainImageUrl,
+          ...((Array.isArray(currentPreview.detailImages) ? currentPreview.detailImages : []) as string[]),
+        ])
+  )
+    .map((url) => realProductImageUrl(url))
+    .filter((url): url is string => Boolean(url))
+    .slice(0, 12)
 
-  const supplierName =
-    fetched.supplierName ||
-    (isPlaceholderPendingName(item.parsedName) ? null : item.supplierName)
+  const supplierName = resolveBatchSupplierName(
+    item.importTask,
+    fetched.supplierName,
+    isPlaceholderPendingName(item.parsedName) ? null : item.supplierName,
+  )
   const sourceCategoryName = fetched.sourceCategoryName || item.sourceCategoryName || null
 
   const parsedSkuRows = Array.isArray(fetched.skuTable) ? fetched.skuTable : []
@@ -9342,11 +12122,14 @@ const applyReparsed1688PreviewToItem = async (params: {
       ? fetched.colors
           .map(color => ({
             label: normalizeText(color.label),
-            imageUrl: normalizeText(color.imageUrl) || null,
+            imageUrl: realProductImageUrl(color.imageUrl),
           }))
           .filter(color => color.label)
       : Array.isArray(currentPreview.colors)
-        ? currentPreview.colors
+        ? currentPreview.colors.map((color) => ({
+            ...color,
+            imageUrl: realProductImageUrl(color.imageUrl),
+          }))
         : []
   const sizesByColorEarly =
     fetched.sizesByColor && typeof fetched.sizesByColor === 'object' && Object.keys(fetched.sizesByColor).length > 0
@@ -9368,7 +12151,7 @@ const applyReparsed1688PreviewToItem = async (params: {
         skuTable: parsedSkuRows,
         colors: colorsEarly,
         sizesByColor: sizesByColorEarly,
-        costPrice: adjustedCostMin,
+        costPrice: adjustedTypicalCost,
         price: finalPriceMin,
         stock: strategyStock,
         weightGrams: toNumberOrNull(item.weightGrams),
@@ -9379,9 +12162,9 @@ const applyReparsed1688PreviewToItem = async (params: {
     text: [productName, productDetail, sourceCategoryName].filter(Boolean).join(' '),
     categoryNames: [...(matchedSecondaryCategoryNames || []), sourceCategoryName],
   })
-  const skuTable: PreviewSkuTableRow[] = sourceSkuRows.map((row, index) => {
-    const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawPriceMin
-    const nextCost = Math.max(0, roundCurrency(sourceCost - costDeductionUsd))
+  let skuTable: PreviewSkuTableRow[] = sourceSkuRows.map((row, index) => {
+    const sourceCost = toNumberOrNull(row.costPrice) ?? toNumberOrNull(row.price) ?? rawTypicalCost
+    const nextCost = Math.max(0, roundCurrency(sourceCost))
     const nextPrice = roundCurrency(nextCost * resolvedCoefficient)
     return {
       skuKey: normalizeText(row.skuKey) || `sku-${index + 1}`,
@@ -9390,18 +12173,12 @@ const applyReparsed1688PreviewToItem = async (params: {
       price: nextPrice,
       stock: resolveInitialStock(toNumberOrNull(row.stock) ?? strategyStock),
       weightGrams: toNumberOrNull(row.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? fallbackWeightGrams,
-      imageUrl: normalizeText(row.imageUrl) || null,
-      attributes:
-        Array.isArray(row.attributes) && row.attributes.length > 0
-          ? row.attributes.map(attr => ({
-              name: normalizeText(attr.name) || '规格',
-              value: normalizeText(attr.value) || '默认',
-            }))
-          : parseSpecAttributes(row.spec || '默认规格'),
+      imageUrl: realProductImageUrl(row.imageUrl),
+      attributes: sanitizeImportedSkuAttributes(row.attributes, row.spec || '默认规格'),
     }
   })
 
-  const colors =
+  let colors =
     Array.isArray(fetched.colors) && fetched.colors.length > 0
       ? fetched.colors
           .map(color => ({
@@ -9428,20 +12205,22 @@ const applyReparsed1688PreviewToItem = async (params: {
             ? currentPreview.colors
             : []
 
-  const sizesByColor: Record<string, string[]> = { ...sizesByColorEarly }
+  let sizesByColor: Record<string, string[]> = { ...sizesByColorEarly }
 
   if (Object.keys(sizesByColor).length === 0) {
     for (const sku of skuTable) {
       const color = sku.attributes?.find(attr => attr.name === '颜色')?.value
       const size = sku.attributes?.find(attr => attr.name === '尺码')?.value
-      if (!color || !size) continue
+      if (!color || !size || isProductTypeSpecValue(size)) continue
       const list = sizesByColor[color] || []
       if (!list.includes(size)) list.push(size)
       sizesByColor[color] = list
     }
   }
 
-  const specSummary: SpecSummaryJson[] =
+  // 1688 重新解析同样保持源站 SKU 色图，不用相册聚类覆盖
+
+  let specSummary: SpecSummaryJson[] = sanitizeSpecSummaryJson(
     Array.isArray(fetched.specSummary) && fetched.specSummary.length > 0
       ? fetched.specSummary
       : [
@@ -9459,9 +12238,10 @@ const applyReparsed1688PreviewToItem = async (params: {
             )
             return sizeValues.length ? [{ name: '尺码', values: sizeValues }] : []
           })(),
-        ]
+        ],
+  )
   if (specSummary.length === 0) {
-    specSummary.push({ name: '规格', values: ['默认规格'] })
+    specSummary = [{ name: '规格', values: ['默认规格'] }]
   }
 
   const skuPrices = skuTable
@@ -9504,7 +12284,7 @@ const applyReparsed1688PreviewToItem = async (params: {
       supplierName,
       mainImageUrl,
       parsedMainImageUrl: mainImageUrl,
-      costPrice: toNumberOrNull(skuTable[0]?.costPrice) ?? adjustedCostMin,
+      costPrice: adjustedTypicalCost,
       weightGrams: toNumberOrNull(skuTable[0]?.weightGrams) ?? toNumberOrNull(item.weightGrams) ?? fallbackWeightGrams,
       sourceCategoryName,
       coefficient: resolvedCoefficient,
@@ -9524,7 +12304,7 @@ const applyReparsed1688PreviewToItem = async (params: {
       parsedPriceMin: rawPriceMin,
       parsedPriceMax: rawPriceMax,
       specSummaryJson: specSummary as any,
-      previewDataJson: previewData as any,
+      previewDataJson: withPersistedReviewMark(previewData, currentPreview) as any,
       fetchStatus: 'COMPLETED' as any,
       failureReason: hasRealParse
         ? null
@@ -9549,6 +12329,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
     }
 
     const itemIds = Array.from(new Set(input.itemIds.filter(Boolean)))
+    if (input.yupooPassword) persistYupooPassword(input.yupooPassword)
     const jobLabel = `reparse:${itemIds.length}`
     acquireParseJob(jobLabel, itemIds.length)
 
@@ -9589,11 +12370,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
         const exchangeRate = await getGlobalExchangeRate(prisma)
         const batchMode = itemIds.length > 3
         let consecutiveRisk = 0
-        if (batchMode && !is1688RiskStormActive()) {
-          const cookie = resolve1688Cookie()
-          if (cookie) await bootstrap1688MtopCookies(cookie).catch(() => cookie)
-          await sleep(itemIds.length > 10 ? 5_000 : 1_200)
-        }
+        let did1688Warmup = false
 
         for (let index = 0; index < itemIds.length; index += 1) {
           if (isParseJobCancelled()) {
@@ -9617,6 +12394,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
           }
 
           bumpParseJobProgress(index, itemIds.length)
+          await yieldEventLoop()
           const itemId = itemIds[index]
           if (batchMode && is1688RiskStormActive()) {
             const paused = await pauseRemaining1688Items(itemIds.slice(index), FAILURE_REASON_RISK_STORM)
@@ -9669,6 +12447,40 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
             }
 
             let sourceUrl = normalizeText(item.sourceUrl)
+            if (isWeishangFeedUrl(sourceUrl)) {
+              const { urls, error } = await expandWeishangFeedUrls(sourceUrl)
+              if (!urls.length) {
+                fail += 1
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: error || '未能从微购相册列表抽出商品',
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                continue
+              }
+              try {
+                const rewritten = await rewriteCategoryItemAsOffers(item, urls)
+                sourceUrl = rewritten.firstUrl
+                item.sourceUrl = rewritten.firstUrl
+                for (const extraId of rewritten.extraItemIds) {
+                  if (!itemIds.includes(extraId)) itemIds.push(extraId)
+                }
+              } catch (expandError: any) {
+                fail += 1
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: expandError?.message || '微购相册列表展开失败',
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                continue
+              }
+            }
             if (is1688ShopCategorySourceUrl(sourceUrl)) {
               const { urls, error } = await fetch1688ShopCategoryOfferUrls(sourceUrl)
               if (!urls.length) {
@@ -9705,13 +12517,20 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
             }
             const is1688OfferUrl = is1688ImportSourceUrl(sourceUrl)
             const isPddUrl = isPinduoduoImportSourceUrl(sourceUrl)
-            if (!sourceUrl || (!is1688OfferUrl && !isPddUrl)) {
+            const isYupooUrl = isYupooImportSourceUrl(sourceUrl)
+            const isWeishangUrl = isWeishangImportSourceUrl(sourceUrl)
+            if (is1688OfferUrl && batchMode && !did1688Warmup && !is1688RiskStormActive()) {
+              did1688Warmup = true
+              const cookie = resolve1688Cookie()
+              if (cookie) await bootstrap1688MtopCookies(cookie).catch(() => cookie)
+            }
+            if (!sourceUrl || (!is1688OfferUrl && !isPddUrl && !isYupooUrl && !isWeishangUrl)) {
               fail += 1
               await prisma.importtaskitem.update({
                 where: { id: item.id },
                 data: {
                   fetchStatus: 'FAILED' as any,
-                  failureReason: '无效的商品链接，仅支持 1688 offer 或拼多多 goods_id 链接重新解析',
+                  failureReason: '无效的商品链接，仅支持 1688 offer、拼多多 goods_id、Yupoo 相册或微商相册链接重新解析',
                   fetchFinishedAt: new Date(),
                 },
               })
@@ -9757,6 +12576,86 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
                   exchangeRate,
                 })
                 success += 1
+              }
+              continue
+            }
+
+            if (isYupooUrl) {
+              const fetchResult = await fetchYupooAlbumPreview(sourceUrl)
+              if (fetchResult.outcome !== 'success' || fetchResult.preview.detailImages.length === 0) {
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    parsedName: fetchResult.preview.name || `[Yupoo] ${extractYupooAlbumId(sourceUrl) || item.id.slice(0, 6)}`,
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: fetchResult.failureReason || 'Yupoo 相册抓取失败',
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                fail += 1
+              } else {
+                try {
+                  await persistYupooParsedItem({
+                    item,
+                    task: item.importTask as any,
+                    fetched: fetchResult.preview,
+                    secondaryCategories,
+                    categoryMap,
+                    exchangeRate,
+                  })
+                  success += 1
+                } catch (yupooError) {
+                  await prisma.importtaskitem.update({
+                    where: { id: item.id },
+                    data: {
+                      parsedName: fetchResult.preview.name || `[Yupoo] ${extractYupooAlbumId(sourceUrl) || item.id.slice(0, 6)}`,
+                      fetchStatus: 'FAILED' as any,
+                      failureReason: yupooError instanceof Error ? yupooError.message : 'Yupoo 图片转存失败',
+                      fetchFinishedAt: new Date(),
+                    },
+                  })
+                  fail += 1
+                }
+              }
+              continue
+            }
+
+            if (isWeishangUrl) {
+              const fetchResult = await fetchWeishangAlbumPreview(sourceUrl)
+              if (fetchResult.outcome !== 'success' || fetchResult.preview.detailImages.length === 0) {
+                await prisma.importtaskitem.update({
+                  where: { id: item.id },
+                  data: {
+                    parsedName: fetchResult.preview.name || `[微商] ${parseWeishangAlbumRef(sourceUrl).itemId || item.id.slice(0, 6)}`,
+                    fetchStatus: 'FAILED' as any,
+                    failureReason: fetchResult.failureReason || '微商相册抓取失败',
+                    fetchFinishedAt: new Date(),
+                  },
+                })
+                fail += 1
+              } else {
+                try {
+                  await persistWeishangParsedItem({
+                    item,
+                    task: item.importTask as any,
+                    fetched: fetchResult.preview,
+                    secondaryCategories,
+                    categoryMap,
+                    exchangeRate,
+                  })
+                  success += 1
+                } catch (weishangError) {
+                  await prisma.importtaskitem.update({
+                    where: { id: item.id },
+                    data: {
+                      parsedName: fetchResult.preview.name || `[微商] ${parseWeishangAlbumRef(sourceUrl).itemId || item.id.slice(0, 6)}`,
+                      fetchStatus: 'FAILED' as any,
+                      failureReason: weishangError instanceof Error ? weishangError.message : '微商相册图片转存失败',
+                      fetchFinishedAt: new Date(),
+                    },
+                  })
+                  fail += 1
+                }
               }
               continue
             }

@@ -101,10 +101,13 @@ import { pickFrontPricingCategoryCoeffs, resolveFrontRmbSellingPrice } from '@/s
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
+import { parseVipDiscount, withCustomerGoodsPolicy } from '@/shared/customerPromoPolicy'
+import { loadCustomerPromo } from '@/frontend/lib/loadCustomerPromoKind'
+import { resolveCustomerPromoEligibility } from '@/shared/customerType'
 import { isStorefrontInStock, isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
 import { storefrontVisibilityWhere } from '@/shared/storefrontProductVisibility'
-import { isColorDimensionName } from '@/shared/tableImportSpec'
+import { enrichSkuColorSizeAttributes, isColorDimensionName } from '@/shared/tableImportSpec'
 import { touchCustomerLastSeen } from '@/frontend/lib/touchCustomerLastSeen'
 
 const resolveProductMinOrderQty = (tradeInfoJson: unknown) => Math.max(1, Number((tradeInfoJson as any)?.minOrderQty ?? 0) || 1)
@@ -126,10 +129,15 @@ const resolveCartLineImageUrl = (
   const own = String(lineSku.imageUrl || '').trim()
   if (own) return own
 
-  const attrs = (Array.isArray(lineSku.attributeJson) ? lineSku.attributeJson : []) as Array<{
-    name?: string
-    value?: string
-  }>
+  const attrs = enrichSkuColorSizeAttributes(
+    ((Array.isArray(lineSku.attributeJson) ? lineSku.attributeJson : []) as Array<{
+      name?: string
+      value?: string
+    }>).map((attr) => ({
+      name: String(attr?.name || '').trim(),
+      value: String(attr?.value || '').trim(),
+    })),
+  )
   const colorAttr = attrs.find((attr) => isColorAttributeName(attr?.name))
   const colorValue = String(colorAttr?.value || '').trim()
   const colorName = String(colorAttr?.name || '').trim()
@@ -138,10 +146,15 @@ const resolveCartLineImageUrl = (
   for (const sku of siblingSkus) {
     const url = String(sku.imageUrl || '').trim()
     if (!url) continue
-    const skuAttrs = (Array.isArray(sku.attributeJson) ? sku.attributeJson : []) as Array<{
-      name?: string
-      value?: string
-    }>
+    const skuAttrs = enrichSkuColorSizeAttributes(
+      ((Array.isArray(sku.attributeJson) ? sku.attributeJson : []) as Array<{
+        name?: string
+        value?: string
+      }>).map((attr) => ({
+        name: String(attr?.name || '').trim(),
+        value: String(attr?.value || '').trim(),
+      })),
+    )
     const matchesColor = skuAttrs.some(
       (attr) =>
         String(attr?.name || '').trim() === colorName &&
@@ -191,6 +204,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
             mainImageUrl: true,
             weightGram: true,
             costPrice: true,
+            priceCoefficient: true,
             tradeInfoJson: true,
             translationsJson: true,
             category: {
@@ -244,6 +258,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
             imageUrl: true,
             attributeJson: true,
             weightKg: true,
+            sizeLabel: true,
           }
         }
       },
@@ -313,6 +328,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: item.productSku.price.toNumber(),
         costPrice: item.product.costPrice,
+        productCoefficient: item.product.priceCoefficient,
         ...pricingCoeffs,
       })
       const unitPriceUsd = toUsdFromCny(priceRmb, exchangeRate)
@@ -341,10 +357,15 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
 
       // 解析 Json
       const rawAttrs = (item.productSku.attributeJson as unknown as any[]) || []
-      const skuAttributes: SkuAttribute[] = rawAttrs.map(attr => ({
-        name: attr?.name || '',
-        value: attr?.value || ''
-      }))
+      const skuAttributes: SkuAttribute[] = enrichSkuColorSizeAttributes(
+        rawAttrs
+          .map(attr => ({
+            name: String(attr?.name || '').trim(),
+            value: String(attr?.value || '').trim(),
+          }))
+          .filter(attr => attr.name && attr.value),
+        { sizeLabel: String(item.productSku.sizeLabel || '').trim() },
+      )
 
       const skuImageUrl = resolveCartLineImageUrl(
         item.productSku,
@@ -389,18 +410,28 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       await prisma.$transaction(updates)
     }
 
-    // 5. 计算折扣（首单/老客/批发/满减）
-    const paidOrder = await prisma.orderrecord.findFirst({
-      where: { userId, status: 'PAID' },
-      select: { id: true },
+    // 5. 折扣：首单仅「新客户 / 未转化」且尚无已付款订单
+    const [account, paidOrder] = await Promise.all([
+      prisma.sysuser.findUnique({
+        where: { id: userId },
+        select: { customerType: true },
+      }),
+      prisma.orderrecord.findFirst({
+        where: { userId, status: 'PAID' },
+        select: { id: true },
+      }),
+    ])
+    const { isFirstOrderEligible, isLoyalCustomer } = resolveCustomerPromoEligibility({
+      customerType: account?.customerType,
+      hasPaidOrder: Boolean(paidOrder),
     })
-    const isFirstOrderEligible = !paidOrder
-    const isLoyalCustomer = Boolean(paidOrder)
 
+    const promo = await loadCustomerPromo(userId)
+    const vipOn = parseVipDiscount(promo.vipDiscount) > 0
     const discountResult = computeDiscounts({
-      config: pricingConfig,
+      config: withCustomerGoodsPolicy(pricingConfig, promo.kind, promo.vipDiscount),
       isFirstOrderEligible,
-      isLoyalCustomer,
+      isLoyalCustomer: isLoyalCustomer || (vipOn && promo.kind !== 'FIRST_ORDER'),
       lines: discountLinesInput,
     })
 
@@ -575,6 +606,7 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
         ratingAverage: true,
         translationsJson: true,
         costPrice: true,
+        priceCoefficient: true,
         category: {
           select: {
             name: true,
@@ -633,6 +665,7 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
           const priceRmb = resolveFrontRmbSellingPrice({
             skuPriceRmb: s.price.toNumber(),
             costPrice: p.costPrice,
+            productCoefficient: p.priceCoefficient,
             ...pricingCoeffs,
           })
           return toUsdFromCny(priceRmb, exchangeRate)

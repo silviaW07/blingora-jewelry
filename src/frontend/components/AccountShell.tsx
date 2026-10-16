@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Heart, MapPin, Package, Settings, UserCircle2 } from 'lucide-react'
+import { ChevronLeft, Heart, Images, MapPin, Package, Settings, UserCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StorefrontStickyHeader } from '@/frontend/components/StorefrontStickyHeader'
 import { StorefrontBrandLogo } from '@/frontend/components/StorefrontBrandLogo'
@@ -59,6 +59,12 @@ export function AccountShell({
       path: Wishlist.path,
       label: t('nav.wishlist'),
       icon: Heart,
+    },
+    {
+      href: '/promo-catalog/',
+      path: '/promo-catalog',
+      label: t('nav.lookbook'),
+      icon: Images,
     },
     {
       href: withSlash(AccountAddresses.path),

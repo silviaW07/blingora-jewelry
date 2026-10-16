@@ -54,6 +54,8 @@ export const retryPendingImportTaskForProductManagement = (...args: Parameters<A
   rpcCall<Awaited<ReturnType<Actions["retryPendingImportTaskForProductManagement"]>>>("src.backend.actions.ProductManagement.retryPendingImportTaskForProductManagement", ...args);
 export const getPendingImportQueue = (...args: Parameters<Actions["getPendingImportQueue"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getPendingImportQueue"]>>>("src.backend.actions.ProductManagement.getPendingImportQueue", ...args);
+export const setPendingImportReviewMark = (...args: Parameters<Actions["setPendingImportReviewMark"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["setPendingImportReviewMark"]>>>("src.backend.actions.ProductManagement.setPendingImportReviewMark", ...args);
 export const inlineUpdatePendingImportItemField = (...args: Parameters<Actions["inlineUpdatePendingImportItemField"]>) => 
   rpcCall<Awaited<ReturnType<Actions["inlineUpdatePendingImportItemField"]>>>("src.backend.actions.ProductManagement.inlineUpdatePendingImportItemField", ...args);
 export const batchUpdatePendingImportItemField = (...args: Parameters<Actions["batchUpdatePendingImportItemField"]>) => 
@@ -70,6 +72,8 @@ export const deletePendingImportSkuColorGroup = (...args: Parameters<Actions["de
   rpcCall<Awaited<ReturnType<Actions["deletePendingImportSkuColorGroup"]>>>("src.backend.actions.ProductManagement.deletePendingImportSkuColorGroup", ...args);
 export const updatePendingImportGallery = (...args: Parameters<Actions["updatePendingImportGallery"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updatePendingImportGallery"]>>>("src.backend.actions.ProductManagement.updatePendingImportGallery", ...args);
+export const batchMosaicGalleryWatermarks = (...args: Parameters<Actions["batchMosaicGalleryWatermarks"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["batchMosaicGalleryWatermarks"]>>>("src.backend.actions.ProductManagement.batchMosaicGalleryWatermarks", ...args);
 export const publishPendingImportItems = (...args: Parameters<Actions["publishPendingImportItems"]>) => 
   rpcCall<Awaited<ReturnType<Actions["publishPendingImportItems"]>>>("src.backend.actions.ProductManagement.publishPendingImportItems", ...args);
 export const reparsePendingImportItems = (...args: Parameters<Actions["reparsePendingImportItems"]>) => 

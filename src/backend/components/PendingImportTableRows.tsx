@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { ArrowUpCircle, ImagePlus, Minus, Plus } from 'lucide-react'
+import { ArrowUpCircle, Heart, ImagePlus, Link2, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
 import { ImageLightbox, PreviewableThumb } from '@/backend/components/ImageLightbox'
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/backend/components/PendingImport1688DetailDialog'
 import { Badge, Button, Checkbox, TableCell, TableRow } from '@/backend/components/ui'
 import { PendingImportSkuChildRows } from '@/backend/components/PendingImportSkuChildRows'
+import { isPlaceholderPendingImportImage } from '@/backend/utils/pendingImportReadiness'
 import {
   PendingImportEditableCell,
   PENDING_GOODS_STATUS_CONFIG,
@@ -21,6 +22,8 @@ import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
 import { calculateCostLinkedSellPrices } from '@/shared/priceCoefficient'
 import type { PendingImportQueueItem } from '@/backend/actions/ProductManagement'
 import type { ProductSource } from '@/backend/types/ProductManagement'
+import { isColorNameSpecValue, isPlaceholderSpecValue } from '@/shared/skuDisplayGuards'
+import { extractProductDimensionSpec } from '@/shared/tableImportSpec'
 import { cn } from '@/lib/utils'
 import {
   canPublishPendingImportItem,
@@ -28,6 +31,7 @@ import {
   isPendingImportEffectivelyReady,
   snapshotFromPendingImportQueueItem,
 } from '@/backend/utils/pendingImportReadiness'
+import { normalizeSupplierSourceUrl } from '@/shared/supplierSourceUrl'
 
 type SourceConfig = Record<ProductSource, {
   label: string
@@ -47,7 +51,9 @@ function formatCnyRange(min: number | null | undefined, max: number | null | und
   if (min == null && max == null) return '--'
   const lo = min ?? max ?? 0
   const hi = max ?? min ?? 0
-  return `￥${Number(lo).toLocaleString()} ~ ${Number(hi).toLocaleString()}`
+  return lo === hi
+    ? `￥${Number(lo).toFixed(2)}`
+    : `￥${Number(lo).toFixed(2)} ~ ￥${Number(hi).toFixed(2)}`
 }
 
 function formatUsdRange(min: number | null | undefined, max: number | null | undefined) {
@@ -78,6 +84,21 @@ function extractBrand(item: PendingImportQueueItem) {
   return matched?.[1]?.trim() || ''
 }
 
+function collectPendingDisplayImageUrls(item: PendingImportQueueItem): string[] {
+  const seen = new Set<string>()
+  const urls: string[] = []
+  const push = (url?: string | null) => {
+    const value = String(url || '').trim()
+    if (!value || isPlaceholderPendingImportImage(value) || seen.has(value)) return
+    seen.add(value)
+    urls.push(value)
+  }
+  for (const url of item.item_galleryUrls || []) push(url)
+  push(item.item_mainImageUrl)
+  push(item.item_parsedMainImageUrl)
+  return urls
+}
+
 function PendingImportTableRowsInner({
   item,
   state,
@@ -90,17 +111,37 @@ function PendingImportTableRowsInner({
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null)
   const [dropImageIndex, setDropImageIndex] = useState<number | null>(null)
   const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null)
+  const [pasteUrlsOpen, setPasteUrlsOpen] = useState(false)
+  const [pasteUrlsText, setPasteUrlsText] = useState('')
   const handlersRef = React.useRef(handlers)
   handlersRef.current = handlers
   const pointerDragRef = React.useRef<{
     from: number
+    url: string
     pointerId: number
     started: boolean
     startX: number
     startY: number
   } | null>(null)
+  const dragListenersRef = React.useRef<{
+    move: (event: PointerEvent) => void
+    up: (event: PointerEvent) => void
+  } | null>(null)
+  React.useEffect(() => {
+    return () => {
+      const listeners = dragListenersRef.current
+      if (!listeners) return
+      document.removeEventListener('pointermove', listeners.move)
+      document.removeEventListener('pointerup', listeners.up)
+      document.removeEventListener('pointercancel', listeners.up)
+    }
+  }, [])
   const expanded = state.expandedPendingImportIds.includes(item.item_id)
   const pendingSkus = item.item_skus || []
+  const selectedSkuCount = pendingSkus.filter((sku) =>
+    state.pendingImportSelectedSkuKeys.includes(`${item.item_id}::${String(sku.sku_key || '').trim()}`),
+  ).length
+  const displayImageUrls = useMemo(() => collectPendingDisplayImageUrls(item), [item])
   const targetCategoryOption =
     state.hierarchicalCategoryOptions?.find(option => option.category_id === item.item_targetCategoryId) ||
     state.categoryOptions.find(option => option.category_id === item.item_targetCategoryId)
@@ -120,23 +161,47 @@ function PendingImportTableRowsInner({
   const canPublish = canPublishPendingImportItem(readinessSnapshot, nowMs) && !isReparsing
   const isTableImport = item.item_sourceUrl?.startsWith('table-import://')
   const isPinduoduoImport = /(?:yangkeduo|pinduoduo)\.com/i.test(String(item.item_sourceUrl || ''))
+  const isWeishangImport = /(?:szwego|wegooooo|weidian|微商|weishang)/i.test(String(item.item_sourceUrl || ''))
+  const isYupooImport = /yupoo/i.test(String(item.item_sourceUrl || ''))
+  const supplierHref = normalizeSupplierSourceUrl(item.item_sourceUrl)
   const source = isTableImport
     ? sourceConfig.TABLE_IMPORT
     : sourceConfig.IMPORT_1688
-  const sourceBadgeLabel = isTableImport ? source.label : isPinduoduoImport ? '拼多多导入' : source.label
-  const sourceLabel = isTableImport ? '表格导入' : isPinduoduoImport ? '拼多多' : '1688'
+  const sourceBadgeLabel = isTableImport
+    ? source.label
+    : isPinduoduoImport
+      ? '拼多多导入'
+      : isWeishangImport
+        ? '微商相册'
+        : isYupooImport
+          ? 'Yupoo相册'
+          : source.label
+  const sourceLabel = isTableImport
+    ? '表格导入'
+    : isPinduoduoImport
+      ? '拼多多'
+      : isWeishangImport
+        ? '微商'
+        : isYupooImport
+          ? 'Yupoo'
+          : '1688'
   const skuCount = pendingSkus.length || 1
   const skuAttrs = (sku: (typeof pendingSkus)[number]) =>
     Array.isArray(sku?.attributes) ? sku.attributes : []
   const colorValues = Array.from(new Set(
-    pendingSkus.map(sku => skuAttrs(sku).find(attr => attr.name === '颜色')?.value?.trim() || '默认颜色'),
+    pendingSkus.map(sku => {
+      const color = skuAttrs(sku).find(attr => attr.name === '颜色')?.value?.trim() || ''
+      const spec = skuAttrs(sku).find(attr => attr.name === '规格' || attr.name === '尺码' || attr.name === '尺寸')?.value?.trim() || ''
+      if (color && color !== '默认颜色' && color !== '其他') return color
+      if (isColorNameSpecValue(spec)) return spec
+      return color || '默认颜色'
+    }),
   ))
   const colorCount = colorValues.length
   const isSingleColor = colorCount <= 1
   const specLabels = pendingSkus.map(sku =>
     skuAttrs(sku).find(attr => attr.name === '规格' || attr.name === '尺码' || attr.name === '尺寸')?.value?.trim()
-    || sku.spec_text
-    || '默认规格',
+    || '',
   )
   const skuPricesList = pendingSkus
     .map(sku => sku.price)
@@ -144,8 +209,8 @@ function PendingImportTableRowsInner({
   const pricesUniform =
     skuPricesList.length === 0 ||
     skuPricesList.every(price => Math.abs(price - (skuPricesList[0] || 0)) < 0.0001)
-  /** 单色同价：不展开；单色异价 / 多色：可展开 */
-  const canExpandChildren = isSingleColor ? !pricesUniform && pendingSkus.length > 1 : pendingSkus.length > 0
+  /** 有 SKU 就可展开：单色时每条规格带前台 SKU 图 */
+  const canExpandChildren = pendingSkus.length > 0
   const externalCode = extractExternalProductCode(item)
   const brand = extractBrand(item)
   const materialHint = useMemo(
@@ -164,10 +229,43 @@ function PendingImportTableRowsInner({
     Number.isFinite(coefficient) && coefficient > 0 && Number.isFinite(cost) && cost >= 0
       ? calculateCostLinkedSellPrices(cost, coefficient, usdRate)
       : null
-  const cnyMin = linked ? linked.rmb : (skuPrices.length ? Math.min(...skuPrices) : item.item_cnyPriceMin)
-  const cnyMax = linked ? linked.rmb : (skuPrices.length ? Math.max(...skuPrices) : item.item_cnyPriceMax)
-  const usdMin = linked ? linked.usd : (cnyMin == null ? item.item_usdPriceMin : toUsdFromCny(Number(cnyMin), usdRate))
-  const usdMax = linked ? linked.usd : (cnyMax == null ? item.item_usdPriceMax : toUsdFromCny(Number(cnyMax), usdRate))
+  const skuCostValues = pendingSkus
+    .map(sku => sku.cost_price)
+    .filter((value): value is number => value !== null && value !== undefined && Number.isFinite(Number(value)))
+    .map(Number)
+  const linkedFromSkuCosts =
+    Number.isFinite(coefficient) && coefficient > 0
+      ? skuCostValues.map(skuCost => Number((skuCost * coefficient).toFixed(2)))
+      : []
+  const rangeOf = (values: number[]) =>
+    values.length ? { min: Math.min(...values), max: Math.max(...values) } : null
+  const rangeSpreads = (values: number[]) => {
+    const range = rangeOf(values)
+    return Boolean(range && range.max - range.min >= 0.009)
+  }
+  // 父行成本是众数/代表价，不能盖住 SKU 真实价差（皮带常按扣头分档）
+  const skuSellRange = rangeSpreads(skuPrices)
+    ? rangeOf(skuPrices)
+    : rangeSpreads(linkedFromSkuCosts)
+      ? rangeOf(linkedFromSkuCosts)
+      : null
+  const storedMin = Number.isFinite(Number(item.item_cnyPriceMin)) ? Number(item.item_cnyPriceMin) : null
+  const storedMax = Number.isFinite(Number(item.item_cnyPriceMax)) ? Number(item.item_cnyPriceMax) : null
+  const storedSpreads = Boolean(
+    storedMin != null && storedMax != null && Math.abs(Number(storedMax) - Number(storedMin)) >= 0.009,
+  )
+  const cnyMin =
+    skuSellRange?.min ??
+    (storedSpreads ? storedMin : null) ??
+    linked?.rmb ??
+    (skuPrices.length ? Math.min(...skuPrices) : storedMin)
+  const cnyMax =
+    skuSellRange?.max ??
+    (storedSpreads ? storedMax : null) ??
+    linked?.rmb ??
+    (skuPrices.length ? Math.max(...skuPrices) : storedMax)
+  const usdMin = cnyMin == null ? item.item_usdPriceMin : toUsdFromCny(Number(cnyMin), usdRate)
+  const usdMax = cnyMax == null ? item.item_usdPriceMax : toUsdFromCny(Number(cnyMax), usdRate)
   const totalStock = pendingSkus.length
     ? pendingSkus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
     : item.item_availableStock
@@ -177,6 +275,27 @@ function PendingImportTableRowsInner({
       <TableRow className="group border-b border-slate-100 last:border-0">
         <TableCell className="pl-4">
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className={cn(
+                'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-white transition-colors',
+                item.item_reviewed
+                  ? 'border-rose-200 text-rose-500 hover:bg-rose-50'
+                  : 'border-slate-200 text-slate-300 hover:border-rose-200 hover:text-rose-400 hover:bg-rose-50/60',
+                state.pendingImportReviewSavingIds.includes(item.item_id) && 'opacity-60',
+              )}
+              disabled={state.pendingImportReviewSavingIds.includes(item.item_id)}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                void handlers.togglePendingImportReviewMark(item.item_id)
+              }}
+              title={item.item_reviewed ? '已审核 · 再点取消' : '标记已审核'}
+              aria-pressed={Boolean(item.item_reviewed)}
+              aria-label={item.item_reviewed ? '取消已审核' : '标记已审核'}
+            >
+              <Heart className={cn('h-3.5 w-3.5', item.item_reviewed && 'fill-current')} />
+            </button>
             {canExpandChildren ? (
               <Button
                 type="button"
@@ -201,20 +320,105 @@ function PendingImportTableRowsInner({
         <TableCell className="whitespace-normal">
           <div className="flex items-start gap-3">
             <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2 max-w-[520px]">
+              <div
+                className="flex flex-wrap items-center gap-2 max-w-[720px] rounded-md data-[pending-gallery-cross-drop=1]:ring-2 data-[pending-gallery-cross-drop=1]:ring-violet-300"
+                data-pending-gallery-item={item.item_id}
+              >
                 {(() => {
-                  const allUrls = item.item_galleryUrls?.length
-                    ? item.item_galleryUrls
-                    : (item.item_mainImageUrl || item.item_parsedMainImageUrl
-                      ? [item.item_mainImageUrl || item.item_parsedMainImageUrl!]
-                      : [])
-                  const finishPointerDrag = (toIndex: number | null) => {
+                  const allUrls = displayImageUrls
+                  const clearCrossDropHover = () => {
+                    document
+                      .querySelectorAll('[data-pending-gallery-cross-drop="1"]')
+                      .forEach((node) => node.removeAttribute('data-pending-gallery-cross-drop'))
+                  }
+                  const detachDragListeners = () => {
+                    const listeners = dragListenersRef.current
+                    if (!listeners) return
+                    document.removeEventListener('pointermove', listeners.move)
+                    document.removeEventListener('pointerup', listeners.up)
+                    document.removeEventListener('pointercancel', listeners.up)
+                    dragListenersRef.current = null
+                  }
+                  const paintHover = (clientX: number, clientY: number) => {
+                    const hit = document.elementFromPoint(clientX, clientY)
+                    const galleryHit = hit?.closest('[data-pending-gallery-item]') as HTMLElement | null
+                    const skuHit = hit?.closest('[data-pending-sku-drop]') as HTMLElement | null
+                    const target = skuHit || galleryHit
+                    document.querySelectorAll('[data-pending-gallery-cross-drop="1"]').forEach((node) => {
+                      if (node !== target) node.removeAttribute('data-pending-gallery-cross-drop')
+                    })
+                    const hitItemId = galleryHit?.getAttribute('data-pending-gallery-item') || skuHit?.getAttribute('data-pending-sku-item') || ''
+                    if (hitItemId && hitItemId !== item.item_id && target) {
+                      target.setAttribute('data-pending-gallery-cross-drop', '1')
+                      if (dropImageIndex !== null) setDropImageIndex(null)
+                      return
+                    }
+                    const idxRaw = galleryHit?.getAttribute('data-pending-gallery-index')
+                    const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
+                    if (idx != null && Number.isFinite(idx) && idx !== dropImageIndex) setDropImageIndex(idx)
+                  }
+                  const commitDrag = (clientX: number, clientY: number) => {
                     const drag = pointerDragRef.current
                     pointerDragRef.current = null
+                    detachDragListeners()
                     setDragImageIndex(null)
                     setDropImageIndex(null)
-                    if (!drag?.started || toIndex == null || toIndex === drag.from) return
-                    void handlersRef.current.reorderPendingImportImages(item.item_id, drag.from, toIndex)
+                    clearCrossDropHover()
+                    if (!drag) return
+                    if (!drag.started) {
+                      setGalleryPreviewUrl(drag.url)
+                      return
+                    }
+                    const hit = document.elementFromPoint(clientX, clientY)
+                    const skuDrop = hit?.closest('[data-pending-sku-drop]')
+                    const skuKey = skuDrop?.getAttribute('data-pending-sku-drop')
+                    const skuItemId = skuDrop?.getAttribute('data-pending-sku-item') || item.item_id
+                    if (skuKey) {
+                      void handlersRef.current.assignPendingImportGalleryImageToSku(skuItemId, skuKey, drag.url)
+                      if (skuItemId !== item.item_id) {
+                        void handlersRef.current.movePendingImportImageToItem(item.item_id, drag.from, skuItemId)
+                      }
+                      return
+                    }
+                    const galleryHit = hit?.closest('[data-pending-gallery-item]')
+                    const hitItemId = galleryHit?.getAttribute('data-pending-gallery-item') || ''
+                    const idxRaw = galleryHit?.getAttribute('data-pending-gallery-index')
+                    const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
+                    if (hitItemId && hitItemId !== item.item_id) {
+                      void handlersRef.current.movePendingImportImageToItem(
+                        item.item_id,
+                        drag.from,
+                        hitItemId,
+                        idx != null && Number.isFinite(idx) ? idx : null,
+                      )
+                      return
+                    }
+                    if (idx != null && Number.isFinite(idx) && idx !== drag.from) {
+                      void handlersRef.current.reorderPendingImportImages(item.item_id, drag.from, idx)
+                    }
+                  }
+                  const startDocumentDrag = () => {
+                    if (dragListenersRef.current) return
+                    const move = (event: PointerEvent) => {
+                      const drag = pointerDragRef.current
+                      if (!drag || drag.pointerId !== event.pointerId) return
+                      const dist = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY)
+                      if (!drag.started && dist > 6) {
+                        drag.started = true
+                        setDragImageIndex(drag.from)
+                      }
+                      if (!drag.started) return
+                      event.preventDefault()
+                      paintHover(event.clientX, event.clientY)
+                    }
+                    const up = (event: PointerEvent) => {
+                      if (pointerDragRef.current?.pointerId !== event.pointerId) return
+                      commitDrag(event.clientX, event.clientY)
+                    }
+                    dragListenersRef.current = { move, up }
+                    document.addEventListener('pointermove', move)
+                    document.addEventListener('pointerup', up)
+                    document.addEventListener('pointercancel', up)
                   }
                   return (
                     <>
@@ -226,67 +430,31 @@ function PendingImportTableRowsInner({
                   return (
                   <div
                     key={`${item.item_id}-${imageIndex}-${url}`}
+                    data-pending-gallery-item={item.item_id}
                     data-pending-gallery-index={imageIndex}
                     data-gallery-dragging={dragImageIndex !== null ? 'true' : undefined}
                     className={cn(
-                      'relative w-12 h-12 rounded border overflow-hidden flex-shrink-0 bg-slate-50 cursor-grab active:cursor-grabbing select-none',
+                      'relative h-20 w-20 rounded border overflow-hidden flex-shrink-0 bg-slate-50 cursor-grab active:cursor-grabbing select-none',
+                      'data-[pending-gallery-cross-drop=1]:ring-2 data-[pending-gallery-cross-drop=1]:ring-violet-400',
                       isMain ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-100',
                       isDragging && 'opacity-40',
                       isDropTarget && 'ring-2 ring-sky-400',
                     )}
-                    title={isMain ? '主图 · 按住拖动可排序，单击看大图' : '按住拖到第一张设为主图，单击看大图'}
+                    title={isMain ? '主图 · 按住拖到下面其他商品' : '按住拖到其他商品，或拖到第一张设为主图'}
                     onPointerDown={(event) => {
                       if ((event.target as HTMLElement).closest('button')) return
                       if (event.button !== 0) return
+                      event.preventDefault()
                       pointerDragRef.current = {
                         from: imageIndex,
+                        url,
                         pointerId: event.pointerId,
                         started: false,
                         startX: event.clientX,
                         startY: event.clientY,
                       }
+                      startDocumentDrag()
                     }}
-                    onPointerMove={(event) => {
-                      const drag = pointerDragRef.current
-                      if (!drag || drag.pointerId !== event.pointerId) return
-                      const dist = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY)
-                      if (!drag.started && dist > 8) {
-                        drag.started = true
-                        setDragImageIndex(drag.from)
-                        try {
-                          event.currentTarget.setPointerCapture(event.pointerId)
-                        } catch {
-                          /* ignore */
-                        }
-                      }
-                      if (!drag.started) return
-                      const hit = document.elementFromPoint(event.clientX, event.clientY)
-                      const idxRaw = hit?.closest('[data-pending-gallery-index]')?.getAttribute('data-pending-gallery-index')
-                      const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
-                      if (idx != null && Number.isFinite(idx) && idx !== dropImageIndex) setDropImageIndex(idx)
-                    }}
-                    onPointerUp={(event) => {
-                      const drag = pointerDragRef.current
-                      try {
-                        event.currentTarget.releasePointerCapture(event.pointerId)
-                      } catch {
-                        /* ignore */
-                      }
-                      if (!drag?.started) {
-                        pointerDragRef.current = null
-                        setDragImageIndex(null)
-                        setDropImageIndex(null)
-                        if (!(event.target as HTMLElement).closest('button')) {
-                          setGalleryPreviewUrl(url)
-                        }
-                        return
-                      }
-                      const hit = document.elementFromPoint(event.clientX, event.clientY)
-                      const idxRaw = hit?.closest('[data-pending-gallery-index]')?.getAttribute('data-pending-gallery-index')
-                      const idx = idxRaw == null ? null : Number.parseInt(idxRaw, 10)
-                      finishPointerDrag(idx != null && Number.isFinite(idx) ? idx : dropImageIndex)
-                    }}
-                    onPointerCancel={() => finishPointerDrag(null)}
                   >
                     {isMain ? (
                       <span className="pointer-events-none absolute bottom-0 left-0 right-0 z-[2] bg-emerald-600/90 py-px text-center text-[8px] font-semibold leading-none text-white">
@@ -305,7 +473,7 @@ function PendingImportTableRowsInner({
                         src={url}
                         keywords={url || item.item_productName || 'product'}
                         description={item.item_productName || item.item_parsedName || '待上传商品'}
-                        proxyWidth={160}
+                        proxyWidth={256}
                         disableKeywordSearch
                       />
                     </PreviewableThumb>
@@ -358,19 +526,31 @@ function PendingImportTableRowsInner({
                 })()}
               </div>
               <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 border-dashed"
-                  onClick={() => {
-                    const input = document.getElementById(`pending-add-${item.item_id}`) as HTMLInputElement | null
-                    input?.click()
-                  }}
-                >
-                  <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
-                  {state.pendingImportImageUploadingIds.includes(item.item_id) ? '继续上传（后台上传中）' : '上传/编辑图片'}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-dashed"
+                    onClick={() => {
+                      const input = document.getElementById(`pending-add-${item.item_id}`) as HTMLInputElement | null
+                      input?.click()
+                    }}
+                  >
+                    <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+                    {state.pendingImportImageUploadingIds.includes(item.item_id) ? '继续上传（后台上传中）' : '上传/编辑图片'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-dashed"
+                    onClick={() => setPasteUrlsOpen(open => !open)}
+                  >
+                    <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                    粘贴图链
+                  </Button>
+                </div>
                 <input
                   id={`pending-add-${item.item_id}`}
                   type="file"
@@ -379,8 +559,46 @@ function PendingImportTableRowsInner({
                   className="hidden"
                   onChange={e => handlers.uploadPendingImportImages(item.item_id, e)}
                 />
+                {pasteUrlsOpen ? (
+                  <div className="mt-2 space-y-2 rounded-md border border-dashed border-slate-200 bg-slate-50/80 p-2">
+                    <textarea
+                      className="min-h-[72px] w-full resize-y rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                      placeholder="粘贴微商相册图片地址，一行一个；也可整段粘贴，系统会自动抽出 http 图片链接"
+                      value={pasteUrlsText}
+                      onChange={event => setPasteUrlsText(event.target.value)}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7"
+                        disabled={!pasteUrlsText.trim() || state.pendingImportImageUploadingIds.includes(item.item_id)}
+                        onClick={() => {
+                          void handlers.pastePendingImportImageUrls(item.item_id, pasteUrlsText).then(() => {
+                            setPasteUrlsText('')
+                            setPasteUrlsOpen(false)
+                          })
+                        }}
+                      >
+                        转入本站
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7"
+                        onClick={() => {
+                          setPasteUrlsOpen(false)
+                          setPasteUrlsText('')
+                        }}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-1 text-[11px] text-slate-400">
-                  主图轮播 · {(item.item_galleryUrls?.length || (item.item_mainImageUrl ? 1 : 0))} 张全部显示 · 按住拖到第一张即主图
+                  主图轮播 · {displayImageUrls.length} 张 · 可拖到下面其他商品
                   {state.pendingImportImageUploadingIds.includes(item.item_id) ? ' · 后台上传中' : ''}
                 </div>
               </div>
@@ -392,8 +610,9 @@ function PendingImportTableRowsInner({
                 value={item.item_productName || item.item_parsedName || ''}
                 state={state}
                 handlers={handlers}
-                className="font-semibold text-slate-900 whitespace-normal break-words max-w-[220px] text-left"
-                inputClassName="max-w-[220px]"
+                multiline
+                className="font-semibold text-slate-900 whitespace-normal break-words max-w-[280px] text-left"
+                inputClassName="min-w-[280px] w-[min(36vw,420px)] max-w-[420px]"
                 placeholder="请输入商品名称"
               />
               <PendingImportEditableCell
@@ -405,7 +624,7 @@ function PendingImportTableRowsInner({
                 multiline
                 className="text-xs text-slate-500 line-clamp-2 text-left mt-0.5 max-w-[220px]"
                 inputClassName="max-w-[220px] text-xs"
-                placeholder="SKU摘要，例如：红色/M | 蓝色/L"
+                placeholder="粉色 / 42*28*15 | 红色 | 黑色，保存后按顺序写入 SKU"
                 renderDisplay={rawValue =>
                   rawValue
                     ? <span className="text-xs text-slate-500 line-clamp-2">{String(rawValue)}</span>
@@ -415,7 +634,7 @@ function PendingImportTableRowsInner({
                 {brand ? `${brand} · ` : ''}
                 {sourceLabel}
                 {isSingleColor
-                  ? ` · ${skuCount} 规格`
+                  ? ` · ${skuCount} SKU`
                   : ` · ${colorCount} 色 · ${skuCount} SKU`}
               </span>
               {canOpenSourceDetail ? (
@@ -426,9 +645,12 @@ function PendingImportTableRowsInner({
               ) : null}
               {isSingleColor ? (
                 <span className="mt-0.5 block max-w-[420px] whitespace-normal break-words text-[11px] leading-4 text-slate-500">
-                  {pricesUniform
-                    ? `包含规格：${Array.from(new Set(specLabels)).join(', ')}`
-                    : `单色商品 · 价格有差异，点击左侧展开查看规格`}
+                  {(() => {
+                    const realSpecs = Array.from(new Set(specLabels.filter((label) => label && !isPlaceholderSpecValue(label))))
+                    if (realSpecs.length > 0 && pricesUniform) return `包含规格：${realSpecs.join(', ')}`
+                    if (!pricesUniform) return '价格有差异，点击左侧展开查看'
+                    return `${skuCount} 个颜色，无规格`
+                  })()}
                 </span>
               ) : null}
             </div>
@@ -455,11 +677,14 @@ function PendingImportTableRowsInner({
             value={item.item_supplierName || ''}
             state={state}
             handlers={handlers}
+            href={supplierHref}
             className="text-left text-sm font-medium text-slate-800 max-w-[140px] truncate"
             placeholder="供应商名称"
             renderDisplay={rawValue => rawValue
-              ? <span className="text-sm font-medium text-slate-800 truncate max-w-[140px]">{String(rawValue)}</span>
-              : <span className="text-xs text-slate-400">未录入</span>}
+              ? <span className="text-sm font-medium truncate max-w-[140px]">{String(rawValue)}</span>
+              : supplierHref
+                ? <span className="text-sm font-medium truncate max-w-[140px]">打开链接</span>
+                : <span className="text-xs text-slate-400">未录入</span>}
           />
         </TableCell>
 
@@ -664,7 +889,29 @@ function PendingImportTableRowsInner({
         </TableCell>
 
         <TableCell className="text-right pr-6">
-          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 border-rose-200 px-2 text-xs text-rose-700 hover:bg-rose-50"
+              disabled={
+                selectedSkuCount === 0 ||
+                pendingSkus.length - selectedSkuCount < 1 ||
+                state.pendingImportSkuSaving
+              }
+              title={
+                selectedSkuCount === 0
+                  ? '先勾选要删除的 SKU'
+                  : pendingSkus.length - selectedSkuCount < 1
+                    ? '至少保留一个规格行'
+                    : `删除选中的 ${selectedSkuCount} 个 SKU`
+              }
+              onClick={() => void handlers.batchDeletePendingImportSelectedSkus(item.item_id)}
+            >
+              批量删除SKU{selectedSkuCount > 0 ? ` (${selectedSkuCount})` : ''}
+            </Button>
+            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
               variant="ghost"
               size="icon"
@@ -683,6 +930,7 @@ function PendingImportTableRowsInner({
             >
               <ArrowUpCircle className="w-4 h-4" />
             </Button>
+            </div>
           </div>
         </TableCell>
       </TableRow>
@@ -691,10 +939,17 @@ function PendingImportTableRowsInner({
         itemId={item.item_id}
         skus={pendingSkus}
         expanded={expanded && canExpandChildren}
+        galleryDragActive={dragImageIndex !== null}
         state={state}
         handlers={handlers}
         minOrderQty={item.item_minimumOrderQuantity}
-        flatSpecMode={isSingleColor}
+        flatSpecMode
+        fallbackSpec={extractProductDimensionSpec(
+          item.item_productName,
+          item.item_parsedName,
+          item.item_productDetail,
+          ...(item.item_featureAttributes || []).map((attr) => `${attr.key || ''} ${attr.value || ''}`),
+        )}
       />
 
       <PendingImport1688DetailDialog
@@ -730,6 +985,9 @@ function pendingImportRowPropsEqual(
   const ns = next.state
   if (ps.expandedPendingImportIds.includes(id) !== ns.expandedPendingImportIds.includes(id)) return false
   if (ps.pendingImportSelectedIds.includes(id) !== ns.pendingImportSelectedIds.includes(id)) return false
+  const prevSkuSel = ps.pendingImportSelectedSkuKeys.filter((key) => key.startsWith(`${id}::`)).join('|')
+  const nextSkuSel = ns.pendingImportSelectedSkuKeys.filter((key) => key.startsWith(`${id}::`)).join('|')
+  if (prevSkuSel !== nextSkuSel) return false
   if (!!ps.reparsingItemIds[id] !== !!ns.reparsingItemIds[id]) return false
   if (ps.pendingImportInlineSaving !== ns.pendingImportInlineSaving) return false
   if (ps.pendingImportSkuSaving !== ns.pendingImportSkuSaving) return false

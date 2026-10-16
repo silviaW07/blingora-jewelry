@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ShippingChannelConfigHandlers,
   ShippingChannelConfigState,
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,8 +22,13 @@ import {
   isParcelBandRule,
   isSeaRule,
   isSeaTierRule,
+  calculateShippingFee,
+  formatShippingFeeCny,
+  normalizeChannelCoefficient,
   type ShippingBillingMode,
 } from '@/shared/shippingFeeCalc'
+import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
+import type { ShippingChannelItem } from '@/backend/actions/ShippingChannelConfig'
 
 interface Props {
   state: ShippingChannelConfigState
@@ -105,9 +111,10 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
               <Table>
                 <TableHeader className="bg-secondary/50">
                   <TableRow>
-                    <TableHead className="min-w-[180px]">渠道名称</TableHead>
+                    <TableHead className="min-w-[220px] whitespace-normal">渠道名称</TableHead>
+                    <TableHead className="min-w-[160px] whitespace-normal">备注</TableHead>
                     <TableHead className="min-w-[120px]">计费模式</TableHead>
-                    <TableHead className="min-w-[140px]">预计时间</TableHead>
+                    <TableHead className="min-w-[140px] whitespace-normal">预计时间</TableHead>
                     <TableHead className="w-[90px]">系数</TableHead>
                     <TableHead className="min-w-[220px]">国家运费（¥）</TableHead>
                     <TableHead className="w-[100px]">排序</TableHead>
@@ -121,13 +128,13 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                 <TableBody>
                   {state.loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-48 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="h-48 text-center text-muted-foreground">
                         加载中...
                       </TableCell>
                     </TableRow>
                   ) : state.list.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-48 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="h-48 text-center text-muted-foreground">
                         暂无物流渠道，请先新增
                       </TableCell>
                     </TableRow>
@@ -154,8 +161,8 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                             void handlers.handleReorder(fromId, item.channel_id)
                           }}
                         >
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
+                          <TableCell className="max-w-[280px] whitespace-normal align-top font-medium">
+                            <div className="flex items-start gap-2">
                               <span
                                 draggable={state.canReorder}
                                 onDragStart={(event) => {
@@ -166,7 +173,7 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                                 onDragEnd={() => {
                                   dragIdRef.current = null
                                 }}
-                                className={state.canReorder ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-default'}
+                                className={state.canReorder ? 'mt-0.5 cursor-grab touch-none active:cursor-grabbing' : 'mt-0.5 cursor-default'}
                                 title={state.canReorder ? '拖拽调整顺序' : '请先重置搜索和筛选再排序'}
                                 aria-label="拖拽调整顺序"
                               >
@@ -175,15 +182,60 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                                   aria-hidden
                                 />
                               </span>
-                              <span>{item.channel_name}</span>
+                              <span className="min-w-0 break-words whitespace-normal leading-5">
+                                {item.channel_name}
+                              </span>
                             </div>
+                          </TableCell>
+                          <TableCell className="max-w-[240px] whitespace-normal align-top text-sm text-muted-foreground">
+                            {state.editingNoteId === item.channel_id ? (
+                              <Textarea
+                                autoFocus
+                                rows={2}
+                                maxLength={500}
+                                value={state.noteDraft}
+                                placeholder="双击填写备注"
+                                className="min-h-[64px] resize-none text-sm text-foreground"
+                                onChange={(event) => handlers.changeInlineNoteDraft(event.target.value)}
+                                onBlur={() => {
+                                  void handlers.commitInlineNoteEdit(item.channel_id)
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Escape') {
+                                    event.preventDefault()
+                                    handlers.cancelInlineNoteEdit()
+                                  }
+                                  if (event.key === 'Enter' && !event.shiftKey) {
+                                    event.preventDefault()
+                                    ;(event.currentTarget as HTMLTextAreaElement).blur()
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="block min-h-[40px] w-full rounded-md px-1 py-1 text-left hover:bg-muted/60"
+                                title="双击编辑备注"
+                                onDoubleClick={() => handlers.startInlineNoteEdit(item)}
+                              >
+                                {item.channel_adminNote ? (
+                                  <span className="break-words whitespace-normal leading-5 text-foreground">
+                                    {item.channel_adminNote}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/50">双击填写</span>
+                                )}
+                              </button>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
                               {SHIPPING_BILLING_MODE_LABELS[item.channel_billingMode] || item.channel_billingMode}
                             </Badge>
                           </TableCell>
-                          <TableCell>{item.channel_estimatedTime}</TableCell>
+                          <TableCell className="max-w-[160px] whitespace-normal break-words">
+                            {item.channel_estimatedTime}
+                          </TableCell>
                           <TableCell>{item.channel_coefficient.toFixed(2)}</TableCell>
                           <TableCell>
                             <button
@@ -247,6 +299,8 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
               </Table>
             </div>
           </Card>
+
+          <ShippingFeeTester list={state.list} usdExchangeRate={state.usdExchangeRate} />
         </div>
       </section>
 
@@ -273,6 +327,32 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
                     value={state.formData.channel_estimatedTime}
                     placeholder="如 3-5 business days"
                     onChange={(e) => handlers.setFormField('channel_estimatedTime', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">西语名称</label>
+                  <Input
+                    value={state.formData.channel_nameEs || ''}
+                    placeholder="客户选西语时展示；留空则按英文名自动翻译"
+                    onChange={(e) => handlers.setFormField('channel_nameEs', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">西语预计时间</label>
+                  <Input
+                    value={state.formData.channel_estimatedTimeEs || ''}
+                    placeholder="如 3-5 días hábiles；留空则自动翻译"
+                    onChange={(e) => handlers.setFormField('channel_estimatedTimeEs', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-sm font-medium">备注（仅后台可见）</label>
+                  <Textarea
+                    className="min-h-[72px]"
+                    value={state.formData.channel_adminNote || ''}
+                    placeholder="给运营看的内部备注，不会出现在客户结账页"
+                    maxLength={500}
+                    onChange={(e) => handlers.setFormField('channel_adminNote', e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -732,6 +812,201 @@ export function ShippingChannelConfigView({ state, handlers }: Props) {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+function ShippingFeeTester({
+  list,
+  usdExchangeRate,
+}: {
+  list: ShippingChannelItem[]
+  usdExchangeRate: number
+}) {
+  const [weightText, setWeightText] = useState('0.5')
+  const [channelId, setChannelId] = useState('')
+  const [country, setCountry] = useState('')
+  const [useDefaultCoef, setUseDefaultCoef] = useState(true)
+  const [coefText, setCoefText] = useState('')
+
+  const channel = list.find((item) => item.channel_id === channelId) || list[0] || null
+
+  const countryOptions = useMemo(() => {
+    if (!channel) return []
+    return Object.entries(channel.channel_countryFees)
+      .map(([code, rule]) => ({
+        code,
+        summary: summarizeCountryRule(channel.channel_billingMode, rule),
+      }))
+      .filter((row) => Boolean(row.summary))
+  }, [channel])
+
+  useEffect(() => {
+    if (!channel) {
+      setChannelId('')
+      setCountry('')
+      return
+    }
+    if (!list.some((item) => item.channel_id === channelId)) {
+      setChannelId(channel.channel_id)
+    }
+    if (!countryOptions.some((row) => row.code === country)) {
+      setCountry(countryOptions[0]?.code || '')
+    }
+  }, [channel, channelId, country, countryOptions, list])
+
+  useEffect(() => {
+    if (!channel || !useDefaultCoef) return
+    setCoefText(String(channel.channel_coefficient ?? 1))
+  }, [channel, useDefaultCoef])
+
+  const weightKg = Number(weightText)
+  const coefficient = useDefaultCoef
+    ? normalizeChannelCoefficient(channel?.channel_coefficient)
+    : normalizeChannelCoefficient(coefText)
+  const rate = usdExchangeRate > 0 ? usdExchangeRate : DEFAULT_USD_EXCHANGE_RATE
+  const countryRule = channel && country ? channel.channel_countryFees[country] : null
+  const cny =
+    channel && Number.isFinite(weightKg) && weightKg > 0
+      ? calculateShippingFee({
+          billingMode: channel.channel_billingMode,
+          channelCoefficient: coefficient,
+          countryRule,
+          weightKg,
+        })
+      : null
+  const usd = cny != null ? toUsdFromCny(cny, rate) : null
+
+  return (
+    <Card className="mt-6 border-border shadow-sm">
+      <CardContent className="space-y-4 p-5">
+        <div>
+          <h2 className="text-base font-semibold">运费测试</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            按已录入渠道的计费规则试算。金额按系统汇率折算美金；系数默认用渠道配置，也可手动覆盖。
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">重量（kg）</label>
+            <Input
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={weightText}
+              placeholder="例如 0.5"
+              onChange={(e) => setWeightText(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">物流渠道</label>
+            <Select
+              value={channel?.channel_id || ''}
+              onValueChange={(val) => {
+                setChannelId(val)
+                setUseDefaultCoef(true)
+              }}
+              disabled={list.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={list.length === 0 ? '请先录入渠道' : '选择渠道'} />
+              </SelectTrigger>
+              <SelectContent>
+                {list.map((item) => (
+                  <SelectItem key={item.channel_id} value={item.channel_id}>
+                    {item.channel_name}
+                    {item.channel_isEnabled ? '' : '（停用）'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">国家</label>
+            <Select value={country} onValueChange={setCountry} disabled={!channel || countryOptions.length === 0}>
+              <SelectTrigger>
+                <SelectValue placeholder={countryOptions.length === 0 ? '该渠道未配置国家运费' : '选择国家'} />
+              </SelectTrigger>
+              <SelectContent>
+                {countryOptions.map((row) => (
+                  <SelectItem key={row.code} value={row.code}>
+                    {row.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">系数</label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-primary"
+                  checked={useDefaultCoef}
+                  onChange={(e) => setUseDefaultCoef(e.target.checked)}
+                />
+                使用渠道默认
+              </label>
+            </div>
+            <Input
+              type="number"
+              min="0.0001"
+              step="0.01"
+              value={coefText}
+              disabled={useDefaultCoef || !channel}
+              onChange={(e) => {
+                setUseDefaultCoef(false)
+                setCoefText(e.target.value)
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end justify-between gap-4 rounded-md border bg-secondary/30 px-4 py-3">
+          <div className="space-y-1 text-sm text-muted-foreground">
+            {channel ? (
+              <>
+                <p>
+                  计费模式：{SHIPPING_BILLING_MODE_LABELS[channel.channel_billingMode] || channel.channel_billingMode}
+                  {country ? ` · ${country}` : ''}
+                </p>
+                <p>
+                  系数 {coefficient.toFixed(2)}
+                  {useDefaultCoef ? '（渠道默认）' : '（手动）'}
+                  {' · '}
+                  汇率 1 USD = {rate.toFixed(2)} CNY
+                </p>
+              </>
+            ) : (
+              <p>请先新增并配置物流渠道</p>
+            )}
+          </div>
+          <div className="text-right">
+            {cny == null ? (
+              <p className="text-sm text-muted-foreground">
+                {!channel
+                  ? '无法计算'
+                  : !Number.isFinite(weightKg) || weightKg <= 0
+                    ? '请输入大于 0 的重量'
+                    : !country
+                      ? '请选择已配置运费的国家'
+                      : '该重量超出此渠道可运范围，或该国家未配置有效运费'}
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                <p className="text-lg font-semibold tabular-nums text-foreground">
+                  {formatShippingFeeCny(cny)}
+                  <span className="ml-2 text-base font-medium text-muted-foreground">人民币</span>
+                </p>
+                <p className="text-lg font-semibold tabular-nums text-foreground">
+                  US$ {usd?.toFixed(2)}
+                  <span className="ml-2 text-base font-medium text-muted-foreground">美金</span>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

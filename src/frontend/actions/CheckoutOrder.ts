@@ -19,7 +19,10 @@ import {
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
-import { computeDiscounts, applyShippingDiscount } from '@/shared/pricingPromotionCalc'
+import { computeDiscounts } from '@/shared/pricingPromotionCalc'
+import { applySeaFreightDiscount, parseVipDiscount, withCustomerGoodsPolicy } from '@/shared/customerPromoPolicy'
+import { loadCustomerPromo } from '@/frontend/lib/loadCustomerPromoKind'
+import { resolveCustomerPromoEligibility } from '@/shared/customerType'
 import { isStorefrontQtyAllowed } from '@/shared/storefrontQty'
 import { resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 import { storefrontError } from '@/frontend/utils/storefrontErrors'
@@ -53,6 +56,8 @@ export type CheckoutOrderAddressInput = {
 }
 
 export type CheckoutOrderItemInput = {
+  /** 当前购物车行；有则只下这一行，避免把上一单残留/过期快照加进来 */
+  cartItemId?: string
   productId: string
   productSkuId: string
   quantity: number
@@ -497,7 +502,50 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
     const fees = normalizeCountryRuleMap(channel.countryFeesJson, billingMode)
     const countryRule = fees[country]
 
-    const skuIds = [...new Set(submittedItems.map((item) => item.productSkuId).filter(Boolean))]
+    const cart = await prisma.cart.findUnique({
+      where: { accountId: userId },
+      select: { id: true },
+    })
+    const dbCartLines = cart
+      ? await prisma.cartitem.findMany({
+          where: { cartId: cart.id },
+          select: {
+            id: true,
+            productId: true,
+            productSkuId: true,
+            quantity: true,
+          },
+        })
+      : []
+    const usedCartLineIds = new Set<string>()
+    const checkoutLines: Array<{ cartItemId: string; productId: string; productSkuId: string; quantity: number }> = []
+    for (const item of submittedItems) {
+      const byId = item.cartItemId
+        ? dbCartLines.find((row) => row.id === item.cartItemId && !usedCartLineIds.has(row.id))
+        : undefined
+      const bySku = dbCartLines.find(
+        (row) =>
+          !usedCartLineIds.has(row.id) &&
+          row.productSkuId === item.productSkuId &&
+          row.productId === item.productId,
+      )
+      const row = byId || bySku
+      if (!row || usedCartLineIds.has(row.id)) continue
+      usedCartLineIds.add(row.id)
+      const quantity = Math.floor(Number(row.quantity) || 0)
+      if (quantity <= 0) continue
+      checkoutLines.push({
+        cartItemId: row.id,
+        productId: row.productId,
+        productSkuId: row.productSkuId,
+        quantity,
+      })
+    }
+    if (checkoutLines.length === 0 || !cart) {
+      throw storefrontError('checkout.errors.cartChanged')
+    }
+
+    const skuIds = [...new Set(checkoutLines.map((item) => item.productSkuId).filter(Boolean))]
     const skus = await prisma.productsku.findMany({
       where: { id: { in: skuIds } },
       select: {
@@ -515,6 +563,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
             weightGram: true,
             tradeInfoJson: true,
             costPrice: true,
+            priceCoefficient: true,
             translationsJson: true,
             category: {
               select: {
@@ -560,7 +609,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       valid: boolean
     }> = []
 
-    for (const item of submittedItems) {
+    for (const item of checkoutLines) {
       const quantity = Math.floor(Number(item.quantity) || 0)
       if (quantity <= 0) throw storefrontError('checkout.errors.qtyInvalid')
       const sku = skuMap.get(item.productSkuId)
@@ -581,6 +630,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: sku.price.toNumber(),
         costPrice: sku.product.costPrice,
+        productCoefficient: sku.product.priceCoefficient,
         ...pricingCoeffs,
       })
       const unitPriceUsd = toUsdFromCny(priceRmb, exchangeRate)
@@ -647,24 +697,36 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       )
     }
 
-    const paidOrder = await prisma.orderrecord.findFirst({
-      where: { userId, status: 'PAID' },
-      select: { id: true },
+    const [account, paidOrder] = await Promise.all([
+      prisma.sysuser.findUnique({
+        where: { id: userId },
+        select: { customerType: true },
+      }),
+      prisma.orderrecord.findFirst({
+        where: { userId, status: 'PAID' },
+        select: { id: true },
+      }),
+    ])
+    const { isFirstOrderEligible, isLoyalCustomer } = resolveCustomerPromoEligibility({
+      customerType: account?.customerType,
+      hasPaidOrder: Boolean(paidOrder),
     })
-    const isFirstOrderEligible = !paidOrder
-    const isLoyalCustomer = Boolean(paidOrder)
+    const promo = await loadCustomerPromo(userId)
+    const vipOn = parseVipDiscount(promo.vipDiscount) > 0
     const discountResult = computeDiscounts({
-      config: pricingConfig,
+      config: withCustomerGoodsPolicy(pricingConfig, promo.kind, promo.vipDiscount),
       isFirstOrderEligible,
-      isLoyalCustomer,
+      isLoyalCustomer: isLoyalCustomer || (vipOn && promo.kind !== 'FIRST_ORDER'),
       lines: discountLinesInput,
     })
 
     const discountAmount = toMoney(discountResult.totalDiscountUsd)
     const discountedSubtotal = toMoney(originalSubtotalAmount - discountAmount)
     const rawShipping = toMoney(toUsdFromCny(serverShippingFee, exchangeRate))
-    const shippingAfterPromo = applyShippingDiscount({
-      config: pricingConfig,
+    const shippingAfterPromo = applySeaFreightDiscount({
+      kind: promo.kind,
+      billingMode,
+      channelName: channel.name,
       shippingUsd: rawShipping,
       merchandiseSubtotalUsd: discountedSubtotal,
     })
@@ -778,7 +840,10 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
           })
 
           await tx.cartitem.deleteMany({
-            where: { cart: { accountId: userId } },
+            where: {
+              cartId: cart.id,
+              id: { in: checkoutLines.map((line) => line.cartItemId) },
+            },
           })
 
           return order

@@ -12,22 +12,19 @@ export type MosaicRegion = {
   height: number
 }
 
-/** Common 1688 shop watermark: bottom-right, sometimes a thin bottom strip. */
+/**
+ * 1688 shop mark is 1–2 lines of white text in the bottom-right.
+ * Keep the box on the corner only — a 64%×22% slab covers the product.
+ */
 export function defaultWatermarkRegions(width: number, height: number): MosaicRegion[] {
   const w = Math.max(1, width)
   const h = Math.max(1, height)
   return [
     {
-      left: Math.floor(w * 0.58),
-      top: Math.floor(h * 0.76),
-      width: Math.max(1, Math.floor(w * 0.42)),
-      height: Math.max(1, Math.floor(h * 0.24)),
-    },
-    {
-      left: Math.floor(w * 0.5),
-      top: Math.floor(h * 0.9),
-      width: Math.max(1, Math.floor(w * 0.5)),
-      height: Math.max(1, Math.floor(h * 0.1)),
+      left: Math.floor(w * 0.62),
+      top: Math.floor(h * 0.86),
+      width: Math.max(24, Math.floor(w * 0.38)),
+      height: Math.max(16, Math.floor(h * 0.14)),
     },
   ]
 }
@@ -46,16 +43,37 @@ function clampRegion(region: MosaicRegion, width: number, height: number): Mosai
 async function mosaicPatch(
   source: Buffer,
   region: MosaicRegion,
-): Promise<{ input: Buffer; left: number; top: number }> {
-  const block = Math.max(6, Math.floor(Math.min(region.width, region.height) / 14))
-  const smallW = Math.max(1, Math.floor(region.width / block))
-  const smallH = Math.max(1, Math.floor(region.height / block))
-  const input = await sharp(source)
+): Promise<sharp.OverlayOptions> {
+  // Keep cells coarse enough that a 1688 URL cannot be read, but sized to the
+  // compact corner box (48px tiles on a short strip look like a huge bar).
+  const block = Math.max(22, Math.floor(Math.min(region.width, region.height) / 6))
+  const smallW = Math.max(2, Math.floor(region.width / block))
+  const smallH = Math.max(2, Math.floor(region.height / block))
+  // libvips fuses consecutive resize() into one identity op — pixelation never lands.
+  const small = await sharp(source)
     .extract(region)
-    .resize(smallW, smallH, { kernel: sharp.kernel.nearest })
-    .resize(region.width, region.height, { kernel: sharp.kernel.nearest })
+    .resize(smallW, smallH, { kernel: sharp.kernel.nearest, fastShrinkOnLoad: false })
     .toBuffer()
-  return { input, left: region.left, top: region.top }
+  const { data, info } = await sharp(small)
+    .resize(region.width, region.height, { kernel: sharp.kernel.nearest })
+    .blur(1.2)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return {
+    input: data,
+    raw: { width: info.width, height: info.height, channels: info.channels },
+    left: region.left,
+    top: region.top,
+  }
+}
+
+export async function resolveWatermarkMosaicRegion(
+  _input: Buffer,
+  width: number,
+  height: number,
+): Promise<MosaicRegion | null> {
+  return clampRegion(defaultWatermarkRegions(width, height)[0], width, height)
 }
 
 /** Returns JPEG bytes with watermark regions pixelated. */
@@ -67,9 +85,8 @@ export async function mosaicWatermarkCorners(input: Buffer): Promise<Buffer> {
     throw new Error('无法读取图片尺寸')
   }
 
-  const regions = defaultWatermarkRegions(width, height)
-    .map((r) => clampRegion(r, width, height))
-    .filter((r): r is MosaicRegion => Boolean(r))
+  const fitted = await resolveWatermarkMosaicRegion(input, width, height)
+  const regions = fitted ? [fitted] : []
 
   if (!regions.length) {
     return sharp(input).jpeg({ quality: 88 }).toBuffer()
@@ -132,10 +149,10 @@ export async function detectCornerWatermark(input: Buffer): Promise<boolean> {
 
   const br = clampRegion(
     {
-      left: Math.floor(width * 0.55),
-      top: Math.floor(height * 0.72),
-      width: Math.max(8, Math.floor(width * 0.45)),
-      height: Math.max(8, Math.floor(height * 0.28)),
+      left: Math.floor(width * 0.62),
+      top: Math.floor(height * 0.86),
+      width: Math.max(8, Math.floor(width * 0.38)),
+      height: Math.max(8, Math.floor(height * 0.14)),
     },
     width,
     height,

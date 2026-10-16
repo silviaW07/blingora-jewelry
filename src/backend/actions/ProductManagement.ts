@@ -100,6 +100,8 @@ export interface ProductListItem {
   sku_code_base: string
   source: ProductSource
   supplier_name: string | null
+  /** 1688 / 拼多多等采购页，单击供应商列跳转 */
+  source_url: string | null
   brand_keyword: string | null
   category_id: string
   category_name: string
@@ -307,6 +309,9 @@ export interface PendingImportQueueItem {
   item_parsedMainImageUrl: string | null
   /** SPU / 表格货号 / 退回待上传时带回的 productCode */
   item_productCode?: string | null
+  /** 运营已审核（爱心收藏标） */
+  item_reviewed?: boolean
+  item_reviewedAt?: string | null
   item_createdAt: Date
   item_updatedAt: Date
   item_skus: PendingImportSkuDraftItem[]
@@ -663,6 +668,7 @@ import {
   reparsePendingImportItems as reparseImportFrom1688PendingImportItems,
   cancelPendingImportParseJob as cancelImportFrom1688PendingImportParseJob,
   updatePendingImportGallery as updateImportFrom1688PendingImportGallery,
+  setPendingImportReviewMark as setImportFrom1688PendingImportReviewMark,
   check1688OfferLiveStatus,
   loadAutoMatchSecondaryCategories,
   matchSecondaryCategoriesByTitle,
@@ -708,6 +714,7 @@ import {
 import { loadBrandAliasRules } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
 import { resolveProduct1688Urls } from '@/shared/listed1688Inspect'
+import { normalizeSupplierSourceUrl, tradeImportSourceUrl } from '@/shared/supplierSourceUrl'
 import { invalidateHomeRecommendZoneCache } from '@/backend/actions/homeRecommendZoneCache'
 import { invalidateStorefrontCatalogCaches } from '@/frontend/actions/ProductCategory'
 import {
@@ -963,6 +970,32 @@ function getEffectivePriceCoefficient(product: {
   return resolveEffectiveCoefficient(toNumber(product.category?.priceCoefficient), null)
 }
 
+async function resolveListSupplierUrls(
+  products: Array<{ id: string; tradeInfoJson?: unknown }>,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  const missing: string[] = []
+  for (const product of products) {
+    const fromTrade = tradeImportSourceUrl(product.tradeInfoJson)
+    if (fromTrade) map.set(product.id, fromTrade)
+    else missing.push(product.id)
+  }
+  if (missing.length === 0) return map
+
+  const items = await prisma.importtaskitem.findMany({
+    where: { importedProductId: { in: missing } },
+    orderBy: { updatedAt: 'desc' },
+    select: { importedProductId: true, sourceUrl: true },
+  })
+  for (const item of items) {
+    const id = String(item.importedProductId || '')
+    if (!id || map.has(id)) continue
+    const url = normalizeSupplierSourceUrl(item.sourceUrl)
+    if (url) map.set(id, url)
+  }
+  return map
+}
+
 async function findPublishedImportProductByName(name?: string | null): Promise<PublishedImportMatchDbRecord | null> {
   const normalizedName = String(name || '').trim()
   if (!normalizedName) return null
@@ -1037,6 +1070,7 @@ async function mapProductToListItem(
     usdExchangeRate,
     prices,
   )
+  const sourceUrlById = await resolveListSupplierUrls([product])
 
   return {
     product_id: product.id,
@@ -1044,6 +1078,7 @@ async function mapProductToListItem(
     sku_code_base: product.productCode,
     source: product.source as ProductSource,
     supplier_name: product.supplierName || null,
+    source_url: sourceUrlById.get(product.id) || null,
     brand_keyword: product.brandName || null,
     category_id: product.categoryId,
     category_name: primaryMeta?.name || product.category?.name || '--',
@@ -1142,6 +1177,17 @@ function resolveCostLinkedSellRange(
   if (costPrice != null && Number.isFinite(costPrice) && costPrice >= 0 && coefficient > 0) {
     const rmb = calculateSkuRmbPrice(costPrice, coefficient)
     const usd = toUsdDisplayPrice(rmb, usdExchangeRate) ?? 0
+    if (fallbackPrices.length > 1 && !skuPricesAreUniform(fallbackPrices)) {
+      const priceMin = Math.min(...fallbackPrices)
+      const priceMax = Math.max(...fallbackPrices)
+      return {
+        priceMin,
+        priceMax,
+        usdMin: toUsdDisplayPrice(priceMin, usdExchangeRate) ?? 0,
+        usdMax: toUsdDisplayPrice(priceMax, usdExchangeRate) ?? 0,
+        linkedRmb: null,
+      }
+    }
     return { priceMin: rmb, priceMax: rmb, usdMin: usd, usdMax: usd, linkedRmb: rmb }
   }
   const priceMin = fallbackPrices.length > 0 ? Math.min(...fallbackPrices) : 0
@@ -2057,7 +2103,10 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       ...(p.relationCategories || []).map((rel: { categoryId: string }) => rel.categoryId),
     ]).filter(Boolean) as string[]
     const { categoryMap } = await getCategoryMetaMap(prisma, allCategoryIds)
-    await persistUniformSkuPricesFromCost(products, categoryMap)
+    void persistUniformSkuPricesFromCost(products, categoryMap).catch((error) => {
+      console.error('[getProductList] persistUniformSkuPricesFromCost failed', error)
+    })
+    const sourceUrlById = await resolveListSupplierUrls(products)
 
     const list: ProductListItem[] = products.map(p => {
       const prices = p.skus.map(s => toNumber(s.price) ?? 0)
@@ -2096,6 +2145,7 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         sku_code_base: p.productCode,
         source: p.source as ProductSource,
         supplier_name: p.supplierName || null,
+        source_url: sourceUrlById.get(p.id) || null,
         brand_keyword: p.brandName || null,
         category_id: p.categoryId,
         category_name: primaryMeta?.name || p.category?.name || '--',
@@ -2526,13 +2576,22 @@ export const updateProductStatus = requireRole([UserRole.ADMIN])(
       if (!product) throw new Error('商品不存在')
 
       if (target_status === 'ACTIVE') {
+        // 商品行经常不写 priceCoefficient，列表上的系数来自主类目继承。
+        // 再上架时用同一套系数，避免「价格系数必须大于0」把已下架商品拦住。
+        const { categoryMap } = await getCategoryMetaMap(tx, [product.categoryId])
+        const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId)
+        const priceCoefficient = resolveListDisplayCoefficient(
+          toNumber(product.priceCoefficient),
+          own,
+          parent,
+        )
         validateActivePreconditions({
           category_id: product.categoryId,
           name: product.name,
           goods_status: normalizeGoodsStatus(product.goodsStatus) || undefined,
           weight_gram: toNumber(product.weightGram) ?? null,
           cost_price: toNumber(product.costPrice) ?? null,
-          price_coefficient: toNumber(product.priceCoefficient) ?? null,
+          price_coefficient: priceCoefficient,
           detail_text: product.detailText || undefined,
           main_image_url: product.mainImageUrl,
           gallery_json: product.galleryJson as any,
@@ -3329,10 +3388,24 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
     page_size?: number
     skip_maintenance?: boolean
     keyword?: string
+    include_drafts?: boolean
+    item_ids?: string[]
   }): Promise<ProductManagementPendingImportQueueOutput> => {
     const queue = await getImportFrom1688PendingImportQueue(input)
     return queue as ProductManagementPendingImportQueueOutput
   })
+)
+
+export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_ids: string[]
+    reviewed: boolean
+  }): Promise<BatchOperateOutput> => {
+    return setImportFrom1688PendingImportReviewMark({
+      itemIds: input.item_ids,
+      reviewed: input.reviewed,
+    })
+  }),
 )
 
 export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
@@ -3367,16 +3440,25 @@ export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
   withResult(async (input: {
     item_id: string
     sku_key: string
+    sku_keys?: string[]
     field: PendingImportSkuEditableField
     value: string | number
-  }): Promise<InlineUpdatePendingImportItemFieldOutput> => {
-    await updateImportFrom1688PendingImportSkuField({
+    skus?: PendingImportSkuDraftItem[]
+  }): Promise<{ success: boolean; item_skus?: PendingImportSkuDraftItem[] }> => {
+    const result = await updateImportFrom1688PendingImportSkuField({
       itemId: input.item_id,
       skuKey: input.sku_key,
+      skuKeys: input.sku_keys,
       field: input.field,
-      value: input.value
+      value: input.value,
+      skus: input.skus as any,
     })
-    return { success: true }
+    const itemSkus =
+      (Array.isArray(result?.item_skus) && result.item_skus) ||
+      (Array.isArray((result as { itemSkus?: PendingImportSkuDraftItem[] })?.itemSkus) &&
+        (result as { itemSkus?: PendingImportSkuDraftItem[] }).itemSkus) ||
+      undefined
+    return { success: true, item_skus: itemSkus }
   })
 )
 
@@ -3530,35 +3612,47 @@ export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
             continue
           }
           const remapped = new Map<string, string>()
-          const processed = await mapPool(allUrls, 2, async (url) => {
-            const next = await mosaicOne(url)
-            remapped.set(url, next)
-            return next
-          })
           const replace = (url?: string | null) => {
             const key = String(url || '').trim()
             return key ? remapped.get(key) || key : url
           }
-          const nextGallery = gallery.map((url) => remapped.get(url) || url)
-          const mainImageUrl = nextGallery[0] || replace(item.mainImageUrl) || processed[0]
-          await prisma.importtaskitem.update({
-            where: { id: item.id },
-            data: {
-              mainImageUrl: mainImageUrl || item.mainImageUrl,
-              parsedMainImageUrl: mainImageUrl || item.parsedMainImageUrl,
-              previewDataJson: {
-                ...preview,
-                mainImageUrl: mainImageUrl || preview.mainImageUrl,
-                detailImages: nextGallery.length ? nextGallery : preview.detailImages,
-                colors: Array.isArray(preview.colors)
-                  ? preview.colors.map((color) => ({ ...color, imageUrl: replace(color.imageUrl) || color.imageUrl }))
-                  : preview.colors,
-                skuTable: Array.isArray(preview.skuTable)
-                  ? preview.skuTable.map((row) => ({ ...row, imageUrl: replace(row.imageUrl) || row.imageUrl }))
-                  : preview.skuTable,
-              } as any,
-            },
+          const persistPendingPreview = async (nextGallery: string[]) => {
+            const mainImageUrl = nextGallery[0] || replace(item.mainImageUrl) || item.mainImageUrl
+            await prisma.importtaskitem.update({
+              where: { id: item.id },
+              data: {
+                mainImageUrl: mainImageUrl || item.mainImageUrl,
+                parsedMainImageUrl: mainImageUrl || item.parsedMainImageUrl,
+                previewDataJson: {
+                  ...preview,
+                  mainImageUrl: mainImageUrl || preview.mainImageUrl,
+                  detailImages: nextGallery.length ? nextGallery : preview.detailImages,
+                  colors: Array.isArray(preview.colors)
+                    ? preview.colors.map((color) => ({ ...color, imageUrl: replace(color.imageUrl) || color.imageUrl }))
+                    : preview.colors,
+                  skuTable: Array.isArray(preview.skuTable)
+                    ? preview.skuTable.map((row) => ({ ...row, imageUrl: replace(row.imageUrl) || row.imageUrl }))
+                    : preview.skuTable,
+                } as any,
+              },
+            })
+          }
+          // 先打主图轮播并落库，避免 80 张 SKU 图把请求拖超时后整单作废
+          await mapPool(gallery, 2, async (url) => {
+            const next = await mosaicOne(url)
+            remapped.set(url, next)
+            return next
           })
+          const nextGallery = gallery.map((url) => remapped.get(url) || url)
+          await persistPendingPreview(nextGallery)
+          if (skuUrls.length) {
+            await mapPool(skuUrls, 2, async (url) => {
+              const next = await mosaicOne(url)
+              remapped.set(url, next)
+              return next
+            })
+            await persistPendingPreview(nextGallery)
+          }
           success += 1
         } catch {
           fail += 1
@@ -4207,6 +4301,16 @@ export const batchAppendProductAdminNotes = requireRole([UserRole.ADMIN])(
   })
 )
 
+function persistPendingParsedName(itemId: string, nextName: string) {
+  return prisma.$executeRawUnsafe(
+    `UPDATE importtaskitem
+     SET parsedName = ?
+     WHERE id = ? AND COALESCE(isPublished, 0) = 0`,
+    nextName,
+    itemId,
+  )
+}
+
 function appendLiteralSuffixToCachedTitle(title: string, suffix: string): string {
   if (titleAlreadyHasSuffix(title, suffix)) return title
   return `${String(title || '').trimEnd()}${suffix}`
@@ -4297,7 +4401,6 @@ export const batchAppendPendingImportTitleSuffix = requireRole([UserRole.ADMIN])
             id: true,
             parsedName: true,
             isPublished: true,
-            previewDataJson: true,
           },
         })
         if (!item || item.isPublished) {
@@ -4312,26 +4415,7 @@ export const batchAppendPendingImportTitleSuffix = requireRole([UserRole.ADMIN])
           continue
         }
 
-        const preview = ((item.previewDataJson || {}) as Record<string, unknown>)
-        const prevEn = typeof preview.nameEn === 'string' ? preview.nameEn : ''
-        const prevEs = typeof preview.nameEs === 'string' ? preview.nameEs : ''
-
-        await prisma.importtaskitem.update({
-          where: { id: itemId },
-          data: {
-            parsedName: nextName,
-            previewDataJson: {
-              ...preview,
-              name: nextName,
-              ...(prevEn
-                ? { nameEn: appendLiteralSuffixToCachedTitle(prevEn, suffix) }
-                : {}),
-              ...(prevEs
-                ? { nameEs: appendLiteralSuffixToCachedTitle(prevEs, suffix) }
-                : {}),
-            } as any,
-          },
-        })
+        await persistPendingParsedName(item.id, nextName)
         success += 1
       } catch {
         fail += 1
@@ -4424,7 +4508,6 @@ export const batchRemovePendingImportTitleSuffix = requireRole([UserRole.ADMIN])
             id: true,
             parsedName: true,
             isPublished: true,
-            previewDataJson: true,
           },
         })
         if (!item || item.isPublished) {
@@ -4439,26 +4522,7 @@ export const batchRemovePendingImportTitleSuffix = requireRole([UserRole.ADMIN])
           continue
         }
 
-        const preview = ((item.previewDataJson || {}) as Record<string, unknown>)
-        const prevEn = typeof preview.nameEn === 'string' ? preview.nameEn : ''
-        const prevEs = typeof preview.nameEs === 'string' ? preview.nameEs : ''
-
-        await prisma.importtaskitem.update({
-          where: { id: itemId },
-          data: {
-            parsedName: nextName,
-            previewDataJson: {
-              ...preview,
-              name: nextName,
-              ...(prevEn
-                ? { nameEn: removeLiteralSuffixesFromCachedTitle(prevEn, suffixes) }
-                : {}),
-              ...(prevEs
-                ? { nameEs: removeLiteralSuffixesFromCachedTitle(prevEs, suffixes) }
-                : {}),
-            } as any,
-          },
-        })
+        await persistPendingParsedName(item.id, nextName)
         success += 1
       } catch {
         fail += 1
@@ -4514,9 +4578,17 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
     if (scopedIds.length === 0) {
       throw new Error('请先勾选要校准的商品')
     }
-    const MAX_CALIBRATE = 40
+    const MAX_CALIBRATE = 200
     if (scopedIds.length > MAX_CALIBRATE) {
-      throw new Error(`一次最多校准 ${MAX_CALIBRATE} 件，请缩小勾选后再试`)
+      throw new Error(`一次最多校准 ${MAX_CALIBRATE} 件，这次勾了 ${scopedIds.length} 件，请分批再试`)
+    }
+
+    const loadCalibrateContext = async () => {
+      const secondaryCategories = await loadAutoMatchSecondaryCategories(prisma)
+      const filterCategories = await loadFilterCategoriesFromDb(prisma)
+      const brandRules = await loadBrandAliasRules()
+      const thresholdCtx = await preloadPriceThresholdSyncContext(prisma)
+      return { secondaryCategories, filterCategories, brandRules, thresholdCtx }
     }
 
     let secondaryCategories: Awaited<ReturnType<typeof loadAutoMatchSecondaryCategories>>
@@ -4524,14 +4596,17 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
     let brandRules: Awaited<ReturnType<typeof loadBrandAliasRules>>
     let thresholdCtx: Awaited<ReturnType<typeof preloadPriceThresholdSyncContext>>
     try {
-      ;[secondaryCategories, filterCategories, brandRules, thresholdCtx] = await Promise.all([
-        loadAutoMatchSecondaryCategories(prisma),
-        loadFilterCategoriesFromDb(prisma),
-        loadBrandAliasRules(),
-        preloadPriceThresholdSyncContext(prisma),
-      ])
-    } catch {
-      throw new Error('校准准备失败，请缩小勾选后重试')
+      ;({ secondaryCategories, filterCategories, brandRules, thresholdCtx } = await loadCalibrateContext())
+    } catch (error) {
+      console.warn('[calibrate] preload failed, retrying', error)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        ;({ secondaryCategories, filterCategories, brandRules, thresholdCtx } = await loadCalibrateContext())
+      } catch (retryError) {
+        const detail = retryError instanceof Error ? retryError.message : String(retryError || '')
+        console.error('[calibrate] preload retry failed', retryError)
+        throw new Error(detail ? `校准准备失败：${detail}` : '校准准备失败，请稍后重试')
+      }
     }
 
     let products: Array<{
@@ -4562,8 +4637,10 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
         },
         orderBy: { updatedAt: 'desc' },
       })
-    } catch {
-      throw new Error('校准准备失败，请缩小勾选后重试')
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error || '')
+      console.error('[calibrate] load products failed', error)
+      throw new Error(detail ? `校准读取商品失败：${detail}` : '校准读取商品失败，请稍后重试')
     }
 
     let matched = 0

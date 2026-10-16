@@ -39,6 +39,13 @@ export interface UpdateBuyerShowMediaInput {
 
 import prisma from '@/tools/prisma'
 import { requireRole, withResult, UserRole } from '@/backend/action_utils'
+import {
+  createBuyerShowProof,
+  deleteBuyerShowProof,
+  listBuyerShowProofs,
+  updateBuyerShowProof,
+  type BuyerShowProofRecord,
+} from '@/shared/buyerShowProof'
 
 function toMedia(row: {
   id: string
@@ -153,6 +160,46 @@ export const reviewBuyerShowComment = requireRole([UserRole.ADMIN, UserRole.SUB_
 export const deleteBuyerShowComment = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
   withResult(async (input: { id: string }): Promise<{ success: boolean }> => {
     await prisma.buyershowcomment.delete({ where: { id: input.id } })
+    return { success: true }
+  }),
+)
+
+export type BuyerShowProofItem = BuyerShowProofRecord
+
+export const listBuyerShowProofsAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+  withResult(async (): Promise<{ list: BuyerShowProofItem[] }> => {
+    try {
+      return { list: await listBuyerShowProofs(false) }
+    } catch (error) {
+      console.error('[listBuyerShowProofsAdmin]', error)
+      return { list: [] }
+    }
+  }),
+)
+
+export const createBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+  withResult(async (input: { imageUrl: string; title: string; body: string }): Promise<{ success: boolean; id: string }> => {
+    const created = await createBuyerShowProof(input)
+    return { success: true, id: created.id }
+  }),
+)
+
+export const updateBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+  withResult(async (input: {
+    id: string
+    title?: string
+    body?: string
+    isEnabled?: boolean
+    sortWeight?: number
+  }): Promise<{ success: boolean }> => {
+    await updateBuyerShowProof(input)
+    return { success: true }
+  }),
+)
+
+export const deleteBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+  withResult(async (input: { id: string }): Promise<{ success: boolean }> => {
+    await deleteBuyerShowProof(input.id)
     return { success: true }
   }),
 )

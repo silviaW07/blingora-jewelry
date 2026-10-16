@@ -6,6 +6,8 @@
  * Aliases ONEBOUND_KEY / ONEBOUND_SECRET are accepted for compatibility.
  */
 
+import { filterSellableSkuAttributes } from '@/shared/skuDisplayGuards'
+
 export type OneBoundSkuRow = {
   skuKey?: string
   spec?: string
@@ -135,29 +137,31 @@ const parseSkuAttributes = (
   const fromList = propertyKeys
     .map(key => parseAttributeLabel(propsList[key]))
     .filter((value): value is { name: string; value: string } => Boolean(value))
-  if (fromList.length) return fromList
+  if (fromList.length) return filterSellableSkuAttributes(fromList)
 
-  return cleanText(sku.properties_name)
-    .split(';')
-    .map(part => {
-      const pieces = part.split(':')
-      if (pieces.length < 4) return null
-      return {
-        name: pieces[2]?.trim() || '',
-        value: pieces.slice(3).join(':').trim(),
-      }
-    })
-    .filter(
-      (value): value is { name: string; value: string } =>
-        Boolean(value?.name && value?.value),
-    )
+  return filterSellableSkuAttributes(
+    cleanText(sku.properties_name)
+      .split(';')
+      .map(part => {
+        const pieces = part.split(':')
+        if (pieces.length < 4) return null
+        return {
+          name: pieces[2]?.trim() || '',
+          value: pieces.slice(3).join(':').trim(),
+        }
+      })
+      .filter(
+        (value): value is { name: string; value: string } =>
+          Boolean(value?.name && value?.value),
+      ),
+  )
 }
 
 const isColorName = (name: string): boolean =>
-  /颜色|色号|colour|color/i.test(name)
+  /颜色|色号|香型|香味|香氛|口味|套餐|款式|花样|图案|colour|color/i.test(name)
 
 const isSizeName = (name: string): boolean =>
-  /尺码|尺寸|大小|规格|size|length|width|长度|宽度/i.test(name)
+  /尺码|尺寸|大小|鞋码|净含量|容量|size|length|width|长度|宽度/i.test(name)
 
 const imageForSku = (
   sku: UnknownRecord,

@@ -1117,7 +1117,7 @@ export const useCategoryManagement = (): { state: CategoryManagementState; handl
         category_id: item.category_id,
         price_coefficient: nextValue,
       });
-      toast.success('售价系数已更新');
+      toast.success('售价系数已更新，前台售价已按新系数重算');
       await loadData(page, activeKeyword, status, levelFilter);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));

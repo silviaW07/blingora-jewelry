@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import {
   ChevronDown,
   Heart,
+  Images,
   LogOut,
   MapPin,
   Package,
@@ -108,6 +109,11 @@ export function CustomerAccountMenu({
     hardNavigate(Wishlist.path.endsWith('/') ? Wishlist.path : `${Wishlist.path}/`)
   }
 
+  const goLookbook = () => {
+    setOpen(false)
+    hardNavigate('/promo-catalog/')
+  }
+
   const handleLogout = () => {
     session.reset()
     setOpen(false)
@@ -199,6 +205,15 @@ export function CustomerAccountMenu({
           >
             <Heart className="size-4 text-[#6f6558]" />
             {t('nav.wishlist')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-3 rounded-[16px] px-4 py-3 text-left text-sm font-medium text-[#232323] transition hover:bg-white"
+            onClick={goLookbook}
+          >
+            <Images className="size-4 text-[#6f6558]" />
+            {t('nav.lookbook')}
           </button>
           <button
             type="button"

@@ -44,13 +44,13 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           1688 链接导入任务
         </CardTitle>
         <CardDescription>
-          粘贴商品详情或店铺分类/分页链接后点提交，系统会自动抽商品并解析。
+          粘贴 1688 / 拼多多 / Yupoo / 微购相册链接后先点提交，确认无误后再点开始解析。Yupoo 成本认页上 P 价，或标题货号前两位（如 131000920 → 成本 13）。加密店铺先填店铺密码。一款多色是一色一条 SKU，同色多图不另开。没标题时按分类词/主图补品牌和品类；蒂芙尼蓝/卡地亚红等看盒子色。微购列表会拆成多条动态。
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground flex items-center gap-1">
-            1688 商品 / 分类源链接
+            商品 / 分类 / Yupoo / 微购相册链接
             <Info className="w-3 h-3 text-muted-foreground" />
           </label>
           <Textarea
@@ -59,10 +59,40 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
             placeholder={
               '商品详情：https://detail.1688.com/offer/数字.html\n' +
               '店铺分类/分页：https://shopXXXX.1688.com/page/offerlist.htm?beginPage=2\n' +
-              '支持多行批量粘贴；分类和分页链接可直接解析'
+              'Yupoo 相册：https://店铺.x.yupoo.com/albums/数字\n' +
+              'Yupoo 分类：https://店铺.x.yupoo.com/categories/数字\n' +
+              '微购相册：https://www.szwego.com/static/index.html#/shop_detail/店铺ID\n' +
+              '支持多行批量粘贴；分类、分页和微购店铺列表可直接解析'
             }
             className="min-h-[120px] resize-none focus-visible:ring-primary"
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">微购 Cookie（解析相册时用，第一次必填）</label>
+          <Textarea
+            value={state.createForm.weishangCookie}
+            onChange={(e) => handlers.handleCreateFormChange('weishangCookie', e.target.value)}
+            placeholder="在电脑打开 www.szwego.com 扫码登录后，按 F12 → Network → 任意请求 → 复制 Cookie"
+            className="min-h-[72px] resize-none focus-visible:ring-primary"
+          />
+          <p className="text-xs text-muted-foreground">
+            只在导入微购/微商相册时需要。填一次会保存在服务器，之后同一台机可直接粘贴链接。
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">Yupoo 店铺密码（加密主页必填）</label>
+          <Input
+            type="password"
+            value={state.createForm.yupooPassword}
+            onChange={(e) => handlers.handleCreateFormChange('yupooPassword', e.target.value)}
+            placeholder="加密店铺的访问密码，填一次会保存在服务器"
+            className="h-10"
+          />
+          <p className="text-xs text-muted-foreground">
+            tyjp 这类加了主页密码的相册，服务器没有密码就只能停在加密页。填一次后同一台机可直接粘贴链接解析。
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -80,18 +110,15 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">成本减法 (USD)</label>
+            <label className="text-sm font-medium text-foreground">供应商</label>
             <Input
-              type="number"
-              value={state.createForm.costDeductionUsd}
-              onChange={(e) =>
-                handlers.handleCreateFormChange('costDeductionUsd', e.target.value === '' ? '' : Number(e.target.value))
-              }
-              placeholder="0"
+              value={state.createForm.supplierName}
+              onChange={(e) => handlers.handleCreateFormChange('supplierName', e.target.value)}
+              placeholder="选填，填了则本批链接都用这个供应商"
               className="h-10"
             />
             <p className="text-xs text-muted-foreground">
-              导入时会先从抓取原价中扣减这里的金额，再按目标分类系数自动生成售价。
+              非必填。填写后本次提交的全部链接解析入库都会用这个供应商名称。
             </p>
           </div>
 
@@ -140,13 +167,13 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
         ) : (
           <Alert>
             <Info className="w-4 h-4" />
-            <AlertTitle>推荐流程：粘贴链接 → 提交</AlertTitle>
+            <AlertTitle>推荐流程：粘贴链接 → 提交 → 开始解析</AlertTitle>
             <AlertDescription className="space-y-1">
               <p>
-                商品详情、店铺分类页、分页链接都可以直接粘贴。提交后会自动抽商品并解析，完成后出现在【待上传区】。
+                商品详情、店铺分类页、Yupoo 相册、微购相册都可以直接粘贴。提交只创建任务，不会立刻抓取；确认后再点「开始解析」。
               </p>
               <p className="text-muted-foreground">
-                若分类页抽不出商品，请更新 secrets/1688-cookie.txt 后重启 rpc。解析失败可点「重新解析」。
+                若分类页抽不出商品，请更新 secrets/1688-cookie.txt 后重启 rpc。微购相册需登录：把 www.szwego.com 的 Cookie 保存到 secrets/szwego-cookie.txt 后重启 rpc。解析失败可点「重新解析」。
               </p>
             </AlertDescription>
           </Alert>
@@ -180,16 +207,26 @@ export function ImportFrom1688LinkImportPanel({ state, handlers }: Props) {
           </Alert>
         ) : null}
 
+        {state.createTaskError ? (
+          <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
+            <AlertCircle className="w-4 h-4" />
+            <AlertTitle>提交失败</AlertTitle>
+            <AlertDescription>{state.createTaskError}</AlertDescription>
+          </Alert>
+        ) : null}
+
         <div className="flex flex-col sm:flex-row gap-3">
           <Button
+            type="button"
             className="h-11 bg-primary hover:bg-primary text-primary-foreground font-semibold"
-            onClick={handlers.handleCreateTask}
-            disabled={state.isSubmitting || state.isParsingTask || !state.createForm.urls.trim()}
+            onClick={() => void handlers.handleCreateTask()}
+            disabled={state.isSubmitting || !state.createForm.urls.trim()}
           >
             {state.isSubmitting ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
             {state.isSubmitting ? '提交中…' : '提交链接'}
           </Button>
           <Button
+            type="button"
             variant="outline"
             className="h-11 font-semibold"
             onClick={() => handlers.handleStartParseTask(parseTargetId || undefined)}

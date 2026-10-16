@@ -21,7 +21,7 @@ import type { CartState, CartHandlers } from '@/frontend/hooks/useCart'
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder'
 import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 import { AccountOrders, Cart } from '@/frontend/route-params'
-import { computeCheckoutTotals, sumCartWeightGram } from '@/shared/checkoutSummary'
+import { computeCheckoutTotals, pickSelectedCartItems, readPersistedCartSelectedIds, sumCartWeightGram, sumSelectedCartOriginalUsd, sumSelectedCartSubtotalUsd } from '@/shared/checkoutSummary'
 import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService'
 import {
   buildWhatsAppUrl,
@@ -83,27 +83,27 @@ export default function CheckoutView({ state, handlers }: Props) {
     }
   }, [isSuccessOpen, router, state.isEmpty, state.loading])
 
-  const checkoutTotals = useMemo(() => {
-    if (!state.summary) {
-      return computeCheckoutTotals({
-        originalPriceUsd: 0,
-        discountUsd: 0,
-        shippingFeeUsd: null,
-      })
-    }
-    return computeCheckoutTotals({
-      originalPriceUsd: Number(state.summary.totalPrice) || 0,
-      discountUsd: Number(state.summary.discount) || 0,
-      shippingFeeUsd: selectedShippingFee,
-    })
-  }, [selectedShippingFee, state.summary])
+  const selectedItems = useMemo(
+    () => pickSelectedCartItems(state.items, readPersistedCartSelectedIds()),
+    [state.items],
+  )
+  const selectedOriginalUsd = useMemo(() => sumSelectedCartOriginalUsd(selectedItems), [selectedItems])
+  const selectedSubtotalUsd = useMemo(() => sumSelectedCartSubtotalUsd(selectedItems), [selectedItems])
+  const selectedDiscountUsd = Math.max(0, selectedOriginalUsd - selectedSubtotalUsd)
+
+  const checkoutTotals = useMemo(
+    () =>
+      computeCheckoutTotals({
+        originalPriceUsd: selectedOriginalUsd,
+        discountUsd: selectedDiscountUsd,
+        shippingFeeUsd: selectedItems.length ? selectedShippingFee : null,
+      }),
+    [selectedDiscountUsd, selectedItems.length, selectedOriginalUsd, selectedShippingFee],
+  )
 
   const payableAmountValue = checkoutTotals.totalUsd
 
-  const totalWeightGram = useMemo(
-    () => sumCartWeightGram(state.items, state.summary?.totalWeightGram),
-    [state.items, state.summary?.totalWeightGram],
-  )
+  const totalWeightGram = useMemo(() => sumCartWeightGram(selectedItems), [selectedItems])
 
   const cartTotalWeightKg = useMemo(() => {
     if (!Number.isFinite(totalWeightGram) || totalWeightGram <= 0) return 0
@@ -139,8 +139,8 @@ export default function CheckoutView({ state, handlers }: Props) {
       toast.error(t('checkout.selectShipping'))
       return
     }
-    const validItems = state.items.filter((item) => item.status !== 'INVALID')
-    if (validItems.length === 0) {
+    const orderItems = selectedItems
+    if (orderItems.length === 0) {
       toast.error(t('checkout.noOrderableItems'))
       return
     }
@@ -154,7 +154,8 @@ export default function CheckoutView({ state, handlers }: Props) {
           channelName: selectedChannelName || 'Shipping',
           shippingFee: selectedShippingFee,
         },
-        items: validItems.map((item) => ({
+        items: orderItems.map((item) => ({
+          cartItemId: item.cartItemId,
           productId: item.productId,
           productSkuId: item.productSkuId,
           quantity: item.quantity,
@@ -248,6 +249,7 @@ export default function CheckoutView({ state, handlers }: Props) {
                     state.actionLoading ||
                     isPlacingOrder ||
                     state.isEmpty ||
+                    selectedItems.length === 0 ||
                     state.hasInvalidItems ||
                     !addressConfirmed ||
                     !checkoutAddress ||

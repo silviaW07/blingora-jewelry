@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { CHECKOUT_COUNTRIES } from '@/shared/shippingCountries'
+import { DEFAULT_USD_EXCHANGE_RATE } from '@/shared/exchangeRate'
 import {
   DEFAULT_CHANNEL_COEFFICIENT,
   DEFAULT_SEA_BASE_KG,
@@ -30,6 +31,7 @@ import {
   getShippingChannelList,
   reorderShippingChannels,
   saveShippingChannel,
+  updateShippingChannelAdminNote,
   updateShippingChannelStatus,
 } from '@/backend/actions/ShippingChannelConfig'
 
@@ -51,7 +53,10 @@ function emptyFees(mode: ShippingBillingMode): CountryRuleMap {
 function createEmptyForm(): SaveShippingChannelInput {
   return {
     channel_name: '',
+    channel_nameEs: '',
     channel_estimatedTime: '',
+    channel_estimatedTimeEs: '',
+    channel_adminNote: '',
     channel_billingMode: 'EXPRESS_TIER',
     channel_coefficient: DEFAULT_CHANNEL_COEFFICIENT,
     channel_countryFees: emptyFees('EXPRESS_TIER'),
@@ -71,6 +76,9 @@ export interface ShippingChannelConfigState {
   formData: SaveShippingChannelInput | null
   submitting: boolean
   canReorder: boolean
+  usdExchangeRate: number
+  editingNoteId: string | null
+  noteDraft: string
   STATUS_LABELS: Record<ShippingChannelFilterStatus, string>
 }
 
@@ -128,6 +136,10 @@ export interface ShippingChannelConfigHandlers {
   handleSubmit: () => Promise<void>
   handleDelete: (id: string) => Promise<void>
   handleQuickUpdateStatus: (id: string, enabled: boolean) => Promise<void>
+  startInlineNoteEdit: (item: ShippingChannelItem) => void
+  changeInlineNoteDraft: (value: string) => void
+  commitInlineNoteEdit: (id: string) => Promise<void>
+  cancelInlineNoteEdit: () => void
   handleReorder: (fromId: string, toId: string) => Promise<void>
 }
 
@@ -142,6 +154,10 @@ export function useShippingChannelConfig() {
   const [formMode, setFormMode] = useState<FormMode>(null)
   const [formData, setFormData] = useState<SaveShippingChannelInput | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [usdExchangeRate, setUsdExchangeRate] = useState(DEFAULT_USD_EXCHANGE_RATE)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
+  const skipNoteCommitRef = useRef(false)
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -153,6 +169,10 @@ export function useShippingChannelConfig() {
       setList(result.list)
       setTotal(result.total)
       setCountries(result.countries?.length ? result.countries : [...CHECKOUT_COUNTRIES])
+      const rate = Number(
+        result.usd_exchange_rate ?? (result as { usdExchangeRate?: number }).usdExchangeRate,
+      )
+      if (Number.isFinite(rate) && rate > 0) setUsdExchangeRate(rate)
     } catch (error) {
       toast.error((error as Error).message || '加载物流渠道失败')
     } finally {
@@ -192,7 +212,10 @@ export function useShippingChannelConfig() {
       setFormData({
         channel_id: item.channel_id,
         channel_name: item.channel_name,
+        channel_nameEs: item.channel_nameEs || '',
         channel_estimatedTime: item.channel_estimatedTime,
+        channel_estimatedTimeEs: item.channel_estimatedTimeEs || '',
+        channel_adminNote: item.channel_adminNote || '',
         channel_billingMode: mode,
         channel_coefficient: item.channel_coefficient ?? DEFAULT_CHANNEL_COEFFICIENT,
         channel_countryFees: merged,
@@ -570,6 +593,51 @@ export function useShippingChannelConfig() {
         toast.error((error as Error).message || '状态更新失败')
       }
     },
+    startInlineNoteEdit: (item) => {
+      skipNoteCommitRef.current = false
+      setEditingNoteId(item.channel_id)
+      setNoteDraft(item.channel_adminNote || '')
+    },
+    changeInlineNoteDraft: (value) => {
+      setNoteDraft(value)
+    },
+    cancelInlineNoteEdit: () => {
+      skipNoteCommitRef.current = true
+      setEditingNoteId(null)
+      setNoteDraft('')
+    },
+    commitInlineNoteEdit: async (id) => {
+      if (skipNoteCommitRef.current) {
+        skipNoteCommitRef.current = false
+        setEditingNoteId(null)
+        return
+      }
+      const current = list.find((item) => item.channel_id === id)
+      const nextNote = noteDraft.trim()
+      const prevNote = String(current?.channel_adminNote || '').trim()
+      setEditingNoteId(null)
+      if (!current || nextNote === prevNote) {
+        setNoteDraft('')
+        return
+      }
+      try {
+        await updateShippingChannelAdminNote({
+          channel_id: id,
+          channel_adminNote: nextNote,
+        })
+        setList((prev) =>
+          prev.map((item) =>
+            item.channel_id === id ? { ...item, channel_adminNote: nextNote } : item,
+          ),
+        )
+        toast.success('备注已更新')
+      } catch (error) {
+        toast.error((error as Error).message || '备注更新失败')
+        await fetchList()
+      } finally {
+        setNoteDraft('')
+      }
+    },
     handleReorder: async (fromId, toId) => {
       if (!fromId || !toId || fromId === toId) return
       if (appliedKeyword || filterStatus !== 'ALL') {
@@ -608,6 +676,9 @@ export function useShippingChannelConfig() {
       formMode,
       formData,
       submitting,
+      usdExchangeRate,
+      editingNoteId,
+      noteDraft,
       canReorder: !appliedKeyword && filterStatus === 'ALL',
       STATUS_LABELS: {
         ALL: '全部',
@@ -615,7 +686,7 @@ export function useShippingChannelConfig() {
         DISABLED: '已停用',
       },
     }),
-    [loading, list, total, countries, inputKeyword, filterStatus, formMode, formData, submitting, appliedKeyword],
+    [loading, list, total, countries, inputKeyword, filterStatus, formMode, formData, submitting, usdExchangeRate, appliedKeyword, editingNoteId, noteDraft],
   )
 
   return { state, handlers }

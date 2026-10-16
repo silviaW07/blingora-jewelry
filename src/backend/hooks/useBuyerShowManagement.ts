@@ -7,15 +7,20 @@ import type {
   BuyerShowCommentItem,
   BuyerShowCommentStatus,
   BuyerShowMediaItem,
+  BuyerShowProofItem,
 } from '@/backend/actions/BuyerShowManagement'
 import {
   createBuyerShowMedia,
+  createBuyerShowProofAdmin,
   deleteBuyerShowComment,
   deleteBuyerShowMedia,
+  deleteBuyerShowProofAdmin,
   listBuyerShowCommentsAdmin,
   listBuyerShowMediaAdmin,
+  listBuyerShowProofsAdmin,
   reviewBuyerShowComment,
   updateBuyerShowMedia,
+  updateBuyerShowProofAdmin,
 } from '@/backend/actions/BuyerShowManagement'
 
 export function useBuyerShowManagement() {
@@ -26,6 +31,8 @@ export function useBuyerShowManagement() {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [proofs, setProofs] = useState<BuyerShowProofItem[]>([])
+  const [proofSaving, setProofSaving] = useState(false)
 
   const reloadMedia = useCallback(async () => {
     const result = await listBuyerShowMediaAdmin()
@@ -40,11 +47,16 @@ export function useBuyerShowManagement() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    Promise.all([listBuyerShowMediaAdmin(), listBuyerShowCommentsAdmin({ status: 'PENDING' })])
-      .then(([mediaResult, commentResult]) => {
+    Promise.all([
+      listBuyerShowMediaAdmin(),
+      listBuyerShowCommentsAdmin({ status: 'PENDING' }),
+      listBuyerShowProofsAdmin(),
+    ])
+      .then(([mediaResult, commentResult, proofResult]) => {
         if (cancelled) return
         setMedia(mediaResult.list)
         setComments(commentResult.list)
+        setProofs(proofResult.list)
       })
       .catch((error) => {
         if (!cancelled) toast.error(error instanceof Error ? error.message : '加载失败')
@@ -97,8 +109,13 @@ export function useBuyerShowManagement() {
     [reloadMedia, titleDraft],
   )
 
+  const reloadProofs = useCallback(async () => {
+    const result = await listBuyerShowProofsAdmin()
+    setProofs(result.list)
+  }, [])
+
   return {
-    state: { media, comments, commentFilter, loading, uploading, dragOver, titleDraft },
+    state: { media, comments, commentFilter, loading, uploading, dragOver, titleDraft, proofs, proofSaving },
     handlers: {
       setTitleDraft,
       setDragOver,
@@ -150,6 +167,50 @@ export function useBuyerShowManagement() {
           await deleteBuyerShowComment({ id })
           await reloadComments()
           toast.success('已删除留言')
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : '删除失败')
+        }
+      },
+      publishProof: async (file: File | null, title: string, body: string) => {
+        if (!file) {
+          toast.error('请先上传一张图片')
+          return false
+        }
+        setProofSaving(true)
+        try {
+          const imageUrl = await upload_media_file(file)
+          await createBuyerShowProofAdmin({ imageUrl, title, body })
+          await reloadProofs()
+          toast.success('已发布到买家秀')
+          return true
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : '发布失败')
+          return false
+        } finally {
+          setProofSaving(false)
+        }
+      },
+      saveProofText: async (id: string, patch: { title?: string; body?: string }) => {
+        try {
+          await updateBuyerShowProofAdmin({ id, ...patch })
+          await reloadProofs()
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : '保存失败')
+        }
+      },
+      toggleProof: async (id: string, isEnabled: boolean) => {
+        try {
+          await updateBuyerShowProofAdmin({ id, isEnabled })
+          await reloadProofs()
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : '保存失败')
+        }
+      },
+      removeProof: async (id: string) => {
+        try {
+          await deleteBuyerShowProofAdmin({ id })
+          await reloadProofs()
+          toast.success('已删除证明')
         } catch (error) {
           toast.error(error instanceof Error ? error.message : '删除失败')
         }

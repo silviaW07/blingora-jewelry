@@ -11,6 +11,7 @@ import {
   updateUserAdminNote,
   updateUserCustomerTag,
   updateUserCustomerType,
+  updateUserVipDiscount,
   impersonateCustomer,
 } from '@/backend/actions/UserManagement'
 import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
@@ -60,6 +61,9 @@ export interface UserManagementState {
   noteEditingId: string | null
   noteEditingValue: string
   noteSaving: boolean
+  vipEditingId: string | null
+  vipEditingValue: string
+  vipSaving: boolean
   tagSavingId: string | null
   customerTypeSavingId: string | null
   impersonatingId: string | null
@@ -92,6 +96,10 @@ export interface UserManagementHandlers {
   changeNoteEditingValue: (value: string) => void
   cancelNoteEdit: () => void
   saveNoteEdit: () => Promise<void>
+  startVipEdit: (userId: string, current: number) => void
+  changeVipEditingValue: (value: string) => void
+  cancelVipEdit: () => void
+  saveVipEdit: () => Promise<void>
   handleCustomerTagChange: (userId: string, tagCode: CustomerTagCode) => Promise<void>
   handleCustomerTypeChange: (userId: string, customerType: string) => Promise<void>
   handleImpersonate: (userId: string) => Promise<void>
@@ -134,13 +142,16 @@ export function useUserManagement(): {
   const [noteEditingId, setNoteEditingId] = useState<string | null>(null)
   const [noteEditingValue, setNoteEditingValue] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [vipEditingId, setVipEditingId] = useState<string | null>(null)
+  const [vipEditingValue, setVipEditingValue] = useState('')
+  const [vipSaving, setVipSaving] = useState(false)
   const [tagSavingId, setTagSavingId] = useState<string | null>(null)
   const [customerTypeSavingId, setCustomerTypeSavingId] = useState<string | null>(null)
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null)
 
   const isComposingRef = useRef(false)
 
-  const sortBy = (urlParams.sortBy as UserListSortField) || 'createdAt'
+  const sortBy = (urlParams.sortBy as UserListSortField) || 'lastLoginAt'
   const sortOrder = (urlParams.sortOrder as SortDirection) || 'desc'
 
   useEffect(() => {
@@ -207,7 +218,7 @@ export function useUserManagement(): {
       role: urlParams.role || 'CUSTOMER',
       status: urlParams.status,
       customerType: urlParams.customerType || '',
-      sortBy: urlParams.sortBy || 'createdAt',
+      sortBy: urlParams.sortBy || 'lastLoginAt',
       sortOrder: urlParams.sortOrder || 'desc',
       ...next,
       userId: next.userId === undefined ? '' : next.userId,
@@ -258,7 +269,7 @@ export function useUserManagement(): {
       role: 'CUSTOMER',
       status: '',
       customerType: '',
-      sortBy: 'createdAt',
+      sortBy: 'lastLoginAt',
       sortOrder: 'desc',
       userId: '',
     })
@@ -354,6 +365,35 @@ export function useUserManagement(): {
       toast.error(e.message || '备注保存失败')
     } finally {
       setNoteSaving(false)
+    }
+  }
+
+  const startVipEdit = (userId: string, current: number) => {
+    setVipEditingId(userId)
+    setVipEditingValue(current > 0 ? String(current) : '0')
+  }
+  const changeVipEditingValue = (value: string) => setVipEditingValue(value)
+  const cancelVipEdit = () => {
+    setVipEditingId(null)
+    setVipEditingValue('')
+  }
+  const saveVipEdit = async () => {
+    if (!vipEditingId) return
+    setVipSaving(true)
+    try {
+      const saved = await updateUserVipDiscount({ id: vipEditingId, vipDiscount: vipEditingValue })
+      toast.success(saved.vipDiscount > 0 ? `已设为 ${saved.vipDiscount}vip` : 'VIP 折扣已清空')
+      setList(prev =>
+        prev.map(item => (item.id === vipEditingId ? { ...item, vipDiscount: saved.vipDiscount } : item)),
+      )
+      if (detailData?.id === vipEditingId) {
+        setDetailData(prev => (prev ? { ...prev, vipDiscount: saved.vipDiscount } : prev))
+      }
+      cancelVipEdit()
+    } catch (e: any) {
+      toast.error(e.message || 'VIP 保存失败')
+    } finally {
+      setVipSaving(false)
     }
   }
 
@@ -501,6 +541,9 @@ export function useUserManagement(): {
       noteEditingId,
       noteEditingValue,
       noteSaving,
+      vipEditingId,
+      vipEditingValue,
+      vipSaving,
       tagSavingId,
       customerTypeSavingId,
       impersonatingId,
@@ -532,6 +575,10 @@ export function useUserManagement(): {
       changeNoteEditingValue,
       cancelNoteEdit,
       saveNoteEdit,
+      startVipEdit,
+      changeVipEditingValue,
+      cancelVipEdit,
+      saveVipEdit,
       handleCustomerTagChange,
       handleCustomerTypeChange,
       handleImpersonate,

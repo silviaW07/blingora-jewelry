@@ -265,8 +265,8 @@ export const UserManagement = {
     },
     sortBy: {
       source_table: 'sysuser',
-      source_column: 'createdAt',
-      description: '排序字段：createdAt / lastLoginAt / cartUsdTotal',
+      source_column: 'lastLoginAt',
+      description: '排序字段：默认 lastLoginAt（最近登录时间），也可 createdAt / cartUsdTotal',
     },
     sortOrder: {
       source_table: 'sysuser',
@@ -297,7 +297,7 @@ export const UserManagement = {
         status: sp.get('status') || '',
         customerType: sp.get('customerType') || '',
         userId: sp.get('userId') || '',
-        sortBy: sp.get('sortBy') || 'createdAt',
+        sortBy: sp.get('sortBy') || 'lastLoginAt',
         sortOrder: sp.get('sortOrder') || 'desc',
       }
       cache.set(sp, result)

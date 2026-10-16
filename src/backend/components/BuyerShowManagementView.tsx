@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
-import { ImageIcon, Upload } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { ImageIcon, ShieldCheck, Upload } from 'lucide-react'
 import type { useBuyerShowManagement } from '@/backend/hooks/useBuyerShowManagement'
 
 type HookReturn = ReturnType<typeof useBuyerShowManagement>
@@ -14,6 +14,19 @@ export default function BuyerShowManagementView({
   handlers: HookReturn['handlers']
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const proofInputRef = useRef<HTMLInputElement | null>(null)
+  const [proofTitle, setProofTitle] = useState('')
+  const [proofBody, setProofBody] = useState('')
+  const [proofFile, setProofFile] = useState<File | null>(null)
+  const [proofPreview, setProofPreview] = useState('')
+
+  const chooseProofFile = (file: File | null) => {
+    setProofFile(file)
+    setProofPreview((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return file ? URL.createObjectURL(file) : ''
+    })
+  }
 
   useEffect(() => {
     const preventNavigate = (event: DragEvent) => {
@@ -33,7 +46,7 @@ export default function BuyerShowManagementView({
         <div>
           <h1 className="text-xl font-bold text-[#1E293B]">买家秀管理</h1>
           <p className="mt-1 text-xs text-[#64748B]">
-            上传图片或视频（自动压缩）。标题可不填。前台买家秀页按网格展示已启用的图和视频。
+            上方照片墙继续放买家实拍。下面的真实性证明需要一张图和一段说明，发布后显示在照片墙上方。
           </p>
         </div>
 
@@ -145,6 +158,123 @@ export default function BuyerShowManagementView({
               </div>
             ))
           )}
+        </div>
+
+        <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">
+          <div className="mb-1 flex items-center gap-2">
+            <ShieldCheck className="size-4 text-[#0052D9]" />
+            <h2 className="text-sm font-bold text-[#1E293B]">真实性证明</h2>
+          </div>
+          <p className="mb-4 text-xs leading-5 text-[#64748B]">
+            每条记录是一张实拍加一段说明，用来展示仓库、打包、发货或客户实收。前台没有记录时，这个分区不会出现。
+          </p>
+          <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+            <button
+              type="button"
+              className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] text-xs text-[#64748B]"
+              onClick={() => proofInputRef.current?.click()}
+            >
+              {proofPreview ? (
+                <img src={proofPreview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <span>选择图片</span>
+              )}
+            </button>
+            <div className="space-y-2">
+              <input
+                value={proofTitle}
+                onChange={(event) => setProofTitle(event.target.value)}
+                placeholder="标题，例如：仓库实拍 / 打包发货"
+                maxLength={160}
+                className="h-9 w-full rounded-md border border-[#E2E8F0] px-3 text-sm"
+              />
+              <textarea
+                value={proofBody}
+                onChange={(event) => setProofBody(event.target.value)}
+                placeholder="写清楚这张图能说明什么。可以换行。"
+                maxLength={2000}
+                rows={4}
+                className="w-full resize-y rounded-md border border-[#E2E8F0] px-3 py-2 text-sm leading-6"
+              />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] text-[#94A3B8]">图片、标题、说明都要填写后才能发布。</p>
+                <button
+                  type="button"
+                  disabled={state.proofSaving}
+                  className="inline-flex h-9 items-center rounded-md bg-[#0052D9] px-4 text-xs font-semibold text-white disabled:opacity-60"
+                  onClick={() => {
+                    void handlers.publishProof(proofFile, proofTitle, proofBody).then((ok) => {
+                      if (!ok) return
+                      setProofTitle('')
+                      setProofBody('')
+                      chooseProofFile(null)
+                    })
+                  }}
+                >
+                  {state.proofSaving ? '发布中...' : '发布到前台'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <input
+            ref={proofInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0] || null
+              if (file && !file.type.startsWith('image/') && !/\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name)) {
+                event.target.value = ''
+                return
+              }
+              chooseProofFile(file)
+              event.target.value = ''
+            }}
+          />
+          <div className="mt-4 space-y-3">
+            {state.proofs.length === 0 ? (
+              <p className="text-xs text-[#94A3B8]">还没有证明。发布后会出现在买家秀照片墙上方。</p>
+            ) : (
+              state.proofs.map((item) => (
+                <div key={item.id} className="grid gap-3 rounded-xl border border-[#F1F5F9] p-3 md:grid-cols-[140px_minmax(0,1fr)]">
+                  <img src={item.imageUrl} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />
+                  <div className="space-y-2">
+                    <input
+                      defaultValue={item.title}
+                      className="h-8 w-full rounded border border-[#E2E8F0] px-2 text-sm"
+                      onBlur={(event) => {
+                        if (event.target.value.trim() !== item.title) {
+                          void handlers.saveProofText(item.id, { title: event.target.value })
+                        }
+                      }}
+                    />
+                    <textarea
+                      defaultValue={item.body}
+                      rows={3}
+                      className="w-full resize-y rounded border border-[#E2E8F0] px-2 py-1.5 text-xs leading-5"
+                      onBlur={(event) => {
+                        if (event.target.value.trim() !== item.body) {
+                          void handlers.saveProofText(item.id, { body: event.target.value })
+                        }
+                      }}
+                    />
+                    <div className="flex items-center justify-between text-[11px]">
+                      <button
+                        type="button"
+                        className="text-[#0052D9]"
+                        onClick={() => void handlers.toggleProof(item.id, !item.isEnabled)}
+                      >
+                        {item.isEnabled ? '前台显示' : '已隐藏'}
+                      </button>
+                      <button type="button" className="text-[#D9001B]" onClick={() => void handlers.removeProof(item.id)}>
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">

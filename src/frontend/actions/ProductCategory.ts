@@ -268,6 +268,7 @@ export interface AddToCartOutput {
 // ===== Imports =====
 import prisma from '@/tools/prisma'
 import { readHomeRecommendZonesWithCache } from '@/backend/actions/homeRecommendZoneCache'
+import { invalidateStorefrontBootstrapCache } from '@/frontend/lib/loadStorefrontBootstrap'
 import {
   requireRole, getAuthContext,
   withResult, UserRole
@@ -285,9 +286,12 @@ import {
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { applySiteWideListedUsd, getSiteWidePercentCoef } from '@/shared/pricingPromotionCalc'
+import { combinePriceCoef, resolveGoodsCoef } from '@/shared/customerPromoPolicy'
+import { loadCustomerPromo } from '@/frontend/lib/loadCustomerPromoKind'
 import {
   collectBrandKeywordTexts,
   collectTranslationSearchTexts,
+  mysqlTokenWordRegexp,
   productMatchesSearchTokens,
   tokenizeProductSearch,
 } from '@/shared/productSearch'
@@ -378,6 +382,7 @@ const collectVariantThumbnails = (
     if (!url || seen.has(url)) continue
     seen.add(url)
     urls.push(url)
+    if (urls.length >= 2) break
   }
 
   const mainUrl = mainImageUrl?.trim()
@@ -385,7 +390,7 @@ const collectVariantThumbnails = (
     urls.push(mainUrl)
   }
 
-  return urls
+  return urls.slice(0, 2)
 }
 
 const toUsdPrice = (rmbPrice: number | null | undefined, exchangeRate: number): number => {
@@ -476,6 +481,9 @@ type ResolvedCategoryContext = {
   matchedCategoryLevel?: number
   descendantCategoryIds: string[]
   categoryIdsForQuery: string[]
+  /** Brand 货架（COACH/LV…）：只认主品牌字段，不把详情里误挂的关联算进来 */
+  isBrandShelfList?: boolean
+  brandTitleNeedles?: string[]
 }
 
 const isJewelryListContext = (context: ResolvedCategoryContext) =>
@@ -587,11 +595,14 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
       level: true,
       parentId: true,
       status: true,
+      isBrandCategory: true,
+      brandKeywordsJson: true,
       parent: {
         select: {
           id: true,
           name: true,
-          status: true
+          status: true,
+          isBrandCategory: true,
         }
       }
     }
@@ -605,6 +616,33 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     categoryContextCache.set(categoryId, { at: Date.now(), value: empty })
     return empty
   }
+
+  const parentName = String(currentCategory.parent?.name || '').trim().toLowerCase()
+  const selfName = String(currentCategory.name || '').trim().toLowerCase()
+  const isBrandShelfList =
+    Boolean(currentCategory.isBrandCategory) ||
+    Boolean(currentCategory.parent?.isBrandCategory) ||
+    parentName === 'brand' ||
+    parentName === 'brands' ||
+    parentName === '品牌' ||
+    selfName === 'brand' ||
+    selfName === 'brands' ||
+    selfName === '品牌'
+
+  const brandTitleNeedles = Array.from(
+    new Set(
+      [
+        currentCategory.name,
+        ...(() => {
+          const raw = currentCategory.brandKeywordsJson
+          if (Array.isArray(raw)) return raw.map((item) => String(item || '').trim())
+          return []
+        })(),
+      ]
+        .map((token) => String(token || '').trim())
+        .filter((token) => token.length >= 2 && !/^(bag|bags|包|袋)$/i.test(token)),
+    ),
+  )
 
   // L1 = 无父级且不是二级。有父级的类目即使 level 标成 1 也按二级查自己，避免 popular products 这类脏数据点进去变成空列表。
   const isL1 = isStorefrontLevel1(currentCategory)
@@ -626,7 +664,9 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
       matchedCategoryName: currentCategory.name,
       matchedCategoryLevel: currentCategory.level || 1,
       descendantCategoryIds,
-      categoryIdsForQuery: Array.from(new Set([currentCategory.id, ...descendantCategoryIds]))
+      categoryIdsForQuery: Array.from(new Set([currentCategory.id, ...descendantCategoryIds])),
+      isBrandShelfList,
+      brandTitleNeedles,
     }
     categoryContextCache.set(categoryId, { at: Date.now(), value: resolved })
     return resolved
@@ -639,7 +679,9 @@ const resolveCategoryContext = async (categoryId?: string): Promise<ResolvedCate
     matchedCategoryName: currentCategory.name,
     matchedCategoryLevel: currentCategory.level,
     descendantCategoryIds: [],
-    categoryIdsForQuery: [currentCategory.id]
+    categoryIdsForQuery: [currentCategory.id],
+    isBrandShelfList,
+    brandTitleNeedles,
   }
   categoryContextCache.set(categoryId, { at: Date.now(), value: resolved })
   return resolved
@@ -676,19 +718,21 @@ const buildProductWhere = (
         in: context.categoryIdsForQuery
       }
     })
-    // product_category_relations to L1 or any expanded L2
-    orConditions.push({
-      relationCategories: {
-        some: {
-          categoryId: {
-            in: context.categoryIdsForQuery
-          },
-          category: {
-            status: 'ACTIVE'
+    // 品牌页不走关联表：1688 详情常罗列一串品牌，会把 LV 标题误挂进 COACH。
+    if (!context.isBrandShelfList) {
+      orConditions.push({
+        relationCategories: {
+          some: {
+            categoryId: {
+              in: context.categoryIdsForQuery
+            },
+            category: {
+              status: 'ACTIVE'
+            }
           }
         }
-      }
-    })
+      })
+    }
     // Safety net: primary category is any ACTIVE direct child of the L1 root
     if (context.rootCategoryId && (context.matchedCategoryLevel === 1 || context.categoryIdsForQuery.includes(context.rootCategoryId))) {
       orConditions.push({
@@ -714,22 +758,26 @@ const buildProductWhere = (
     where.OR = orConditions
   }
 
+  if (
+    context.isBrandShelfList &&
+    context.matchedCategoryLevel === 2 &&
+    (context.brandTitleNeedles || []).length > 0
+  ) {
+    where.AND = [
+      ...(where.AND || []),
+      {
+        OR: context.brandTitleNeedles!.map((needle) => ({
+          name: { contains: needle },
+        })),
+      },
+    ]
+  }
+
   if (brandCategoryId) {
-    // 品牌货架三路命中（去重靠 OR）：
-    // 1) brandCategoryId 主品牌字段
-    // 2) 主类目 categoryId（历史误把品牌当主类目的商品）
-    // 3) product_category_relations 关联绑定
+    // 品牌货架只认主品牌字段 / 误把品牌当主类目的商品，不走详情误挂的关联
     const brandMatchOr = [
       { brandCategoryId },
       { categoryId: brandCategoryId },
-      {
-        relationCategories: {
-          some: {
-            categoryId: brandCategoryId,
-            category: { status: 'ACTIVE' },
-          },
-        },
-      },
     ]
     if (where.OR) {
       // 已有类目 OR 条件时，与品牌条件做 AND 组合，避免语义被覆盖
@@ -836,7 +884,7 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
   // Brand 商品数：主类目 / brandCategoryId / 关联类目 去重统计（与前台品牌列表口径一致）
   const brandProductCount = new Map<string, number>()
   if (brandIds.length > 0) {
-    const [byCategory, byBrandCategory, byRelation] = await Promise.all([
+    const [byCategory, byBrandCategory] = await Promise.all([
       prisma.product.groupBy({
         by: ['categoryId'],
         where: { ...storefrontVisibilityWhere(), categoryId: { in: brandIds } },
@@ -847,14 +895,6 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
         where: { ...storefrontVisibilityWhere(), brandCategoryId: { in: brandIds } },
         _count: { _all: true },
       }),
-      prisma.product_category_relations.groupBy({
-        by: ['categoryId'],
-        where: {
-          categoryId: { in: brandIds },
-          product: storefrontVisibilityWhere(),
-        },
-        _count: { _all: true },
-      }),
     ])
     const addCount = (id: string | null | undefined, count: number) => {
       if (!id) return
@@ -862,12 +902,11 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
     }
     for (const row of byCategory) addCount(row.categoryId, row._count._all)
     for (const row of byBrandCategory) addCount(row.brandCategoryId, row._count._all)
-    for (const row of byRelation) addCount(row.categoryId, row._count._all)
   }
 
   const output: GetCategoryListOutput = {
     list: mainCategories.map(cat => {
-      const fallbackName = cat.navConfig?.navTitle?.trim() || cat.name
+      const fallbackName = cat.name
       return {
         category_id: cat.id,
         category_name: resolveCategoryDisplayName(cat.translationsJson, fallbackName, lang),
@@ -1305,7 +1344,12 @@ const LIST_CACHE_TTL_MS = Number(process.env.PRODUCT_LIST_CACHE_TTL_MS || 45_000
 const LIST_CACHE_MAX = 300
 const productListCache = new Map<string, { at: number; value: GetProductListOutput }>()
 
-function buildListCacheKey(input: GetProductListInput, lang: string, siteWideCoef: number | null): string {
+function buildListCacheKey(
+  input: GetProductListInput,
+  lang: string,
+  siteWideCoef: number | null,
+  customerCoef: number | null,
+): string {
   return JSON.stringify({
     c: input.category_id || '',
     b: input.brand_category_id || '',
@@ -1322,6 +1366,7 @@ function buildListCacheKey(input: GetProductListInput, lang: string, siteWideCoe
     ps: input.page_size || 60,
     lang,
     sw: siteWideCoef,
+    cust: customerCoef,
   })
 }
 
@@ -1386,6 +1431,7 @@ function mapProductRecordToItem(
   const priceRmb = resolveFrontRmbSellingPrice({
     skuPriceRmb: opts?.skuPriceMinRmb ?? (defaultSku ? defaultSku.price.toNumber() : 0),
     costPrice: p.costPrice,
+    productCoefficient: p.priceCoefficient,
     ...pricingCoeffs,
   })
   const priceNum = toUsdPrice(priceRmb, exchangeRate)
@@ -1397,6 +1443,7 @@ function mapProductRecordToItem(
             resolveFrontRmbSellingPrice({
               skuPriceRmb: opts.skuPriceMinRmb,
               costPrice: p.costPrice,
+              productCoefficient: p.priceCoefficient,
               ...pricingCoeffs,
             }),
             exchangeRate,
@@ -1405,6 +1452,7 @@ function mapProductRecordToItem(
             resolveFrontRmbSellingPrice({
               skuPriceRmb: opts.skuPriceMaxRmb,
               costPrice: p.costPrice,
+              productCoefficient: p.priceCoefficient,
               ...pricingCoeffs,
             }),
             exchangeRate,
@@ -1416,6 +1464,7 @@ function mapProductRecordToItem(
               resolveFrontRmbSellingPrice({
                 skuPriceRmb: sku.price.toNumber(),
                 costPrice: p.costPrice,
+                productCoefficient: p.priceCoefficient,
                 ...pricingCoeffs,
               }),
               exchangeRate,
@@ -1491,6 +1540,61 @@ function applyPinOrderToIds(pinIds: string[], orderedIds: string[]): string[] {
   return [...pinned, ...orderedIds.filter((id) => !pinSet.has(id))]
 }
 
+const SEARCH_ID_LIMIT = 8000
+
+function sqlQuote(value: string): string {
+  return `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
+}
+
+/**
+ * Title search must hit translationsJson (EN storefront names), not only product.name.
+ * Short tokens use word REGEXP so `set` matches "coin purse set" and not "closet".
+ */
+async function findStorefrontSearchProductIds(tokens: string[]): Promise<string[]> {
+  if (!tokens.length) return []
+  let current: Set<string> | null = null
+  for (const token of tokens) {
+    const likeLit = sqlQuote(`%${token.replace(/[%_]/g, '')}%`)
+    const useWord = token.length < 4
+    const nameHit = useWord
+      ? `LOWER(p.name) REGEXP ${sqlQuote(mysqlTokenWordRegexp(token))}`
+      : `LOWER(p.name) LIKE ${likeLit}`
+    const transHit = useWord
+      ? `LOWER(CAST(p.translationsJson AS CHAR(65535))) REGEXP ${sqlQuote(mysqlTokenWordRegexp(token))}`
+      : `LOWER(CAST(p.translationsJson AS CHAR(65535))) LIKE ${likeLit}`
+    const descHit = useWord
+      ? `LOWER(IFNULL(p.shortDescription, '')) REGEXP ${sqlQuote(mysqlTokenWordRegexp(token))}`
+      : `LOWER(IFNULL(p.shortDescription, '')) LIKE ${likeLit}`
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT p.id
+       FROM product p
+       WHERE p.status = 'ACTIVE'
+         AND (
+           ${nameHit}
+           OR ${transHit}
+           OR ${descHit}
+           OR LOWER(IFNULL(p.productCode, '')) LIKE ${likeLit}
+           OR LOWER(IFNULL(p.slug, '')) LIKE ${likeLit}
+           OR EXISTS (
+             SELECT 1 FROM productsku s
+             WHERE s.productId = p.id AND LOWER(IFNULL(s.skuCode, '')) LIKE ${likeLit}
+           )
+         )
+       LIMIT ${SEARCH_ID_LIMIT}`,
+    )
+    const ids = new Set(rows.map((row) => row.id))
+    if (!current) {
+      current = ids
+    } else {
+      for (const id of [...current]) {
+        if (!ids.has(id)) current.delete(id)
+      }
+    }
+    if (!current.size) return []
+  }
+  return [...current]
+}
+
 /**
  * 获取商品列表，支持多重条件筛选、排序和分页。
  */
@@ -1514,9 +1618,12 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
       : Promise.resolve(null),
   ])
   const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
+  const customerPromo = await loadCustomerPromo()
+  const customerCoef = resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount)
+  const listCoef = combinePriceCoef(siteWideCoef, customerCoef)
   const thresholdCap = priceThresholdMaxUsdForCategory(listingCategory?.name, listingCategory?.slug)
 
-  const cacheKey = buildListCacheKey(input, lang, siteWideCoef)
+  const cacheKey = buildListCacheKey(input, lang, siteWideCoef, customerCoef)
   const cachedOutput = getCachedList(cacheKey)
   if (cachedOutput) return cachedOutput
 
@@ -1535,24 +1642,16 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
   }
 
   const searchTokens = tokenizeProductSearch(input.search_keyword)
-  // Broad SQL prefilter (any token hits any field). Exact token-AND + EN titles
-  // in translationsJson are applied in-memory below — never require contiguous phrase.
+  let searchCandidateIds: string[] | null = null
   if (searchTokens.length > 0) {
-    const tokenOr = (token: string) => ({
-      OR: [
-        { name: { contains: token } },
-        { shortDescription: { contains: token } },
-        { productCode: { contains: token } },
-        { slug: { contains: token } },
-        { skus: { some: { skuCode: { contains: token } } } },
-        { brandCategory: { name: { contains: token } } },
-        { category: { name: { contains: token } } },
-        { relationCategories: { some: { category: { name: { contains: token } } } } },
-      ],
-    })
+    searchCandidateIds = await findStorefrontSearchProductIds(searchTokens)
     dbWhere.AND = [
       ...(Array.isArray(dbWhere.AND) ? dbWhere.AND : dbWhere.AND ? [dbWhere.AND] : []),
-      { OR: searchTokens.map(tokenOr) },
+      {
+        id: {
+          in: searchCandidateIds.length ? searchCandidateIds : ['__no_search_match__'],
+        },
+      },
     ]
   }
 
@@ -1575,6 +1674,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     shortDescription: true,
     translationsJson: true,
     costPrice: true,
+    priceCoefficient: true,
     tradeInfoJson: true,
     ratingAverage: true,
     ratingCount: true,
@@ -1665,7 +1765,13 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
     : dbWhere
 
   // Slow-path ceiling: never pull thousands of fat product+SKU rows for Accessories-scale L1s.
-  const listTake = thresholdCap != null ? 2500 : searchTokens.length > 0 ? 500 : 800
+  // Search already narrowed to candidate IDs (incl. EN titles in translationsJson).
+  const listTake =
+    searchCandidateIds != null
+      ? Math.min(Math.max(searchCandidateIds.length, 1), SEARCH_ID_LIMIT)
+      : thresholdCap != null
+        ? 2500
+        : 800
 
   if (canPushdownPaginate && wantsPriceSort) {
     const [total, priceRows] = await Promise.all([
@@ -1747,7 +1853,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
-          siteWideCoef,
+          siteWideCoef: listCoef,
         })
       }),
       total,
@@ -1847,7 +1953,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
           skuPriceMinRmb: agg?.min ?? null,
           skuPriceMaxRmb: agg?.max ?? null,
           stockStatus: stockByProduct.get(p.id),
-          siteWideCoef,
+          siteWideCoef: listCoef,
         })
       }),
       total,
@@ -1894,7 +2000,7 @@ export const getProductList = withResult(async (input: GetProductListInput): Pro
         ...p.skus.map((sku) => sku.skuCode),
       ])
     })
-    .map((p) => mapProductRecordToItem(p, lang, exchangeRate, { siteWideCoef }))
+    .map((p) => mapProductRecordToItem(p, lang, exchangeRate, { siteWideCoef: listCoef }))
 
   if (jewelryShelf) {
     const allowedIds = new Set(
@@ -1974,6 +2080,7 @@ export function invalidateStorefrontCatalogCaches() {
   categoryContextCache.clear()
   posterListCache.clear()
   brandFacetCache.clear()
+  invalidateStorefrontBootstrapCache()
 }
 
 function buildBrandFacetCacheKey(input: GetAvailableBrandFiltersInput, lang: string): string {
@@ -2232,6 +2339,9 @@ export const getWishlistProducts = withResult(async (
     loadPricingPromotionConfig(prisma),
   ])
   const siteWideCoef = getSiteWidePercentCoef(pricingConfig)
+  const customerPromo = await loadCustomerPromo()
+  const customerCoef = resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount)
+  const listCoef = combinePriceCoef(siteWideCoef, customerCoef)
 
   const rows = await prisma.product.findMany({
     where: {
@@ -2247,6 +2357,7 @@ export const getWishlistProducts = withResult(async (
       shortDescription: true,
       translationsJson: true,
       costPrice: true,
+      priceCoefficient: true,
       tradeInfoJson: true,
       ratingAverage: true,
       ratingCount: true,
@@ -2313,7 +2424,7 @@ export const getWishlistProducts = withResult(async (
   const list = ids
     .map(id => byId.get(id))
     .filter(Boolean)
-    .map(row => mapProductRecordToItem(row, lang, exchangeRate, { siteWideCoef }))
+    .map(row => mapProductRecordToItem(row, lang, exchangeRate, { siteWideCoef: listCoef }))
 
   return { list }
 })

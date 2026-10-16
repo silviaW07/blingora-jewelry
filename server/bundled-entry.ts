@@ -131,7 +131,7 @@ router.post('/', async (req, res) => {
     // Business validation (wrong password, disabled account, duplicate email, etc.) → 400
     // so storefront shows the real message instead of a generic 5xx toast.
     const looksLikeBusinessMsg =
-      /该邮箱已被注册|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户|请填写|密码不|注册失败/i.test(
+      /该邮箱已被注册|数据库结构未同步|账号或密码错误|账户状态受限|非前台客户|请填写|密码不|注册失败|not registered|Incorrect password|Please register|cannot sign in|Account restricted|already registered/i.test(
         msg,
       )
     const looksLikeEngineOrSchema =

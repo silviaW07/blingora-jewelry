@@ -52,7 +52,7 @@ export const SERVICE_PAGE_CONFIGS: ServicePageConfig[] = [
   },
   {
     slug: 'why-choose-us',
-    title: 'Why choose us',
+    title: 'Send in 24H',
     description: 'A clear summary of service strengths, sourcing standards, and long-term value.',
     iconSrc: '/service-icons/why-choose-us.svg',
     heroEyebrow: 'Brand promise',

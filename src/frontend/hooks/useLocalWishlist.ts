@@ -43,6 +43,18 @@ const writeWishlistIds = (ids: string[]) => {
   notify()
 }
 
+export const addProductWishlistIds = (productIds: string[]) => {
+  const extra = productIds.map((id) => String(id || '').trim()).filter(Boolean)
+  if (!extra.length) return
+  writeWishlistIds([...readWishlistIds(), ...extra])
+}
+
+export const removeProductWishlistIds = (productIds: string[]) => {
+  const drop = new Set(productIds.map((id) => String(id || '').trim()).filter(Boolean))
+  if (!drop.size) return
+  writeWishlistIds(readWishlistIds().filter((id) => !drop.has(id)))
+}
+
 export const isProductWishlisted = (productId: string): boolean => {
   const id = String(productId || '').trim()
   if (!id) return false

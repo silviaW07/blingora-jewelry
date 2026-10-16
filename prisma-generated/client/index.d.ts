@@ -16736,6 +16736,8 @@ export namespace Prisma {
     usdPriceMax: Decimal | null
     productDetail: string | null
     skuSummaryText: string | null
+    operatorSkuJson: string | null
+    operatorGalleryJson: string | null
     fetchStatus: $Enums.importtaskstatus | null
     publishStatus: $Enums.importtaskstatus | null
     retryCount: number | null
@@ -16776,6 +16778,8 @@ export namespace Prisma {
     usdPriceMax: Decimal | null
     productDetail: string | null
     skuSummaryText: string | null
+    operatorSkuJson: string | null
+    operatorGalleryJson: string | null
     fetchStatus: $Enums.importtaskstatus | null
     publishStatus: $Enums.importtaskstatus | null
     retryCount: number | null
@@ -16816,6 +16820,8 @@ export namespace Prisma {
     usdPriceMax: number
     productDetail: number
     skuSummaryText: number
+    operatorSkuJson: number
+    operatorGalleryJson: number
     fetchStatus: number
     publishStatus: number
     retryCount: number
@@ -16890,6 +16896,8 @@ export namespace Prisma {
     usdPriceMax?: true
     productDetail?: true
     skuSummaryText?: true
+    operatorSkuJson?: true
+    operatorGalleryJson?: true
     fetchStatus?: true
     publishStatus?: true
     retryCount?: true
@@ -16930,6 +16938,8 @@ export namespace Prisma {
     usdPriceMax?: true
     productDetail?: true
     skuSummaryText?: true
+    operatorSkuJson?: true
+    operatorGalleryJson?: true
     fetchStatus?: true
     publishStatus?: true
     retryCount?: true
@@ -16970,6 +16980,8 @@ export namespace Prisma {
     usdPriceMax?: true
     productDetail?: true
     skuSummaryText?: true
+    operatorSkuJson?: true
+    operatorGalleryJson?: true
     fetchStatus?: true
     publishStatus?: true
     retryCount?: true
@@ -17099,6 +17111,8 @@ export namespace Prisma {
     usdPriceMax: Decimal | null
     productDetail: string | null
     skuSummaryText: string | null
+    operatorSkuJson: string | null
+    operatorGalleryJson: string | null
     fetchStatus: $Enums.importtaskstatus
     publishStatus: $Enums.importtaskstatus
     retryCount: number
@@ -17160,6 +17174,8 @@ export namespace Prisma {
     usdPriceMax?: boolean
     productDetail?: boolean
     skuSummaryText?: boolean
+    operatorSkuJson?: boolean
+    operatorGalleryJson?: boolean
     fetchStatus?: boolean
     publishStatus?: boolean
     retryCount?: boolean
@@ -17207,6 +17223,8 @@ export namespace Prisma {
     usdPriceMax?: boolean
     productDetail?: boolean
     skuSummaryText?: boolean
+    operatorSkuJson?: boolean
+    operatorGalleryJson?: boolean
     fetchStatus?: boolean
     publishStatus?: boolean
     retryCount?: boolean
@@ -17224,7 +17242,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type importtaskitemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "importTaskId" | "operatorId" | "sourceUrl" | "parsedName" | "parsedMainImageUrl" | "parsedPriceMin" | "parsedPriceMax" | "supplierName" | "mainImageUrl" | "costPrice" | "weightGrams" | "sourceCategoryName" | "targetCategoryId" | "coefficient" | "goodsStatus" | "minimumOrderQuantity" | "availableStock" | "cnyPriceMin" | "cnyPriceMax" | "usdPriceMin" | "usdPriceMax" | "productDetail" | "skuSummaryText" | "fetchStatus" | "publishStatus" | "retryCount" | "fetchStartedAt" | "fetchFinishedAt" | "publishStartedAt" | "publishedAt" | "specSummaryJson" | "previewDataJson" | "isSelected" | "isPublished" | "importedProductId" | "failureReason" | "createdAt" | "updatedAt", ExtArgs["result"]["importtaskitem"]>
+  export type importtaskitemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "importTaskId" | "operatorId" | "sourceUrl" | "parsedName" | "parsedMainImageUrl" | "parsedPriceMin" | "parsedPriceMax" | "supplierName" | "mainImageUrl" | "costPrice" | "weightGrams" | "sourceCategoryName" | "targetCategoryId" | "coefficient" | "goodsStatus" | "minimumOrderQuantity" | "availableStock" | "cnyPriceMin" | "cnyPriceMax" | "usdPriceMin" | "usdPriceMax" | "productDetail" | "skuSummaryText" | "operatorSkuJson" | "operatorGalleryJson" | "fetchStatus" | "publishStatus" | "retryCount" | "fetchStartedAt" | "fetchFinishedAt" | "publishStartedAt" | "publishedAt" | "specSummaryJson" | "previewDataJson" | "isSelected" | "isPublished" | "importedProductId" | "failureReason" | "createdAt" | "updatedAt", ExtArgs["result"]["importtaskitem"]>
   export type importtaskitemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     importTask?: boolean | importtaskDefaultArgs<ExtArgs>
     operator?: boolean | sysuserDefaultArgs<ExtArgs>
@@ -17263,6 +17281,8 @@ export namespace Prisma {
       usdPriceMax: Prisma.Decimal | null
       productDetail: string | null
       skuSummaryText: string | null
+      operatorSkuJson: string | null
+      operatorGalleryJson: string | null
       fetchStatus: $Enums.importtaskstatus
       publishStatus: $Enums.importtaskstatus
       retryCount: number
@@ -17674,6 +17694,8 @@ export namespace Prisma {
     readonly usdPriceMax: FieldRef<"importtaskitem", 'Decimal'>
     readonly productDetail: FieldRef<"importtaskitem", 'String'>
     readonly skuSummaryText: FieldRef<"importtaskitem", 'String'>
+    readonly operatorSkuJson: FieldRef<"importtaskitem", 'String'>
+    readonly operatorGalleryJson: FieldRef<"importtaskitem", 'String'>
     readonly fetchStatus: FieldRef<"importtaskitem", 'importtaskstatus'>
     readonly publishStatus: FieldRef<"importtaskitem", 'importtaskstatus'>
     readonly retryCount: FieldRef<"importtaskitem", 'Int'>
@@ -45533,7 +45555,10 @@ export namespace Prisma {
   export type ShippingchannelMinAggregateOutputType = {
     id: string | null
     name: string | null
+    nameEs: string | null
     estimatedTime: string | null
+    estimatedTimeEs: string | null
+    adminNote: string | null
     billingMode: string | null
     channelCoefficient: Decimal | null
     isEnabled: boolean | null
@@ -45545,7 +45570,10 @@ export namespace Prisma {
   export type ShippingchannelMaxAggregateOutputType = {
     id: string | null
     name: string | null
+    nameEs: string | null
     estimatedTime: string | null
+    estimatedTimeEs: string | null
+    adminNote: string | null
     billingMode: string | null
     channelCoefficient: Decimal | null
     isEnabled: boolean | null
@@ -45557,7 +45585,10 @@ export namespace Prisma {
   export type ShippingchannelCountAggregateOutputType = {
     id: number
     name: number
+    nameEs: number
     estimatedTime: number
+    estimatedTimeEs: number
+    adminNote: number
     billingMode: number
     channelCoefficient: number
     countryFeesJson: number
@@ -45582,7 +45613,10 @@ export namespace Prisma {
   export type ShippingchannelMinAggregateInputType = {
     id?: true
     name?: true
+    nameEs?: true
     estimatedTime?: true
+    estimatedTimeEs?: true
+    adminNote?: true
     billingMode?: true
     channelCoefficient?: true
     isEnabled?: true
@@ -45594,7 +45628,10 @@ export namespace Prisma {
   export type ShippingchannelMaxAggregateInputType = {
     id?: true
     name?: true
+    nameEs?: true
     estimatedTime?: true
+    estimatedTimeEs?: true
+    adminNote?: true
     billingMode?: true
     channelCoefficient?: true
     isEnabled?: true
@@ -45606,7 +45643,10 @@ export namespace Prisma {
   export type ShippingchannelCountAggregateInputType = {
     id?: true
     name?: true
+    nameEs?: true
     estimatedTime?: true
+    estimatedTimeEs?: true
+    adminNote?: true
     billingMode?: true
     channelCoefficient?: true
     countryFeesJson?: true
@@ -45706,7 +45746,10 @@ export namespace Prisma {
   export type ShippingchannelGroupByOutputType = {
     id: string
     name: string
+    nameEs: string | null
     estimatedTime: string
+    estimatedTimeEs: string | null
+    adminNote: string | null
     billingMode: string
     channelCoefficient: Decimal
     countryFeesJson: JsonValue
@@ -45738,7 +45781,10 @@ export namespace Prisma {
   export type shippingchannelSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     name?: boolean
+    nameEs?: boolean
     estimatedTime?: boolean
+    estimatedTimeEs?: boolean
+    adminNote?: boolean
     billingMode?: boolean
     channelCoefficient?: boolean
     countryFeesJson?: boolean
@@ -45753,7 +45799,10 @@ export namespace Prisma {
   export type shippingchannelSelectScalar = {
     id?: boolean
     name?: boolean
+    nameEs?: boolean
     estimatedTime?: boolean
+    estimatedTimeEs?: boolean
+    adminNote?: boolean
     billingMode?: boolean
     channelCoefficient?: boolean
     countryFeesJson?: boolean
@@ -45763,7 +45812,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type shippingchannelOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "estimatedTime" | "billingMode" | "channelCoefficient" | "countryFeesJson" | "isEnabled" | "sortWeight" | "createdAt" | "updatedAt", ExtArgs["result"]["shippingchannel"]>
+  export type shippingchannelOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "nameEs" | "estimatedTime" | "estimatedTimeEs" | "adminNote" | "billingMode" | "channelCoefficient" | "countryFeesJson" | "isEnabled" | "sortWeight" | "createdAt" | "updatedAt", ExtArgs["result"]["shippingchannel"]>
 
   export type $shippingchannelPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "shippingchannel"
@@ -45771,7 +45820,19 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       id: string
       name: string
+      /**
+       * 前台西语展示名；空则按英文名自动译成西语
+       */
+      nameEs: string | null
       estimatedTime: string
+      /**
+       * 前台西语时效；空则按英文时效自动译成西语
+       */
+      estimatedTimeEs: string | null
+      /**
+       * 仅后台可见备注，不返回给客户结账
+       */
+      adminNote: string | null
       /**
        * 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）
        */
@@ -46162,7 +46223,10 @@ export namespace Prisma {
   interface shippingchannelFieldRefs {
     readonly id: FieldRef<"shippingchannel", 'String'>
     readonly name: FieldRef<"shippingchannel", 'String'>
+    readonly nameEs: FieldRef<"shippingchannel", 'String'>
     readonly estimatedTime: FieldRef<"shippingchannel", 'String'>
+    readonly estimatedTimeEs: FieldRef<"shippingchannel", 'String'>
+    readonly adminNote: FieldRef<"shippingchannel", 'String'>
     readonly billingMode: FieldRef<"shippingchannel", 'String'>
     readonly channelCoefficient: FieldRef<"shippingchannel", 'Decimal'>
     readonly countryFeesJson: FieldRef<"shippingchannel", 'Json'>
@@ -53652,14 +53716,25 @@ export namespace Prisma {
 
   export type AggregateProduct_category_relations = {
     _count: Product_category_relationsCountAggregateOutputType | null
+    _avg: Product_category_relationsAvgAggregateOutputType | null
+    _sum: Product_category_relationsSumAggregateOutputType | null
     _min: Product_category_relationsMinAggregateOutputType | null
     _max: Product_category_relationsMaxAggregateOutputType | null
+  }
+
+  export type Product_category_relationsAvgAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type Product_category_relationsSumAggregateOutputType = {
+    sortWeight: number | null
   }
 
   export type Product_category_relationsMinAggregateOutputType = {
     id: string | null
     productId: string | null
     categoryId: string | null
+    sortWeight: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -53668,6 +53743,7 @@ export namespace Prisma {
     id: string | null
     productId: string | null
     categoryId: string | null
+    sortWeight: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -53676,16 +53752,26 @@ export namespace Prisma {
     id: number
     productId: number
     categoryId: number
+    sortWeight: number
     createdAt: number
     updatedAt: number
     _all: number
   }
 
 
+  export type Product_category_relationsAvgAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type Product_category_relationsSumAggregateInputType = {
+    sortWeight?: true
+  }
+
   export type Product_category_relationsMinAggregateInputType = {
     id?: true
     productId?: true
     categoryId?: true
+    sortWeight?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -53694,6 +53780,7 @@ export namespace Prisma {
     id?: true
     productId?: true
     categoryId?: true
+    sortWeight?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -53702,6 +53789,7 @@ export namespace Prisma {
     id?: true
     productId?: true
     categoryId?: true
+    sortWeight?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -53745,6 +53833,18 @@ export namespace Prisma {
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
+     * Select which fields to average
+    **/
+    _avg?: Product_category_relationsAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: Product_category_relationsSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
      * Select which fields to find the minimum value
     **/
     _min?: Product_category_relationsMinAggregateInputType
@@ -53775,6 +53875,8 @@ export namespace Prisma {
     take?: number
     skip?: number
     _count?: Product_category_relationsCountAggregateInputType | true
+    _avg?: Product_category_relationsAvgAggregateInputType
+    _sum?: Product_category_relationsSumAggregateInputType
     _min?: Product_category_relationsMinAggregateInputType
     _max?: Product_category_relationsMaxAggregateInputType
   }
@@ -53783,9 +53885,12 @@ export namespace Prisma {
     id: string
     productId: string
     categoryId: string
+    sortWeight: number
     createdAt: Date
     updatedAt: Date
     _count: Product_category_relationsCountAggregateOutputType | null
+    _avg: Product_category_relationsAvgAggregateOutputType | null
+    _sum: Product_category_relationsSumAggregateOutputType | null
     _min: Product_category_relationsMinAggregateOutputType | null
     _max: Product_category_relationsMaxAggregateOutputType | null
   }
@@ -53808,6 +53913,7 @@ export namespace Prisma {
     id?: boolean
     productId?: boolean
     categoryId?: boolean
+    sortWeight?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     product?: boolean | productDefaultArgs<ExtArgs>
@@ -53820,11 +53926,12 @@ export namespace Prisma {
     id?: boolean
     productId?: boolean
     categoryId?: boolean
+    sortWeight?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type product_category_relationsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "productId" | "categoryId" | "createdAt" | "updatedAt", ExtArgs["result"]["product_category_relations"]>
+  export type product_category_relationsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "productId" | "categoryId" | "sortWeight" | "createdAt" | "updatedAt", ExtArgs["result"]["product_category_relations"]>
   export type product_category_relationsInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     product?: boolean | productDefaultArgs<ExtArgs>
     category?: boolean | categoryDefaultArgs<ExtArgs>
@@ -53840,6 +53947,10 @@ export namespace Prisma {
       id: string
       productId: string
       categoryId: string
+      /**
+       * * 类目内优先展示权重；0 表示不置顶，沿用前台原排序
+       */
+      sortWeight: number
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["product_category_relations"]>
@@ -54216,6 +54327,7 @@ export namespace Prisma {
     readonly id: FieldRef<"product_category_relations", 'String'>
     readonly productId: FieldRef<"product_category_relations", 'String'>
     readonly categoryId: FieldRef<"product_category_relations", 'String'>
+    readonly sortWeight: FieldRef<"product_category_relations", 'Int'>
     readonly createdAt: FieldRef<"product_category_relations", 'DateTime'>
     readonly updatedAt: FieldRef<"product_category_relations", 'DateTime'>
   }
@@ -60485,6 +60597,8 @@ export namespace Prisma {
     usdPriceMax: 'usdPriceMax',
     productDetail: 'productDetail',
     skuSummaryText: 'skuSummaryText',
+    operatorSkuJson: 'operatorSkuJson',
+    operatorGalleryJson: 'operatorGalleryJson',
     fetchStatus: 'fetchStatus',
     publishStatus: 'publishStatus',
     retryCount: 'retryCount',
@@ -60932,7 +61046,10 @@ export namespace Prisma {
   export const ShippingchannelScalarFieldEnum: {
     id: 'id',
     name: 'name',
+    nameEs: 'nameEs',
     estimatedTime: 'estimatedTime',
+    estimatedTimeEs: 'estimatedTimeEs',
+    adminNote: 'adminNote',
     billingMode: 'billingMode',
     channelCoefficient: 'channelCoefficient',
     countryFeesJson: 'countryFeesJson',
@@ -61059,6 +61176,7 @@ export namespace Prisma {
     id: 'id',
     productId: 'productId',
     categoryId: 'categoryId',
+    sortWeight: 'sortWeight',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -61327,6 +61445,8 @@ export namespace Prisma {
     targetCategoryId: 'targetCategoryId',
     productDetail: 'productDetail',
     skuSummaryText: 'skuSummaryText',
+    operatorSkuJson: 'operatorSkuJson',
+    operatorGalleryJson: 'operatorGalleryJson',
     importedProductId: 'importedProductId',
     failureReason: 'failureReason'
   };
@@ -61645,7 +61765,10 @@ export namespace Prisma {
   export const shippingchannelOrderByRelevanceFieldEnum: {
     id: 'id',
     name: 'name',
+    nameEs: 'nameEs',
     estimatedTime: 'estimatedTime',
+    estimatedTimeEs: 'estimatedTimeEs',
+    adminNote: 'adminNote',
     billingMode: 'billingMode'
   };
 
@@ -63338,6 +63461,8 @@ export namespace Prisma {
     usdPriceMax?: DecimalNullableFilter<"importtaskitem"> | Decimal | DecimalJsLike | number | string | null
     productDetail?: StringNullableFilter<"importtaskitem"> | string | null
     skuSummaryText?: StringNullableFilter<"importtaskitem"> | string | null
+    operatorSkuJson?: StringNullableFilter<"importtaskitem"> | string | null
+    operatorGalleryJson?: StringNullableFilter<"importtaskitem"> | string | null
     fetchStatus?: EnumimporttaskstatusFilter<"importtaskitem"> | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFilter<"importtaskitem"> | $Enums.importtaskstatus
     retryCount?: IntFilter<"importtaskitem"> | number
@@ -63383,6 +63508,8 @@ export namespace Prisma {
     usdPriceMax?: SortOrderInput | SortOrder
     productDetail?: SortOrderInput | SortOrder
     skuSummaryText?: SortOrderInput | SortOrder
+    operatorSkuJson?: SortOrderInput | SortOrder
+    operatorGalleryJson?: SortOrderInput | SortOrder
     fetchStatus?: SortOrder
     publishStatus?: SortOrder
     retryCount?: SortOrder
@@ -63432,6 +63559,8 @@ export namespace Prisma {
     usdPriceMax?: DecimalNullableFilter<"importtaskitem"> | Decimal | DecimalJsLike | number | string | null
     productDetail?: StringNullableFilter<"importtaskitem"> | string | null
     skuSummaryText?: StringNullableFilter<"importtaskitem"> | string | null
+    operatorSkuJson?: StringNullableFilter<"importtaskitem"> | string | null
+    operatorGalleryJson?: StringNullableFilter<"importtaskitem"> | string | null
     fetchStatus?: EnumimporttaskstatusFilter<"importtaskitem"> | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFilter<"importtaskitem"> | $Enums.importtaskstatus
     retryCount?: IntFilter<"importtaskitem"> | number
@@ -63477,6 +63606,8 @@ export namespace Prisma {
     usdPriceMax?: SortOrderInput | SortOrder
     productDetail?: SortOrderInput | SortOrder
     skuSummaryText?: SortOrderInput | SortOrder
+    operatorSkuJson?: SortOrderInput | SortOrder
+    operatorGalleryJson?: SortOrderInput | SortOrder
     fetchStatus?: SortOrder
     publishStatus?: SortOrder
     retryCount?: SortOrder
@@ -63527,6 +63658,8 @@ export namespace Prisma {
     usdPriceMax?: DecimalNullableWithAggregatesFilter<"importtaskitem"> | Decimal | DecimalJsLike | number | string | null
     productDetail?: StringNullableWithAggregatesFilter<"importtaskitem"> | string | null
     skuSummaryText?: StringNullableWithAggregatesFilter<"importtaskitem"> | string | null
+    operatorSkuJson?: StringNullableWithAggregatesFilter<"importtaskitem"> | string | null
+    operatorGalleryJson?: StringNullableWithAggregatesFilter<"importtaskitem"> | string | null
     fetchStatus?: EnumimporttaskstatusWithAggregatesFilter<"importtaskitem"> | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusWithAggregatesFilter<"importtaskitem"> | $Enums.importtaskstatus
     retryCount?: IntWithAggregatesFilter<"importtaskitem"> | number
@@ -65803,7 +65936,10 @@ export namespace Prisma {
     NOT?: shippingchannelWhereInput | shippingchannelWhereInput[]
     id?: StringFilter<"shippingchannel"> | string
     name?: StringFilter<"shippingchannel"> | string
+    nameEs?: StringNullableFilter<"shippingchannel"> | string | null
     estimatedTime?: StringFilter<"shippingchannel"> | string
+    estimatedTimeEs?: StringNullableFilter<"shippingchannel"> | string | null
+    adminNote?: StringNullableFilter<"shippingchannel"> | string | null
     billingMode?: StringFilter<"shippingchannel"> | string
     channelCoefficient?: DecimalFilter<"shippingchannel"> | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonFilter<"shippingchannel">
@@ -65816,7 +65952,10 @@ export namespace Prisma {
   export type shippingchannelOrderByWithRelationInput = {
     id?: SortOrder
     name?: SortOrder
+    nameEs?: SortOrderInput | SortOrder
     estimatedTime?: SortOrder
+    estimatedTimeEs?: SortOrderInput | SortOrder
+    adminNote?: SortOrderInput | SortOrder
     billingMode?: SortOrder
     channelCoefficient?: SortOrder
     countryFeesJson?: SortOrder
@@ -65833,7 +65972,10 @@ export namespace Prisma {
     OR?: shippingchannelWhereInput[]
     NOT?: shippingchannelWhereInput | shippingchannelWhereInput[]
     name?: StringFilter<"shippingchannel"> | string
+    nameEs?: StringNullableFilter<"shippingchannel"> | string | null
     estimatedTime?: StringFilter<"shippingchannel"> | string
+    estimatedTimeEs?: StringNullableFilter<"shippingchannel"> | string | null
+    adminNote?: StringNullableFilter<"shippingchannel"> | string | null
     billingMode?: StringFilter<"shippingchannel"> | string
     channelCoefficient?: DecimalFilter<"shippingchannel"> | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonFilter<"shippingchannel">
@@ -65846,7 +65988,10 @@ export namespace Prisma {
   export type shippingchannelOrderByWithAggregationInput = {
     id?: SortOrder
     name?: SortOrder
+    nameEs?: SortOrderInput | SortOrder
     estimatedTime?: SortOrder
+    estimatedTimeEs?: SortOrderInput | SortOrder
+    adminNote?: SortOrderInput | SortOrder
     billingMode?: SortOrder
     channelCoefficient?: SortOrder
     countryFeesJson?: SortOrder
@@ -65867,7 +66012,10 @@ export namespace Prisma {
     NOT?: shippingchannelScalarWhereWithAggregatesInput | shippingchannelScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"shippingchannel"> | string
     name?: StringWithAggregatesFilter<"shippingchannel"> | string
+    nameEs?: StringNullableWithAggregatesFilter<"shippingchannel"> | string | null
     estimatedTime?: StringWithAggregatesFilter<"shippingchannel"> | string
+    estimatedTimeEs?: StringNullableWithAggregatesFilter<"shippingchannel"> | string | null
+    adminNote?: StringNullableWithAggregatesFilter<"shippingchannel"> | string | null
     billingMode?: StringWithAggregatesFilter<"shippingchannel"> | string
     channelCoefficient?: DecimalWithAggregatesFilter<"shippingchannel"> | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonWithAggregatesFilter<"shippingchannel">
@@ -66473,6 +66621,7 @@ export namespace Prisma {
     id?: StringFilter<"product_category_relations"> | string
     productId?: StringFilter<"product_category_relations"> | string
     categoryId?: StringFilter<"product_category_relations"> | string
+    sortWeight?: IntFilter<"product_category_relations"> | number
     createdAt?: DateTimeFilter<"product_category_relations"> | Date | string
     updatedAt?: DateTimeFilter<"product_category_relations"> | Date | string
     product?: XOR<ProductScalarRelationFilter, productWhereInput>
@@ -66483,6 +66632,7 @@ export namespace Prisma {
     id?: SortOrder
     productId?: SortOrder
     categoryId?: SortOrder
+    sortWeight?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     product?: productOrderByWithRelationInput
@@ -66498,6 +66648,7 @@ export namespace Prisma {
     NOT?: product_category_relationsWhereInput | product_category_relationsWhereInput[]
     productId?: StringFilter<"product_category_relations"> | string
     categoryId?: StringFilter<"product_category_relations"> | string
+    sortWeight?: IntFilter<"product_category_relations"> | number
     createdAt?: DateTimeFilter<"product_category_relations"> | Date | string
     updatedAt?: DateTimeFilter<"product_category_relations"> | Date | string
     product?: XOR<ProductScalarRelationFilter, productWhereInput>
@@ -66508,11 +66659,14 @@ export namespace Prisma {
     id?: SortOrder
     productId?: SortOrder
     categoryId?: SortOrder
+    sortWeight?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: product_category_relationsCountOrderByAggregateInput
+    _avg?: product_category_relationsAvgOrderByAggregateInput
     _max?: product_category_relationsMaxOrderByAggregateInput
     _min?: product_category_relationsMinOrderByAggregateInput
+    _sum?: product_category_relationsSumOrderByAggregateInput
   }
 
   export type product_category_relationsScalarWhereWithAggregatesInput = {
@@ -66522,6 +66676,7 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"product_category_relations"> | string
     productId?: StringWithAggregatesFilter<"product_category_relations"> | string
     categoryId?: StringWithAggregatesFilter<"product_category_relations"> | string
+    sortWeight?: IntWithAggregatesFilter<"product_category_relations"> | number
     createdAt?: DateTimeWithAggregatesFilter<"product_category_relations"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"product_category_relations"> | Date | string
   }
@@ -68490,6 +68645,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -68534,6 +68691,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -68574,6 +68733,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -68618,6 +68779,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -68660,6 +68823,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -68700,6 +68865,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -68741,6 +68908,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -71185,7 +71354,10 @@ export namespace Prisma {
   export type shippingchannelCreateInput = {
     id?: string
     name: string
+    nameEs?: string | null
     estimatedTime: string
+    estimatedTimeEs?: string | null
+    adminNote?: string | null
     billingMode?: string
     channelCoefficient?: Decimal | DecimalJsLike | number | string
     countryFeesJson: JsonNullValueInput | InputJsonValue
@@ -71198,7 +71370,10 @@ export namespace Prisma {
   export type shippingchannelUncheckedCreateInput = {
     id?: string
     name: string
+    nameEs?: string | null
     estimatedTime: string
+    estimatedTimeEs?: string | null
+    adminNote?: string | null
     billingMode?: string
     channelCoefficient?: Decimal | DecimalJsLike | number | string
     countryFeesJson: JsonNullValueInput | InputJsonValue
@@ -71211,7 +71386,10 @@ export namespace Prisma {
   export type shippingchannelUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
+    nameEs?: NullableStringFieldUpdateOperationsInput | string | null
     estimatedTime?: StringFieldUpdateOperationsInput | string
+    estimatedTimeEs?: NullableStringFieldUpdateOperationsInput | string | null
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     billingMode?: StringFieldUpdateOperationsInput | string
     channelCoefficient?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonNullValueInput | InputJsonValue
@@ -71224,7 +71402,10 @@ export namespace Prisma {
   export type shippingchannelUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
+    nameEs?: NullableStringFieldUpdateOperationsInput | string | null
     estimatedTime?: StringFieldUpdateOperationsInput | string
+    estimatedTimeEs?: NullableStringFieldUpdateOperationsInput | string | null
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     billingMode?: StringFieldUpdateOperationsInput | string
     channelCoefficient?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonNullValueInput | InputJsonValue
@@ -71237,7 +71418,10 @@ export namespace Prisma {
   export type shippingchannelCreateManyInput = {
     id?: string
     name: string
+    nameEs?: string | null
     estimatedTime: string
+    estimatedTimeEs?: string | null
+    adminNote?: string | null
     billingMode?: string
     channelCoefficient?: Decimal | DecimalJsLike | number | string
     countryFeesJson: JsonNullValueInput | InputJsonValue
@@ -71250,7 +71434,10 @@ export namespace Prisma {
   export type shippingchannelUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
+    nameEs?: NullableStringFieldUpdateOperationsInput | string | null
     estimatedTime?: StringFieldUpdateOperationsInput | string
+    estimatedTimeEs?: NullableStringFieldUpdateOperationsInput | string | null
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     billingMode?: StringFieldUpdateOperationsInput | string
     channelCoefficient?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonNullValueInput | InputJsonValue
@@ -71263,7 +71450,10 @@ export namespace Prisma {
   export type shippingchannelUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
+    nameEs?: NullableStringFieldUpdateOperationsInput | string | null
     estimatedTime?: StringFieldUpdateOperationsInput | string
+    estimatedTimeEs?: NullableStringFieldUpdateOperationsInput | string | null
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     billingMode?: StringFieldUpdateOperationsInput | string
     channelCoefficient?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     countryFeesJson?: JsonNullValueInput | InputJsonValue
@@ -71920,6 +72110,7 @@ export namespace Prisma {
 
   export type product_category_relationsCreateInput = {
     id?: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     product: productCreateNestedOneWithoutRelationCategoriesInput
@@ -71930,12 +72121,14 @@ export namespace Prisma {
     id?: string
     productId: string
     categoryId: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
 
   export type product_category_relationsUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     product?: productUpdateOneRequiredWithoutRelationCategoriesNestedInput
@@ -71946,6 +72139,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     productId?: StringFieldUpdateOperationsInput | string
     categoryId?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -71954,12 +72148,14 @@ export namespace Prisma {
     id?: string
     productId: string
     categoryId: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
 
   export type product_category_relationsUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -71968,6 +72164,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     productId?: StringFieldUpdateOperationsInput | string
     categoryId?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -73973,6 +74170,8 @@ export namespace Prisma {
     usdPriceMax?: SortOrder
     productDetail?: SortOrder
     skuSummaryText?: SortOrder
+    operatorSkuJson?: SortOrder
+    operatorGalleryJson?: SortOrder
     fetchStatus?: SortOrder
     publishStatus?: SortOrder
     retryCount?: SortOrder
@@ -74030,6 +74229,8 @@ export namespace Prisma {
     usdPriceMax?: SortOrder
     productDetail?: SortOrder
     skuSummaryText?: SortOrder
+    operatorSkuJson?: SortOrder
+    operatorGalleryJson?: SortOrder
     fetchStatus?: SortOrder
     publishStatus?: SortOrder
     retryCount?: SortOrder
@@ -74070,6 +74271,8 @@ export namespace Prisma {
     usdPriceMax?: SortOrder
     productDetail?: SortOrder
     skuSummaryText?: SortOrder
+    operatorSkuJson?: SortOrder
+    operatorGalleryJson?: SortOrder
     fetchStatus?: SortOrder
     publishStatus?: SortOrder
     retryCount?: SortOrder
@@ -75724,7 +75927,10 @@ export namespace Prisma {
   export type shippingchannelCountOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
+    nameEs?: SortOrder
     estimatedTime?: SortOrder
+    estimatedTimeEs?: SortOrder
+    adminNote?: SortOrder
     billingMode?: SortOrder
     channelCoefficient?: SortOrder
     countryFeesJson?: SortOrder
@@ -75742,7 +75948,10 @@ export namespace Prisma {
   export type shippingchannelMaxOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
+    nameEs?: SortOrder
     estimatedTime?: SortOrder
+    estimatedTimeEs?: SortOrder
+    adminNote?: SortOrder
     billingMode?: SortOrder
     channelCoefficient?: SortOrder
     isEnabled?: SortOrder
@@ -75754,7 +75963,10 @@ export namespace Prisma {
   export type shippingchannelMinOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
+    nameEs?: SortOrder
     estimatedTime?: SortOrder
+    estimatedTimeEs?: SortOrder
+    adminNote?: SortOrder
     billingMode?: SortOrder
     channelCoefficient?: SortOrder
     isEnabled?: SortOrder
@@ -76222,14 +76434,20 @@ export namespace Prisma {
     id?: SortOrder
     productId?: SortOrder
     categoryId?: SortOrder
+    sortWeight?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type product_category_relationsAvgOrderByAggregateInput = {
+    sortWeight?: SortOrder
   }
 
   export type product_category_relationsMaxOrderByAggregateInput = {
     id?: SortOrder
     productId?: SortOrder
     categoryId?: SortOrder
+    sortWeight?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -76238,8 +76456,13 @@ export namespace Prisma {
     id?: SortOrder
     productId?: SortOrder
     categoryId?: SortOrder
+    sortWeight?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type product_category_relationsSumOrderByAggregateInput = {
+    sortWeight?: SortOrder
   }
 
   export type KeyworditemScalarRelationFilter = {
@@ -81046,6 +81269,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -81088,6 +81313,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -81540,6 +81767,8 @@ export namespace Prisma {
     usdPriceMax?: DecimalNullableFilter<"importtaskitem"> | Decimal | DecimalJsLike | number | string | null
     productDetail?: StringNullableFilter<"importtaskitem"> | string | null
     skuSummaryText?: StringNullableFilter<"importtaskitem"> | string | null
+    operatorSkuJson?: StringNullableFilter<"importtaskitem"> | string | null
+    operatorGalleryJson?: StringNullableFilter<"importtaskitem"> | string | null
     fetchStatus?: EnumimporttaskstatusFilter<"importtaskitem"> | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFilter<"importtaskitem"> | $Enums.importtaskstatus
     retryCount?: IntFilter<"importtaskitem"> | number
@@ -82423,6 +82652,7 @@ export namespace Prisma {
 
   export type product_category_relationsCreateWithoutCategoryInput = {
     id?: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     product: productCreateNestedOneWithoutRelationCategoriesInput
@@ -82431,6 +82661,7 @@ export namespace Prisma {
   export type product_category_relationsUncheckedCreateWithoutCategoryInput = {
     id?: string
     productId: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -82859,6 +83090,7 @@ export namespace Prisma {
     id?: StringFilter<"product_category_relations"> | string
     productId?: StringFilter<"product_category_relations"> | string
     categoryId?: StringFilter<"product_category_relations"> | string
+    sortWeight?: IntFilter<"product_category_relations"> | number
     createdAt?: DateTimeFilter<"product_category_relations"> | Date | string
     updatedAt?: DateTimeFilter<"product_category_relations"> | Date | string
   }
@@ -83361,6 +83593,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -83404,6 +83638,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -83634,6 +83870,7 @@ export namespace Prisma {
 
   export type product_category_relationsCreateWithoutProductInput = {
     id?: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     category: categoryCreateNestedOneWithoutRelationProductsInput
@@ -83642,6 +83879,7 @@ export namespace Prisma {
   export type product_category_relationsUncheckedCreateWithoutProductInput = {
     id?: string
     categoryId: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -85563,6 +85801,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -85605,6 +85845,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -95572,6 +95814,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -95814,6 +96058,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -95856,6 +96102,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -95897,6 +96145,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -96438,6 +96688,7 @@ export namespace Prisma {
   export type product_category_relationsCreateManyCategoryInput = {
     id?: string
     productId: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -97054,6 +97305,7 @@ export namespace Prisma {
 
   export type product_category_relationsUpdateWithoutCategoryInput = {
     id?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     product?: productUpdateOneRequiredWithoutRelationCategoriesNestedInput
@@ -97062,6 +97314,7 @@ export namespace Prisma {
   export type product_category_relationsUncheckedUpdateWithoutCategoryInput = {
     id?: StringFieldUpdateOperationsInput | string
     productId?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -97069,6 +97322,7 @@ export namespace Prisma {
   export type product_category_relationsUncheckedUpdateManyWithoutCategoryInput = {
     id?: StringFieldUpdateOperationsInput | string
     productId?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -97142,6 +97396,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -97232,6 +97488,7 @@ export namespace Prisma {
   export type product_category_relationsCreateManyProductInput = {
     id?: string
     categoryId: string
+    sortWeight?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -97430,6 +97687,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -97473,6 +97732,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -97514,6 +97775,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -97745,6 +98008,7 @@ export namespace Prisma {
 
   export type product_category_relationsUpdateWithoutProductInput = {
     id?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: categoryUpdateOneRequiredWithoutRelationProductsNestedInput
@@ -97753,6 +98017,7 @@ export namespace Prisma {
   export type product_category_relationsUncheckedUpdateWithoutProductInput = {
     id?: StringFieldUpdateOperationsInput | string
     categoryId?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -97760,6 +98025,7 @@ export namespace Prisma {
   export type product_category_relationsUncheckedUpdateManyWithoutProductInput = {
     id?: StringFieldUpdateOperationsInput | string
     categoryId?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -98147,6 +98413,8 @@ export namespace Prisma {
     usdPriceMax?: Decimal | DecimalJsLike | number | string | null
     productDetail?: string | null
     skuSummaryText?: string | null
+    operatorSkuJson?: string | null
+    operatorGalleryJson?: string | null
     fetchStatus?: $Enums.importtaskstatus
     publishStatus?: $Enums.importtaskstatus
     retryCount?: number
@@ -98187,6 +98455,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -98229,6 +98499,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number
@@ -98270,6 +98542,8 @@ export namespace Prisma {
     usdPriceMax?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     productDetail?: NullableStringFieldUpdateOperationsInput | string | null
     skuSummaryText?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorSkuJson?: NullableStringFieldUpdateOperationsInput | string | null
+    operatorGalleryJson?: NullableStringFieldUpdateOperationsInput | string | null
     fetchStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     publishStatus?: EnumimporttaskstatusFieldUpdateOperationsInput | $Enums.importtaskstatus
     retryCount?: IntFieldUpdateOperationsInput | number

@@ -29,8 +29,25 @@ export function getSiteWidePercentCoef(config: PricingPromotionConfig | null | u
 }
 
 /** Admin historically writes original = list * 1.1 whenever cost exists. That is not a promotion. */
-function isPlaceholderCompareAt(listPrice: number, originalPrice: number): boolean {
-  return Math.abs(originalPrice - roundMoney(listPrice * 1.1)) <= 0.02
+export function isPlaceholderCompareAt(listPrice: number, originalPrice: number): boolean {
+  const list = roundMoney(Math.max(0, Number(listPrice) || 0))
+  const original = roundMoney(Math.max(0, Number(originalPrice) || 0))
+  if (list <= 0 || original <= 0) return false
+  if (Math.abs(original - roundMoney(list * 1.1)) <= 0.05) return true
+  const ratio = original / list
+  return ratio >= 1.08 && ratio <= 1.12
+}
+
+/** Real compare-at only; drops empty values and the imported price*1.1 placeholder. */
+export function resolveListedCompareAt(
+  listPrice: number,
+  originalPrice?: number | null,
+): number | null {
+  if (originalPrice == null || !Number.isFinite(originalPrice)) return null
+  const list = roundMoney(Math.max(0, Number(listPrice) || 0))
+  const original = roundMoney(Number(originalPrice) || 0)
+  if (original <= list + 0.009 || isPlaceholderCompareAt(list, original)) return null
+  return original
 }
 
 export function applySiteWideListedUsd(params: {
@@ -47,10 +64,7 @@ export function applySiteWideListedUsd(params: {
   const price = roundMoney(Math.max(0, Number(params.price) || 0))
   const priceMax = params.priceMax != null ? roundMoney(Number(params.priceMax) || 0) : null
   if (params.coef == null) {
-    let original = params.originalPrice != null ? roundMoney(Number(params.originalPrice) || 0) : null
-    if (original != null && (original <= price + 0.009 || isPlaceholderCompareAt(price, original))) {
-      original = null
-    }
+    const original = resolveListedCompareAt(price, params.originalPrice)
     return {
       price,
       priceMax,

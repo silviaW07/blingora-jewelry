@@ -38,6 +38,7 @@ import {
 } from '@/shared/minOrderQty'
 import { sortSizeLabels } from '@/utils/sortSizeLabels'
 import { isColorDimensionName } from '@/shared/tableImportSpec'
+import { isColorNameSpecValue, isNonSellableSkuDimensionName, isProductTypeSpecValue } from '@/shared/skuDisplayGuards'
 
 /**
  * 数字感知的自然排序：让「颜色1、颜色2 … 颜色10」按数值升序而非字符串序，
@@ -52,8 +53,12 @@ const naturalCompareLabels = (a: string, b: string): number =>
 const isColorAttributeName = (name?: string | null) => isColorDimensionName(name)
 
 /** 1688 常把无尺码 SKU 写成「默认/Default」——不当作真实规格维 */
-const isPlaceholderSpecValue = (value?: string | null) =>
-  /^(默认|默认规格|default|standard|n\/a|none|—|－)?$/i.test(String(value || '').trim())
+const isPlaceholderSpecValue = (value?: string | null) => {
+  const text = String(value || '').trim()
+  if (!text) return true
+  if (isProductTypeSpecValue(text)) return true
+  return /^(默认|默认规格|default|standard|n\/a|none|—|－)?$/i.test(text)
+}
 
 const hasRealSpecValues = (values: string[]) =>
   values.some((value) => Boolean(String(value || '').trim()) && !isPlaceholderSpecValue(value))
@@ -66,14 +71,16 @@ const isSizeAttributeName = (name?: string | null) => {
     normalized === '尺寸' ||
     normalized === '码数' ||
     normalized === '规格' ||
+    normalized === '規格' ||
     normalized === 'size' ||
     normalized === 'spec' ||
     normalized === 'sizing'
   )
 }
 
-/** 里料/材质等是描述属性，不能当成尺码维，否则数量会停在 0 且规格露出中文。 */
+/** 里料/材质/纯度等是描述属性，不能当成尺码维，否则数量会停在 0 且规格露出中文。 */
 const isDescriptiveSkuDimensionName = (name?: string | null) => {
+  if (isNonSellableSkuDimensionName(name)) return true
   const compact = String(name || '')
     .trim()
     .toLowerCase()
@@ -85,6 +92,13 @@ const isDescriptiveSkuDimensionName = (name?: string | null) => {
 export interface SelectionHighlight {
   color: boolean
   size: boolean
+}
+
+export interface AddedCartLine {
+  skuId: string
+  imageUrl: string
+  color: string
+  quantity: number
 }
 
 export interface ProductDetailState {
@@ -121,6 +135,8 @@ export interface ProductDetailState {
   supportsMixedBatch: boolean;
   /** 列表点击带过来的封面，冷加载时先画出主图 */
   detailPreview: { id: string; name: string; image: string } | null;
+  /** 刚加入购物车的规格，用于加购确认面板 */
+  addedCartLines: AddedCartLine[] | null;
 }
 
 export interface ProductDetailHandlers {
@@ -131,6 +147,7 @@ export interface ProductDetailHandlers {
   getSkuLineQuantity: (skuId: string) => number;
   resolveLineMinOrderQty: (sku: ProductSkuData) => number;
   handleAddToCart: () => Promise<void>;
+  dismissAddedCart: () => void;
   handleRelatedClick: (id: string) => void;
   setActiveImage: (url: string) => void;
 }
@@ -161,6 +178,7 @@ export const useProductDetail = (seed?: {
   const [skuQuantities, setSkuQuantities] = useState<Record<string, number>>({})
   const [activeImage, setActiveImage] = useState<string>(() => seed?.initialProduct?.mainImageUrl || '')
   const [submitting, setSubmitting] = useState(false)
+  const [addedCartLines, setAddedCartLines] = useState<AddedCartLine[] | null>(null)
   const [manualColorValue, setManualColorValue] = useState<string | null>(null)
   const [manualSizeSkuId, setManualSizeSkuId] = useState<string | null>(null)
   const [selectionHighlight, setSelectionHighlight] = useState<SelectionHighlight>({
@@ -340,6 +358,8 @@ export const useProductDetail = (seed?: {
         const name = String(attr.name).trim()
         const value = String(attr.value).trim()
         if (!name || !value) return
+        if (isNonSellableSkuDimensionName(name) || isProductTypeSpecValue(value)) return
+        if (isSizeAttributeName(name) && isColorNameSpecValue(value)) return
         if (!attrMap.has(name)) {
           attrMap.set(name, new Set())
         }
@@ -392,7 +412,7 @@ export const useProductDetail = (seed?: {
     setSelectedSku(null)
     setSelectedAttributes({})
     setManualSizeSkuId(null)
-    setQuantity(1)
+    setQuantity(0)
     setSelectionHighlight({ color: false, size: false })
 
     const qtyMap: Record<string, number> = {}
@@ -533,21 +553,12 @@ export const useProductDetail = (seed?: {
       }
       setSelectedAttributes(attrs)
 
-      const moq = resolveSkuMinOrderQty({
-        productMinOrderQty,
-        skuMinOrderQty: sku.minOrderQty,
-        supportsMixedBatch,
-      })
+      // 点颜色图或选规格只切换预览。数量只由 +/- 写入，避免点几张图就把 Add to cart 加成几件。
       const existing = skuQuantitiesRef.current[sku.id] || 0
-      const nextQty = clampSelectedQuantityToMoq(existing > 0 ? existing : moq, moq)
-      const capped = Math.min(skuQtyCap(sku), nextQty) || moq
-      setQuantity(capped)
-      const merged = { ...skuQuantitiesRef.current, [sku.id]: capped }
-      skuQuantitiesRef.current = merged
-      setSkuQuantities(merged)
+      setQuantity(existing)
       setSelectionHighlight({ color: false, size: false })
     },
-    [colorAttribute, productMinOrderQty, supportsMixedBatch],
+    [colorAttribute],
   )
 
   useEffect(() => {
@@ -820,10 +831,21 @@ export const useProductDetail = (seed?: {
 
     try {
       setSubmitting(true)
-      toast.success(t('product.addedToCart', { defaultValue: 'Added to cart' }))
       await addToCart({
         lines: lines.map(([productSkuId, quantity]) => ({ productSkuId, quantity })),
       })
+      setAddedCartLines(
+        lines.map(([skuId, quantity]) => {
+          const sku = product?.skus.find((item) => item.id === skuId)
+          const colorAttr = sku?.attributeJson?.find((attr) => isColorAttributeName(attr.name))
+          return {
+            skuId,
+            quantity,
+            color: String(colorAttr?.value || '').trim(),
+            imageUrl: sku?.imageUrl || product?.mainImageUrl || '',
+          }
+        }),
+      )
       bumpCartBadgeCount(batchTotal)
       void refreshCartBadgeCount()
     } catch (err: any) {
@@ -882,6 +904,7 @@ export const useProductDetail = (seed?: {
       productMinOrderQty,
       supportsMixedBatch,
       detailPreview: readProductDetailPreview(productId),
+      addedCartLines,
     },
     handlers: {
       handleColorSelect,
@@ -891,6 +914,7 @@ export const useProductDetail = (seed?: {
       getSkuLineQuantity,
       resolveLineMinOrderQty,
       handleAddToCart,
+      dismissAddedCart: () => setAddedCartLines(null),
       handleRelatedClick,
       setActiveImage,
     }

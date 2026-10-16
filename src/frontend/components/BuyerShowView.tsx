@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { StorefrontResponsiveHeader } from '@/frontend/components/MobileStorefrontHeader'
 import { getBuyerShowPage } from '@/frontend/actions/BuyerShow'
 import type { StorefrontBuyerShowMedia } from '@/frontend/actions/BuyerShow'
+import { BuyerShowProofSection, type BuyerShowProofCard } from '@/frontend/components/BuyerShowProofSection'
 import { OptimizedProductImage } from '@/frontend/components/OptimizedProductImage'
 import { toProxiedImageUrl } from '@/frontend/utils/toProxiedImageUrl'
 
@@ -24,29 +25,39 @@ function filterMedia(list: StorefrontBuyerShowMedia[] | null | undefined) {
   return (list || []).filter((item) => hasBuyerShowMediaUrl(item.mediaUrl))
 }
 
+function filterProofs(list: BuyerShowProofCard[] | null | undefined) {
+  return (list || []).filter((item) => item.id && item.imageUrl && item.title && item.body)
+}
+
 export default function BuyerShowView({
   initialMedia,
+  initialProofs,
 }: {
   initialMedia?: StorefrontBuyerShowMedia[]
+  initialProofs?: BuyerShowProofCard[]
 }) {
   const router = useRouter()
   const { t } = useTranslation()
   const [media, setMedia] = useState<StorefrontBuyerShowMedia[]>(() => filterMedia(initialMedia))
-  const [loading, setLoading] = useState(initialMedia == null)
+  const [proofs, setProofs] = useState<BuyerShowProofCard[]>(() => filterProofs(initialProofs))
+  const [loading, setLoading] = useState(() => filterMedia(initialMedia).length === 0)
   const [visibleCount, setVisibleCount] = useState(() =>
     Math.min(GRID_PAGE_SIZE, filterMedia(initialMedia).length),
   )
   const [active, setActive] = useState<StorefrontBuyerShowMedia | null>(null)
+  const [activeProof, setActiveProof] = useState<BuyerShowProofCard | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (initialMedia) return
+    if (filterMedia(initialMedia).length > 0) return
     let cancelled = false
+    setLoading(true)
     getBuyerShowPage()
       .then((result) => {
         if (cancelled) return
         const next = filterMedia(result.media)
         setMedia(next)
+        setProofs(filterProofs(result.proofs))
         setVisibleCount(Math.min(GRID_PAGE_SIZE, next.length))
       })
       .catch(() => {
@@ -80,9 +91,12 @@ export default function BuyerShowView({
   }, [hasMore, media.length, visibleCount])
 
   useEffect(() => {
-    if (!active) return
+    if (!active && !activeProof) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActive(null)
+      if (event.key === 'Escape') {
+        setActive(null)
+        setActiveProof(null)
+      }
     }
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -91,12 +105,15 @@ export default function BuyerShowView({
       document.body.style.overflow = previous
       window.removeEventListener('keydown', onKey)
     }
-  }, [active])
+  }, [active, activeProof])
 
   const lightboxSrc =
     active && active.mediaType !== 'VIDEO'
       ? toProxiedImageUrl(active.mediaUrl, { width: LIGHTBOX_WIDTH, quality: 82 }) || active.mediaUrl
       : ''
+  const proofLightboxSrc = activeProof
+    ? toProxiedImageUrl(activeProof.imageUrl, { width: LIGHTBOX_WIDTH, quality: 86 }) || activeProof.imageUrl
+    : ''
 
   return (
     <div className="min-h-screen bg-[#FFF5F5] text-[#111111]">
@@ -118,6 +135,8 @@ export default function BuyerShowView({
             </p>
             <h1 className="mt-2 text-[clamp(28px,4vw,44px)] font-black">{t('home.buyer_show')}</h1>
           </div>
+
+          <BuyerShowProofSection proofs={proofs} onOpen={setActiveProof} />
 
           {loading ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -210,6 +229,39 @@ export default function BuyerShowView({
                 className="max-h-[90vh] w-full rounded-lg object-contain"
               />
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {activeProof ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={activeProof.title}
+          onClick={() => setActiveProof(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 z-[81] flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white"
+            aria-label="Close"
+            onClick={() => setActiveProof(null)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div
+            className="max-h-[90vh] w-full max-w-[min(96vw,860px)] overflow-y-auto rounded-2xl bg-white"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={proofLightboxSrc}
+              alt={activeProof.title}
+              className="max-h-[62vh] w-full bg-[#f7f4ee] object-contain"
+            />
+            <div className="px-5 py-5">
+              <h2 className="text-xl font-bold text-[#111111]">{activeProof.title}</h2>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#4a453f]">{activeProof.body}</p>
+            </div>
           </div>
         </div>
       ) : null}

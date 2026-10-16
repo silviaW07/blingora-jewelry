@@ -15,7 +15,6 @@ import EditableImg from '@/@base/EditableImg';
 import {
   Camera,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Globe,
   Menu,
@@ -51,6 +50,7 @@ import { listingPriceBoundMaxUsd } from '@/shared/priceThreshold';
 import { ProductListCard } from '@/frontend/components/ProductListCard';
 import { ProductListToolbar, ListingBrandFilter } from '@/frontend/components/ProductListToolbar';
 import { ListingPageHead } from '@/frontend/components/ListingPageHead';
+import { StorefrontPagination } from '@/frontend/components/StorefrontPagination';
 import { HomeRecommendZoneSection } from '@/frontend/components/HomeRecommendZoneSection';
 import { MobileHomeStorefrontView } from '@/frontend/components/MobileHomeStorefrontView';
 import { WishlistHeartButton } from '@/frontend/components/WishlistHeartButton';
@@ -386,6 +386,8 @@ const renderRecommendZoneContent = (zone: HomeRecommendZoneSection, handlers: Ho
                   fallbackSrc={CATEGORY_CARD_PLACEHOLDER}
                   slowFallbackMs={waitingForProduct ? CATEGORY_PRODUCT_IMAGE_SLOW_MS : 0}
                   loading="lazy"
+                  proxyWidth={720}
+                  proxyQuality={85}
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                 />
               </div>
@@ -438,7 +440,9 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
     topNavPanelRef,
     products,
     isLoadingProducts,
+    isLoadingMore,
     totalCount,
+    totalPages,
     categoryDetail,
     isSecondaryCategoryResults,
     selectedParentCategory,
@@ -487,6 +491,18 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   }, [queryState.searchKeyword]);
 
   useEffect(() => {
+    const hasMore = products.length > 0 && products.length < totalCount
+    if (!hasMore) return
+    const el = loadMoreSentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) handlers.handleLoadMore()
+    }, { rootMargin: '280px 0px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [handlers, products.length, totalCount]);
+
+  useEffect(() => {
     if (!isSearchLoading) return;
     if (isLoadingProducts) {
       sawProductLoadingRef.current = true;
@@ -529,6 +545,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
   const isDefaultHomeState = isDefaultHomeQueryState(state);
   const activeBanner = posters[activeBannerIndex] || null;
   const categoryProductsRef = useRef<HTMLElement | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const wasDefaultHomeRef = useRef(true);
 
   useEffect(() => {
@@ -1093,30 +1110,14 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                           alt={activeBanner.title || 'Banner'}
                           disableKeywordSearch
                           loading="eager"
-                          proxyWidth={720}
-                          proxyQuality={70}
-                          className="home-banner-media absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                          proxyWidth={1920}
+                          proxyQuality={88}
+                          className="home-banner-media absolute inset-0 h-full w-full object-cover"
                         />
                       </button>
 
                       {posters.length > 1 ? (
                         <>
-                          <button
-                            type="button"
-                            className="absolute left-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center bg-white/88 text-[#111111] transition hover:bg-white sm:left-4 sm:size-11"
-                            onClick={() => handlers.handleBannerChange(activeBannerIndex - 1)}
-                            aria-label="Previous banner"
-                          >
-                            <ChevronLeft className="size-5" />
-                          </button>
-                          <button
-                            type="button"
-                            className="absolute right-3 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center bg-white/88 text-[#111111] transition hover:bg-white sm:right-4 sm:size-11"
-                            onClick={() => handlers.handleBannerChange(activeBannerIndex + 1)}
-                            aria-label="Next banner"
-                          >
-                            <ChevronRight className="size-5" />
-                          </button>
                           <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
                             {posters.map((banner, index) => (
                               <button
@@ -1261,6 +1262,7 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
               </div>
 
               {products.length > 0 ? (
+                <>
                 <div className="storefront-product-grid mt-6 grid grid-cols-2 gap-2.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {products.map((item, index) => (
                     <ProductListCard
@@ -1275,6 +1277,23 @@ export const HomeStorefrontView = ({ state, handlers }: Props) => {
                     />
                   ))}
                 </div>
+                {totalPages > 1 ? (
+                  <div className="hidden lg:block">
+                    <StorefrontPagination
+                      page={queryState.page}
+                      pageSize={queryState.pageSize}
+                      total={totalCount}
+                      totalPages={totalPages}
+                      onPageChange={handlers.handleGoToPage}
+                    />
+                  </div>
+                ) : null}
+                {products.length < totalCount ? (
+                  <div ref={loadMoreSentinelRef} className="flex justify-center py-6 lg:hidden">
+                    {isLoadingMore ? <Loader2 className="size-5 animate-spin text-[#7a756c]" /> : null}
+                  </div>
+                ) : null}
+                </>
               ) : isLoadingProducts ? (
                 <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-sm text-[#7a756c]">
                   <Loader2 className="size-6 animate-spin" />

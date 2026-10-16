@@ -521,6 +521,8 @@ model importtaskitem {
   usdPriceMax          Decimal?         @db.Decimal(10, 2) // 美元预估区间最高价
   productDetail        String?          @db.LongText // 商品详情描述/图文摘要
   skuSummaryText       String?          @db.LongText // SKU摘要文本，便于待上传列表直接编辑
+  operatorSkuJson      String?          @db.LongText // 运营改过的 SKU 草稿，独立于巨大 previewDataJson
+  operatorGalleryJson  String?          @db.LongText // 运营改过的主图/轮播，独立于巨大 previewDataJson
   fetchStatus          importtaskstatus @default(PENDING) // 单条采集状态：排队/抓取中/成功/失败/可重试
   publishStatus        importtaskstatus @default(PENDING) // 单条发布状态：待发布/发布中/完成/失败/可重试
   retryCount           Int              @default(0)
@@ -753,7 +755,7 @@ model orderrecord {
   installmentInfo    String?           @db.VarChar(100)
   couponId           String?           @db.VarChar(36)
   shipMethod         ordershipmethod   @default(STANDARD)
-  trackingCarrier    String?           @db.VarChar(60)
+  trackingCarrier    String?           @db.VarChar(255)
   trackingNumber     String?           @db.VarChar(100)
   estimatedArrivalAt DateTime?
   shippedAt          DateTime?
@@ -1043,8 +1045,14 @@ model shippingtemplate {
 /// 物流渠道配置：名称、时效、计费模式、渠道系数、按国家运费规则、启用状态
 model shippingchannel {
   id                 String   @id @default(uuid()) @db.VarChar(36)
-  name               String   @db.VarChar(120)
+  name               String   @db.VarChar(200)
+  /// 前台西语展示名；空则按英文名自动译成西语
+  nameEs             String?  @db.VarChar(200)
   estimatedTime      String   @db.VarChar(120)
+  /// 前台西语时效；空则按英文时效自动译成西语
+  estimatedTimeEs    String?  @db.VarChar(120)
+  /// 仅后台可见备注，不返回给客户结账
+  adminNote          String?  @db.VarChar(500)
   /// 计费模式：EXPRESS_TIER（快递阶梯价）| SEA_PER_KG（海运按公斤）
   billingMode        String   @default("EXPRESS_TIER") @db.VarChar(30)
   /// 渠道系数，最终运费 = 基础运费 × 系数，默认 1.00
@@ -1200,6 +1208,9 @@ model product_category_relations {
   id         String   @id @default(uuid()) @db.VarChar(36)
   productId  String   @db.VarChar(36)
   categoryId String   @db.VarChar(36)
+  /**
+   * 类目内优先展示权重；0 表示不置顶，沿用前台原排序
+   */
   sortWeight Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now()) @updatedAt

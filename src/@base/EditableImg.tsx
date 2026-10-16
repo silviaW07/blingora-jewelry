@@ -325,7 +325,11 @@ const EditableImg = ({
             {(() => {
                 const raw = imageSrc ?? fallbackSrc ?? undefined
                 if (!raw) return null
-                const proxied = toProxiedImageUrl(raw, { width: proxyWidth, quality: proxyQuality }) || raw
+                // 带尺寸后缀的缩略图经常 404；失败后改要无后缀原图，否则会一直裂开。
+                const proxied = toProxiedImageUrl(raw, {
+                  width: loadAttempt > 0 ? 0 : proxyWidth,
+                  quality: proxyQuality,
+                }) || raw
                 const useNativeImg =
                     proxyWidth <= 480 ||
                     shouldBypassImageOptimizer(proxied) ||

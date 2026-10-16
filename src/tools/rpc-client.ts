@@ -76,8 +76,11 @@ function serverErrorMessage(actionName: string): string {
     : BACKEND_SERVER_ERROR
 }
 
-const TIMEOUT_ERROR_MESSAGE = (timeoutMs: number) =>
-  storefrontCopy().requestTimeout(Math.round(timeoutMs / 1000))
+const TIMEOUT_ERROR_MESSAGE = (timeoutMs: number, actionName = '') => {
+  const seconds = Math.round(timeoutMs / 1000)
+  if (isStorefrontAction(actionName)) return storefrontCopy().requestTimeout(seconds)
+  return `请求超时（${seconds}秒），请稍后重试`
+}
 
 // 本地：直连 RPC 后端；线上走 /api/query（避免部分 Chrome 广告拦截把 /rpc/ 当追踪接口拦掉）
 const getApiUrl = () => {
@@ -130,6 +133,18 @@ const actionLeafName = (actionName: string) => {
 const shouldSilentServerError = (actionName: string) =>
   SILENT_SERVER_ERROR_ACTIONS.has(actionLeafName(actionName));
 
+/** Timeouts on these polling reads must not toast; the page hook decides. */
+const SILENT_TIMEOUT_ACTIONS = new Set([
+  ...SILENT_SERVER_ERROR_ACTIONS,
+  'getPendingImportQueue',
+  'getProductList',
+  'getAdminUnreadCounts',
+  'getCategoryOptions',
+])
+
+const shouldSilentTimeout = (actionName: string) =>
+  SILENT_TIMEOUT_ACTIONS.has(actionLeafName(actionName))
+
 /** Hide misleading engine messages that are not actionable for operators */
 const sanitizeRpcErrorMessage = (raw: unknown, actionName = ''): string => {
   const message = String(raw || '').trim();
@@ -144,13 +159,20 @@ const sanitizeRpcErrorMessage = (raw: unknown, actionName = ''): string => {
   if (/P2002|Unique constraint/i.test(message)) {
     return storefrontCopy().emailAlreadyRegistered;
   }
-  // Prisma column/table schema drift → friendly message for storefront
+  // Prisma column/table schema drift. Storefront stays generic; admin must not
+  // see a fake "run ensure-online.sh" hint — that script does not fix this.
   if (
     /Invalid `.*` invocation/i.test(message) ||
     /does not exist in the current database/i.test(message) ||
     /passwordPlain/i.test(message)
   ) {
-    return serverErrorMessage(actionName);
+    if (isStorefrontAction(actionName)) return serverErrorMessage(actionName)
+    const hint =
+      message.match(/Unknown (?:field|arg) `([^`]+)`/i)?.[1] ||
+      message.match(/The (?:column|table) `([^`]+)`/i)?.[1]
+    return hint
+      ? `后台数据字段异常（${hint}），请重试`
+      : '后台数据字段异常，请重试'
   }
   // Legacy Chinese RPC outage toast → locale-aware copy
   if (/后台服务异常|ensure-online\.sh|无法连接后台 RPC/i.test(message)) {
@@ -219,6 +241,7 @@ async function fetchWithTimeout(
   url: string,
   options: RequestInit,
   timeoutMs: number,
+  actionName = '',
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -229,7 +252,7 @@ async function fetchWithTimeout(
       error?.name === 'AbortError' ||
       /aborted|AbortError/i.test(String(error?.message || ''))
     ) {
-      throw new Error(TIMEOUT_ERROR_MESSAGE(timeoutMs));
+      throw new Error(TIMEOUT_ERROR_MESSAGE(timeoutMs, actionName));
     }
     throw error;
   } finally {
@@ -287,11 +310,11 @@ async function rpcCallInternal<T>(
 
       let resp: Response;
       try {
-        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
+        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs, actionName);
       } catch (networkError: any) {
         const msg = String(networkError?.message || '');
         if (/请求超时|timed out|agotó el tiempo/i.test(msg)) {
-          if (!shouldSilentServerError(actionName)) {
+          if (!shouldSilentTimeout(actionName)) {
             toast.error(msg, { id: 'rpc-timeout-error' });
           }
           throw networkError instanceof Error ? networkError : new Error(msg);
@@ -308,7 +331,7 @@ async function rpcCallInternal<T>(
       // 503 服务过载：延迟 0.5 秒重试 1 次，失败就放弃
       if (resp.status === 503) {
         await new Promise(r => setTimeout(r, 500));
-        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
+        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs, actionName);
         if (resp.status === 503) {
           const errMsg = serverErrorMessage(actionName);
           if (!shouldSilentServerError(actionName)) {
@@ -319,13 +342,15 @@ async function rpcCallInternal<T>(
       }
 
       // 502/500：瞬时过载再试一次（点击目录并发请求高峰）
-      // Skip retry for auth actions — business "密码错误" also used to return as 500.
+      // Skip retry for auth actions and long mutations — a second copy races the first.
       if (
         (resp.status === 502 || resp.status === 500) &&
-        !/(loginCustomer|registerCustomer|checkEmailUnique)/i.test(actionLeafName(actionName))
+        !/(loginCustomer|registerCustomer|checkEmailUnique|reclassifyPublishedProductsBySecondaryMatch|calibratePendingImportItems|sync1688ProductStatus)/i.test(
+          actionLeafName(actionName),
+        )
       ) {
         await new Promise(r => setTimeout(r, 400));
-        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs);
+        resp = await fetchWithTimeout(apiUrl, fetchOptions, timeoutMs, actionName);
       }
 
       // 401：公开店面接口去掉坏 token 再试一次（Chrome 里过期 JWT 会让类目列表整页空白）
@@ -340,6 +365,7 @@ async function rpcCallInternal<T>(
             apiUrl,
             { ...fetchOptions, headers: retryHeaders },
             timeoutMs,
+            actionName,
           )
         }
       }

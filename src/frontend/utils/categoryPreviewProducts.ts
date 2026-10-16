@@ -207,7 +207,9 @@ export function slimProductCards(list: unknown): ShelfProductCard[] {
       original_price:
         typeof originalRaw === 'number' && Number.isFinite(originalRaw) ? originalRaw : null,
       variant_thumbnails: Array.isArray(row.variant_thumbnails)
-        ? row.variant_thumbnails.filter((url): url is string => typeof url === 'string')
+        ? row.variant_thumbnails
+            .filter((url): url is string => typeof url === 'string' && Boolean(url.trim()))
+            .slice(0, 2)
         : undefined,
       min_order_quantity:
         typeof row.min_order_quantity === 'number' ? row.min_order_quantity : null,

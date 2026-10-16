@@ -746,15 +746,6 @@ export const parsePinduoduoHtml = (html: string, sourceUrl: string): PinduoduoPr
     preview.sizesByColor[color.label] = Array.from(new Set(sizes))
   }
 
-  // 仅有颜色无尺码时，给每个颜色挂一个「默认规格」，便于待上传区展开色图
-  if (preview.colors.length > 0) {
-    for (const color of preview.colors) {
-      if (!preview.sizesByColor[color.label] || preview.sizesByColor[color.label].length === 0) {
-        preview.sizesByColor[color.label] = ['默认规格']
-      }
-    }
-  }
-
   return preview
 }
 

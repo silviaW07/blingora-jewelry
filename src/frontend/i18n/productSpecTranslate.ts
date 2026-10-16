@@ -152,10 +152,7 @@ export function translateColorStyleText(text: string | null | undefined, t: TFun
   }
 
   const joined = joinTranslatedPieces(pieces)
-  // Storefront is EN/ES only — never leave untranslated CJK in color/style text.
-  if (!containsChinese(joined)) return joined
-  const stripped = stripChineseFromTitle(joined).replace(/\s+/g, ' ').trim()
-  return stripped || joined
+  return joined
 }
 
 export function isSizeSpecField(label: string | null | undefined): boolean {
@@ -173,14 +170,27 @@ export function translateProductSpecValue(
 ): string {
   const raw = String(value || '').trim()
   if (!raw) return ''
-  const translated = translateColorStyleText(raw, t)
+  const lng =
+    typeof (t as { language?: string }).language === 'string'
+      ? String((t as { language?: string }).language).toLowerCase()
+      : 'en'
+  let translated = translateColorStyleText(raw, t)
     .replace(/(^|[,/])\s*配(?=\s|[A-Za-z])/g, '$1With ')
     .replace(/\s*\+\s*/g, ' + ')
     .replace(/\s*[，,]\s*/g, ', ')
+    .replace(/[-–—]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  if (!containsChinese(translated)) return translated
-  return stripChineseFromTitle(translated)
+  if (!lng.startsWith('zh') && containsChinese(translated)) {
+    translated = stripChineseFromTitle(translated).replace(/[-–—]+/g, ' ').replace(/\s+/g, ' ').trim()
+  }
+  if (!lng.startsWith('zh') && (!translated || containsChinese(translated))) {
+    const colorNum = raw.match(/颜色\s*(\d+)/)
+    if (colorNum) return lng.startsWith('es') ? `Color ${colorNum[1]}` : `Color ${colorNum[1]}`
+    const fallback = t('product.optionFallback')
+    return fallback && fallback !== 'product.optionFallback' ? fallback : 'Option'
+  }
+  return translated
 }
 
 /** Translate Description field labels (颜色/尺码/材质 …). */
@@ -239,6 +249,5 @@ export function translateProductSpecLabel(
   }
   const viaKeywords = translateColorStyleText(raw, t)
   if (viaKeywords && !containsChinese(viaKeywords)) return viaKeywords
-  const stripped = stripChineseFromTitle(viaKeywords || raw)
-  return stripped || viaKeywords || raw
+  return viaKeywords || raw
 }

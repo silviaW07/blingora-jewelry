@@ -48,7 +48,10 @@ function isAllowedRemoteHost(hostname: string): boolean {
     host.endsWith('.aliyuncs.com') ||
     host.endsWith('.tbcdn.cn') ||
     host.endsWith('.taobaocdn.com') ||
-    host.endsWith('.1688.com')
+    host.endsWith('.1688.com') ||
+    host.endsWith('.amazonaws.com') ||
+    host.endsWith('szwego.com') ||
+    host.endsWith('yupoo.com')
   )
 }
 
@@ -104,7 +107,7 @@ function resolveFetchUrl(raw: string): string | null {
   }
 }
 
-async function loadImageBytes(imageUrl: string): Promise<Buffer> {
+export async function loadImageBytes(imageUrl: string): Promise<Buffer> {
   const localKey = uploadsKeyFromUrl(imageUrl)
   if (localKey) {
     const absolute = resolveStoredFile(localKey)

@@ -10,3 +10,7 @@ export const deleteShippingChannel = (...args: Parameters<Actions["deleteShippin
   rpcCall<Awaited<ReturnType<Actions["deleteShippingChannel"]>>>("src.backend.actions.ShippingChannelConfig.deleteShippingChannel", ...args);
 export const updateShippingChannelStatus = (...args: Parameters<Actions["updateShippingChannelStatus"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateShippingChannelStatus"]>>>("src.backend.actions.ShippingChannelConfig.updateShippingChannelStatus", ...args);
+export const updateShippingChannelAdminNote = (...args: Parameters<Actions["updateShippingChannelAdminNote"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateShippingChannelAdminNote"]>>>("src.backend.actions.ShippingChannelConfig.updateShippingChannelAdminNote", ...args);
+export const reorderShippingChannels = (...args: Parameters<Actions["reorderShippingChannels"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["reorderShippingChannels"]>>>("src.backend.actions.ShippingChannelConfig.reorderShippingChannels", ...args);

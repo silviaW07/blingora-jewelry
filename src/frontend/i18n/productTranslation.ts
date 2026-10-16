@@ -4,9 +4,11 @@ import {
   collapseRepeatedTitleWords,
   containsChinese,
   fixStorefrontLabelTypos,
+  isIncompleteTranslatedTitle,
   stripChineseFromTitle,
   translateTitleKeywords,
 } from '@/shared/productKeywordDictionary'
+import { leftoverIsVolumeOnly } from '@/shared/storefrontLabel'
 
 /**
  * Storefront only serves en/es. Historical `zh` preference maps to English
@@ -65,12 +67,6 @@ export function stripQualityShelfSuffix(raw: string | null | undefined): string 
   return value
 }
 
-/** `LV 1822` / `COACH 5 6363-1` leftover model codes. */
-const SKU_RESIDUE_TAIL_RE =
-  /(?:\s+(?:[A-Z]{1,8}\s+)?)?(?:\d{1,4}\s+)+\d{2,}(?:[-\s]\d{1,4})+$/
-const SKU_RESIDUE_CODE_RE = /\s+\d{3,6}(?:[-\s]\d{1,4}){1,3}$/
-const SKU_RESIDUE_SHORT_CODE_RE = /\s+\d{3,6}$/
-
 const BRAND_ONLY_TITLES = new Set(
   [
     'louis vuitton',
@@ -102,28 +98,6 @@ const BRAND_ONLY_TITLES = new Set(
     'vancleef',
   ].map((item) => item.replace(/\s+/g, ' ')),
 )
-
-function titleLooksBrandPrefixed(raw: string): boolean {
-  const lower = raw.trim().toLowerCase()
-  if (!lower) return false
-  for (const brand of BRAND_ONLY_TITLES) {
-    if (lower === brand || lower.startsWith(`${brand} `) || lower.startsWith(`${brand.replace(/\s+/g, '')} `)) {
-      return true
-    }
-  }
-  return false
-}
-
-export function stripSkuResidueFromTitle(raw: string | null | undefined): string {
-  let value = String(raw || '').trim()
-  if (!value) return ''
-  value = value.replace(SKU_RESIDUE_TAIL_RE, '').trim()
-  value = value.replace(SKU_RESIDUE_CODE_RE, '').trim()
-  if (titleLooksBrandPrefixed(value)) {
-    value = value.replace(SKU_RESIDUE_SHORT_CODE_RE, '').trim()
-  }
-  return value.replace(/\s+/g, ' ').trim()
-}
 
 function isBrandOnlyTitle(raw: string | null | undefined): boolean {
   const key = String(raw || '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -172,7 +146,7 @@ export function polishStorefrontProductTitle(
   raw: string | null | undefined,
   extra?: ProductTitleContext,
 ): string {
-  let value = stripSkuResidueFromTitle(stripQualityShelfSuffix(raw))
+  let value = stripQualityShelfSuffix(raw)
   if (!value) value = String(raw || '').trim()
   if (isBrandOnlyTitle(value)) {
     value = expandBrandOnlyTitle(value)
@@ -200,8 +174,12 @@ function healLatinTitle(raw: string, code: 'en' | 'es'): string {
   if (direct) return direct
   if (!fixed) return ''
   const healed = collapseRepeatedTitleWords(translateTitleKeywords(fixed, code) || '')
-  const clean = asCleanLatinTitle(healed) || asCleanLatinTitle(stripChineseFromTitle(healed))
-  return clean
+  const clean = asCleanLatinTitle(healed)
+  if (clean && !leftoverIsVolumeOnly(clean)) return clean
+  // 有中文时不要剥成 100ml / 空标题；留给详情接口做整句翻译。
+  if (containsChinese(fixed)) return ''
+  const stripped = asCleanLatinTitle(stripChineseFromTitle(healed))
+  return stripped && !leftoverIsVolumeOnly(stripped) ? stripped : ''
 }
 
 function pickEnglishTitle(translationsJson: unknown, fallback: string): string {
@@ -222,9 +200,19 @@ function pickEnglishTitle(translationsJson: unknown, fallback: string): string {
   return stripQualityShelfSuffix(healLatinTitle(fallback, 'en')) || healLatinTitle(fallback, 'en')
 }
 
+function preferCompleteTitle(
+  cached: string,
+  source: string,
+  fromSource: string,
+  code: 'en' | 'es',
+): string {
+  if (cached && !isIncompleteTranslatedTitle(cached, source, code, fromSource)) return cached
+  return fromSource || cached
+}
+
 /**
  * Storefront product title by locale (en/es only):
- * clean Latin title — never returns Chinese / mixed CJK titles.
+ * translate the admin/backend name — never strip 货号, never return Chinese leftovers.
  */
 export function resolveProductDisplayName(
   name: string,
@@ -235,36 +223,42 @@ export function resolveProductDisplayName(
   const fallback = String(name || '').trim()
   const code = normalizeProductLang(lang)
   const finish = (title: string) => polishStorefrontProductTitle(title, extra) || 'Product'
+  const fromSource = healLatinTitle(stripQualityShelfSuffix(fallback), code)
 
   const exact = pickExactProductTranslation(translationsJson, code)
   const fromLang = String(exact?.name || '').trim()
   const fromExact = healLatinTitle(fromLang, code)
-  if (fromExact) return finish(fromExact)
+  const chosenExact = preferCompleteTitle(fromExact, fallback, fromSource, code)
+  if (chosenExact) return finish(chosenExact)
 
   if (translationsJson && typeof translationsJson === 'object') {
     const root = translationsJson as Record<string, unknown>
     if (code === 'es') {
       const sideEs = String(root.title_es ?? root.titleEs ?? root.nameEs ?? '').trim()
       const cleanEs = healLatinTitle(sideEs, 'es')
-      if (cleanEs) return finish(cleanEs)
+      const chosenEs = preferCompleteTitle(cleanEs, fallback, fromSource, 'es')
+      if (chosenEs) return finish(chosenEs)
     }
     const sideEn = String(root.title_en ?? root.titleEn ?? root.nameEn ?? '').trim()
     const cleanEn = healLatinTitle(sideEn, 'en')
-    if (cleanEn) return finish(cleanEn)
+    const chosenEn = preferCompleteTitle(cleanEn, fallback, fromSource, 'en')
+    if (chosenEn) return finish(chosenEn)
   }
 
-  const fromFallback = healLatinTitle(fallback, code)
-  if (fromFallback) return finish(fromFallback)
+  if (fromSource) return finish(fromSource)
 
   if (code === 'es') {
     const en = pickEnglishTitle(translationsJson, fallback)
-    if (en) return finish(en)
+    if (en) return finish(preferCompleteTitle(en, fallback, fromSource, 'en') || en)
   }
 
   const stripped = stripChineseFromTitle(fromLang || fallback)
   const cleanStripped = asCleanLatinTitle(stripped)
-  const finalized = stripQualityShelfSuffix(cleanStripped) || cleanStripped
-  return finish(finalized || 'Product')
+  if (cleanStripped && !leftoverIsVolumeOnly(cleanStripped)) {
+    const finalized = stripQualityShelfSuffix(cleanStripped) || cleanStripped
+    return finish(preferCompleteTitle(finalized, fallback, fromSource, code) || finalized)
+  }
+  return finish(fromSource || 'Product')
 }
 
 function pickCategoryLocaleName(block: unknown): string {
@@ -323,5 +317,6 @@ export function resolveCategoryDisplayName(
   if (healedFallback) return healedFallback
 
   const stripped = asCleanLatinTitle(stripChineseFromTitle(fallback))
-  return stripped || 'Category'
+  if (stripped && !leftoverIsVolumeOnly(stripped)) return stripped
+  return healedFallback || fallback || 'Category'
 }

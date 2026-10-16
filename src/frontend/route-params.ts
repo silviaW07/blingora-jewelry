@@ -369,6 +369,14 @@ export const Wishlist = {
   navigateTo: (router: AppRouterInstance) => router.push('/wishlist/'),
 }
 
+export const PromoCatalog = {
+  id: 'F16',
+  path: '/promo-catalog',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push('/promo-catalog/'),
+}
+
 export const AccountCenter = {
   id: 'F07',
   path: '/account',

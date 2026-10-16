@@ -178,6 +178,7 @@ export function ProductDetailImageCarousel({
       }}
     >
       <OptimizedProductImage
+        key={heroUrl}
         fill
         src={heroUrl}
         alt={alt}

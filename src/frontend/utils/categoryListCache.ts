@@ -15,8 +15,8 @@ let cache: CacheEntry | null = null
 let inflight: Promise<CategoryItem[]> | null = null
 let inflightLang = ''
 
-const TTL_MS = 5 * 60 * 1000
-const STORAGE_KEY = 'sj.category-list.v1'
+const TTL_MS = 60 * 1000
+const STORAGE_KEY = 'sj.category-list.v2'
 
 function readSession(lang: string): CacheEntry | null {
   if (typeof window === 'undefined') return null

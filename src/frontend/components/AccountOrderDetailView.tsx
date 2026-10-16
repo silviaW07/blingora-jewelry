@@ -16,6 +16,8 @@ import {
 import type { CustomerOrderItem, CustomerOrderSummary } from '../actions/AccountCenter'
 import { AccountOrderDetail } from '@/frontend/route-params'
 import { hardNavigate, hardNavProps, orderPayHref, productHref } from '@/frontend/utils/hardNavigate'
+import { localizeShippingText } from '@/shared/shippingChannelI18n'
+import { normalizeProductLang } from '@/frontend/i18n/productTranslation'
 
 export default function AccountOrderDetailView() {
   const searchParams = useClientSearchParams()
@@ -135,7 +137,12 @@ export default function AccountOrderDetailView() {
             <DetailField label={t('accountOrders.total')} value={`${order.currencyCode} ${order.totalAmount.toFixed(2)}`} />
             <DetailField
               label={t('accountOrders.shippingMethod')}
-              value={order.trackingCarrier || t(`accountOrders.shipMethods.${order.shipMethod}`)}
+              value={
+                localizeShippingText(
+                  order.trackingCarrier,
+                  normalizeProductLang(i18n.resolvedLanguage),
+                ) || t(`accountOrders.shipMethods.${order.shipMethod}`)
+              }
             />
             <DetailField
               label={t('accountOrders.weight')}

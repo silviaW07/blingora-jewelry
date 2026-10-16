@@ -348,6 +348,8 @@ exports.Prisma.ImporttaskitemScalarFieldEnum = {
   usdPriceMax: 'usdPriceMax',
   productDetail: 'productDetail',
   skuSummaryText: 'skuSummaryText',
+  operatorSkuJson: 'operatorSkuJson',
+  operatorGalleryJson: 'operatorGalleryJson',
   fetchStatus: 'fetchStatus',
   publishStatus: 'publishStatus',
   retryCount: 'retryCount',
@@ -711,7 +713,10 @@ exports.Prisma.ShippingtemplateScalarFieldEnum = {
 exports.Prisma.ShippingchannelScalarFieldEnum = {
   id: 'id',
   name: 'name',
+  nameEs: 'nameEs',
   estimatedTime: 'estimatedTime',
+  estimatedTimeEs: 'estimatedTimeEs',
+  adminNote: 'adminNote',
   billingMode: 'billingMode',
   channelCoefficient: 'channelCoefficient',
   countryFeesJson: 'countryFeesJson',
@@ -814,6 +819,7 @@ exports.Prisma.Product_category_relationsScalarFieldEnum = {
   id: 'id',
   productId: 'productId',
   categoryId: 'categoryId',
+  sortWeight: 'sortWeight',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -1019,6 +1025,8 @@ exports.Prisma.importtaskitemOrderByRelevanceFieldEnum = {
   targetCategoryId: 'targetCategoryId',
   productDetail: 'productDetail',
   skuSummaryText: 'skuSummaryText',
+  operatorSkuJson: 'operatorSkuJson',
+  operatorGalleryJson: 'operatorGalleryJson',
   importedProductId: 'importedProductId',
   failureReason: 'failureReason'
 };
@@ -1253,7 +1261,10 @@ exports.Prisma.shippingtemplateOrderByRelevanceFieldEnum = {
 exports.Prisma.shippingchannelOrderByRelevanceFieldEnum = {
   id: 'id',
   name: 'name',
+  nameEs: 'nameEs',
   estimatedTime: 'estimatedTime',
+  estimatedTimeEs: 'estimatedTimeEs',
+  adminNote: 'adminNote',
   billingMode: 'billingMode'
 };
 

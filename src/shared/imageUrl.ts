@@ -56,6 +56,19 @@ export const shouldBypassImageOptimizer = (value?: string | null): boolean => {
   }
 }
 
+const ALICDN_SIZE_SUFFIX = /_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i
+
+/** Rewrite (or add) alicdn `_WxHqN.jpg` so a 400px product thumb can be upsized for large category cards. */
+function withAlicdnCatalogSize(pathOrUrl: string, width: number): string {
+  const [pathPart, query = ''] = pathOrUrl.split('?')
+  const stripped = pathPart.replace(ALICDN_SIZE_SUFFIX, '')
+  if (!/\.(jpe?g|png|webp)$/i.test(stripped)) {
+    return pathOrUrl
+  }
+  const next = `${stripped}_${width}x${width}q90.jpg`
+  return query ? `${next}?${query}` : next
+}
+
 /**
  * 对已知图床 URL 追加压缩参数（优先 WebP / 限制宽度），降低首页类目卡加载体积。
  * 无法识别的地址原样返回。
@@ -68,10 +81,8 @@ export const optimizeCatalogImageUrl = (
   if (!text) return null
   if (text.startsWith('/') || text.startsWith('data:') || text.startsWith('blob:')) {
     // Already same-origin (incl. /img-proxy) — append alicdn size when possible
-    if (text.startsWith('/img-proxy/') && !/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
-      if (/\.(jpe?g|png|webp)$/i.test(text.split('?')[0] || '')) {
-        return `${text.split('?')[0]}_${width}x${width}q90.jpg${text.includes('?') ? `?${text.split('?')[1]}` : ''}`
-      }
+    if (text.startsWith('/img-proxy/') && /\.(jpe?g|png|webp)$/i.test((text.split('?')[0] || '').replace(ALICDN_SIZE_SUFFIX, ''))) {
+      return withAlicdnCatalogSize(text, width)
     }
     return text
   }
@@ -80,11 +91,7 @@ export const optimizeCatalogImageUrl = (
     const url = new URL(text)
     // Absolute same-origin img-proxy (nginx JSON rewrite) — treat like relative
     if (url.pathname.startsWith('/img-proxy/')) {
-      const path = `${url.pathname}${url.search}`
-      if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(url.pathname) && /\.(jpe?g|png|webp)$/i.test(url.pathname)) {
-        return `${url.pathname}_${width}x${width}q90.jpg${url.search}`
-      }
-      return path
+      return withAlicdnCatalogSize(`${url.pathname}${url.search}`, width)
     }
     const host = url.hostname.toLowerCase()
 
@@ -106,10 +113,7 @@ export const optimizeCatalogImageUrl = (
 
     // 1688 / alicdn：官方尺寸后缀，体积从数百 KB 降到几十 KB
     if (host.includes('alicdn.com')) {
-      const path = url.pathname
-      if (!/_\d+x\d+q?\d*\.(jpe?g|png|webp)$/i.test(path) && /\.(jpe?g|png|webp)$/i.test(path)) {
-        url.pathname = `${path}_${width}x${width}q90.jpg`
-      }
+      url.pathname = withAlicdnCatalogSize(url.pathname, width)
       return url.toString()
     }
 
@@ -136,9 +140,9 @@ export const resolveCategoryShelfImageUrl = (
   iconUrl?: string | null,
 ): string | null => {
   return (
-    optimizeCatalogImageUrl(imageUrl, 640) ||
-    optimizeCatalogImageUrl(bannerImageUrl, 640) ||
-    optimizeCatalogImageUrl(iconUrl, 640) ||
+    optimizeCatalogImageUrl(imageUrl, 720) ||
+    optimizeCatalogImageUrl(bannerImageUrl, 720) ||
+    optimizeCatalogImageUrl(iconUrl, 720) ||
     null
   )
 }
@@ -151,10 +155,10 @@ export const resolveCategoryCardImageUrl = (
   productImageUrl?: string | null,
 ): string => {
   return (
-    optimizeCatalogImageUrl(productImageUrl, 640) ||
-    optimizeCatalogImageUrl(imageUrl, 640) ||
-    optimizeCatalogImageUrl(bannerImageUrl, 640) ||
-    optimizeCatalogImageUrl(iconUrl, 640) ||
+    optimizeCatalogImageUrl(productImageUrl, 720) ||
+    optimizeCatalogImageUrl(imageUrl, 720) ||
+    optimizeCatalogImageUrl(bannerImageUrl, 720) ||
+    optimizeCatalogImageUrl(iconUrl, 720) ||
     CATEGORY_CARD_PLACEHOLDER_URL
   )
 }

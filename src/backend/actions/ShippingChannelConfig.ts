@@ -1,6 +1,7 @@
 'use server'
 
 import prisma from '@/tools/prisma'
+import { DEFAULT_USD_EXCHANGE_RATE, getUsdExchangeRate } from '@/shared/exchangeRate'
 import { requireRole, withResult, UserRole } from '@/backend/action_utils'
 import {
   CHECKOUT_COUNTRIES,
@@ -25,7 +26,10 @@ export type ShippingChannelFilterStatus = 'ALL' | 'ENABLED' | 'DISABLED'
 export interface ShippingChannelItem {
   channel_id: string
   channel_name: string
+  channel_nameEs: string
   channel_estimatedTime: string
+  channel_estimatedTimeEs: string
+  channel_adminNote: string
   channel_billingMode: ShippingBillingMode
   channel_coefficient: number
   channel_countryFees: CountryRuleMap
@@ -43,12 +47,16 @@ export interface GetShippingChannelListOutput {
   list: ShippingChannelItem[]
   total: number
   countries: string[]
+  usd_exchange_rate: number
 }
 
 export interface SaveShippingChannelInput {
   channel_id?: string
   channel_name: string
+  channel_nameEs?: string
   channel_estimatedTime: string
+  channel_estimatedTimeEs?: string
+  channel_adminNote?: string
   channel_billingMode: ShippingBillingMode
   channel_coefficient: number
   channel_countryFees: CountryRuleMap
@@ -78,6 +86,15 @@ export interface UpdateShippingChannelStatusOutput {
   success: boolean
 }
 
+export interface UpdateShippingChannelAdminNoteInput {
+  channel_id: string
+  channel_adminNote: string
+}
+
+export interface UpdateShippingChannelAdminNoteOutput {
+  success: boolean
+}
+
 export interface ReorderShippingChannelsInput {
   channel_ids: string[]
 }
@@ -89,7 +106,10 @@ export interface ReorderShippingChannelsOutput {
 function mapChannel(row: {
   id: string
   name: string
+  nameEs?: string | null
   estimatedTime: string
+  estimatedTimeEs?: string | null
+  adminNote?: string | null
   billingMode?: string | null
   channelCoefficient?: unknown
   countryFeesJson: unknown
@@ -106,7 +126,10 @@ function mapChannel(row: {
   return {
     channel_id: row.id,
     channel_name: row.name,
+    channel_nameEs: String(row.nameEs || '').trim(),
     channel_estimatedTime: row.estimatedTime,
+    channel_estimatedTimeEs: String(row.estimatedTimeEs || '').trim(),
+    channel_adminNote: String(row.adminNote || '').trim(),
     channel_billingMode: billingMode,
     channel_coefficient: normalizeChannelCoefficient(coefficientRaw),
     channel_countryFees: normalizeCountryRuleMap(row.countryFeesJson, billingMode),
@@ -137,21 +160,34 @@ export const getShippingChannelList = requireRole([UserRole.ADMIN])(
     await ensureDefaultChannels()
 
     const { search_keyword = '', filter_status = 'ALL' } = input
+    const keyword = search_keyword.trim()
     const where = {
-      ...(search_keyword ? { name: { contains: search_keyword } } : {}),
+      ...(keyword
+        ? {
+            OR: [
+              { name: { contains: keyword } },
+              { nameEs: { contains: keyword } },
+              { adminNote: { contains: keyword } },
+            ],
+          }
+        : {}),
       ...(filter_status === 'ENABLED' ? { isEnabled: true } : {}),
       ...(filter_status === 'DISABLED' ? { isEnabled: false } : {}),
     }
 
-    const list = await prisma.shippingchannel.findMany({
-      where,
-      orderBy: [{ sortWeight: 'asc' }, { updatedAt: 'desc' }],
-    })
+    const [list, usdExchangeRate] = await Promise.all([
+      prisma.shippingchannel.findMany({
+        where,
+        orderBy: [{ sortWeight: 'asc' }, { updatedAt: 'desc' }],
+      }),
+      getUsdExchangeRate(prisma, { ttlMs: 60_000 }).catch(() => DEFAULT_USD_EXCHANGE_RATE),
+    ])
 
     return {
       list: list.map(mapChannel),
       total: list.length,
       countries: [...CHECKOUT_COUNTRIES],
+      usd_exchange_rate: usdExchangeRate > 0 ? usdExchangeRate : DEFAULT_USD_EXCHANGE_RATE,
     }
   }),
 )
@@ -160,6 +196,9 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
   withResult(async (input: SaveShippingChannelInput): Promise<SaveShippingChannelOutput> => {
     const name = (input.channel_name || '').trim()
     const estimatedTime = (input.channel_estimatedTime || '').trim()
+    const nameEs = (input.channel_nameEs || '').trim().slice(0, 200)
+    const estimatedTimeEs = (input.channel_estimatedTimeEs || '').trim().slice(0, 120)
+    const adminNote = (input.channel_adminNote || '').trim().slice(0, 500)
     if (!name) throw new Error('请填写渠道名称')
     if (!estimatedTime) throw new Error('请填写预计配送时间')
 
@@ -215,7 +254,10 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
 
     const payload = {
       name,
+      nameEs: nameEs || null,
       estimatedTime,
+      estimatedTimeEs: estimatedTimeEs || null,
+      adminNote: adminNote || null,
       billingMode,
       channelCoefficient,
       countryFeesJson: fees,
@@ -248,6 +290,19 @@ export const updateShippingChannelStatus = requireRole([UserRole.ADMIN])(
     await prisma.shippingchannel.update({
       where: { id: input.channel_id },
       data: { isEnabled: !!input.channel_isEnabled },
+    })
+    return { success: true }
+  }),
+)
+
+export const updateShippingChannelAdminNote = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateShippingChannelAdminNoteInput): Promise<UpdateShippingChannelAdminNoteOutput> => {
+    const channelId = String(input.channel_id || '').trim()
+    if (!channelId) throw new Error('渠道不存在')
+    const adminNote = String(input.channel_adminNote || '').trim().slice(0, 500)
+    await prisma.shippingchannel.update({
+      where: { id: channelId },
+      data: { adminNote: adminNote || null },
     })
     return { success: true }
   }),

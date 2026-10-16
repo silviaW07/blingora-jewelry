@@ -34,13 +34,16 @@ import {
   TABLE_IMPORT_SPEC_HEADER_ALIASES,
   isTableImportCategoryHeader,
 } from '@/shared/tableImportSpec'
+import { splitPastedImportUrls } from '@/shared/importSourceUrls'
 
 interface CreateFormFields {
   urls: string
   defaultCategoryId: string
-  costDeductionUsd: number | ''
+  supplierName: string
   defaultStatus: ProductStatusType
   stockStrategyStock: number | ''
+  weishangCookie: string
+  yupooPassword: string
 }
 
 type ImportFailureKind = 'FETCH' | 'PUBLISH'
@@ -146,11 +149,12 @@ export interface ImportFrom1688State {
   createForm: CreateFormFields
   isSubmitting: boolean
   isParsingTask: boolean
-  /** Task waiting for local HTML capture +「开始解析」; null when none. */
+  /** Task created by「提交链接」, waiting for a manual「开始解析」; null when none. */
   pendingParseTaskId: string | null
   currentTask: PendingImportQueueTaskSummary | null
   currentItems: PendingImportItemRecord[]
   createFormCategoryWarning: string | null
+  createTaskError: string | null
   isLoadingDetail: boolean
   activeItemId: string | null
   selectedItemIds: string[]
@@ -219,6 +223,8 @@ export interface ImportFrom1688Handlers {
   /** 将图库缩略图设为当前主图（便于「处理当前图」） */
   handleSetCurrentPendingImage: (itemId: string, imageIndex: number) => void
   dismissFeedbackDialog: () => void
+  /** Clear stuck submit/parse flags (collect modal reopen). */
+  resetCreateUiFlags: () => void
 }
 
 const emptyManualForm: ManualFormFields = {
@@ -309,9 +315,9 @@ const isTaskStillParsing = (status?: ImportTaskStatusType | null) =>
   !!status && ['PENDING', 'RUNNING', 'RETRY_PENDING'].includes(status)
 
 const validate1688Urls = (raw: string): { ok: true; urls: string[] } | { ok: false; message: string } => {
-  const lines = raw.split(/\r?\n/).map(v => v.trim()).filter(Boolean)
+  const lines = splitPastedImportUrls(raw)
   if (lines.length === 0) {
-    return { ok: false, message: '解析失败：请先粘贴1688商品链接' }
+    return { ok: false, message: '请先粘贴 1688 / 拼多多 / Yupoo / 微购相册链接' }
   }
 
   const invalid = lines.find(line => {
@@ -324,7 +330,7 @@ const validate1688Urls = (raw: string): { ok: true; urls: string[] } | { ok: fal
   })
 
   if (invalid) {
-    return { ok: false, message: '解析失败：链接错误，需以 http 或 https 开头' }
+    return { ok: false, message: '链接错误：每条需以 http 或 https 开头（长链接请不要从中间断行）' }
   }
 
   return { ok: true, urls: lines }
@@ -642,9 +648,11 @@ export const useImportFrom1688 = (
   const [createForm, setCreateForm] = useState<CreateFormFields>({
     urls: '',
     defaultCategoryId: '',
-    costDeductionUsd: 0,
+    supplierName: '',
     defaultStatus: 'DRAFT',
-    stockStrategyStock: 100
+    stockStrategyStock: 100,
+    weishangCookie: '',
+    yupooPassword: '',
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isParsingTask, setIsParsingTask] = useState(false)
@@ -681,6 +689,7 @@ export const useImportFrom1688 = (
   const [currentTask, setCurrentTask] = useState<PendingImportQueueTaskSummary | null>(null)
   const [currentItems, setCurrentItems] = useState<PendingImportItemRecord[]>([])
   const [createFormCategoryWarning, setCreateFormCategoryWarning] = useState<string | null>(null)
+  const [createTaskError, setCreateTaskError] = useState<string | null>(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
   const [activeItemId, setActiveItemId] = useState<string | null>(null)
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
@@ -747,9 +756,9 @@ export const useImportFrom1688 = (
       // Light queue pull for status panels — never full unbounded dump or heavy maintenance on every open
       const res = await getPendingImportQueue({
         page: 1,
-        page_size: 80,
+        page_size: 20,
         skip_maintenance: true,
-      } as any)
+      } as any, { __rpcTimeoutMs: 12_000 } as any)
       const queueItems = id ? res.list.filter(item => item.item_importTaskId === id) : res.list
       const fallbackTask = id && queueItems.length > 0
         ? (res.activeTask?.task_id === id ? res.activeTask : buildFallbackTaskSummary(id, queueItems))
@@ -873,40 +882,12 @@ export const useImportFrom1688 = (
   // 表格导入 / 手动建品：预览纯本地，不强制拉待上传队列（避免 Failed to fetch 掩盖解析成功）
   useEffect(() => {
     setActiveTab('current')
+    if (embedded) return
     if (creationMode === 'table' || creationMode === 'manual') {
       return
     }
     void loadDetail(taskId || null)
-  }, [taskId, loadDetail, creationMode])
-
-  useEffect(() => {
-    const watchId = parseWatchTaskId || taskId || null
-    const shouldPoll =
-      isParsingTask ||
-      isTaskStillParsing(currentTask?.task_status) ||
-      currentItems.some(item => item.item_fetchStatus === 'PENDING' || item.item_fetchStatus === 'RUNNING')
-
-    if (!shouldPoll) return
-
-    const timer = window.setInterval(async () => {
-      const snapshot = await loadDetail(watchId, { silent: true })
-      if (!snapshot) return
-
-      const stillRunning =
-        isTaskStillParsing(snapshot.task?.task_status) ||
-        snapshot.items.some(item => item.item_fetchStatus === 'PENDING' || item.item_fetchStatus === 'RUNNING')
-
-      if (!stillRunning) {
-        setIsParsingTask(false)
-        setParseWatchTaskId(null)
-        if (watchId) {
-          notifyParseResult(watchId, snapshot.items, snapshot.task?.task_status)
-        }
-      }
-    }, 2000)
-
-    return () => window.clearInterval(timer)
-  }, [parseWatchTaskId, taskId, isParsingTask, currentTask?.task_status, currentItems, loadDetail, notifyParseResult])
+  }, [taskId, loadDetail, creationMode, embedded])
 
   useEffect(() => {
     if (activeTab === 'history') {
@@ -948,6 +929,9 @@ export const useImportFrom1688 = (
   const handleCreateFormChange = <K extends keyof CreateFormFields>(field: K, value: CreateFormFields[K]) => {
     if (field === 'defaultCategoryId') {
       setCreateFormCategoryWarning(null)
+    }
+    if (field === 'urls') {
+      setCreateTaskError(null)
     }
     setCreateForm(prev => ({ ...prev, [field]: value }))
   }
@@ -1062,68 +1046,78 @@ export const useImportFrom1688 = (
     toast.success('首张图片草稿已带入手动建品表单，可继续补充其余字段后创建商品')
   }
 
+  const resetCreateUiFlags = useCallback(() => {
+    setIsSubmitting(false)
+    setIsParsingTask(false)
+    setParseWatchTaskId(null)
+    setCreateTaskError(null)
+    setFeedbackDialog(prev => ({ ...prev, open: false }))
+  }, [])
+
   const handleCreateTask = async () => {
+    // A prior「开始解析」ACK used to leave isParsingTask=true forever (no poller),
+    // which disabled this button with no visible reason. Always allow a fresh submit.
+    if (isParsingTask) {
+      setIsParsingTask(false)
+      setParseWatchTaskId(null)
+    }
     const urlCheck = validate1688Urls(createForm.urls)
     if (!urlCheck.ok) {
-      showFeedbackDialog({
-        variant: 'error',
-        title: urlCheck.message,
-        description: '请粘贴 1688 商品详情、店铺分类或分页链接后再试。',
-        details: []
-      })
+      setCreateTaskError(urlCheck.message)
+      toast.error(urlCheck.message)
+      // Embedded collect modal already shows createTaskError; nested AlertDialog can
+      // sit behind the Dialog overlay and make the form look dead.
+      if (!embedded) {
+        showFeedbackDialog({
+          variant: 'error',
+          title: urlCheck.message,
+          description: '请粘贴 1688 商品详情、店铺分类、拼多多、Yupoo 或微购相册链接后再试。',
+          details: []
+        })
+      }
       return
     }
     if (!createForm.defaultCategoryId) {
       setCreateFormCategoryWarning('当前未设置默认分类。链接仍可提交，但后续确认导入前需要先补齐目标分类，否则会在发布阶段失败。')
     }
+    setCreateTaskError(null)
     setIsSubmitting(true)
     try {
       const res = await createImportTask({
-        urls: createForm.urls,
+        urls: urlCheck.urls.join('\n'),
         defaultCategoryId: createForm.defaultCategoryId || undefined,
-        costDeductionUsd: createForm.costDeductionUsd === '' ? undefined : createForm.costDeductionUsd,
+        supplierName: createForm.supplierName.trim() || undefined,
         defaultStatus: createForm.defaultStatus,
-        stockStrategyStock: createForm.stockStrategyStock === '' ? undefined : createForm.stockStrategyStock
+        stockStrategyStock: createForm.stockStrategyStock === '' ? undefined : createForm.stockStrategyStock,
+        weishangCookie: createForm.weishangCookie.trim() || undefined,
+        yupooPassword: createForm.yupooPassword.trim() || undefined,
       })
       setCreateFormCategoryWarning(null)
-      setCreateForm(prev => ({ ...prev, urls: '' }))
+      setCreateTaskError(null)
+      setCreateForm(prev => ({ ...prev, urls: '', weishangCookie: '', yupooPassword: '' }))
       setPendingParseTaskId(res.taskId)
       const createdCount = Number(res.createdCount ?? 0)
       const skippedDuplicateCount = Number(res.skippedDuplicateCount ?? 0)
       const categoryUrlCount = Number(res.categoryUrlCount ?? 0)
       toast.success(
         categoryUrlCount > 0
-          ? `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个分类/分页），正在自动抽商品并解析`
+          ? `已提交 ${createdCount} 条（含 ${categoryUrlCount} 个分类/分页），尚未解析，请点「开始解析」`
           : skippedDuplicateCount > 0
-            ? `已提交 ${createdCount} 条新链接并开始解析；跳过 ${skippedDuplicateCount} 条重复链接`
-            : `已提交 ${createdCount} 条，正在解析`,
+            ? `已提交 ${createdCount} 条新链接（跳过 ${skippedDuplicateCount} 条重复）；请点「开始解析」`
+            : `已提交 ${createdCount} 条，尚未解析，请点「开始解析」`,
       )
-
-      setIsParsingTask(true)
-      parseResultNotifiedRef.current = null
-      setParseWatchTaskId(res.taskId)
-      try {
-        await startParseTask({ taskId: res.taskId })
-        setPendingParseTaskId(null)
-      } catch (parseError) {
-        toast.error(`解析进行中或请求超时：${(parseError as Error).message}`)
-      }
-
-      if (embedded) {
-        onTaskCreatedRef.current?.(res.taskId)
-        return
-      }
-
-      ImportFrom1688.navigateToTaskDetail(router, { taskId: res.taskId })
-      await loadDetail(res.taskId)
     } catch (error) {
       const message = formatParseFailureReason((error as Error).message)
-      showFeedbackDialog({
-        variant: 'error',
-        title: message,
-        description: '提交导入任务失败，请检查链接与网络后重试。',
-        details: [message]
-      })
+      setCreateTaskError(message)
+      toast.error(message)
+      if (!embedded) {
+        showFeedbackDialog({
+          variant: 'error',
+          title: message,
+          description: '提交导入任务失败，请检查链接与网络后重试。',
+          details: [message]
+        })
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -1140,7 +1134,8 @@ export const useImportFrom1688 = (
     parseResultNotifiedRef.current = null
     setParseWatchTaskId(id)
     try {
-      // ACK only — parse continues in background; polling effect watches task/item status
+      // ACK only — parse continues in the RPC process; clear local spinner after ACK
+      // so the collect modal can submit new links in the same page session.
       await startParseTask({ taskId: id })
       toast.success('已开始解析。请稍候，完成后会出现在待上传区')
       setPendingParseTaskId(null)
@@ -1161,13 +1156,14 @@ export const useImportFrom1688 = (
           item => item.item_fetchStatus === 'PENDING' || item.item_fetchStatus === 'RUNNING',
         )
       ) {
-        setIsParsingTask(false)
-        setParseWatchTaskId(null)
         notifyParseResult(id, snapshot.items, snapshot.task?.task_status)
       }
     } catch (parseError) {
-      // 请求超时不代表服务端已停止；继续轮询待上传区，由最终状态决定提示
+      // 请求超时不代表服务端已停止；提示后仍允许继续提交新链接
       toast.error(`解析进行中或请求超时：${(parseError as Error).message}`)
+    } finally {
+      setIsParsingTask(false)
+      setParseWatchTaskId(null)
     }
   }
 
@@ -1470,9 +1466,9 @@ export const useImportFrom1688 = (
         if (details.length === 0) {
           const latest = await getPendingImportQueue({
             page: 1,
-            page_size: 80,
+            page_size: 20,
             skip_maintenance: true,
-          } as any)
+          } as any, { __rpcTimeoutMs: 12_000 } as any)
           const failed = latest.list.filter(
             item => selectedItemIds.includes(item.item_id) && item.item_publishStatus === 'FAILED',
           )
@@ -1579,6 +1575,7 @@ export const useImportFrom1688 = (
       currentTask,
       currentItems,
       createFormCategoryWarning,
+      createTaskError,
       isLoadingDetail,
       activeItemId,
       selectedItemIds,
@@ -1642,7 +1639,8 @@ export const useImportFrom1688 = (
       handleRemovePendingImage,
       handleProcessCurrentImageWatermark,
       handleSetCurrentPendingImage,
-      dismissFeedbackDialog
+      dismissFeedbackDialog,
+      resetCreateUiFlags,
     }
   }
 }

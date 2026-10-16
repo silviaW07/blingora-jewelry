@@ -16,6 +16,8 @@ export { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
 import type { CustomerTagCode } from '@/backend/lib/customerTags'
 import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
 import { DEFAULT_CUSTOMER_TYPE, isValidCustomerType, normalizeCustomerType, CUSTOMER_TYPE_OPTIONS } from '@/shared/customerType'
+import { parseVipDiscount } from '@/shared/customerPromoPolicy'
+import { Prisma } from '../../../prisma-generated/client'
 
 export interface UserOrderSummary {
   total: number
@@ -68,6 +70,8 @@ export interface UserListItem {
   adminNote: string | null
   /** 客户类型枚举码：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED */
   customerType: string
+  /** 0 = 不单独打折；95 = 95vip */
+  vipDiscount: number
   customerTagCode: CustomerTagCode
   customerTagName: string | null
   cartItemCount: number
@@ -88,6 +92,7 @@ export interface UserDetail {
   createdAt: string
   lastLoginAt: string | null
   adminNote: string | null
+  vipDiscount: number
   customerTagCode: CustomerTagCode
   customerTagName: string | null
   cartId: string | null
@@ -138,6 +143,11 @@ export interface DeleteUserInput {
 export interface UpdateUserAdminNoteInput {
   id: string
   adminNote: string
+}
+
+export interface UpdateUserVipDiscountInput {
+  id: string
+  vipDiscount: string
 }
 
 export interface UpdateUserCustomerTagInput {
@@ -326,7 +336,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
     const rawPageSize = input.pageSize && input.pageSize > 0 ? input.pageSize : 50
     const pageSize = Math.max(1, Math.min(200, Math.floor(rawPageSize)))
     const skip = (page - 1) * pageSize
-    const sortBy = input.sortBy || 'createdAt'
+    const sortBy = input.sortBy || 'lastLoginAt'
     const sortOrder = input.sortOrder === 'asc' ? 'asc' : 'desc'
     const customerTypeFilter = isValidCustomerType(input.customerType) ? String(input.customerType) : ''
 
@@ -418,7 +428,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
     }
 
     const emails = Array.from(new Set(users.map(user => user.email.trim().toLowerCase()).filter(Boolean)))
-    const [emailOrders, passwordPlains] = await Promise.all([
+    const [emailOrders, passwordPlains, vipMap] = await Promise.all([
       emails.length
         ? prisma.orderrecord.findMany({
             where: {
@@ -434,6 +444,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
           })
         : Promise.resolve([] as Array<{ userId: string; status: string; user: { email: string } }>),
       loadCustomerPasswordPlains(prisma, users.map(user => user.id)),
+      loadVipDiscountMap(users.map(user => user.id)),
     ])
 
     const emailStatusMap = new Map<string, RawOrderStatus[]>()
@@ -465,6 +476,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
         lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
         adminNote: user.adminNote || null,
         customerType: (user as any).customerType || DEFAULT_CUSTOMER_TYPE,
+        vipDiscount: vipMap.get(user.id) ?? 0,
         customerTagCode: tag.customerTagCode,
         customerTagName: tag.customerTagName,
         cartItemCount: cart?._count?.items ?? 0,
@@ -644,6 +656,7 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
       createdAt: user.createdAt.toISOString(),
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
       adminNote: user.adminNote || null,
+      vipDiscount: (await loadVipDiscountMap([user.id])).get(user.id) ?? 0,
       customerTagCode: tag.customerTagCode,
       customerTagName: tag.customerTagName,
       cartId: cart?.id ?? null,
@@ -655,6 +668,31 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
       unpaidOrders
     }
   })
+)
+
+async function loadVipDiscountMap(ids: string[]): Promise<Map<string, number>> {
+  const unique = Array.from(new Set(ids.map((id) => String(id || '').trim()).filter(Boolean)))
+  const map = new Map<string, number>()
+  if (!unique.length) return map
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string; vipDiscount: number | null }>>`
+      SELECT id, vipDiscount FROM sysuser WHERE id IN (${Prisma.join(unique)})
+    `
+    for (const row of rows) map.set(row.id, parseVipDiscount(row.vipDiscount))
+  } catch {
+    // 列尚未迁移时按 0
+  }
+  return map
+}
+
+export const updateUserVipDiscount = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateUserVipDiscountInput): Promise<{ success: boolean; vipDiscount: number }> => {
+    const vipDiscount = parseVipDiscount(input.vipDiscount)
+    const user = await prisma.sysuser.findUnique({ where: { id: input.id }, select: { id: true } })
+    if (!user) throw new Error('客户不存在')
+    await prisma.$executeRaw`UPDATE sysuser SET vipDiscount = ${vipDiscount} WHERE id = ${input.id}`
+    return { success: true, vipDiscount }
+  }),
 )
 
 export const updateUserAdminNote = requireRole([UserRole.ADMIN])(

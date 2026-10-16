@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Heart } from 'lucide-react'
+import { Heart, Images } from 'lucide-react'
 import { AccountShell } from '@/frontend/components/AccountShell'
 import { ProductListCard } from '@/frontend/components/ProductListCard'
 import {
@@ -121,7 +121,17 @@ export default function WishlistView() {
   const body = (
     <div className="space-y-4" data-controller-name="心愿单商品列表">
       {!loading && products.length > 0 ? (
-        <p className="text-xs font-medium text-[#6f6558]">{t('wishlist.count', { count: products.length })}</p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs font-medium text-[#6f6558]">{t('wishlist.count', { count: products.length })}</p>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#111111] px-4 text-sm font-semibold text-white"
+            onClick={() => router.push('/promo-catalog/')}
+          >
+            <Images className="size-4" />
+            {t('wishlist.openLookbook')}
+          </button>
+        </div>
       ) : null}
       {loading ? (
         <p className="py-16 text-center text-sm text-[#6f6558]">{t('wishlist.loading')}</p>

@@ -35,9 +35,13 @@ import {
   getAvailableBrandFilters,
   addToCart,
   getCategoryTopPromotion,
+  getProductList,
   resolveCategoryRouteKey,
 } from '@/frontend/actions/ProductCategory'
 import { fetchCategoryShelfProducts } from '@/frontend/utils/storefrontProductsClient'
+import { isStorefrontGuestSession } from '@/frontend/components/GuestPricePlaceholder'
+import { applyCustomerCoefToProductCard } from '@/shared/applyCustomerListedPrices'
+import { useCustomerGoodsCoef } from '@/frontend/hooks/useCustomerGoodsCoef'
 import { loadCategoryListCached, peekCachedCategoryList, seedCategoryListCache } from '@/frontend/utils/categoryListCache'
 import type { StorefrontBootstrap } from '@/frontend/types/storefrontBootstrap'
 import { loadSideNavZonesCached, peekCachedSideNavZones } from '@/frontend/utils/sideNavZonesCache'
@@ -367,6 +371,7 @@ export interface ProductCategoryHandlers {
   handleAddToWishlist: (item: ProductCardItem, favorited?: boolean) => void
   handleNavigateToDetail: (productId: string) => void
   handleLoadMore: () => void
+  handleGoToPage: (page: number) => void
   handleToggleCategoryChildren: (categoryId: string) => void
   handleToggleBrandExpand: () => void
   handleBrandQuickFilterToggle: (brandId: string) => void
@@ -393,6 +398,7 @@ export const useProductCategory = (
   const searchParams = useClientSearchParams()
   const routeParams = useMemo(() => ProductCategory.getParams(searchParams), [searchParams])
   const userSession = useUserSession() as UserSession
+  const customerGoodsCoef = useCustomerGoodsCoef()
   const { role, username } = userSession
   const { openAuthModal } = useCustomerAuthModal()
 
@@ -925,11 +931,6 @@ export const useProductCategory = (
     if (!isMobile) {
       setExpandedTopNavCategoryIds([])
     }
-    setQueryState((prev) => {
-      const target = isMobile ? 30 : 60
-      if (prev.pageSize === target) return prev
-      return { ...prev, pageSize: target, page: 1 }
-    })
   }, [isMobile])
 
   useEffect(() => {
@@ -1016,8 +1017,27 @@ export const useProductCategory = (
     }
 
     const gen = ++productFetchGenRef.current
-    if (productsRef.current.length === 0) setIsLoadingProducts(true)
-    else if (queryState.page > 1 && (isMobile || isNarrowViewport())) setIsLoadingMore(true)
+    const seededFirstPage =
+      queryState.page <= 1 &&
+      queryState.sortBy === 'NEWEST' &&
+      !queryState.searchKeyword &&
+      !queryState.brandCategoryId &&
+      queryState.minPrice === undefined &&
+      queryState.maxPrice === undefined &&
+      !queryState.hasDiscount &&
+      productsRef.current.length >= queryState.pageSize &&
+      !searchParams.get('dailyMonth')
+
+    // SSG/ISR HTML can stay on old bindings after a category unbind.
+    // Keep the seed on screen (no spinner) but always refresh from RPC.
+    if (seededFirstPage) {
+      setIsLoadingProducts(false)
+      setIsLoadingMore(false)
+    } else if (productsRef.current.length === 0) {
+      setIsLoadingProducts(true)
+    } else if (queryState.page > 1 && (isMobile || isNarrowViewport())) {
+      setIsLoadingMore(true)
+    }
 
     const lang = getCurrentLang()
     const safety = window.setTimeout(() => {
@@ -1069,6 +1089,7 @@ export const useProductCategory = (
         })
         .catch((err: any) => {
           if (productFetchGenRef.current !== gen) return
+          if (seededFirstPage) return
           setProducts([])
           setTotalCount(0)
           toast.error(err.message || 'Failed to load new arrivals')
@@ -1080,21 +1101,38 @@ export const useProductCategory = (
       }
     }
 
-    fetchCategoryShelfProducts({
-      categoryId: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
-      slug:
-        !queryState.searchKeyword && isCategorySlugRoute
-          ? routeCategorySlug || undefined
-          : undefined,
-      search: queryState.searchKeyword || undefined,
-      lang,
-      page: queryState.page,
-      pageSize: Math.min(60, queryState.pageSize || 60),
-      minPrice: queryState.minPrice,
-      maxPrice: queryState.maxPrice,
-      sortBy: queryState.sortBy,
-      brandCategoryId: queryState.brandCategoryId || undefined,
-    })
+    const listingRequest = !isStorefrontGuestSession(userSession)
+      ? getProductList({
+          category_id: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
+          brand_category_id: queryState.brandCategoryId || undefined,
+          search_keyword: queryState.searchKeyword || undefined,
+          page: queryState.page,
+          page_size: Math.min(60, queryState.pageSize || 60),
+          min_price: queryState.minPrice,
+          max_price: queryState.maxPrice,
+          sort_by: queryState.sortBy,
+          lang,
+        }).then((res) => ({
+          list: (Array.isArray(res.list) ? res.list : []) as ProductCardItem[],
+          total: res.total || 0,
+        }))
+      : fetchCategoryShelfProducts({
+          categoryId: queryState.searchKeyword ? undefined : queryState.categoryId || undefined,
+          slug:
+            !queryState.searchKeyword && isCategorySlugRoute
+              ? routeCategorySlug || undefined
+              : undefined,
+          search: queryState.searchKeyword || undefined,
+          lang,
+          page: queryState.page,
+          pageSize: Math.min(60, queryState.pageSize || 60),
+          minPrice: queryState.minPrice,
+          maxPrice: queryState.maxPrice,
+          sortBy: queryState.sortBy,
+          brandCategoryId: queryState.brandCategoryId || undefined,
+        })
+
+    listingRequest
       .then(({ list, total }) => {
         if (productFetchGenRef.current !== gen) return
         setProducts((prev) =>
@@ -1109,6 +1147,7 @@ export const useProductCategory = (
       })
       .catch((err: any) => {
         if (productFetchGenRef.current !== gen) return
+        if (seededFirstPage) return
         setProducts([])
         setTotalCount(0)
         toast.error(err.message)
@@ -1118,7 +1157,7 @@ export const useProductCategory = (
     return () => {
       window.clearTimeout(safety)
     }
-  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams, isMobile])
+  }, [isDailyNewArrivalMode, isCategorySlugRoute, routeCategorySlug, hasActiveListingQuery, queryState.categoryId, queryState.brandCategoryId, queryState.keywordId, queryState.keywordGroupId, queryState.searchKeyword, memoizedStockStatus, queryState.sortBy, queryState.page, queryState.pageSize, queryState.minPrice, queryState.maxPrice, queryState.hasDiscount, queryState.minRating, localeTick, searchParams, isMobile, userSession.token, userSession.user_id])
 
   useEffect(() => {
     if (isDailyNewArrivalMode) {
@@ -1248,7 +1287,11 @@ export const useProductCategory = (
       ...(field === 'keywordId' ? { keywordGroupId: '' } : {}),
       page: field === 'page' ? (value as number) : 1
     }))
-  }, [])
+    if (field === 'page') {
+      const nextPage = Math.max(1, Number(value) || 1)
+      syncListingQueryToUrl({ page: nextPage })
+    }
+  }, [syncListingQueryToUrl])
 
   const buildCurrentReturnTo = useCallback(() => {
     const query = searchParams.toString()
@@ -1701,6 +1744,11 @@ export const useProductCategory = (
     }
   }, [promotionConfig, promotionNow, t])
 
+  const displayedProducts = useMemo(
+    () => products.map((item) => applyCustomerCoefToProductCard(item, customerGoodsCoef)),
+    [products, customerGoodsCoef],
+  )
+
   const handleAddToCart = async (item: ProductCardItem) => {
     if (!userSession.token?.trim()) {
       toast.info(t('product.signInToAddCart', { defaultValue: 'Please sign in to add to cart' }))
@@ -1760,9 +1808,17 @@ export const useProductCategory = (
     if (typeof window !== 'undefined' && !isNarrowViewport()) return
     setQueryState((prev) => {
       if (productsRef.current.length >= totalCount) return prev
-      return { ...prev, page: prev.page + 1 }
+      const nextPage = prev.page + 1
+      syncListingQueryToUrl({ page: nextPage })
+      return { ...prev, page: nextPage }
     })
-  }, [isLoadingMore, isLoadingProducts, totalCount])
+  }, [isLoadingMore, isLoadingProducts, syncListingQueryToUrl, totalCount])
+
+  const handleGoToPage = useCallback((nextPage: number) => {
+    const target = Math.max(1, Math.floor(Number(nextPage) || 1))
+    handleFilterChange('page', target)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [handleFilterChange])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / queryState.pageSize))
 
@@ -1805,7 +1861,7 @@ export const useProductCategory = (
       recommendationFloors,
       activeBannerIndex,
       promotionBanner,
-      products,
+      products: displayedProducts,
       isSecondaryCategoryResults,
       totalCount,
       isLoadingCategories,
@@ -1852,6 +1908,7 @@ export const useProductCategory = (
       handleAddToWishlist,
       handleNavigateToDetail,
       handleLoadMore,
+      handleGoToPage,
       handleToggleCategoryChildren,
       handleToggleBrandExpand,
       handleBrandQuickFilterToggle,
