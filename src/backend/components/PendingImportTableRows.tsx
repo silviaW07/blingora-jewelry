@@ -622,13 +622,13 @@ function PendingImportTableRowsInner({
                 state={state}
                 handlers={handlers}
                 multiline
-                className="text-xs text-slate-500 line-clamp-2 text-left mt-0.5 max-w-[220px]"
-                inputClassName="max-w-[220px] text-xs"
-                placeholder="粉色 / 42*28*15 | 红色 | 黑色，保存后按顺序写入 SKU"
+                className="text-xs text-slate-500 line-clamp-2 text-left mt-0.5 max-w-[280px]"
+                inputClassName="min-w-[320px] w-[min(42vw,460px)] text-xs"
+                placeholder={'颜色白色/红色\n尺码31/32/33\n失焦或 Ctrl+Enter 后生成全部组合。也可按顺序写：粉色 / 42*28*15 | 红色 | 黑色'}
                 renderDisplay={rawValue =>
                   rawValue
                     ? <span className="text-xs text-slate-500 line-clamp-2">{String(rawValue)}</span>
-                    : <span className="text-xs text-slate-400">双击编辑 SKU摘要</span>}
+                    : <span className="text-xs text-slate-400">双击填写颜色和尺码，自动生成 SKU</span>}
               />
               <span className="text-xs text-muted-foreground font-mono">
                 {brand ? `${brand} · ` : ''}

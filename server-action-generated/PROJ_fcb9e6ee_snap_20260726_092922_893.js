@@ -28420,14 +28420,25 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
             break;
         case 'sku_summary_text':
             {
+                var _item_cnyPriceMin, _toNumberOrNull;
                 const text = String(rawValue || '');
-                data.skuSummaryText = text;
                 const drafts = resolvePendingSkuDrafts(item);
-                const entries = (0, _pendingSkuSummary.parsePendingSkuSummaryEntries)(text);
-                if (drafts.length && entries.length) {
-                    await persistPendingImportSkuDrafts(item, (0, _pendingSkuSummary.applyPendingSkuSummaryToDrafts)(drafts, entries));
+                const applied = (0, _pendingSkuSummary.applyPendingSkuSummaryText)(drafts, text, {
+                    sku_key: 'sku-1',
+                    spec_text: '',
+                    cost_price: toNumberOrNull(item.costPrice),
+                    price: toNumberOrNull((_item_cnyPriceMin = item.cnyPriceMin) !== null && _item_cnyPriceMin !== void 0 ? _item_cnyPriceMin : item.parsedPriceMin),
+                    weight_grams: toNumberOrNull(item.weightGrams),
+                    stock: (_toNumberOrNull = toNumberOrNull(item.availableStock)) !== null && _toNumberOrNull !== void 0 ? _toNumberOrNull : 0,
+                    image_url: normalizeText(item.mainImageUrl || item.parsedMainImageUrl) || null,
+                    attributes: []
+                });
+                const orderedEntries = applied.mode === 'ordered';
+                if (applied.mode === 'distribution' || drafts.length && orderedEntries && applied.skus !== drafts) {
+                    await persistPendingImportSkuDrafts(item, applied.skus);
                     return;
                 }
+                data.skuSummaryText = text;
                 break;
             }
         case 'supplier_name':
@@ -57360,7 +57371,11 @@ function formatUsdCompact(amount) {
 (__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
-/** 待上传 SKU 摘要：`粉色 / 42*28*15 | 红色 | 黑色` → 按顺序写入颜色/规格 */ 
+/** 待上传 SKU 摘要。
+ *  旧格式仍按顺序改已有行：`粉色 / 42*28*15 | 红色 | 黑色`
+ *  分布格式一次生成颜色 × 尺码：`颜色白色/红色` + `尺码31/32/33`
+ *  → 白色/31、白色/32、白色/33、红色/31、红色/32、红色/33
+ */ 
 Object.defineProperty(exports, "__esModule", ({
     value: true
 }));
@@ -57371,19 +57386,218 @@ function _export(target, all) {
     });
 }
 _export(exports, {
+    get PENDING_SKU_DISTRIBUTION_LIMIT () {
+        return PENDING_SKU_DISTRIBUTION_LIMIT;
+    },
+    get applyPendingSkuSummaryText () {
+        return applyPendingSkuSummaryText;
+    },
     get applyPendingSkuSummaryToDrafts () {
         return applyPendingSkuSummaryToDrafts;
     },
+    get describePendingSkuSummarySave () {
+        return describePendingSkuSummarySave;
+    },
+    get expandPendingSkuDistribution () {
+        return expandPendingSkuDistribution;
+    },
+    get parsePendingSkuDistribution () {
+        return parsePendingSkuDistribution;
+    },
     get parsePendingSkuSummaryEntries () {
         return parsePendingSkuSummaryEntries;
+    },
+    get readPendingSkuColor () {
+        return readPendingSkuColor;
+    },
+    get readPendingSkuSpec () {
+        return readPendingSkuSpec;
     }
 });
 const _skuDisplayGuards = __webpack_require__(4860);
 const SPEC_ATTR_NAMES = [
     '规格',
     '尺码',
-    '尺寸'
+    '尺寸',
+    '規格',
+    '尺碼',
+    'size'
 ];
+const COLOR_LABEL_SOURCE = '颜色|顏色|colour|color';
+const SPEC_LABEL_SOURCE = '尺码|尺碼|尺寸|规格|規格|size';
+const PENDING_SKU_DISTRIBUTION_LIMIT = 40;
+const COLOR_NAME = /^(颜色|顏色|color|colour)$/i;
+function uniq(values) {
+    const seen = new Set();
+    const out = [];
+    for (const value of values){
+        const token = value.trim();
+        if (!token || seen.has(token)) continue;
+        seen.add(token);
+        out.push(token);
+    }
+    return out;
+}
+function findLabel(text, source, kind) {
+    const re = new RegExp(source, 'gi');
+    let match;
+    while(match = re.exec(text)){
+        const index = match.index;
+        const token = match[0];
+        const before = index === 0 ? '' : text[index - 1];
+        if (index > 0 && !/[\s\n\r|，,;；:：/／、]/.test(before)) continue;
+        const after = text[index + token.length] || '';
+        if (/[a-z]/i.test(token[0] || '') && /[a-z]/i.test(after)) continue;
+        // 「颜色1 / 颜色2」是旧摘要里的色名，不是分布标签。尺码31 仍是标签。
+        if (kind === 'color' && /[0-9０-９]/.test(after)) continue;
+        return {
+            index,
+            length: token.length,
+            token
+        };
+    }
+    return null;
+}
+function extractAxis(text, kind) {
+    const source = kind === 'color' ? COLOR_LABEL_SOURCE : SPEC_LABEL_SOURCE;
+    const other = kind === 'color' ? SPEC_LABEL_SOURCE : COLOR_LABEL_SOURCE;
+    const found = findLabel(text, source, kind);
+    if (!found) return null;
+    let rest = text.slice(found.index + found.length).replace(/^[\s:：]+/, '');
+    rest = rest.replace(/^(分类|名称|名稱)\s*[:：]?\s*/, '');
+    const otherFound = findLabel(rest, other, kind === 'color' ? 'spec' : 'color');
+    if (otherFound) rest = rest.slice(0, otherFound.index);
+    return {
+        raw: rest.trim(),
+        token: found.token
+    };
+}
+function splitAxisValues(raw, kind) {
+    const chunks = String(raw || '').split(/[/／、,，|;；\n\r]+/).map((part)=>part.trim()).filter(Boolean);
+    const tokens = [];
+    for (const chunk of chunks){
+        if (kind === 'spec' && /\s/.test(chunk) && !/[*xX×]/.test(chunk)) {
+            tokens.push(...chunk.split(/\s+/).map((part)=>part.trim()).filter(Boolean));
+        } else {
+            tokens.push(chunk);
+        }
+    }
+    return uniq(tokens.map((token)=>(0, _skuDisplayGuards.stripSkuCopyLabel)(token).replace(/^(颜色|顏色|colour|color|尺码|尺碼|尺寸|规格|規格|size)\s*[:：]?\s*/i, '').trim()).filter((token)=>token && token.length <= 24 && !/^(颜色|顏色|colour|color|尺码|尺碼|尺寸|规格|規格|size)$/i.test(token)));
+}
+function specAttrNameFrom(token) {
+    if (/尺寸/.test(token)) return '尺寸';
+    if (/尺码|尺碼|size/i.test(token)) return '尺码';
+    return '规格';
+}
+function parsePendingSkuDistribution(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return null;
+    const colorAxis = extractAxis(raw, 'color');
+    const specAxis = extractAxis(raw, 'spec');
+    if (!colorAxis || !specAxis) return null;
+    const colors = splitAxisValues(colorAxis.raw, 'color');
+    const specs = splitAxisValues(specAxis.raw, 'spec');
+    if (!colors.length || !specs.length) return null;
+    if (colors.length * specs.length < 2) return null;
+    return {
+        colors,
+        specs,
+        specAttrName: specAttrNameFrom(specAxis.token)
+    };
+}
+function readNamed(sku, matcher) {
+    const attrs = Array.isArray(sku.attributes) ? sku.attributes : [];
+    const found = attrs.find((attr)=>matcher(String(attr.name || '').trim()));
+    return (0, _skuDisplayGuards.stripSkuCopyLabel)(found === null || found === void 0 ? void 0 : found.value);
+}
+function readPendingSkuColor(sku) {
+    const fromAttr = readNamed(sku, (name)=>COLOR_NAME.test(name));
+    if (fromAttr && fromAttr !== '默认颜色' && fromAttr !== '其他') return fromAttr;
+    const left = (0, _skuDisplayGuards.stripSkuCopyLabel)(String(sku.spec_text || '').split('/')[0] || '');
+    if (left && left !== '默认颜色') return left;
+    return fromAttr;
+}
+function readPendingSkuSpec(sku) {
+    const fromAttr = readNamed(sku, (name)=>SPEC_ATTR_NAMES.includes(name));
+    if (fromAttr && !(0, _skuDisplayGuards.isPlaceholderSpecValue)(fromAttr)) return fromAttr;
+    const parts = String(sku.spec_text || '').split('/').map((part)=>(0, _skuDisplayGuards.stripSkuCopyLabel)(part)).filter(Boolean);
+    if (parts.length >= 2) {
+        const right = parts.slice(1).join(' / ');
+        if (right && !(0, _skuDisplayGuards.isPlaceholderSpecValue)(right)) return right;
+    }
+    return '';
+}
+function allocateKey(used, seed) {
+    const base = String(seed || 'sku').trim().replace(/\s+/g, '-').replace(/[\\/]/g, '-') || 'sku';
+    let candidate = base;
+    let index = 2;
+    while(used.has(candidate)){
+        candidate = `${base}-${index}`;
+        index += 1;
+    }
+    used.add(candidate);
+    return candidate;
+}
+function withColorAndSpec(source, color, spec, specAttrName, skuKey) {
+    const attributes = (Array.isArray(source.attributes) ? source.attributes : []).map((attr)=>({
+            ...attr
+        })).filter((attr)=>!SPEC_ATTR_NAMES.includes(String(attr.name || '').trim()));
+    const colorIndex = attributes.findIndex((attr)=>COLOR_NAME.test(String(attr.name || '').trim()));
+    if (colorIndex >= 0) attributes[colorIndex] = {
+        ...attributes[colorIndex],
+        name: '颜色',
+        value: color
+    };
+    else attributes.unshift({
+        name: '颜色',
+        value: color
+    });
+    if (spec) attributes.push({
+        name: specAttrName,
+        value: spec
+    });
+    const spec_text = attributes.map((attr)=>String(attr.value || '').trim()).filter(Boolean).join(' / ');
+    return {
+        ...source,
+        sku_key: skuKey,
+        attributes,
+        spec_text
+    };
+}
+function expandPendingSkuDistribution(skus, distribution, template) {
+    const sources = skus.length ? skus : template ? [
+        template
+    ] : [];
+    const fallback = sources[0];
+    if (!fallback) return {
+        skus,
+        truncated: false
+    };
+    const used = new Set();
+    const next = [];
+    let truncated = false;
+    for (const color of distribution.colors){
+        for (const spec of distribution.specs){
+            if (next.length >= PENDING_SKU_DISTRIBUTION_LIMIT) {
+                truncated = true;
+                break;
+            }
+            const same = sources.find((sku)=>readPendingSkuColor(sku) === color && readPendingSkuSpec(sku) === spec);
+            const sameColor = sources.find((sku)=>readPendingSkuColor(sku) === color);
+            const source = same || sameColor || fallback;
+            const preferred = same ? String(same.sku_key || '').trim() : '';
+            let skuKey = preferred;
+            if (preferred && !used.has(preferred)) used.add(preferred);
+            else skuKey = allocateKey(used, `${color}-${spec}`);
+            next.push(withColorAndSpec(source, color, spec, distribution.specAttrName, skuKey));
+        }
+        if (truncated) break;
+    }
+    return {
+        skus: next,
+        truncated
+    };
+}
 function parsePendingSkuSummaryEntries(text) {
     return String(text || '').split('|').map((part)=>part.trim()).filter(Boolean).map((part)=>{
         const slash = part.search(/\s*\/\s*/);
@@ -57436,6 +57650,40 @@ function applyPendingSkuSummaryToDrafts(skus, entries) {
             spec_text: attributes.map((attr)=>attr.value).filter(Boolean).join(' / ') || entry.color
         };
     });
+}
+function applyPendingSkuSummaryText(skus, text, template) {
+    const distribution = parsePendingSkuDistribution(text);
+    if (distribution) {
+        const expanded = expandPendingSkuDistribution(skus, distribution, template);
+        return {
+            skus: expanded.skus,
+            mode: 'distribution',
+            summaryText: expanded.skus.map((sku)=>sku.spec_text).filter(Boolean).join(' | '),
+            colors: distribution.colors,
+            specs: distribution.specs,
+            truncated: expanded.truncated
+        };
+    }
+    const entries = parsePendingSkuSummaryEntries(text);
+    return {
+        skus: applyPendingSkuSummaryToDrafts(skus, entries),
+        mode: 'ordered',
+        summaryText: text,
+        colors: [],
+        specs: [],
+        truncated: false
+    };
+}
+function describePendingSkuSummarySave(result, previousCount, text) {
+    if (result.mode === 'distribution') {
+        const combo = `${result.colors.join('/')} × ${result.specs.join('/')}`;
+        return result.truncated ? `已生成 ${result.skus.length} 个 SKU（${combo}，超出 ${PENDING_SKU_DISTRIBUTION_LIMIT} 个的组合未写入）` : `已生成 ${result.skus.length} 个 SKU（${combo}）`;
+    }
+    const entryCount = parsePendingSkuSummaryEntries(text).length;
+    const skuCount = previousCount;
+    if (entryCount === skuCount) return `已按顺序写入 ${skuCount} 个 SKU 颜色/规格`;
+    if (entryCount > skuCount) return `已按顺序写入 ${skuCount} 个 SKU（摘要多出 ${entryCount - skuCount} 条已忽略）`;
+    return `已按顺序写入前 ${entryCount} 个 SKU（还有 ${skuCount - entryCount} 个未改）`;
 }
 
 

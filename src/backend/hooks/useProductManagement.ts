@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent, createE
 import { DEFAULT_USD_EXCHANGE_RATE, toUsdFromCny } from '@/shared/exchangeRate'
 import { calculateCostLinkedSellPrices, resolveDisplayedPriceCoefficient } from '@/shared/priceCoefficient'
 import { isPlaceholderSpecValue, sanitizePendingSkuCopyLabels } from '@/shared/skuDisplayGuards'
-import { applyPendingSkuSummaryToDrafts, parsePendingSkuSummaryEntries } from '@/shared/pendingSkuSummary'
+import { applyPendingSkuSummaryText, describePendingSkuSummarySave } from '@/shared/pendingSkuSummary'
 import { appendTitleSuffixIfMissing, removeTitleSuffixesIfPresent } from '@/shared/titleSuffix'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductManagement, ImportFrom1688 } from '@/backend/route-params'
@@ -591,8 +591,25 @@ const applyPendingImportLocalField = (
   if (field === 'sku_summary_text') {
     const text = String(payloadValue || '')
     const skus = item.item_skus || []
-    const nextSkus = applyPendingSkuSummaryToDrafts(skus, parsePendingSkuSummaryEntries(text))
-    return { ...item, item_skuSummaryText: text, item_skus: nextSkus }
+    const template = skus[0] || {
+      sku_key: 'sku-1',
+      spec_text: '',
+      cost_price: item.item_costPrice,
+      price: item.item_cnyPriceMin,
+      weight_grams: item.item_weightGrams,
+      stock: item.item_availableStock,
+      image_url: item.item_mainImageUrl || item.item_parsedMainImageUrl || null,
+      attributes: [],
+    }
+    const applied = applyPendingSkuSummaryText(skus, text, template)
+    const nextItem = {
+      ...item,
+      item_skuSummaryText: applied.summaryText,
+      item_skus: applied.skus,
+    }
+    if (applied.mode !== 'distribution') return nextItem
+    const totalStock = applied.skus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
+    return withPendingSkuPriceSummary({ ...nextItem, item_availableStock: totalStock }, applied.skus, usdRate)
   }
   if (field === 'supplier_name') return { ...item, item_supplierName: String(payloadValue || '') || null }
   if (field === 'source_category_name') return { ...item, item_sourceCategoryName: String(payloadValue || '') || null }
@@ -2565,15 +2582,19 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const nextItem = applyPendingImportLocalField(currentItem, field, payloadValue, usdExchangeRate)
       if (field === 'sku_summary_text') {
         pendingImportSkuLocalRef.current.set(itemId, { skus: nextItem.item_skus || [], at: Date.now() })
-        const entryCount = parsePendingSkuSummaryEntries(String(payloadValue || '')).length
-        const skuCount = (currentItem.item_skus || []).length
-        toast.success(
-          entryCount === skuCount
-            ? `已按顺序写入 ${skuCount} 个 SKU 颜色/规格`
-            : entryCount > skuCount
-              ? `已按顺序写入 ${skuCount} 个 SKU（摘要多出 ${entryCount - skuCount} 条已忽略）`
-              : `已按顺序写入前 ${entryCount} 个 SKU（还有 ${skuCount - entryCount} 个未改）`,
-        )
+        const summaryText = String(payloadValue || '')
+        const applied = applyPendingSkuSummaryText(currentItem.item_skus || [], summaryText, (nextItem.item_skus || [])[0])
+        const shown = applied.mode === 'distribution' ? (nextItem.item_skus || []) : applied.skus
+        const comboCount = applied.colors.length * applied.specs.length
+        toast.success(describePendingSkuSummarySave(
+          {
+            ...applied,
+            skus: shown,
+            truncated: applied.mode === 'distribution' && comboCount > shown.length,
+          },
+          (currentItem.item_skus || []).length,
+          summaryText,
+        ))
       } else {
         toast.success('待上传条目已更新')
       }
@@ -2657,15 +2678,19 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       const nextItem = applyPendingImportLocalField(currentItem, field, payloadValue, usdExchangeRate)
       if (field === 'sku_summary_text') {
         pendingImportSkuLocalRef.current.set(itemId, { skus: nextItem.item_skus || [], at: Date.now() })
-        const entryCount = parsePendingSkuSummaryEntries(String(payloadValue || '')).length
-        const skuCount = (currentItem.item_skus || []).length
-        toast.success(
-          entryCount === skuCount
-            ? `已按顺序写入 ${skuCount} 个 SKU 颜色/规格`
-            : entryCount > skuCount
-              ? `已按顺序写入 ${skuCount} 个 SKU（摘要多出 ${entryCount - skuCount} 条已忽略）`
-              : `已按顺序写入前 ${entryCount} 个 SKU（还有 ${skuCount - entryCount} 个未改）`,
-        )
+        const summaryText = String(payloadValue || '')
+        const applied = applyPendingSkuSummaryText(currentItem.item_skus || [], summaryText, (nextItem.item_skus || [])[0])
+        const shown = applied.mode === 'distribution' ? (nextItem.item_skus || []) : applied.skus
+        const comboCount = applied.colors.length * applied.specs.length
+        toast.success(describePendingSkuSummarySave(
+          {
+            ...applied,
+            skus: shown,
+            truncated: applied.mode === 'distribution' && comboCount > shown.length,
+          },
+          (currentItem.item_skus || []).length,
+          summaryText,
+        ))
       } else {
         toast.success('待上传条目已更新')
       }

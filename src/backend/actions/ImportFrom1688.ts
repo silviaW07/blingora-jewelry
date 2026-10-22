@@ -802,7 +802,7 @@ import {
   normalizeBrandTitleSync,
 } from '@/backend/lib/brandAlias'
 import { applyBrandAliases } from '@/shared/brandTitleNormalize'
-import { applyPendingSkuSummaryToDrafts, parsePendingSkuSummaryEntries } from '@/shared/pendingSkuSummary'
+import { applyPendingSkuSummaryText } from '@/shared/pendingSkuSummary'
 import { extractAlbumTitlePrice, pickAlbumCostFromTitleAndFetched, titleHasStrongPriceHint } from '@/shared/albumTitlePrice'
 import {
   extract1688OfferIdsFromHtml,
@@ -10818,13 +10818,23 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
         break
       case 'sku_summary_text': {
         const text = String(rawValue || '')
-        data.skuSummaryText = text
         const drafts = resolvePendingSkuDrafts(item)
-        const entries = parsePendingSkuSummaryEntries(text)
-        if (drafts.length && entries.length) {
-          await persistPendingImportSkuDrafts(item, applyPendingSkuSummaryToDrafts(drafts, entries))
+        const applied = applyPendingSkuSummaryText(drafts, text, {
+          sku_key: 'sku-1',
+          spec_text: '',
+          cost_price: toNumberOrNull(item.costPrice),
+          price: toNumberOrNull(item.cnyPriceMin ?? item.parsedPriceMin),
+          weight_grams: toNumberOrNull(item.weightGrams),
+          stock: toNumberOrNull(item.availableStock) ?? 0,
+          image_url: normalizeText(item.mainImageUrl || item.parsedMainImageUrl) || null,
+          attributes: [],
+        })
+        const orderedEntries = applied.mode === 'ordered'
+        if (applied.mode === 'distribution' || (drafts.length && orderedEntries && applied.skus !== drafts)) {
+          await persistPendingImportSkuDrafts(item, applied.skus)
           return
         }
+        data.skuSummaryText = text
         break
       }
       case 'supplier_name':
