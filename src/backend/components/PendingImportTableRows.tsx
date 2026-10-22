@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { ArrowUpCircle, Heart, ImagePlus, Link2, Minus, Plus } from 'lucide-react'
 import EditableImg from '@/@base/EditableImg'
-import { ImageLightbox, PreviewableThumb } from '@/backend/components/ImageLightbox'
+import { ImageLightbox, PreviewableThumb, prefetchAdminLargeImage } from '@/backend/components/ImageLightbox'
 import {
   PendingImport1688DetailDialog,
   PendingImport1688DetailTrigger,
@@ -111,6 +111,7 @@ function PendingImportTableRowsInner({
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null)
   const [dropImageIndex, setDropImageIndex] = useState<number | null>(null)
   const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null)
+  const [galleryPreviewShown, setGalleryPreviewShown] = useState('')
   const [pasteUrlsOpen, setPasteUrlsOpen] = useState(false)
   const [pasteUrlsText, setPasteUrlsText] = useState('')
   const handlersRef = React.useRef(handlers)
@@ -118,6 +119,7 @@ function PendingImportTableRowsInner({
   const pointerDragRef = React.useRef<{
     from: number
     url: string
+    shown: string
     pointerId: number
     started: boolean
     startX: number
@@ -366,6 +368,7 @@ function PendingImportTableRowsInner({
                     clearCrossDropHover()
                     if (!drag) return
                     if (!drag.started) {
+                      setGalleryPreviewShown(drag.shown || '')
                       setGalleryPreviewUrl(drag.url)
                       return
                     }
@@ -445,14 +448,17 @@ function PendingImportTableRowsInner({
                       if ((event.target as HTMLElement).closest('button')) return
                       if (event.button !== 0) return
                       event.preventDefault()
+                      const img = (event.currentTarget as HTMLElement).querySelector('img')
                       pointerDragRef.current = {
                         from: imageIndex,
                         url,
+                        shown: img?.currentSrc || img?.getAttribute('src') || '',
                         pointerId: event.pointerId,
                         started: false,
                         startX: event.clientX,
                         startY: event.clientY,
                       }
+                      prefetchAdminLargeImage(url)
                       startDocumentDrag()
                     }}
                   >
@@ -962,9 +968,13 @@ function PendingImportTableRowsInner({
       />
       <ImageLightbox
         src={galleryPreviewUrl || ''}
+        instantSrc={galleryPreviewShown}
         alt={item.item_productName || item.item_parsedName || '商品图片'}
         open={Boolean(galleryPreviewUrl)}
-        onClose={() => setGalleryPreviewUrl(null)}
+        onClose={() => {
+          setGalleryPreviewUrl(null)
+          setGalleryPreviewShown('')
+        }}
       />
     </>
   )

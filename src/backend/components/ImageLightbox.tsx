@@ -10,6 +10,8 @@ type ImageLightboxProps = {
   alt?: string
   open: boolean
   onClose: () => void
+  /** URL already painted in the thumbnail. Shown immediately so the preview is not blank. */
+  instantSrc?: string
 }
 
 function uniqueUrls(...urls: Array<string | null | undefined>) {
@@ -17,8 +19,36 @@ function uniqueUrls(...urls: Array<string | null | undefined>) {
   return Array.from(new Set(list))
 }
 
+const LARGE_WIDTH = 960
+const LARGE_QUALITY = 82
+
+/** Screen-sized preview. Separate from the list thumb so a click can warm it early. */
+export function adminLargeImageUrl(src: string): string {
+  const raw = String(src || '').trim()
+  if (!raw) return ''
+  return toProxiedImageUrl(raw, { width: LARGE_WIDTH, quality: LARGE_QUALITY }) || raw
+}
+
+const warmedLargeUrls = new Set<string>()
+
+/** Start the large file during pointerdown, before the overlay opens. */
+export function prefetchAdminLargeImage(src: string) {
+  if (typeof window === 'undefined') return
+  const url = adminLargeImageUrl(src)
+  if (!url || warmedLargeUrls.has(url)) return
+  warmedLargeUrls.add(url)
+  if (warmedLargeUrls.size > 80) {
+    const oldest = warmedLargeUrls.values().next().value
+    if (oldest) warmedLargeUrls.delete(oldest)
+  }
+  const img = new window.Image()
+  img.referrerPolicy = 'no-referrer'
+  img.decoding = 'async'
+  img.src = url
+}
+
 /** Full-screen image preview: click backdrop or press Esc to close. */
-export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxProps) {
+export function ImageLightbox({ src, alt = '', open, onClose, instantSrc = '' }: ImageLightboxProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -41,10 +71,6 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
 
   if (!mounted || !open || !src) return null
 
-  const thumb = toProxiedImageUrl(src, { width: 240, quality: 75 }) || src
-  const preview = toProxiedImageUrl(src, { width: 960, quality: 82 }) || src
-  const compact = toProxiedImageUrl(src, { width: 720, quality: 80 }) || src
-
   return createPortal(
     <div
       role="dialog"
@@ -62,48 +88,54 @@ export function ImageLightbox({ src, alt = '', open, onClose }: ImageLightboxPro
       >
         <X className="h-5 w-5" />
       </button>
-      <LightboxImage
-        thumb={thumb}
-        preview={preview}
-        compact={compact}
-        rawSrc={src}
-        alt={alt || '预览大图'}
-      />
+      <LightboxImage src={src} instantSrc={instantSrc} alt={alt || '预览大图'} />
     </div>,
     document.body,
   )
 }
 
 /**
- * Fast preview first (resized CDN/OSS thumb), then a screen-sized image.
- * Avoids pulling full 1688 originals through img-proxy (slow progressive strips).
+ * Paint the thumbnail that is already on screen, then swap in a screen-sized
+ * image when it finishes. The sharp file used to stay opacity-0 until a 960px
+ * proxy (or the raw original) loaded, so the overlay sat empty.
  */
 function LightboxImage({
-  thumb,
-  preview,
-  compact,
-  rawSrc,
+  src,
+  instantSrc,
   alt,
 }: {
-  thumb: string
-  preview: string
-  compact: string
-  rawSrc: string
+  src: string
+  instantSrc: string
   alt: string
 }) {
-  const candidates = useMemo(
-    () => uniqueUrls(preview, compact, rawSrc),
-    [compact, preview, rawSrc],
+  const instant =
+    String(instantSrc || '').trim() ||
+    toProxiedImageUrl(src, { width: 256, quality: 70 }) ||
+    src
+  const upgrades = useMemo(
+    () =>
+      uniqueUrls(
+        adminLargeImageUrl(src),
+        toProxiedImageUrl(src, { width: 720, quality: 80 }),
+      ).filter((url) => url && url !== instant),
+    [instant, src],
   )
-  const [attempt, setAttempt] = useState(0)
-  const [ready, setReady] = useState(false)
+  const [upgradeIndex, setUpgradeIndex] = useState(0)
+  const [upgradeReady, setUpgradeReady] = useState(false)
+  const [instantBroken, setInstantBroken] = useState(false)
 
   useEffect(() => {
-    setAttempt(0)
-    setReady(false)
-  }, [preview, compact, rawSrc])
+    setUpgradeIndex(0)
+    setUpgradeReady(false)
+    setInstantBroken(false)
+  }, [instant, src])
 
-  if (attempt >= candidates.length) {
+  const upgrade = upgrades[upgradeIndex] || ''
+  const upgradeGaveUp = !upgrade
+  const showInstant = !upgradeReady && !instantBroken
+  const showFailure = upgradeGaveUp && instantBroken
+
+  if (showFailure) {
     return (
       <div
         className="flex max-h-[90vh] max-w-[min(96vw,1200px)] flex-col items-center justify-center gap-2 rounded-lg bg-black/40 px-8 py-12 text-sm text-white/80"
@@ -111,7 +143,7 @@ function LightboxImage({
       >
         <span>图片加载失败</span>
         <a
-          href={rawSrc}
+          href={src}
           target="_blank"
           rel="noreferrer"
           className="text-xs text-white/60 underline hover:text-white"
@@ -122,40 +154,54 @@ function LightboxImage({
     )
   }
 
-  const displaySrc = candidates[attempt]
-
   return (
     <div
-      className="relative flex max-h-[90vh] max-w-[min(96vw,1200px)] items-center justify-center"
+      className="relative flex h-[min(90vh,1200px)] w-[min(96vw,1200px)] items-center justify-center"
       onClick={(event) => event.stopPropagation()}
     >
-      {!ready ? (
+      {showInstant ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={thumb}
-          alt=""
-          aria-hidden
+          src={instant}
+          alt={alt}
           referrerPolicy="no-referrer"
-          className="max-h-[90vh] max-w-[min(96vw,1200px)] object-contain opacity-80 blur-[1px]"
+          decoding="sync"
+          fetchPriority="high"
+          className="relative z-[1] h-full w-full object-contain shadow-2xl"
+          draggable={false}
+          onError={() => setInstantBroken(true)}
+        />
+      ) : null}
+      {upgrade ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={upgrade}
+          src={upgrade}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          decoding="async"
+          fetchPriority="high"
+          className={
+            upgradeReady
+              ? 'relative z-[1] h-full w-full object-contain shadow-2xl'
+              : 'pointer-events-none absolute inset-0 z-0 h-full w-full object-contain opacity-0'
+          }
+          onLoad={(event) => {
+            // Some CDN size suffixes 200 a tiny error gif. Keep the thumb instead of swapping to it.
+            if (event.currentTarget.naturalWidth < 48) {
+              setUpgradeReady(false)
+              setUpgradeIndex((prev) => prev + 1)
+              return
+            }
+            setUpgradeReady(true)
+          }}
+          onError={() => {
+            setUpgradeReady(false)
+            setUpgradeIndex((prev) => prev + 1)
+          }}
           draggable={false}
         />
       ) : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        key={displaySrc}
-        src={displaySrc}
-        alt={alt}
-        referrerPolicy="no-referrer"
-        decoding="async"
-        fetchPriority="high"
-        className={`max-h-[90vh] max-w-[min(96vw,1200px)] object-contain shadow-2xl ${ready ? '' : 'absolute inset-0 h-full w-full opacity-0'}`}
-        onLoad={() => setReady(true)}
-        onError={() => {
-          setReady(false)
-          setAttempt((prev) => prev + 1)
-        }}
-        draggable={false}
-      />
     </div>
   )
 }
@@ -170,6 +216,11 @@ type PreviewableThumbProps = {
   onPreviewOpen?: () => void
 }
 
+function readPaintedThumb(root: HTMLElement | null): string {
+  const img = root?.querySelector('img')
+  return img?.currentSrc || img?.getAttribute('src') || ''
+}
+
 /** Wrap a thumbnail: click opens ImageLightbox. Overlay is a div so parent `draggable` can reorder. */
 export function PreviewableThumb({
   src,
@@ -181,9 +232,17 @@ export function PreviewableThumb({
   onPreviewOpen,
 }: PreviewableThumbProps) {
   const [open, setOpen] = useState(false)
+  const [instantSrc, setInstantSrc] = useState('')
   const dragMovedRef = React.useRef(false)
   const pointerRef = React.useRef<{ x: number; y: number } | null>(null)
+  const rootRef = React.useRef<HTMLDivElement>(null)
   const safeSrc = String(src || '').trim()
+
+  const openPreview = () => {
+    setInstantSrc(readPaintedThumb(rootRef.current))
+    setOpen(true)
+    onPreviewOpen?.()
+  }
 
   if (!safeSrc) {
     return <div className={className}>{children}</div>
@@ -191,7 +250,7 @@ export function PreviewableThumb({
 
   return (
     <>
-      <div className={`relative ${className || 'block h-full w-full'}`}>
+      <div ref={rootRef} className={`relative ${className || 'block h-full w-full'}`}>
         <div className="pointer-events-none h-full w-full [&>*]:h-full [&>*]:w-full [&>img]:[-webkit-user-drag:none]">
           {children}
         </div>
@@ -204,6 +263,7 @@ export function PreviewableThumb({
           onPointerDown={(event) => {
             dragMovedRef.current = false
             pointerRef.current = { x: event.clientX, y: event.clientY }
+            prefetchAdminLargeImage(safeSrc)
           }}
           onPointerMove={(event) => {
             const start = pointerRef.current
@@ -215,20 +275,19 @@ export function PreviewableThumb({
           onClick={(event) => {
             event.stopPropagation()
             if (dragMovedRef.current) return
-            setOpen(true)
-            onPreviewOpen?.()
+            openPreview()
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
-              setOpen(true)
-              onPreviewOpen?.()
+              openPreview()
             }
           }}
         />
       </div>
       <ImageLightbox
         src={safeSrc}
+        instantSrc={instantSrc}
         alt={alt}
         open={open}
         onClose={() => setOpen(false)}
