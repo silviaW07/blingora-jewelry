@@ -15,6 +15,7 @@ import {
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { formatUsd } from '@/shared/money'
 import { applySeaFreightDiscount } from '@/shared/customerPromoPolicy'
+import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { loadCustomerPromoKind } from '@/frontend/lib/loadCustomerPromoKind'
 
 export interface CheckoutShippingOption {
@@ -76,9 +77,10 @@ export const getCheckoutShippingOptions = withResult(
 
     const weightKg = Math.max(0, Number(input.weightKg) || 0)
     const merchandiseSubtotalUsd = Math.max(0, Number(input.merchandiseSubtotalUsd) || 0)
-    const [exchangeRate, promoKind] = await Promise.all([
+    const [exchangeRate, promoKind, pricingConfig] = await Promise.all([
       getUsdExchangeRate(prisma),
       loadCustomerPromoKind(),
+      loadPricingPromotionConfig(prisma),
     ])
 
     const rows = await prisma.shippingchannel.findMany({
@@ -111,6 +113,8 @@ export const getCheckoutShippingOptions = withResult(
         channelName: row.name,
         shippingUsd: rawShippingUsd,
         merchandiseSubtotalUsd,
+        newTiers: pricingConfig.seaNewTiers,
+        loyalTiers: pricingConfig.seaLoyalTiers,
       }).shippingUsd
       list.push({
         channelId: row.id,

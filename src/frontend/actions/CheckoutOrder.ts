@@ -729,6 +729,8 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       channelName: channel.name,
       shippingUsd: rawShipping,
       merchandiseSubtotalUsd: discountedSubtotal,
+      newTiers: pricingConfig.seaNewTiers,
+      loyalTiers: pricingConfig.seaLoyalTiers,
     })
     const shippingAmount = toMoney(shippingAfterPromo.shippingUsd)
     const totalAmount = toMoney(discountedSubtotal + shippingAmount)

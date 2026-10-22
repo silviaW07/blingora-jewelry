@@ -171,6 +171,71 @@ function ActivityTimeFields({
   )
 }
 
+function offPercent(off: number): number {
+  return Math.round((Number(off) || 0) * 1000) / 10
+}
+
+function SeaTierEditor({
+  title,
+  hint,
+  tiers,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  title: string
+  hint: string
+  tiers: Array<{ minUsd: number; off: number }>
+  onAdd: () => void
+  onUpdate: (index: number, patch: { minUsd?: number; offPercent?: number }) => void
+  onRemove: (index: number) => void
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border border-border p-4">
+      <div>
+        <h3 className="text-sm font-bold">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+      </div>
+      {tiers.length > 0 ? (
+        <div className="space-y-2">
+          {tiers.map((tier, idx) => (
+            <div key={`${title}-${idx}`} className="flex flex-wrap items-end gap-3">
+              <div className="space-y-2">
+                <Label>货额满（USD）</Label>
+                <DecimalInput
+                  className="w-36"
+                  value={tier.minUsd}
+                  onCommit={(n) => onUpdate(idx, { minUsd: n })}
+                  placeholder="例如 100"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>运费减免（%）</Label>
+                <DecimalInput
+                  className="w-36"
+                  value={offPercent(tier.off)}
+                  onCommit={(n) => onUpdate(idx, { offPercent: n })}
+                  placeholder="例如 30"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => onRemove(idx)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                删除
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">暂无档位，保存后这类客户的海运不打折。</p>
+      )}
+      <Button variant="outline" size="sm" onClick={onAdd}>
+        <Plus className="mr-2 h-4 w-4" />
+        新增档位
+      </Button>
+    </div>
+  )
+}
+
 export function PricingPromotionManagementView({ state, handlers }: Props) {
   const config = state.config
   const topBanner = state.topBanner
@@ -239,7 +304,7 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
             <div>
               <h1 className="font-header text-2xl font-bold tracking-tight">促销活动管理</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                统一管理顶部促销通栏、全局汇率、全场/批发/首单/老客折扣、运费折扣与阶梯满减。顶部横幅为全站唯一促销展示位。
+                统一管理顶部促销通栏、全局汇率、全场/批发/首单/老客折扣、新客与老客海运折扣、运费折扣与阶梯满减。顶部横幅为全站唯一促销展示位。
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -715,6 +780,35 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                   <Plus className="mr-2 h-4 w-4" />
                   新增档位
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-xs">
+            <CardContent className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-bold">新客 / 老客海运折扣</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  只作用于海运渠道。按折后货额从高到低匹配一档。新客取「新客档」和「老客档」里减免更高的一档；老客只用老客档。100 表示免运费。保存后结算立即按新档位计算。
+                </p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SeaTierEditor
+                  title="新客海运折扣"
+                  hint="新客户、未转化，且还没有已付款订单。"
+                  tiers={config.seaNewTiers || []}
+                  onAdd={() => handlers.addSeaTier('seaNewTiers')}
+                  onUpdate={(index, patch) => handlers.updateSeaTier('seaNewTiers', index, patch)}
+                  onRemove={(index) => handlers.removeSeaTier('seaNewTiers', index)}
+                />
+                <SeaTierEditor
+                  title="老客海运折扣"
+                  hint="已经有已付款订单的客户。"
+                  tiers={config.seaLoyalTiers || []}
+                  onAdd={() => handlers.addSeaTier('seaLoyalTiers')}
+                  onUpdate={(index, patch) => handlers.updateSeaTier('seaLoyalTiers', index, patch)}
+                  onRemove={(index) => handlers.removeSeaTier('seaLoyalTiers', index)}
+                />
               </div>
             </CardContent>
           </Card>

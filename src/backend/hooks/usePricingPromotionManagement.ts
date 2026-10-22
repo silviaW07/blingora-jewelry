@@ -59,6 +59,13 @@ export interface PricingPromotionManagementHandlers {
   setShippingPromoMinSubtotal: (value: number) => void
   setShippingPromoStartAt: (value: string) => void
   setShippingPromoEndAt: (value: string) => void
+  addSeaTier: (which: 'seaNewTiers' | 'seaLoyalTiers') => void
+  updateSeaTier: (
+    which: 'seaNewTiers' | 'seaLoyalTiers',
+    index: number,
+    patch: { minUsd?: number; offPercent?: number },
+  ) => void
+  removeSeaTier: (which: 'seaNewTiers' | 'seaLoyalTiers', index: number) => void
   setTopBannerEnabled: (enabled: boolean) => void
   setTopBannerMessage: (value: string) => void
   setTopBannerEndTime: (value: string) => void
@@ -228,6 +235,30 @@ export function usePricingPromotionManagement(): {
         setConfig((prev) => ({
           ...prev,
           shipping: { ...prev.shipping, endAt: normalizePromoDateTime(value) },
+        })),
+      addSeaTier: (which) =>
+        setConfig((prev) => ({
+          ...prev,
+          [which]: [...(prev[which] || []), { minUsd: which === 'seaNewTiers' ? 50 : 500, off: 0.1 }],
+        })),
+      updateSeaTier: (which, index, patch) =>
+        setConfig((prev) => ({
+          ...prev,
+          [which]: (prev[which] || []).map((tier, i) => {
+            if (i !== index) return tier
+            const next = { ...tier }
+            if (patch.minUsd != null) next.minUsd = patch.minUsd
+            if (patch.offPercent != null) {
+              const percent = Math.min(100, Math.max(0, patch.offPercent))
+              next.off = Math.round(percent * 100) / 10000
+            }
+            return next
+          }),
+        })),
+      removeSeaTier: (which, index) =>
+        setConfig((prev) => ({
+          ...prev,
+          [which]: (prev[which] || []).filter((_, i) => i !== index),
         })),
       setTopBannerEnabled: (enabled) => setTopBanner((prev) => ({ ...prev, enabled })),
       setTopBannerMessage: (value) => setTopBanner((prev) => ({ ...prev, message: value })),

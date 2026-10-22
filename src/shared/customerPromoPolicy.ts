@@ -6,18 +6,21 @@ export type CustomerPromoKind = 'FIRST_ORDER' | 'LOYAL' | 'NONE'
 export const FIRST_ORDER_GOODS_COEF = 0.95
 export const LOYAL_GOODS_COEF = 0.97
 
+/** 海运一档：货额门槛（USD）+ 减免比例（0.15 = 减 15%）。 */
+export type SeaFreightTier = { minUsd: number; off: number }
+
 /**
  * 首单海运（仅新客户，按折后货额）。从高到低匹配。
  * 满 $50 减 15%，满 $100 减 30%，满 $200 减 50%。
  */
-export const FIRST_ORDER_SEA_TIERS: Array<{ minUsd: number; off: number }> = [
+export const FIRST_ORDER_SEA_TIERS: SeaFreightTier[] = [
   { minUsd: 200, off: 0.5 },
   { minUsd: 100, off: 0.3 },
   { minUsd: 50, off: 0.15 },
 ]
 
 /** 海运减免比例（0.1 = 减 10%）。从高到低匹配。 */
-export const SEA_FREIGHT_TIERS: Array<{ minUsd: number; off: number }> = [
+export const SEA_FREIGHT_TIERS: SeaFreightTier[] = [
   { minUsd: 10000, off: 1 },
   { minUsd: 5000, off: 0.5 },
   { minUsd: 3000, off: 0.35 },
@@ -62,20 +65,27 @@ export function combinePriceCoef(siteWide: number | null | undefined, customer: 
   return coef
 }
 
-function matchTierOff(tiers: Array<{ minUsd: number; off: number }>, subtotalUsd: number): number {
-  for (const tier of tiers) {
-    if (subtotalUsd + 0.001 >= tier.minUsd) return tier.off
+function matchTierOff(tiers: SeaFreightTier[], subtotalUsd: number): number {
+  const ordered = [...tiers].sort((a, b) => b.minUsd - a.minUsd)
+  for (const tier of ordered) {
+    if (subtotalUsd + 0.001 >= tier.minUsd && tier.off > 0) return tier.off
   }
   return 0
 }
 
 /** 海运减免比例。首单档与满额档取较高的一档，不把两个百分比相加。 */
-export function seaOffRate(kind: CustomerPromoKind, merchandiseUsd: number): number {
+export function seaOffRate(
+  kind: CustomerPromoKind,
+  merchandiseUsd: number,
+  tiers?: { newTiers?: SeaFreightTier[]; loyalTiers?: SeaFreightTier[] },
+): number {
   if (kind === 'NONE') return 0
   const sub = Math.max(0, Number(merchandiseUsd) || 0)
-  const amountOff = matchTierOff(SEA_FREIGHT_TIERS, sub)
+  const loyalTiers = tiers?.loyalTiers ?? SEA_FREIGHT_TIERS
+  const amountOff = matchTierOff(loyalTiers, sub)
   if (kind !== 'FIRST_ORDER') return amountOff
-  return Math.max(amountOff, matchTierOff(FIRST_ORDER_SEA_TIERS, sub))
+  const newTiers = tiers?.newTiers ?? FIRST_ORDER_SEA_TIERS
+  return Math.max(amountOff, matchTierOff(newTiers, sub))
 }
 
 export function isSeaBillingMode(mode: string | null | undefined): boolean {
@@ -98,12 +108,17 @@ export function applySeaFreightDiscount(params: {
   channelName?: string | null
   shippingUsd: number
   merchandiseSubtotalUsd: number
+  newTiers?: SeaFreightTier[]
+  loyalTiers?: SeaFreightTier[]
 }): { shippingUsd: number; discountUsd: number } {
   const base = Math.round(Math.max(0, Number(params.shippingUsd) || 0) * 100) / 100
   if (!isSeaFreightChannel({ billingMode: params.billingMode, name: params.channelName }) || base <= 0) {
     return { shippingUsd: base, discountUsd: 0 }
   }
-  const off = seaOffRate(params.kind, params.merchandiseSubtotalUsd)
+  const off = seaOffRate(params.kind, params.merchandiseSubtotalUsd, {
+    newTiers: params.newTiers,
+    loyalTiers: params.loyalTiers,
+  })
   if (off <= 0) return { shippingUsd: base, discountUsd: 0 }
   const next = Math.round(Math.max(0, base * (1 - off)) * 100) / 100
   return { shippingUsd: next, discountUsd: Math.round((base - next) * 100) / 100 }

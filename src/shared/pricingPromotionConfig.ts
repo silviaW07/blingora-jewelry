@@ -1,4 +1,9 @@
 import type prismaClient from '@/tools/prisma'
+import {
+  FIRST_ORDER_SEA_TIERS,
+  SEA_FREIGHT_TIERS,
+  type SeaFreightTier,
+} from '@/shared/customerPromoPolicy'
 
 type PrismaLike = typeof prismaClient
 
@@ -47,6 +52,13 @@ export type PricingPromotionConfig = {
     /** percent: 0.9 = 9折；amount: 美元减免 */
     value: number
   } & PromoScheduleFields
+  /**
+   * 新客海运折扣档（首单）。老客档见 seaLoyalTiers。
+   * 新客结算取两套里减免更高的一档。
+   */
+  seaNewTiers: SeaFreightTier[]
+  /** 老客海运折扣档。老客只用这一套；新客大额订单也会拿来比较。 */
+  seaLoyalTiers: SeaFreightTier[]
   /** 运费折扣：活动期内对运费按系数或减免金额 */
   shipping: {
     enabled: boolean
@@ -63,7 +75,20 @@ export const DEFAULT_PRICING_PROMO_CONFIG: PricingPromotionConfig = {
   loyal: { enabled: false, coefficient: 0.95, startAt: null, endAt: null },
   fullReduction: { enabled: false, tiers: [], startAt: null, endAt: null },
   siteWide: { enabled: false, mode: 'PERCENT', value: 0.9, startAt: null, endAt: null },
+  seaNewTiers: FIRST_ORDER_SEA_TIERS.map((tier) => ({ ...tier })),
+  seaLoyalTiers: SEA_FREIGHT_TIERS.map((tier) => ({ ...tier })),
   shipping: { enabled: false, mode: 'PERCENT', value: 0.9, minSubtotalUsd: 0, startAt: null, endAt: null },
+}
+
+function normalizeSeaTiers(raw: unknown, fallback: SeaFreightTier[]): SeaFreightTier[] {
+  if (!Array.isArray(raw)) return fallback.map((tier) => ({ ...tier }))
+  return raw
+    .map((tier) => ({
+      minUsd: roundMoney(clamp(Number((tier as SeaFreightTier)?.minUsd), 0, 1_000_000)),
+      off: Math.round(clamp(Number((tier as SeaFreightTier)?.off), 0, 1) * 10000) / 10000,
+    }))
+    .filter((tier) => tier.minUsd > 0 && tier.off > 0)
+    .sort((a, b) => b.minUsd - a.minUsd)
 }
 
 /** 解析后台 datetime-local / ISO 字符串为 ISO；空值返回 null */
@@ -204,6 +229,8 @@ export function normalizePricingPromotionConfig(raw: unknown): PricingPromotionC
           : roundMoney(clamp(Number(siteWide.value ?? DEFAULT_PRICING_PROMO_CONFIG.siteWide.value), 0, 1)),
       ...normalizeSchedule(siteWide),
     },
+    seaNewTiers: normalizeSeaTiers(input.seaNewTiers, FIRST_ORDER_SEA_TIERS),
+    seaLoyalTiers: normalizeSeaTiers(input.seaLoyalTiers, SEA_FREIGHT_TIERS),
     shipping: {
       enabled: shipping.enabled === true,
       mode: normalizeDiscountMode(shipping.mode),
