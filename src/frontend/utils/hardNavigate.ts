@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent, typ
 declare global {
   interface Window {
     __storefrontNav?: (href: string) => void
+    __storefrontPrefetch?: (href: string) => void
   }
 }
 
@@ -216,25 +217,21 @@ export function useStorefrontLink(href: string) {
  */
 export function useReliableTap<T extends HTMLElement = HTMLElement>(
   handler: () => void,
-  { disabled = false, debounceMs = 320 }: ReliableTapOptions = {},
+  { disabled = false }: ReliableTapOptions = {},
 ) {
   const handlerRef = useRef(handler)
   handlerRef.current = handler
   const disabledRef = useRef(disabled)
   disabledRef.current = disabled
-  const lastFire = useRef(0)
   const originRef = useRef<TapOrigin | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
-  const suppressUntil = useRef(0)
+  const gestureFired = useRef(false)
 
   const fire = useCallback(() => {
-    if (disabledRef.current) return
-    const now = Date.now()
-    if (now < suppressUntil.current) return
-    if (now - lastFire.current < debounceMs) return
-    lastFire.current = now
+    if (disabledRef.current || gestureFired.current) return
+    gestureFired.current = true
     handlerRef.current()
-  }, [debounceMs])
+  }, [])
 
   const ref = useCallback(
     (node: T | null) => {
@@ -244,15 +241,16 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 
       const onPointerDown = (event: PointerEvent) => {
         if (disabledRef.current || event.button !== 0) return
+        gestureFired.current = false
         originRef.current = { x: event.clientX, y: event.clientY }
       }
 
       const onEnd = (event: PointerEvent | TouchEvent) => {
-        if (disabledRef.current) return
+        if (disabledRef.current || gestureFired.current) return
         const origin = originRef.current
         originRef.current = null
         if (!origin) {
-          suppressUntil.current = Date.now() + 400
+          gestureFired.current = true
           return
         }
         let x = origin.x
@@ -265,7 +263,7 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
           y = event.changedTouches[0].clientY
         }
         if (tapWasScroll(origin, x, y)) {
-          suppressUntil.current = Date.now() + 400
+          gestureFired.current = true
           return
         }
         fire()
@@ -296,7 +294,6 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 
   const onClick = useCallback(
     (_event: ReactMouseEvent) => {
-      if (Date.now() < suppressUntil.current) return
       fire()
     },
     [fire],
@@ -312,26 +309,25 @@ export function useReliableTap<T extends HTMLElement = HTMLElement>(
 export function useChromeActivate(handler: () => void) {
   const fn = useRef(handler)
   fn.current = handler
-  const last = useRef(0)
   const originRef = useRef<TapOrigin | null>(null)
-  const suppressUntil = useRef(0)
+  const gestureFired = useRef(false)
 
-  const commit = useCallback((x: number, y: number) => {
-    const now = Date.now()
-    if (now < suppressUntil.current) return
+  const commit = useCallback((x: number, y: number, fromClick = false) => {
+    if (gestureFired.current) return
     const origin = originRef.current
     originRef.current = null
-    if (tapWasScroll(origin, x, y)) {
-      suppressUntil.current = now + 280
+    if (origin && tapWasScroll(origin, x, y)) {
+      gestureFired.current = true
       return
     }
-    if (now - last.current < 280) return
-    last.current = now
+    if (!origin && !fromClick) return
+    gestureFired.current = true
     fn.current()
   }, [])
 
   const onPointerDown = useCallback((event: ReactPointerEvent) => {
     if (event.button !== 0) return
+    gestureFired.current = false
     originRef.current = { x: event.clientX, y: event.clientY }
   }, [])
 
@@ -344,7 +340,7 @@ export function useChromeActivate(handler: () => void) {
   }, [])
 
   const onClick = useCallback((event: ReactMouseEvent) => {
-    commit(event.clientX, event.clientY)
+    commit(event.clientX, event.clientY, true)
   }, [commit])
 
   return { onPointerDown, onPointerUp, onPointerCancel, onClick }

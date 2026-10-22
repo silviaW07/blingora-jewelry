@@ -204,6 +204,7 @@ export const ProductListCard = ({
             name: displayName,
             image: previewImage || item.main_image_url || '',
           })
+          prefetchProductDetail(item.product_id, { fromTouch: true })
         }}
         onFocus={prefetchDetail}
         onKeyDown={handleCardKeyDown}

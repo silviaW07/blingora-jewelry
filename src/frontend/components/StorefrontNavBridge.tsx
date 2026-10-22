@@ -45,7 +45,18 @@ export function StorefrontNavBridge() {
       window.setTimeout(notifyStorefrontUrl, 0)
     }
 
+    const prefetch = (href: string) => {
+      const next = toAppPath(href)
+      if (!next) return
+      try {
+        router.prefetch(next)
+      } catch {
+        /* ignore */
+      }
+    }
+
     window.__storefrontNav = nav
+    window.__storefrontPrefetch = prefetch
     const later = window.setTimeout(() => {
       ;['/', '/categories/', '/cart/', '/account/profile/', '/checkout/'].forEach((href) => {
         try {
@@ -65,6 +76,7 @@ export function StorefrontNavBridge() {
       window.removeEventListener('pageshow', relock)
       window.removeEventListener('orientationchange', relock)
       if (window.__storefrontNav === nav) delete window.__storefrontNav
+      if (window.__storefrontPrefetch === prefetch) delete window.__storefrontPrefetch
     }
   }, [router])
 

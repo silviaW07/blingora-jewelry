@@ -87,16 +87,26 @@ export function readProductDetailPreview(productId?: string | null): PreviewEntr
   }
 }
 
-/** Hover / tap: start the detail RPC before navigation so the click often paints from cache. */
-export function prefetchProductDetail(productId: string) {
+export function readInflightProductDetail(
+  productId?: string | null,
+  slug?: string | null,
+  lang?: string | null,
+): Promise<ProductDetailData> | null {
+  return inflight.get(makeKey(productId, slug, lang)) || null
+}
+
+/** Hover, or the product under a finger: start the detail RPC before navigation. */
+export function prefetchProductDetail(productId: string, options?: { fromTouch?: boolean }) {
   const id = String(productId || '').trim()
   if (!id || typeof window === 'undefined') return
 
-  // Mobile scroll/touch fires pointerenter — skip to keep bandwidth for images + add-to-cart
-  try {
-    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
-  } catch {
-    // continue
+  // Scrolling a phone list fires pointerenter on every card. Only a real press should prefetch.
+  if (!options?.fromTouch) {
+    try {
+      if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
+    } catch {
+      // continue
+    }
   }
 
   const lang = getClientPreferredLang()

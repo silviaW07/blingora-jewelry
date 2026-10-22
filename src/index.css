@@ -2158,6 +2158,23 @@ html.is-narrow .home-product-card {
   overflow: visible !important;
 }
 
+html.is-narrow a[data-hard-nav],
+html.is-narrow button,
+html.is-narrow .product-color-swatch,
+html.is-narrow .product-sku-stepper-btn {
+  touch-action: manipulation;
+}
+
+html.is-narrow a[data-hard-nav]:active {
+  opacity: 0.72;
+}
+
+html.is-narrow .product-sku-stepper-btn:active,
+html.is-narrow .home-product-card-cart-btn:active,
+html.is-narrow .product-color-swatch:active {
+  transform: scale(0.96);
+}
+
 html.is-narrow .home-product-card-actions {
   display: flex !important;
   flex-direction: row !important;

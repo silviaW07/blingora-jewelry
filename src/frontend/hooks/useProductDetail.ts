@@ -23,6 +23,7 @@ import { getClientPreferredLang } from '@/frontend/i18n'
 import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
 import {
   readCachedProductDetail,
+  readInflightProductDetail,
   readProductDetailPreview,
   writeCachedProductDetail,
   writeProductDetailPreview,
@@ -234,14 +235,16 @@ export const useProductDetail = (seed?: {
     try {
       const lang = typeof window !== 'undefined' ? getClientPreferredLang() : 'en'
       const cached = readCachedProductDetail(productId, slug, lang)
-      if (cached && cached.status === 'ACTIVE') {
-        setProduct(cached)
-        setActiveImage(cached.mainImageUrl)
+      const pending = cached ? null : readInflightProductDetail(productId, slug, lang)
+      const prefetched = cached || (pending ? await pending.catch(() => null) : null)
+      if (prefetched && prefetched.status === 'ACTIVE') {
+        setProduct(prefetched)
+        setActiveImage(prefetched.mainImageUrl)
         setError(null)
         setLoading(false)
         void getRelatedProducts({
-          categoryId: cached.categoryId,
-          excludeProductId: cached.id,
+          categoryId: prefetched.categoryId,
+          excludeProductId: prefetched.id,
           lang,
         })
           .then((relatedData) => setRelatedProducts(relatedData.list))

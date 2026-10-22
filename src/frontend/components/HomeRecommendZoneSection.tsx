@@ -349,6 +349,7 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
               name: displayName,
               image: item.imageUrl || '',
             })
+            prefetchProductDetail(item.productId, { fromTouch: true })
           }}
           onClick={openProductEvents.onClick}
         >
@@ -500,6 +501,7 @@ const renderMobileSquircleContent = (
                 name: productTitle,
                 image: item.imageUrl || '',
               })
+              prefetchProductDetail(item.productId, { fromTouch: true })
             }}
             onPointerEnter={() => prefetchProductDetail(item.productId)}
             data-controller-name="移动端推荐商品图标"
