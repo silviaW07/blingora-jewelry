@@ -150,6 +150,8 @@ export function useUserManagement(): {
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null)
 
   const isComposingRef = useRef(false)
+  const hasRowsRef = useRef(false)
+  const loadGenRef = useRef(0)
 
   const sortBy = (urlParams.sortBy as UserListSortField) || 'lastLoginAt'
   const sortOrder = (urlParams.sortOrder as SortDirection) || 'desc'
@@ -163,7 +165,10 @@ export function useUserManagement(): {
 
   const loadData = useCallback(async () => {
     if (isDetailMode) return
-    setLoading(true)
+    const gen = ++loadGenRef.current
+    // Keep the current rows on screen. A full-page spinner on every refetch
+    // made the customer list look stuck while the sidebar warmed other pages.
+    if (!hasRowsRef.current) setLoading(true)
     try {
       const result = await getUserList({
         account: urlParams.account,
@@ -175,14 +180,18 @@ export function useUserManagement(): {
         sortOrder,
         page,
         pageSize,
-      })
-      setList(result.list)
+      }, { __rpcTimeoutMs: 12_000 } as any)
+      if (gen !== loadGenRef.current) return
+      const nextList = result.list || []
+      hasRowsRef.current = nextList.length > 0
+      setList(nextList)
       setTotal(result.total)
       setTypeCounts(result.type_counts || {})
     } catch (e: any) {
+      if (gen !== loadGenRef.current) return
       toast.error(e.message)
     } finally {
-      setLoading(false)
+      if (gen === loadGenRef.current) setLoading(false)
     }
   }, [urlParams, page, pageSize, isDetailMode, sortBy, sortOrder])
 

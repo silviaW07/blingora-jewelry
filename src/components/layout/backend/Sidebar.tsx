@@ -233,7 +233,7 @@ export default function Sidebar() {
               ? newOrders
               : 0;
         const badge = formatBadgeCount(unread);
-        return <Link key={item.id} href={item.href} data-active={isActive} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
+        return <Link key={item.id} href={item.href} prefetch={false} onMouseEnter={() => { if (!isActive) router.prefetch(item.href) }} data-active={isActive} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
               <span className="relative shrink-0">
                 <Icon className="w-5 h-5" />
                 {!sidebarOpen && badge ? (
