@@ -14,6 +14,7 @@ import type {
   GetOrderListInput,
   OrderListItem,
   OrderDetail,
+  OrderInboundLine,
   ShipOrderInput,
   AddLogisticsSegmentInput,
   UpdateOrderStatusInput
@@ -28,6 +29,7 @@ import {
   addLogisticsSegment,
   updateOrderStatus,
   updateOrderRemark,
+  updateOrderInbound,
   exportOrdersExcel,
 } from '@/backend/actions/OrderManagement'
 
@@ -92,6 +94,10 @@ export interface OrderManagementState {
   remarkSavingId: string | null
   /** 正在导出 */
   exportLoading: boolean
+  /** 正在登记入库的订单 */
+  inboundOrderId: string | null
+  inboundDrafts: OrderInboundLine[]
+  inboundSaving: boolean
 }
 
 export interface OrderManagementHandlers {
@@ -141,6 +147,18 @@ export interface OrderManagementHandlers {
   submitOrderRemark: (orderId: string) => Promise<void>
   /** 导出 Excel（全部当前页或指定订单） */
   handleExportExcel: (orderIds?: string[]) => Promise<void>
+  /** 打开入库登记 */
+  openInboundDialog: (orderId: string) => void
+  /** 关闭入库登记 */
+  closeInboundDialog: () => void
+  /** 修改一行入库草稿 */
+  setInboundDraft: (lineId: string, patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote'>>) => void
+  /** 本行按订购数量标为已入库 */
+  markInboundLineFull: (lineId: string) => void
+  /** 全部商品标为已入库 */
+  markInboundAllFull: () => void
+  /** 保存入库登记 */
+  submitInbound: () => Promise<void>
 }
 
 export const useOrderManagement = (): { state: OrderManagementState, handlers: OrderManagementHandlers } => {
@@ -193,6 +211,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [remarkDrafts, setRemarkDrafts] = useState<Record<string, string>>({})
   const [remarkSavingId, setRemarkSavingId] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
+  const [inboundOrderId, setInboundOrderId] = useState<string | null>(null)
+  const [inboundDrafts, setInboundDrafts] = useState<OrderInboundLine[]>([])
+  const [inboundSaving, setInboundSaving] = useState(false)
 
   const fetchStats = async () => {
     try {
@@ -463,6 +484,106 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+  const openInboundDialog = (orderId: string) => {
+    const fromDetail = detailData && detailData.id === orderId
+      ? detailData.items.map((item) => ({
+          id: item.id,
+          productName: item.productName,
+          skuCode: item.skuCode,
+          quantity: Math.max(0, Number(item.quantity) || 0),
+          inboundQty: Math.max(0, Number(item.inboundQty) || 0),
+          inboundNote: item.inboundNote || '',
+          mainImageUrl: item.mainImageUrl || null,
+        }))
+      : null
+    const row = list.find((item) => item.id === orderId)
+    const lines = fromDetail || row?.inboundLines || []
+    if (!lines.length) {
+      toast.error('这笔订单没有可登记的商品')
+      return
+    }
+    setInboundDrafts(lines.map((line) => ({ ...line, inboundNote: line.inboundNote || '' })))
+    setInboundOrderId(orderId)
+  }
+
+  const closeInboundDialog = () => {
+    if (inboundSaving) return
+    setInboundOrderId(null)
+  }
+
+  const setInboundDraft = (
+    lineId: string,
+    patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote'>>,
+  ) => {
+    setInboundDrafts((prev) => prev.map((line) => {
+      if (line.id !== lineId) return line
+      const next = { ...line, ...patch }
+      const ordered = Math.max(0, Number(line.quantity) || 0)
+      const qty = Math.max(0, Math.floor(Number(next.inboundQty) || 0))
+      next.inboundQty = ordered > 0 ? Math.min(ordered, qty) : 0
+      return next
+    }))
+  }
+
+  const markInboundLineFull = (lineId: string) => {
+    setInboundDrafts((prev) => prev.map((line) => (
+      line.id === lineId ? { ...line, inboundQty: line.quantity } : line
+    )))
+  }
+
+  const markInboundAllFull = () => {
+    setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity })))
+  }
+
+  const submitInbound = async () => {
+    if (!inboundOrderId) return
+    try {
+      setInboundSaving(true)
+      const result = await updateOrderInbound({
+        orderId: inboundOrderId,
+        lines: inboundDrafts.map((line) => ({
+          orderItemId: line.id,
+          inboundQty: line.inboundQty,
+          inboundNote: line.inboundNote,
+        })),
+      })
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId
+          ? {
+              ...row,
+              inboundLines: result.lines,
+              inboundOrderedQty: result.orderedQty,
+              inboundReceivedQty: result.receivedQty,
+              inboundState: result.state,
+            }
+          : row
+      )))
+      setDetailData((prev) => {
+        if (!prev || prev.id !== inboundOrderId) return prev
+        const byId = new Map(result.lines.map((line) => [line.id, line]))
+        return {
+          ...prev,
+          inboundLines: result.lines,
+          inboundOrderedQty: result.orderedQty,
+          inboundReceivedQty: result.receivedQty,
+          inboundState: result.state,
+          items: prev.items.map((item) => {
+            const line = byId.get(item.id)
+            return line
+              ? { ...item, inboundQty: line.inboundQty, inboundNote: line.inboundNote || null }
+              : item
+          }),
+        }
+      })
+      toast.success('入库情况已保存')
+      setInboundOrderId(null)
+    } catch (err: any) {
+      toast.error(err.message || '入库保存失败')
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
   const jumpToCustomer = (email: string) => {
     UserManagement.navigateToWithFilters(router, { account: '', email, role: 'CUSTOMER', status: '' })
   }
@@ -486,6 +607,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       remarkDrafts,
       remarkSavingId,
       exportLoading,
+      inboundOrderId,
+      inboundDrafts,
+      inboundSaving,
     },
     handlers: {
       handleFilterChange,
@@ -511,6 +635,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       handleRemarkDraftChange,
       submitOrderRemark,
       handleExportExcel,
+      openInboundDialog,
+      closeInboundDialog,
+      setInboundDraft,
+      markInboundLineFull,
+      markInboundAllFull,
+      submitInbound,
     },
   }
 }

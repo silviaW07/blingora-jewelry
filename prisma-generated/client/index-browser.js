@@ -140,6 +140,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   adminNote: 'adminNote',
   customerType: 'customerType',
   customerTypeUpdatedAt: 'customerTypeUpdatedAt',
+  vipDiscount: 'vipDiscount',
   ringSizeUs: 'ringSizeUs',
   ringSizeEu: 'ringSizeEu',
   braceletSize: 'braceletSize',
@@ -532,6 +533,9 @@ exports.Prisma.OrderitemScalarFieldEnum = {
   engravingText: 'engravingText',
   engravingFont: 'engravingFont',
   quantity: 'quantity',
+  inboundQty: 'inboundQty',
+  inboundNote: 'inboundNote',
+  inboundAt: 'inboundAt',
   unitPrice: 'unitPrice',
   lineAmount: 'lineAmount',
   giftWrapSelected: 'giftWrapSelected',
@@ -879,6 +883,17 @@ exports.Prisma.BuyershowcommentScalarFieldEnum = {
   reviewedAt: 'reviewedAt'
 };
 
+exports.Prisma.BuyershowproofScalarFieldEnum = {
+  id: 'id',
+  imageUrl: 'imageUrl',
+  title: 'title',
+  body: 'body',
+  sortWeight: 'sortWeight',
+  isEnabled: 'isEnabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1135,7 +1150,8 @@ exports.Prisma.orderitemOrderByRelevanceFieldEnum = {
   materialLabel: 'materialLabel',
   sizeLabel: 'sizeLabel',
   engravingText: 'engravingText',
-  engravingFont: 'engravingFont'
+  engravingFont: 'engravingFont',
+  inboundNote: 'inboundNote'
 };
 
 exports.Prisma.productreviewOrderByRelevanceFieldEnum = {
@@ -1364,6 +1380,13 @@ exports.Prisma.buyershowcommentOrderByRelevanceFieldEnum = {
   id: 'id',
   authorName: 'authorName',
   content: 'content'
+};
+
+exports.Prisma.buyershowproofOrderByRelevanceFieldEnum = {
+  id: 'id',
+  imageUrl: 'imageUrl',
+  title: 'title',
+  body: 'body'
 };
 exports.userrole = exports.$Enums.userrole = {
   CUSTOMER: 'CUSTOMER',
@@ -1613,7 +1636,8 @@ exports.Prisma.ModelName = {
   suffixconfig: 'suffixconfig',
   brandalias: 'brandalias',
   buyershowmedia: 'buyershowmedia',
-  buyershowcomment: 'buyershowcomment'
+  buyershowcomment: 'buyershowcomment',
+  buyershowproof: 'buyershowproof'
 };
 
 /**

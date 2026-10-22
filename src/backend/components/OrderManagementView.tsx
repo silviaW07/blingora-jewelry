@@ -52,6 +52,17 @@ const ORDER_STATUS_VARIANTS: Record<OrderStatus, string> = {
   CANCELLED: 'bg-slate-200 text-slate-700 hover:bg-slate-200',
   REFUNDED: 'bg-orange-100 text-orange-800 hover:bg-orange-100'
 };
+const INBOUND_BADGE: Record<'NONE' | 'PARTIAL' | 'DONE', string> = {
+  NONE: 'bg-slate-100 text-slate-700 border-slate-200',
+  PARTIAL: 'bg-amber-100 text-amber-900 border-amber-200',
+  DONE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+};
+const inboundBadgeLabel = (state: 'NONE' | 'PARTIAL' | 'DONE', received: number, ordered: number) => {
+  if (ordered <= 0) return '无商品';
+  if (state === 'DONE') return '已入库';
+  if (state === 'PARTIAL') return `部分 ${received}/${ordered}`;
+  return '未入库';
+};
 const getListStatusClassName = (status: OrderStatus) =>
   LIST_STATUS_OPTIONS.find((o) => o.value === status)?.className ||
   ORDER_STATUS_VARIANTS[status] ||
@@ -75,7 +86,7 @@ export const OrderManagementView = ({
       
       {/* 1. 关键指标看板 Section */}
       <section data-controller-name="关键指标看板" className="w-full bg-slate-50 border-b" data-api-unique-id="ordermanagementview-rb60e64f62b7f9d04-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-        <div className="container mx-auto px-8 py-8" data-api-unique-id="ordermanagementview-r8a74b3ed8054c34c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+        <div className="w-full max-w-none px-4 xl:px-6 py-8" data-api-unique-id="ordermanagementview-r8a74b3ed8054c34c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
           <div className="flex items-center justify-between mb-6" data-api-unique-id="ordermanagementview-ra591b6e3898dad1f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <h1 className="text-2xl font-header font-bold tracking-tight" data-api-unique-id="ordermanagementview-r76e3a528fc21a119-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">订单管理</h1>
             <div className="flex gap-2" data-api-unique-id="ordermanagementview-rfd62d20332c66dd9-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
@@ -127,7 +138,7 @@ export const OrderManagementView = ({
 
       {/* 2. 订单筛选控制台 Section */}
       <section data-controller-name="订单筛选控制台" className="w-full" data-api-unique-id="ordermanagementview-rd15ae399a3022c30-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-        <div className="container mx-auto px-8 py-8" data-api-unique-id="ordermanagementview-r1d9fb3b1858894fa-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+        <div className="w-full max-w-none px-4 xl:px-6 py-8" data-api-unique-id="ordermanagementview-r1d9fb3b1858894fa-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
           <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full mb-6" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <TabsList className="h-10 p-1 bg-slate-100/50" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <TabsTrigger value="ALL" className="px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
@@ -172,11 +183,13 @@ export const OrderManagementView = ({
 
       {/* 3. 订单数据列表 Section */}
       <section data-controller-name="订单数据列表" className="w-full" data-api-unique-id="ordermanagementview-r59fb865c02138ac6-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-        <div className="container mx-auto px-8 pb-12" data-api-unique-id="ordermanagementview-rf716b4765ff61c1f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+        <div className="w-full max-w-none px-4 xl:px-6 pb-12" data-api-unique-id="ordermanagementview-rf716b4765ff61c1f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
           <Card className="shadow-sm border-slate-200 overflow-hidden" data-api-unique-id="ordermanagementview-rb70c09c00d88ed41-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <div className="flex items-center justify-between gap-4 px-6 py-4 border-b bg-white">
               <div className="text-sm font-medium text-muted-foreground">
-                按线下单时间排序 · 可用上方状态 Tab 快速筛选
+                {state.filterForm.status === 'PAID'
+                  ? '已支付包含待发货、运输中、已送达 · 按线下单时间排序'
+                  : '按线下单时间排序 · 可用上方状态 Tab 快速筛选'}
               </div>
               <Button
                 variant="outline"
@@ -198,6 +211,7 @@ export const OrderManagementView = ({
                       <TableHead className="font-bold min-w-[160px]">客户Email</TableHead>
                       <TableHead className="font-bold min-w-[110px]">客户名称</TableHead>
                       <TableHead className="font-bold min-w-[120px]">订单状态</TableHead>
+                      <TableHead className="font-bold min-w-[150px]">入库</TableHead>
                       <TableHead className="font-bold min-w-[120px]">WhatsApp</TableHead>
                       <TableHead className="font-bold min-w-[100px]">金额</TableHead>
                       <TableHead className="font-bold min-w-[90px]">总重量(g)</TableHead>
@@ -209,11 +223,11 @@ export const OrderManagementView = ({
                   <TableBody data-api-unique-id="ordermanagementview-r64976b895e3cee0a-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     {state.listLoading ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
+                        <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
                       </TableRow>
                     ) : state.list.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
+                        <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
                       </TableRow>
                     ) : (
                       state.list.map((row) => (
@@ -252,6 +266,22 @@ export const OrderManagementView = ({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          <TableCell className="pt-4">
+                            <div className="flex flex-col items-start gap-2">
+                              <Badge className={cn('border font-semibold hover:bg-inherit', INBOUND_BADGE[row.inboundState] || INBOUND_BADGE.NONE)}>
+                                {inboundBadgeLabel(row.inboundState, row.inboundReceivedQty, row.inboundOrderedQty)}
+                              </Badge>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                                onClick={() => handlers.openInboundDialog(row.id)}
+                              >
+                                登记入库
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell className="pt-4 text-sm text-muted-foreground">
                             {row.customerWhatsapp || '—'}
@@ -392,8 +422,13 @@ export const OrderManagementView = ({
                     <div className="space-y-6" data-api-unique-id="ordermanagementview-rfb6c357a7a1dae02-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                       <Card className="border-slate-200" data-api-unique-id="ordermanagementview-re86740ffa41e68b2-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                         <CardHeader className="pb-3 border-b" data-api-unique-id="ordermanagementview-r4b8fe7b02b669cc1-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                          <CardTitle className="text-sm font-bold flex items-center" data-api-unique-id="ordermanagementview-r186eb335dfc424cd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                            <Package className="h-4 w-4 mr-2 text-primary" data-api-unique-id="ordermanagementview-rbb0a2b27610d3774-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" /> SKU 商品明细
+                          <CardTitle className="text-sm font-bold flex items-center justify-between gap-3" data-api-unique-id="ordermanagementview-r186eb335dfc424cd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                            <span className="flex items-center">
+                              <Package className="h-4 w-4 mr-2 text-primary" data-api-unique-id="ordermanagementview-rbb0a2b27610d3774-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" /> SKU 商品明细
+                            </span>
+                            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => handlers.openInboundDialog(state.detailData.id)}>
+                              登记入库
+                            </Button>
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0" data-api-unique-id="ordermanagementview-rfb0a6d9007c97a49-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
@@ -418,6 +453,10 @@ export const OrderManagementView = ({
                                     </div>
                                     <div className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">
                                       SKU: {sku.skuCode}
+                                    </div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                      入库 {Math.max(0, Number(sku.inboundQty) || 0)}/{qty}
+                                      {sku.inboundNote ? ` · ${sku.inboundNote}` : ''}
                                     </div>
                                   </div>
                                   <div className="w-[7.5rem] shrink-0 text-right">
@@ -684,6 +723,76 @@ export const OrderManagementView = ({
           <DialogFooter data-api-unique-id="ordermanagementview-r65a77c7817043e92-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <Button variant="outline" onClick={() => handlers.setIsLogisticsDialogOpen(false)} data-api-unique-id="ordermanagementview-r32ea96d95e8b0f6b-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">取消</Button>
             <Button className="bg-primary text-primary-foreground" onClick={handlers.submitLogisticsSegment} data-api-unique-id="ordermanagementview-r8fa12eed981af3b3-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">提交节点记录</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) handlers.closeInboundDialog() }}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>登记入库</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const orderNo = state.list.find((row) => row.id === state.inboundOrderId)?.orderNo
+                  || (state.detailData?.id === state.inboundOrderId ? state.detailData.orderNo : '')
+                const received = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.inboundQty) || 0), 0)
+                const ordered = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)
+                return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写已到仓库的数量。当前 ${received}/${ordered} 件。`
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+            {state.inboundDrafts.map((line) => (
+              <div key={line.id} className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded border bg-slate-50">
+                  {line.mainImageUrl ? (
+                    <EditableImg
+                      propKey={`inbound-${line.id}`}
+                      keywords={line.mainImageUrl}
+                      description={line.productName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold leading-5 break-words">{line.productName}</div>
+                  <div className="mt-0.5 font-mono text-[10px] text-muted-foreground break-all">SKU: {line.skuCode} · 订购 {line.quantity}</div>
+                  <Input
+                    className="mt-2 h-9"
+                    placeholder="货位或缺货说明，可不填"
+                    value={line.inboundNote}
+                    onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
+                  />
+                </div>
+                <div className="w-[8.5rem] shrink-0 space-y-2">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">已入库</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={line.quantity}
+                    className="h-9"
+                    value={String(line.inboundQty)}
+                    onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })}
+                  />
+                  <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.markInboundLineFull(line.id)}>
+                    本行到齐
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
+              全部到齐
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={handlers.closeInboundDialog} disabled={state.inboundSaving}>
+                取消
+              </Button>
+              <Button type="button" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
+                {state.inboundSaving ? '保存中…' : '保存入库'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

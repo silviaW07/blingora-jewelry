@@ -268,6 +268,11 @@ export type buyershowmedia = $Result.DefaultSelection<Prisma.$buyershowmediaPayl
  * 买家秀留言：客户提交后待审核，通过后才在前台展示
  */
 export type buyershowcomment = $Result.DefaultSelection<Prisma.$buyershowcommentPayload>
+/**
+ * Model buyershowproof
+ * 买家秀真实性证明：一张图加一段说明，前台展示在照片墙上方
+ */
+export type buyershowproof = $Result.DefaultSelection<Prisma.$buyershowproofPayload>
 
 /**
  * Enums
@@ -1273,6 +1278,16 @@ export class PrismaClient<
     * ```
     */
   get buyershowcomment(): Prisma.buyershowcommentDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.buyershowproof`: Exposes CRUD operations for the **buyershowproof** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Buyershowproofs
+    * const buyershowproofs = await prisma.buyershowproof.findMany()
+    * ```
+    */
+  get buyershowproof(): Prisma.buyershowproofDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -1764,7 +1779,8 @@ export namespace Prisma {
     suffixconfig: 'suffixconfig',
     brandalias: 'brandalias',
     buyershowmedia: 'buyershowmedia',
-    buyershowcomment: 'buyershowcomment'
+    buyershowcomment: 'buyershowcomment',
+    buyershowproof: 'buyershowproof'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1783,7 +1799,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment"
+      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment" | "buyershowproof"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -5153,6 +5169,72 @@ export namespace Prisma {
           }
         }
       }
+      buyershowproof: {
+        payload: Prisma.$buyershowproofPayload<ExtArgs>
+        fields: Prisma.buyershowproofFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.buyershowproofFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.buyershowproofFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>
+          }
+          findFirst: {
+            args: Prisma.buyershowproofFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.buyershowproofFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>
+          }
+          findMany: {
+            args: Prisma.buyershowproofFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>[]
+          }
+          create: {
+            args: Prisma.buyershowproofCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>
+          }
+          createMany: {
+            args: Prisma.buyershowproofCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.buyershowproofDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>
+          }
+          update: {
+            args: Prisma.buyershowproofUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>
+          }
+          deleteMany: {
+            args: Prisma.buyershowproofDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.buyershowproofUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.buyershowproofUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$buyershowproofPayload>
+          }
+          aggregate: {
+            args: Prisma.BuyershowproofAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateBuyershowproof>
+          }
+          groupBy: {
+            args: Prisma.buyershowproofGroupByArgs<ExtArgs>
+            result: $Utils.Optional<BuyershowproofGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.buyershowproofCountArgs<ExtArgs>
+            result: $Utils.Optional<BuyershowproofCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -5300,6 +5382,7 @@ export namespace Prisma {
     brandalias?: brandaliasOmit
     buyershowmedia?: buyershowmediaOmit
     buyershowcomment?: buyershowcommentOmit
+    buyershowproof?: buyershowproofOmit
   }
 
   /* Types for Logging */
@@ -6307,10 +6390,12 @@ export namespace Prisma {
 
   export type SysuserAvgAggregateOutputType = {
     purchaseCount: number | null
+    vipDiscount: number | null
   }
 
   export type SysuserSumAggregateOutputType = {
     purchaseCount: number | null
+    vipDiscount: number | null
   }
 
   export type SysuserMinAggregateOutputType = {
@@ -6332,6 +6417,7 @@ export namespace Prisma {
     adminNote: string | null
     customerType: string | null
     customerTypeUpdatedAt: Date | null
+    vipDiscount: number | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6359,6 +6445,7 @@ export namespace Prisma {
     adminNote: string | null
     customerType: string | null
     customerTypeUpdatedAt: Date | null
+    vipDiscount: number | null
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6386,6 +6473,7 @@ export namespace Prisma {
     adminNote: number
     customerType: number
     customerTypeUpdatedAt: number
+    vipDiscount: number
     ringSizeUs: number
     ringSizeEu: number
     braceletSize: number
@@ -6400,10 +6488,12 @@ export namespace Prisma {
 
   export type SysuserAvgAggregateInputType = {
     purchaseCount?: true
+    vipDiscount?: true
   }
 
   export type SysuserSumAggregateInputType = {
     purchaseCount?: true
+    vipDiscount?: true
   }
 
   export type SysuserMinAggregateInputType = {
@@ -6425,6 +6515,7 @@ export namespace Prisma {
     adminNote?: true
     customerType?: true
     customerTypeUpdatedAt?: true
+    vipDiscount?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6452,6 +6543,7 @@ export namespace Prisma {
     adminNote?: true
     customerType?: true
     customerTypeUpdatedAt?: true
+    vipDiscount?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6479,6 +6571,7 @@ export namespace Prisma {
     adminNote?: true
     customerType?: true
     customerTypeUpdatedAt?: true
+    vipDiscount?: true
     ringSizeUs?: true
     ringSizeEu?: true
     braceletSize?: true
@@ -6595,6 +6688,7 @@ export namespace Prisma {
     adminNote: string | null
     customerType: string
     customerTypeUpdatedAt: Date | null
+    vipDiscount: number
     ringSizeUs: string | null
     ringSizeEu: string | null
     braceletSize: string | null
@@ -6643,6 +6737,7 @@ export namespace Prisma {
     adminNote?: boolean
     customerType?: boolean
     customerTypeUpdatedAt?: boolean
+    vipDiscount?: boolean
     ringSizeUs?: boolean
     ringSizeEu?: boolean
     braceletSize?: boolean
@@ -6686,6 +6781,7 @@ export namespace Prisma {
     adminNote?: boolean
     customerType?: boolean
     customerTypeUpdatedAt?: boolean
+    vipDiscount?: boolean
     ringSizeUs?: boolean
     ringSizeEu?: boolean
     braceletSize?: boolean
@@ -6696,7 +6792,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "customerTypeUpdatedAt" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
+  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "customerTypeUpdatedAt" | "vipDiscount" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
   export type sysuserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     carts?: boolean | sysuser$cartsArgs<ExtArgs>
     importTasks?: boolean | sysuser$importTasksArgs<ExtArgs>
@@ -6746,6 +6842,7 @@ export namespace Prisma {
       adminNote: string | null
       customerType: string
       customerTypeUpdatedAt: Date | null
+      vipDiscount: number
       ringSizeUs: string | null
       ringSizeEu: string | null
       braceletSize: string | null
@@ -7152,6 +7249,7 @@ export namespace Prisma {
     readonly adminNote: FieldRef<"sysuser", 'String'>
     readonly customerType: FieldRef<"sysuser", 'String'>
     readonly customerTypeUpdatedAt: FieldRef<"sysuser", 'DateTime'>
+    readonly vipDiscount: FieldRef<"sysuser", 'Int'>
     readonly ringSizeUs: FieldRef<"sysuser", 'String'>
     readonly ringSizeEu: FieldRef<"sysuser", 'String'>
     readonly braceletSize: FieldRef<"sysuser", 'String'>
@@ -29739,12 +29837,14 @@ export namespace Prisma {
 
   export type OrderitemAvgAggregateOutputType = {
     quantity: number | null
+    inboundQty: number | null
     unitPrice: Decimal | null
     lineAmount: Decimal | null
   }
 
   export type OrderitemSumAggregateOutputType = {
     quantity: number | null
+    inboundQty: number | null
     unitPrice: Decimal | null
     lineAmount: Decimal | null
   }
@@ -29761,6 +29861,9 @@ export namespace Prisma {
     engravingText: string | null
     engravingFont: string | null
     quantity: number | null
+    inboundQty: number | null
+    inboundNote: string | null
+    inboundAt: Date | null
     unitPrice: Decimal | null
     lineAmount: Decimal | null
     giftWrapSelected: boolean | null
@@ -29780,6 +29883,9 @@ export namespace Prisma {
     engravingText: string | null
     engravingFont: string | null
     quantity: number | null
+    inboundQty: number | null
+    inboundNote: string | null
+    inboundAt: Date | null
     unitPrice: Decimal | null
     lineAmount: Decimal | null
     giftWrapSelected: boolean | null
@@ -29799,6 +29905,9 @@ export namespace Prisma {
     engravingText: number
     engravingFont: number
     quantity: number
+    inboundQty: number
+    inboundNote: number
+    inboundAt: number
     unitPrice: number
     lineAmount: number
     giftWrapSelected: number
@@ -29810,12 +29919,14 @@ export namespace Prisma {
 
   export type OrderitemAvgAggregateInputType = {
     quantity?: true
+    inboundQty?: true
     unitPrice?: true
     lineAmount?: true
   }
 
   export type OrderitemSumAggregateInputType = {
     quantity?: true
+    inboundQty?: true
     unitPrice?: true
     lineAmount?: true
   }
@@ -29832,6 +29943,9 @@ export namespace Prisma {
     engravingText?: true
     engravingFont?: true
     quantity?: true
+    inboundQty?: true
+    inboundNote?: true
+    inboundAt?: true
     unitPrice?: true
     lineAmount?: true
     giftWrapSelected?: true
@@ -29851,6 +29965,9 @@ export namespace Prisma {
     engravingText?: true
     engravingFont?: true
     quantity?: true
+    inboundQty?: true
+    inboundNote?: true
+    inboundAt?: true
     unitPrice?: true
     lineAmount?: true
     giftWrapSelected?: true
@@ -29870,6 +29987,9 @@ export namespace Prisma {
     engravingText?: true
     engravingFont?: true
     quantity?: true
+    inboundQty?: true
+    inboundNote?: true
+    inboundAt?: true
     unitPrice?: true
     lineAmount?: true
     giftWrapSelected?: true
@@ -29976,6 +30096,9 @@ export namespace Prisma {
     engravingText: string | null
     engravingFont: string | null
     quantity: number
+    inboundQty: number
+    inboundNote: string | null
+    inboundAt: Date | null
     unitPrice: Decimal
     lineAmount: Decimal
     giftWrapSelected: boolean
@@ -30014,6 +30137,9 @@ export namespace Prisma {
     engravingText?: boolean
     engravingFont?: boolean
     quantity?: boolean
+    inboundQty?: boolean
+    inboundNote?: boolean
+    inboundAt?: boolean
     unitPrice?: boolean
     lineAmount?: boolean
     giftWrapSelected?: boolean
@@ -30038,6 +30164,9 @@ export namespace Prisma {
     engravingText?: boolean
     engravingFont?: boolean
     quantity?: boolean
+    inboundQty?: boolean
+    inboundNote?: boolean
+    inboundAt?: boolean
     unitPrice?: boolean
     lineAmount?: boolean
     giftWrapSelected?: boolean
@@ -30045,7 +30174,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type orderitemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderId" | "productId" | "productSkuId" | "productName" | "skuCode" | "materialLabel" | "sizeLabel" | "engravingText" | "engravingFont" | "quantity" | "unitPrice" | "lineAmount" | "giftWrapSelected" | "createdAt" | "updatedAt", ExtArgs["result"]["orderitem"]>
+  export type orderitemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderId" | "productId" | "productSkuId" | "productName" | "skuCode" | "materialLabel" | "sizeLabel" | "engravingText" | "engravingFont" | "quantity" | "inboundQty" | "inboundNote" | "inboundAt" | "unitPrice" | "lineAmount" | "giftWrapSelected" | "createdAt" | "updatedAt", ExtArgs["result"]["orderitem"]>
   export type orderitemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     order?: boolean | orderrecordDefaultArgs<ExtArgs>
     product?: boolean | productDefaultArgs<ExtArgs>
@@ -30071,6 +30200,9 @@ export namespace Prisma {
       engravingText: string | null
       engravingFont: string | null
       quantity: number
+      inboundQty: number
+      inboundNote: string | null
+      inboundAt: Date | null
       unitPrice: Prisma.Decimal
       lineAmount: Prisma.Decimal
       giftWrapSelected: boolean
@@ -30459,6 +30591,9 @@ export namespace Prisma {
     readonly engravingText: FieldRef<"orderitem", 'String'>
     readonly engravingFont: FieldRef<"orderitem", 'String'>
     readonly quantity: FieldRef<"orderitem", 'Int'>
+    readonly inboundQty: FieldRef<"orderitem", 'Int'>
+    readonly inboundNote: FieldRef<"orderitem", 'String'>
+    readonly inboundAt: FieldRef<"orderitem", 'DateTime'>
     readonly unitPrice: FieldRef<"orderitem", 'Decimal'>
     readonly lineAmount: FieldRef<"orderitem", 'Decimal'>
     readonly giftWrapSelected: FieldRef<"orderitem", 'Boolean'>
@@ -60333,6 +60468,955 @@ export namespace Prisma {
 
 
   /**
+   * Model buyershowproof
+   */
+
+  export type AggregateBuyershowproof = {
+    _count: BuyershowproofCountAggregateOutputType | null
+    _avg: BuyershowproofAvgAggregateOutputType | null
+    _sum: BuyershowproofSumAggregateOutputType | null
+    _min: BuyershowproofMinAggregateOutputType | null
+    _max: BuyershowproofMaxAggregateOutputType | null
+  }
+
+  export type BuyershowproofAvgAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type BuyershowproofSumAggregateOutputType = {
+    sortWeight: number | null
+  }
+
+  export type BuyershowproofMinAggregateOutputType = {
+    id: string | null
+    imageUrl: string | null
+    title: string | null
+    body: string | null
+    sortWeight: number | null
+    isEnabled: boolean | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BuyershowproofMaxAggregateOutputType = {
+    id: string | null
+    imageUrl: string | null
+    title: string | null
+    body: string | null
+    sortWeight: number | null
+    isEnabled: boolean | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BuyershowproofCountAggregateOutputType = {
+    id: number
+    imageUrl: number
+    title: number
+    body: number
+    sortWeight: number
+    isEnabled: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type BuyershowproofAvgAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type BuyershowproofSumAggregateInputType = {
+    sortWeight?: true
+  }
+
+  export type BuyershowproofMinAggregateInputType = {
+    id?: true
+    imageUrl?: true
+    title?: true
+    body?: true
+    sortWeight?: true
+    isEnabled?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BuyershowproofMaxAggregateInputType = {
+    id?: true
+    imageUrl?: true
+    title?: true
+    body?: true
+    sortWeight?: true
+    isEnabled?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BuyershowproofCountAggregateInputType = {
+    id?: true
+    imageUrl?: true
+    title?: true
+    body?: true
+    sortWeight?: true
+    isEnabled?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type BuyershowproofAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which buyershowproof to aggregate.
+     */
+    where?: buyershowproofWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowproofs to fetch.
+     */
+    orderBy?: buyershowproofOrderByWithRelationInput | buyershowproofOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: buyershowproofWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowproofs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowproofs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned buyershowproofs
+    **/
+    _count?: true | BuyershowproofCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: BuyershowproofAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: BuyershowproofSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: BuyershowproofMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: BuyershowproofMaxAggregateInputType
+  }
+
+  export type GetBuyershowproofAggregateType<T extends BuyershowproofAggregateArgs> = {
+        [P in keyof T & keyof AggregateBuyershowproof]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateBuyershowproof[P]>
+      : GetScalarType<T[P], AggregateBuyershowproof[P]>
+  }
+
+
+
+
+  export type buyershowproofGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: buyershowproofWhereInput
+    orderBy?: buyershowproofOrderByWithAggregationInput | buyershowproofOrderByWithAggregationInput[]
+    by: BuyershowproofScalarFieldEnum[] | BuyershowproofScalarFieldEnum
+    having?: buyershowproofScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: BuyershowproofCountAggregateInputType | true
+    _avg?: BuyershowproofAvgAggregateInputType
+    _sum?: BuyershowproofSumAggregateInputType
+    _min?: BuyershowproofMinAggregateInputType
+    _max?: BuyershowproofMaxAggregateInputType
+  }
+
+  export type BuyershowproofGroupByOutputType = {
+    id: string
+    imageUrl: string
+    title: string
+    body: string
+    sortWeight: number
+    isEnabled: boolean
+    createdAt: Date
+    updatedAt: Date
+    _count: BuyershowproofCountAggregateOutputType | null
+    _avg: BuyershowproofAvgAggregateOutputType | null
+    _sum: BuyershowproofSumAggregateOutputType | null
+    _min: BuyershowproofMinAggregateOutputType | null
+    _max: BuyershowproofMaxAggregateOutputType | null
+  }
+
+  type GetBuyershowproofGroupByPayload<T extends buyershowproofGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<BuyershowproofGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof BuyershowproofGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], BuyershowproofGroupByOutputType[P]>
+            : GetScalarType<T[P], BuyershowproofGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type buyershowproofSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    imageUrl?: boolean
+    title?: boolean
+    body?: boolean
+    sortWeight?: boolean
+    isEnabled?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["buyershowproof"]>
+
+
+
+  export type buyershowproofSelectScalar = {
+    id?: boolean
+    imageUrl?: boolean
+    title?: boolean
+    body?: boolean
+    sortWeight?: boolean
+    isEnabled?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type buyershowproofOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "imageUrl" | "title" | "body" | "sortWeight" | "isEnabled" | "createdAt" | "updatedAt", ExtArgs["result"]["buyershowproof"]>
+
+  export type $buyershowproofPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "buyershowproof"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      imageUrl: string
+      title: string
+      body: string
+      sortWeight: number
+      isEnabled: boolean
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["buyershowproof"]>
+    composites: {}
+  }
+
+  type buyershowproofGetPayload<S extends boolean | null | undefined | buyershowproofDefaultArgs> = $Result.GetResult<Prisma.$buyershowproofPayload, S>
+
+  type buyershowproofCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<buyershowproofFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: BuyershowproofCountAggregateInputType | true
+    }
+
+  export interface buyershowproofDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['buyershowproof'], meta: { name: 'buyershowproof' } }
+    /**
+     * Find zero or one Buyershowproof that matches the filter.
+     * @param {buyershowproofFindUniqueArgs} args - Arguments to find a Buyershowproof
+     * @example
+     * // Get one Buyershowproof
+     * const buyershowproof = await prisma.buyershowproof.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends buyershowproofFindUniqueArgs>(args: SelectSubset<T, buyershowproofFindUniqueArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Buyershowproof that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {buyershowproofFindUniqueOrThrowArgs} args - Arguments to find a Buyershowproof
+     * @example
+     * // Get one Buyershowproof
+     * const buyershowproof = await prisma.buyershowproof.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends buyershowproofFindUniqueOrThrowArgs>(args: SelectSubset<T, buyershowproofFindUniqueOrThrowArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Buyershowproof that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowproofFindFirstArgs} args - Arguments to find a Buyershowproof
+     * @example
+     * // Get one Buyershowproof
+     * const buyershowproof = await prisma.buyershowproof.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends buyershowproofFindFirstArgs>(args?: SelectSubset<T, buyershowproofFindFirstArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Buyershowproof that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowproofFindFirstOrThrowArgs} args - Arguments to find a Buyershowproof
+     * @example
+     * // Get one Buyershowproof
+     * const buyershowproof = await prisma.buyershowproof.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends buyershowproofFindFirstOrThrowArgs>(args?: SelectSubset<T, buyershowproofFindFirstOrThrowArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Buyershowproofs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowproofFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Buyershowproofs
+     * const buyershowproofs = await prisma.buyershowproof.findMany()
+     * 
+     * // Get first 10 Buyershowproofs
+     * const buyershowproofs = await prisma.buyershowproof.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const buyershowproofWithIdOnly = await prisma.buyershowproof.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends buyershowproofFindManyArgs>(args?: SelectSubset<T, buyershowproofFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Buyershowproof.
+     * @param {buyershowproofCreateArgs} args - Arguments to create a Buyershowproof.
+     * @example
+     * // Create one Buyershowproof
+     * const Buyershowproof = await prisma.buyershowproof.create({
+     *   data: {
+     *     // ... data to create a Buyershowproof
+     *   }
+     * })
+     * 
+     */
+    create<T extends buyershowproofCreateArgs>(args: SelectSubset<T, buyershowproofCreateArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Buyershowproofs.
+     * @param {buyershowproofCreateManyArgs} args - Arguments to create many Buyershowproofs.
+     * @example
+     * // Create many Buyershowproofs
+     * const buyershowproof = await prisma.buyershowproof.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends buyershowproofCreateManyArgs>(args?: SelectSubset<T, buyershowproofCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Buyershowproof.
+     * @param {buyershowproofDeleteArgs} args - Arguments to delete one Buyershowproof.
+     * @example
+     * // Delete one Buyershowproof
+     * const Buyershowproof = await prisma.buyershowproof.delete({
+     *   where: {
+     *     // ... filter to delete one Buyershowproof
+     *   }
+     * })
+     * 
+     */
+    delete<T extends buyershowproofDeleteArgs>(args: SelectSubset<T, buyershowproofDeleteArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Buyershowproof.
+     * @param {buyershowproofUpdateArgs} args - Arguments to update one Buyershowproof.
+     * @example
+     * // Update one Buyershowproof
+     * const buyershowproof = await prisma.buyershowproof.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends buyershowproofUpdateArgs>(args: SelectSubset<T, buyershowproofUpdateArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Buyershowproofs.
+     * @param {buyershowproofDeleteManyArgs} args - Arguments to filter Buyershowproofs to delete.
+     * @example
+     * // Delete a few Buyershowproofs
+     * const { count } = await prisma.buyershowproof.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends buyershowproofDeleteManyArgs>(args?: SelectSubset<T, buyershowproofDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Buyershowproofs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowproofUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Buyershowproofs
+     * const buyershowproof = await prisma.buyershowproof.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends buyershowproofUpdateManyArgs>(args: SelectSubset<T, buyershowproofUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Buyershowproof.
+     * @param {buyershowproofUpsertArgs} args - Arguments to update or create a Buyershowproof.
+     * @example
+     * // Update or create a Buyershowproof
+     * const buyershowproof = await prisma.buyershowproof.upsert({
+     *   create: {
+     *     // ... data to create a Buyershowproof
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Buyershowproof we want to update
+     *   }
+     * })
+     */
+    upsert<T extends buyershowproofUpsertArgs>(args: SelectSubset<T, buyershowproofUpsertArgs<ExtArgs>>): Prisma__buyershowproofClient<$Result.GetResult<Prisma.$buyershowproofPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Buyershowproofs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowproofCountArgs} args - Arguments to filter Buyershowproofs to count.
+     * @example
+     * // Count the number of Buyershowproofs
+     * const count = await prisma.buyershowproof.count({
+     *   where: {
+     *     // ... the filter for the Buyershowproofs we want to count
+     *   }
+     * })
+    **/
+    count<T extends buyershowproofCountArgs>(
+      args?: Subset<T, buyershowproofCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], BuyershowproofCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Buyershowproof.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BuyershowproofAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends BuyershowproofAggregateArgs>(args: Subset<T, BuyershowproofAggregateArgs>): Prisma.PrismaPromise<GetBuyershowproofAggregateType<T>>
+
+    /**
+     * Group by Buyershowproof.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {buyershowproofGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends buyershowproofGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: buyershowproofGroupByArgs['orderBy'] }
+        : { orderBy?: buyershowproofGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, buyershowproofGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetBuyershowproofGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the buyershowproof model
+   */
+  readonly fields: buyershowproofFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for buyershowproof.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__buyershowproofClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the buyershowproof model
+   */
+  interface buyershowproofFieldRefs {
+    readonly id: FieldRef<"buyershowproof", 'String'>
+    readonly imageUrl: FieldRef<"buyershowproof", 'String'>
+    readonly title: FieldRef<"buyershowproof", 'String'>
+    readonly body: FieldRef<"buyershowproof", 'String'>
+    readonly sortWeight: FieldRef<"buyershowproof", 'Int'>
+    readonly isEnabled: FieldRef<"buyershowproof", 'Boolean'>
+    readonly createdAt: FieldRef<"buyershowproof", 'DateTime'>
+    readonly updatedAt: FieldRef<"buyershowproof", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * buyershowproof findUnique
+   */
+  export type buyershowproofFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowproof to fetch.
+     */
+    where: buyershowproofWhereUniqueInput
+  }
+
+  /**
+   * buyershowproof findUniqueOrThrow
+   */
+  export type buyershowproofFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowproof to fetch.
+     */
+    where: buyershowproofWhereUniqueInput
+  }
+
+  /**
+   * buyershowproof findFirst
+   */
+  export type buyershowproofFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowproof to fetch.
+     */
+    where?: buyershowproofWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowproofs to fetch.
+     */
+    orderBy?: buyershowproofOrderByWithRelationInput | buyershowproofOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for buyershowproofs.
+     */
+    cursor?: buyershowproofWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowproofs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowproofs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of buyershowproofs.
+     */
+    distinct?: BuyershowproofScalarFieldEnum | BuyershowproofScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowproof findFirstOrThrow
+   */
+  export type buyershowproofFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowproof to fetch.
+     */
+    where?: buyershowproofWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowproofs to fetch.
+     */
+    orderBy?: buyershowproofOrderByWithRelationInput | buyershowproofOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for buyershowproofs.
+     */
+    cursor?: buyershowproofWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowproofs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowproofs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of buyershowproofs.
+     */
+    distinct?: BuyershowproofScalarFieldEnum | BuyershowproofScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowproof findMany
+   */
+  export type buyershowproofFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * Filter, which buyershowproofs to fetch.
+     */
+    where?: buyershowproofWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of buyershowproofs to fetch.
+     */
+    orderBy?: buyershowproofOrderByWithRelationInput | buyershowproofOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing buyershowproofs.
+     */
+    cursor?: buyershowproofWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` buyershowproofs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` buyershowproofs.
+     */
+    skip?: number
+    distinct?: BuyershowproofScalarFieldEnum | BuyershowproofScalarFieldEnum[]
+  }
+
+  /**
+   * buyershowproof create
+   */
+  export type buyershowproofCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * The data needed to create a buyershowproof.
+     */
+    data: XOR<buyershowproofCreateInput, buyershowproofUncheckedCreateInput>
+  }
+
+  /**
+   * buyershowproof createMany
+   */
+  export type buyershowproofCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many buyershowproofs.
+     */
+    data: buyershowproofCreateManyInput | buyershowproofCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * buyershowproof update
+   */
+  export type buyershowproofUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * The data needed to update a buyershowproof.
+     */
+    data: XOR<buyershowproofUpdateInput, buyershowproofUncheckedUpdateInput>
+    /**
+     * Choose, which buyershowproof to update.
+     */
+    where: buyershowproofWhereUniqueInput
+  }
+
+  /**
+   * buyershowproof updateMany
+   */
+  export type buyershowproofUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update buyershowproofs.
+     */
+    data: XOR<buyershowproofUpdateManyMutationInput, buyershowproofUncheckedUpdateManyInput>
+    /**
+     * Filter which buyershowproofs to update
+     */
+    where?: buyershowproofWhereInput
+    /**
+     * Limit how many buyershowproofs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * buyershowproof upsert
+   */
+  export type buyershowproofUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * The filter to search for the buyershowproof to update in case it exists.
+     */
+    where: buyershowproofWhereUniqueInput
+    /**
+     * In case the buyershowproof found by the `where` argument doesn't exist, create a new buyershowproof with this data.
+     */
+    create: XOR<buyershowproofCreateInput, buyershowproofUncheckedCreateInput>
+    /**
+     * In case the buyershowproof was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<buyershowproofUpdateInput, buyershowproofUncheckedUpdateInput>
+  }
+
+  /**
+   * buyershowproof delete
+   */
+  export type buyershowproofDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+    /**
+     * Filter which buyershowproof to delete.
+     */
+    where: buyershowproofWhereUniqueInput
+  }
+
+  /**
+   * buyershowproof deleteMany
+   */
+  export type buyershowproofDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which buyershowproofs to delete
+     */
+    where?: buyershowproofWhereInput
+    /**
+     * Limit how many buyershowproofs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * buyershowproof without action
+   */
+  export type buyershowproofDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the buyershowproof
+     */
+    select?: buyershowproofSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the buyershowproof
+     */
+    omit?: buyershowproofOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -60365,6 +61449,7 @@ export namespace Prisma {
     adminNote: 'adminNote',
     customerType: 'customerType',
     customerTypeUpdatedAt: 'customerTypeUpdatedAt',
+    vipDiscount: 'vipDiscount',
     ringSizeUs: 'ringSizeUs',
     ringSizeEu: 'ringSizeEu',
     braceletSize: 'braceletSize',
@@ -60817,6 +61902,9 @@ export namespace Prisma {
     engravingText: 'engravingText',
     engravingFont: 'engravingFont',
     quantity: 'quantity',
+    inboundQty: 'inboundQty',
+    inboundNote: 'inboundNote',
+    inboundAt: 'inboundAt',
     unitPrice: 'unitPrice',
     lineAmount: 'lineAmount',
     giftWrapSelected: 'giftWrapSelected',
@@ -61257,6 +62345,20 @@ export namespace Prisma {
   export type BuyershowcommentScalarFieldEnum = (typeof BuyershowcommentScalarFieldEnum)[keyof typeof BuyershowcommentScalarFieldEnum]
 
 
+  export const BuyershowproofScalarFieldEnum: {
+    id: 'id',
+    imageUrl: 'imageUrl',
+    title: 'title',
+    body: 'body',
+    sortWeight: 'sortWeight',
+    isEnabled: 'isEnabled',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type BuyershowproofScalarFieldEnum = (typeof BuyershowproofScalarFieldEnum)[keyof typeof BuyershowproofScalarFieldEnum]
+
+
   export const SortOrder: {
     asc: 'asc',
     desc: 'desc'
@@ -61591,7 +62693,8 @@ export namespace Prisma {
     materialLabel: 'materialLabel',
     sizeLabel: 'sizeLabel',
     engravingText: 'engravingText',
-    engravingFont: 'engravingFont'
+    engravingFont: 'engravingFont',
+    inboundNote: 'inboundNote'
   };
 
   export type orderitemOrderByRelevanceFieldEnum = (typeof orderitemOrderByRelevanceFieldEnum)[keyof typeof orderitemOrderByRelevanceFieldEnum]
@@ -61915,6 +63018,16 @@ export namespace Prisma {
   export type buyershowcommentOrderByRelevanceFieldEnum = (typeof buyershowcommentOrderByRelevanceFieldEnum)[keyof typeof buyershowcommentOrderByRelevanceFieldEnum]
 
 
+  export const buyershowproofOrderByRelevanceFieldEnum: {
+    id: 'id',
+    imageUrl: 'imageUrl',
+    title: 'title',
+    body: 'body'
+  };
+
+  export type buyershowproofOrderByRelevanceFieldEnum = (typeof buyershowproofOrderByRelevanceFieldEnum)[keyof typeof buyershowproofOrderByRelevanceFieldEnum]
+
+
   /**
    * Field references
    */
@@ -62176,6 +63289,7 @@ export namespace Prisma {
     adminNote?: StringNullableFilter<"sysuser"> | string | null
     customerType?: StringFilter<"sysuser"> | string
     customerTypeUpdatedAt?: DateTimeNullableFilter<"sysuser"> | Date | string | null
+    vipDiscount?: IntFilter<"sysuser"> | number
     ringSizeUs?: StringNullableFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableFilter<"sysuser"> | string | null
     braceletSize?: StringNullableFilter<"sysuser"> | string | null
@@ -62216,6 +63330,7 @@ export namespace Prisma {
     adminNote?: SortOrderInput | SortOrder
     customerType?: SortOrder
     customerTypeUpdatedAt?: SortOrderInput | SortOrder
+    vipDiscount?: SortOrder
     ringSizeUs?: SortOrderInput | SortOrder
     ringSizeEu?: SortOrderInput | SortOrder
     braceletSize?: SortOrderInput | SortOrder
@@ -62260,6 +63375,7 @@ export namespace Prisma {
     adminNote?: StringNullableFilter<"sysuser"> | string | null
     customerType?: StringFilter<"sysuser"> | string
     customerTypeUpdatedAt?: DateTimeNullableFilter<"sysuser"> | Date | string | null
+    vipDiscount?: IntFilter<"sysuser"> | number
     ringSizeUs?: StringNullableFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableFilter<"sysuser"> | string | null
     braceletSize?: StringNullableFilter<"sysuser"> | string | null
@@ -62300,6 +63416,7 @@ export namespace Prisma {
     adminNote?: SortOrderInput | SortOrder
     customerType?: SortOrder
     customerTypeUpdatedAt?: SortOrderInput | SortOrder
+    vipDiscount?: SortOrder
     ringSizeUs?: SortOrderInput | SortOrder
     ringSizeEu?: SortOrderInput | SortOrder
     braceletSize?: SortOrderInput | SortOrder
@@ -62337,6 +63454,7 @@ export namespace Prisma {
     adminNote?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     customerType?: StringWithAggregatesFilter<"sysuser"> | string
     customerTypeUpdatedAt?: DateTimeNullableWithAggregatesFilter<"sysuser"> | Date | string | null
+    vipDiscount?: IntWithAggregatesFilter<"sysuser"> | number
     ringSizeUs?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     ringSizeEu?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
     braceletSize?: StringNullableWithAggregatesFilter<"sysuser"> | string | null
@@ -64698,6 +65816,9 @@ export namespace Prisma {
     engravingText?: StringNullableFilter<"orderitem"> | string | null
     engravingFont?: StringNullableFilter<"orderitem"> | string | null
     quantity?: IntFilter<"orderitem"> | number
+    inboundQty?: IntFilter<"orderitem"> | number
+    inboundNote?: StringNullableFilter<"orderitem"> | string | null
+    inboundAt?: DateTimeNullableFilter<"orderitem"> | Date | string | null
     unitPrice?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFilter<"orderitem"> | boolean
@@ -64720,6 +65841,9 @@ export namespace Prisma {
     engravingText?: SortOrderInput | SortOrder
     engravingFont?: SortOrderInput | SortOrder
     quantity?: SortOrder
+    inboundQty?: SortOrder
+    inboundNote?: SortOrderInput | SortOrder
+    inboundAt?: SortOrderInput | SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -64746,6 +65870,9 @@ export namespace Prisma {
     engravingText?: StringNullableFilter<"orderitem"> | string | null
     engravingFont?: StringNullableFilter<"orderitem"> | string | null
     quantity?: IntFilter<"orderitem"> | number
+    inboundQty?: IntFilter<"orderitem"> | number
+    inboundNote?: StringNullableFilter<"orderitem"> | string | null
+    inboundAt?: DateTimeNullableFilter<"orderitem"> | Date | string | null
     unitPrice?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFilter<"orderitem"> | boolean
@@ -64768,6 +65895,9 @@ export namespace Prisma {
     engravingText?: SortOrderInput | SortOrder
     engravingFont?: SortOrderInput | SortOrder
     quantity?: SortOrder
+    inboundQty?: SortOrder
+    inboundNote?: SortOrderInput | SortOrder
+    inboundAt?: SortOrderInput | SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -64795,6 +65925,9 @@ export namespace Prisma {
     engravingText?: StringNullableWithAggregatesFilter<"orderitem"> | string | null
     engravingFont?: StringNullableWithAggregatesFilter<"orderitem"> | string | null
     quantity?: IntWithAggregatesFilter<"orderitem"> | number
+    inboundQty?: IntWithAggregatesFilter<"orderitem"> | number
+    inboundNote?: StringNullableWithAggregatesFilter<"orderitem"> | string | null
+    inboundAt?: DateTimeNullableWithAggregatesFilter<"orderitem"> | Date | string | null
     unitPrice?: DecimalWithAggregatesFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalWithAggregatesFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolWithAggregatesFilter<"orderitem"> | boolean
@@ -67058,6 +68191,76 @@ export namespace Prisma {
     reviewedAt?: DateTimeNullableWithAggregatesFilter<"buyershowcomment"> | Date | string | null
   }
 
+  export type buyershowproofWhereInput = {
+    AND?: buyershowproofWhereInput | buyershowproofWhereInput[]
+    OR?: buyershowproofWhereInput[]
+    NOT?: buyershowproofWhereInput | buyershowproofWhereInput[]
+    id?: StringFilter<"buyershowproof"> | string
+    imageUrl?: StringFilter<"buyershowproof"> | string
+    title?: StringFilter<"buyershowproof"> | string
+    body?: StringFilter<"buyershowproof"> | string
+    sortWeight?: IntFilter<"buyershowproof"> | number
+    isEnabled?: BoolFilter<"buyershowproof"> | boolean
+    createdAt?: DateTimeFilter<"buyershowproof"> | Date | string
+    updatedAt?: DateTimeFilter<"buyershowproof"> | Date | string
+  }
+
+  export type buyershowproofOrderByWithRelationInput = {
+    id?: SortOrder
+    imageUrl?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _relevance?: buyershowproofOrderByRelevanceInput
+  }
+
+  export type buyershowproofWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: buyershowproofWhereInput | buyershowproofWhereInput[]
+    OR?: buyershowproofWhereInput[]
+    NOT?: buyershowproofWhereInput | buyershowproofWhereInput[]
+    imageUrl?: StringFilter<"buyershowproof"> | string
+    title?: StringFilter<"buyershowproof"> | string
+    body?: StringFilter<"buyershowproof"> | string
+    sortWeight?: IntFilter<"buyershowproof"> | number
+    isEnabled?: BoolFilter<"buyershowproof"> | boolean
+    createdAt?: DateTimeFilter<"buyershowproof"> | Date | string
+    updatedAt?: DateTimeFilter<"buyershowproof"> | Date | string
+  }, "id">
+
+  export type buyershowproofOrderByWithAggregationInput = {
+    id?: SortOrder
+    imageUrl?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: buyershowproofCountOrderByAggregateInput
+    _avg?: buyershowproofAvgOrderByAggregateInput
+    _max?: buyershowproofMaxOrderByAggregateInput
+    _min?: buyershowproofMinOrderByAggregateInput
+    _sum?: buyershowproofSumOrderByAggregateInput
+  }
+
+  export type buyershowproofScalarWhereWithAggregatesInput = {
+    AND?: buyershowproofScalarWhereWithAggregatesInput | buyershowproofScalarWhereWithAggregatesInput[]
+    OR?: buyershowproofScalarWhereWithAggregatesInput[]
+    NOT?: buyershowproofScalarWhereWithAggregatesInput | buyershowproofScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"buyershowproof"> | string
+    imageUrl?: StringWithAggregatesFilter<"buyershowproof"> | string
+    title?: StringWithAggregatesFilter<"buyershowproof"> | string
+    body?: StringWithAggregatesFilter<"buyershowproof"> | string
+    sortWeight?: IntWithAggregatesFilter<"buyershowproof"> | number
+    isEnabled?: BoolWithAggregatesFilter<"buyershowproof"> | boolean
+    createdAt?: DateTimeWithAggregatesFilter<"buyershowproof"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"buyershowproof"> | Date | string
+  }
+
   export type sysuserCreateInput = {
     id?: string
     account: string
@@ -67077,6 +68280,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -67117,6 +68321,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -67157,6 +68362,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67197,6 +68403,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67237,6 +68444,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -67266,6 +68474,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67295,6 +68504,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70040,6 +71250,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -70062,6 +71275,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -70078,6 +71294,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -70100,6 +71319,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -70119,6 +71341,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -70135,6 +71360,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -70154,6 +71382,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -72550,6 +73781,83 @@ export namespace Prisma {
     reviewedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
+  export type buyershowproofCreateInput = {
+    id?: string
+    imageUrl: string
+    title: string
+    body: string
+    sortWeight?: number
+    isEnabled?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type buyershowproofUncheckedCreateInput = {
+    id?: string
+    imageUrl: string
+    title: string
+    body: string
+    sortWeight?: number
+    isEnabled?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type buyershowproofUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    imageUrl?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowproofUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    imageUrl?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowproofCreateManyInput = {
+    id?: string
+    imageUrl: string
+    title: string
+    body: string
+    sortWeight?: number
+    isEnabled?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type buyershowproofUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    imageUrl?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type buyershowproofUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    imageUrl?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    body?: StringFieldUpdateOperationsInput | string
+    sortWeight?: IntFieldUpdateOperationsInput | number
+    isEnabled?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -72790,6 +74098,7 @@ export namespace Prisma {
     adminNote?: SortOrder
     customerType?: SortOrder
     customerTypeUpdatedAt?: SortOrder
+    vipDiscount?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -72802,6 +74111,7 @@ export namespace Prisma {
 
   export type sysuserAvgOrderByAggregateInput = {
     purchaseCount?: SortOrder
+    vipDiscount?: SortOrder
   }
 
   export type sysuserMaxOrderByAggregateInput = {
@@ -72823,6 +74133,7 @@ export namespace Prisma {
     adminNote?: SortOrder
     customerType?: SortOrder
     customerTypeUpdatedAt?: SortOrder
+    vipDiscount?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -72850,6 +74161,7 @@ export namespace Prisma {
     adminNote?: SortOrder
     customerType?: SortOrder
     customerTypeUpdatedAt?: SortOrder
+    vipDiscount?: SortOrder
     ringSizeUs?: SortOrder
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
@@ -72860,6 +74172,7 @@ export namespace Prisma {
 
   export type sysuserSumOrderByAggregateInput = {
     purchaseCount?: SortOrder
+    vipDiscount?: SortOrder
   }
 
   export type StringWithAggregatesFilter<$PrismaModel = never> = {
@@ -75132,6 +76445,9 @@ export namespace Prisma {
     engravingText?: SortOrder
     engravingFont?: SortOrder
     quantity?: SortOrder
+    inboundQty?: SortOrder
+    inboundNote?: SortOrder
+    inboundAt?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -75141,6 +76457,7 @@ export namespace Prisma {
 
   export type orderitemAvgOrderByAggregateInput = {
     quantity?: SortOrder
+    inboundQty?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
   }
@@ -75157,6 +76474,9 @@ export namespace Prisma {
     engravingText?: SortOrder
     engravingFont?: SortOrder
     quantity?: SortOrder
+    inboundQty?: SortOrder
+    inboundNote?: SortOrder
+    inboundAt?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -75176,6 +76496,9 @@ export namespace Prisma {
     engravingText?: SortOrder
     engravingFont?: SortOrder
     quantity?: SortOrder
+    inboundQty?: SortOrder
+    inboundNote?: SortOrder
+    inboundAt?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -75185,6 +76508,7 @@ export namespace Prisma {
 
   export type orderitemSumOrderByAggregateInput = {
     quantity?: SortOrder
+    inboundQty?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
   }
@@ -76753,6 +78077,53 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel>
     _max?: NestedEnumbuyershowcommentstatusFilter<$PrismaModel>
+  }
+
+  export type buyershowproofOrderByRelevanceInput = {
+    fields: buyershowproofOrderByRelevanceFieldEnum | buyershowproofOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type buyershowproofCountOrderByAggregateInput = {
+    id?: SortOrder
+    imageUrl?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type buyershowproofAvgOrderByAggregateInput = {
+    sortWeight?: SortOrder
+  }
+
+  export type buyershowproofMaxOrderByAggregateInput = {
+    id?: SortOrder
+    imageUrl?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type buyershowproofMinOrderByAggregateInput = {
+    id?: SortOrder
+    imageUrl?: SortOrder
+    title?: SortOrder
+    body?: SortOrder
+    sortWeight?: SortOrder
+    isEnabled?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type buyershowproofSumOrderByAggregateInput = {
+    sortWeight?: SortOrder
   }
 
   export type cartCreateNestedManyWithoutAccountInput = {
@@ -83763,6 +85134,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -83783,6 +85157,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -84363,6 +85740,9 @@ export namespace Prisma {
     engravingText?: StringNullableFilter<"orderitem"> | string | null
     engravingFont?: StringNullableFilter<"orderitem"> | string | null
     quantity?: IntFilter<"orderitem"> | number
+    inboundQty?: IntFilter<"orderitem"> | number
+    inboundNote?: StringNullableFilter<"orderitem"> | string | null
+    inboundAt?: DateTimeNullableFilter<"orderitem"> | Date | string | null
     unitPrice?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFilter<"orderitem"> | boolean
@@ -84709,6 +86089,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -84729,6 +86112,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -85006,6 +86392,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85045,6 +86432,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85140,6 +86528,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85179,6 +86568,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85714,6 +87104,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85753,6 +87144,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -85904,6 +87296,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -85943,6 +87336,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86051,6 +87445,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86090,6 +87485,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86347,6 +87743,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86386,6 +87783,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86574,6 +87972,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86613,6 +88012,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86742,6 +88142,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86781,6 +88182,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -86836,6 +88238,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -86875,6 +88278,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -87073,6 +88477,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -87112,6 +88517,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -89093,6 +90499,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -89132,6 +90539,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -89248,6 +90656,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -89268,6 +90679,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -89417,6 +90831,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -89456,6 +90871,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -90406,6 +91822,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -90445,6 +91862,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -90718,6 +92136,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -90757,6 +92176,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -90871,6 +92291,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -90910,6 +92331,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -91220,6 +92642,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -91259,6 +92682,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -91571,6 +92995,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -91610,6 +93035,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -91665,6 +93091,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -91704,6 +93131,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -92783,6 +94211,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -92822,6 +94251,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -92902,6 +94332,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -92941,6 +94372,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -93011,6 +94443,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -93050,6 +94483,7 @@ export namespace Prisma {
     adminNote?: string | null
     customerType?: string
     customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
     ringSizeUs?: string | null
     ringSizeEu?: string | null
     braceletSize?: string | null
@@ -93105,6 +94539,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -93144,6 +94579,7 @@ export namespace Prisma {
     adminNote?: NullableStringFieldUpdateOperationsInput | string | null
     customerType?: StringFieldUpdateOperationsInput | string
     customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
     ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
     ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
     braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
@@ -97454,6 +98890,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -97889,6 +99328,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -97909,6 +99351,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -97927,6 +99372,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -98155,6 +99603,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -98233,6 +99684,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -98253,6 +99707,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -98271,6 +99728,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99032,6 +100492,9 @@ export namespace Prisma {
     engravingText?: string | null
     engravingFont?: string | null
     quantity?: number
+    inboundQty?: number
+    inboundNote?: string | null
+    inboundAt?: Date | string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -99084,6 +100547,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99104,6 +100570,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99122,6 +100591,9 @@ export namespace Prisma {
     engravingText?: NullableStringFieldUpdateOperationsInput | string | null
     engravingFont?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
+    inboundQty?: IntFieldUpdateOperationsInput | number
+    inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
+    inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean

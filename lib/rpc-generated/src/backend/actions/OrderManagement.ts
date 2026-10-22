@@ -14,6 +14,8 @@ export const addLogisticsSegment = (...args: Parameters<Actions["addLogisticsSeg
   rpcCall<Awaited<ReturnType<Actions["addLogisticsSegment"]>>>("src.backend.actions.OrderManagement.addLogisticsSegment", ...args);
 export const updateOrderStatus = (...args: Parameters<Actions["updateOrderStatus"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderStatus"]>>>("src.backend.actions.OrderManagement.updateOrderStatus", ...args);
+export const updateOrderInbound = (...args: Parameters<Actions["updateOrderInbound"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateOrderInbound"]>>>("src.backend.actions.OrderManagement.updateOrderInbound", ...args);
 export const updateOrderRemark = (...args: Parameters<Actions["updateOrderRemark"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderRemark"]>>>("src.backend.actions.OrderManagement.updateOrderRemark", ...args);
 export const exportOrdersExcel = (...args: Parameters<Actions["exportOrdersExcel"]>) => 

@@ -788,6 +788,9 @@ model orderitem {
   engravingText     String?            @db.VarChar(120)
   engravingFont     String?            @db.VarChar(50)
   quantity          Int                @default(1)
+  inboundQty        Int                @default(0)
+  inboundNote       String?            @db.VarChar(255)
+  inboundAt         DateTime?
   unitPrice         Decimal            @db.Decimal(10, 2)
   lineAmount        Decimal            @db.Decimal(10, 2)
   giftWrapSelected  Boolean            @default(false)

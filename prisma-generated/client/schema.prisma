@@ -216,6 +216,7 @@ model sysuser {
   adminNote             String?    @db.Text
   customerType          String     @default("NEW") @db.VarChar(20) // 客户类型：NEW/UNCONVERTED/FIRST_ORDER/MULTI_ORDER/HIGH_RISK/CHURNED，后台可行内下拉修改
   customerTypeUpdatedAt DateTime? // 后台最后一次标记客户类型的时间，用于首单/复购周月年统计
+  vipDiscount           Int        @default(0) // 0 = 不单独打折；95 = 95vip，后台双击修改
   ringSizeUs            String?    @db.VarChar(20)
   ringSizeEu            String?    @db.VarChar(20)
   braceletSize          String?    @db.VarChar(20)
@@ -778,22 +779,25 @@ model orderrecord {
 }
 
 model orderitem {
-  id               String   @id @default(uuid()) @db.VarChar(36)
-  orderId          String   @db.VarChar(36)
-  productId        String   @db.VarChar(36)
-  productSkuId     String   @db.VarChar(36)
-  productName      String   @db.VarChar(200)
-  skuCode          String   @db.VarChar(100)
-  materialLabel    String?  @db.VarChar(60)
-  sizeLabel        String?  @db.VarChar(60)
-  engravingText    String?  @db.VarChar(120)
-  engravingFont    String?  @db.VarChar(50)
-  quantity         Int      @default(1)
-  unitPrice        Decimal  @db.Decimal(10, 2)
-  lineAmount       Decimal  @db.Decimal(10, 2)
-  giftWrapSelected Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @default(now()) @updatedAt
+  id               String    @id @default(uuid()) @db.VarChar(36)
+  orderId          String    @db.VarChar(36)
+  productId        String    @db.VarChar(36)
+  productSkuId     String    @db.VarChar(36)
+  productName      String    @db.VarChar(200)
+  skuCode          String    @db.VarChar(100)
+  materialLabel    String?   @db.VarChar(60)
+  sizeLabel        String?   @db.VarChar(60)
+  engravingText    String?   @db.VarChar(120)
+  engravingFont    String?   @db.VarChar(50)
+  quantity         Int       @default(1)
+  inboundQty       Int       @default(0)
+  inboundNote      String?   @db.VarChar(255)
+  inboundAt        DateTime?
+  unitPrice        Decimal   @db.Decimal(10, 2)
+  lineAmount       Decimal   @db.Decimal(10, 2)
+  giftWrapSelected Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
 
   order      orderrecord @relation(fields: [orderId], references: [id])
   product    product     @relation(fields: [productId], references: [id])
@@ -1319,4 +1323,19 @@ model buyershowcomment {
 
   @@index([status, createdAt])
   @@map("buyer_show_comment")
+}
+
+/// 买家秀真实性证明：一张图加一段说明，前台展示在照片墙上方
+model buyershowproof {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  imageUrl   String   @map("image_url") @db.VarChar(700)
+  title      String   @db.VarChar(160)
+  body       String   @db.Text
+  sortWeight Int      @default(0) @map("sort_weight")
+  isEnabled  Boolean  @default(true) @map("is_enabled")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([isEnabled, sortWeight])
+  @@map("buyer_show_proof")
 }

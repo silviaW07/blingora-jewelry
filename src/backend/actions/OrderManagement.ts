@@ -15,6 +15,61 @@ import { isPlaceholderCompareAt, resolveListedCompareAt } from '@/shared/pricing
 /** 订单状态：待付款(PENDING_PAYMENT) | 已支付(PAID) | 处理中(PROCESSING) | 已发货(SHIPPED) | 已送达(DELIVERED) | 已取消(CANCELLED) | 已退款(REFUNDED) */
 export type OrderStatus = 'PENDING_PAYMENT' | 'PAID' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'REFUNDED'
 
+/** 已支付 Tab：付款后进入待发货 / 运输中 / 已送达的订单仍算已付款 */
+const PAID_TAB_STATUSES: OrderStatus[] = ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+
+/** 入库：未入库 / 部分入库 / 已入库 */
+export type InboundState = 'NONE' | 'PARTIAL' | 'DONE'
+
+export interface OrderInboundLine {
+  id: string
+  productName: string
+  skuCode: string
+  quantity: number
+  inboundQty: number
+  inboundNote: string
+  mainImageUrl: string | null
+}
+
+function clampInboundQty(quantity: number, raw: number) {
+  const ordered = Math.max(0, Math.floor(Number(quantity) || 0))
+  const qty = Math.max(0, Math.floor(Number(raw) || 0))
+  return ordered > 0 ? Math.min(ordered, qty) : 0
+}
+
+function inboundStateOf(orderedQty: number, inboundQty: number): InboundState {
+  if (inboundQty <= 0 || orderedQty <= 0) return 'NONE'
+  if (inboundQty >= orderedQty) return 'DONE'
+  return 'PARTIAL'
+}
+
+function mapInboundLine(item: {
+  id: string
+  productName: string
+  skuCode: string
+  quantity: number
+  inboundQty?: number | null
+  inboundNote?: string | null
+  product?: { mainImageUrl?: string | null } | null
+}): OrderInboundLine {
+  const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0))
+  return {
+    id: item.id,
+    productName: item.productName,
+    skuCode: item.skuCode,
+    quantity,
+    inboundQty: clampInboundQty(quantity, Number(item.inboundQty) || 0),
+    inboundNote: String(item.inboundNote || ''),
+    mainImageUrl: item.product?.mainImageUrl || null,
+  }
+}
+
+function summarizeInbound(lines: OrderInboundLine[]) {
+  const orderedQty = lines.reduce((sum, line) => sum + line.quantity, 0)
+  const inboundQty = lines.reduce((sum, line) => sum + line.inboundQty, 0)
+  return { orderedQty, inboundQty, state: inboundStateOf(orderedQty, inboundQty) }
+}
+
 /** 发货方式：标准(STANDARD) | 加急(EXPRESS) */
 export type OrderShipMethod = 'STANDARD' | 'EXPRESS'
 
@@ -34,6 +89,8 @@ export interface OrderItemDetail {
   sizeLabel: string | null     // data-from: orderitem-sizeLabel
   engravingText: string | null // data-from: orderitem-engravingText
   quantity: number             // data-from: orderitem-quantity
+  inboundQty: number           // data-from: orderitem-inboundQty
+  inboundNote: string | null   // data-from: orderitem-inboundNote
   unitPrice: number            // data-from: orderitem-unitPrice (Decimal -> number)
   lineAmount: number           // data-from: orderitem-lineAmount (Decimal -> number)
   mainImageUrl?: string        // data-from: product-mainImageUrl (关联查询补全)
@@ -93,6 +150,10 @@ export interface OrderListItem {
   itemImageUrl: string | null  // aggregated (取第一个商品的图片)
   totalWeightGrams: number     // aggregated from product.weightGram * qty
   internalNote: string | null  // data-from: orderrecord-internalNote
+  inboundOrderedQty: number
+  inboundReceivedQty: number
+  inboundState: InboundState
+  inboundLines: OrderInboundLine[]
 }
 
 export interface OrderExcelExportRow {
@@ -109,6 +170,8 @@ export interface OrderExcelExportRow {
   supplierUrl: string
   productName: string
   orderNo: string
+  inboundQty: number
+  inboundNote: string
 }
 
 export interface OrderDetail extends OrderListItem {
@@ -182,6 +245,24 @@ export interface UpdateOrderRemarkInput {
   internalNote: string
 }
 
+export interface UpdateOrderInboundLineInput {
+  orderItemId: string
+  inboundQty: number
+  inboundNote?: string
+}
+
+export interface UpdateOrderInboundInput {
+  orderId: string
+  lines: UpdateOrderInboundLineInput[]
+}
+
+export interface UpdateOrderInboundOutput {
+  lines: OrderInboundLine[]
+  orderedQty: number
+  receivedQty: number
+  state: InboundState
+}
+
 export interface ExportOrdersExcelInput {
   orderIds: string[]
 }
@@ -249,7 +330,9 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
     // 构建过滤条件
     const whereCondition: any = {}
 
-    if (status) {
+    if (status === 'PAID') {
+      whereCondition.status = { in: PAID_TAB_STATUSES }
+    } else if (status) {
       whereCondition.status = status
     }
 
@@ -307,6 +390,8 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         const unitGrams = item.product?.weightGram != null ? Number(item.product.weightGram) : 0
         return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity
       }, 0)
+      const inboundLines = record.items.map((item) => mapInboundLine(item))
+      const inbound = summarizeInbound(inboundLines)
 
       return {
         id: record.id,
@@ -327,6 +412,10 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
         totalWeightGrams: Math.round(totalWeightGrams * 100) / 100,
         internalNote: record.internalNote || null,
+        inboundOrderedQty: inbound.orderedQty,
+        inboundReceivedQty: inbound.inboundQty,
+        inboundState: inbound.state,
+        inboundLines,
       }
     })
 
@@ -400,6 +489,16 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity
       }, 0) * 100) / 100,
       internalNote: record.internalNote || null,
+      ...(() => {
+        const inboundLines = record.items.map((item) => mapInboundLine(item))
+        const inbound = summarizeInbound(inboundLines)
+        return {
+          inboundOrderedQty: inbound.orderedQty,
+          inboundReceivedQty: inbound.inboundQty,
+          inboundState: inbound.state,
+          inboundLines,
+        }
+      })(),
 
       address: record.address ? {
         recipientName: record.address.recipientName,
@@ -423,6 +522,8 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         sizeLabel: item.sizeLabel,
         engravingText: item.engravingText,
         quantity: item.quantity,
+        inboundQty: clampInboundQty(item.quantity, Number(item.inboundQty) || 0),
+        inboundNote: item.inboundNote || null,
         unitPrice: item.unitPrice.toNumber(),
         lineAmount: item.lineAmount.toNumber(),
         mainImageUrl: item.product?.mainImageUrl
@@ -589,6 +690,76 @@ export const updateOrderStatus = requireRole([UserRole.ADMIN])(
       })
     })
   })
+)
+
+/**
+ * 登记订单商品入库数量。数量不能超过下单件数，0 表示未入库。
+ */
+export const updateOrderInbound = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateOrderInboundInput): Promise<UpdateOrderInboundOutput> => {
+    const { username } = getAuthContext()
+    const order = await prisma.orderrecord.findUnique({
+      where: { id: input.orderId },
+      include: {
+        items: {
+          include: { product: { select: { mainImageUrl: true } } },
+        },
+      },
+    })
+    if (!order) throw new Error('订单不存在')
+
+    const itemIds = new Set(order.items.map((item) => item.id))
+    for (const line of input.lines || []) {
+      if (!itemIds.has(line.orderItemId)) throw new Error('订单商品不存在')
+    }
+    const requested = new Map((input.lines || []).map((line) => [line.orderItemId, line]))
+    const changes: string[] = []
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        const line = requested.get(item.id)
+        if (!line) continue
+        const nextQty = clampInboundQty(item.quantity, Number(line.inboundQty) || 0)
+        const nextNote = String(line.inboundNote || '').trim().slice(0, 255)
+        const prevQty = clampInboundQty(item.quantity, Number(item.inboundQty) || 0)
+        const prevNote = String(item.inboundNote || '')
+        if (nextQty === prevQty && nextNote === prevNote) continue
+        await tx.orderitem.update({
+          where: { id: item.id },
+          data: {
+            inboundQty: nextQty,
+            inboundNote: nextNote || null,
+            inboundAt: nextQty > 0 ? new Date() : null,
+          },
+        })
+        changes.push(`${item.skuCode || item.productName} ${prevQty}->${nextQty}${nextNote ? `（${nextNote}）` : ''}`)
+      }
+      if (changes.length) {
+        await tx.orderoperationlog.create({
+          data: {
+            orderId: order.id,
+            actionType: '入库登记',
+            actionNote: changes.join('；').slice(0, 4000),
+            operatorName: username,
+          },
+        })
+      }
+    })
+
+    const fresh = await prisma.orderitem.findMany({
+      where: { orderId: order.id },
+      include: { product: { select: { mainImageUrl: true } } },
+      orderBy: { createdAt: 'asc' },
+    })
+    const lines = fresh.map((item) => mapInboundLine(item))
+    const summary = summarizeInbound(lines)
+    return {
+      lines,
+      orderedQty: summary.orderedQty,
+      receivedQty: summary.inboundQty,
+      state: summary.state,
+    }
+  }),
 )
 
 /**
@@ -998,6 +1169,8 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
           product: item.product,
         }),
         orderNo: order.orderNo,
+        inboundQty: clampInboundQty(item.quantity, Number(item.inboundQty) || 0),
+        inboundNote: String(item.inboundNote || ''),
       })
     }
   }
@@ -1078,6 +1251,8 @@ async function buildOrderExcelRows(orderIdsInput: string[]): Promise<ExportOrder
           product: item.product,
         }),
         orderNo: item.order?.orderNo || '',
+        inboundQty: clampInboundQty(item.quantity, Number(item.inboundQty) || 0),
+        inboundNote: String(item.inboundNote || ''),
       })
     }
   }
@@ -1114,6 +1289,8 @@ async function buildPlainXlsxFile(
     供应商名称: row.supplierName,
     供应商链接: row.supplierUrl,
     商品名称: row.productName,
+    已入库数量: row.inboundQty,
+    入库备注: row.inboundNote,
   }))
   const worksheet = XLSX.utils.json_to_sheet(sheetRows)
   const workbook = XLSX.utils.book_new()
@@ -1156,6 +1333,8 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
     { header: '供应商名称', key: 'supplierName', width: 18 },
     { header: '供应商链接', key: 'supplierUrl', width: 40 },
     { header: '商品名称（中文）', key: 'productName', width: 55 },
+    { header: '已入库数量', key: 'inboundQty', width: 14 },
+    { header: '入库备注', key: 'inboundNote', width: 24 },
   ]
 
   const headerRow = worksheet.getRow(1)
@@ -1182,6 +1361,8 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
       supplierName: row.supplierName,
       supplierUrl: row.supplierUrl,
       productName: row.productName,
+      inboundQty: row.inboundQty,
+      inboundNote: row.inboundNote,
     })
   }
 
