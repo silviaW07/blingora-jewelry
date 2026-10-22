@@ -16,6 +16,19 @@ export interface ParamMeta {
   description: string;
 }
 
+function pushStorefront(href: string, router: AppRouterInstance) {
+  if (typeof window === 'undefined') {
+    router.push(href)
+    return
+  }
+  const spa = (window as Window & { __storefrontNav?: (href: string) => void }).__storefrontNav
+  if (typeof spa === 'function') {
+    spa(href)
+    return
+  }
+  window.location.assign(href)
+}
+
 function buildUrl(path: string, params: Record<string, string>): string {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -123,11 +136,7 @@ export const ProductCategory = {
         href = buildUrl(ProductCategory.path, { categoryId })
       }
     }
-    if (typeof window !== 'undefined') {
-      window.location.assign(href)
-      return
-    }
-    router.push(href)
+    pushStorefront(href, router)
   },
   navigateToFiltered: (router: AppRouterInstance, params: { categoryId: string; stockStatus: string; sortBy: string; page: string }) =>
     router.push(buildUrl(ProductCategory.path, params)),
@@ -166,12 +175,7 @@ export const ProductDetail = {
   navigateToById: (_router: AppRouterInstance, params: { productId: string }) => {
     const productId = (params.productId || '').trim()
     if (!productId) return
-    const href = `/productdetail/?productId=${encodeURIComponent(productId)}`
-    if (typeof window !== 'undefined') {
-      window.location.assign(href)
-      return
-    }
-    _router.push(href)
+    pushStorefront(`/productdetail/?productId=${encodeURIComponent(productId)}`, _router)
   },
   navigateToBySlug: (router: AppRouterInstance, params: { slug: string }) => {
     const slug = (params.slug || '').trim()

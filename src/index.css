@@ -2165,13 +2165,19 @@ html.is-narrow .product-sku-stepper-btn {
   touch-action: manipulation;
 }
 
-html.is-narrow a[data-hard-nav]:active {
+html.is-narrow a[data-hard-nav]:active,
+html:not(.is-narrow) a[data-hard-nav]:active,
+html:not(.is-narrow) .home-product-card-link:active {
   opacity: 0.72;
+  transition: none;
 }
 
 html.is-narrow .product-sku-stepper-btn:active,
 html.is-narrow .home-product-card-cart-btn:active,
-html.is-narrow .product-color-swatch:active {
+html.is-narrow .product-color-swatch:active,
+html:not(.is-narrow) .product-sku-stepper-btn:active,
+html:not(.is-narrow) .home-product-card-cart-btn:active,
+html:not(.is-narrow) .product-color-swatch:active {
   transform: scale(0.96);
 }
 

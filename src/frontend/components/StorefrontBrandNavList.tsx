@@ -6,10 +6,12 @@
  * - Non-home CATEGORIES flyout (StorefrontFloatingSideNav)
  */
 import React from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
+import { categoryHref } from '@/frontend/utils/hardNavigate'
 import type { BrandNavListItem } from '@/frontend/utils/brandSideNav'
 
 interface Props {
@@ -36,6 +38,7 @@ export const StorefrontBrandNavList = ({
   getItemMapVarName,
 }: Props) => {
   const { t } = useTranslation()
+  const router = useRouter()
   const listClass =
     variant === 'flyout' ? 'floating-side-nav-list' : 'home-side-nav-list'
   const itemClass = 'brand-nav-item'
@@ -68,6 +71,13 @@ export const StorefrontBrandNavList = ({
             type="button"
             data-active={isActive ? 'true' : 'false'}
             className={itemClass}
+            onPointerEnter={() => {
+              try {
+                router.prefetch(categoryHref(item.slug, item.id))
+              } catch {
+                /* ignore */
+              }
+            }}
             onClick={() => onSelect(item.id, item.slug)}
             {...(bindInfo ? { 'data-api-bind-info': bindInfo } : {})}
             {...(mapVar ? { 'data-api-map-var-name': mapVar } : {})}

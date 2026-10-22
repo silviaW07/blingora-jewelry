@@ -327,9 +327,16 @@ const RecommendZoneProductCard = ({ item, index, handlers, t }: RecommendZonePro
 
   return (
     <article
-      className="home-product-card group flex h-full flex-col overflow-visible transition duration-200 hover:opacity-95"
+      className="home-product-card group flex h-full flex-col overflow-visible transition-opacity duration-75 hover:opacity-95"
       data-controller-name="首页推荐专区商品卡片"
-      onPointerEnter={isDraft ? undefined : () => prefetchProductDetail(item.productId)}
+      onPointerEnter={isDraft ? undefined : () => {
+        prefetchProductDetail(item.productId)
+        try {
+          window.__storefrontPrefetch?.(href)
+        } catch {
+          /* ignore */
+        }
+      }}
     >
       {isDraft ? (
         <div className="block text-[#111111]">
@@ -503,7 +510,14 @@ const renderMobileSquircleContent = (
               })
               prefetchProductDetail(item.productId, { fromTouch: true })
             }}
-            onPointerEnter={() => prefetchProductDetail(item.productId)}
+            onPointerEnter={() => {
+              prefetchProductDetail(item.productId)
+              try {
+                window.__storefrontPrefetch?.(href)
+              } catch {
+                /* ignore */
+              }
+            }}
             data-controller-name="移动端推荐商品图标"
           >
             <span className="mobile-zone-squircle__media">

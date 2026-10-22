@@ -141,6 +141,11 @@ export const ProductListCard = ({
     // Touch / coarse pointers: hover prefetch competes with scroll + add-to-cart bandwidth
     if (!isFinePointerHover()) return
     prefetchProductDetail(item.product_id)
+    try {
+      window.__storefrontPrefetch?.(detailHref)
+    } catch {
+      /* ignore */
+    }
   }
 
   const stopAnd = (event: React.MouseEvent, action?: () => void) => {
@@ -171,7 +176,7 @@ export const ProductListCard = ({
   return (
     <article
       className={cn(
-        'home-product-card group relative flex h-full flex-col overflow-visible transition duration-200',
+        'home-product-card group relative flex h-full flex-col overflow-visible transition-opacity duration-75',
         'hover:opacity-95',
         selected && 'ring-2 ring-[#111111] ring-offset-2 ring-offset-[#fff5f5]',
         className,

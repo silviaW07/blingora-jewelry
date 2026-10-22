@@ -114,7 +114,9 @@ export function prefetchProductDetail(productId: string, options?: { fromTouch?:
 
   const key = makeKey(id, null, lang)
   if (inflight.has(key)) return
-  if (inflight.size >= 2) return
+  // Desktop hover can warm a row of cards. A finger press stays at two so scrolling does not stampede.
+  const cap = options?.fromTouch ? 2 : 6
+  if (inflight.size >= cap) return
 
   const request = getProductDetail({ productId: id, lang })
     .then((data) => {

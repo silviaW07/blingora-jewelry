@@ -1477,10 +1477,10 @@ export const useProductCategory = (
     }
 
     if (target.startsWith('/')) {
-      // Chrome Android may intercept SPA navigation on full-tap overlays.
-      // Use native navigation for consistency with other browsers.
       if (typeof window !== 'undefined') {
-        window.location.assign(target)
+        const spa = (window as Window & { __storefrontNav?: (href: string) => void }).__storefrontNav
+        if (typeof spa === 'function') spa(target)
+        else window.location.assign(target)
       } else {
         router.push(target)
       }

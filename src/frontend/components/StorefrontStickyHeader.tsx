@@ -43,7 +43,7 @@ import { useTranslation } from 'react-i18next'
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n'
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
-import { hardNavigate, useChromeActivate } from '@/frontend/utils/hardNavigate'
+import { categoryHref, hardNavigate, useChromeActivate } from '@/frontend/utils/hardNavigate'
 import { useCartBadge } from '@/frontend/hooks/useCartBadge'
 
 /** Pure storefront home only — listing queries / other paths enable CATEGORIES flyout. */
@@ -555,6 +555,11 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                       className="relative flex min-w-0 items-center justify-center"
                       onMouseEnter={() => {
                         if (hasHoverPanel) handleTopCategoryHoverChange(category.category_id)
+                        try {
+                          router.prefetch(categoryHref(category.category_slug, category.category_id))
+                        } catch {
+                          /* ignore */
+                        }
                       }}
                       onMouseLeave={() => handleTopCategoryHoverChange(null)}
                     >
@@ -690,11 +695,18 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                                   type="button"
                                   role="menuitem"
                                   className="flex w-full items-center justify-between rounded-[12px] px-3 py-2.5 text-left text-sm text-[#2b2b2b] transition-colors hover:bg-[#f5f1e8]"
-                                  onClick={(event) => {
-                                    event.preventDefault()
-                                    event.stopPropagation()
-                                    goHomeWithCategory(child.category_id, child.category_slug)
-                                  }}
+                                onMouseEnter={() => {
+                                  try {
+                                    router.prefetch(categoryHref(child.category_slug, child.category_id))
+                                  } catch {
+                                    /* ignore */
+                                  }
+                                }}
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  goHomeWithCategory(child.category_id, child.category_slug)
+                                }}
                                 >
                                   <span>{translateCatalogLabel(t, child.category_name)}</span>
                                   <ChevronRight className="size-4 opacity-60" />
