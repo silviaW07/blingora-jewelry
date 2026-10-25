@@ -180,6 +180,7 @@ export const OrderManagementView = ({
   const [inboundSelected, setInboundSelected] = React.useState<string[]>([]);
   const [stageFilter, setStageFilter] = React.useState('ALL');
   const [batchNote, setBatchNote] = React.useState('');
+  const [noteOpen, setNoteOpen] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
@@ -208,6 +209,7 @@ export const OrderManagementView = ({
     setImportRows([]);
     setStageFilter('ALL');
     setBatchNote('');
+    setNoteOpen(false);
     setInboundSelected(readInboundSelection(state.inboundOrderId));
   }, [state.inboundOrderId]);
   const visibleInboundDrafts = stageFilter === 'ALL'
@@ -225,7 +227,14 @@ export const OrderManagementView = ({
     }
     for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundStage: stage });
   };
-  const fillBatchNote = () => {
+  const openBatchNote = () => {
+    if (!inboundSelected.length) {
+      toast.error('请先勾选商品');
+      return;
+    }
+    setNoteOpen(true);
+  };
+  const confirmBatchNote = () => {
     const text = batchNote.trim();
     if (!inboundSelected.length) {
       toast.error('请先勾选商品');
@@ -236,6 +245,9 @@ export const OrderManagementView = ({
       return;
     }
     for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundNote: text });
+    setNoteOpen(false);
+    setBatchNote('');
+    toast.success('备注已填入勾选商品');
   };
   const patchImportRow = (key: string, patch: Partial<InboundImportRow>) => {
     setImportRows((prev) => prev.map((row) => row.key === key ? { ...row, ...patch } : row));
@@ -1156,19 +1168,7 @@ export const OrderManagementView = ({
                   ))}
                 </select>
               </label>
-              <input
-                className="h-9 min-w-[12rem] flex-1 rounded-md border border-slate-200 px-3 text-sm"
-                placeholder="备注内容"
-                aria-label="批量备注"
-                value={batchNote}
-                onChange={(event) => setBatchNote(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter') return;
-                  event.preventDefault();
-                  fillBatchNote();
-                }}
-              />
-              <Button type="button" size="sm" variant="outline" className="h-9" onClick={fillBatchNote}>填入备注</Button>
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={openBatchNote}>添加备注</Button>
             </div>
             <table className="w-full min-w-[1180px] table-fixed border-collapse text-sm">
               <colgroup>
@@ -1230,8 +1230,13 @@ export const OrderManagementView = ({
                 </tr>
               </thead>
               <tbody>
+                {visibleInboundDrafts.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500">没有这个状态的商品</td>
+                  </tr>
+                ) : null}
                 {visibleInboundDrafts.map((line) => {
-                  const imageUrl = line.shipmentImageUrl || line.mainImageUrl
+                  const imageUrl = line.mainImageUrl
                   return (
                     <tr
                       key={line.id}
@@ -1283,6 +1288,26 @@ export const OrderManagementView = ({
                               <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
                             </div>
                             <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>
+                            {line.shipmentImageUrl ? (
+                              <div className="mt-2">
+                                <div className="text-xs font-semibold text-slate-700">发货图片</div>
+                                <button
+                                  type="button"
+                                  className="mt-1 h-16 w-16 overflow-hidden rounded border bg-slate-50"
+                                  aria-label="查看发货图片"
+                                  onClick={() => setInboundZoom({ src: line.shipmentImageUrl || '', name: `${line.productName} 发货图片` })}
+                                >
+                                  <EditableImg
+                                    propKey={`ship-${line.id}`}
+                                    keywords={line.shipmentImageUrl}
+                                    description="发货图片"
+                                    className="h-full w-full object-contain"
+                                    proxyWidth={320}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain', aspectRatio: '1 / 1' }}
+                                  />
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -1363,7 +1388,6 @@ export const OrderManagementView = ({
                 发货图片
               </Button>
               <Button type="button" variant="outline" onClick={() => applyBatchStage('STOCK')} disabled={state.inboundSaving}>备货</Button>
-              <Button type="button" variant="outline" onClick={() => applyBatchStage('TRANSIT')} disabled={state.inboundSaving}>工厂发货</Button>
               <Button type="button" variant="outline" onClick={() => applyBatchStage('ARRIVED')} disabled={state.inboundSaving}>到达仓库</Button>
               <Button type="button" variant="outline" onClick={() => applyBatchStage('PARCEL')} disabled={state.inboundSaving}>包裹发货</Button>
               <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
@@ -1397,6 +1421,32 @@ export const OrderManagementView = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {state.inboundOrderId && noteOpen ? (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="添加备注" onClick={() => setNoteOpen(false)}>
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
+            <div className="text-lg font-semibold text-slate-900">添加备注</div>
+            <p className="mt-1 text-sm text-slate-500">确认后写入已勾选的 {inboundSelected.length} 个商品。</p>
+            <textarea
+              rows={4}
+              autoFocus
+              className="mt-3 w-full resize-none rounded-md border border-slate-200 px-3 py-2 text-sm leading-6"
+              placeholder="输入备注"
+              aria-label="备注内容"
+              value={batchNote}
+              onChange={(event) => setBatchNote(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                confirmBatchNote();
+              }}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setNoteOpen(false)}>取消</Button>
+              <Button type="button" onClick={confirmBatchNote}>确认</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {state.inboundOrderId && inboundZoom ? (
         <div
           className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 p-16"

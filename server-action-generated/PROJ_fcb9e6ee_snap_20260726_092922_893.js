@@ -31775,8 +31775,8 @@ const INBOUND_STAGE_LABEL = {
     STOCK: '备货',
     PREPARING: '备货中',
     FACTORY: '工厂发货',
-    TRANSIT: '运输中',
-    ARRIVED: '已到货',
+    TRANSIT: '工厂发货',
+    ARRIVED: '到达仓库',
     PARCEL: '包裹发货'
 };
 function publicSupplierUrl(value) {
@@ -43544,6 +43544,27 @@ function previewFromHtml(html, sourceUrl, ref) {
         ].filter(Boolean).join('\n')
     };
 }
+function albumShopName(payload) {
+    const root = asRecord(payload);
+    const result = asRecord(root === null || root === void 0 ? void 0 : root.result) || asRecord(root === null || root === void 0 ? void 0 : root.data);
+    const target = asRecord(result === null || result === void 0 ? void 0 : result.targetAlbum);
+    const named = firstString(target === null || target === void 0 ? void 0 : target.name, target === null || target === void 0 ? void 0 : target.shop_name, target === null || target === void 0 ? void 0 : target.shopName);
+    if (named) return named.slice(0, 150);
+    for (const item of albumItemsFromPayload(payload)){
+        const shop = firstString(item.shop_name, item.shopName);
+        if (shop) return shop.slice(0, 150);
+    }
+    return null;
+}
+async function withAlbumShopName(preview, ref, cookie) {
+    if (preview.supplierName) return preview;
+    const album = await fetchAlbumPage(ref, cookie, '0');
+    const shopName = albumShopName(album.payload);
+    return shopName ? {
+        ...preview,
+        supplierName: shopName
+    } : preview;
+}
 async function fetchWeishangAlbumPreview(sourceUrl) {
     const ref = (0, _weishangAlbum.parseWeishangAlbumRef)(sourceUrl);
     if (!(0, _weishangAlbum.isWeishangAlbumPageUrl)(sourceUrl)) {
@@ -43574,7 +43595,7 @@ async function fetchWeishangAlbumPreview(sourceUrl) {
             }
             if ((_media_preview = media.preview) === null || _media_preview === void 0 ? void 0 : _media_preview.detailImages.length) {
                 return {
-                    preview: media.preview,
+                    preview: await withAlbumShopName(media.preview, ref, cookie),
                     outcome: 'success'
                 };
             }
@@ -43608,8 +43629,12 @@ async function fetchWeishangAlbumPreview(sourceUrl) {
                         var _media_preview1;
                         const media = await fetchItemMediaPreview(albumRef, sourceUrl, cookie);
                         if ((_media_preview1 = media.preview) === null || _media_preview1 === void 0 ? void 0 : _media_preview1.detailImages.length) {
+                            const shopName = media.preview.supplierName || preview.supplierName;
                             return {
-                                preview: media.preview,
+                                preview: await withAlbumShopName({
+                                    ...media.preview,
+                                    supplierName: shopName
+                                }, ref, cookie),
                                 outcome: 'success'
                             };
                         }
