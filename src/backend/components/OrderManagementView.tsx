@@ -92,21 +92,20 @@ const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
   ['stage', '商品状态', 'w-[10%]'],
   ['inboundQty', '到货数量', 'w-[10%]'],
 ];
-const INBOUND_COLUMN_WEIGHT: Record<string, number> = {
-  product: 22,
-  unitPrice: 8,
-  discountPrice: 8,
-  quantity: 7,
-  lineAmount: 8,
-  costPrice: 8,
-  supplier: 11,
-  note: 12,
-  stage: 10,
-  inboundQty: 10,
+const INBOUND_COLUMN_WIDTH: Record<string, number> = {
+  product: 280,
+  unitPrice: 96,
+  discountPrice: 96,
+  quantity: 72,
+  lineAmount: 88,
+  costPrice: 88,
+  supplier: 140,
+  note: 168,
+  stage: 112,
+  inboundQty: 128,
 };
 const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
   ['PENDING', '待采购'],
-  ['STOCK', '备货'],
   ['PREPARING', '备货中'],
   ['TRANSIT', '工厂发货'],
   ['ARRIVED', '到达仓库'],
@@ -114,6 +113,7 @@ const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
 ];
 const INBOUND_STAGE_LABEL: Record<string, string> = {
   ...Object.fromEntries(INBOUND_STAGE_OPTIONS),
+  STOCK: '备货',
   FACTORY: '工厂发货',
 };
 const normalizedInboundStage = (stage?: string | null) => {
@@ -239,16 +239,9 @@ export const OrderManagementView = ({
     setInboundSelected(next);
     if (state.inboundOrderId) writeInboundSelection(state.inboundOrderId, next);
   };
-  const applyBatchStage = (stage: string) => {
-    if (!inboundSelected.length) {
-      toast.error('请先勾选商品');
-      return;
-    }
-    for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundStage: stage });
-  };
   const columnVisible = (key: string) => hiddenColumns[key] !== true;
   const visibleInboundColumns = INBOUND_EXPORT_COLUMNS.filter(([key]) => columnVisible(key));
-  const visibleColumnWeight = visibleInboundColumns.reduce((sum, [key]) => sum + (INBOUND_COLUMN_WEIGHT[key] || 8), 0) || 1;
+  const visibleTableWidth = visibleInboundColumns.reduce((sum, [key]) => sum + (INBOUND_COLUMN_WIDTH[key] || 96), 0);
   const hideInboundColumn = (key: string) => {
     const remaining = INBOUND_EXPORT_COLUMNS.filter(([item]) => item !== key && columnVisible(item));
     if (!remaining.length) {
@@ -1319,10 +1312,10 @@ export const OrderManagementView = ({
                 ))}
               </div>
             ) : null}
-            <table className="w-full table-fixed border-collapse text-sm">
+            <table className="table-fixed border-collapse text-sm" style={{ width: visibleTableWidth }}>
               <colgroup>
                 {visibleInboundColumns.map(([key]) => (
-                  <col key={key} style={{ width: `${((INBOUND_COLUMN_WEIGHT[key] || 8) / visibleColumnWeight) * 100}%` }} />
+                  <col key={key} style={{ width: INBOUND_COLUMN_WIDTH[key] || 96 }} />
                 ))}
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white">
@@ -1483,6 +1476,7 @@ export const OrderManagementView = ({
                           value={normalizedInboundStage(line.inboundStage)}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
                         >
+                          {normalizedInboundStage(line.inboundStage) === 'STOCK' ? <option value="STOCK">备货</option> : null}
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
                             <option key={value} value={value}>{label}</option>
                           ))}
@@ -1596,9 +1590,6 @@ export const OrderManagementView = ({
               <Button type="button" variant="outline" onClick={() => shipImageRef.current?.click()} disabled={state.inboundSaving}>
                 发货图片
               </Button>
-              <Button type="button" variant="outline" onClick={() => applyBatchStage('STOCK')} disabled={state.inboundSaving}>备货</Button>
-              <Button type="button" variant="outline" onClick={() => applyBatchStage('ARRIVED')} disabled={state.inboundSaving}>到达仓库</Button>
-              <Button type="button" variant="outline" onClick={() => applyBatchStage('PARCEL')} disabled={state.inboundSaving}>包裹发货</Button>
               <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>
