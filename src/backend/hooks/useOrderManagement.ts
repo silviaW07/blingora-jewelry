@@ -35,6 +35,7 @@ import {
   appendManualOrderLine,
   importInboundSheet,
   updateManualOrderLine,
+  importCustomerOrder,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -175,6 +176,7 @@ export interface OrderManagementHandlers {
   appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => Promise<boolean>
   importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
   updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null }) => Promise<boolean>
+  importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -1113,6 +1115,21 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+  const importCustomerOrderFile = async (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => {
+    try {
+      const result = await importCustomerOrder(input, { __rpcTimeoutMs: 90_000 })
+      toast.success(`已生成订单 ${result.orderNo}`)
+      const nextForm = { ...filterForm, status: undefined, page: 1 }
+      setFilterForm(nextForm)
+      fetchList(nextForm)
+      fetchStats()
+      return result
+    } catch (err: any) {
+      toast.error(err.message || '导入订单失败')
+      return null
+    }
+  }
+
   const exportInboundSheet = async (input: ExportInboundSheetInput) => {
     if (!input.rows?.length) {
       toast.error('请先勾选要导出的商品')
@@ -1212,6 +1229,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       appendManualOrderLine: appendManualOrderLineToOrder,
       importInboundSheet: importInboundSheetFile,
       updateManualOrderLine: updateManualOrderLineOnOrder,
+      importCustomerOrder: importCustomerOrderFile,
       exportInboundSheet,
     },
   }

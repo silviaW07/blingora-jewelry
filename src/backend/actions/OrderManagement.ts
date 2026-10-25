@@ -1488,6 +1488,272 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
   }),
 )
 
+export interface ImportCustomerOrderInput {
+  email: string
+  fileName?: string
+  fileBase64: string
+  shippingMethod?: string
+  weightGrams?: number | null
+  orderNote?: string
+  status?: OrderStatus
+}
+
+export interface ImportCustomerOrderOutput {
+  orderId: string
+  orderNo: string
+  itemCount: number
+  totalAmount: number
+}
+
+async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Array<ManualOrderLineInput & { skuCode: string }>> {
+  const raw = Buffer.from(String(fileBase64 || ''), 'base64')
+  const imagesByRow = new Map<number, { buffer?: Buffer | Uint8Array | ArrayBuffer; extension?: string }>()
+  const matrix: string[][] = []
+  if (/\.(csv|xls)$/i.test(fileName)) {
+    const XLSX = require('xlsx') as { read: Function; utils: { sheet_to_json: Function } }
+    const book = XLSX.read(raw, { type: 'buffer' })
+    const first = book.Sheets?.[book.SheetNames?.[0]]
+    if (!first) throw new Error('表格是空的')
+    const aoa = XLSX.utils.sheet_to_json(first, { header: 1, defval: '', raw: false }) as unknown[][]
+    for (const line of aoa) matrix.push((line || []).map((cell) => sheetCellText(cell)))
+  } else {
+    const ExcelJS = loadExcelJS()
+    if (!ExcelJS) throw new Error('表格解析不可用')
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(raw)
+    const sheet = workbook.worksheets[0]
+    if (!sheet) throw new Error('表格是空的')
+    for (const image of sheet.getImages?.() || []) {
+      const anchor = image?.range?.tl?.nativeRow ?? image?.range?.tl?.row ?? 0
+      const row = Math.round(Number(anchor)) + 1
+      if (imagesByRow.has(row)) continue
+      const media = workbook.getImage(Number(image.imageId))
+      if (media?.buffer) imagesByRow.set(row, media)
+    }
+    const last = Math.max(sheet.rowCount || 1, ...[...imagesByRow.keys(), 1])
+    for (let rowNumber = 1; rowNumber <= last; rowNumber += 1) {
+      const line: string[] = []
+      sheet.getRow(rowNumber).eachCell({ includeEmpty: true }, (cell: { value?: unknown }, col: number) => {
+        line[col - 1] = sheetCellText(cell.value)
+      })
+      matrix.push(line)
+    }
+  }
+  if (!matrix.length) throw new Error('表格是空的')
+  let headerRow = 0
+  const columns: Partial<Record<keyof ManualOrderLineInput | 'sku', number>> = {}
+  for (let index = 0; index < Math.min(matrix.length, 8); index += 1) {
+    const found: Partial<Record<keyof ManualOrderLineInput | 'sku', number>> = {}
+    matrix[index].forEach((cell, col) => {
+      const label = String(cell || '').trim()
+      if (!label) return
+      for (const [key, names] of SHEET_HEADERS) {
+        if (names.includes(label)) found[key] = col + 1
+      }
+    })
+    if (Object.keys(found).length) {
+      headerRow = index + 1
+      Object.assign(columns, found)
+      break
+    }
+  }
+  if (!headerRow || (columns.unitPrice == null && columns.quantity == null && columns.lineAmount == null)) {
+    throw new Error('请让表头包含售价、数量或总价')
+  }
+  const read = (rowNumber: number, key: keyof ManualOrderLineInput | 'sku') => {
+    const col = columns[key]
+    if (!col) return ''
+    return String(matrix[rowNumber - 1]?.[col - 1] || '').trim()
+  }
+  const parsed: Array<ManualOrderLineInput & { skuCode: string }> = []
+  let emptyRun = 0
+  const lastRow = Math.max(matrix.length, ...[...imagesByRow.keys(), headerRow])
+  for (let rowNumber = headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
+    const skuCode = read(rowNumber, 'sku')
+    const unitText = read(rowNumber, 'unitPrice')
+    const quantityText = read(rowNumber, 'quantity')
+    const totalText = read(rowNumber, 'lineAmount')
+    const costText = read(rowNumber, 'costPrice')
+    const image = imagesByRow.get(rowNumber)
+    if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+      emptyRun += 1
+      if (emptyRun >= 3) break
+      continue
+    }
+    emptyRun = 0
+    let imageUrl = ''
+    if (image?.buffer) {
+      const ext = String(image.extension || 'png').toLowerCase() === 'jpeg' ? 'jpg' : String(image.extension || 'png').toLowerCase()
+      const safeExt = ext === 'jpg' || ext === 'png' || ext === 'webp' || ext === 'gif' ? ext : 'png'
+      const saved = await saveUploadedImage(Buffer.from(image.buffer), safeExt)
+      imageUrl = saved.url
+    }
+    parsed.push({
+      skuCode,
+      imageUrl,
+      unitPrice: unitText ? Number(unitText) : null,
+      quantity: quantityText ? Number(quantityText) : null,
+      lineAmount: totalText ? Number(totalText) : null,
+      costPrice: costText ? Number(costText) : null,
+    })
+  }
+  if (!parsed.length) throw new Error('没有读到商品')
+  return parsed
+}
+
+function shanghaiOrderPrefix(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? ''
+  return `BJ${part('year').slice(-2)}${part('month')}${part('day')}`
+}
+
+async function withNextOrderNo<T>(tx: { $queryRawUnsafe: Function }, run: (orderNo: string) => Promise<T>): Promise<T> {
+  const lockRows = await tx.$queryRawUnsafe(
+    'SELECT GET_LOCK(?, 10) AS acquired',
+    'orderno_bj_global_seq',
+  ) as Array<{ acquired: number | bigint | null }>
+  if (Number(lockRows?.[0]?.acquired ?? 0) !== 1) throw new Error('订单号正在分配，请稍后重试')
+  try {
+    const maxRows = await tx.$queryRawUnsafe(
+      `SELECT MAX(CAST(RIGHT(orderNo, 4) AS UNSIGNED)) AS maxSeq
+       FROM orderrecord
+       WHERE orderNo REGEXP '^BJ[0-9]{10}$'`,
+    ) as Array<{ maxSeq: number | bigint | null }>
+    const nextSeq = Number(maxRows?.[0]?.maxSeq ?? 0) + 1
+    if (!Number.isFinite(nextSeq) || nextSeq > 9999) throw new Error('订单号序号已满')
+    return await run(`${shanghaiOrderPrefix()}${String(nextSeq).padStart(4, '0')}`)
+  } finally {
+    await tx.$queryRawUnsafe('SELECT RELEASE_LOCK(?)', 'orderno_bj_global_seq')
+  }
+}
+
+const IMPORT_ORDER_STATUSES: OrderStatus[] = ['PENDING_PAYMENT', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+
+/**
+ * 按客户邮箱导入一张订单。表格不要求 SKU，表头对上售价、数量、总价即可。
+ * 订单号按 BJ + 当天日期 + 全局递增序号生成。客户登录该邮箱后能在我的订单里看到。
+ */
+export const importCustomerOrder = requireRole([UserRole.ADMIN])(
+  withResult(async (input: ImportCustomerOrderInput): Promise<ImportCustomerOrderOutput> => {
+    const { username } = getAuthContext()
+    const email = String(input.email || '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请填写客户邮箱')
+    const users = await prisma.$queryRawUnsafe(
+      'SELECT id, status FROM sysuser WHERE LOWER(email) = ? LIMIT 1',
+      email,
+    ) as Array<{ id: string; status: string }>
+    const user = users[0]
+    if (!user) throw new Error('没有这个客户邮箱，请让客户先用这个邮箱注册')
+    if (String(user.status || '').toUpperCase() !== 'ACTIVE') throw new Error('这个客户账号已停用')
+    const status = IMPORT_ORDER_STATUSES.includes(input.status as OrderStatus) ? input.status as OrderStatus : 'PROCESSING'
+    const parsed = await readGoodsSheet(String(input.fileBase64 || ''), String(input.fileName || ''))
+    const category = await prisma.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
+    if (!category) throw new Error('没有可用分类，无法保存订单')
+    const skuRows = await prisma.productsku.findMany({
+      where: { skuCode: { in: parsed.map((row) => row.skuCode).filter(Boolean) } },
+      include: { product: { select: { id: true, name: true } } },
+    })
+    const skuByCode = new Map(skuRows.map((row) => [row.skuCode, row]))
+    const shippingText = String(input.shippingMethod || '').trim().slice(0, 255)
+    const note = String(input.orderNote || '').trim().slice(0, 4000)
+    const weight = input.weightGrams == null || !Number.isFinite(Number(input.weightGrams)) || Number(input.weightGrams) <= 0
+      ? 0
+      : Math.round(Number(input.weightGrams) * 100) / 100
+    const created = await prisma.$transaction(async (tx) => withNextOrderNo(tx, async (orderNo) => {
+      const order = await tx.orderrecord.create({
+        data: {
+          orderNo,
+          userId: user.id,
+          status,
+          currencyCode: 'USD',
+          localeCode: 'en',
+          subtotalAmount: 0,
+          discountAmount: 0,
+          shippingAmount: 0,
+          giftWrapAmount: 0,
+          totalAmount: 0,
+          paymentMethod: 'BANK_TRANSFER',
+          paymentStatus: status === 'PENDING_PAYMENT' ? 'UNPAID' : 'PAID',
+          shipMethod: 'STANDARD',
+          trackingCarrier: shippingText || null,
+          internalNote: note || null,
+        },
+      })
+      const manual: ManualOrderLineInput[] = []
+      for (const row of parsed) {
+        const known = row.skuCode ? skuByCode.get(row.skuCode) : null
+        if (known?.product) {
+          const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0
+            ? 1
+            : Math.max(1, Math.floor(Number(row.quantity)))
+          const unit = manualMoney(row.unitPrice) ?? manualMoney(row.lineAmount) ?? 0
+          const total = manualMoney(row.lineAmount) ?? Math.round((unit || 0) * quantity * 100) / 100
+          await tx.orderitem.create({
+            data: {
+              orderId: order.id,
+              productId: known.productId,
+              productSkuId: known.id,
+              productName: String(known.product.name || row.skuCode).slice(0, 200),
+              skuCode: known.skuCode,
+              materialLabel: known.materialLabel,
+              sizeLabel: known.sizeLabel,
+              quantity,
+              unitPrice: unit || 0,
+              lineAmount: total,
+              inboundQty: 0,
+              inboundStage: 'PENDING',
+              shipmentImageUrl: row.imageUrl || null,
+              giftWrapSelected: false,
+            },
+          })
+          continue
+        }
+        manual.push(row)
+      }
+      if (manual.length) await insertManualOrderLines(tx, order, category.id, manual, username)
+      else {
+        const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
+        const subtotal = Math.round(items.reduce((sum: number, item: { lineAmount: unknown }) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
+        await tx.orderrecord.update({
+          where: { id: order.id },
+          data: { subtotalAmount: subtotal, totalAmount: subtotal },
+        })
+      }
+      if (weight > 0) {
+        const items = await tx.orderitem.findMany({ where: { orderId: order.id }, orderBy: { createdAt: 'asc' } })
+        const carrier = items.find((item) => String(item.skuCode || '').startsWith('ADD-'))
+        if (carrier) {
+          await tx.product.update({
+            where: { id: carrier.productId },
+            data: { weightGram: Math.round((weight / Math.max(1, carrier.quantity)) * 100) / 100 },
+          })
+        }
+      }
+      const fresh = await tx.orderrecord.findUnique({ where: { id: order.id }, include: { items: true } })
+      await tx.orderoperationlog.create({
+        data: {
+          orderId: order.id,
+          actionType: '导入订单',
+          actionNote: `邮箱 ${email}，${fresh?.items.length || 0} 行`.slice(0, 4000),
+          operatorName: username,
+        },
+      })
+      return {
+        orderId: order.id,
+        orderNo,
+        itemCount: (fresh?.items || []).reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0),
+        totalAmount: moneyAmount(fresh?.totalAmount) ?? 0,
+      }
+    }))
+    return created
+  }),
+)
+
 export interface UpdateManualOrderLineInput {
   orderId: string
   orderItemId: string

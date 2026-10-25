@@ -209,6 +209,15 @@ export const OrderManagementView = ({
   const [batchNote, setBatchNote] = React.useState('');
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }>>([]);
+  const [importOrderOpen, setImportOrderOpen] = React.useState(false);
+  const [importOrderEmail, setImportOrderEmail] = React.useState('');
+  const [importOrderFile, setImportOrderFile] = React.useState<File | null>(null);
+  const [importOrderShip, setImportOrderShip] = React.useState('');
+  const [importOrderWeight, setImportOrderWeight] = React.useState('');
+  const [importOrderNote, setImportOrderNote] = React.useState('');
+  const [importOrderStatus, setImportOrderStatus] = React.useState<OrderStatus>('PROCESSING');
+  const [importOrderSaving, setImportOrderSaving] = React.useState(false);
+
   const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; lineAmount: string; costPrice: string }>>({});
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [discountEditing, setDiscountEditing] = React.useState(false);
@@ -544,6 +553,51 @@ export const OrderManagementView = ({
       return next;
     });
   };
+
+  const submitImportOrder = async () => {
+    const email = importOrderEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('请填写客户邮箱');
+      return;
+    }
+    if (!importOrderFile) {
+      toast.error('请上传表格');
+      return;
+    }
+    if (importOrderFile.size > 8 * 1024 * 1024) {
+      toast.error('表格超过 8MB，请压缩图片后再导入');
+      return;
+    }
+    const weightText = importOrderWeight.trim();
+    const weightGrams = weightText ? Number(weightText) : null;
+    if (weightGrams != null && (!Number.isFinite(weightGrams) || weightGrams < 0)) {
+      toast.error('请填写正确的重量');
+      return;
+    }
+    try {
+      setImportOrderSaving(true);
+      const fileBase64 = await fileToBase64(importOrderFile);
+      const created = await handlers.importCustomerOrder({
+        email,
+        fileBase64,
+        fileName: importOrderFile.name,
+        shippingMethod: importOrderShip.trim(),
+        weightGrams,
+        orderNote: importOrderNote.trim(),
+        status: importOrderStatus,
+      });
+      if (!created) return;
+      setImportOrderOpen(false);
+      setImportOrderEmail('');
+      setImportOrderFile(null);
+      setImportOrderShip('');
+      setImportOrderWeight('');
+      setImportOrderNote('');
+      setImportOrderStatus('PROCESSING');
+    } finally {
+      setImportOrderSaving(false);
+    }
+  };
   const inboundCurrency = state.inboundDrafts.find((line) => line.currencyCode)?.currencyCode || 'USD';
   const originalTotal = state.inboundDrafts.reduce((sum, line) => sum + (line.lineAmount != null ? Number(line.lineAmount) : (Number(line.unitPrice) || 0) * line.quantity), 0);
   const discountTotal = state.inboundDrafts.reduce((sum, line) => sum + ((line.discountUnitPrice ?? line.unitPrice ?? 0) * line.quantity), 0);
@@ -627,7 +681,8 @@ export const OrderManagementView = ({
       {/* 2. 订单筛选控制台 Section */}
       <section data-controller-name="订单筛选控制台" className="w-full" data-api-unique-id="ordermanagementview-rd15ae399a3022c30-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
         <div className="w-full max-w-none px-3 py-4 sm:px-4 sm:py-8 xl:px-6" data-api-unique-id="ordermanagementview-r1d9fb3b1858894fa-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-          <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="mb-6 w-full max-w-full overflow-x-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+          <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full max-w-full overflow-x-auto sm:w-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <TabsList className="h-10 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <TabsTrigger value="ALL" className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
               {Object.entries(ORDER_STATUS_LABELS).map(([k, v], index) => <TabsTrigger key={k} value={k} className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r180c0dacb82b1231-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
@@ -635,6 +690,46 @@ export const OrderManagementView = ({
                 </TabsTrigger>)}
             </TabsList>
           </Tabs>
+          <Button type="button" className="h-10 shrink-0" onClick={() => setImportOrderOpen(true)}>导入订单</Button>
+          </div>
+          <Dialog open={importOrderOpen} onOpenChange={setImportOrderOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>导入订单</DialogTitle>
+                <DialogDescription>填写客户邮箱并上传表格。表头对上售价、数量、总价就可以，SKU 可以不填。客户登录这个邮箱后，在我的订单里能看到订单号、日期、件数、状态、总价、运输方式、重量和备注。</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3">
+                <label className="grid gap-1 text-sm font-medium text-slate-700">客户邮箱
+                  <Input value={importOrderEmail} onChange={(event) => setImportOrderEmail(event.target.value)} placeholder="customer@email.com" autoComplete="off" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">表格
+                  <Input type="file" accept=".xlsx,.xls,.csv" onChange={(event) => setImportOrderFile(event.target.files?.[0] || null)} />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">运输方式
+                  <Input value={importOrderShip} onChange={(event) => setImportOrderShip(event.target.value)} placeholder="可不填，例如 ship by sea" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">重量（克）
+                  <Input inputMode="decimal" value={importOrderWeight} onChange={(event) => setImportOrderWeight(event.target.value)} placeholder="可不填" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">订单备注
+                  <Textarea rows={2} value={importOrderNote} onChange={(event) => setImportOrderNote(event.target.value)} placeholder="可不填" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">状态
+                  <select className="h-10 rounded-md border border-slate-200 bg-white px-2 text-sm" value={importOrderStatus} onChange={(event) => setImportOrderStatus(event.target.value as OrderStatus)}>
+                    <option value="PROCESSING">处理中</option>
+                    <option value="PENDING_PAYMENT">待付款</option>
+                    <option value="PAID">已支付</option>
+                    <option value="SHIPPED">已发货</option>
+                    <option value="DELIVERED">已送达</option>
+                  </select>
+                </label>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setImportOrderOpen(false)} disabled={importOrderSaving}>取消</Button>
+                <Button type="button" onClick={() => void submitImportOrder()} disabled={importOrderSaving}>{importOrderSaving ? '正在生成…' : '生成订单'}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Card className="shadow-sm border-slate-200" data-api-unique-id="ordermanagementview-r1f768dc5d710e915-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <CardContent className="p-6" data-api-unique-id="ordermanagementview-rfe1440c2f31f8753-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
