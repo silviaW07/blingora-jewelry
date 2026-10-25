@@ -209,12 +209,12 @@ export default function AccountOrdersView() {
                     <TableCell className={`${CELL} whitespace-nowrap text-[#6f6558]`}>
                       {weightText}
                     </TableCell>
-                    <TableCell className={`${CELL} account-orders-actions min-w-[168px] bg-white text-right`}>
-                      <div className="flex flex-wrap items-center justify-end gap-2 pr-1">
+                    <TableCell className={`${CELL} account-orders-actions w-[8.5rem] bg-white text-right`}>
+                      <div className="ml-auto grid w-[7.6rem] grid-cols-1 gap-1.5">
                         {canPay ? (
                           <a
                             {...hardNavProps(payHref)}
-                            className="inline-flex h-8 shrink-0 items-center rounded-full bg-[#f254a6] px-3 text-sm font-medium text-white hover:bg-[#df3f91]"
+                            className="inline-flex h-7 items-center justify-center rounded-full bg-[#f254a6] px-2 text-[11px] font-medium leading-none text-white hover:bg-[#df3f91]"
                           >
                             {t('accountOrders.payNow')}
                           </a>
@@ -222,12 +222,12 @@ export default function AccountOrdersView() {
                         <Button
                           type="button"
                           size="sm"
-                          className="min-w-24 shrink-0 rounded-full bg-[#f254a6] text-white hover:bg-[#df3f91]"
+                          className="h-7 w-full rounded-full bg-[#f254a6] px-2 text-[11px] text-white hover:bg-[#df3f91]"
                           disabled={reorderingId !== null}
                           onClick={() => void handleReorder(order)}
                         >
                           {reorderingId === order.orderId && (
-                            <Loader2 className="mr-1 size-3.5 animate-spin" />
+                            <Loader2 className="mr-1 size-3 animate-spin" />
                           )}
                           {t('accountOrders.reorder')}
                         </Button>

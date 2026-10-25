@@ -199,11 +199,11 @@ function OrderItemRow({
   const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
   return (
-    <div className="grid grid-cols-[52px_minmax(0,1fr)_9.5rem_4.75rem] items-center gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0 sm:grid-cols-[96px_minmax(0,1fr)_9.5rem_5.5rem] sm:gap-3 sm:py-3">
+    <div className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0 sm:grid-cols-[96px_minmax(0,1fr)_8.75rem_5.25rem] sm:items-center sm:gap-3 sm:py-3">
       <button
         type="button"
         onClick={onOpenProduct}
-        className="relative h-14 w-14 shrink-0 overflow-hidden bg-[#F1F5F9] sm:h-24 sm:w-24"
+        className="relative h-11 w-11 shrink-0 overflow-hidden bg-[#F1F5F9] sm:h-24 sm:w-24"
         aria-label={item.productName}
       >
         <EditableImg
@@ -219,25 +219,36 @@ function OrderItemRow({
         <button
           type="button"
           onClick={onOpenProduct}
-          className="line-clamp-2 text-left text-xs font-medium leading-4 text-[#0F172A]"
+          className="line-clamp-2 text-left text-[11px] font-medium leading-4 text-[#0F172A] sm:text-sm sm:leading-5"
         >
           {item.productName}
         </button>
-        <p className="mt-0.5 truncate text-[10px] leading-4 text-[#64748B]">
+        <p className="mt-0.5 truncate text-[10px] leading-3 text-[#64748B]">
           {[item.skuCode && !item.skuCode.startsWith('ADD-') ? `SKU ${item.skuCode}` : '', item.materialLabel, item.sizeLabel].filter(Boolean).join(' · ')}
         </p>
-        <p className="text-xs font-semibold leading-4 text-[#0F172A]">{currencyCode} {discountUnit.toFixed(2)}</p>
+        <p className="text-[11px] font-semibold leading-4 text-[#0F172A] sm:text-xs">{currencyCode} {discountUnit.toFixed(2)}</p>
+        <div className="mt-1 flex items-start justify-between gap-2 sm:hidden">
+          <div className="min-w-0 text-[10px] leading-3 text-[#6b5e52]">
+            <p>{t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}</p>
+            <p className="mt-0.5">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
+          </div>
+          <div className="shrink-0 text-right text-[11px] leading-4 text-[#64748B]">
+            <p>×{item.quantity}</p>
+            <p className="font-medium text-[#0F172A]">{currencyCode} {discountLine.toFixed(2)}</p>
+          </div>
+        </div>
       </div>
-      <div className="flex w-full flex-col items-center justify-center text-center">
-        <span className="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-[#eadfce] bg-[#fbfaf7] px-2 py-0.5 text-[10px] font-medium leading-4 text-[#6b5e52]">
+      <div className="hidden flex-col items-center justify-center text-center sm:flex">
+        <span className="inline-flex max-w-[8.5rem] items-center justify-center rounded-full border border-[#eadfce] bg-[#fbfaf7] px-2 py-0.5 text-center text-[11px] font-medium leading-4 text-[#6b5e52]">
           {t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}
         </span>
-        <p className="mt-0.5 text-[10px] leading-4 text-[#6b5e52]">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-[#6b5e52]">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
       </div>
-      <div className="text-right text-xs leading-4 text-[#64748B]">
+      <div className="hidden text-right text-xs leading-4 text-[#64748B] sm:block">
         <p>×{item.quantity}</p>
         <p className="font-medium text-[#0F172A]">{currencyCode} {discountLine.toFixed(2)}</p>
       </div>
     </div>
   )
+
 }
