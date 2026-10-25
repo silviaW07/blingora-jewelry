@@ -33,6 +33,8 @@ import {
   appendOrderGoods,
   updateOrderDiscount,
   appendManualOrderLine,
+  importInboundSheet,
+  updateManualOrderLine,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -170,7 +172,9 @@ export interface OrderManagementHandlers {
   applyInboundImport: (patches: Array<{ id: string } & Partial<OrderInboundLine>>) => Promise<void>
   appendInboundGoods: (lines: Array<{ skuCode: string; quantity?: number; unitPrice?: number | null; inboundQty?: number; inboundNote?: string; inboundStage?: string; shipmentImageUrl?: string | null }>) => Promise<{ missingSkus: string[]; addedCount: number } | null>
   updateInboundDiscount: (discountPercent: number) => Promise<void>
-  appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number; costPrice?: number | null }) => Promise<boolean>
+  appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => Promise<boolean>
+  importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
+  updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null }) => Promise<boolean>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -900,7 +904,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const appendManualOrderLineToOrder = async (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number; costPrice?: number | null }) => {
+  const appendManualOrderLineToOrder = async (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => {
     if (!inboundOrderId) return false
     try {
       setInboundSaving(true)
@@ -960,10 +964,149 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           openedImage: prev.openedImage,
         }
       }))
-      toast.success('已加到最后一行')
+      toast.success(input.lines && input.lines.length > 1 ? `已存入 ${input.lines.length} 行` : '已加到最后一行')
       return true
     } catch (err: any) {
       toast.error(err.message || '保存加货失败')
+      return false
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
+  const importInboundSheetFile = async (input: { fileBase64: string; fileName?: string }) => {
+    if (!inboundOrderId) return false
+    try {
+      setInboundSaving(true)
+      const result = await importInboundSheet({ orderId: inboundOrderId, ...input })
+      const drafts = inboundDrafts
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId
+          ? {
+              ...row,
+              subtotalAmount: result.subtotalAmount,
+              discountAmount: result.discountAmount,
+              totalAmount: result.totalAmount,
+              inboundLines: result.lines,
+              inboundOrderedQty: result.orderedQty,
+              inboundReceivedQty: result.receivedQty,
+              inboundState: result.state,
+            }
+          : row
+      )))
+      setDetailData((prev) => {
+        if (!prev || prev.id !== inboundOrderId) return prev
+        return {
+          ...prev,
+          subtotalAmount: result.subtotalAmount,
+          discountAmount: result.discountAmount,
+          totalAmount: result.totalAmount,
+          inboundLines: result.lines,
+        }
+      })
+      setInboundDrafts(result.lines.map((line) => {
+        const prev = drafts.find((item) => item.id === line.id)
+        if (!prev) {
+          return {
+            ...line,
+            acknowledged: false,
+            openedQty: line.inboundQty,
+            openedNote: line.inboundNote || '',
+            openedStage: line.inboundStage || 'PENDING',
+            openedImage: line.shipmentImageUrl || '',
+          }
+        }
+        return {
+          ...line,
+          inboundQty: prev.inboundQty,
+          inboundNote: prev.inboundNote,
+          inboundStage: prev.inboundStage,
+          shipmentImageUrl: prev.shipmentImageUrl ?? line.shipmentImageUrl,
+          unitPrice: line.unitPrice,
+          lineAmount: line.lineAmount,
+          costPrice: line.costPrice ?? prev.costPrice,
+          supplierName: prev.supplierName || line.supplierName,
+          supplierUrl: prev.supplierUrl || line.supplierUrl,
+          acknowledged: prev.acknowledged,
+          openedQty: prev.openedQty,
+          openedNote: prev.openedNote,
+          openedStage: prev.openedStage,
+          openedImage: prev.openedImage,
+        }
+      }))
+      toast.success(`已存入 ${result.addedCount} 行，价格和数量可以之后再补`)
+      return true
+    } catch (err: any) {
+      toast.error(err.message || '导入表格失败')
+      return false
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
+  const updateManualOrderLineOnOrder = async (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null }) => {
+    if (!inboundOrderId) return false
+    try {
+      setInboundSaving(true)
+      const result = await updateManualOrderLine({ orderId: inboundOrderId, ...input })
+      const drafts = inboundDrafts
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId
+          ? {
+              ...row,
+              subtotalAmount: result.subtotalAmount,
+              discountAmount: result.discountAmount,
+              totalAmount: result.totalAmount,
+              inboundLines: result.lines,
+              inboundOrderedQty: result.orderedQty,
+              inboundReceivedQty: result.receivedQty,
+              inboundState: result.state,
+            }
+          : row
+      )))
+      setDetailData((prev) => {
+        if (!prev || prev.id !== inboundOrderId) return prev
+        return {
+          ...prev,
+          subtotalAmount: result.subtotalAmount,
+          discountAmount: result.discountAmount,
+          totalAmount: result.totalAmount,
+          inboundLines: result.lines,
+        }
+      })
+      setInboundDrafts(result.lines.map((line) => {
+        const prev = drafts.find((item) => item.id === line.id)
+        if (!prev) {
+          return {
+            ...line,
+            acknowledged: false,
+            openedQty: line.inboundQty,
+            openedNote: line.inboundNote || '',
+            openedStage: line.inboundStage || 'PENDING',
+            openedImage: line.shipmentImageUrl || '',
+          }
+        }
+        return {
+          ...line,
+          inboundQty: Math.min(prev.inboundQty, line.quantity),
+          inboundNote: prev.inboundNote,
+          inboundStage: prev.inboundStage,
+          shipmentImageUrl: prev.shipmentImageUrl ?? line.shipmentImageUrl,
+          unitPrice: line.unitPrice,
+          lineAmount: line.lineAmount,
+          costPrice: line.costPrice,
+          supplierName: prev.supplierName || line.supplierName,
+          supplierUrl: prev.supplierUrl || line.supplierUrl,
+          acknowledged: prev.acknowledged,
+          openedQty: prev.openedQty,
+          openedNote: prev.openedNote,
+          openedStage: prev.openedStage,
+          openedImage: prev.openedImage,
+        }
+      }))
+      return true
+    } catch (err: any) {
+      toast.error(err.message || '保存价格失败')
       return false
     } finally {
       setInboundSaving(false)
@@ -1067,6 +1210,8 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       appendInboundGoods,
       updateInboundDiscount,
       appendManualOrderLine: appendManualOrderLineToOrder,
+      importInboundSheet: importInboundSheetFile,
+      updateManualOrderLine: updateManualOrderLineOnOrder,
       exportInboundSheet,
     },
   }

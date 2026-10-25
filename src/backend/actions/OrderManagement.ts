@@ -1,6 +1,7 @@
 'use server'
 
 import prisma from '@/tools/prisma'
+import { saveUploadedImage } from '@/lib/uploadStorage'
 import {
   requireRole,
   getAuthContext,
@@ -1119,16 +1120,150 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
 
 
 
-export interface AppendManualOrderLineInput {
-  orderId: string
+export interface ManualOrderLineInput {
   imageUrl?: string | null
   unitPrice?: number | null
-  quantity?: number
+  quantity?: number | null
   costPrice?: number | null
+  lineAmount?: number | null
+}
+
+export interface AppendManualOrderLineInput extends ManualOrderLineInput {
+  orderId: string
+  lines?: ManualOrderLineInput[]
+}
+
+function manualMoney(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const number = Number(value)
+  if (!Number.isFinite(number)) return null
+  return Math.round(number * 100) / 100
+}
+
+function normalizeManualLine(row: ManualOrderLineInput) {
+  const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0
+    ? 1
+    : Math.max(1, Math.floor(Number(row.quantity)))
+  const unitPrice = manualMoney(row.unitPrice)
+  const lineAmount = manualMoney(row.lineAmount)
+  const unit = unitPrice ?? (lineAmount != null ? Math.round((lineAmount / quantity) * 100) / 100 : 0)
+  const total = lineAmount ?? Math.round(unit * quantity * 100) / 100
+  const costPrice = manualMoney(row.costPrice)
+  return {
+    quantity,
+    unitPrice: unit,
+    lineAmount: total,
+    costPrice,
+    imageUrl: String(row.imageUrl || '').trim().slice(0, 700),
+  }
+}
+
+async function insertManualOrderLines(
+  tx: any,
+  order: { id: string; discountAmount: unknown; shippingAmount: unknown; giftWrapAmount: unknown },
+  categoryId: string,
+  rows: ManualOrderLineInput[],
+  username: string,
+) {
+  const notes: string[] = []
+  for (const [index, raw] of rows.entries()) {
+    const row = normalizeManualLine(raw)
+    const code = `ADD-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100)
+    const product = await tx.product.create({
+      data: {
+        name: '',
+        slug: code,
+        productCode: code,
+        source: 'MANUAL',
+        status: 'DRAFT',
+        costPrice: row.costPrice,
+        mainImageUrl: row.imageUrl,
+        galleryJson: row.imageUrl ? [{ url: row.imageUrl, sort: 1, type: 'image' }] : [],
+        category: { connect: { id: categoryId } },
+        skus: {
+          create: {
+            skuCode: code,
+            imageUrl: row.imageUrl || null,
+            price: row.costPrice ?? 0,
+            stock: 0,
+            stockStatus: 'IN_STOCK',
+            attributeJson: [],
+          },
+        },
+      },
+      include: { skus: true },
+    })
+    const sku = product.skus[0]
+    if (!sku) throw new Error('加货行创建失败')
+    await tx.orderitem.create({
+      data: {
+        orderId: order.id,
+        productId: product.id,
+        productSkuId: sku.id,
+        productName: '',
+        skuCode: code,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        lineAmount: row.lineAmount,
+        inboundQty: 0,
+        inboundStage: 'PENDING',
+        giftWrapSelected: false,
+      },
+    })
+    notes.push(`x${row.quantity} 售价 ${row.unitPrice} 总价 ${row.lineAmount}`)
+  }
+  const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
+  const subtotal = Math.round(items.reduce((sum: number, item: { lineAmount: unknown }) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
+  const previousDiscount = moneyAmount(order.discountAmount) ?? 0
+  const discount = Math.min(Math.max(0, previousDiscount), subtotal)
+  const shipping = moneyAmount(order.shippingAmount) ?? 0
+  const gift = moneyAmount(order.giftWrapAmount) ?? 0
+  const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100
+  await tx.orderrecord.update({
+    where: { id: order.id },
+    data: { subtotalAmount: subtotal, discountAmount: discount, totalAmount: total },
+  })
+  await tx.orderoperationlog.create({
+    data: {
+      orderId: order.id,
+      actionType: '客户加货',
+      actionNote: `手动加货 ${notes.join('；')}`.slice(0, 4000),
+      operatorName: username,
+    },
+  })
+}
+
+async function inboundLinesAfterGoods(orderId: string, currencyCode: string | null): Promise<UpdateOrderDiscountOutput> {
+  const freshOrder = await prisma.orderrecord.findUnique({ where: { id: orderId } })
+  const fresh = await prisma.orderitem.findMany({
+    where: { orderId },
+    include: {
+      product: { select: inboundProductSelect },
+      productSku: { select: { imageUrl: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+  const subtotalAmount = moneyAmount(freshOrder?.subtotalAmount) ?? 0
+  const discountAmount = moneyAmount(freshOrder?.discountAmount) ?? 0
+  const lines = fresh.map((item) => mapInboundLine(item, currencyCode, {
+    subtotalAmount,
+    discountAmount,
+  })).sort(compareInboundSpu)
+  const summary = summarizeInbound(lines)
+  return {
+    lines,
+    orderedQty: summary.orderedQty,
+    receivedQty: summary.inboundQty,
+    state: summary.state,
+    subtotalAmount,
+    discountAmount,
+    totalAmount: moneyAmount(freshOrder?.totalAmount) ?? 0,
+    discountPercent: subtotalAmount > 0 ? Math.round((discountAmount / subtotalAmount) * 10000) / 100 : 0,
+  }
 }
 
 /**
- * 不填 SKU，按售价、数量、成本价在订单末尾加一行。
+ * 不填 SKU，按售价、数量、总价在订单末尾加行。缺的金额可以先空着。
  */
 export const appendManualOrderLine = requireRole([UserRole.ADMIN])(
   withResult(async (input: AppendManualOrderLineInput): Promise<UpdateOrderDiscountOutput> => {
@@ -1137,102 +1272,273 @@ export const appendManualOrderLine = requireRole([UserRole.ADMIN])(
     if (!order) throw new Error('订单不存在')
     const category = await prisma.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
     if (!category) throw new Error('没有可用分类，无法保存加货')
-    const quantity = Math.max(1, Math.floor(Number(input.quantity) || 1))
-    const unitPrice = Math.round((Number(input.unitPrice) || 0) * 100) / 100
-    const costPrice = input.costPrice == null || input.costPrice === ('' as unknown) || !Number.isFinite(Number(input.costPrice))
-      ? null
-      : Math.round(Number(input.costPrice) * 100) / 100
-    const imageUrl = String(input.imageUrl || '').trim().slice(0, 700)
-    const code = `ADD-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100)
+    const rows = input.lines?.length ? input.lines : [input]
     await prisma.$transaction(async (tx) => {
-      const product = await tx.product.create({
-        data: {
-          name: '',
-          slug: code,
-          productCode: code,
-          source: 'MANUAL',
-          status: 'DRAFT',
-          costPrice,
-          mainImageUrl: imageUrl,
-          galleryJson: imageUrl ? [{ url: imageUrl, sort: 1, type: 'image' }] : [],
-          category: { connect: { id: category.id } },
-          skus: {
-            create: {
-              skuCode: code,
-              imageUrl: imageUrl || null,
-              price: costPrice ?? 0,
-              stock: 0,
-              stockStatus: 'IN_STOCK',
-              attributeJson: [],
-            },
-          },
-        },
-        include: { skus: true },
+      await insertManualOrderLines(tx, order, category.id, rows, username)
+    })
+    return inboundLinesAfterGoods(order.id, order.currencyCode)
+  }),
+)
+
+export interface ImportInboundSheetInput {
+  orderId: string
+  fileName?: string
+  fileBase64: string
+}
+
+export interface ImportInboundSheetOutput extends UpdateOrderDiscountOutput {
+  addedCount: number
+}
+
+function sheetCellText(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'object') {
+    const record = value as { result?: unknown; text?: unknown; richText?: Array<{ text?: string }> }
+    if (record.result != null) return sheetCellText(record.result)
+    if (typeof record.text === 'string') return record.text.trim()
+    if (Array.isArray(record.richText)) return record.richText.map((part) => part.text || '').join('').trim()
+  }
+  return String(value).trim()
+}
+
+const SHEET_HEADERS: Array<[keyof ManualOrderLineInput | 'sku', string[]]> = [
+  ['unitPrice', ['售价', '售价(美金)', '单价']],
+  ['quantity', ['数量']],
+  ['lineAmount', ['总价', '总价(美金)']],
+  ['costPrice', ['成本价', '采购价']],
+  ['sku', ['SKU', 'sku', 'Sku']],
+]
+
+/**
+ * 导入表格。SKU 可以不填，表头对上售价、数量、总价即可先存入。
+ */
+export const importInboundSheet = requireRole([UserRole.ADMIN])(
+  withResult(async (input: ImportInboundSheetInput): Promise<ImportInboundSheetOutput> => {
+    const { username } = getAuthContext()
+    const order = await prisma.orderrecord.findUnique({
+      where: { id: input.orderId },
+      include: { items: true },
+    })
+    if (!order) throw new Error('订单不存在')
+    const raw = Buffer.from(String(input.fileBase64 || ''), 'base64')
+    const fileName = String(input.fileName || '')
+    const imagesByRow = new Map<number, { buffer?: Buffer | Uint8Array | ArrayBuffer; extension?: string }>()
+    const matrix: string[][] = []
+    if (/\.(csv|xls)$/i.test(fileName)) {
+      const XLSX = require('xlsx') as { read: Function; utils: { sheet_to_json: Function } }
+      const book = XLSX.read(raw, { type: 'buffer' })
+      const first = book.Sheets?.[book.SheetNames?.[0]]
+      if (!first) throw new Error('表格是空的')
+      const aoa = XLSX.utils.sheet_to_json(first, { header: 1, defval: '', raw: false }) as unknown[][]
+      for (const line of aoa) matrix.push((line || []).map((cell) => sheetCellText(cell)))
+    } else {
+      const ExcelJS = loadExcelJS()
+      if (!ExcelJS) throw new Error('表格解析不可用')
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(raw)
+      const sheet = workbook.worksheets[0]
+      if (!sheet) throw new Error('表格是空的')
+      for (const image of sheet.getImages?.() || []) {
+        const anchor = image?.range?.tl?.nativeRow ?? image?.range?.tl?.row ?? 0
+        const row = Math.round(Number(anchor)) + 1
+        if (imagesByRow.has(row)) continue
+        const media = workbook.getImage(Number(image.imageId))
+        if (media?.buffer) imagesByRow.set(row, media)
+      }
+      const last = Math.max(sheet.rowCount || 1, ...[...imagesByRow.keys(), 1])
+      for (let rowNumber = 1; rowNumber <= last; rowNumber += 1) {
+        const line: string[] = []
+        sheet.getRow(rowNumber).eachCell({ includeEmpty: true }, (cell: { value?: unknown }, col: number) => {
+          line[col - 1] = sheetCellText(cell.value)
+        })
+        matrix.push(line)
+      }
+    }
+    if (!matrix.length) throw new Error('表格是空的')
+    let headerRow = 0
+    const columns: Partial<Record<keyof ManualOrderLineInput | 'sku', number>> = {}
+    for (let index = 0; index < Math.min(matrix.length, 8); index += 1) {
+      const found: Partial<Record<keyof ManualOrderLineInput | 'sku', number>> = {}
+      matrix[index].forEach((text, col) => {
+        const label = String(text || '').trim()
+        if (!label) return
+        for (const [key, names] of SHEET_HEADERS) {
+          if (names.includes(label)) found[key] = col + 1
+        }
       })
-      const sku = product.skus[0]
-      if (!sku) throw new Error('加货行创建失败')
-      await tx.orderitem.create({
+      if (Object.keys(found).length) {
+        headerRow = index + 1
+        Object.assign(columns, found)
+        break
+      }
+    }
+    if (!headerRow || (columns.unitPrice == null && columns.quantity == null && columns.lineAmount == null)) {
+      throw new Error('请让表头包含售价、数量或总价')
+    }
+    const read = (rowNumber: number, key: keyof ManualOrderLineInput | 'sku') => {
+      const col = columns[key]
+      if (!col) return ''
+      return String(matrix[rowNumber - 1]?.[col - 1] || '').trim()
+    }
+    const parsed: Array<ManualOrderLineInput & { skuCode: string }> = []
+    let emptyRun = 0
+    const lastRow = Math.max(matrix.length, ...[...imagesByRow.keys(), headerRow])
+    for (let rowNumber = headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
+      const skuCode = read(rowNumber, 'sku')
+      const unitText = read(rowNumber, 'unitPrice')
+      const quantityText = read(rowNumber, 'quantity')
+      const totalText = read(rowNumber, 'lineAmount')
+      const costText = read(rowNumber, 'costPrice')
+      const image = imagesByRow.get(rowNumber)
+      if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+        emptyRun += 1
+        if (emptyRun >= 3) break
+        continue
+      }
+      emptyRun = 0
+      let imageUrl = ''
+      if (image?.buffer) {
+        const ext = String(image.extension || 'png').toLowerCase() === 'jpeg' ? 'jpg' : String(image.extension || 'png').toLowerCase()
+        const safeExt = ext === 'jpg' || ext === 'png' || ext === 'webp' || ext === 'gif' ? ext : 'png'
+        const saved = await saveUploadedImage(Buffer.from(image.buffer), safeExt)
+        imageUrl = saved.url
+      }
+      parsed.push({
+        skuCode,
+        imageUrl,
+        unitPrice: unitText ? Number(unitText) : null,
+        quantity: quantityText ? Number(quantityText) : null,
+        lineAmount: totalText ? Number(totalText) : null,
+        costPrice: costText ? Number(costText) : null,
+      })
+    }
+    if (!parsed.length) throw new Error('没有读到商品')
+    const category = await prisma.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
+    if (!category) throw new Error('没有可用分类，无法保存加货')
+    const skuRows = await prisma.productsku.findMany({
+      where: { skuCode: { in: parsed.map((row) => row.skuCode).filter(Boolean) } },
+      include: { product: { select: { id: true, name: true } } },
+    })
+    const skuByCode = new Map(skuRows.map((row) => [row.skuCode, row]))
+    await prisma.$transaction(async (tx) => {
+      const manual: ManualOrderLineInput[] = []
+      for (const row of parsed) {
+        const known = row.skuCode ? skuByCode.get(row.skuCode) : null
+        const existing = row.skuCode ? order.items.find((item) => item.skuCode === row.skuCode) : null
+        if (existing) {
+          const addQty = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0
+            ? 0
+            : Math.floor(Number(row.quantity))
+          const nextQuantity = Math.max(1, existing.quantity + addQty)
+          const unit = manualMoney(row.unitPrice) ?? (moneyAmount(existing.unitPrice) ?? 0)
+          await tx.orderitem.update({
+            where: { id: existing.id },
+            data: {
+              quantity: nextQuantity,
+              unitPrice: unit,
+              lineAmount: manualMoney(row.lineAmount) ?? Math.round(unit * nextQuantity * 100) / 100,
+            },
+          })
+          continue
+        }
+        if (known?.product) {
+          const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0
+            ? 1
+            : Math.max(1, Math.floor(Number(row.quantity)))
+          const unit = manualMoney(row.unitPrice) ?? manualMoney(row.lineAmount) ?? 0
+          const total = manualMoney(row.lineAmount) ?? Math.round((unit || 0) * quantity * 100) / 100
+          await tx.orderitem.create({
+            data: {
+              orderId: order.id,
+              productId: known.productId,
+              productSkuId: known.id,
+              productName: String(known.product.name || row.skuCode).slice(0, 200),
+              skuCode: known.skuCode,
+              materialLabel: known.materialLabel,
+              sizeLabel: known.sizeLabel,
+              quantity,
+              unitPrice: unit || 0,
+              lineAmount: total,
+              inboundQty: 0,
+              inboundStage: 'PENDING',
+              shipmentImageUrl: row.imageUrl || null,
+              giftWrapSelected: false,
+            },
+          })
+          continue
+        }
+        manual.push(row)
+      }
+      if (manual.length) await insertManualOrderLines(tx, order, category.id, manual, username)
+      else {
+        const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
+        const subtotal = Math.round(items.reduce((sum: number, item: { lineAmount: unknown }) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
+        const discount = Math.min(Math.max(0, moneyAmount(order.discountAmount) ?? 0), subtotal)
+        const total = Math.round(Math.max(0, subtotal - discount + (moneyAmount(order.shippingAmount) ?? 0) + (moneyAmount(order.giftWrapAmount) ?? 0)) * 100) / 100
+        await tx.orderrecord.update({
+          where: { id: order.id },
+          data: { subtotalAmount: subtotal, discountAmount: discount, totalAmount: total },
+        })
+      }
+    })
+    const result = await inboundLinesAfterGoods(order.id, order.currencyCode)
+    return { ...result, addedCount: parsed.length }
+  }),
+)
+
+export interface UpdateManualOrderLineInput {
+  orderId: string
+  orderItemId: string
+  unitPrice?: number | null
+  quantity?: number | null
+  lineAmount?: number | null
+  costPrice?: number | null
+}
+
+/**
+ * 补手动加货行的售价、数量、总价、成本价，并重算订单金额。
+ */
+export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateManualOrderLineInput): Promise<UpdateOrderDiscountOutput> => {
+    const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
+    if (!order) throw new Error('订单不存在')
+    const item = await prisma.orderitem.findFirst({ where: { id: input.orderItemId, orderId: order.id } })
+    if (!item) throw new Error('订单商品不存在')
+    if (!String(item.skuCode || '').startsWith('ADD-')) throw new Error('只能修改手动加货行')
+    const quantity = input.quantity == null || !Number.isFinite(Number(input.quantity)) || Number(input.quantity) <= 0
+      ? Math.max(1, item.quantity)
+      : Math.max(1, Math.floor(Number(input.quantity)))
+    const statedUnit = input.unitPrice === undefined ? (moneyAmount(item.unitPrice) ?? 0) : manualMoney(input.unitPrice)
+    const statedTotal = input.lineAmount === undefined ? (moneyAmount(item.lineAmount) ?? 0) : manualMoney(input.lineAmount)
+    const unitPrice = statedUnit ?? (statedTotal != null ? Math.round((statedTotal / quantity) * 100) / 100 : 0)
+    const lineAmount = statedTotal ?? Math.round(unitPrice * quantity * 100) / 100
+    const costPrice = input.costPrice === undefined ? undefined : manualMoney(input.costPrice)
+    await prisma.$transaction(async (tx) => {
+      await tx.orderitem.update({
+        where: { id: item.id },
         data: {
-          orderId: order.id,
-          productId: product.id,
-          productSkuId: sku.id,
-          productName: '',
-          skuCode: code,
           quantity,
           unitPrice,
-          lineAmount: Math.round(unitPrice * quantity * 100) / 100,
-          inboundQty: 0,
-          inboundStage: 'PENDING',
-          giftWrapSelected: false,
+          lineAmount,
+          inboundQty: Math.min(Math.max(0, Number(item.inboundQty) || 0), quantity),
         },
       })
+      if (costPrice !== undefined) {
+        await tx.product.update({ where: { id: item.productId }, data: { costPrice } })
+        await tx.productsku.update({ where: { id: item.productSkuId }, data: { price: costPrice ?? 0 } })
+      }
       const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
-      const subtotal = Math.round(items.reduce((sum, item) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
-      const previousDiscount = moneyAmount(order.discountAmount) ?? 0
-      const discount = Math.min(Math.max(0, previousDiscount), subtotal)
-      const shipping = moneyAmount(order.shippingAmount) ?? 0
-      const gift = moneyAmount(order.giftWrapAmount) ?? 0
-      const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100
+      const subtotal = Math.round(items.reduce((sum: number, row: { lineAmount: unknown }) => sum + (moneyAmount(row.lineAmount) ?? 0), 0) * 100) / 100
+      const discount = Math.min(Math.max(0, moneyAmount(order.discountAmount) ?? 0), subtotal)
+      const total = Math.round(Math.max(0, subtotal - discount + (moneyAmount(order.shippingAmount) ?? 0) + (moneyAmount(order.giftWrapAmount) ?? 0)) * 100) / 100
       await tx.orderrecord.update({
         where: { id: order.id },
         data: { subtotalAmount: subtotal, discountAmount: discount, totalAmount: total },
       })
-      await tx.orderoperationlog.create({
-        data: {
-          orderId: order.id,
-          actionType: '客户加货',
-          actionNote: `手动加货 x${quantity} 售价 ${unitPrice}`.slice(0, 4000),
-          operatorName: username,
-        },
-      })
     })
-    const freshOrder = await prisma.orderrecord.findUnique({ where: { id: order.id } })
-    const fresh = await prisma.orderitem.findMany({
-      where: { orderId: order.id },
-      include: {
-        product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
-    const subtotalAmount = moneyAmount(freshOrder?.subtotalAmount) ?? 0
-    const discountAmount = moneyAmount(freshOrder?.discountAmount) ?? 0
-    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, {
-      subtotalAmount,
-      discountAmount,
-    })).sort(compareInboundSpu)
-    const summary = summarizeInbound(lines)
-    const subtotal = moneyAmount(freshOrder?.subtotalAmount) ?? 0
-    return {
-      lines,
-      orderedQty: summary.orderedQty,
-      receivedQty: summary.inboundQty,
-      state: summary.state,
-      subtotalAmount,
-      discountAmount,
-      totalAmount: moneyAmount(freshOrder?.totalAmount) ?? 0,
-      discountPercent: subtotal > 0 ? Math.round((discountAmount / subtotal) * 10000) / 100 : 0,
-    }
+    return inboundLinesAfterGoods(order.id, order.currencyCode)
   }),
 )
 

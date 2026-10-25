@@ -209,6 +209,7 @@ export const OrderManagementView = ({
   const [batchNote, setBatchNote] = React.useState('');
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }>>([]);
+  const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; lineAmount: string; costPrice: string }>>({});
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
@@ -318,48 +319,13 @@ export const OrderManagementView = ({
         const imageUrl = await uploadInboundImage(file);
         nextRows.push(emptyImportRow({ imageUrl }));
       }
-      if (sheets.length) {
-        const XLSX = await import('xlsx');
-        for (const file of sheets) {
-          const book = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-          const sheet = book.Sheets[book.SheetNames[0]];
-          const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-          const stageOf = (value: unknown) => {
-            const text = String(value || '').trim();
-            if (text === '待采购' || text === 'PENDING') return 'PENDING';
-            if (text === '备货中' || text === 'PREPARING') return 'PREPARING';
-            if (text === '运输中' || text === 'TRANSIT') return 'TRANSIT';
-            if (text === '已到货' || text === 'ARRIVED') return 'ARRIVED';
-            return '';
-          };
-          for (const record of records) {
-            const pick = (...names: string[]) => {
-              for (const name of names) {
-                const hit = Object.entries(record).find(([key]) => key.trim() === name);
-                if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
-              }
-              return '';
-            };
-            nextRows.push(emptyImportRow({
-              sku: pick('SKU', 'sku', 'Sku'),
-              unitPrice: pick('售价', '售价(美金)', '单价', '折扣价(美金)'),
-              quantity: pick('数量'),
-              lineAmount: pick('总价', '总价(美金)'),
-              costPrice: pick('成本价', '采购价'),
-              supplierUrl: pick('供应商链接'),
-              supplierName: pick('供应商名称', '供应商'),
-              note: pick('备注', '入库备注'),
-              inboundQty: pick('到货数量', '已入库数量'),
-              stage: stageOf(pick('商品状态')),
-            }));
-          }
-        }
-      }
+      for (const file of sheets) await importSheetNow(file);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '导入失败');
       return;
     }
     if (!nextRows.length) {
+      if (sheets.length) return;
       toast.error('没有读到商品或图片');
       return;
     }
@@ -408,8 +374,20 @@ export const OrderManagementView = ({
     const pool = targets.length ? targets : state.inboundDrafts;
     const used = new Set<string>();
     const patches: Array<{ id: string } & Record<string, unknown>> = [];
+    const manualLines: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> = [];
     importRows.forEach((row) => {
       const sku = row.sku.trim();
+      const hasValues = Boolean(row.unitPrice.trim() || row.quantity.trim() || row.lineAmount.trim() || row.costPrice.trim());
+      if (!sku && hasValues) {
+        manualLines.push({
+          imageUrl: row.imageUrl || null,
+          unitPrice: row.unitPrice.trim() ? Number(row.unitPrice) : null,
+          quantity: row.quantity.trim() ? Number(row.quantity) : null,
+          lineAmount: row.lineAmount.trim() ? Number(row.lineAmount) : null,
+          costPrice: row.costPrice.trim() ? Number(row.costPrice) : null,
+        });
+        return;
+      }
       const matched = sku ? pool.find((line) => line.skuCode.trim() === sku && !used.has(line.id)) : null;
       const line = matched || pool.find((item) => !used.has(item.id));
       if (!line) return;
@@ -429,7 +407,8 @@ export const OrderManagementView = ({
       if (row.stage) patch.inboundStage = row.stage;
       patches.push(patch as { id: string });
     });
-    await handlers.applyInboundImport(patches);
+    if (patches.length) await handlers.applyInboundImport(patches);
+    if (manualLines.length) await handlers.appendManualOrderLine({ lines: manualLines });
     setImportOpen(false);
     setImportRows([]);
   };
@@ -461,41 +440,23 @@ export const OrderManagementView = ({
     });
   };
 
-  const readAddonSheet = async (file: File) => {
-    const XLSX = await import('xlsx');
-    const book = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-    const sheet = book.Sheets[book.SheetNames[0]];
-    const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-    const stageOf = (value: unknown) => {
-      const text = String(value || '').trim();
-      if (text === '待采购' || text === 'PENDING') return 'PENDING';
-      if (text === '备货' || text === 'STOCK') return 'STOCK';
-      if (text === '备货中' || text === 'PREPARING') return 'PREPARING';
-      if (text === '工厂发货' || text === '运输中' || text === 'TRANSIT' || text === 'FACTORY') return 'TRANSIT';
-      if (text === '到达仓库' || text === '已到货' || text === 'ARRIVED') return 'ARRIVED';
-      if (text === '包裹发货' || text === 'PARCEL') return 'PARCEL';
-      return '';
-    };
-    return records.map((record) => {
-      const pick = (...names: string[]) => {
-        for (const name of names) {
-          const hit = Object.entries(record).find(([key]) => key.trim() === name);
-          if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
-        }
-        return '';
-      };
-      const unitPrice = pick('售价', '售价(美金)', '单价');
-      const quantity = pick('数量');
-      const inboundQty = pick('到货数量', '已入库数量');
-      return {
-        skuCode: pick('SKU', 'sku', 'Sku'),
-        quantity: quantity ? Number(quantity) : 1,
-        unitPrice: unitPrice && Number.isFinite(Number(unitPrice)) ? Number(unitPrice) : null,
-        inboundQty: inboundQty && Number.isFinite(Number(inboundQty)) ? Number(inboundQty) : undefined,
-        inboundNote: pick('备注', '入库备注'),
-        inboundStage: stageOf(pick('商品状态')),
-      };
-    }).filter((row) => row.skuCode);
+
+  const fileToBase64 = async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    const size = 0x8000;
+    for (let index = 0; index < bytes.length; index += size) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + size));
+    }
+    return btoa(binary);
+  };
+  const importSheetNow = async (file: File) => {
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('表格超过 8MB，请压缩图片后再导入');
+      return false;
+    }
+    const fileBase64 = await fileToBase64(file);
+    return handlers.importInboundSheet({ fileBase64, fileName: file.name });
   };
   const receiveAddonProducts = async (files: FileList | File[]) => {
     const list = [...files];
@@ -509,10 +470,8 @@ export const OrderManagementView = ({
         cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, quantity: '1', unitPrice: '', costPrice: '' });
       }
       if (cards.length) setAddonCards((prev) => [...prev, ...cards]);
-      const parsed = [];
-      for (const file of sheets) parsed.push(...await readAddonSheet(file));
-      if (parsed.length) await handlers.appendInboundGoods(parsed);
-      else if (!cards.length) toast.error('请拖入商品图片');
+      for (const file of sheets) await importSheetNow(file);
+      if (!cards.length && !sheets.length) toast.error('请拖入商品图片或表格');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '传入商品失败');
     }
@@ -524,13 +483,7 @@ export const OrderManagementView = ({
       return;
     }
     try {
-      const parsed = [];
-      for (const file of sheets) parsed.push(...await readAddonSheet(file));
-      if (!parsed.length) {
-        toast.error('表格里没有 SKU');
-        return;
-      }
-      await handlers.appendInboundGoods(parsed);
+      for (const file of sheets) await importSheetNow(file);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '传入表格失败');
     }
@@ -554,6 +507,42 @@ export const OrderManagementView = ({
       costPrice,
     });
     if (saved) setAddonCards((prev) => prev.filter((item) => item.key !== card.key));
+  };
+
+  const manualDraftOf = (line: { id: string; unitPrice: number | null; quantity: number; lineAmount: number | null; costPrice: number | null }) => (
+    manualDrafts[line.id] || {
+      unitPrice: line.unitPrice ? String(line.unitPrice) : '',
+      quantity: line.quantity ? String(line.quantity) : '',
+      lineAmount: line.lineAmount ? String(line.lineAmount) : '',
+      costPrice: line.costPrice == null ? '' : String(line.costPrice),
+    }
+  );
+  const patchManualDraft = (line: { id: string; unitPrice: number | null; quantity: number; lineAmount: number | null; costPrice: number | null }, patch: Partial<{ unitPrice: string; quantity: string; lineAmount: string; costPrice: string }>) => {
+    setManualDrafts((prev) => ({ ...prev, [line.id]: { ...manualDraftOf(line), ...prev[line.id], ...patch } }));
+  };
+  const saveManualDraft = async (line: { id: string; unitPrice: number | null; quantity: number; lineAmount: number | null; costPrice: number | null }) => {
+    const draft = manualDrafts[line.id];
+    if (!draft) return;
+    const numberOrNull = (value: string) => {
+      const text = value.trim();
+      if (!text) return null;
+      const number = Number(text);
+      return Number.isFinite(number) ? number : Number.NaN;
+    };
+    const unitPrice = numberOrNull(draft.unitPrice);
+    const quantity = numberOrNull(draft.quantity);
+    const lineAmount = numberOrNull(draft.lineAmount);
+    const costPrice = numberOrNull(draft.costPrice);
+    if ([unitPrice, quantity, lineAmount, costPrice].some((value) => Number.isNaN(value)) || (unitPrice != null && unitPrice < 0) || (quantity != null && quantity <= 0) || (lineAmount != null && lineAmount < 0) || (costPrice != null && costPrice < 0)) {
+      toast.error('请填写正确的售价、数量或总价');
+      return;
+    }
+    const saved = await handlers.updateManualOrderLine({ orderItemId: line.id, unitPrice, quantity, lineAmount, costPrice });
+    if (saved) setManualDrafts((prev) => {
+      const next = { ...prev };
+      delete next[line.id];
+      return next;
+    });
   };
   const inboundCurrency = state.inboundDrafts.find((line) => line.currencyCode)?.currencyCode || 'USD';
   const originalTotal = state.inboundDrafts.reduce((sum, line) => sum + (line.lineAmount != null ? Number(line.lineAmount) : (Number(line.unitPrice) || 0) * line.quantity), 0);
@@ -1521,11 +1510,11 @@ export const OrderManagementView = ({
                           </div>
                         </div>
                       </td>) : null}
-                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>) : null}
+                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : formatInboundMoney(line.unitPrice, line.currencyCode)}</td>) : null}
                       {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>) : null}
-                      {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.quantity}</td>) : null}
-                      {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>) : null}
-                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.costPrice == null ? '' : formatInboundMoney(line.costPrice, 'CNY')}</td>) : null}
+                      {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).quantity} onChange={(event) => patchManualDraft(line, { quantity: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : line.quantity}</td>) : null}
+                      {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="总价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).lineAmount} onChange={(event) => patchManualDraft(line, { lineAmount: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : formatInboundMoney(line.lineAmount, line.currencyCode)}</td>) : null}
+                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).costPrice} onChange={(event) => patchManualDraft(line, { costPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : (line.costPrice == null ? '' : formatInboundMoney(line.costPrice, 'CNY'))}</td>) : null}
                       {columnVisible('supplier') ? (<td className="overflow-hidden px-2 py-3 align-middle text-center">
                         {line.supplierUrl ? (
                           <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-3 break-words text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
@@ -1671,7 +1660,7 @@ export const OrderManagementView = ({
                 onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonSheet(event.dataTransfer.files); }}
               >
                 <div className="text-base font-semibold">传入表格</div>
-                <div className="mt-1 text-sm text-slate-500">按 SKU 给客户加货，已有商品会增加数量</div>
+                <div className="mt-1 text-sm text-slate-500">SKU 可以不填。表头对上售价、数量、总价就先存入</div>
               </div>
             </div>
             <input ref={addonProductRef} type="file" className="hidden" multiple accept="image/*,.xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonProducts(files); event.target.value = ''; }} />
