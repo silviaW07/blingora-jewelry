@@ -2123,10 +2123,8 @@ export const OrderManagementView = ({
           </DialogFooter>
           )}
           </InboundShipBar>
-        </DialogContent>
-      </Dialog>
       {state.inboundOrderId && stageOpen ? (
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="发货状态" onClick={() => setStageOpen(false)}>
+        <div className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="发货状态" onClick={() => setStageOpen(false)}>
           <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
             <div className="text-lg font-semibold text-slate-900">发货状态</div>
             <p className="mt-1 text-sm text-slate-500">先点一个状态，再点确认。将写入已勾选的 {inboundSelected.length} 个商品。</p>
@@ -2143,7 +2141,7 @@ export const OrderManagementView = ({
         </div>
       ) : null}
       {state.inboundOrderId && noteOpen ? (
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="添加备注" onClick={() => setNoteOpen(false)}>
+        <div className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="添加备注" onClick={() => setNoteOpen(false)}>
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
             <div className="text-lg font-semibold text-slate-900">添加备注</div>
             <p className="mt-1 text-sm text-slate-500">确认后写入已勾选的 {inboundSelected.length} 个商品。</p>
@@ -2168,6 +2166,8 @@ export const OrderManagementView = ({
           </div>
         </div>
       ) : null}
+        </DialogContent>
+      </Dialog>
       {state.inboundOrderId && inboundZoom ? (
         <div
           className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 p-16"
