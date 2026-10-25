@@ -674,7 +674,7 @@
     "backToOrders": "Volver a Mis pedidos",
     "notFound": "Este pedido no existe o no pertenece a esta cuenta.",
     "paymentMethod": "Método de pago",
-        "payNow": "Pagar ahora",
+    "payNow": "Pagar ahora",
     "originalTotal": "Total original",
     "discount": "Descuento",
     "merchandiseTotal": "Total",
@@ -714,6 +714,7 @@
       "OUT_OF_STOCK": "{{product}} ({{sku}}): agotado",
       "INSUFFICIENT_STOCK": "{{product}} ({{sku}}): solo quedan {{stock}}",
       "MIN_ORDER_CHANGED": "{{product}} ({{sku}}): el mínimo ahora es {{minimum}}"
-    }
+    },
+    "goodsStatus": "Estado de la mercancía"
   }
 }

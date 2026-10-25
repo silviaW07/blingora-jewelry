@@ -187,6 +187,30 @@ export default function AccountOrderDetailView() {
                 </div>
               ))}
             </div>
+          <div>
+            <h2 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8a8073]">{t('accountOrders.goodsStatus')}</h2>
+            <div className="overflow-hidden rounded-xl border border-[#ebe6dc] bg-white">
+              {order.items.map((item) => {
+                const stage = item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')
+                const thumb = item.imageUrl || item.mainImageUrl
+                return (
+                  <div key={item.itemId} className="flex items-center gap-2 border-b border-[#f0ebe3] px-2.5 py-2 last:border-b-0 sm:gap-3 sm:px-3">
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-[#F1F5F9] sm:h-12 sm:w-12">
+                      {thumb ? <img src={thumb} alt="" className="h-full w-full object-contain" /> : null}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-[11px] font-medium leading-4 text-[#1f1a14] sm:text-xs">{item.productName}</p>
+                      <p className="mt-0.5 text-[10px] text-[#8a8073]">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
+                    </div>
+                    <span className="max-w-[7.5rem] shrink-0 rounded-full border border-[#eadfce] bg-[#fbfaf7] px-2 py-0.5 text-center text-[10px] font-medium leading-4 text-[#6b5e52] sm:text-[11px]">
+                      {t(`accountOrders.inboundStages.${stage}`)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           ) : null}
         </div>
       )}

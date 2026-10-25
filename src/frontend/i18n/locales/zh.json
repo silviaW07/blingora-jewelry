@@ -560,7 +560,7 @@
     "backToOrders": "返回我的订单",
     "notFound": "订单不存在，或不属于当前账户。",
     "paymentMethod": "支付方式",
-        "payNow": "立即支付",
+    "payNow": "立即支付",
     "originalTotal": "原价合计",
     "discount": "折扣",
     "merchandiseTotal": "合计",
@@ -594,6 +594,7 @@
       "OUT_OF_STOCK": "{{product}}（{{sku}}）：已售罄",
       "INSUFFICIENT_STOCK": "{{product}}（{{sku}}）：仅余 {{stock}} 件",
       "MIN_ORDER_CHANGED": "{{product}}（{{sku}}）：当前起订量为 {{minimum}} 件"
-    }
+    },
+    "goodsStatus": "商品状态"
   }
 }
