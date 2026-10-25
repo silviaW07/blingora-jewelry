@@ -687,15 +687,15 @@
     "discount": "Discount",
     "merchandiseTotal": "Total",
     "shipping": "Shipping",
-    "inStockCount": "in stock {{arrived}}/{{ordered}}",
+    "inStockCount": "in stock {{arrived}}",
     "inboundStages": {
       "PENDING": "To purchase",
-      "STOCK": "Stocking",
-      "PREPARING": "Preparing stock",
-      "FACTORY": "Shipped from factory",
-      "TRANSIT": "Shipped from factory",
+      "STOCK": "Preparing",
+      "PREPARING": "Preparing",
+      "FACTORY": "waiting products",
+      "TRANSIT": "waiting products",
       "ARRIVED": "Arrived at warehouse",
-      "PARCEL": "Parcel shipped"
+      "PARCEL": "shipped"
     },
     "statuses": {
       "PENDING_PAYMENT": "Pending",
