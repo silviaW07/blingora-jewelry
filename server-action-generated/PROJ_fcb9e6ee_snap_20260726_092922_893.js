@@ -31409,9 +31409,10 @@ async function insertManualOrderLines(tx, order, categoryId, rows, username) {
         var _row_costPrice;
         const row = normalizeManualLine(raw);
         const code = `ADD-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100);
+        const addedName = String(row.inboundNote || '').trim().slice(0, 200);
         const product = await tx.product.create({
             data: {
-                name: '',
+                name: addedName,
                 slug: code,
                 productCode: code,
                 source: 'MANUAL',
@@ -31453,7 +31454,7 @@ async function insertManualOrderLines(tx, order, categoryId, rows, username) {
                 orderId: order.id,
                 productId: product.id,
                 productSkuId: sku.id,
-                productName: '',
+                productName: addedName,
                 skuCode: code,
                 quantity: row.quantity,
                 unitPrice: row.unitPrice,
@@ -46486,6 +46487,7 @@ const customerOrderInclude = {
             sizeLabel: true,
             quantity: true,
             inboundQty: true,
+            inboundNote: true,
             inboundStage: true,
             unitPrice: true,
             lineAmount: true,
@@ -46533,7 +46535,7 @@ const mapCustomerOrder = (row)=>({
                 itemId: item.id,
                 productId: item.productId,
                 productSkuId: item.productSkuId,
-                productName: item.productName,
+                productName: String(item.productName || item.inboundNote || '').trim(),
                 skuCode: item.skuCode,
                 materialLabel: item.materialLabel || '',
                 sizeLabel: item.sizeLabel || '',
