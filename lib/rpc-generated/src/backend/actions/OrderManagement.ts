@@ -22,6 +22,8 @@ export const appendManualOrderLine = (...args: Parameters<Actions["appendManualO
   rpcCall<Awaited<ReturnType<Actions["appendManualOrderLine"]>>>("src.backend.actions.OrderManagement.appendManualOrderLine", ...args);
 export const importInboundSheet = (...args: Parameters<Actions["importInboundSheet"]>) => 
   rpcCall<Awaited<ReturnType<Actions["importInboundSheet"]>>>("src.backend.actions.OrderManagement.importInboundSheet", ...args);
+export const importCustomerOrder = (...args: Parameters<Actions["importCustomerOrder"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["importCustomerOrder"]>>>("src.backend.actions.OrderManagement.importCustomerOrder", ...args);
 export const updateManualOrderLine = (...args: Parameters<Actions["updateManualOrderLine"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateManualOrderLine"]>>>("src.backend.actions.OrderManagement.updateManualOrderLine", ...args);
 export const updateOrderDiscount = (...args: Parameters<Actions["updateOrderDiscount"]>) => 

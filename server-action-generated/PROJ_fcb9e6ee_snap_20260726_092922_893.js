@@ -30376,6 +30376,9 @@ _export(exports, {
     get getOrderList () {
         return getOrderList;
     },
+    get importCustomerOrder () {
+        return importCustomerOrder;
+    },
     get importInboundSheet () {
         return importInboundSheet;
     },
@@ -31817,6 +31820,320 @@ const importInboundSheet = (0, _action_utils.requireRole)([
         ...result,
         addedCount: parsed.length
     };
+}));
+async function readGoodsSheet(fileBase64, fileName) {
+    const raw = Buffer.from(String(fileBase64 || ''), 'base64');
+    const imagesByRow = new Map();
+    const matrix = [];
+    if (/\.(csv|xls)$/i.test(fileName)) {
+        var _book_SheetNames, _book_Sheets;
+        const XLSX = __webpack_require__(9964);
+        const book = XLSX.read(raw, {
+            type: 'buffer'
+        });
+        const first = (_book_Sheets = book.Sheets) === null || _book_Sheets === void 0 ? void 0 : _book_Sheets[(_book_SheetNames = book.SheetNames) === null || _book_SheetNames === void 0 ? void 0 : _book_SheetNames[0]];
+        if (!first) throw new Error('表格是空的');
+        const aoa = XLSX.utils.sheet_to_json(first, {
+            header: 1,
+            defval: '',
+            raw: false
+        });
+        for (const line of aoa)matrix.push((line || []).map((cell)=>sheetCellText(cell)));
+    } else {
+        var _sheet_getImages;
+        const ExcelJS = loadExcelJS();
+        if (!ExcelJS) throw new Error('表格解析不可用');
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(raw);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) throw new Error('表格是空的');
+        for (const image of ((_sheet_getImages = sheet.getImages) === null || _sheet_getImages === void 0 ? void 0 : _sheet_getImages.call(sheet)) || []){
+            var _ref, _ref1;
+            var _image_range_tl, _image_range, _image_range_tl1, _image_range1;
+            const anchor = (_ref = (_ref1 = image === null || image === void 0 ? void 0 : (_image_range = image.range) === null || _image_range === void 0 ? void 0 : (_image_range_tl = _image_range.tl) === null || _image_range_tl === void 0 ? void 0 : _image_range_tl.nativeRow) !== null && _ref1 !== void 0 ? _ref1 : image === null || image === void 0 ? void 0 : (_image_range1 = image.range) === null || _image_range1 === void 0 ? void 0 : (_image_range_tl1 = _image_range1.tl) === null || _image_range_tl1 === void 0 ? void 0 : _image_range_tl1.row) !== null && _ref !== void 0 ? _ref : 0;
+            const row = Math.round(Number(anchor)) + 1;
+            if (imagesByRow.has(row)) continue;
+            const media = workbook.getImage(Number(image.imageId));
+            if (media === null || media === void 0 ? void 0 : media.buffer) imagesByRow.set(row, media);
+        }
+        const last = Math.max(sheet.rowCount || 1, ...[
+            ...imagesByRow.keys(),
+            1
+        ]);
+        for(let rowNumber = 1; rowNumber <= last; rowNumber += 1){
+            const line = [];
+            sheet.getRow(rowNumber).eachCell({
+                includeEmpty: true
+            }, (cell, col)=>{
+                line[col - 1] = sheetCellText(cell.value);
+            });
+            matrix.push(line);
+        }
+    }
+    if (!matrix.length) throw new Error('表格是空的');
+    let headerRow = 0;
+    const columns = {};
+    for(let index = 0; index < Math.min(matrix.length, 8); index += 1){
+        const found = {};
+        matrix[index].forEach((cell, col)=>{
+            const label = String(cell || '').trim();
+            if (!label) return;
+            for (const [key, names] of SHEET_HEADERS){
+                if (names.includes(label)) found[key] = col + 1;
+            }
+        });
+        if (Object.keys(found).length) {
+            headerRow = index + 1;
+            Object.assign(columns, found);
+            break;
+        }
+    }
+    if (!headerRow || columns.unitPrice == null && columns.quantity == null && columns.lineAmount == null) {
+        throw new Error('请让表头包含售价、数量或总价');
+    }
+    const read = (rowNumber, key)=>{
+        var _matrix_;
+        const col = columns[key];
+        if (!col) return '';
+        return String(((_matrix_ = matrix[rowNumber - 1]) === null || _matrix_ === void 0 ? void 0 : _matrix_[col - 1]) || '').trim();
+    };
+    const parsed = [];
+    let emptyRun = 0;
+    const lastRow = Math.max(matrix.length, ...[
+        ...imagesByRow.keys(),
+        headerRow
+    ]);
+    for(let rowNumber = headerRow + 1; rowNumber <= lastRow; rowNumber += 1){
+        const skuCode = read(rowNumber, 'sku');
+        const unitText = read(rowNumber, 'unitPrice');
+        const quantityText = read(rowNumber, 'quantity');
+        const totalText = read(rowNumber, 'lineAmount');
+        const costText = read(rowNumber, 'costPrice');
+        const image = imagesByRow.get(rowNumber);
+        if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+            emptyRun += 1;
+            if (emptyRun >= 3) break;
+            continue;
+        }
+        emptyRun = 0;
+        let imageUrl = '';
+        if (image === null || image === void 0 ? void 0 : image.buffer) {
+            const ext = String(image.extension || 'png').toLowerCase() === 'jpeg' ? 'jpg' : String(image.extension || 'png').toLowerCase();
+            const safeExt = ext === 'jpg' || ext === 'png' || ext === 'webp' || ext === 'gif' ? ext : 'png';
+            const saved = await (0, _uploadStorage.saveUploadedImage)(Buffer.from(image.buffer), safeExt);
+            imageUrl = saved.url;
+        }
+        parsed.push({
+            skuCode,
+            imageUrl,
+            unitPrice: unitText ? Number(unitText) : null,
+            quantity: quantityText ? Number(quantityText) : null,
+            lineAmount: totalText ? Number(totalText) : null,
+            costPrice: costText ? Number(costText) : null
+        });
+    }
+    if (!parsed.length) throw new Error('没有读到商品');
+    return parsed;
+}
+function shanghaiOrderPrefix(now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(now);
+    const part = (type)=>{
+        var _ref;
+        var _parts_find;
+        return (_ref = (_parts_find = parts.find((item)=>item.type === type)) === null || _parts_find === void 0 ? void 0 : _parts_find.value) !== null && _ref !== void 0 ? _ref : '';
+    };
+    return `BJ${part('year').slice(-2)}${part('month')}${part('day')}`;
+}
+async function withNextOrderNo(tx, run) {
+    var _ref;
+    var _lockRows_;
+    const lockRows = await tx.$queryRawUnsafe('SELECT GET_LOCK(?, 10) AS acquired', 'orderno_bj_global_seq');
+    if (Number((_ref = lockRows === null || lockRows === void 0 ? void 0 : (_lockRows_ = lockRows[0]) === null || _lockRows_ === void 0 ? void 0 : _lockRows_.acquired) !== null && _ref !== void 0 ? _ref : 0) !== 1) throw new Error('订单号正在分配，请稍后重试');
+    try {
+        var _ref1;
+        var _maxRows_;
+        const maxRows = await tx.$queryRawUnsafe(`SELECT MAX(CAST(RIGHT(orderNo, 4) AS UNSIGNED)) AS maxSeq
+       FROM orderrecord
+       WHERE orderNo REGEXP '^BJ[0-9]{10}$'`);
+        const nextSeq = Number((_ref1 = maxRows === null || maxRows === void 0 ? void 0 : (_maxRows_ = maxRows[0]) === null || _maxRows_ === void 0 ? void 0 : _maxRows_.maxSeq) !== null && _ref1 !== void 0 ? _ref1 : 0) + 1;
+        if (!Number.isFinite(nextSeq) || nextSeq > 9999) throw new Error('订单号序号已满');
+        return await run(`${shanghaiOrderPrefix()}${String(nextSeq).padStart(4, '0')}`);
+    } finally{
+        await tx.$queryRawUnsafe('SELECT RELEASE_LOCK(?)', 'orderno_bj_global_seq');
+    }
+}
+const IMPORT_ORDER_STATUSES = [
+    'PENDING_PAYMENT',
+    'PAID',
+    'PROCESSING',
+    'SHIPPED',
+    'DELIVERED'
+];
+const importCustomerOrder = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const email = String(input.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请填写客户邮箱');
+    const users = await _prisma.default.$queryRawUnsafe('SELECT id, status FROM sysuser WHERE LOWER(email) = ? LIMIT 1', email);
+    const user = users[0];
+    if (!user) throw new Error('没有这个客户邮箱，请让客户先用这个邮箱注册');
+    if (String(user.status || '').toUpperCase() !== 'ACTIVE') throw new Error('这个客户账号已停用');
+    const status = IMPORT_ORDER_STATUSES.includes(input.status) ? input.status : 'PROCESSING';
+    const parsed = await readGoodsSheet(String(input.fileBase64 || ''), String(input.fileName || ''));
+    const category = await _prisma.default.category.findFirst({
+        select: {
+            id: true
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    if (!category) throw new Error('没有可用分类，无法保存订单');
+    const skuRows = await _prisma.default.productsku.findMany({
+        where: {
+            skuCode: {
+                in: parsed.map((row)=>row.skuCode).filter(Boolean)
+            }
+        },
+        include: {
+            product: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
+    });
+    const skuByCode = new Map(skuRows.map((row)=>[
+            row.skuCode,
+            row
+        ]));
+    const shippingText = String(input.shippingMethod || '').trim().slice(0, 255);
+    const note = String(input.orderNote || '').trim().slice(0, 4000);
+    const weight = input.weightGrams == null || !Number.isFinite(Number(input.weightGrams)) || Number(input.weightGrams) <= 0 ? 0 : Math.round(Number(input.weightGrams) * 100) / 100;
+    const created = await _prisma.default.$transaction(async (tx)=>withNextOrderNo(tx, async (orderNo)=>{
+            var _moneyAmount;
+            const order = await tx.orderrecord.create({
+                data: {
+                    orderNo,
+                    userId: user.id,
+                    status,
+                    currencyCode: 'USD',
+                    localeCode: 'en',
+                    subtotalAmount: 0,
+                    discountAmount: 0,
+                    shippingAmount: 0,
+                    giftWrapAmount: 0,
+                    totalAmount: 0,
+                    paymentMethod: 'BANK_TRANSFER',
+                    paymentStatus: status === 'PENDING_PAYMENT' ? 'UNPAID' : 'PAID',
+                    shipMethod: 'STANDARD',
+                    trackingCarrier: shippingText || null,
+                    internalNote: note || null
+                }
+            });
+            const manual = [];
+            for (const row of parsed){
+                const known = row.skuCode ? skuByCode.get(row.skuCode) : null;
+                if (known === null || known === void 0 ? void 0 : known.product) {
+                    var _ref, _manualMoney, _manualMoney1;
+                    const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0 ? 1 : Math.max(1, Math.floor(Number(row.quantity)));
+                    const unit = (_ref = (_manualMoney = manualMoney(row.unitPrice)) !== null && _manualMoney !== void 0 ? _manualMoney : manualMoney(row.lineAmount)) !== null && _ref !== void 0 ? _ref : 0;
+                    const total = (_manualMoney1 = manualMoney(row.lineAmount)) !== null && _manualMoney1 !== void 0 ? _manualMoney1 : Math.round((unit || 0) * quantity * 100) / 100;
+                    await tx.orderitem.create({
+                        data: {
+                            orderId: order.id,
+                            productId: known.productId,
+                            productSkuId: known.id,
+                            productName: String(known.product.name || row.skuCode).slice(0, 200),
+                            skuCode: known.skuCode,
+                            materialLabel: known.materialLabel,
+                            sizeLabel: known.sizeLabel,
+                            quantity,
+                            unitPrice: unit || 0,
+                            lineAmount: total,
+                            inboundQty: 0,
+                            inboundStage: 'PENDING',
+                            shipmentImageUrl: row.imageUrl || null,
+                            giftWrapSelected: false
+                        }
+                    });
+                    continue;
+                }
+                manual.push(row);
+            }
+            if (manual.length) await insertManualOrderLines(tx, order, category.id, manual, username);
+            else {
+                const items = await tx.orderitem.findMany({
+                    where: {
+                        orderId: order.id
+                    }
+                });
+                const subtotal = Math.round(items.reduce((sum, item)=>{
+                    var _moneyAmount;
+                    return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
+                }, 0) * 100) / 100;
+                await tx.orderrecord.update({
+                    where: {
+                        id: order.id
+                    },
+                    data: {
+                        subtotalAmount: subtotal,
+                        totalAmount: subtotal
+                    }
+                });
+            }
+            if (weight > 0) {
+                const items = await tx.orderitem.findMany({
+                    where: {
+                        orderId: order.id
+                    },
+                    orderBy: {
+                        createdAt: 'asc'
+                    }
+                });
+                const carrier = items.find((item)=>String(item.skuCode || '').startsWith('ADD-'));
+                if (carrier) {
+                    await tx.product.update({
+                        where: {
+                            id: carrier.productId
+                        },
+                        data: {
+                            weightGram: Math.round(weight / Math.max(1, carrier.quantity) * 100) / 100
+                        }
+                    });
+                }
+            }
+            const fresh = await tx.orderrecord.findUnique({
+                where: {
+                    id: order.id
+                },
+                include: {
+                    items: true
+                }
+            });
+            await tx.orderoperationlog.create({
+                data: {
+                    orderId: order.id,
+                    actionType: '导入订单',
+                    actionNote: `邮箱 ${email}，${(fresh === null || fresh === void 0 ? void 0 : fresh.items.length) || 0} 行`.slice(0, 4000),
+                    operatorName: username
+                }
+            });
+            return {
+                orderId: order.id,
+                orderNo,
+                itemCount: ((fresh === null || fresh === void 0 ? void 0 : fresh.items) || []).reduce((sum, item)=>sum + item.quantity, 0),
+                totalAmount: (_moneyAmount = moneyAmount(fresh === null || fresh === void 0 ? void 0 : fresh.totalAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0
+            };
+        }));
+    return created;
 }));
 const updateManualOrderLine = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
