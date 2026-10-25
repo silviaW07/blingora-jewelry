@@ -210,11 +210,13 @@ function InboundShipBar({
   shipments,
   saving,
   onSave,
+  onUpdate,
   children,
 }: {
   shipments: Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string; images?: string[] }>
   saving: boolean
   onSave: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
+  onUpdate: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
   children: (button: React.ReactNode) => React.ReactNode
 }) {
   const blankLeg = () => ({
@@ -230,10 +232,23 @@ function InboundShipBar({
     legs: [blankLeg()],
   })
   const [open, setOpen] = React.useState(false)
+  const [editingId, setEditingId] = React.useState('')
+  const [zoomUrl, setZoomUrl] = React.useState('')
   const [blocks, setBlocks] = React.useState<Array<{ key: string; images: string[]; shippedAt: string; legs: Array<{ key: string; trackingNumber: string; channel: string; note: string }> }>>([blankBlock()])
   const [uploadingKey, setUploadingKey] = React.useState('')
   const openForm = () => {
+    setEditingId('')
     setBlocks([blankBlock()])
+    setOpen(true)
+  }
+  const editRow = (row: { id: string; shippedAt: string; trackingNumber: string; channel: string; note: string; images?: string[] }) => {
+    setEditingId(row.id)
+    setBlocks([{
+      key: row.id,
+      images: [...(row.images || [])],
+      shippedAt: shanghaiShipLabel(row.shippedAt),
+      legs: [{ key: row.id, trackingNumber: row.trackingNumber || '', channel: row.channel || '', note: row.note || '' }],
+    }])
     setOpen(true)
   }
   const uploadFiles = async (key: string, files: File[]) => {
@@ -271,20 +286,29 @@ function InboundShipBar({
       toast.error('请填写发货日期')
       return
     }
-    const saved = await onSave({
-      blocks: filled.flatMap((block) => {
-        const legs = block.legs.filter((leg) => leg.trackingNumber.trim() || leg.channel.trim() || leg.note.trim())
-        const rows = legs.length ? legs : block.legs.slice(0, 1)
-        return rows.map((leg) => ({
-          shippedAt: block.shippedAt,
-          trackingNumber: leg.trackingNumber.trim(),
-          channel: leg.channel.trim(),
-          note: leg.note.trim(),
-          images: block.images,
-        }))
-      }),
+    const packed = filled.flatMap((block) => {
+      const legs = block.legs.filter((leg) => leg.trackingNumber.trim() || leg.channel.trim() || leg.note.trim())
+      const rows = legs.length ? legs : block.legs.slice(0, 1)
+      return rows.map((leg) => ({
+        shippedAt: block.shippedAt,
+        trackingNumber: leg.trackingNumber.trim(),
+        channel: leg.channel.trim(),
+        note: leg.note.trim(),
+        images: block.images,
+      }))
     })
-    if (saved) setOpen(false)
+    let saved = false
+    if (editingId) {
+      const [first, ...rest] = packed
+      saved = await onUpdate({ id: editingId, ...first })
+      if (saved && rest.length) saved = await onSave({ blocks: rest })
+    } else {
+      saved = await onSave({ blocks: packed })
+    }
+    if (saved) {
+      setEditingId('')
+      setOpen(false)
+    }
   }
   const shanghaiShipLabel = (iso: string) => {
     const date = new Date(iso)
@@ -323,7 +347,7 @@ function InboundShipBar({
                       const url = block.images[slot]
                       return (
                         <label key={`${block.key}-${slot}`} className="relative flex h-16 w-16 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-slate-300 bg-slate-50 text-[11px] text-slate-400">
-                          {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : (uploadingKey === block.key ? '上传中' : '发货图片')}
+                          {url ? <button type="button" className="h-full w-full" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setZoomUrl(url) }}><img src={url} alt="" className="h-full w-full object-cover" /></button> : (uploadingKey === block.key ? '上传中' : '发货图片')}
                           {url ? null : <input type="file" accept="image/*" className="hidden" onChange={(event) => { const files = event.target.files; if (files?.length) void uploadFiles(block.key, [...files]); event.target.value = '' }} />}
                           {url ? (
                             <button type="button" className="absolute right-0.5 top-0.5 rounded bg-white/90 px-1 text-xs text-slate-700" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, images: item.images.filter((_, imageIndex) => imageIndex !== slot) } : item)) }}>×</button>
@@ -383,7 +407,7 @@ function InboundShipBar({
             )
           })}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void saveForm()} disabled={saving}>保存发货</Button>
+            <Button type="button" onClick={() => void saveForm()} disabled={saving}>{editingId ? '保存修改' : '保存发货'}</Button>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>取消</Button>
           </div>
         </div>
@@ -394,7 +418,9 @@ function InboundShipBar({
             <div key={row.id} className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center">
               <div className="flex gap-1">
                 {(row.images || []).slice(0, 4).map((url) => (
-                  <img key={url} src={url} alt="" className="h-12 w-12 rounded border object-cover" />
+                  <button key={url} type="button" className="h-12 w-12 overflow-hidden rounded border" onClick={() => setZoomUrl(url)}>
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  </button>
                 ))}
               </div>
               <div className="grid flex-1 gap-1 text-sm text-slate-700 sm:grid-cols-4">
@@ -403,8 +429,15 @@ function InboundShipBar({
                 <div className="break-all">渠道 {row.channel || '—'}</div>
                 <div className="break-all">备注 {row.note || '—'}</div>
               </div>
+              <Button type="button" variant="outline" className="h-9 shrink-0 border-slate-600 px-3" onClick={() => editRow(row)}>编辑</Button>
             </div>
           ))}
+        </div>
+      ) : null}
+      {zoomUrl ? (
+        <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-label="发货图片" onClick={() => setZoomUrl('')}>
+          <button type="button" className="absolute right-4 top-4 rounded-md bg-white px-3 py-1.5 text-sm text-slate-900" onClick={() => setZoomUrl('')}>关闭</button>
+          <img src={zoomUrl} alt="" className="max-h-[92vh] max-w-[94vw] object-contain" onClick={(event) => event.stopPropagation()} />
         </div>
       ) : null}
       {children(
@@ -2061,6 +2094,7 @@ export const OrderManagementView = ({
             shipments={state.inboundShipments || []}
             saving={state.inboundSaving}
             onSave={(input) => handlers.saveInboundShipment(input)}
+            onUpdate={(input) => handlers.updateInboundShipment(input)}
           >
           {(shipButton) => (
           <DialogFooter className="shrink-0 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">

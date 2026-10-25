@@ -39,6 +39,7 @@ import {
   importCustomerOrder,
   listInboundShipments,
   saveInboundShipment,
+  updateInboundShipment,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -184,6 +185,7 @@ export interface OrderManagementHandlers {
   updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => Promise<boolean>
   deleteInboundLines: (lineIds: string[]) => Promise<boolean>
   saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
+  updateInboundShipment: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
@@ -644,6 +646,27 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     try {
       setInboundSaving(true)
       const rows = await saveInboundShipment({ orderId: inboundOrderId, ...input })
+      setInboundShipments(rows || [])
+      toast.success('发货信息已保存')
+      return true
+    } catch (err: any) {
+      toast.error(err.message || '保存发货信息失败')
+      return false
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
+
+  const updateInboundShipmentRow = async (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => {
+    if (!inboundOrderId) return false
+    if (!String(input.shippedAt || '').trim()) {
+      toast.error('请填写发货日期')
+      return false
+    }
+    try {
+      setInboundSaving(true)
+      const rows = await updateInboundShipment({ orderId: inboundOrderId, ...input })
       setInboundShipments(rows || [])
       toast.success('发货信息已保存')
       return true
@@ -1390,6 +1413,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       deleteInboundLines: deleteInboundLinesOnOrder,
       importCustomerOrder: importCustomerOrderFile,
       saveInboundShipment: saveInboundShipmentRows,
+      updateInboundShipment: updateInboundShipmentRow,
       exportInboundSheet,
     },
   }
