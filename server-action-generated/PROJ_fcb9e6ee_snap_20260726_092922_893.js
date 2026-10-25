@@ -46116,6 +46116,8 @@ const customerOrderInclude = {
             materialLabel: true,
             sizeLabel: true,
             quantity: true,
+            inboundQty: true,
+            inboundStage: true,
             unitPrice: true,
             lineAmount: true,
             product: {
@@ -46169,6 +46171,7 @@ const mapCustomerOrder = (row)=>({
                 imageUrl: ((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.imageUrl) || '',
                 mainImageUrl: ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.mainImageUrl) || '',
                 quantity: item.quantity,
+                inboundQty: Math.max(0, Math.floor(Number(item.inboundQty) || 0)),
                 unitPrice: toNum(item.unitPrice),
                 lineAmount: toNum(item.lineAmount),
                 inboundStage: [
