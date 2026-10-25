@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Camera } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Camera, X } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
 import { formatBadgeCount, useAdminNavBadges } from '@/backend/hooks/useAdminNavBadges';
@@ -134,7 +134,7 @@ const DECORATE_PAGES = [
     icon: ShoppingBag,
   },
 ] as const;
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
@@ -165,24 +165,25 @@ export default function Sidebar() {
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
-  return <aside className={`
-        ${sidebarOpen ? 'w-64' : 'w-20'} 
-        shrink-0 flex flex-col transition-all duration-200 sticky top-0 h-full border-r border-border bg-card
-      `}>
+  const labelsOpen = mobileOpen || sidebarOpen;
+  return <>
+      {mobileOpen ? <button type="button" aria-label="关闭菜单" className="fixed inset-0 z-[70] bg-black/40 md:hidden" onClick={onClose} /> : null}
+      <aside className={`fixed inset-y-0 left-0 z-[80] flex w-64 shrink-0 flex-col border-r border-border bg-card transition-transform duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:inset-auto md:z-auto md:h-dvh md:translate-x-0 ${labelsOpen ? 'md:w-64' : 'md:w-20'}`}>
       {/* 顶部 Logo 区 */}
       <div className="h-16 flex items-center px-4 gap-3 shrink-0 border-b border-border relative">
         <div className="w-9 h-9 rounded-md bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-sm">
           <ShieldCheck className="w-5 h-5" />
         </div>
         
-        {sidebarOpen && <div className="flex flex-col flex-1 min-w-0">
+        {labelsOpen && <div className="flex flex-col flex-1 min-w-0">
             <span className="truncate font-[var(--font-header)] font-bold text-sm tracking-tight text-foreground">GLOBALTRADE</span>
             <span className="truncate text-[10px] font-mono font-medium text-accent tracking-wider uppercase">ADMIN CONSOLE</span>
           </div>}
 
         {/* 展开/收起 控制按钮 */}
-        <button onClick={toggleSidebar} className="absolute -right-3 top-1/2 -translate-y-1/2 flex items-center justify-center z-10 w-6 h-6 bg-card border border-border rounded-full text-muted-foreground hover:text-foreground shadow-sm transition-colors">
-          {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        <button type="button" aria-label="关闭菜单" onClick={onClose} className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground md:hidden"><X className="h-5 w-5" /></button>
+        <button onClick={toggleSidebar} className="absolute -right-3 top-1/2 hidden -translate-y-1/2 items-center justify-center z-10 h-6 w-6 rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground md:flex">
+          {labelsOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
       </div>
 
@@ -190,16 +191,16 @@ export default function Sidebar() {
       <nav className="flex-1 p-4 flex flex-col gap-1 overflow-y-auto">
         {isLogin && currentRole === 'ADMIN' ? (
           <div
-            className={`mb-3 rounded-xl border border-[#93C5FD] bg-[linear-gradient(135deg,#DBEAFE,#EFF6FF)] p-2 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.85)] ${sidebarOpen ? '' : 'flex flex-col items-center'}`}
+            className={`mb-3 rounded-xl border border-[#93C5FD] bg-[linear-gradient(135deg,#DBEAFE,#EFF6FF)] p-2 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.85)] ${labelsOpen ? '' : 'flex flex-col items-center'}`}
             data-controller-name="页面内容编辑面板入口"
           >
-            <div className={`mb-1.5 flex items-center gap-2 px-1 text-[#1D4ED8] ${sidebarOpen ? '' : 'justify-center'}`}>
+            <div className={`mb-1.5 flex items-center gap-2 px-1 text-[#1D4ED8] ${labelsOpen ? '' : 'justify-center'}`}>
               <Paintbrush className="h-4 w-4 shrink-0" />
-              {sidebarOpen ? (
+              {labelsOpen ? (
                 <span className="truncate text-xs font-bold uppercase tracking-[0.08em]">页面可视化装修</span>
               ) : null}
             </div>
-            <div className={`flex flex-col gap-1 ${sidebarOpen ? '' : 'w-full items-center'}`}>
+            <div className={`flex flex-col gap-1 ${labelsOpen ? '' : 'w-full items-center'}`}>
               {DECORATE_PAGES.map((page) => {
                 const Icon = page.icon;
                 return (
@@ -208,14 +209,14 @@ export default function Sidebar() {
                     type="button"
                     title={`装修${page.label}`}
                     onClick={() => window.open(page.href, '_blank', 'noopener,noreferrer')}
-                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold text-[#1E40AF] transition hover:bg-white/80 ${sidebarOpen ? 'w-full' : 'justify-center'}`}
+                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold text-[#1E40AF] transition hover:bg-white/80 ${labelsOpen ? 'w-full' : 'justify-center'}`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    {sidebarOpen ? <span className="truncate">{page.label}</span> : null}
+                    {labelsOpen ? <span className="truncate">{page.label}</span> : null}
                   </button>
                 );
               })}
-              {sidebarOpen ? (
+              {labelsOpen ? (
                 <p className="mt-1 px-2 text-[10px] leading-4 text-[#1D4ED8]/80">
                   进入首页装修后，点击顶部 Logo 可上传站点 Logo；左下角可配置【客服配置】（WhatsApp）
                 </p>
@@ -233,16 +234,16 @@ export default function Sidebar() {
               ? newOrders
               : 0;
         const badge = formatBadgeCount(unread);
-        return <Link key={item.id} href={item.href} prefetch={false} onMouseEnter={() => { if (!isActive) router.prefetch(item.href) }} data-active={isActive} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
+        return <Link key={item.id} href={item.href} prefetch={false} onClick={() => onClose?.()} onMouseEnter={() => { if (!isActive) router.prefetch(item.href) }} data-active={isActive} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
               <span className="relative shrink-0">
                 <Icon className="w-5 h-5" />
-                {!sidebarOpen && badge ? (
+                {!labelsOpen && badge ? (
                   <span className="absolute -right-2 -top-1.5 min-w-[1.1rem] rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-4 text-white">
                     {badge}
                   </span>
                 ) : null}
               </span>
-              {sidebarOpen && <div className="flex min-w-0 w-full items-center justify-between">
+              {labelsOpen && <div className="flex min-w-0 w-full items-center justify-between">
                   <span className="truncate">{item.label}</span>
                   {badge ? (
                     <span className="ml-2 inline-flex min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -260,7 +261,7 @@ export default function Sidebar() {
             <button
               type="button"
               onClick={() => AdminProfile.navigateTo(router)}
-              className={`flex items-center rounded-md transition-colors hover:bg-secondary ${sidebarOpen ? 'gap-3 px-1 py-1' : 'justify-center p-1'}`}
+              className={`flex items-center rounded-md transition-colors hover:bg-secondary ${labelsOpen ? 'gap-3 px-1 py-1' : 'justify-center p-1'}`}
               title="个人设置"
             >
               <div className="w-9 h-9 rounded-full border border-border bg-card flex items-center justify-center shrink-0 text-muted-foreground shadow-xs overflow-hidden">
@@ -271,20 +272,21 @@ export default function Sidebar() {
                   <span className="text-xs font-bold text-foreground">{avatarLetter}</span>
                 )}
               </div>
-              {sidebarOpen && <div className="min-w-0 flex-1 text-left">
+              {labelsOpen && <div className="min-w-0 flex-1 text-left">
                   <p className="text-xs font-semibold text-foreground truncate">{username || '超级管理员'}</p>
                   <p className="text-[10px] text-muted-foreground truncate">个人设置 · 更换头像</p>
                 </div>}
             </button>
             {/* 退出登录按钮 */}
-            <button onClick={handleLogout} className={`flex items-center ${sidebarOpen ? 'gap-3 justify-start px-3 py-2.5' : 'justify-center p-2.5'} rounded-md text-sm font-medium text-secondary-foreground hover:bg-secondary hover:text-foreground transition-colors`}>
+            <button onClick={handleLogout} className={`flex items-center ${labelsOpen ? 'gap-3 justify-start px-3 py-2.5' : 'justify-center p-2.5'} rounded-md text-sm font-medium text-secondary-foreground hover:bg-secondary hover:text-foreground transition-colors`}>
               <LogOut className="shrink-0 w-5 h-5" />
-              {sidebarOpen && <span className="truncate">退出登录</span>}
+              {labelsOpen && <span className="truncate">退出登录</span>}
             </button>
           </> : <div className="flex justify-center text-muted-foreground">
             {/* 未登录时的底部占位 */}
             <ShieldCheck className="shrink-0 w-6 h-6" />
           </div>}
       </div>
-    </aside>;
+    </aside>
+    </>;
 }

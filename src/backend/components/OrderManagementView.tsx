@@ -582,7 +582,7 @@ export const OrderManagementView = ({
       
       {/* 1. 关键指标看板 Section */}
       <section data-controller-name="关键指标看板" className="w-full bg-slate-50 border-b" data-api-unique-id="ordermanagementview-rb60e64f62b7f9d04-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-        <div className="w-full max-w-none px-4 xl:px-6 py-8" data-api-unique-id="ordermanagementview-r8a74b3ed8054c34c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+        <div className="w-full max-w-none px-3 py-4 sm:px-4 sm:py-8 xl:px-6" data-api-unique-id="ordermanagementview-r8a74b3ed8054c34c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
           <div className="flex items-center justify-between mb-6" data-api-unique-id="ordermanagementview-ra591b6e3898dad1f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <h1 className="text-2xl font-header font-bold tracking-tight" data-api-unique-id="ordermanagementview-r76e3a528fc21a119-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">订单管理</h1>
             <div className="flex gap-2" data-api-unique-id="ordermanagementview-rfd62d20332c66dd9-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
@@ -634,11 +634,11 @@ export const OrderManagementView = ({
 
       {/* 2. 订单筛选控制台 Section */}
       <section data-controller-name="订单筛选控制台" className="w-full" data-api-unique-id="ordermanagementview-rd15ae399a3022c30-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-        <div className="w-full max-w-none px-4 xl:px-6 py-8" data-api-unique-id="ordermanagementview-r1d9fb3b1858894fa-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-          <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full mb-6" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-            <TabsList className="h-10 p-1 bg-slate-100/50" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-              <TabsTrigger value="ALL" className="px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
-              {Object.entries(ORDER_STATUS_LABELS).map(([k, v], index) => <TabsTrigger key={k} value={k} className="px-6" data-api-unique-id="ordermanagementview-r180c0dacb82b1231-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
+        <div className="w-full max-w-none px-3 py-4 sm:px-4 sm:py-8 xl:px-6" data-api-unique-id="ordermanagementview-r1d9fb3b1858894fa-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+          <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="mb-6 w-full max-w-full overflow-x-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+            <TabsList className="h-10 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+              <TabsTrigger value="ALL" className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
+              {Object.entries(ORDER_STATUS_LABELS).map(([k, v], index) => <TabsTrigger key={k} value={k} className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r180c0dacb82b1231-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
                   {v}
                 </TabsTrigger>)}
             </TabsList>
@@ -647,19 +647,19 @@ export const OrderManagementView = ({
           <Card className="shadow-sm border-slate-200" data-api-unique-id="ordermanagementview-r1f768dc5d710e915-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <CardContent className="p-6" data-api-unique-id="ordermanagementview-rfe1440c2f31f8753-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <form className="flex flex-wrap items-end gap-4" data-api-unique-id="ordermanagementview-r532206465c35d31c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                <div className="flex-1 min-w-[240px]" data-api-unique-id="ordermanagementview-r1e6b9b8dbfaf7b5d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                <div className="w-full min-w-0 flex-1 sm:min-w-[240px]" data-api-unique-id="ordermanagementview-r1e6b9b8dbfaf7b5d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <Label className="text-xs font-bold uppercase text-muted-foreground mb-2 block" data-api-unique-id="ordermanagementview-r6e126d0f501a5a77-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全局搜索</Label>
                   <Input className="h-10" value={state.filterForm.keyword || ''} onChange={e => handlers.handleFilterChange('keyword', e.target.value)} placeholder="订单号 / 客户 / 邮箱" data-api-unique-id="ordermanagementview-r3db9b9a68ccec56f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" />
                 </div>
-                <div className="w-[180px]" data-api-unique-id="ordermanagementview-rb7f771e4d093a20d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                <div className="w-full sm:w-[180px]" data-api-unique-id="ordermanagementview-rb7f771e4d093a20d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <Label className="text-xs font-bold uppercase text-muted-foreground mb-2 block" data-api-unique-id="ordermanagementview-rc55fd4a0365d0cb2-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">国家/地区</Label>
                   <Input className="h-10" value={state.filterForm.countryName || ''} onChange={e => handlers.handleFilterChange('countryName', e.target.value)} placeholder="例如: US" data-api-unique-id="ordermanagementview-rb3070d39d9bf3a2d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" />
                 </div>
-                <div className="w-[180px]" data-api-unique-id="ordermanagementview-r212180d99aa8d3a7-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                <div className="w-full sm:w-[180px]" data-api-unique-id="ordermanagementview-r212180d99aa8d3a7-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <Label className="text-xs font-bold uppercase text-muted-foreground mb-2 block" data-api-unique-id="ordermanagementview-rc9fa4e3f8dcb0b0f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">下单时间 (起)</Label>
                   <Input type="date" className="h-10" value={state.filterForm.startDate || ''} onChange={e => handlers.handleFilterChange('startDate', e.target.value)} data-api-unique-id="ordermanagementview-r636320b2c3cf9ddd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" />
                 </div>
-                <div className="w-[180px]" data-api-unique-id="ordermanagementview-r77cefabd2cb519cd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                <div className="w-full sm:w-[180px]" data-api-unique-id="ordermanagementview-r77cefabd2cb519cd-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <Label className="text-xs font-bold uppercase text-muted-foreground mb-2 block" data-api-unique-id="ordermanagementview-r925100bed0bec2d0-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">下单时间 (止)</Label>
                   <Input type="date" className="h-10" value={state.filterForm.endDate || ''} onChange={e => handlers.handleFilterChange('endDate', e.target.value)} data-api-unique-id="ordermanagementview-r5db82181cceaebcb-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" />
                 </div>
@@ -681,7 +681,7 @@ export const OrderManagementView = ({
       <section data-controller-name="订单数据列表" className="w-full" data-api-unique-id="ordermanagementview-r59fb865c02138ac6-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
         <div className="w-full max-w-none px-4 xl:px-6 pb-12" data-api-unique-id="ordermanagementview-rf716b4765ff61c1f-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
           <Card className="shadow-sm border-slate-200 overflow-hidden" data-api-unique-id="ordermanagementview-rb70c09c00d88ed41-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-            <div className="flex items-center justify-between gap-4 px-6 py-4 border-b bg-white">
+            <div className="flex flex-col items-stretch justify-between gap-3 border-b bg-white px-4 py-4 sm:flex-row sm:items-center sm:px-6">
               <div className="text-sm font-medium text-muted-foreground">
                 {state.filterForm.status === 'PAID'
                   ? '已支付包含待发货、运输中、已送达 · 按线下单时间排序'
@@ -700,7 +700,7 @@ export const OrderManagementView = ({
             </div>
             <CardContent className="p-0" data-api-unique-id="ordermanagementview-r1da7689958c38b10-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <div className="overflow-x-auto" data-api-unique-id="ordermanagementview-r2d67d5ce48ac7d5a-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                <Table data-api-unique-id="ordermanagementview-r90a9eeedb50f830d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+                <Table className="min-w-[960px]" data-api-unique-id="ordermanagementview-r90a9eeedb50f830d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <TableHeader className="bg-slate-50/80" data-api-unique-id="ordermanagementview-rb0510531d2e123f5-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     <TableRow data-api-unique-id="ordermanagementview-r2829fce95c941439-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                       <TableHead className="w-[150px] font-bold py-4 pl-6">订单编号</TableHead>
@@ -1255,7 +1255,7 @@ export const OrderManagementView = ({
               <X className="h-5 w-5" />
             </button>
             <DialogTitle className="text-2xl">登记入库</DialogTitle>
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-start">
             <DialogDescription className="text-base">
               {(() => {
                 const orderNo = state.list.find((row) => row.id === state.inboundOrderId)?.orderNo
@@ -1578,7 +1578,7 @@ export const OrderManagementView = ({
               </tbody>
             </table>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
                 <div>
                   <div className="text-xs font-medium text-slate-500">Original total</div>
