@@ -30,6 +30,8 @@ export const saveInboundShipment = (...args: Parameters<Actions["saveInboundShip
   rpcCall<Awaited<ReturnType<Actions["saveInboundShipment"]>>>("src.backend.actions.OrderManagement.saveInboundShipment", ...args);
 export const updateManualOrderLine = (...args: Parameters<Actions["updateManualOrderLine"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateManualOrderLine"]>>>("src.backend.actions.OrderManagement.updateManualOrderLine", ...args);
+export const deleteInboundLines = (...args: Parameters<Actions["deleteInboundLines"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["deleteInboundLines"]>>>("src.backend.actions.OrderManagement.deleteInboundLines", ...args);
 export const updateOrderDiscount = (...args: Parameters<Actions["updateOrderDiscount"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderDiscount"]>>>("src.backend.actions.OrderManagement.updateOrderDiscount", ...args);
 export const updateOrderRemark = (...args: Parameters<Actions["updateOrderRemark"]>) => 
