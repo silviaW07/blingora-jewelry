@@ -200,71 +200,44 @@ function OrderItemRow({
   const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
   return (
-    <div className="border-b border-[#f0f0f0] py-2.5 last:border-b-0">
-      <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-2.5">
-        <div className="flex items-start justify-center sm:justify-start">
-          <button
-            type="button"
-            onClick={onOpenProduct}
-            className="relative aspect-square w-16 shrink-0 cursor-pointer overflow-hidden bg-[#F1F5F9] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
-            aria-label={item.productName}
-          >
-            <EditableImg
-              propKey={`order-item-img-${item.itemId}`}
-              src={thumbSrc}
-              keywords={thumbSrc || item.productName}
-              fallbackSrc={item.mainImageUrl || undefined}
-              disableKeywordSearch
-              className="pointer-events-none h-full w-full object-contain"
-            />
-          </button>
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-2.5">
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <h3 className="whitespace-normal break-words text-sm font-medium leading-snug text-[#0F172A]">
-                <button
-                  type="button"
-                  onClick={onOpenProduct}
-                  className="block w-full whitespace-normal break-words text-left transition-colors hover:text-[#f254a6] hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
-                >
-                  {item.productName}
-                </button>
-              </h3>
-
-              <div className="flex flex-wrap gap-1.5">
-                {item.skuCode && !item.skuCode.startsWith('ADD-') ? <SpecChip label="SKU" value={item.skuCode} /> : null}
-                {item.materialLabel ? (
-                  <SpecChip label={t('common.color')} value={item.materialLabel} />
-                ) : null}
-                {item.sizeLabel ? (
-                  <SpecChip label={t('common.size')} value={item.sizeLabel} />
-                ) : null}
-              </div>
-
-              <p className="text-xs font-semibold text-[#0F172A]">
-                {currencyCode} {discountUnit.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="flex shrink-0 flex-col items-start gap-2 xl:items-center xl:px-3">
-              <span className="inline-flex rounded-full border border-[#eadfce] bg-[#fbfaf7] px-3 py-1 text-xs font-semibold text-[#6b5e52]">
-                {t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}
-              </span>
-              <span className="text-xs font-semibold text-[#6b5e52]">
-                {t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}
-              </span>
-            </div>
-
-            <div className="shrink-0 text-sm text-[#64748B] xl:text-right">
-              <p>×{item.quantity}</p>
-              <p className="mt-1 font-medium text-[#0F172A]">
-                {currencyCode} {discountLine.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="flex items-center gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0">
+      <button
+        type="button"
+        onClick={onOpenProduct}
+        className="relative h-14 w-14 shrink-0 overflow-hidden bg-[#F1F5F9]"
+        aria-label={item.productName}
+      >
+        <EditableImg
+          propKey={`order-item-img-${item.itemId}`}
+          src={thumbSrc}
+          keywords={thumbSrc || item.productName}
+          fallbackSrc={item.mainImageUrl || undefined}
+          disableKeywordSearch
+          className="pointer-events-none h-full w-full object-contain"
+        />
+      </button>
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={onOpenProduct}
+          className="line-clamp-2 text-left text-xs font-medium leading-4 text-[#0F172A]"
+        >
+          {item.productName}
+        </button>
+        <p className="mt-0.5 truncate text-[10px] leading-4 text-[#64748B]">
+          {[item.skuCode && !item.skuCode.startsWith('ADD-') ? `SKU ${item.skuCode}` : '', item.materialLabel, item.sizeLabel].filter(Boolean).join(' · ')}
+        </p>
+        <p className="text-xs font-semibold leading-4 text-[#0F172A]">{currencyCode} {discountUnit.toFixed(2)}</p>
+      </div>
+      <div className="w-[4.6rem] shrink-0 text-center">
+        <span className="inline-flex max-w-full items-center justify-center rounded-full border border-[#eadfce] bg-[#fbfaf7] px-1.5 py-0.5 text-[10px] font-medium leading-4 text-[#6b5e52]">
+          {t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}
+        </span>
+        <p className="mt-0.5 text-[10px] leading-4 text-[#6b5e52]">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
+      </div>
+      <div className="w-16 shrink-0 text-right text-xs leading-4 text-[#64748B]">
+        <p>×{item.quantity}</p>
+        <p className="font-medium text-[#0F172A]">{currencyCode} {discountLine.toFixed(2)}</p>
       </div>
     </div>
   )
