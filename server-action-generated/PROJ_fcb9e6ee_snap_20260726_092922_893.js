@@ -31610,6 +31610,155 @@ const SHEET_HEADERS = [
         ]
     ]
 ];
+function loadJSZip() {
+    try {
+        const exceljsPath = /*require.resolve*/(8608);
+        return __webpack_require__(9006)(__webpack_require__(9006).resolve('jszip', {
+            paths: [
+                (__webpack_require__(6928).dirname)(exceljsPath)
+            ]
+        }));
+    } catch  {
+        try {
+            return __webpack_require__(Object(function webpackMissingModule() { const e = new Error("Cannot find module 'jszip'"); e.code = 'MODULE_NOT_FOUND'; throw e; }()));
+        } catch  {
+            return null;
+        }
+    }
+}
+function resolveZipTarget(fromFile, target) {
+    const clean = target.split('?')[0];
+    if (clean.startsWith('/')) return clean.replace(/^\/+/, '');
+    const dir = fromFile.split('/').slice(0, -1);
+    for (const part of clean.split('/')){
+        if (part === '..') dir.pop();
+        else if (part && part !== '.') dir.push(part);
+    }
+    return dir.join('/');
+}
+/** WPS / Excel 嵌入单元格的图片不在 drawing 里，要从压缩包的 cellimages 或 richData 读。 */ async function embeddedCellImages(raw) {
+    const out = new Map();
+    const JSZip = loadJSZip();
+    if (!JSZip) return out;
+    let zip;
+    try {
+        zip = await JSZip.loadAsync(raw);
+    } catch  {
+        return out;
+    }
+    const readMedia = async (filePath)=>{
+        const hit = zip.file(filePath);
+        if (!hit) return null;
+        const buffer = Buffer.from(await hit.async('nodebuffer'));
+        if (!buffer.length) return null;
+        const ext = (filePath.split('.').pop() || 'png').toLowerCase();
+        return {
+            buffer,
+            extension: ext === 'jpeg' ? 'jpg' : ext
+        };
+    };
+    const relMapFrom = (xml)=>{
+        const relMap = new Map();
+        const re = /<Relationship\b([^>]*)\/?>/g;
+        let match;
+        while(match = re.exec(xml)){
+            var _match__match, _match__match1;
+            const id = (_match__match = match[1].match(/\bId="([^"]+)"/)) === null || _match__match === void 0 ? void 0 : _match__match[1];
+            const target = (_match__match1 = match[1].match(/\bTarget="([^"]+)"/)) === null || _match__match1 === void 0 ? void 0 : _match__match1[1];
+            if (id && target) relMap.set(id, target);
+        }
+        return relMap;
+    };
+    const cellImages = zip.file('xl/cellimages.xml');
+    const cellRels = zip.file('xl/_rels/cellimages.xml.rels');
+    const idToMedia = new Map();
+    if (cellImages && cellRels) {
+        const xml = String(await cellImages.async('string'));
+        const relMap = relMapFrom(String(await cellRels.async('string')));
+        const chunks = xml.match(/<[^>]*:?cellImage\b[\s\S]*?<\/[^>]*:?cellImage>/g) || [];
+        for (const chunk of chunks){
+            var _chunk_match, _chunk_match1;
+            const name = (_chunk_match = chunk.match(/\bname="([^"]+)"/)) === null || _chunk_match === void 0 ? void 0 : _chunk_match[1];
+            const rid = (_chunk_match1 = chunk.match(/\br:embed="([^"]+)"/)) === null || _chunk_match1 === void 0 ? void 0 : _chunk_match1[1];
+            const target = name && rid ? relMap.get(rid) : '';
+            if (!name || !target) continue;
+            const img = await readMedia(resolveZipTarget('xl/cellimages.xml', target));
+            if (img) idToMedia.set(name, img);
+        }
+    }
+    const workbookXml = zip.file('xl/workbook.xml');
+    const workbookRels = zip.file('xl/_rels/workbook.xml.rels');
+    let sheetPath = 'xl/worksheets/sheet1.xml';
+    if (workbookXml && workbookRels) {
+        var _wbXml_match;
+        const wbXml = String(await workbookXml.async('string'));
+        const rid = (_wbXml_match = wbXml.match(/<sheet\b[^>]*\br:id="([^"]+)"/)) === null || _wbXml_match === void 0 ? void 0 : _wbXml_match[1];
+        const relMap = relMapFrom(String(await workbookRels.async('string')));
+        const target = rid ? relMap.get(rid) : '';
+        if (target) sheetPath = resolveZipTarget('xl/workbook.xml', target);
+    }
+    const sheetFile = zip.file(sheetPath);
+    const sheetXml = sheetFile ? String(await sheetFile.async('string')) : '';
+    const cellRe = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
+    let cell;
+    while(cell = cellRe.exec(sheetXml)){
+        var _cell__match;
+        const ref = cell[1].match(/\br="[A-Z]+(\d+)"/);
+        if (!ref) continue;
+        const row = Number(ref[1]);
+        if (!row || out.has(row)) continue;
+        const imageId = (_cell__match = cell[2].match(/DISPIMG\(\s*(?:&quot;|")([^"&]+)/)) === null || _cell__match === void 0 ? void 0 : _cell__match[1];
+        const img = imageId ? idToMedia.get(imageId) : undefined;
+        if (img) out.set(row, img);
+    }
+    const metaFile = zip.file('xl/metadata.xml');
+    const richFile = zip.file('xl/richData/rdrichvalue.xml');
+    const richRelFile = zip.file('xl/richData/richValueRel.xml');
+    const richRelRels = zip.file('xl/richData/_rels/richValueRel.xml.rels');
+    if (metaFile && richFile && richRelFile && richRelRels && sheetXml) {
+        var _meta_match;
+        const meta = String(await metaFile.async('string'));
+        const richXml = String(await richFile.async('string'));
+        const richRelXml = String(await richRelFile.async('string'));
+        const rels = relMapFrom(String(await richRelRels.async('string')));
+        const vmToRich = [];
+        const vmBlocks = ((_meta_match = meta.match(/<valueMetadata\b[\s\S]*?<\/valueMetadata>/)) === null || _meta_match === void 0 ? void 0 : _meta_match[0]) || '';
+        for (const block of vmBlocks.match(/<bk\b[\s\S]*?<\/bk>/g) || []){
+            var _block_match;
+            const index = (_block_match = block.match(/<rc\b[^>]*\bv="(\d+)"/)) === null || _block_match === void 0 ? void 0 : _block_match[1];
+            vmToRich.push(index == null ? -1 : Number(index));
+        }
+        const richValues = [];
+        for (const block of richXml.match(/<rv\b[\s\S]*?<\/rv>/g) || []){
+            richValues.push([
+                ...block.matchAll(/<v>(\d+)<\/v>/g)
+            ].map((item)=>Number(item[1])));
+        }
+        const relIds = [
+            ...richRelXml.matchAll(/\br:id="([^"]+)"/g)
+        ].map((item)=>item[1]);
+        const mediaByRel = [];
+        for (const id of relIds){
+            const target = rels.get(id);
+            mediaByRel.push(target ? await readMedia(resolveZipTarget('xl/richData/richValueRel.xml', target)) : null);
+        }
+        const richCellRe = /<c\b([^>]*)>/g;
+        let richCell;
+        while(richCell = richCellRe.exec(sheetXml)){
+            var _richCell__match;
+            const vm = (_richCell__match = richCell[1].match(/\bvm="(\d+)"/)) === null || _richCell__match === void 0 ? void 0 : _richCell__match[1];
+            const ref = richCell[1].match(/\br="[A-Z]+(\d+)"/);
+            if (!vm || !ref) continue;
+            const row = Number(ref[1]);
+            if (!row || out.has(row)) continue;
+            const values = richValues[vmToRich[Number(vm) - 1]] || [];
+            const relIndex = values.find((value)=>value >= 0 && value < mediaByRel.length && mediaByRel[value]);
+            const img = relIndex == null ? null : mediaByRel[relIndex];
+            if (img) out.set(row, img);
+        }
+    }
+    return out;
+}
 const importInboundSheet = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
@@ -31657,6 +31806,10 @@ const importInboundSheet = (0, _action_utils.requireRole)([
             if (imagesByRow.has(row)) continue;
             const media = workbook.getImage(Number(image.imageId));
             if (media === null || media === void 0 ? void 0 : media.buffer) imagesByRow.set(row, media);
+        }
+        const embedded = await embeddedCellImages(raw);
+        for (const [row, media] of embedded){
+            if (!imagesByRow.has(row)) imagesByRow.set(row, media);
         }
         const last = Math.max(sheet.rowCount || 1, ...[
             ...imagesByRow.keys(),
@@ -31878,6 +32031,10 @@ async function readGoodsSheet(fileBase64, fileName) {
             if (imagesByRow.has(row)) continue;
             const media = workbook.getImage(Number(image.imageId));
             if (media === null || media === void 0 ? void 0 : media.buffer) imagesByRow.set(row, media);
+        }
+        const embedded = await embeddedCellImages(raw);
+        for (const [row, media] of embedded){
+            if (!imagesByRow.has(row)) imagesByRow.set(row, media);
         }
         const last = Math.max(sheet.rowCount || 1, ...[
             ...imagesByRow.keys(),
@@ -67328,6 +67485,21 @@ decimal.js/decimal.mjs:
 */
 //# sourceMappingURL=library.js.map
 
+
+/***/ },
+
+/***/ 9006
+(module) {
+
+function webpackEmptyContext(req) {
+	const e = new Error("Cannot find module '" + req + "'");
+	e.code = 'MODULE_NOT_FOUND';
+	throw e;
+}
+webpackEmptyContext.keys = () => ([]);
+webpackEmptyContext.resolve = webpackEmptyContext;
+webpackEmptyContext.id = 9006;
+module.exports = webpackEmptyContext;
 
 /***/ },
 
