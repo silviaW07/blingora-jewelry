@@ -30361,6 +30361,9 @@ _export(exports, {
     get appendOrderGoods () {
         return appendOrderGoods;
     },
+    get deleteInboundLines () {
+        return deleteInboundLines;
+    },
     get exportInboundSheet () {
         return exportInboundSheet;
     },
@@ -31633,7 +31636,7 @@ function loadJSZip() {
     }
 }
 function resolveZipTarget(fromFile, target) {
-    const clean = target.split('?')[0];
+    const clean = target.split('?')[0].replace(/\\/g, '/');
     if (clean.startsWith('/')) return clean.replace(/^\/+/, '');
     const dir = fromFile.split('/').slice(0, -1);
     for (const part of clean.split('/')){
@@ -31642,25 +31645,41 @@ function resolveZipTarget(fromFile, target) {
     }
     return dir.join('/');
 }
-/** WPS / Excel 嵌入单元格的图片不在 drawing 里，要从压缩包的 cellimages 或 richData 读。 */ async function embeddedCellImages(raw) {
-    const out = new Map();
+/** WPS 嵌入单元格、Excel 单元格图片、以及画在格子上但没被 exceljs 认到的图。 */ async function embeddedCellImages(raw) {
+    const byRow = new Map();
+    const ordered = [];
     const JSZip = loadJSZip();
-    if (!JSZip) return out;
+    if (!JSZip) return {
+        byRow,
+        ordered
+    };
     let zip;
     try {
         zip = await JSZip.loadAsync(raw);
     } catch  {
-        return out;
+        return {
+            byRow,
+            ordered
+        };
     }
+    const entries = Object.keys(zip.files || {});
+    const byLower = new Map(entries.map((name)=>[
+            name.toLowerCase(),
+            name
+        ]));
+    const entry = (name)=>{
+        const hit = byLower.get(name.toLowerCase());
+        return hit ? zip.file(hit) : null;
+    };
     const readMedia = async (filePath)=>{
-        const hit = zip.file(filePath);
+        const hit = entry(filePath) || entry(filePath.replace(/^xl\//i, ''));
         if (!hit) return null;
         const buffer = Buffer.from(await hit.async('nodebuffer'));
         if (!buffer.length) return null;
-        const ext = (filePath.split('.').pop() || 'png').toLowerCase();
+        const ext = (filePath.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
         return {
             buffer,
-            extension: ext === 'jpeg' ? 'jpg' : ext
+            extension: ext === 'jpeg' ? 'jpg' : ext || 'png'
         };
     };
     const relMapFrom = (xml)=>{
@@ -31675,63 +31694,98 @@ function resolveZipTarget(fromFile, target) {
         }
         return relMap;
     };
-    const cellImages = zip.file('xl/cellimages.xml');
-    const cellRels = zip.file('xl/_rels/cellimages.xml.rels');
+    const imageIdIn = (xml)=>{
+        var _xml_match_, _xml_match;
+        return ((_xml_match = xml.match(/DISPIMG\(\s*(?:&quot;|&#34;|["'“”])([^"'“”&<]+)/i)) === null || _xml_match === void 0 ? void 0 : (_xml_match_ = _xml_match[1]) === null || _xml_match_ === void 0 ? void 0 : _xml_match_.trim()) || '';
+    };
+    const remember = (row, img)=>{
+        if (!row || !img || byRow.has(row)) return;
+        byRow.set(row, img);
+    };
+    const cellImageNames = entries.filter((name)=>/(^|\/)cellimages\.xml$/i.test(name) && !/\/_rels\//i.test(name));
     const idToMedia = new Map();
-    if (cellImages && cellRels) {
-        const xml = String(await cellImages.async('string'));
-        const relMap = relMapFrom(String(await cellRels.async('string')));
-        const chunks = xml.match(/<[^>]*:?cellImage\b[\s\S]*?<\/[^>]*:?cellImage>/g) || [];
+    for (const imageName of cellImageNames){
+        const xmlFile = zip.file(imageName);
+        const relFile = entry(imageName.replace(/^(.*\/)?([^/]+)$/i, '$1_rels/$2.rels')) || entry('xl/_rels/cellimages.xml.rels');
+        if (!xmlFile || !relFile) continue;
+        const xml = String(await xmlFile.async('string'));
+        const relMap = relMapFrom(String(await relFile.async('string')));
+        const chunks = xml.match(/<[^>]*:?cellImage\b[\s\S]*?<\/[^>]*:?cellImage>/gi) || [];
         for (const chunk of chunks){
             var _chunk_match, _chunk_match1;
-            const name = (_chunk_match = chunk.match(/\bname="([^"]+)"/)) === null || _chunk_match === void 0 ? void 0 : _chunk_match[1];
-            const rid = (_chunk_match1 = chunk.match(/\br:embed="([^"]+)"/)) === null || _chunk_match1 === void 0 ? void 0 : _chunk_match1[1];
-            const target = name && rid ? relMap.get(rid) : '';
-            if (!name || !target) continue;
-            const img = await readMedia(resolveZipTarget('xl/cellimages.xml', target));
-            if (img) idToMedia.set(name, img);
+            const name = (_chunk_match = chunk.match(/\b(?:name|descr)="([^"]+)"/i)) === null || _chunk_match === void 0 ? void 0 : _chunk_match[1];
+            const rid = (_chunk_match1 = chunk.match(/\br:(?:embed|link)="([^"]+)"/i)) === null || _chunk_match1 === void 0 ? void 0 : _chunk_match1[1];
+            const target = rid ? relMap.get(rid) : '';
+            if (!target) continue;
+            const img = await readMedia(resolveZipTarget(imageName, target));
+            if (!img) continue;
+            ordered.push(img);
+            if (name) idToMedia.set(name, img);
         }
     }
-    const workbookXml = zip.file('xl/workbook.xml');
-    const workbookRels = zip.file('xl/_rels/workbook.xml.rels');
+    const workbookXml = entry('xl/workbook.xml');
+    const workbookRels = entry('xl/_rels/workbook.xml.rels');
     let sheetPath = 'xl/worksheets/sheet1.xml';
     if (workbookXml && workbookRels) {
         var _wbXml_match;
         const wbXml = String(await workbookXml.async('string'));
-        const rid = (_wbXml_match = wbXml.match(/<sheet\b[^>]*\br:id="([^"]+)"/)) === null || _wbXml_match === void 0 ? void 0 : _wbXml_match[1];
+        const rid = (_wbXml_match = wbXml.match(/<sheet\b[^>]*\br:id="([^"]+)"/i)) === null || _wbXml_match === void 0 ? void 0 : _wbXml_match[1];
         const relMap = relMapFrom(String(await workbookRels.async('string')));
         const target = rid ? relMap.get(rid) : '';
         if (target) sheetPath = resolveZipTarget('xl/workbook.xml', target);
     }
-    const sheetFile = zip.file(sheetPath);
+    const sheetFile = entry(sheetPath);
     const sheetXml = sheetFile ? String(await sheetFile.async('string')) : '';
-    const cellRe = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
-    let cell;
-    while(cell = cellRe.exec(sheetXml)){
-        var _cell__match;
-        const ref = cell[1].match(/\br="[A-Z]+(\d+)"/);
-        if (!ref) continue;
-        const row = Number(ref[1]);
-        if (!row || out.has(row)) continue;
-        const imageId = (_cell__match = cell[2].match(/DISPIMG\(\s*(?:&quot;|")([^"&]+)/)) === null || _cell__match === void 0 ? void 0 : _cell__match[1];
-        const img = imageId ? idToMedia.get(imageId) : undefined;
-        if (img) out.set(row, img);
+    const sharedFile = entry('xl/sharedStrings.xml');
+    const sharedStrings = [];
+    if (sharedFile) {
+        const sharedXml = String(await sharedFile.async('string'));
+        for (const item of sharedXml.match(/<si\b[\s\S]*?<\/si>/g) || []){
+            sharedStrings.push(item.replace(/<[^>]+>/g, ''));
+        }
     }
-    const metaFile = zip.file('xl/metadata.xml');
-    const richFile = zip.file('xl/richData/rdrichvalue.xml');
-    const richRelFile = zip.file('xl/richData/richValueRel.xml');
-    const richRelRels = zip.file('xl/richData/_rels/richValueRel.xml.rels');
-    if (metaFile && richFile && richRelFile && richRelRels && sheetXml) {
+    const formulaRows = [];
+    if (sheetXml) {
+        const rowRe = /<row\b([^>]*)>([\s\S]*?)<\/row>/g;
+        let rowMatch;
+        let fallbackRow = 1;
+        while(rowMatch = rowRe.exec(sheetXml)){
+            var _rowMatch__match;
+            const row = Number(((_rowMatch__match = rowMatch[1].match(/\br="(\d+)"/)) === null || _rowMatch__match === void 0 ? void 0 : _rowMatch__match[1]) || fallbackRow);
+            fallbackRow = row + 1;
+            const body = rowMatch[2];
+            let imageId = imageIdIn(body);
+            if (!imageId) {
+                var _body_match, _body_match1;
+                const stringIndex = ((_body_match = body.match(/\bt="s"[^>]*>[\s\S]*?<v>(\d+)<\/v>/)) === null || _body_match === void 0 ? void 0 : _body_match[1]) || ((_body_match1 = body.match(/<v>(\d+)<\/v>[\s\S]*?\bt="s"/)) === null || _body_match1 === void 0 ? void 0 : _body_match1[1]);
+                if (stringIndex && imageIdIn(sharedStrings[Number(stringIndex)] || '')) imageId = imageIdIn(sharedStrings[Number(stringIndex)] || '');
+            }
+            const named = imageId ? idToMedia.get(imageId) : undefined;
+            if (named) {
+                remember(row, named);
+                formulaRows.push(row);
+            } else if (imageId) formulaRows.push(row);
+        }
+        if (!byRow.size && formulaRows.length && formulaRows.length === ordered.length) {
+            formulaRows.forEach((row, index)=>remember(row, ordered[index]));
+        }
+    }
+    const metaFile = entry('xl/metadata.xml');
+    const richFile = entry('xl/richData/rdrichvalue.xml') || entry('xl/richData/rdRichValue.xml');
+    const richRelPath = byLower.get('xl/richdata/richvaluerel.xml') || byLower.get('xl/richdata/rdrichvaluerel.xml') || '';
+    const richRelFile = richRelPath ? zip.file(richRelPath) : null;
+    const richRelRelsFile = entry('xl/richData/_rels/richValueRel.xml.rels') || entry('xl/richData/_rels/rdRichValueRel.xml.rels');
+    if (metaFile && richFile && richRelFile && richRelRelsFile && sheetXml && !byRow.size) {
         var _meta_match;
         const meta = String(await metaFile.async('string'));
         const richXml = String(await richFile.async('string'));
         const richRelXml = String(await richRelFile.async('string'));
-        const rels = relMapFrom(String(await richRelRels.async('string')));
+        const rels = relMapFrom(String(await richRelRelsFile.async('string')));
         const vmToRich = [];
-        const vmBlocks = ((_meta_match = meta.match(/<valueMetadata\b[\s\S]*?<\/valueMetadata>/)) === null || _meta_match === void 0 ? void 0 : _meta_match[0]) || '';
+        const vmBlocks = ((_meta_match = meta.match(/<valueMetadata\b[\s\S]*?<\/valueMetadata>/i)) === null || _meta_match === void 0 ? void 0 : _meta_match[0]) || '';
         for (const block of vmBlocks.match(/<bk\b[\s\S]*?<\/bk>/g) || []){
             var _block_match;
-            const index = (_block_match = block.match(/<rc\b[^>]*\bv="(\d+)"/)) === null || _block_match === void 0 ? void 0 : _block_match[1];
+            const index = (_block_match = block.match(/\bv="(\d+)"/)) === null || _block_match === void 0 ? void 0 : _block_match[1];
             vmToRich.push(index == null ? -1 : Number(index));
         }
         const richValues = [];
@@ -31746,7 +31800,8 @@ function resolveZipTarget(fromFile, target) {
         const mediaByRel = [];
         for (const id of relIds){
             const target = rels.get(id);
-            mediaByRel.push(target ? await readMedia(resolveZipTarget('xl/richData/richValueRel.xml', target)) : null);
+            const img = target ? await readMedia(resolveZipTarget(richRelPath, target)) : null;
+            mediaByRel.push(img);
         }
         const richCellRe = /<c\b([^>]*)>/g;
         let richCell;
@@ -31755,15 +31810,42 @@ function resolveZipTarget(fromFile, target) {
             const vm = (_richCell__match = richCell[1].match(/\bvm="(\d+)"/)) === null || _richCell__match === void 0 ? void 0 : _richCell__match[1];
             const ref = richCell[1].match(/\br="[A-Z]+(\d+)"/);
             if (!vm || !ref) continue;
-            const row = Number(ref[1]);
-            if (!row || out.has(row)) continue;
             const values = richValues[vmToRich[Number(vm) - 1]] || [];
             const relIndex = values.find((value)=>value >= 0 && value < mediaByRel.length && mediaByRel[value]);
-            const img = relIndex == null ? null : mediaByRel[relIndex];
-            if (img) out.set(row, img);
+            remember(Number(ref[1]), relIndex == null ? null : mediaByRel[relIndex]);
+        }
+        if (!ordered.length) {
+            for (const img of mediaByRel)if (img) ordered.push(img);
         }
     }
-    return out;
+    if (!byRow.size) {
+        const drawingNames = entries.filter((name)=>/xl\/drawings\/drawing[^/]*\.xml$/i.test(name));
+        for (const drawingName of drawingNames){
+            const drawingFile = zip.file(drawingName);
+            const relName = drawingName.replace(/\/([^/]+)$/, '/_rels/$1.rels');
+            const relFile = entry(relName);
+            if (!drawingFile || !relFile) continue;
+            const drawingXml = String(await drawingFile.async('string'));
+            const relMap = relMapFrom(String(await relFile.async('string')));
+            const anchors = drawingXml.match(/<(?:[^:>]+:)?(?:twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/(?:[^:>]+:)?(?:twoCellAnchor|oneCellAnchor)>/gi) || [];
+            const drawingImages = [];
+            for (const anchor of anchors){
+                var _anchor_match, _anchor_match1;
+                const rowText = (_anchor_match = anchor.match(/<(?:[^:>]+:)?row>(\d+)<\/(?:[^:>]+:)?row>/i)) === null || _anchor_match === void 0 ? void 0 : _anchor_match[1];
+                const rid = (_anchor_match1 = anchor.match(/\br:embed="([^"]+)"/i)) === null || _anchor_match1 === void 0 ? void 0 : _anchor_match1[1];
+                const target = rid ? relMap.get(rid) : '';
+                if (rowText == null || !target) continue;
+                const img = await readMedia(resolveZipTarget(drawingName, target));
+                remember(Number(rowText) + 1, img);
+                if (img) drawingImages.push(img);
+            }
+            if (!ordered.length) ordered.push(...drawingImages);
+        }
+    }
+    return {
+        byRow,
+        ordered
+    };
 }
 const importInboundSheet = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -31781,6 +31863,7 @@ const importInboundSheet = (0, _action_utils.requireRole)([
     const raw = Buffer.from(String(input.fileBase64 || ''), 'base64');
     const fileName = String(input.fileName || '');
     const imagesByRow = new Map();
+    const unplacedCellImages = [];
     const matrix = [];
     if (/\.(csv|xls)$/i.test(fileName)) {
         var _book_SheetNames, _book_Sheets;
@@ -31814,9 +31897,10 @@ const importInboundSheet = (0, _action_utils.requireRole)([
             if (media === null || media === void 0 ? void 0 : media.buffer) imagesByRow.set(row, media);
         }
         const embedded = await embeddedCellImages(raw);
-        for (const [row, media] of embedded){
+        for (const [row, media] of embedded.byRow){
             if (!imagesByRow.has(row)) imagesByRow.set(row, media);
         }
+        if (!embedded.byRow.size) unplacedCellImages.push(...embedded.ordered);
         const last = Math.max(sheet.rowCount || 1, ...[
             ...imagesByRow.keys(),
             1
@@ -31870,7 +31954,8 @@ const importInboundSheet = (0, _action_utils.requireRole)([
         const quantityText = read(rowNumber, 'quantity');
         const totalText = read(rowNumber, 'lineAmount');
         const costText = read(rowNumber, 'costPrice');
-        const image = imagesByRow.get(rowNumber);
+        let image = imagesByRow.get(rowNumber);
+        if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift();
         if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
             emptyRun += 1;
             if (emptyRun >= 3) break;
@@ -32006,6 +32091,7 @@ const importInboundSheet = (0, _action_utils.requireRole)([
 async function readGoodsSheet(fileBase64, fileName) {
     const raw = Buffer.from(String(fileBase64 || ''), 'base64');
     const imagesByRow = new Map();
+    const unplacedCellImages = [];
     const matrix = [];
     if (/\.(csv|xls)$/i.test(fileName)) {
         var _book_SheetNames, _book_Sheets;
@@ -32039,9 +32125,10 @@ async function readGoodsSheet(fileBase64, fileName) {
             if (media === null || media === void 0 ? void 0 : media.buffer) imagesByRow.set(row, media);
         }
         const embedded = await embeddedCellImages(raw);
-        for (const [row, media] of embedded){
+        for (const [row, media] of embedded.byRow){
             if (!imagesByRow.has(row)) imagesByRow.set(row, media);
         }
+        if (!embedded.byRow.size) unplacedCellImages.push(...embedded.ordered);
         const last = Math.max(sheet.rowCount || 1, ...[
             ...imagesByRow.keys(),
             1
@@ -32095,7 +32182,8 @@ async function readGoodsSheet(fileBase64, fileName) {
         const quantityText = read(rowNumber, 'quantity');
         const totalText = read(rowNumber, 'lineAmount');
         const costText = read(rowNumber, 'costPrice');
-        const image = imagesByRow.get(rowNumber);
+        let image = imagesByRow.get(rowNumber);
+        if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift();
         if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
             emptyRun += 1;
             if (emptyRun >= 3) break;
@@ -32470,6 +32558,60 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
                 }
             });
         }
+        const items = await tx.orderitem.findMany({
+            where: {
+                orderId: order.id
+            }
+        });
+        const subtotal = Math.round(items.reduce((sum, row)=>{
+            var _moneyAmount;
+            return sum + ((_moneyAmount = moneyAmount(row.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
+        }, 0) * 100) / 100;
+        const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal);
+        const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount = moneyAmount(order.shippingAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0) + ((_moneyAmount1 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0)) * 100) / 100;
+        await tx.orderrecord.update({
+            where: {
+                id: order.id
+            },
+            data: {
+                subtotalAmount: subtotal,
+                discountAmount: discount,
+                totalAmount: total
+            }
+        });
+    });
+    return inboundLinesAfterGoods(order.id, order.currencyCode);
+}));
+const deleteInboundLines = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        },
+        include: {
+            items: {
+                select: {
+                    id: true
+                }
+            }
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const ids = [
+        ...new Set((input.lineIds || []).map((id)=>String(id || '').trim()).filter(Boolean))
+    ].filter((id)=>order.items.some((item)=>item.id === id));
+    if (!ids.length) throw new Error('请先勾选商品');
+    await _prisma.default.$transaction(async (tx)=>{
+        var _moneyAmount, _moneyAmount1;
+        await tx.orderitem.deleteMany({
+            where: {
+                orderId: order.id,
+                id: {
+                    in: ids
+                }
+            }
+        });
         const items = await tx.orderitem.findMany({
             where: {
                 orderId: order.id
