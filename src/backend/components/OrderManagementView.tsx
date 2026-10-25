@@ -110,6 +110,9 @@ const inboundSpuKey = (skuCode?: string | null) => {
   return (cut > 0 ? sku.slice(0, cut) : sku).toLowerCase()
 }
 const compareInboundRows = (a: { spu?: string | null; skuCode?: string | null }, b: { spu?: string | null; skuCode?: string | null }) => {
+  const manual = (row: { skuCode?: string | null }) => String(row.skuCode || '').startsWith('ADD-') ? 1 : 0
+  const rank = manual(a) - manual(b)
+  if (rank) return rank
   const left = String(a.spu || inboundSpuKey(a.skuCode))
   const right = String(b.spu || inboundSpuKey(b.skuCode))
   const spu = left.localeCompare(right, 'en', { numeric: true, sensitivity: 'base' })
@@ -205,7 +208,7 @@ export const OrderManagementView = ({
   const [stageFilter, setStageFilter] = React.useState('ALL');
   const [batchNote, setBatchNote] = React.useState('');
   const [noteOpen, setNoteOpen] = React.useState(false);
-  const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; sku: string; quantity: string; unitPrice: string }>>([]);
+  const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }>>([]);
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
@@ -500,20 +503,16 @@ export const OrderManagementView = ({
     const images = list.filter((file) => file.type.startsWith('image/'));
     const sheets = list.filter((file) => !file.type.startsWith('image/') && /\.(xlsx|xls|csv)$/i.test(file.name));
     try {
-      const cards: Array<{ key: string; imageUrl: string; sku: string; quantity: string; unitPrice: string }> = [];
+      const cards: Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }> = [];
       for (const file of images) {
         const imageUrl = await uploadInboundImage(file);
-        cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, sku: '', quantity: '1', unitPrice: '' });
+        cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, quantity: '1', unitPrice: '', costPrice: '' });
       }
       if (cards.length) setAddonCards((prev) => [...prev, ...cards]);
       const parsed = [];
       for (const file of sheets) parsed.push(...await readAddonSheet(file));
-      if (parsed.length) {
-        const result = await handlers.appendInboundGoods(parsed);
-        if (result?.addedCount) setAddonCards([]);
-      } else if (!cards.length) {
-        toast.error('请拖入商品图片或带 SKU 的表格');
-      }
+      if (parsed.length) await handlers.appendInboundGoods(parsed);
+      else if (!cards.length) toast.error('请拖入商品图片');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '传入商品失败');
     }
@@ -536,21 +535,25 @@ export const OrderManagementView = ({
       toast.error(error instanceof Error ? error.message : '传入表格失败');
     }
   };
-  const submitAddonCards = async () => {
-    const ready = addonCards.filter((card) => card.sku.trim());
-    if (!ready.length) {
-      toast.error('请先填写 SKU');
+  const patchAddonCard = (key: string, patch: Partial<{ quantity: string; unitPrice: string; costPrice: string }>) => {
+    setAddonCards((prev) => prev.map((item) => item.key === key ? { ...item, ...patch } : item));
+  };
+  const saveAddonRow = async (card: { key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }) => {
+    const unitRaw = card.unitPrice.trim();
+    const costRaw = card.costPrice.trim();
+    const unitPrice = unitRaw === '' ? 0 : Number(unitRaw);
+    const costPrice = costRaw === '' ? null : Number(costRaw);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0 || (costPrice != null && (!Number.isFinite(costPrice) || costPrice < 0))) {
+      toast.error('请填写正确的售价和成本价');
       return;
     }
-    const result = await handlers.appendInboundGoods(ready.map((card) => ({
-      skuCode: card.sku.trim(),
-      quantity: Number(card.quantity) || 1,
-      unitPrice: card.unitPrice.trim() && Number.isFinite(Number(card.unitPrice)) ? Number(card.unitPrice) : null,
-      shipmentImageUrl: card.imageUrl,
-    })));
-    if (!result) return;
-    const missing = new Set(result.missingSkus || []);
-    setAddonCards((prev) => prev.filter((card) => missing.has(card.sku.trim()) || !card.sku.trim()));
+    const saved = await handlers.appendManualOrderLine({
+      imageUrl: card.imageUrl,
+      quantity: Math.max(1, Math.floor(Number(card.quantity) || 1)),
+      unitPrice,
+      costPrice,
+    });
+    if (saved) setAddonCards((prev) => prev.filter((item) => item.key !== card.key));
   };
   const inboundCurrency = state.inboundDrafts.find((line) => line.currencyCode)?.currencyCode || 'USD';
   const originalTotal = state.inboundDrafts.reduce((sum, line) => sum + (line.lineAmount != null ? Number(line.lineAmount) : (Number(line.unitPrice) || 0) * line.quantity), 0);
@@ -1490,11 +1493,11 @@ export const OrderManagementView = ({
                             ) : null}
                           </button>
                           <div className="min-w-0 flex-1">
-                            <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div>
+                            {line.productName.trim() ? <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div> : null}
                             <div className="mt-1">
                               <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
                             </div>
-                            <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>
+                            {String(line.skuCode || '').startsWith('ADD-') ? null : <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>}
                             {line.shipmentImageUrl ? (
                               <div className="mt-2">
                                 <div className="text-xs font-semibold text-slate-700">发货图片</div>
@@ -1522,12 +1525,14 @@ export const OrderManagementView = ({
                       {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>) : null}
                       {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.quantity}</td>) : null}
                       {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>) : null}
-                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.costPrice, 'CNY')}</td>) : null}
+                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.costPrice == null ? '' : formatInboundMoney(line.costPrice, 'CNY')}</td>) : null}
                       {columnVisible('supplier') ? (<td className="overflow-hidden px-2 py-3 align-middle text-center">
                         {line.supplierUrl ? (
                           <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-3 break-words text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
-                        ) : (
-                          <span className="line-clamp-3 break-words text-sm text-slate-700">{line.supplierName || '未录入'}</span>
+                        ) : line.supplierName ? (
+                          <span className="line-clamp-3 break-words text-sm text-slate-700">{line.supplierName}</span>
+                        ) : String(line.skuCode || '').startsWith('ADD-') ? null : (
+                          <span className="line-clamp-3 break-words text-sm text-slate-700">未录入</span>
                         )}
                       </td>) : null}
                       {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
@@ -1575,6 +1580,45 @@ export const OrderManagementView = ({
                     </tr>
                   )
                 })}
+
+                {addonCards.map((card) => (
+                  <tr key={card.key} className="border-b bg-sky-50/40 align-middle">
+                    {columnVisible('product') ? (
+                      <td className="overflow-hidden px-2 py-3 align-middle">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-white">
+                            {card.imageUrl ? <img src={card.imageUrl} alt="" className="h-full w-full object-contain" /> : null}
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <Button type="button" size="sm" className="h-8" disabled={state.inboundSaving} onClick={() => void saveAddonRow(card)}>保存</Button>
+                            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setAddonCards((prev) => prev.filter((item) => item.key !== card.key))}>删除</Button>
+                          </div>
+                        </div>
+                      </td>
+                    ) : null}
+                    {columnVisible('unitPrice') ? (
+                      <td className="px-1 py-3 align-middle">
+                        <input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} />
+                      </td>
+                    ) : null}
+                    {columnVisible('discountPrice') ? <td /> : null}
+                    {columnVisible('quantity') ? (
+                      <td className="px-1 py-3 align-middle">
+                        <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm" value={card.quantity} onChange={(event) => patchAddonCard(card.key, { quantity: event.target.value })} />
+                      </td>
+                    ) : null}
+                    {columnVisible('lineAmount') ? <td /> : null}
+                    {columnVisible('costPrice') ? (
+                      <td className="px-1 py-3 align-middle">
+                        <input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={card.costPrice} onChange={(event) => patchAddonCard(card.key, { costPrice: event.target.value })} />
+                      </td>
+                    ) : null}
+                    {columnVisible('supplier') ? <td /> : null}
+                    {columnVisible('note') ? <td /> : null}
+                    {columnVisible('stage') ? <td /> : null}
+                    {columnVisible('inboundQty') ? <td /> : null}
+                  </tr>
+                ))}
               </tbody>
             </table>
 
@@ -1617,7 +1661,7 @@ export const OrderManagementView = ({
                 onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProducts(event.dataTransfer.files); }}
               >
                 <div className="text-base font-semibold">传入商品（允许拖拽）</div>
-                <div className="mt-1 text-sm text-slate-500">拖入商品图片，填写 SKU 后加入订单</div>
+                <div className="mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
               </div>
               <div
                 className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${addonDrag === 'sheet' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
@@ -1630,29 +1674,6 @@ export const OrderManagementView = ({
                 <div className="mt-1 text-sm text-slate-500">按 SKU 给客户加货，已有商品会增加数量</div>
               </div>
             </div>
-            {addonCards.length ? (
-              <div className="mt-3 space-y-2">
-                {addonCards.map((card) => (
-                  <div key={card.key} className="flex flex-wrap items-end gap-2 rounded-md border bg-white p-3">
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded border bg-slate-50">
-                      <img src={card.imageUrl} alt="" className="h-full w-full object-contain" />
-                    </div>
-                    <label className="grid gap-1 text-sm font-medium text-slate-700">SKU
-                      <input className="h-9 w-44 rounded-md border px-2 text-sm" value={card.sku} onChange={(event) => setAddonCards((prev) => prev.map((item) => item.key === card.key ? { ...item, sku: event.target.value } : item))} />
-                    </label>
-                    <label className="grid gap-1 text-sm font-medium text-slate-700">数量
-                      <input className="h-9 w-20 rounded-md border px-2 text-sm" value={card.quantity} onChange={(event) => setAddonCards((prev) => prev.map((item) => item.key === card.key ? { ...item, quantity: event.target.value } : item))} />
-                    </label>
-                    <label className="grid gap-1 text-sm font-medium text-slate-700">售价
-                      <input className="h-9 w-24 rounded-md border px-2 text-sm" value={card.unitPrice} onChange={(event) => setAddonCards((prev) => prev.map((item) => item.key === card.key ? { ...item, unitPrice: event.target.value } : item))} />
-                    </label>
-                  </div>
-                ))}
-                <div className="flex justify-end">
-                  <Button type="button" onClick={() => void submitAddonCards()} disabled={state.inboundSaving}>加入订单</Button>
-                </div>
-              </div>
-            ) : null}
             <input ref={addonProductRef} type="file" className="hidden" multiple accept="image/*,.xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonProducts(files); event.target.value = ''; }} />
             <input ref={addonSheetRef} type="file" className="hidden" multiple accept=".xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonSheet(files); event.target.value = ''; }} />
           </div>

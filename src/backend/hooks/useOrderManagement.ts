@@ -32,6 +32,7 @@ import {
   updateOrderInbound,
   appendOrderGoods,
   updateOrderDiscount,
+  appendManualOrderLine,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -169,6 +170,7 @@ export interface OrderManagementHandlers {
   applyInboundImport: (patches: Array<{ id: string } & Partial<OrderInboundLine>>) => Promise<void>
   appendInboundGoods: (lines: Array<{ skuCode: string; quantity?: number; unitPrice?: number | null; inboundQty?: number; inboundNote?: string; inboundStage?: string; shipmentImageUrl?: string | null }>) => Promise<{ missingSkus: string[]; addedCount: number } | null>
   updateInboundDiscount: (discountPercent: number) => Promise<void>
+  appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number; costPrice?: number | null }) => Promise<boolean>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -898,6 +900,76 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+  const appendManualOrderLineToOrder = async (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number; costPrice?: number | null }) => {
+    if (!inboundOrderId) return false
+    try {
+      setInboundSaving(true)
+      const result = await appendManualOrderLine({ orderId: inboundOrderId, ...input })
+      const drafts = inboundDrafts
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId
+          ? {
+              ...row,
+              subtotalAmount: result.subtotalAmount,
+              discountAmount: result.discountAmount,
+              totalAmount: result.totalAmount,
+              inboundLines: result.lines,
+              inboundOrderedQty: result.orderedQty,
+              inboundReceivedQty: result.receivedQty,
+              inboundState: result.state,
+            }
+          : row
+      )))
+      setDetailData((prev) => {
+        if (!prev || prev.id !== inboundOrderId) return prev
+        return {
+          ...prev,
+          subtotalAmount: result.subtotalAmount,
+          discountAmount: result.discountAmount,
+          totalAmount: result.totalAmount,
+          inboundLines: result.lines,
+        }
+      })
+      setInboundDrafts(result.lines.map((line) => {
+        const prev = drafts.find((item) => item.id === line.id)
+        if (!prev) {
+          return {
+            ...line,
+            acknowledged: false,
+            openedQty: line.inboundQty,
+            openedNote: line.inboundNote || '',
+            openedStage: line.inboundStage || 'PENDING',
+            openedImage: line.shipmentImageUrl || '',
+          }
+        }
+        return {
+          ...line,
+          inboundQty: prev.inboundQty,
+          inboundNote: prev.inboundNote,
+          inboundStage: prev.inboundStage,
+          shipmentImageUrl: prev.shipmentImageUrl,
+          unitPrice: prev.unitPrice ?? line.unitPrice,
+          lineAmount: prev.lineAmount ?? line.lineAmount,
+          costPrice: prev.costPrice ?? line.costPrice,
+          supplierName: prev.supplierName || line.supplierName,
+          supplierUrl: prev.supplierUrl || line.supplierUrl,
+          acknowledged: prev.acknowledged,
+          openedQty: prev.openedQty,
+          openedNote: prev.openedNote,
+          openedStage: prev.openedStage,
+          openedImage: prev.openedImage,
+        }
+      }))
+      toast.success('已加到最后一行')
+      return true
+    } catch (err: any) {
+      toast.error(err.message || '保存加货失败')
+      return false
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
   const exportInboundSheet = async (input: ExportInboundSheetInput) => {
     if (!input.rows?.length) {
       toast.error('请先勾选要导出的商品')
@@ -994,6 +1066,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       applyInboundImport,
       appendInboundGoods,
       updateInboundDiscount,
+      appendManualOrderLine: appendManualOrderLineToOrder,
       exportInboundSheet,
     },
   }

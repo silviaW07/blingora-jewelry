@@ -144,6 +144,9 @@ function inboundSpuOf(item: { skuCode?: string | null; product?: { productCode?:
 }
 
 function compareInboundSpu(a: { spu?: string | null; skuCode?: string | null }, b: { spu?: string | null; skuCode?: string | null }) {
+  const manual = (row: { skuCode?: string | null }) => String(row.skuCode || '').startsWith('ADD-') ? 1 : 0
+  const rank = manual(a) - manual(b)
+  if (rank) return rank
   const spu = String(a.spu || '').localeCompare(String(b.spu || ''), 'en', { numeric: true, sensitivity: 'base' })
   if (spu) return spu
   return String(a.skuCode || '').localeCompare(String(b.skuCode || ''), 'en', { numeric: true, sensitivity: 'base' })
@@ -1114,6 +1117,124 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
   }),
 )
 
+
+
+export interface AppendManualOrderLineInput {
+  orderId: string
+  imageUrl?: string | null
+  unitPrice?: number | null
+  quantity?: number
+  costPrice?: number | null
+}
+
+/**
+ * 不填 SKU，按售价、数量、成本价在订单末尾加一行。
+ */
+export const appendManualOrderLine = requireRole([UserRole.ADMIN])(
+  withResult(async (input: AppendManualOrderLineInput): Promise<UpdateOrderDiscountOutput> => {
+    const { username } = getAuthContext()
+    const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
+    if (!order) throw new Error('订单不存在')
+    const category = await prisma.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
+    if (!category) throw new Error('没有可用分类，无法保存加货')
+    const quantity = Math.max(1, Math.floor(Number(input.quantity) || 1))
+    const unitPrice = Math.round((Number(input.unitPrice) || 0) * 100) / 100
+    const costPrice = input.costPrice == null || input.costPrice === ('' as unknown) || !Number.isFinite(Number(input.costPrice))
+      ? null
+      : Math.round(Number(input.costPrice) * 100) / 100
+    const imageUrl = String(input.imageUrl || '').trim().slice(0, 700)
+    const code = `ADD-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100)
+    await prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          name: '',
+          slug: code,
+          productCode: code,
+          source: 'MANUAL',
+          status: 'DRAFT',
+          costPrice,
+          mainImageUrl: imageUrl,
+          galleryJson: imageUrl ? [{ url: imageUrl, sort: 1, type: 'image' }] : [],
+          category: { connect: { id: category.id } },
+          skus: {
+            create: {
+              skuCode: code,
+              imageUrl: imageUrl || null,
+              price: costPrice ?? 0,
+              stock: 0,
+              stockStatus: 'IN_STOCK',
+              attributeJson: [],
+            },
+          },
+        },
+        include: { skus: true },
+      })
+      const sku = product.skus[0]
+      if (!sku) throw new Error('加货行创建失败')
+      await tx.orderitem.create({
+        data: {
+          orderId: order.id,
+          productId: product.id,
+          productSkuId: sku.id,
+          productName: '',
+          skuCode: code,
+          quantity,
+          unitPrice,
+          lineAmount: Math.round(unitPrice * quantity * 100) / 100,
+          inboundQty: 0,
+          inboundStage: 'PENDING',
+          giftWrapSelected: false,
+        },
+      })
+      const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
+      const subtotal = Math.round(items.reduce((sum, item) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
+      const previousDiscount = moneyAmount(order.discountAmount) ?? 0
+      const discount = Math.min(Math.max(0, previousDiscount), subtotal)
+      const shipping = moneyAmount(order.shippingAmount) ?? 0
+      const gift = moneyAmount(order.giftWrapAmount) ?? 0
+      const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100
+      await tx.orderrecord.update({
+        where: { id: order.id },
+        data: { subtotalAmount: subtotal, discountAmount: discount, totalAmount: total },
+      })
+      await tx.orderoperationlog.create({
+        data: {
+          orderId: order.id,
+          actionType: '客户加货',
+          actionNote: `手动加货 x${quantity} 售价 ${unitPrice}`.slice(0, 4000),
+          operatorName: username,
+        },
+      })
+    })
+    const freshOrder = await prisma.orderrecord.findUnique({ where: { id: order.id } })
+    const fresh = await prisma.orderitem.findMany({
+      where: { orderId: order.id },
+      include: {
+        product: { select: inboundProductSelect },
+        productSku: { select: { imageUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    const subtotalAmount = moneyAmount(freshOrder?.subtotalAmount) ?? 0
+    const discountAmount = moneyAmount(freshOrder?.discountAmount) ?? 0
+    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, {
+      subtotalAmount,
+      discountAmount,
+    })).sort(compareInboundSpu)
+    const summary = summarizeInbound(lines)
+    const subtotal = moneyAmount(freshOrder?.subtotalAmount) ?? 0
+    return {
+      lines,
+      orderedQty: summary.orderedQty,
+      receivedQty: summary.inboundQty,
+      state: summary.state,
+      subtotalAmount,
+      discountAmount,
+      totalAmount: moneyAmount(freshOrder?.totalAmount) ?? 0,
+      discountPercent: subtotal > 0 ? Math.round((discountAmount / subtotal) * 10000) / 100 : 0,
+    }
+  }),
+)
 
 export interface UpdateOrderDiscountInput {
   orderId: string
