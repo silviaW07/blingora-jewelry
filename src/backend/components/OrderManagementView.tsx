@@ -418,6 +418,8 @@ export const OrderManagementView = ({
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const shipImageRef = React.useRef<HTMLInputElement>(null);
+  const addonProductRef = React.useRef<HTMLInputElement>(null);
+  const addonSheetRef = React.useRef<HTMLInputElement>(null);
   const shipTimeNote = (note: string) => {
     const stamp = new Intl.DateTimeFormat('zh-CN', {
       timeZone: 'Asia/Shanghai',
