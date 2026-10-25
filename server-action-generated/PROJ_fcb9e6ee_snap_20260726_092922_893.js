@@ -46529,6 +46529,7 @@ const mapCustomerOrder = (row)=>({
         internalNote: row.internalNote || '',
         createdAt: row.createdAt.toISOString(),
         itemCount: row.items.reduce((sum, item)=>sum + item.quantity, 0),
+        shipments: [],
         items: row.items.map((item)=>{
             var _item_productSku, _item_product;
             return {
@@ -46861,7 +46862,37 @@ const getCustomerOrderDetail = (0, _action_utils.requireRole)([
         include: customerOrderInclude
     });
     if (!row) throw new Error('订单不存在或无权访问');
-    return mapCustomerOrder(row);
+    const mapped = mapCustomerOrder(row);
+    const segments = await _prisma.default.orderlogisticssegment.findMany({
+        where: {
+            orderId: row.id,
+            segmentType: '入库发货'
+        },
+        orderBy: [
+            {
+                shippedAt: 'asc'
+            },
+            {
+                createdAt: 'asc'
+            }
+        ]
+    });
+    mapped.shipments = segments.map((segment)=>{
+        const timeline = Array.isArray(segment.timelineJson) ? segment.timelineJson : [];
+        const images = timeline.map((item)=>{
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return '';
+            return String(item.imageUrl || '');
+        }).filter(Boolean);
+        return {
+            id: segment.id,
+            shippedAt: segment.shippedAt ? segment.shippedAt.toISOString() : '',
+            trackingNumber: String(segment.trackingNumber || ''),
+            channel: String(segment.carrierName || ''),
+            note: String(segment.remark || ''),
+            images
+        };
+    });
+    return mapped;
 }));
 const reorderCustomerOrder = (0, _action_utils.requireRole)([
     _action_utils.UserRole.CUSTOMER

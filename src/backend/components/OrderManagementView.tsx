@@ -217,16 +217,20 @@ function InboundShipBar({
   onSave: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   children: (button: React.ReactNode) => React.ReactNode
 }) {
-  const blankBlock = () => ({
-    key: `ship-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    images: [] as string[],
-    shippedAt: '',
+  const blankLeg = () => ({
+    key: `leg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     trackingNumber: '',
     channel: '',
     note: '',
   })
+  const blankBlock = () => ({
+    key: `ship-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    images: [] as string[],
+    shippedAt: '',
+    legs: [blankLeg()],
+  })
   const [open, setOpen] = React.useState(false)
-  const [blocks, setBlocks] = React.useState<Array<{ key: string; images: string[]; shippedAt: string; trackingNumber: string; channel: string; note: string }>>([blankBlock()])
+  const [blocks, setBlocks] = React.useState<Array<{ key: string; images: string[]; shippedAt: string; legs: Array<{ key: string; trackingNumber: string; channel: string; note: string }> }>>([blankBlock()])
   const [uploadingKey, setUploadingKey] = React.useState('')
   const openForm = () => {
     setBlocks([blankBlock()])
@@ -258,7 +262,7 @@ function InboundShipBar({
     }
   }
   const saveForm = async () => {
-    const filled = blocks.filter((block) => block.shippedAt.trim() || block.trackingNumber.trim() || block.channel.trim() || block.note.trim() || block.images.length)
+    const filled = blocks.filter((block) => block.shippedAt.trim() || block.images.length || block.legs.some((leg) => leg.trackingNumber.trim() || leg.channel.trim() || leg.note.trim()))
     if (!filled.length) {
       toast.error('请填写发货信息')
       return
@@ -268,13 +272,17 @@ function InboundShipBar({
       return
     }
     const saved = await onSave({
-      blocks: filled.map((block) => ({
-        shippedAt: block.shippedAt,
-        trackingNumber: block.trackingNumber.trim(),
-        channel: block.channel.trim(),
-        note: block.note.trim(),
-        images: block.images,
-      })),
+      blocks: filled.flatMap((block) => {
+        const legs = block.legs.filter((leg) => leg.trackingNumber.trim() || leg.channel.trim() || leg.note.trim())
+        const rows = legs.length ? legs : block.legs.slice(0, 1)
+        return rows.map((leg) => ({
+          shippedAt: block.shippedAt,
+          trackingNumber: leg.trackingNumber.trim(),
+          channel: leg.channel.trim(),
+          note: leg.note.trim(),
+          images: block.images,
+        }))
+      }),
     })
     if (saved) setOpen(false)
   }
@@ -334,22 +342,30 @@ function InboundShipBar({
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
                     <label className="grid w-56 max-w-full gap-1 text-sm font-medium text-slate-700">发货时间
-                      <Input className="h-9" type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
+                      <Input className="h-9 border-slate-600 bg-white" type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
                     </label>
-                    <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[9.5rem_8rem_10rem_4.25rem]">
-                      <label className="grid min-w-0 gap-1 text-sm text-slate-700">物流号
-                        <Input className="h-9" value={block.trackingNumber} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, trackingNumber: event.target.value } : item))} />
-                      </label>
-                      <label className="grid min-w-0 gap-1 text-sm text-slate-700">渠道
-                        <Input className="h-9" value={block.channel} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, channel: event.target.value } : item))} />
-                      </label>
-                      <label className="col-span-2 grid min-w-0 gap-1 text-sm text-slate-700 sm:col-span-1">备注
-                        <Input className="h-9" value={block.note} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, note: event.target.value } : item))} />
-                      </label>
-                      <Button type="button" variant="outline" className="h-9" onClick={() => {
-                        const text = ["物流号 " + (block.trackingNumber || ""), "渠道 " + (block.channel || ""), "备注 " + (block.note || "")].join("\n")
-                        void navigator.clipboard.writeText(text).then(() => toast.success("已复制物流、渠道、备注")).catch(() => toast.error("复制失败"))
-                      }}>复制</Button>
+                    <div className="space-y-2">
+                      {block.legs.map((leg, legIndex) => (
+                        <div key={leg.key} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[9.5rem_8rem_minmax(0,10rem)_auto]">
+                          <label className="grid min-w-0 gap-1 text-sm text-slate-700">{legIndex === 0 ? '物流号' : '物流号'}
+                            <Input className="h-9 border-slate-600 bg-white text-slate-900" value={leg.trackingNumber} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, legs: item.legs.map((row) => row.key === leg.key ? { ...row, trackingNumber: event.target.value } : row) } : item))} />
+                          </label>
+                          <label className="grid min-w-0 gap-1 text-sm text-slate-700">渠道
+                            <Input className="h-9 border-slate-600 bg-white text-slate-900" value={leg.channel} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, legs: item.legs.map((row) => row.key === leg.key ? { ...row, channel: event.target.value } : row) } : item))} />
+                          </label>
+                          <label className="col-span-2 grid min-w-0 gap-1 text-sm text-slate-700 sm:col-span-1">备注
+                            <Input className="h-9 border-slate-600 bg-white text-slate-900" value={leg.note} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, legs: item.legs.map((row) => row.key === leg.key ? { ...row, note: event.target.value } : row) } : item))} />
+                          </label>
+                          <div className="flex gap-1">
+                            {legIndex === block.legs.length - 1 ? (
+                              <Button type="button" className="h-9 bg-emerald-600 px-3 text-white hover:bg-emerald-700" onClick={() => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, legs: [...item.legs, blankLeg()] } : item))}>复制</Button>
+                            ) : null}
+                            {block.legs.length > 1 ? (
+                              <Button type="button" variant="outline" className="h-9 border-slate-600 px-2" onClick={() => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, legs: item.legs.filter((row) => row.key !== leg.key) } : item))}>删除</Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col gap-2">
