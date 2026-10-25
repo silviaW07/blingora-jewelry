@@ -669,6 +669,21 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }, [inboundOrderId, inboundDrafts])
 
   useEffect(() => {
+    if (!inboundOrderId || inboundDrafts.length === 0 || inboundSaving) return
+    const dirty = inboundDrafts.some((line) => (
+      line.inboundQty !== line.openedQty
+      || (line.inboundNote || '') !== (line.openedNote || '')
+      || (line.inboundStage || 'PENDING') !== (line.openedStage || 'PENDING')
+      || (line.shipmentImageUrl || '') !== (line.openedImage || '')
+    ))
+    if (!dirty) return
+    const timer = window.setTimeout(() => {
+      void saveInboundDrafts(inboundDrafts, { keepOpen: true, quiet: true })
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [inboundOrderId, inboundDrafts, inboundSaving])
+
+  useEffect(() => {
     if (searchParams.get('inbound') !== '1' || !queryOrderId) {
       inboundClosing.current = false
       inboundBooted.current = null
