@@ -103,68 +103,39 @@ export default function AccountOrderDetailView() {
           {t('accountOrders.notFound')}
         </div>
       ) : (
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl bg-[#fbfaf7] p-5">
-            <div>
-              <p className="text-lg font-semibold text-[#1f1a14]">{order.orderNo}</p>
-              <p className="mt-1 text-sm text-[#7a756c]">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fbfaf7] px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#1f1a14]">{order.orderNo}</p>
+              <p className="text-[11px] text-[#7a756c]">
                 {new Date(order.createdAt).toLocaleString(locale)}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge variant="outline">{t(`accountOrders.statuses.${order.status}`)}</Badge>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className="h-7 px-2 text-[11px]">{t(`accountOrders.statuses.${order.status}`)}</Badge>
               {order.status === 'PENDING_PAYMENT' ? (
                 <a
                   {...hardNavProps(orderPayHref(order.orderId))}
-                  className="inline-flex h-10 items-center rounded-full bg-[#f254a6] px-4 text-sm font-medium text-white hover:bg-[#df3f91]"
+                  className="inline-flex h-7 items-center rounded-full bg-[#f254a6] px-3 text-xs font-medium text-white hover:bg-[#df3f91]"
                 >
                   {t('accountOrders.payNow')}
                 </a>
               ) : null}
               <Button
                 type="button"
-                className="rounded-full bg-[#f254a6] text-white hover:bg-[#df3f91]"
+                className="h-7 rounded-full bg-[#f254a6] px-3 text-xs text-white hover:bg-[#df3f91]"
                 disabled={reordering}
                 onClick={() => void handleReorder()}
               >
-                {reordering && <Loader2 className="mr-1 size-4 animate-spin" />}
+                {reordering && <Loader2 className="mr-1 size-3 animate-spin" />}
                 {t('accountOrders.reorder')}
               </Button>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-[#ebe6dc] bg-white p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#8a8073]">{t('accountOrders.total')}</p>
-              <p className="mt-2 text-lg font-semibold text-[#1f1a14]">{order.currencyCode} {order.totalAmount.toFixed(2)}</p>
-              <div className="mt-3 space-y-1.5 text-sm text-[#6f6558]">
-                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.originalTotal')}</span><span className="font-medium text-[#2f2a24]">{order.currencyCode} {order.subtotalAmount.toFixed(2)}</span></p>
-                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.discount')}</span><span className="font-medium text-[#2f2a24]">{order.discountAmount > 0 ? '-' : ''}{order.currencyCode} {order.discountAmount.toFixed(2)}</span></p>
-                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.merchandiseTotal')}</span><span className="font-medium text-[#2f2a24]">{order.currencyCode} {Math.max(0, order.subtotalAmount - order.discountAmount).toFixed(2)}</span></p>
-                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.shipping')}</span><span className="font-medium text-[#2f2a24]">{order.currencyCode} {order.shippingAmount.toFixed(2)}</span></p>
-              </div>
-            </div>
-            <DetailField
-              label={t('accountOrders.shippingMethod')}
-              value={
-                localizeShippingText(
-                  order.trackingCarrier,
-                  normalizeProductLang(i18n.resolvedLanguage),
-                ) || t(`accountOrders.shipMethods.${order.shipMethod}`)
-              }
-            />
-            <DetailField
-              label={t('accountOrders.weight')}
-              value={order.totalWeightGrams > 0
-                ? t('accountOrders.weightValue', { weight: order.totalWeightGrams.toLocaleString(locale) })
-                : '—'}
-            />
-            <DetailField label={t('accountOrders.paymentMethod')} value={order.paymentMethod || '—'} />
-          </div>
-
           <div>
-            <h2 className="mb-3 text-sm font-semibold text-[#1f1a14]">{t('accountOrders.items')}</h2>
-            <div className="overflow-hidden rounded-2xl border border-[#ebe6dc] bg-white px-3 sm:px-4">
+            <h2 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8a8073]">{t('accountOrders.items')}</h2>
+            <div className="overflow-hidden rounded-xl border border-[#ebe6dc] bg-white px-2.5 sm:px-3">
               {order.items.map((item) => (
                 <OrderItemRow
                   key={item.itemId}
@@ -177,7 +148,16 @@ export default function AccountOrderDetailView() {
             </div>
           </div>
 
-          <DetailField label={t('accountOrders.comment')} value={order.internalNote || '—'} />
+          <div className="rounded-xl border border-[#ebe6dc] bg-white px-3 py-2 text-xs text-[#6f6558]">
+            <p className="flex items-center justify-between gap-3 py-1"><span>{t('accountOrders.originalTotal')}</span><span>{order.currencyCode} {order.subtotalAmount.toFixed(2)}</span></p>
+            <p className="flex items-center justify-between gap-3 py-1"><span>{t('accountOrders.discount')}</span><span>{order.discountAmount > 0 ? '-' : ''}{order.currencyCode} {order.discountAmount.toFixed(2)}</span></p>
+            <p className="flex items-center justify-between gap-3 py-1"><span>{t('accountOrders.shipping')}</span><span>{order.currencyCode} {order.shippingAmount.toFixed(2)}</span></p>
+            <p className="flex items-center justify-between gap-3 border-t border-[#f0ebe3] py-1.5 text-sm font-semibold text-[#1f1a14]"><span>{t('accountOrders.total')}</span><span>{order.currencyCode} {order.totalAmount.toFixed(2)}</span></p>
+            <p className="flex items-start justify-between gap-3 border-t border-[#f0ebe3] py-1.5"><span className="shrink-0 text-[#8a8073]">{t('accountOrders.shippingMethod')}</span><span className="text-right text-[#2f2a24]">{localizeShippingText(order.trackingCarrier, normalizeProductLang(i18n.resolvedLanguage)) || t(`accountOrders.shipMethods.${order.shipMethod}`)}</span></p>
+            <p className="flex items-center justify-between gap-3 py-1"><span className="text-[#8a8073]">{t('accountOrders.weight')}</span><span className="text-[#2f2a24]">{order.totalWeightGrams > 0 ? t('accountOrders.weightValue', { weight: order.totalWeightGrams.toLocaleString(locale) }) : '—'}</span></p>
+            <p className="flex items-center justify-between gap-3 py-1"><span className="text-[#8a8073]">{t('accountOrders.paymentMethod')}</span><span className="text-[#2f2a24]">{order.paymentMethod || '—'}</span></p>
+            {order.internalNote ? <p className="flex items-start justify-between gap-3 border-t border-[#f0ebe3] py-1.5"><span className="shrink-0 text-[#8a8073]">{t('accountOrders.comment')}</span><span className="text-right text-[#2f2a24]">{order.internalNote}</span></p> : null}
+          </div>
         </div>
       )}
     </AccountShell>
@@ -220,13 +200,13 @@ function OrderItemRow({
   const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
   return (
-    <div className="border-b border-[#f0f0f0] py-4 last:border-b-0">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+    <div className="border-b border-[#f0f0f0] py-2.5 last:border-b-0">
+      <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-2.5">
         <div className="flex items-start justify-center sm:justify-start">
           <button
             type="button"
             onClick={onOpenProduct}
-            className="relative aspect-square w-full max-w-[96px] shrink-0 cursor-pointer overflow-hidden bg-[#F1F5F9] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
+            className="relative aspect-square w-16 shrink-0 cursor-pointer overflow-hidden bg-[#F1F5F9] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
             aria-label={item.productName}
           >
             <EditableImg
@@ -243,7 +223,7 @@ function OrderItemRow({
         <div className="flex min-w-0 flex-col gap-2.5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1 space-y-1.5">
-              <h3 className="whitespace-normal break-words text-base font-semibold leading-snug text-[#0F172A]">
+              <h3 className="whitespace-normal break-words text-sm font-medium leading-snug text-[#0F172A]">
                 <button
                   type="button"
                   onClick={onOpenProduct}
@@ -263,7 +243,7 @@ function OrderItemRow({
                 ) : null}
               </div>
 
-              <p className="text-sm font-bold text-[#0F172A]">
+              <p className="text-xs font-semibold text-[#0F172A]">
                 {currencyCode} {discountUnit.toFixed(2)}
               </p>
             </div>
