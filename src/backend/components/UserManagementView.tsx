@@ -264,7 +264,13 @@ export default function UserManagementView({ state, handlers }: Props) {
                         </TableCell>
                         <TableCell className="text-muted-foreground">{user.whatsapp || '--'}</TableCell>
                         <TableCell className="text-muted-foreground" scrollX scrollXClassName="max-w-[260px]">
-                          {user.email}
+                          <button
+                            type="button"
+                            className="text-left text-sky-700 underline-offset-2 hover:underline"
+                            onClick={() => handlers.handleOpenDetail(user.id)}
+                          >
+                            {user.email}
+                          </button>
                         </TableCell>
                         <TableCell className="font-mono text-sm">
                           {user.passwordPlain || '--'}
@@ -446,7 +452,7 @@ function CustomerDetailPanel({ state, handlers }: Props) {
             返回客户列表
           </Button>
           <h1 className="text-2xl font-header font-bold tracking-tight">客户详情</h1>
-          <p className="mt-1 text-sm text-muted-foreground">查看客户资料与未付款订单</p>
+          <p className="mt-1 text-sm text-muted-foreground">查看客户资料和这个邮箱下过的全部订单</p>
         </div>
       </section>
 
@@ -516,13 +522,13 @@ function CustomerDetailPanel({ state, handlers }: Props) {
             <Card className="border-none shadow-sm">
               <CardContent className="p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">未付款订单</h2>
-                  <Badge variant="secondary">{detail.unpaidOrders.length} 笔待支付</Badge>
+                  <h2 className="text-lg font-semibold">全部订单</h2>
+                  <Badge variant="secondary">{detail.orderRecords.length} 笔订单</Badge>
                 </div>
 
-                {detail.unpaidOrders.length === 0 ? (
+                {detail.orderRecords.length === 0 ? (
                   <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-                    当前没有未付款订单
+                    这个客户还没有订单
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -538,7 +544,7 @@ function CustomerDetailPanel({ state, handlers }: Props) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {detail.unpaidOrders.map(order => (
+                        {detail.orderRecords.map(order => (
                           <TableRow key={order.id}>
                             <TableCell className="font-mono text-sm" scrollX scrollXClassName="max-w-[220px]">
                               {order.orderNo}
