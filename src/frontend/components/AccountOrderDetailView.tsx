@@ -156,7 +156,6 @@ export default function AccountOrderDetailView() {
             <p className="flex items-start justify-between gap-3 border-t border-[#f0ebe3] py-1.5"><span className="shrink-0 text-[#8a8073]">{t('accountOrders.shippingMethod')}</span><span className="text-right text-[#2f2a24]">{localizeShippingText(order.trackingCarrier, normalizeProductLang(i18n.resolvedLanguage)) || t(`accountOrders.shipMethods.${order.shipMethod}`)}</span></p>
             <p className="flex items-center justify-between gap-3 py-1"><span className="text-[#8a8073]">{t('accountOrders.weight')}</span><span className="text-[#2f2a24]">{order.totalWeightGrams > 0 ? t('accountOrders.weightValue', { weight: order.totalWeightGrams.toLocaleString(locale) }) : '—'}</span></p>
             <p className="flex items-center justify-between gap-3 py-1"><span className="text-[#8a8073]">{t('accountOrders.paymentMethod')}</span><span className="text-[#2f2a24]">{order.paymentMethod || '—'}</span></p>
-            {order.internalNote ? <p className="flex items-start justify-between gap-3 border-t border-[#f0ebe3] py-1.5"><span className="shrink-0 text-[#8a8073]">{t('accountOrders.comment')}</span><span className="text-right text-[#2f2a24]">{order.internalNote}</span></p> : null}
           </div>
         </div>
       )}
@@ -200,7 +199,7 @@ function OrderItemRow({
   const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
   return (
-    <div className="flex items-center gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0">
+    <div className="grid grid-cols-[52px_minmax(0,1fr)_9.5rem_4.75rem] items-center gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0">
       <button
         type="button"
         onClick={onOpenProduct}
@@ -216,7 +215,7 @@ function OrderItemRow({
           className="pointer-events-none h-full w-full object-contain"
         />
       </button>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0">
         <button
           type="button"
           onClick={onOpenProduct}
@@ -229,13 +228,13 @@ function OrderItemRow({
         </p>
         <p className="text-xs font-semibold leading-4 text-[#0F172A]">{currencyCode} {discountUnit.toFixed(2)}</p>
       </div>
-      <div className="w-[4.6rem] shrink-0 text-center">
-        <span className="inline-flex max-w-full items-center justify-center rounded-full border border-[#eadfce] bg-[#fbfaf7] px-1.5 py-0.5 text-[10px] font-medium leading-4 text-[#6b5e52]">
+      <div className="flex w-full flex-col items-center justify-center text-center">
+        <span className="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-[#eadfce] bg-[#fbfaf7] px-2 py-0.5 text-[10px] font-medium leading-4 text-[#6b5e52]">
           {t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}
         </span>
         <p className="mt-0.5 text-[10px] leading-4 text-[#6b5e52]">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
       </div>
-      <div className="w-16 shrink-0 text-right text-xs leading-4 text-[#64748B]">
+      <div className="text-right text-xs leading-4 text-[#64748B]">
         <p>×{item.quantity}</p>
         <p className="font-medium text-[#0F172A]">{currencyCode} {discountLine.toFixed(2)}</p>
       </div>

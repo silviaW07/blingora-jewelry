@@ -152,7 +152,6 @@ export default function AccountOrdersView() {
                 <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.total')}</TableHead>
                 <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.shippingMethod')}</TableHead>
                 <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.weight')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.orderNote')}</TableHead>
                 <TableHead className={`${HEAD} account-orders-actions whitespace-normal break-words bg-[#fbfaf7] text-right`}>
                   {t('accountOrders.operations')}
                 </TableHead>
@@ -161,7 +160,6 @@ export default function AccountOrdersView() {
             <TableBody>
               {orders.map((order) => {
                 const { dateLine, timeLine } = formatOrderDateTime(order.createdAt, locale)
-                const orderNote = String(order.internalNote || '').trim()
                 const canPay = order.status === 'PENDING_PAYMENT'
                 const detailHref = orderDetailHref(order.orderId)
                 const payHref = orderPayHref(order.orderId)
@@ -210,9 +208,6 @@ export default function AccountOrdersView() {
                     </TableCell>
                     <TableCell className={`${CELL} whitespace-nowrap text-[#6f6558]`}>
                       {weightText}
-                    </TableCell>
-                    <TableCell className={`${CELL} max-w-[180px] whitespace-normal break-words text-[#6f6558]`}>
-                      {orderNote || '—'}
                     </TableCell>
                     <TableCell className={`${CELL} account-orders-actions min-w-[168px] bg-white text-right`}>
                       <div className="flex flex-wrap items-center justify-end gap-2 pr-1">
