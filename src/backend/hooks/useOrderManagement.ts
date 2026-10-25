@@ -31,6 +31,7 @@ import {
   updateOrderRemark,
   updateOrderInbound,
   appendOrderGoods,
+  updateOrderDiscount,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -167,6 +168,7 @@ export interface OrderManagementHandlers {
   /** 把导入的图片和可选字段写进当前商品，空字段不覆盖。 */
   applyInboundImport: (patches: Array<{ id: string } & Partial<OrderInboundLine>>) => Promise<void>
   appendInboundGoods: (lines: Array<{ skuCode: string; quantity?: number; unitPrice?: number | null; inboundQty?: number; inboundNote?: string; inboundStage?: string; shipmentImageUrl?: string | null }>) => Promise<{ missingSkus: string[]; addedCount: number } | null>
+  updateInboundDiscount: (discountPercent: number) => Promise<void>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -828,6 +830,74 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+  const updateInboundDiscount = async (discountPercent: number) => {
+    if (!inboundOrderId) return
+    try {
+      setInboundSaving(true)
+      const result = await updateOrderDiscount({ orderId: inboundOrderId, discountPercent })
+      const drafts = inboundDrafts
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId
+          ? {
+              ...row,
+              subtotalAmount: result.subtotalAmount,
+              discountAmount: result.discountAmount,
+              totalAmount: result.totalAmount,
+              inboundLines: result.lines,
+              inboundOrderedQty: result.orderedQty,
+              inboundReceivedQty: result.receivedQty,
+              inboundState: result.state,
+            }
+          : row
+      )))
+      setDetailData((prev) => {
+        if (!prev || prev.id !== inboundOrderId) return prev
+        return {
+          ...prev,
+          subtotalAmount: result.subtotalAmount,
+          discountAmount: result.discountAmount,
+          totalAmount: result.totalAmount,
+          inboundLines: result.lines,
+        }
+      })
+      setInboundDrafts(result.lines.map((line) => {
+        const prev = drafts.find((item) => item.id === line.id)
+        if (!prev) {
+          return {
+            ...line,
+            acknowledged: false,
+            openedQty: line.inboundQty,
+            openedNote: line.inboundNote || '',
+            openedStage: line.inboundStage || 'PENDING',
+            openedImage: line.shipmentImageUrl || '',
+          }
+        }
+        return {
+          ...line,
+          inboundQty: prev.inboundQty,
+          inboundNote: prev.inboundNote,
+          inboundStage: prev.inboundStage,
+          shipmentImageUrl: prev.shipmentImageUrl,
+          unitPrice: prev.unitPrice ?? line.unitPrice,
+          lineAmount: prev.lineAmount ?? line.lineAmount,
+          costPrice: prev.costPrice ?? line.costPrice,
+          supplierName: prev.supplierName || line.supplierName,
+          supplierUrl: prev.supplierUrl || line.supplierUrl,
+          acknowledged: prev.acknowledged,
+          openedQty: prev.openedQty,
+          openedNote: prev.openedNote,
+          openedStage: prev.openedStage,
+          openedImage: prev.openedImage,
+        }
+      }))
+      toast.success(`折扣已改为 ${result.discountPercent}%`)
+    } catch (err: any) {
+      toast.error(err.message || '修改折扣失败')
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
   const exportInboundSheet = async (input: ExportInboundSheetInput) => {
     if (!input.rows?.length) {
       toast.error('请先勾选要导出的商品')
@@ -923,6 +993,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       submitInbound,
       applyInboundImport,
       appendInboundGoods,
+      updateInboundDiscount,
       exportInboundSheet,
     },
   }

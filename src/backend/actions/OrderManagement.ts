@@ -272,6 +272,8 @@ export interface OrderListItem {
   orderNo: string              // data-from: orderrecord-orderNo
   status: OrderStatus          // data-from: orderrecord-status
   totalAmount: number          // data-from: orderrecord-totalAmount (Decimal -> number)
+  subtotalAmount: number       // data-from: orderrecord-subtotalAmount
+  discountAmount: number       // data-from: orderrecord-discountAmount
   currencyCode: string         // data-from: orderrecord-currencyCode
   paymentMethod: PaymentMethodType // data-from: orderrecord-paymentMethod
   paymentStatus: string | null // data-from: orderrecord-paymentStatus
@@ -542,6 +544,8 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         orderNo: record.orderNo,
         status: record.status as OrderStatus,
         totalAmount: record.totalAmount.toNumber(),
+        subtotalAmount: record.subtotalAmount.toNumber(),
+        discountAmount: record.discountAmount.toNumber(),
         currencyCode: record.currencyCode,
         paymentMethod: record.paymentMethod as PaymentMethodType,
         paymentStatus: record.paymentStatus,
@@ -1106,6 +1110,75 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
       addedCount,
       missingSkus,
       totalAmount: moneyAmount(freshOrder?.totalAmount) ?? 0,
+    }
+  }),
+)
+
+
+export interface UpdateOrderDiscountInput {
+  orderId: string
+  /** 0 to 100. 3 means the order is discounted by 3 percent. */
+  discountPercent: number
+}
+
+export interface UpdateOrderDiscountOutput extends UpdateOrderInboundOutput {
+  subtotalAmount: number
+  discountAmount: number
+  totalAmount: number
+  discountPercent: number
+}
+
+/**
+ * 修改整单折扣百分比。折扣价按新的优惠比例重算。
+ */
+export const updateOrderDiscount = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateOrderDiscountInput): Promise<UpdateOrderDiscountOutput> => {
+    const { username } = getAuthContext()
+    const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
+    if (!order) throw new Error('订单不存在')
+    const percent = Math.min(100, Math.max(0, Number(input.discountPercent) || 0))
+    const subtotal = moneyAmount(order.subtotalAmount) ?? 0
+    const discount = Math.round(subtotal * percent) / 100
+    const shipping = moneyAmount(order.shippingAmount) ?? 0
+    const gift = moneyAmount(order.giftWrapAmount) ?? 0
+    const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100
+    const previous = moneyAmount(order.discountAmount) ?? 0
+    await prisma.$transaction(async (tx) => {
+      await tx.orderrecord.update({
+        where: { id: order.id },
+        data: { discountAmount: discount, totalAmount: total },
+      })
+      await tx.orderoperationlog.create({
+        data: {
+          orderId: order.id,
+          actionType: '修改折扣',
+          actionNote: `折扣 ${percent}% ，优惠 ${previous} -> ${discount}`.slice(0, 4000),
+          operatorName: username,
+        },
+      })
+    })
+    const fresh = await prisma.orderitem.findMany({
+      where: { orderId: order.id },
+      include: {
+        product: { select: inboundProductSelect },
+        productSku: { select: { imageUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, {
+      subtotalAmount: subtotal,
+      discountAmount: discount,
+    })).sort(compareInboundSpu)
+    const summary = summarizeInbound(lines)
+    return {
+      lines,
+      orderedQty: summary.orderedQty,
+      receivedQty: summary.inboundQty,
+      state: summary.state,
+      subtotalAmount: subtotal,
+      discountAmount: discount,
+      totalAmount: total,
+      discountPercent: percent,
     }
   }),
 )

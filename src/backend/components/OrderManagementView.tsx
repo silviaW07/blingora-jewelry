@@ -207,6 +207,8 @@ export const OrderManagementView = ({
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; sku: string; quantity: string; unitPrice: string }>>([]);
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
+  const [discountEditing, setDiscountEditing] = React.useState(false);
+  const [discountDraft, setDiscountDraft] = React.useState('');
   const [hiddenColumns, setHiddenColumns] = React.useState<Record<string, boolean>>({});
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
@@ -241,6 +243,7 @@ export const OrderManagementView = ({
     setNoteOpen(false);
     setHiddenColumns({});
     setAddonCards([]);
+    setDiscountEditing(false);
     setInboundSelected(readInboundSelection(state.inboundOrderId));
   }, [state.inboundOrderId]);
   const visibleInboundDrafts = (stageFilter === 'ALL'
@@ -554,6 +557,26 @@ export const OrderManagementView = ({
   const discountTotal = state.inboundDrafts.reduce((sum, line) => sum + ((line.discountUnitPrice ?? line.unitPrice ?? 0) * line.quantity), 0);
   const orderedPieces = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
   const arrivedPieces = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.inboundQty) || 0), 0);
+  const inStockTotal = state.inboundDrafts.reduce((sum, line) => sum + ((Number(line.unitPrice) || 0) * (Number(line.inboundQty) || 0)), 0);
+  const inStockDiscountTotal = state.inboundDrafts.reduce((sum, line) => sum + ((Number(line.discountUnitPrice ?? line.unitPrice) || 0) * (Number(line.inboundQty) || 0)), 0);
+  const inboundOrder = state.detailData?.id === state.inboundOrderId
+    ? state.detailData
+    : state.list.find((row) => row.id === state.inboundOrderId);
+  const orderSubtotal = inboundOrder && Number.isFinite(Number(inboundOrder.subtotalAmount)) ? Number(inboundOrder.subtotalAmount) : originalTotal;
+  const orderDiscount = inboundOrder && Number.isFinite(Number(inboundOrder.discountAmount))
+    ? Number(inboundOrder.discountAmount)
+    : Math.max(0, originalTotal - discountTotal);
+  const discountPercent = orderSubtotal > 0 ? Math.round((orderDiscount / orderSubtotal) * 10000) / 100 : 0;
+  const discountPercentLabel = `${Number(discountPercent.toFixed(2))}%`;
+  const saveDiscountPercent = async () => {
+    const percent = Number(discountDraft.replace('%', '').trim());
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      toast.error('请输入 0 到 100 的折扣');
+      return;
+    }
+    setDiscountEditing(false);
+    await handlers.updateInboundDiscount(percent);
+  };
 
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id="ordermanagementview-r1f69bc6332e634b8-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
       
@@ -1232,6 +1255,7 @@ export const OrderManagementView = ({
               <X className="h-5 w-5" />
             </button>
             <DialogTitle className="text-2xl">登记入库</DialogTitle>
+            <div className="flex items-start justify-between gap-4">
             <DialogDescription className="text-base">
               {(() => {
                 const orderNo = state.list.find((row) => row.id === state.inboundOrderId)?.orderNo
@@ -1241,6 +1265,32 @@ export const OrderManagementView = ({
                 return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写到货数量。当前 ${received}/${ordered} 件。改完后点这一行的确认；数量 0 在确认前不会记为缺货。`
               })()}
             </DialogDescription>
+            <div className="shrink-0 pt-0.5 text-right">
+              {discountEditing ? (
+                <input
+                  autoFocus
+                  inputMode="decimal"
+                  aria-label="订单折扣"
+                  className="h-9 w-24 rounded-md border border-slate-300 px-2 text-right text-base font-semibold"
+                  value={discountDraft}
+                  onChange={(event) => setDiscountDraft(event.target.value)}
+                  onBlur={() => void saveDiscountPercent()}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); void saveDiscountPercent(); }
+                    if (event.key === 'Escape') setDiscountEditing(false);
+                  }}
+                />
+              ) : (
+                <span
+                  className="inline-flex min-w-16 cursor-text items-center justify-center rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
+                  title="双击修改折扣"
+                  onDoubleClick={() => { setDiscountDraft(String(discountPercent)); setDiscountEditing(true); }}
+                >
+                  {discountPercentLabel}
+                </span>
+              )}
+            </div>
+            </div>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6">
             {importOpen ? (
@@ -1529,13 +1579,25 @@ export const OrderManagementView = ({
             </table>
 
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <div className="rounded-md border border-slate-200 bg-white px-3 py-3">
-                <div className="text-xs font-medium text-slate-500">Original total</div>
-                <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(originalTotal, inboundCurrency)}</div>
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
+                <div>
+                  <div className="text-xs font-medium text-slate-500">Original total</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(originalTotal, inboundCurrency)}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">In stock total</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(inStockTotal, inboundCurrency)}</div>
+                </div>
               </div>
-              <div className="rounded-md border border-slate-200 bg-white px-3 py-3">
-                <div className="text-xs font-medium text-slate-500">Discount total</div>
-                <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(discountTotal, inboundCurrency)}</div>
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
+                <div>
+                  <div className="text-xs font-medium text-slate-500">Discount total</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(discountTotal, inboundCurrency)}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">In stock discount total</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(inStockDiscountTotal, inboundCurrency)}</div>
+                </div>
               </div>
               <div className="rounded-md border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-medium text-slate-500">Quantity</div>
