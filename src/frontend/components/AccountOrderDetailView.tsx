@@ -183,7 +183,6 @@ export default function AccountOrderDetailView() {
                         <a href={`https://www.17track.net/en/track?nums=${encodeURIComponent(row.trackingNumber)}`} target="_blank" rel="noreferrer" className="break-all font-medium text-sky-700 underline-offset-2 hover:underline">{row.trackingNumber}</a>
                       ) : <span>—</span>}
                     </p>
-                    {row.note ? <p className="break-words sm:col-span-2"><span className="text-[#8a8073]">{t('accountOrders.shipmentNote')}</span> <span className="text-[#2f2a24]">{row.note}</span></p> : null}
                   </div>
                 </div>
               ))}
