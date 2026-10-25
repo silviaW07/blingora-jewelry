@@ -1324,6 +1324,141 @@ const SHEET_HEADERS: Array<[keyof ManualOrderLineInput | 'sku', string[]]> = [
   ['sku', ['SKU', 'sku', 'Sku']],
 ]
 
+function loadJSZip(): any | null {
+  try {
+    const exceljsPath = require.resolve('exceljs')
+    return require(require.resolve('jszip', { paths: [require('path').dirname(exceljsPath)] }))
+  } catch {
+    try {
+      return require('jszip')
+    } catch {
+      return null
+    }
+  }
+}
+
+function resolveZipTarget(fromFile: string, target: string) {
+  const clean = target.split('?')[0]
+  if (clean.startsWith('/')) return clean.replace(/^\/+/, '')
+  const dir = fromFile.split('/').slice(0, -1)
+  for (const part of clean.split('/')) {
+    if (part === '..') dir.pop()
+    else if (part && part !== '.') dir.push(part)
+  }
+  return dir.join('/')
+}
+
+/** WPS / Excel 嵌入单元格的图片不在 drawing 里，要从压缩包的 cellimages 或 richData 读。 */
+async function embeddedCellImages(raw: Buffer): Promise<Map<number, { buffer: Buffer; extension: string }>> {
+  const out = new Map<number, { buffer: Buffer; extension: string }>()
+  const JSZip = loadJSZip()
+  if (!JSZip) return out
+  let zip: { file: (name: string) => { async: (type: string) => Promise<Buffer | string> } | null }
+  try {
+    zip = await JSZip.loadAsync(raw)
+  } catch {
+    return out
+  }
+  const readMedia = async (filePath: string) => {
+    const hit = zip.file(filePath)
+    if (!hit) return null
+    const buffer = Buffer.from(await hit.async('nodebuffer'))
+    if (!buffer.length) return null
+    const ext = (filePath.split('.').pop() || 'png').toLowerCase()
+    return { buffer, extension: ext === 'jpeg' ? 'jpg' : ext }
+  }
+  const relMapFrom = (xml: string) => {
+    const relMap = new Map<string, string>()
+    const re = /<Relationship\b([^>]*)\/?>/g
+    let match: RegExpExecArray | null
+    while ((match = re.exec(xml))) {
+      const id = match[1].match(/\bId="([^"]+)"/)?.[1]
+      const target = match[1].match(/\bTarget="([^"]+)"/)?.[1]
+      if (id && target) relMap.set(id, target)
+    }
+    return relMap
+  }
+  const cellImages = zip.file('xl/cellimages.xml')
+  const cellRels = zip.file('xl/_rels/cellimages.xml.rels')
+  const idToMedia = new Map<string, { buffer: Buffer; extension: string }>()
+  if (cellImages && cellRels) {
+    const xml = String(await cellImages.async('string'))
+    const relMap = relMapFrom(String(await cellRels.async('string')))
+    const chunks = xml.match(/<[^>]*:?cellImage\b[\s\S]*?<\/[^>]*:?cellImage>/g) || []
+    for (const chunk of chunks) {
+      const name = chunk.match(/\bname="([^"]+)"/)?.[1]
+      const rid = chunk.match(/\br:embed="([^"]+)"/)?.[1]
+      const target = name && rid ? relMap.get(rid) : ''
+      if (!name || !target) continue
+      const img = await readMedia(resolveZipTarget('xl/cellimages.xml', target))
+      if (img) idToMedia.set(name, img)
+    }
+  }
+  const workbookXml = zip.file('xl/workbook.xml')
+  const workbookRels = zip.file('xl/_rels/workbook.xml.rels')
+  let sheetPath = 'xl/worksheets/sheet1.xml'
+  if (workbookXml && workbookRels) {
+    const wbXml = String(await workbookXml.async('string'))
+    const rid = wbXml.match(/<sheet\b[^>]*\br:id="([^"]+)"/)?.[1]
+    const relMap = relMapFrom(String(await workbookRels.async('string')))
+    const target = rid ? relMap.get(rid) : ''
+    if (target) sheetPath = resolveZipTarget('xl/workbook.xml', target)
+  }
+  const sheetFile = zip.file(sheetPath)
+  const sheetXml = sheetFile ? String(await sheetFile.async('string')) : ''
+  const cellRe = /<c\b([^>]*)>([\s\S]*?)<\/c>/g
+  let cell: RegExpExecArray | null
+  while ((cell = cellRe.exec(sheetXml))) {
+    const ref = cell[1].match(/\br="[A-Z]+(\d+)"/)
+    if (!ref) continue
+    const row = Number(ref[1])
+    if (!row || out.has(row)) continue
+    const imageId = cell[2].match(/DISPIMG\(\s*(?:&quot;|")([^"&]+)/)?.[1]
+    const img = imageId ? idToMedia.get(imageId) : undefined
+    if (img) out.set(row, img)
+  }
+  const metaFile = zip.file('xl/metadata.xml')
+  const richFile = zip.file('xl/richData/rdrichvalue.xml')
+  const richRelFile = zip.file('xl/richData/richValueRel.xml')
+  const richRelRels = zip.file('xl/richData/_rels/richValueRel.xml.rels')
+  if (metaFile && richFile && richRelFile && richRelRels && sheetXml) {
+    const meta = String(await metaFile.async('string'))
+    const richXml = String(await richFile.async('string'))
+    const richRelXml = String(await richRelFile.async('string'))
+    const rels = relMapFrom(String(await richRelRels.async('string')))
+    const vmToRich: number[] = []
+    const vmBlocks = meta.match(/<valueMetadata\b[\s\S]*?<\/valueMetadata>/)?.[0] || ''
+    for (const block of vmBlocks.match(/<bk\b[\s\S]*?<\/bk>/g) || []) {
+      const index = block.match(/<rc\b[^>]*\bv="(\d+)"/)?.[1]
+      vmToRich.push(index == null ? -1 : Number(index))
+    }
+    const richValues: number[][] = []
+    for (const block of richXml.match(/<rv\b[\s\S]*?<\/rv>/g) || []) {
+      richValues.push([...block.matchAll(/<v>(\d+)<\/v>/g)].map((item) => Number(item[1])))
+    }
+    const relIds = [...richRelXml.matchAll(/\br:id="([^"]+)"/g)].map((item) => item[1])
+    const mediaByRel: Array<{ buffer: Buffer; extension: string } | null> = []
+    for (const id of relIds) {
+      const target = rels.get(id)
+      mediaByRel.push(target ? await readMedia(resolveZipTarget('xl/richData/richValueRel.xml', target)) : null)
+    }
+    const richCellRe = /<c\b([^>]*)>/g
+    let richCell: RegExpExecArray | null
+    while ((richCell = richCellRe.exec(sheetXml))) {
+      const vm = richCell[1].match(/\bvm="(\d+)"/)?.[1]
+      const ref = richCell[1].match(/\br="[A-Z]+(\d+)"/)
+      if (!vm || !ref) continue
+      const row = Number(ref[1])
+      if (!row || out.has(row)) continue
+      const values = richValues[vmToRich[Number(vm) - 1]] || []
+      const relIndex = values.find((value) => value >= 0 && value < mediaByRel.length && mediaByRel[value])
+      const img = relIndex == null ? null : mediaByRel[relIndex]
+      if (img) out.set(row, img)
+    }
+  }
+  return out
+}
+
 /**
  * 导入表格。SKU 可以不填，表头对上售价、数量、总价即可先存入。
  */
@@ -1359,6 +1494,10 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
         if (imagesByRow.has(row)) continue
         const media = workbook.getImage(Number(image.imageId))
         if (media?.buffer) imagesByRow.set(row, media)
+      }
+      const embedded = await embeddedCellImages(raw)
+      for (const [row, media] of embedded) {
+        if (!imagesByRow.has(row)) imagesByRow.set(row, media)
       }
       const last = Math.max(sheet.rowCount || 1, ...[...imagesByRow.keys(), 1])
       for (let rowNumber = 1; rowNumber <= last; rowNumber += 1) {
@@ -1542,6 +1681,10 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
       if (imagesByRow.has(row)) continue
       const media = workbook.getImage(Number(image.imageId))
       if (media?.buffer) imagesByRow.set(row, media)
+    }
+    const embedded = await embeddedCellImages(raw)
+    for (const [row, media] of embedded) {
+      if (!imagesByRow.has(row)) imagesByRow.set(row, media)
     }
     const last = Math.max(sheet.rowCount || 1, ...[...imagesByRow.keys(), 1])
     for (let rowNumber = 1; rowNumber <= last; rowNumber += 1) {
