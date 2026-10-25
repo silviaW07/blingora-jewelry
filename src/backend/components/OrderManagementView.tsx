@@ -2021,7 +2021,18 @@ export const OrderManagementView = ({
                 <Download className="mr-2 h-4 w-4" /> 下载表格
               </Button>
               {shipButton}
-              <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
+              <Button type="button" aria-label="保存入库" onClick={() => {
+                const cards = [...addonCards]
+                const drafts = Object.keys(manualDrafts)
+                void (async () => {
+                  for (const card of cards) await saveAddonRow(card)
+                  for (const id of drafts) {
+                    const line = state.inboundDrafts.find((item) => item.id === id)
+                    if (line) await saveManualDraft(line)
+                  }
+                  await handlers.submitInbound()
+                })()
+              }} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>
               <input

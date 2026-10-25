@@ -171,7 +171,7 @@ export default function AccountOrderDetailView() {
                   item={item}
                   currencyCode={order.currencyCode}
                   discountRate={order.subtotalAmount > 0 && order.discountAmount > 0.009 ? Math.max(0, (order.subtotalAmount - order.discountAmount) / order.subtotalAmount) : 1}
-                  onOpenProduct={() => hardNavigate(productHref(item.productId))}
+                  onOpenProduct={() => { if (item.productName && !String(item.skuCode || '').startsWith('ADD-')) hardNavigate(productHref(item.productId)) }}
                 />
               ))}
             </div>
@@ -254,7 +254,7 @@ function OrderItemRow({
               </h3>
 
               <div className="flex flex-wrap gap-1.5">
-                {item.skuCode ? <SpecChip label="SKU" value={item.skuCode} /> : null}
+                {item.skuCode && !item.skuCode.startsWith('ADD-') ? <SpecChip label="SKU" value={item.skuCode} /> : null}
                 {item.materialLabel ? (
                   <SpecChip label={t('common.color')} value={item.materialLabel} />
                 ) : null}

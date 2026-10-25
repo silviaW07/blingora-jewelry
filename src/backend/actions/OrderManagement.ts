@@ -1187,9 +1187,10 @@ async function insertManualOrderLines(
   for (const [index, raw] of rows.entries()) {
     const row = normalizeManualLine(raw)
     const code = `ADD-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100)
+    const addedName = String(row.inboundNote || '').trim().slice(0, 200)
     const product = await tx.product.create({
       data: {
-        name: '',
+        name: addedName,
         slug: code,
         productCode: code,
         source: 'MANUAL',
@@ -1219,7 +1220,7 @@ async function insertManualOrderLines(
         orderId: order.id,
         productId: product.id,
         productSkuId: sku.id,
-        productName: '',
+        productName: addedName,
         skuCode: code,
         quantity: row.quantity,
         unitPrice: row.unitPrice,
