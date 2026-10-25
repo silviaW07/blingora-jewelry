@@ -687,10 +687,11 @@
     "discount": "Discount",
     "merchandiseTotal": "Total",
     "shipping": "Shipping",
+    "inStockCount": "in stock {{arrived}}/{{ordered}}",
     "inboundStages": {
-      "PENDING": "Pending purchase",
+      "PENDING": "To purchase",
       "STOCK": "Stocking",
-      "PREPARING": "Preparing",
+      "PREPARING": "Preparing stock",
       "FACTORY": "Shipped from factory",
       "TRANSIT": "Shipped from factory",
       "ARRIVED": "Arrived at warehouse",

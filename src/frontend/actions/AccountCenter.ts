@@ -59,6 +59,8 @@ export interface CustomerOrderItem {
   imageUrl: string
   mainImageUrl: string
   quantity: number
+  /** Arrived pieces saved in the warehouse check-in. */
+  inboundQty: number
   unitPrice: number
   lineAmount: number
   /** PENDING | PREPARING | TRANSIT | ARRIVED. Mirrors warehouse check-in. */
@@ -157,6 +159,8 @@ const customerOrderInclude = {
       materialLabel: true,
       sizeLabel: true,
       quantity: true,
+      inboundQty: true,
+      inboundStage: true,
       unitPrice: true,
       lineAmount: true,
       product: {
@@ -203,6 +207,7 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
     imageUrl: item.productSku?.imageUrl || '',
     mainImageUrl: item.product?.mainImageUrl || '',
     quantity: item.quantity,
+    inboundQty: Math.max(0, Math.floor(Number(item.inboundQty) || 0)),
     unitPrice: toNum(item.unitPrice),
     lineAmount: toNum(item.lineAmount),
     inboundStage: ['PENDING', 'STOCK', 'PREPARING', 'FACTORY', 'TRANSIT', 'ARRIVED', 'PARCEL'].includes(String(item.inboundStage || '').toUpperCase())

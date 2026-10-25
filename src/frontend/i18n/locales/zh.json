@@ -565,6 +565,7 @@
     "discount": "折扣",
     "merchandiseTotal": "合计",
     "shipping": "运费",
+    "inStockCount": "到货 {{arrived}}/{{ordered}}",
     "inboundStages": {
       "PENDING": "待采购",
       "STOCK": "备货",

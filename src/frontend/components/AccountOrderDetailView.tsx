@@ -268,9 +268,12 @@ function OrderItemRow({
               </p>
             </div>
 
-            <div className="flex shrink-0 items-center xl:px-3">
+            <div className="flex shrink-0 flex-col items-start gap-2 xl:items-center xl:px-3">
               <span className="inline-flex rounded-full border border-[#eadfce] bg-[#fbfaf7] px-3 py-1 text-xs font-semibold text-[#6b5e52]">
-                {t(`accountOrders.inboundStages.${item.inboundStage || 'PENDING'}`)}
+                {t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}
+              </span>
+              <span className="text-xs font-semibold text-[#6b5e52]">
+                {t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}
               </span>
             </div>
 
