@@ -1754,6 +1754,99 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
   }),
 )
 
+export interface InboundShipmentLegInput {
+  trackingNumber?: string
+  channel?: string
+  note?: string
+}
+
+export interface SaveInboundShipmentInput {
+  orderId: string
+  /** 浏览器 datetime-local，按北京时间理解。 */
+  shippedAt: string
+  legs: InboundShipmentLegInput[]
+}
+
+export interface InboundShipmentRow {
+  id: string
+  shippedAt: string
+  trackingNumber: string
+  channel: string
+  note: string
+}
+
+const INBOUND_SHIP_SEGMENT = '入库发货'
+
+function parseShanghaiDateTime(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value || '').trim())
+  if (!match) throw new Error('请填写发货时间')
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:00+08:00`)
+  if (Number.isNaN(date.getTime())) throw new Error('请填写发货时间')
+  return date
+}
+
+async function listInboundShipmentRows(orderId: string): Promise<InboundShipmentRow[]> {
+  const rows = await prisma.orderlogisticssegment.findMany({
+    where: { orderId, segmentType: INBOUND_SHIP_SEGMENT },
+    orderBy: [{ shippedAt: 'asc' }, { createdAt: 'asc' }],
+  })
+  return rows.map((row) => ({
+    id: row.id,
+    shippedAt: row.shippedAt ? row.shippedAt.toISOString() : '',
+    trackingNumber: String(row.trackingNumber || ''),
+    channel: String(row.carrierName || ''),
+    note: String(row.remark || ''),
+  }))
+}
+
+export const listInboundShipments = requireRole([UserRole.ADMIN])(
+  withResult(async (orderId: string): Promise<InboundShipmentRow[]> => {
+    if (!orderId) return []
+    return listInboundShipmentRows(orderId)
+  }),
+)
+
+/**
+ * 登记一次发货。发货时间必填。同一时间可以有多组物流号、渠道、备注。
+ */
+export const saveInboundShipment = requireRole([UserRole.ADMIN])(
+  withResult(async (input: SaveInboundShipmentInput): Promise<InboundShipmentRow[]> => {
+    const { username } = getAuthContext()
+    const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId }, select: { id: true } })
+    if (!order) throw new Error('订单不存在')
+    const shippedAt = parseShanghaiDateTime(input.shippedAt)
+    const legs = (input.legs?.length ? input.legs : [{}]).map((leg) => ({
+      trackingNumber: String(leg?.trackingNumber || '').trim().slice(0, 120),
+      channel: String(leg?.channel || '').trim().slice(0, 100),
+      note: String(leg?.note || '').trim().slice(0, 2000),
+    }))
+    await prisma.$transaction(async (tx) => {
+      for (const leg of legs) {
+        await tx.orderlogisticssegment.create({
+          data: {
+            orderId: order.id,
+            segmentType: INBOUND_SHIP_SEGMENT,
+            carrierName: leg.channel || null,
+            trackingNumber: leg.trackingNumber || null,
+            statusLabel: '已发货',
+            shippedAt,
+            remark: leg.note || null,
+          },
+        })
+      }
+      await tx.orderoperationlog.create({
+        data: {
+          orderId: order.id,
+          actionType: '入库发货',
+          actionNote: `发货时间 ${input.shippedAt}，${legs.length} 条物流`.slice(0, 4000),
+          operatorName: username,
+        },
+      })
+    })
+    return listInboundShipmentRows(order.id)
+  }),
+)
+
 export interface UpdateManualOrderLineInput {
   orderId: string
   orderItemId: string

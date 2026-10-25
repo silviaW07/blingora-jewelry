@@ -36,6 +36,8 @@ import {
   importInboundSheet,
   updateManualOrderLine,
   importCustomerOrder,
+  listInboundShipments,
+  saveInboundShipment,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -106,6 +108,7 @@ export interface OrderManagementState {
   inboundOrderId: string | null
   inboundDrafts: OrderInboundLine[]
   inboundSaving: boolean
+  inboundShipments: Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>
 }
 
 export interface OrderManagementHandlers {
@@ -176,6 +179,7 @@ export interface OrderManagementHandlers {
   appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => Promise<boolean>
   importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
   updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null }) => Promise<boolean>
+  saveInboundShipment: (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
@@ -281,6 +285,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [inboundOrderId, setInboundOrderId] = useState<string | null>(null)
   const [inboundDrafts, setInboundDrafts] = useState<OrderInboundLine[]>([])
   const [inboundSaving, setInboundSaving] = useState(false)
+  const [inboundShipments, setInboundShipments] = useState<Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>>([])
   const inboundBooted = useRef<string | null>(null)
   const inboundClosing = useRef(false)
 
@@ -601,6 +606,40 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     inboundBooted.current = orderId
     inboundClosing.current = false
     if (!options?.skipUrl) syncInboundQuery(true, orderId)
+  }
+
+  useEffect(() => {
+    if (!inboundOrderId) {
+      setInboundShipments([])
+      return
+    }
+    let cancelled = false
+    listInboundShipments(inboundOrderId).then((rows) => {
+      if (!cancelled) setInboundShipments(rows || [])
+    }).catch(() => {
+      if (!cancelled) setInboundShipments([])
+    })
+    return () => { cancelled = true }
+  }, [inboundOrderId])
+
+  const saveInboundShipmentRows = async (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => {
+    if (!inboundOrderId) return false
+    if (!String(input.shippedAt || '').trim()) {
+      toast.error('请填写发货时间')
+      return false
+    }
+    try {
+      setInboundSaving(true)
+      const rows = await saveInboundShipment({ orderId: inboundOrderId, ...input })
+      setInboundShipments(rows || [])
+      toast.success('发货信息已保存')
+      return true
+    } catch (err: any) {
+      toast.error(err.message || '保存发货信息失败')
+      return false
+    } finally {
+      setInboundSaving(false)
+    }
   }
 
   const closeInboundDialog = () => {
@@ -1191,6 +1230,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       inboundOrderId,
       inboundDrafts,
       inboundSaving,
+      inboundShipments,
     },
     handlers: {
       handleFilterChange,
@@ -1230,6 +1270,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       importInboundSheet: importInboundSheetFile,
       updateManualOrderLine: updateManualOrderLineOnOrder,
       importCustomerOrder: importCustomerOrderFile,
+      saveInboundShipment: saveInboundShipmentRows,
       exportInboundSheet,
     },
   }
