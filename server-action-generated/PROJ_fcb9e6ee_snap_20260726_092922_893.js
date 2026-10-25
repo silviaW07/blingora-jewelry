@@ -30355,6 +30355,9 @@ _export(exports, {
     get addLogisticsSegment () {
         return addLogisticsSegment;
     },
+    get appendManualOrderLine () {
+        return appendManualOrderLine;
+    },
     get appendOrderGoods () {
         return appendOrderGoods;
     },
@@ -30373,8 +30376,17 @@ _export(exports, {
     get getOrderList () {
         return getOrderList;
     },
+    get importInboundSheet () {
+        return importInboundSheet;
+    },
     get shipOrder () {
         return shipOrder;
+    },
+    get updateManualOrderLine () {
+        return updateManualOrderLine;
+    },
+    get updateOrderDiscount () {
+        return updateOrderDiscount;
     },
     get updateOrderInbound () {
         return updateOrderInbound;
@@ -30387,6 +30399,7 @@ _export(exports, {
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
+const _uploadStorage = __webpack_require__(5791);
 const _action_utils = __webpack_require__(9360);
 const _exchangeRate = __webpack_require__(3928);
 const _supplierSourceUrl = __webpack_require__(7713);
@@ -30458,6 +30471,7 @@ function moneyAmount(value) {
     return Number.isFinite(n) ? n : null;
 }
 const inboundProductSelect = {
+    productCode: true,
     mainImageUrl: true,
     weightGram: true,
     costPrice: true,
@@ -30509,6 +30523,28 @@ function discountedUnitPrice(unitPrice, subtotal, discount) {
     if (!Number.isFinite(ratio) || ratio >= 1) return unitPrice;
     return Math.round(unitPrice * Math.max(0, ratio) * 100) / 100;
 }
+function inboundSpuOf(item) {
+    var _item_product;
+    const code = String(((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.productCode) || '').trim();
+    if (code) return code;
+    const sku = String(item.skuCode || '').trim();
+    const cut = sku.indexOf('-');
+    return cut > 0 ? sku.slice(0, cut) : sku;
+}
+function compareInboundSpu(a, b) {
+    const manual = (row)=>String(row.skuCode || '').startsWith('ADD-') ? 1 : 0;
+    const rank = manual(a) - manual(b);
+    if (rank) return rank;
+    const spu = String(a.spu || '').localeCompare(String(b.spu || ''), 'en', {
+        numeric: true,
+        sensitivity: 'base'
+    });
+    if (spu) return spu;
+    return String(a.skuCode || '').localeCompare(String(b.skuCode || ''), 'en', {
+        numeric: true,
+        sensitivity: 'base'
+    });
+}
 function mapInboundLine(item, currencyCode, orderAmounts) {
     var _item_productSku, _item_product, _item_product1, _item_product2, _item_product3, _item_product4;
     const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
@@ -30519,6 +30555,7 @@ function mapInboundLine(item, currencyCode, orderAmounts) {
         id: item.id,
         productName: item.productName,
         skuCode: item.skuCode,
+        spu: inboundSpuOf(item),
         quantity,
         inboundQty,
         inboundNote: String(item.inboundNote || ''),
@@ -30676,13 +30713,15 @@ const getOrderList = (0, _action_utils.requireRole)([
             const unitGrams = ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.weightGram) != null ? Number(item.product.weightGram) : 0;
             return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity;
         }, 0);
-        const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record));
+        const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record)).sort(compareInboundSpu);
         const inbound = summarizeInbound(inboundLines);
         return {
             id: record.id,
             orderNo: record.orderNo,
             status: record.status,
             totalAmount: record.totalAmount.toNumber(),
+            subtotalAmount: record.subtotalAmount.toNumber(),
+            discountAmount: record.discountAmount.toNumber(),
             currencyCode: record.currencyCode,
             paymentMethod: record.paymentMethod,
             paymentStatus: record.paymentStatus,
@@ -30787,7 +30826,7 @@ const getOrderDetail = (0, _action_utils.requireRole)([
         }, 0) * 100) / 100,
         internalNote: record.internalNote || null,
         ...(()=>{
-            const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record));
+            const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record)).sort(compareInboundSpu);
             const inbound = summarizeInbound(inboundLines);
             return {
                 inboundOrderedQty: inbound.orderedQty,
@@ -30807,7 +30846,15 @@ const getOrderDetail = (0, _action_utils.requireRole)([
             addressLine2: record.address.addressLine2,
             postalCode: record.address.postalCode
         } : null,
-        items: record.items.map((item)=>{
+        items: [
+            ...record.items
+        ].sort((a, b)=>compareInboundSpu({
+                spu: inboundSpuOf(a),
+                skuCode: a.skuCode
+            }, {
+                spu: inboundSpuOf(b),
+                skuCode: b.skuCode
+            })).map((item)=>{
             var _item_product;
             return {
                 id: item.id,
@@ -31090,7 +31137,7 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
             createdAt: 'asc'
         }
     });
-    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, order));
+    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, order)).sort(compareInboundSpu);
     const summary = summarizeInbound(lines);
     return {
         lines,
@@ -31288,7 +31335,7 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
         subtotalAmount: freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.subtotalAmount,
         discountAmount: freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.discountAmount
     };
-    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, amounts));
+    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, amounts)).sort(compareInboundSpu);
     const summary = summarizeInbound(lines);
     return {
         lines,
@@ -31298,6 +31345,627 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
         addedCount,
         missingSkus,
         totalAmount: (_moneyAmount = moneyAmount(freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.totalAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0
+    };
+}));
+function manualMoney(value) {
+    if (value == null || value === '') return null;
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return Math.round(number * 100) / 100;
+}
+function normalizeManualLine(row) {
+    const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0 ? 1 : Math.max(1, Math.floor(Number(row.quantity)));
+    const unitPrice = manualMoney(row.unitPrice);
+    const lineAmount = manualMoney(row.lineAmount);
+    const unit = unitPrice !== null && unitPrice !== void 0 ? unitPrice : lineAmount != null ? Math.round(lineAmount / quantity * 100) / 100 : 0;
+    const total = lineAmount !== null && lineAmount !== void 0 ? lineAmount : Math.round(unit * quantity * 100) / 100;
+    const costPrice = manualMoney(row.costPrice);
+    return {
+        quantity,
+        unitPrice: unit,
+        lineAmount: total,
+        costPrice,
+        imageUrl: String(row.imageUrl || '').trim().slice(0, 700)
+    };
+}
+async function insertManualOrderLines(tx, order, categoryId, rows, username) {
+    var _moneyAmount, _moneyAmount1, _moneyAmount2;
+    const notes = [];
+    for (const [index, raw] of rows.entries()){
+        var _row_costPrice;
+        const row = normalizeManualLine(raw);
+        const code = `ADD-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100);
+        const product = await tx.product.create({
+            data: {
+                name: '',
+                slug: code,
+                productCode: code,
+                source: 'MANUAL',
+                status: 'DRAFT',
+                costPrice: row.costPrice,
+                mainImageUrl: row.imageUrl,
+                galleryJson: row.imageUrl ? [
+                    {
+                        url: row.imageUrl,
+                        sort: 1,
+                        type: 'image'
+                    }
+                ] : [],
+                category: {
+                    connect: {
+                        id: categoryId
+                    }
+                },
+                skus: {
+                    create: {
+                        skuCode: code,
+                        imageUrl: row.imageUrl || null,
+                        price: (_row_costPrice = row.costPrice) !== null && _row_costPrice !== void 0 ? _row_costPrice : 0,
+                        stock: 0,
+                        stockStatus: 'IN_STOCK',
+                        attributeJson: []
+                    }
+                }
+            },
+            include: {
+                skus: true
+            }
+        });
+        const sku = product.skus[0];
+        if (!sku) throw new Error('加货行创建失败');
+        await tx.orderitem.create({
+            data: {
+                orderId: order.id,
+                productId: product.id,
+                productSkuId: sku.id,
+                productName: '',
+                skuCode: code,
+                quantity: row.quantity,
+                unitPrice: row.unitPrice,
+                lineAmount: row.lineAmount,
+                inboundQty: 0,
+                inboundStage: 'PENDING',
+                giftWrapSelected: false
+            }
+        });
+        notes.push(`x${row.quantity} 售价 ${row.unitPrice} 总价 ${row.lineAmount}`);
+    }
+    const items = await tx.orderitem.findMany({
+        where: {
+            orderId: order.id
+        }
+    });
+    const subtotal = Math.round(items.reduce((sum, item)=>{
+        var _moneyAmount;
+        return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
+    }, 0) * 100) / 100;
+    const previousDiscount = (_moneyAmount = moneyAmount(order.discountAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+    const discount = Math.min(Math.max(0, previousDiscount), subtotal);
+    const shipping = (_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
+    const gift = (_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0;
+    const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100;
+    await tx.orderrecord.update({
+        where: {
+            id: order.id
+        },
+        data: {
+            subtotalAmount: subtotal,
+            discountAmount: discount,
+            totalAmount: total
+        }
+    });
+    await tx.orderoperationlog.create({
+        data: {
+            orderId: order.id,
+            actionType: '客户加货',
+            actionNote: `手动加货 ${notes.join('；')}`.slice(0, 4000),
+            operatorName: username
+        }
+    });
+}
+async function inboundLinesAfterGoods(orderId, currencyCode) {
+    var _moneyAmount, _moneyAmount1, _moneyAmount2;
+    const freshOrder = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: orderId
+        }
+    });
+    const fresh = await _prisma.default.orderitem.findMany({
+        where: {
+            orderId
+        },
+        include: {
+            product: {
+                select: inboundProductSelect
+            },
+            productSku: {
+                select: {
+                    imageUrl: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    const subtotalAmount = (_moneyAmount = moneyAmount(freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.subtotalAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+    const discountAmount = (_moneyAmount1 = moneyAmount(freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.discountAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
+    const lines = fresh.map((item)=>mapInboundLine(item, currencyCode, {
+            subtotalAmount,
+            discountAmount
+        })).sort(compareInboundSpu);
+    const summary = summarizeInbound(lines);
+    return {
+        lines,
+        orderedQty: summary.orderedQty,
+        receivedQty: summary.inboundQty,
+        state: summary.state,
+        subtotalAmount,
+        discountAmount,
+        totalAmount: (_moneyAmount2 = moneyAmount(freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.totalAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0,
+        discountPercent: subtotalAmount > 0 ? Math.round(discountAmount / subtotalAmount * 10000) / 100 : 0
+    };
+}
+const appendManualOrderLine = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _input_lines;
+    const { username } = (0, _action_utils.getAuthContext)();
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const category = await _prisma.default.category.findFirst({
+        select: {
+            id: true
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    if (!category) throw new Error('没有可用分类，无法保存加货');
+    const rows = ((_input_lines = input.lines) === null || _input_lines === void 0 ? void 0 : _input_lines.length) ? input.lines : [
+        input
+    ];
+    await _prisma.default.$transaction(async (tx)=>{
+        await insertManualOrderLines(tx, order, category.id, rows, username);
+    });
+    return inboundLinesAfterGoods(order.id, order.currencyCode);
+}));
+function sheetCellText(value) {
+    if (value == null) return '';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'object') {
+        const record = value;
+        if (record.result != null) return sheetCellText(record.result);
+        if (typeof record.text === 'string') return record.text.trim();
+        if (Array.isArray(record.richText)) return record.richText.map((part)=>part.text || '').join('').trim();
+    }
+    return String(value).trim();
+}
+const SHEET_HEADERS = [
+    [
+        'unitPrice',
+        [
+            '售价',
+            '售价(美金)',
+            '单价'
+        ]
+    ],
+    [
+        'quantity',
+        [
+            '数量'
+        ]
+    ],
+    [
+        'lineAmount',
+        [
+            '总价',
+            '总价(美金)'
+        ]
+    ],
+    [
+        'costPrice',
+        [
+            '成本价',
+            '采购价'
+        ]
+    ],
+    [
+        'sku',
+        [
+            'SKU',
+            'sku',
+            'Sku'
+        ]
+    ]
+];
+const importInboundSheet = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        },
+        include: {
+            items: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const raw = Buffer.from(String(input.fileBase64 || ''), 'base64');
+    const fileName = String(input.fileName || '');
+    const imagesByRow = new Map();
+    const matrix = [];
+    if (/\.(csv|xls)$/i.test(fileName)) {
+        var _book_SheetNames, _book_Sheets;
+        const XLSX = __webpack_require__(9964);
+        const book = XLSX.read(raw, {
+            type: 'buffer'
+        });
+        const first = (_book_Sheets = book.Sheets) === null || _book_Sheets === void 0 ? void 0 : _book_Sheets[(_book_SheetNames = book.SheetNames) === null || _book_SheetNames === void 0 ? void 0 : _book_SheetNames[0]];
+        if (!first) throw new Error('表格是空的');
+        const aoa = XLSX.utils.sheet_to_json(first, {
+            header: 1,
+            defval: '',
+            raw: false
+        });
+        for (const line of aoa)matrix.push((line || []).map((cell)=>sheetCellText(cell)));
+    } else {
+        var _sheet_getImages;
+        const ExcelJS = loadExcelJS();
+        if (!ExcelJS) throw new Error('表格解析不可用');
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(raw);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) throw new Error('表格是空的');
+        for (const image of ((_sheet_getImages = sheet.getImages) === null || _sheet_getImages === void 0 ? void 0 : _sheet_getImages.call(sheet)) || []){
+            var _ref, _ref1;
+            var _image_range_tl, _image_range, _image_range_tl1, _image_range1;
+            const anchor = (_ref = (_ref1 = image === null || image === void 0 ? void 0 : (_image_range = image.range) === null || _image_range === void 0 ? void 0 : (_image_range_tl = _image_range.tl) === null || _image_range_tl === void 0 ? void 0 : _image_range_tl.nativeRow) !== null && _ref1 !== void 0 ? _ref1 : image === null || image === void 0 ? void 0 : (_image_range1 = image.range) === null || _image_range1 === void 0 ? void 0 : (_image_range_tl1 = _image_range1.tl) === null || _image_range_tl1 === void 0 ? void 0 : _image_range_tl1.row) !== null && _ref !== void 0 ? _ref : 0;
+            const row = Math.round(Number(anchor)) + 1;
+            if (imagesByRow.has(row)) continue;
+            const media = workbook.getImage(Number(image.imageId));
+            if (media === null || media === void 0 ? void 0 : media.buffer) imagesByRow.set(row, media);
+        }
+        const last = Math.max(sheet.rowCount || 1, ...[
+            ...imagesByRow.keys(),
+            1
+        ]);
+        for(let rowNumber = 1; rowNumber <= last; rowNumber += 1){
+            const line = [];
+            sheet.getRow(rowNumber).eachCell({
+                includeEmpty: true
+            }, (cell, col)=>{
+                line[col - 1] = sheetCellText(cell.value);
+            });
+            matrix.push(line);
+        }
+    }
+    if (!matrix.length) throw new Error('表格是空的');
+    let headerRow = 0;
+    const columns = {};
+    for(let index = 0; index < Math.min(matrix.length, 8); index += 1){
+        const found = {};
+        matrix[index].forEach((text, col)=>{
+            const label = String(text || '').trim();
+            if (!label) return;
+            for (const [key, names] of SHEET_HEADERS){
+                if (names.includes(label)) found[key] = col + 1;
+            }
+        });
+        if (Object.keys(found).length) {
+            headerRow = index + 1;
+            Object.assign(columns, found);
+            break;
+        }
+    }
+    if (!headerRow || columns.unitPrice == null && columns.quantity == null && columns.lineAmount == null) {
+        throw new Error('请让表头包含售价、数量或总价');
+    }
+    const read = (rowNumber, key)=>{
+        var _matrix_;
+        const col = columns[key];
+        if (!col) return '';
+        return String(((_matrix_ = matrix[rowNumber - 1]) === null || _matrix_ === void 0 ? void 0 : _matrix_[col - 1]) || '').trim();
+    };
+    const parsed = [];
+    let emptyRun = 0;
+    const lastRow = Math.max(matrix.length, ...[
+        ...imagesByRow.keys(),
+        headerRow
+    ]);
+    for(let rowNumber = headerRow + 1; rowNumber <= lastRow; rowNumber += 1){
+        const skuCode = read(rowNumber, 'sku');
+        const unitText = read(rowNumber, 'unitPrice');
+        const quantityText = read(rowNumber, 'quantity');
+        const totalText = read(rowNumber, 'lineAmount');
+        const costText = read(rowNumber, 'costPrice');
+        const image = imagesByRow.get(rowNumber);
+        if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+            emptyRun += 1;
+            if (emptyRun >= 3) break;
+            continue;
+        }
+        emptyRun = 0;
+        let imageUrl = '';
+        if (image === null || image === void 0 ? void 0 : image.buffer) {
+            const ext = String(image.extension || 'png').toLowerCase() === 'jpeg' ? 'jpg' : String(image.extension || 'png').toLowerCase();
+            const safeExt = ext === 'jpg' || ext === 'png' || ext === 'webp' || ext === 'gif' ? ext : 'png';
+            const saved = await (0, _uploadStorage.saveUploadedImage)(Buffer.from(image.buffer), safeExt);
+            imageUrl = saved.url;
+        }
+        parsed.push({
+            skuCode,
+            imageUrl,
+            unitPrice: unitText ? Number(unitText) : null,
+            quantity: quantityText ? Number(quantityText) : null,
+            lineAmount: totalText ? Number(totalText) : null,
+            costPrice: costText ? Number(costText) : null
+        });
+    }
+    if (!parsed.length) throw new Error('没有读到商品');
+    const category = await _prisma.default.category.findFirst({
+        select: {
+            id: true
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    if (!category) throw new Error('没有可用分类，无法保存加货');
+    const skuRows = await _prisma.default.productsku.findMany({
+        where: {
+            skuCode: {
+                in: parsed.map((row)=>row.skuCode).filter(Boolean)
+            }
+        },
+        include: {
+            product: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
+    });
+    const skuByCode = new Map(skuRows.map((row)=>[
+            row.skuCode,
+            row
+        ]));
+    await _prisma.default.$transaction(async (tx)=>{
+        const manual = [];
+        for (const row of parsed){
+            const known = row.skuCode ? skuByCode.get(row.skuCode) : null;
+            const existing = row.skuCode ? order.items.find((item)=>item.skuCode === row.skuCode) : null;
+            if (existing) {
+                var _manualMoney, _moneyAmount, _manualMoney1;
+                const addQty = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0 ? 0 : Math.floor(Number(row.quantity));
+                const nextQuantity = Math.max(1, existing.quantity + addQty);
+                const unit = (_manualMoney = manualMoney(row.unitPrice)) !== null && _manualMoney !== void 0 ? _manualMoney : (_moneyAmount = moneyAmount(existing.unitPrice)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+                await tx.orderitem.update({
+                    where: {
+                        id: existing.id
+                    },
+                    data: {
+                        quantity: nextQuantity,
+                        unitPrice: unit,
+                        lineAmount: (_manualMoney1 = manualMoney(row.lineAmount)) !== null && _manualMoney1 !== void 0 ? _manualMoney1 : Math.round(unit * nextQuantity * 100) / 100
+                    }
+                });
+                continue;
+            }
+            if (known === null || known === void 0 ? void 0 : known.product) {
+                var _ref, _manualMoney2, _manualMoney3;
+                const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0 ? 1 : Math.max(1, Math.floor(Number(row.quantity)));
+                const unit = (_ref = (_manualMoney2 = manualMoney(row.unitPrice)) !== null && _manualMoney2 !== void 0 ? _manualMoney2 : manualMoney(row.lineAmount)) !== null && _ref !== void 0 ? _ref : 0;
+                const total = (_manualMoney3 = manualMoney(row.lineAmount)) !== null && _manualMoney3 !== void 0 ? _manualMoney3 : Math.round((unit || 0) * quantity * 100) / 100;
+                await tx.orderitem.create({
+                    data: {
+                        orderId: order.id,
+                        productId: known.productId,
+                        productSkuId: known.id,
+                        productName: String(known.product.name || row.skuCode).slice(0, 200),
+                        skuCode: known.skuCode,
+                        materialLabel: known.materialLabel,
+                        sizeLabel: known.sizeLabel,
+                        quantity,
+                        unitPrice: unit || 0,
+                        lineAmount: total,
+                        inboundQty: 0,
+                        inboundStage: 'PENDING',
+                        shipmentImageUrl: row.imageUrl || null,
+                        giftWrapSelected: false
+                    }
+                });
+                continue;
+            }
+            manual.push(row);
+        }
+        if (manual.length) await insertManualOrderLines(tx, order, category.id, manual, username);
+        else {
+            var _moneyAmount1, _moneyAmount2, _moneyAmount3;
+            const items = await tx.orderitem.findMany({
+                where: {
+                    orderId: order.id
+                }
+            });
+            const subtotal = Math.round(items.reduce((sum, item)=>{
+                var _moneyAmount;
+                return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
+            }, 0) * 100) / 100;
+            const discount = Math.min(Math.max(0, (_moneyAmount1 = moneyAmount(order.discountAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0), subtotal);
+            const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount2 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0) + ((_moneyAmount3 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount3 !== void 0 ? _moneyAmount3 : 0)) * 100) / 100;
+            await tx.orderrecord.update({
+                where: {
+                    id: order.id
+                },
+                data: {
+                    subtotalAmount: subtotal,
+                    discountAmount: discount,
+                    totalAmount: total
+                }
+            });
+        }
+    });
+    const result = await inboundLinesAfterGoods(order.id, order.currencyCode);
+    return {
+        ...result,
+        addedCount: parsed.length
+    };
+}));
+const updateManualOrderLine = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _moneyAmount, _moneyAmount1;
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const item = await _prisma.default.orderitem.findFirst({
+        where: {
+            id: input.orderItemId,
+            orderId: order.id
+        }
+    });
+    if (!item) throw new Error('订单商品不存在');
+    if (!String(item.skuCode || '').startsWith('ADD-')) throw new Error('只能修改手动加货行');
+    const quantity = input.quantity == null || !Number.isFinite(Number(input.quantity)) || Number(input.quantity) <= 0 ? Math.max(1, item.quantity) : Math.max(1, Math.floor(Number(input.quantity)));
+    const statedUnit = input.unitPrice === undefined ? (_moneyAmount = moneyAmount(item.unitPrice)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0 : manualMoney(input.unitPrice);
+    const statedTotal = input.lineAmount === undefined ? (_moneyAmount1 = moneyAmount(item.lineAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0 : manualMoney(input.lineAmount);
+    const unitPrice = statedUnit !== null && statedUnit !== void 0 ? statedUnit : statedTotal != null ? Math.round(statedTotal / quantity * 100) / 100 : 0;
+    const lineAmount = statedTotal !== null && statedTotal !== void 0 ? statedTotal : Math.round(unitPrice * quantity * 100) / 100;
+    const costPrice = input.costPrice === undefined ? undefined : manualMoney(input.costPrice);
+    await _prisma.default.$transaction(async (tx)=>{
+        var _moneyAmount, _moneyAmount1, _moneyAmount2;
+        await tx.orderitem.update({
+            where: {
+                id: item.id
+            },
+            data: {
+                quantity,
+                unitPrice,
+                lineAmount,
+                inboundQty: Math.min(Math.max(0, Number(item.inboundQty) || 0), quantity)
+            }
+        });
+        if (costPrice !== undefined) {
+            await tx.product.update({
+                where: {
+                    id: item.productId
+                },
+                data: {
+                    costPrice
+                }
+            });
+            await tx.productsku.update({
+                where: {
+                    id: item.productSkuId
+                },
+                data: {
+                    price: costPrice !== null && costPrice !== void 0 ? costPrice : 0
+                }
+            });
+        }
+        const items = await tx.orderitem.findMany({
+            where: {
+                orderId: order.id
+            }
+        });
+        const subtotal = Math.round(items.reduce((sum, row)=>{
+            var _moneyAmount;
+            return sum + ((_moneyAmount = moneyAmount(row.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
+        }, 0) * 100) / 100;
+        const discount = Math.min(Math.max(0, (_moneyAmount = moneyAmount(order.discountAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0), subtotal);
+        const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0) + ((_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0)) * 100) / 100;
+        await tx.orderrecord.update({
+            where: {
+                id: order.id
+            },
+            data: {
+                subtotalAmount: subtotal,
+                discountAmount: discount,
+                totalAmount: total
+            }
+        });
+    });
+    return inboundLinesAfterGoods(order.id, order.currencyCode);
+}));
+const updateOrderDiscount = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _moneyAmount, _moneyAmount1, _moneyAmount2, _moneyAmount3;
+    const { username } = (0, _action_utils.getAuthContext)();
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const percent = Math.min(100, Math.max(0, Number(input.discountPercent) || 0));
+    const subtotal = (_moneyAmount = moneyAmount(order.subtotalAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+    const discount = Math.round(subtotal * percent) / 100;
+    const shipping = (_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
+    const gift = (_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0;
+    const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100;
+    const previous = (_moneyAmount3 = moneyAmount(order.discountAmount)) !== null && _moneyAmount3 !== void 0 ? _moneyAmount3 : 0;
+    await _prisma.default.$transaction(async (tx)=>{
+        await tx.orderrecord.update({
+            where: {
+                id: order.id
+            },
+            data: {
+                discountAmount: discount,
+                totalAmount: total
+            }
+        });
+        await tx.orderoperationlog.create({
+            data: {
+                orderId: order.id,
+                actionType: '修改折扣',
+                actionNote: `折扣 ${percent}% ，优惠 ${previous} -> ${discount}`.slice(0, 4000),
+                operatorName: username
+            }
+        });
+    });
+    const fresh = await _prisma.default.orderitem.findMany({
+        where: {
+            orderId: order.id
+        },
+        include: {
+            product: {
+                select: inboundProductSelect
+            },
+            productSku: {
+                select: {
+                    imageUrl: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, {
+            subtotalAmount: subtotal,
+            discountAmount: discount
+        })).sort(compareInboundSpu);
+    const summary = summarizeInbound(lines);
+    return {
+        lines,
+        orderedQty: summary.orderedQty,
+        receivedQty: summary.inboundQty,
+        state: summary.state,
+        subtotalAmount: subtotal,
+        discountAmount: discount,
+        totalAmount: total,
+        discountPercent: percent
     };
 }));
 const updateOrderRemark = (0, _action_utils.requireRole)([
