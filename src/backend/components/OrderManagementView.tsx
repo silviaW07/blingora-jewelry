@@ -332,19 +332,25 @@ function InboundShipBar({
                       input.click()
                     }}>新增</button>
                   </div>
-                  <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
-                    <label className="grid gap-1 text-sm font-medium text-slate-700 sm:col-span-2">发货时间
-                      <Input type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <label className="grid w-56 max-w-full gap-1 text-sm font-medium text-slate-700">发货时间
+                      <Input className="h-9" type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
                     </label>
-                    <label className="grid gap-1 text-sm text-slate-700">物流号
-                      <Input value={block.trackingNumber} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, trackingNumber: event.target.value } : item))} />
-                    </label>
-                    <label className="grid gap-1 text-sm text-slate-700">渠道
-                      <Input value={block.channel} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, channel: event.target.value } : item))} />
-                    </label>
-                    <label className="grid gap-1 text-sm text-slate-700 sm:col-span-2">备注
-                      <Input value={block.note} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, note: event.target.value } : item))} />
-                    </label>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="grid w-40 gap-1 text-sm text-slate-700">物流号
+                        <Input className="h-9" value={block.trackingNumber} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, trackingNumber: event.target.value } : item))} />
+                      </label>
+                      <label className="grid w-32 gap-1 text-sm text-slate-700">渠道
+                        <Input className="h-9" value={block.channel} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, channel: event.target.value } : item))} />
+                      </label>
+                      <label className="grid w-44 gap-1 text-sm text-slate-700">备注
+                        <Input className="h-9" value={block.note} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, note: event.target.value } : item))} />
+                      </label>
+                      <Button type="button" variant="outline" className="h-9" onClick={() => {
+                        const text = ["物流号 " + (block.trackingNumber || ""), "渠道 " + (block.channel || ""), "备注 " + (block.note || "")].join("\n")
+                        void navigator.clipboard.writeText(text).then(() => toast.success("已复制物流、渠道、备注")).catch(() => toast.error("复制失败"))
+                      }}>复制</Button>
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-col gap-2">
                     <Button type="button" variant="outline" onClick={() => setBlocks((prev) => {
