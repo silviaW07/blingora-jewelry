@@ -96,12 +96,18 @@ const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
   ['PENDING', '待采购'],
   ['STOCK', '备货'],
   ['PREPARING', '备货中'],
-  ['FACTORY', '工厂发货'],
-  ['TRANSIT', '运输中'],
-  ['ARRIVED', '已到货'],
+  ['TRANSIT', '工厂发货'],
+  ['ARRIVED', '到达仓库'],
   ['PARCEL', '包裹发货'],
 ];
-const INBOUND_STAGE_LABEL: Record<string, string> = Object.fromEntries(INBOUND_STAGE_OPTIONS);
+const INBOUND_STAGE_LABEL: Record<string, string> = {
+  ...Object.fromEntries(INBOUND_STAGE_OPTIONS),
+  FACTORY: '工厂发货',
+};
+const normalizedInboundStage = (stage?: string | null) => {
+  const value = String(stage || 'PENDING').toUpperCase();
+  return value === 'FACTORY' ? 'TRANSIT' : value;
+};
 type InboundImportRow = {
   key: string;
   imageUrl: string;
@@ -206,7 +212,7 @@ export const OrderManagementView = ({
   }, [state.inboundOrderId]);
   const visibleInboundDrafts = stageFilter === 'ALL'
     ? state.inboundDrafts
-    : state.inboundDrafts.filter((line) => (line.inboundStage || 'PENDING') === stageFilter);
+    : state.inboundDrafts.filter((line) => normalizedInboundStage(line.inboundStage) === stageFilter);
   const allInboundSelected = visibleInboundDrafts.length > 0 && visibleInboundDrafts.every((line) => inboundSelected.includes(line.id));
   const setInboundSelectedPersist = (next: string[]) => {
     setInboundSelected(next);
@@ -1136,10 +1142,6 @@ export const OrderManagementView = ({
               </div>
             ) : null}
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('STOCK')}>备货</Button>
-              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('FACTORY')}>工厂发货</Button>
-              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('ARRIVED')}>已到货</Button>
-              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('PARCEL')}>包裹发货</Button>
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 商品状态
                 <select
@@ -1184,12 +1186,12 @@ export const OrderManagementView = ({
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b text-sm font-semibold text-slate-800">
                   {INBOUND_EXPORT_COLUMNS.map(([key, label]) => (
-                    <th key={key} className={`overflow-hidden px-2 py-2 align-middle font-semibold ${key === 'product' ? 'text-left' : 'text-center'}`}>
-                      <div className="flex items-start gap-2">
-                        {key === 'product' ? (
+                    <th key={key} className={`overflow-hidden px-1 py-2 align-middle font-semibold ${key === 'product' ? 'text-left' : 'text-center'}`}>
+                      {key === 'product' ? (
+                        <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
-                            className="mt-0.5 h-4 w-4 shrink-0"
+                            className="h-4 w-4 shrink-0"
                             aria-label="全选商品"
                             checked={allInboundSelected}
                             onChange={(event) => {
@@ -1199,18 +1201,30 @@ export const OrderManagementView = ({
                                 : inboundSelected.filter((id) => !visibleIds.includes(id)));
                             }}
                           />
-                        ) : null}
-                      <label className="flex items-start gap-1 whitespace-normal break-words">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          aria-label={`导出${label}`}
-                          checked={inboundColumns[key] === true}
-                          onChange={(event) => setInboundColumns((prev) => ({ ...prev, [key]: event.target.checked }))}
-                        />
-                        <span>{label}</span>
-                      </label>
-                      </div>
+                          <label className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              aria-label="导出商品"
+                              checked={inboundColumns[key] === true}
+                              onChange={(event) => setInboundColumns((prev) => ({ ...prev, [key]: event.target.checked }))}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="grid w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 justify-self-center"
+                            aria-label={"导出" + label}
+                            checked={inboundColumns[key] === true}
+                            onChange={(event) => setInboundColumns((prev) => ({ ...prev, [key]: event.target.checked }))}
+                          />
+                          <span className="text-center leading-5">{label}</span>
+                          <span aria-hidden="true" />
+                        </div>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -1266,7 +1280,7 @@ export const OrderManagementView = ({
                           <div className="min-w-0 flex-1">
                             <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div>
                             <div className="mt-1">
-                              <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">{INBOUND_STAGE_LABEL[line.inboundStage || 'PENDING'] || '待采购'}</span>
+                              <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
                             </div>
                             <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>
                           </div>
@@ -1298,7 +1312,7 @@ export const OrderManagementView = ({
                         <select
                           className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
                           aria-label={`${line.productName} 商品状态`}
-                          value={line.inboundStage || 'PENDING'}
+                          value={normalizedInboundStage(line.inboundStage)}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
                         >
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
@@ -1348,6 +1362,10 @@ export const OrderManagementView = ({
               <Button type="button" variant="outline" onClick={() => shipImageRef.current?.click()} disabled={state.inboundSaving}>
                 发货图片
               </Button>
+              <Button type="button" variant="outline" onClick={() => applyBatchStage('STOCK')} disabled={state.inboundSaving}>备货</Button>
+              <Button type="button" variant="outline" onClick={() => applyBatchStage('TRANSIT')} disabled={state.inboundSaving}>工厂发货</Button>
+              <Button type="button" variant="outline" onClick={() => applyBatchStage('ARRIVED')} disabled={state.inboundSaving}>到达仓库</Button>
+              <Button type="button" variant="outline" onClick={() => applyBatchStage('PARCEL')} disabled={state.inboundSaving}>包裹发货</Button>
               <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>

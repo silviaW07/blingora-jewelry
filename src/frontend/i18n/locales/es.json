@@ -684,8 +684,8 @@
       "STOCK": "En stock",
       "PREPARING": "En preparación",
       "FACTORY": "Enviado de fábrica",
-      "TRANSIT": "En tránsito",
-      "ARRIVED": "Recibido",
+      "TRANSIT": "Enviado de fábrica",
+      "ARRIVED": "Llegado al almacén",
       "PARCEL": "Paquete enviado"
     },
     "statuses": {

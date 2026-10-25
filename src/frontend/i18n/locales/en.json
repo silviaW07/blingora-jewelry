@@ -692,8 +692,8 @@
       "STOCK": "Stocking",
       "PREPARING": "Preparing",
       "FACTORY": "Shipped from factory",
-      "TRANSIT": "In transit",
-      "ARRIVED": "Arrived",
+      "TRANSIT": "Shipped from factory",
+      "ARRIVED": "Arrived at warehouse",
       "PARCEL": "Parcel shipped"
     },
     "statuses": {

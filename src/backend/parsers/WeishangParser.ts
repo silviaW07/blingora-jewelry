@@ -630,6 +630,27 @@ function previewFromHtml(html: string, sourceUrl: string, ref: WeishangAlbumRef)
   }
 }
 
+
+function albumShopName(payload: unknown): string | null {
+  const root = asRecord(payload)
+  const result = asRecord(root?.result) || asRecord(root?.data)
+  const target = asRecord(result?.targetAlbum)
+  const named = firstString(target?.name, target?.shop_name, target?.shopName)
+  if (named) return named.slice(0, 150)
+  for (const item of albumItemsFromPayload(payload)) {
+    const shop = firstString(item.shop_name, item.shopName)
+    if (shop) return shop.slice(0, 150)
+  }
+  return null
+}
+
+async function withAlbumShopName(preview: WeishangAlbumPreview, ref: WeishangAlbumRef, cookie: string): Promise<WeishangAlbumPreview> {
+  if (preview.supplierName) return preview
+  const album = await fetchAlbumPage(ref, cookie, '0')
+  const shopName = albumShopName(album.payload)
+  return shopName ? { ...preview, supplierName: shopName } : preview
+}
+
 export async function fetchWeishangAlbumPreview(sourceUrl: string): Promise<FetchWeishangResult> {
   const ref = parseWeishangAlbumRef(sourceUrl)
   if (!isWeishangAlbumPageUrl(sourceUrl)) {
@@ -659,7 +680,7 @@ export async function fetchWeishangAlbumPreview(sourceUrl: string): Promise<Fetc
         }
       }
       if (media.preview?.detailImages.length) {
-        return { preview: media.preview, outcome: 'success' }
+        return { preview: await withAlbumShopName(media.preview, ref, cookie), outcome: 'success' }
       }
     }
 
@@ -688,7 +709,8 @@ export async function fetchWeishangAlbumPreview(sourceUrl: string): Promise<Fetc
           if (albumRef.albumId && albumRef.itemId) {
             const media = await fetchItemMediaPreview(albumRef, sourceUrl, cookie)
             if (media.preview?.detailImages.length) {
-              return { preview: media.preview, outcome: 'success' }
+              const shopName = media.preview.supplierName || preview.supplierName
+              return { preview: await withAlbumShopName({ ...media.preview, supplierName: shopName }, ref, cookie), outcome: 'success' }
             }
           }
         }
