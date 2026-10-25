@@ -222,6 +222,8 @@ export const OrderManagementView = ({
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
+  const [cellEdit, setCellEdit] = React.useState<{ id: string; field: 'unit' | 'discount' } | null>(null);
+  const [cellDraft, setCellDraft] = React.useState('');
   const [hiddenColumns, setHiddenColumns] = React.useState<Record<string, boolean>>({});
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
@@ -578,7 +580,7 @@ export const OrderManagementView = ({
 
   const manualDraftOf = (line: { id: string; unitPrice: number | null; quantity: number; costPrice: number | null; supplierName?: string | null }) => (
     manualDrafts[line.id] || {
-      unitPrice: line.unitPrice ? String(line.unitPrice) : '',
+      unitPrice: line.unitPrice == null ? '' : String(line.unitPrice),
       quantity: line.quantity ? String(line.quantity) : '',
       costPrice: line.costPrice == null ? '' : String(line.costPrice),
       supplierName: line.supplierName || '',
@@ -672,6 +674,21 @@ export const OrderManagementView = ({
     : Math.max(0, originalTotal - discountTotal);
   const discountPercent = orderSubtotal > 0 ? Math.round((orderDiscount / orderSubtotal) * 10000) / 100 : 0;
   const discountPercentLabel = `${Number(discountPercent.toFixed(2))}%`;
+  const orderKeepRate = Math.max(0, Math.min(1, 1 - discountPercent / 100));
+  const discountFromCost = (costText: string) => {
+    if (!costText.trim()) return null;
+    const cost = Number(costText);
+    if (!Number.isFinite(cost)) return null;
+    return Math.round(cost * orderKeepRate * 100) / 100;
+  };
+  const costDiscountTotal = state.inboundDrafts.reduce((sum, line) => {
+    const price = discountFromCost(line.costPrice == null ? '' : String(line.costPrice));
+    return price == null ? sum : sum + price * line.quantity;
+  }, 0);
+  const costInStockDiscountTotal = state.inboundDrafts.reduce((sum, line) => {
+    const price = discountFromCost(line.costPrice == null ? '' : String(line.costPrice));
+    return price == null ? sum : sum + price * (Number(line.inboundQty) || 0);
+  }, 0);
   const saveDiscountPercent = async () => {
     const percent = Number(discountDraft.replace('%', '').trim());
     if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
@@ -1428,7 +1445,7 @@ export const OrderManagementView = ({
               ) : (
                 <span
                   className="inline-flex min-w-16 cursor-text items-center justify-center rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
-                  title="双击修改折扣"
+                  title="订单折扣，双击后改整单"
                   onDoubleClick={() => { setDiscountDraft(String(discountPercent)); setDiscountEditing(true); }}
                 >
                   {discountPercentLabel}
@@ -1663,8 +1680,8 @@ export const OrderManagementView = ({
                           </div>
                         </div>
                       </td>) : null}
-                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
-                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{(() => { const unit = Number(manualDraftOf(line).unitPrice); const rate = orderSubtotal > 0 ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal : 1; return manualDraftOf(line).unitPrice.trim() && Number.isFinite(unit) ? formatInboundMoney(Math.round(unit * rate * 100) / 100, line.currencyCode) : ''; })()}</td>) : null}
+                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle">{cellEdit?.id === line.id && cellEdit.field === 'unit' ? <input autoFocus aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => { setCellEdit(null); void saveManualDraft(line); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改售价" onDoubleClick={() => setCellEdit({ id: line.id, field: 'unit' })}>{manualDraftOf(line).unitPrice}</button>}</td>) : null}
+                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{cellEdit?.id === line.id && cellEdit.field === 'discount' ? <input autoFocus aria-label="折扣价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => { const text = event.target.value; setCellDraft(text); if (!text.trim()) { patchManualDraft(line, { costPrice: '' }); return; } const entered = Number(text); if (Number.isFinite(entered) && orderKeepRate > 0) patchManualDraft(line, { costPrice: String(Math.round((entered / orderKeepRate) * 100) / 100) }); }} onBlur={() => { setCellEdit(null); void saveManualDraft(line); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改折扣价" onDoubleClick={() => { const current = discountFromCost(manualDraftOf(line).costPrice); setCellDraft(current == null ? '' : String(current)); setCellEdit({ id: line.id, field: 'discount' }); }}>{(() => { const price = discountFromCost(manualDraftOf(line).costPrice); return price == null ? '' : formatInboundMoney(price, line.currencyCode); })()}</button>}</td>) : null}
                       {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).quantity} onChange={(event) => patchManualDraft(line, { quantity: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
                       {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{(() => { const unit = Number(manualDraftOf(line).unitPrice); const qty = Number(manualDraftOf(line).quantity); return manualDraftOf(line).unitPrice.trim() && manualDraftOf(line).quantity.trim() && Number.isFinite(unit) && Number.isFinite(qty) ? formatInboundMoney(Math.round(unit * qty * 100) / 100, line.currencyCode) : ''; })()}</td>) : null}
                       {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).costPrice} onChange={(event) => patchManualDraft(line, { costPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
@@ -1724,8 +1741,8 @@ export const OrderManagementView = ({
                   const addonTotal = card.unitPrice.trim() && card.quantity.trim() && Number.isFinite(addonUnit) && Number.isFinite(addonQty)
                     ? Math.round(addonUnit * addonQty * 100) / 100
                     : null;
-                  const addonRate = orderSubtotal > 0 ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal : 1;
-                  const addonDiscount = card.unitPrice.trim() && Number.isFinite(addonUnit) ? Math.round(addonUnit * addonRate * 100) / 100 : null;
+                  const addonCost = Number(card.costPrice);
+                  const addonDiscount = card.costPrice.trim() && Number.isFinite(addonCost) ? Math.round(addonCost * orderKeepRate * 100) / 100 : null;
                   return (
                   <tr key={card.key} className="border-b bg-sky-50/40 align-middle">
                     {columnVisible('product') ? (
@@ -1743,10 +1760,10 @@ export const OrderManagementView = ({
                     ) : null}
                     {columnVisible('unitPrice') ? (
                       <td className="overflow-hidden px-1 py-3 text-center align-middle">
-                        <input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} />
+                        {cellEdit?.id === card.key && cellEdit.field === 'unit' ? <input autoFocus aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} onBlur={() => setCellEdit(null)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums hover:bg-slate-100" title="双击修改售价" onDoubleClick={() => setCellEdit({ id: card.key, field: 'unit' })}>{card.unitPrice}</button>}
                       </td>
                     ) : null}
-                    {columnVisible('discountPrice') ? <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums">{addonDiscount == null ? '' : formatInboundMoney(addonDiscount, inboundCurrency)}</td> : null}
+                    {columnVisible('discountPrice') ? <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums">{cellEdit?.id === card.key && cellEdit.field === 'discount' ? <input autoFocus aria-label="折扣价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => { const text = event.target.value; setCellDraft(text); if (!text.trim()) { patchAddonCard(card.key, { costPrice: '' }); return; } const entered = Number(text); if (Number.isFinite(entered) && orderKeepRate > 0) patchAddonCard(card.key, { costPrice: String(Math.round((entered / orderKeepRate) * 100) / 100) }); }} onBlur={() => setCellEdit(null)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums hover:bg-slate-100" title="双击修改折扣价" onDoubleClick={() => { setCellDraft(addonDiscount == null ? '' : String(addonDiscount)); setCellEdit({ id: card.key, field: 'discount' }); }}>{addonDiscount == null ? '' : formatInboundMoney(addonDiscount, inboundCurrency)}</button>}</td> : null}
                     {columnVisible('quantity') ? (
                       <td className="overflow-hidden px-1 py-3 text-center align-middle">
                         <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.quantity} onChange={(event) => patchAddonCard(card.key, { quantity: event.target.value })} />
@@ -1801,11 +1818,11 @@ export const OrderManagementView = ({
               <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
                 <div>
                   <div className="text-xs font-medium text-slate-500">Discount total</div>
-                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(discountTotal, inboundCurrency)}</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(costDiscountTotal, inboundCurrency)}</div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-slate-500">In stock discount total</div>
-                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(inStockDiscountTotal, inboundCurrency)}</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(costInStockDiscountTotal, inboundCurrency)}</div>
                 </div>
               </div>
               <div className="rounded-md border border-slate-200 bg-white px-3 py-3">

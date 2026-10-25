@@ -126,6 +126,14 @@ function supplierLinkFromProduct(product: {
   return { supplierName, supplierUrl }
 }
 
+function carryDiscountAmount(previousSubtotal: unknown, previousDiscount: unknown, subtotal: number) {
+  const before = moneyAmount(previousSubtotal) ?? 0
+  const discountBefore = Math.max(0, moneyAmount(previousDiscount) ?? 0)
+  if (!(before > 0) || !(discountBefore > 0)) return 0
+  const next = Math.round(subtotal * (discountBefore / before) * 100) / 100
+  return Math.min(Math.max(0, next), Math.max(0, subtotal))
+}
+
 function discountedUnitPrice(unitPrice: number | null, subtotal: unknown, discount: unknown): number | null {
   if (unitPrice == null) return null
   const sub = Number(subtotal || 0)
@@ -1070,8 +1078,7 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
 
       const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
       const subtotal = Math.round(items.reduce((sum, item) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
-      const previousDiscount = moneyAmount(order.discountAmount) ?? 0
-      const discount = Math.min(Math.max(0, previousDiscount), subtotal)
+      const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal)
       const shipping = moneyAmount(order.shippingAmount) ?? 0
       const gift = moneyAmount(order.giftWrapAmount) ?? 0
       const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100
@@ -1171,7 +1178,7 @@ function normalizeManualLine(row: ManualOrderLineInput) {
 
 async function insertManualOrderLines(
   tx: any,
-  order: { id: string; discountAmount: unknown; shippingAmount: unknown; giftWrapAmount: unknown },
+  order: { id: string; subtotalAmount?: unknown; discountAmount: unknown; shippingAmount: unknown; giftWrapAmount: unknown },
   categoryId: string,
   rows: ManualOrderLineInput[],
   username: string,
@@ -1227,8 +1234,7 @@ async function insertManualOrderLines(
   }
   const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
   const subtotal = Math.round(items.reduce((sum: number, item: { lineAmount: unknown }) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
-  const previousDiscount = moneyAmount(order.discountAmount) ?? 0
-  const discount = Math.min(Math.max(0, previousDiscount), subtotal)
+  const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal)
   const shipping = moneyAmount(order.shippingAmount) ?? 0
   const gift = moneyAmount(order.giftWrapAmount) ?? 0
   const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100
@@ -1627,7 +1633,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
       else {
         const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
         const subtotal = Math.round(items.reduce((sum: number, item: { lineAmount: unknown }) => sum + (moneyAmount(item.lineAmount) ?? 0), 0) * 100) / 100
-        const discount = Math.min(Math.max(0, moneyAmount(order.discountAmount) ?? 0), subtotal)
+        const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal)
         const total = Math.round(Math.max(0, subtotal - discount + (moneyAmount(order.shippingAmount) ?? 0) + (moneyAmount(order.giftWrapAmount) ?? 0)) * 100) / 100
         await tx.orderrecord.update({
           where: { id: order.id },
@@ -2053,7 +2059,7 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
       }
       const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
       const subtotal = Math.round(items.reduce((sum: number, row: { lineAmount: unknown }) => sum + (moneyAmount(row.lineAmount) ?? 0), 0) * 100) / 100
-      const discount = Math.min(Math.max(0, moneyAmount(order.discountAmount) ?? 0), subtotal)
+      const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal)
       const total = Math.round(Math.max(0, subtotal - discount + (moneyAmount(order.shippingAmount) ?? 0) + (moneyAmount(order.giftWrapAmount) ?? 0)) * 100) / 100
       await tx.orderrecord.update({
         where: { id: order.id },
