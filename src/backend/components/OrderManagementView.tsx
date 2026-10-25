@@ -159,7 +159,7 @@ export const OrderManagementView = ({
   const router = useRouter();
   const [inboundZoom, setInboundZoom] = React.useState<{ src: string; name: string } | null>(null);
 
-  const [inboundColumns, setInboundColumns] = React.useState<Record<string, boolean>>({});
+  const [inboundColumns, setInboundColumns] = React.useState<Record<string, boolean>>(() => Object.fromEntries(INBOUND_EXPORT_COLUMNS.map(([key]) => [key, false])));
   const [inboundSelected, setInboundSelected] = React.useState<string[]>([]);
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
@@ -167,8 +167,8 @@ export const OrderManagementView = ({
   const importFileRef = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => {
     if (!state.inboundOrderId) return;
-    setInboundSelected(state.inboundDrafts.map((line) => line.id));
-    setInboundColumns(Object.fromEntries(INBOUND_EXPORT_COLUMNS.map(([key]) => [key, true])));
+    setInboundSelected([]);
+    setInboundColumns(Object.fromEntries(INBOUND_EXPORT_COLUMNS.map(([key]) => [key, false])));
     setImportOpen(false);
     setImportRows([]);
   }, [state.inboundOrderId]);
@@ -993,29 +993,6 @@ export const OrderManagementView = ({
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" className="h-10 text-base" onClick={() => importFileRef.current?.click()}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> 导入商品/表格
-              </Button>
-              <Button type="button" variant="outline" className="h-10 text-base" disabled={state.exportLoading} onClick={() => downloadInbound('sheet')}>
-                <Download className="mr-2 h-4 w-4" /> 下载表格
-              </Button>
-              <Button type="button" variant="outline" className="h-10 text-base" disabled={state.exportLoading} onClick={() => downloadInbound('images')}>
-                发货图片
-              </Button>
-              <input
-                ref={importFileRef}
-                type="file"
-                className="hidden"
-                multiple
-                accept=".xlsx,.xls,.csv,image/*"
-                onChange={(event) => {
-                  const files = event.target.files
-                  if (files?.length) void receiveImportFiles(files)
-                  event.target.value = ''
-                }}
-              />
-            </div>
             {importOpen ? (
               <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4">
                 <div className="text-lg font-semibold text-slate-900">导入商品 / 图片</div>
@@ -1093,7 +1070,7 @@ export const OrderManagementView = ({
                           type="checkbox"
                           className="h-4 w-4"
                           aria-label={`导出${label}`}
-                          checked={inboundColumns[key] !== false}
+                          checked={inboundColumns[key] === true}
                           onChange={(event) => setInboundColumns((prev) => ({ ...prev, [key]: event.target.checked }))}
                         />
                         <span>{label}</span>
@@ -1222,13 +1199,34 @@ export const OrderManagementView = ({
             <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
               全部到齐
             </Button>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button type="button" variant="outline" onClick={handlers.closeInboundDialog} disabled={state.inboundSaving}>
                 取消
+              </Button>
+              <Button type="button" variant="outline" onClick={() => importFileRef.current?.click()} disabled={state.inboundSaving}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> 导入商品/表格
+              </Button>
+              <Button type="button" variant="outline" disabled={state.exportLoading} onClick={() => downloadInbound('sheet')}>
+                <Download className="mr-2 h-4 w-4" /> 下载表格
+              </Button>
+              <Button type="button" variant="outline" disabled={state.exportLoading} onClick={() => downloadInbound('images')}>
+                发货图片
               </Button>
               <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>
+              <input
+                ref={importFileRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept=".xlsx,.xls,.csv,image/*"
+                onChange={(event) => {
+                  const files = event.target.files
+                  if (files?.length) void receiveImportFiles(files)
+                  event.target.value = ''
+                }}
+              />
             </div>
           </DialogFooter>
         </DialogContent>
