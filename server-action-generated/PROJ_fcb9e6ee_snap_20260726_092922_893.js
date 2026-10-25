@@ -30382,6 +30382,12 @@ _export(exports, {
     get importInboundSheet () {
         return importInboundSheet;
     },
+    get listInboundShipments () {
+        return listInboundShipments;
+    },
+    get saveInboundShipment () {
+        return saveInboundShipment;
+    },
     get shipOrder () {
         return shipOrder;
     },
@@ -32134,6 +32140,90 @@ const importCustomerOrder = (0, _action_utils.requireRole)([
             };
         }));
     return created;
+}));
+const INBOUND_SHIP_SEGMENT = '入库发货';
+function parseShanghaiDateTime(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value || '').trim());
+    if (!match) throw new Error('请填写发货时间');
+    const date = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:00+08:00`);
+    if (Number.isNaN(date.getTime())) throw new Error('请填写发货时间');
+    return date;
+}
+async function listInboundShipmentRows(orderId) {
+    const rows = await _prisma.default.orderlogisticssegment.findMany({
+        where: {
+            orderId,
+            segmentType: INBOUND_SHIP_SEGMENT
+        },
+        orderBy: [
+            {
+                shippedAt: 'asc'
+            },
+            {
+                createdAt: 'asc'
+            }
+        ]
+    });
+    return rows.map((row)=>({
+            id: row.id,
+            shippedAt: row.shippedAt ? row.shippedAt.toISOString() : '',
+            trackingNumber: String(row.trackingNumber || ''),
+            channel: String(row.carrierName || ''),
+            note: String(row.remark || '')
+        }));
+}
+const listInboundShipments = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (orderId)=>{
+    if (!orderId) return [];
+    return listInboundShipmentRows(orderId);
+}));
+const saveInboundShipment = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _input_legs;
+    const { username } = (0, _action_utils.getAuthContext)();
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const shippedAt = parseShanghaiDateTime(input.shippedAt);
+    const legs = (((_input_legs = input.legs) === null || _input_legs === void 0 ? void 0 : _input_legs.length) ? input.legs : [
+        {}
+    ]).map((leg)=>({
+            trackingNumber: String((leg === null || leg === void 0 ? void 0 : leg.trackingNumber) || '').trim().slice(0, 120),
+            channel: String((leg === null || leg === void 0 ? void 0 : leg.channel) || '').trim().slice(0, 100),
+            note: String((leg === null || leg === void 0 ? void 0 : leg.note) || '').trim().slice(0, 2000)
+        }));
+    await _prisma.default.$transaction(async (tx)=>{
+        for (const leg of legs){
+            await tx.orderlogisticssegment.create({
+                data: {
+                    orderId: order.id,
+                    segmentType: INBOUND_SHIP_SEGMENT,
+                    carrierName: leg.channel || null,
+                    trackingNumber: leg.trackingNumber || null,
+                    statusLabel: '已发货',
+                    shippedAt,
+                    remark: leg.note || null
+                }
+            });
+        }
+        await tx.orderoperationlog.create({
+            data: {
+                orderId: order.id,
+                actionType: '入库发货',
+                actionNote: `发货时间 ${input.shippedAt}，${legs.length} 条物流`.slice(0, 4000),
+                operatorName: username
+            }
+        });
+    });
+    return listInboundShipmentRows(order.id);
 }));
 const updateManualOrderLine = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
