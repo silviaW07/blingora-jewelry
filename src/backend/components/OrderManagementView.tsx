@@ -336,14 +336,14 @@ function InboundShipBar({
                     <label className="grid w-56 max-w-full gap-1 text-sm font-medium text-slate-700">发货时间
                       <Input className="h-9" type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
                     </label>
-                    <div className="flex flex-wrap items-end gap-2">
-                      <label className="grid w-40 gap-1 text-sm text-slate-700">物流号
+                    <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[9.5rem_8rem_10rem_4.25rem]">
+                      <label className="grid min-w-0 gap-1 text-sm text-slate-700">物流号
                         <Input className="h-9" value={block.trackingNumber} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, trackingNumber: event.target.value } : item))} />
                       </label>
-                      <label className="grid w-32 gap-1 text-sm text-slate-700">渠道
+                      <label className="grid min-w-0 gap-1 text-sm text-slate-700">渠道
                         <Input className="h-9" value={block.channel} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, channel: event.target.value } : item))} />
                       </label>
-                      <label className="grid w-44 gap-1 text-sm text-slate-700">备注
+                      <label className="col-span-2 grid min-w-0 gap-1 text-sm text-slate-700 sm:col-span-1">备注
                         <Input className="h-9" value={block.note} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, note: event.target.value } : item))} />
                       </label>
                       <Button type="button" variant="outline" className="h-9" onClick={() => {

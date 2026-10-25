@@ -679,6 +679,12 @@
     "discount": "Descuento",
     "merchandiseTotal": "Total",
     "shipping": "Envío",
+    "shipments": "Envíos",
+    "shippedAt": "Enviado",
+    "trackingNo": "Número de rastreo",
+    "channel": "Canal",
+    "shipmentNote": "Nota",
+    "downloadPhoto": "Descargar",
     "inStockCount": "en stock {{arrived}}",
     "inboundStages": {
       "PENDING": "Por comprar",

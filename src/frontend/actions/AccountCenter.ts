@@ -87,6 +87,16 @@ export interface CustomerOrderSummary {
   createdAt: string
   itemCount: number
   items: CustomerOrderItem[]
+  shipments: CustomerShipment[]
+}
+
+export interface CustomerShipment {
+  id: string
+  shippedAt: string
+  trackingNumber: string
+  channel: string
+  note: string
+  images: string[]
 }
 
 export type ReorderSkipReason =
@@ -197,6 +207,7 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
   internalNote: row.internalNote || '',
   createdAt: row.createdAt.toISOString(),
   itemCount: row.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
+  shipments: [],
   items: row.items.map((item: any) => ({
     itemId: item.id,
     productId: item.productId,
@@ -489,7 +500,27 @@ export const getCustomerOrderDetail = requireRole([UserRole.CUSTOMER])(
       include: customerOrderInclude,
     })
     if (!row) throw new Error('订单不存在或无权访问')
-    return mapCustomerOrder(row)
+    const mapped = mapCustomerOrder(row)
+    const segments = await prisma.orderlogisticssegment.findMany({
+      where: { orderId: row.id, segmentType: '入库发货' },
+      orderBy: [{ shippedAt: 'asc' }, { createdAt: 'asc' }],
+    })
+    mapped.shipments = segments.map((segment) => {
+      const timeline = Array.isArray(segment.timelineJson) ? segment.timelineJson : []
+      const images = timeline.map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return ''
+        return String((item as { imageUrl?: unknown }).imageUrl || '')
+      }).filter(Boolean)
+      return {
+        id: segment.id,
+        shippedAt: segment.shippedAt ? segment.shippedAt.toISOString() : '',
+        trackingNumber: String(segment.trackingNumber || ''),
+        channel: String(segment.carrierName || ''),
+        note: String(segment.remark || ''),
+        images,
+      }
+    })
+    return mapped
   }),
 )
 

@@ -157,6 +157,37 @@ export default function AccountOrderDetailView() {
             <p className="flex items-center justify-between gap-3 py-1"><span className="text-[#8a8073]">{t('accountOrders.weight')}</span><span className="text-[#2f2a24]">{order.totalWeightGrams > 0 ? t('accountOrders.weightValue', { weight: order.totalWeightGrams.toLocaleString(locale) }) : '—'}</span></p>
             <p className="flex items-center justify-between gap-3 py-1"><span className="text-[#8a8073]">{t('accountOrders.paymentMethod')}</span><span className="text-[#2f2a24]">{order.paymentMethod || '—'}</span></p>
           </div>
+
+          {order.shipments?.length ? (
+            <div className="space-y-2">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[#8a8073]">{t('accountOrders.shipments')}</h2>
+              {order.shipments.map((row) => (
+                <div key={row.id} className="rounded-xl border border-[#ebe6dc] bg-white px-3 py-2.5 text-xs text-[#6f6558]">
+                  {row.images?.length ? (
+                    <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+                      {row.images.map((url) => (
+                        <a key={url} href={url} download className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-[#ebe6dc] bg-[#fbfaf7] sm:h-20 sm:w-20" title={t('accountOrders.downloadPhoto')}>
+                          <img src={url} alt="" className="h-full w-full object-cover" />
+                          <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[10px] text-white">{t('accountOrders.downloadPhoto')}</span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.shippedAt')}</span> <span className="text-[#2f2a24]">{row.shippedAt ? new Date(row.shippedAt).toLocaleString(locale) : '—'}</span></p>
+                    <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.channel')}</span> <span className="text-[#2f2a24]">{row.channel || '—'}</span></p>
+                    <p className="flex justify-between gap-3 sm:col-span-2 sm:block">
+                      <span className="text-[#8a8073]">{t('accountOrders.trackingNo')}</span>{' '}
+                      {row.trackingNumber ? (
+                        <a href={`https://www.17track.net/en/track?nums=${encodeURIComponent(row.trackingNumber)}`} target="_blank" rel="noreferrer" className="break-all font-medium text-sky-700 underline-offset-2 hover:underline">{row.trackingNumber}</a>
+                      ) : <span>—</span>}
+                    </p>
+                    {row.note ? <p className="break-words sm:col-span-2"><span className="text-[#8a8073]">{t('accountOrders.shipmentNote')}</span> <span className="text-[#2f2a24]">{row.note}</span></p> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
     </AccountShell>
