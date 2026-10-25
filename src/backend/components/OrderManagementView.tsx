@@ -196,6 +196,132 @@ interface Props {
   state: OrderManagementState;
   handlers: OrderManagementHandlers;
 }
+function InboundShipBar({
+  shipments,
+  saving,
+  onSave,
+  children,
+}: {
+  shipments: Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>
+  saving: boolean
+  onSave: (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => Promise<boolean>
+  children: (button: React.ReactNode) => React.ReactNode
+}) {
+  const blankLeg = () => ({ key: `ship-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, trackingNumber: '', channel: '', note: '' })
+  const [open, setOpen] = React.useState(false)
+  const [shipTime, setShipTime] = React.useState('')
+  const [shipLegs, setShipLegs] = React.useState<Array<{ key: string; trackingNumber: string; channel: string; note: string }>>([blankLeg()])
+  const openForm = (shippedAt = '') => {
+    setShipTime(shippedAt)
+    setShipLegs([blankLeg()])
+    setOpen(true)
+  }
+  const saveForm = async () => {
+    if (!shipTime.trim()) {
+      toast.error('请填写发货时间')
+      return
+    }
+    const saved = await onSave({
+      shippedAt: shipTime,
+      legs: shipLegs.map((leg) => ({
+        trackingNumber: leg.trackingNumber.trim(),
+        channel: leg.channel.trim(),
+        note: leg.note.trim(),
+      })),
+    })
+    if (saved) setOpen(false)
+  }
+  const shanghaiShipLabel = (iso: string) => {
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return ''
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date)
+    const part = (type: string) => parts.find((item) => item.type === type)?.value || ''
+    const hour = part('hour') === '24' ? '00' : part('hour')
+    return `${part('year')}-${part('month')}-${part('day')} ${hour}:${part('minute')}`
+  }
+  const groups = (() => {
+    const map = new Map<string, { label: string; local: string; legs: Array<{ id: string; trackingNumber: string; channel: string; note: string }> }>()
+    for (const row of shipments) {
+      const label = shanghaiShipLabel(row.shippedAt)
+      if (!label) continue
+      const current = map.get(label) || { label, local: label.replace(' ', 'T'), legs: [] }
+      current.legs.push(row)
+      map.set(label, current)
+    }
+    return [...map.values()]
+  })()
+  return (
+    <>
+      {open ? (
+        <div className="shrink-0 border-t bg-white px-4 py-3 sm:px-6">
+          <div className="text-sm font-semibold text-slate-900">发货信息</div>
+          <label className="mt-3 grid max-w-xs gap-1 text-sm font-medium text-slate-700">发货时间
+            <Input type="datetime-local" value={shipTime} onChange={(event) => setShipTime(event.target.value)} />
+          </label>
+          <div className="mt-3 max-h-48 space-y-3 overflow-auto">
+            {shipLegs.map((leg, index) => (
+              <div key={leg.key} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+                <label className="grid gap-1 text-sm text-slate-700">物流号
+                  <Input value={leg.trackingNumber} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, trackingNumber: event.target.value } : item))} />
+                </label>
+                <label className="grid gap-1 text-sm text-slate-700">渠道
+                  <Input value={leg.channel} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, channel: event.target.value } : item))} />
+                </label>
+                <label className="grid gap-1 text-sm text-slate-700">备注
+                  <Input value={leg.note} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, note: event.target.value } : item))} />
+                </label>
+                {index > 0 ? (
+                  <Button type="button" variant="outline" className="h-10" onClick={() => setShipLegs((prev) => prev.filter((item) => item.key !== leg.key))}>删除</Button>
+                ) : <span className="hidden sm:block" />}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setShipLegs((prev) => [...prev, blankLeg()])}>添加物流号</Button>
+            <Button type="button" onClick={() => void saveForm()} disabled={saving}>保存发货</Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>取消</Button>
+          </div>
+        </div>
+      ) : null}
+      {groups.length ? (
+        <div className="max-h-36 shrink-0 space-y-2 overflow-auto border-t bg-slate-50 px-4 py-3 sm:px-6">
+          {groups.map((group) => (
+            <div key={group.label} className="rounded-md border border-slate-200 bg-white px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-slate-900">发货时间 {group.label}</div>
+                <Button type="button" size="sm" variant="outline" onClick={() => openForm(group.local)}>添加</Button>
+              </div>
+              <div className="mt-2 space-y-1">
+                {group.legs.map((leg) => (
+                  <div key={leg.id} className="grid gap-1 text-sm text-slate-700 sm:grid-cols-3">
+                    <div className="break-all">物流号 {leg.trackingNumber || '—'}</div>
+                    <div className="break-all">渠道 {leg.channel || '—'}</div>
+                    <div className="break-all">备注 {leg.note || '—'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {children(
+        <Button type="button" variant="outline" onClick={() => openForm()}>
+          发货图片
+        </Button>,
+      )}
+    </>
+  )
+}
+
+
 export const OrderManagementView = ({
   state,
   handlers
@@ -230,59 +356,6 @@ export const OrderManagementView = ({
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const shipImageRef = React.useRef<HTMLInputElement>(null);
-  const blankShipLeg = () => ({ key: `ship-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, trackingNumber: '', channel: '', note: '' });
-  const [shipFormOpen, setShipFormOpen] = React.useState(false);
-  const [shipTime, setShipTime] = React.useState('');
-  const [shipLegs, setShipLegs] = React.useState<Array<{ key: string; trackingNumber: string; channel: string; note: string }>>([blankShipLeg()]);
-  const addonProductRef = React.useRef<HTMLInputElement>(null);
-  const addonSheetRef = React.useRef<HTMLInputElement>(null);
-  const openShipForm = (shippedAt = '') => {
-    setShipTime(shippedAt);
-    setShipLegs([blankShipLeg()]);
-    setShipFormOpen(true);
-  };
-  const saveShipForm = async () => {
-    if (!shipTime.trim()) {
-      toast.error('请填写发货时间');
-      return;
-    }
-    const saved = await handlers.saveInboundShipment({
-      shippedAt: shipTime,
-      legs: shipLegs.map((leg) => ({
-        trackingNumber: leg.trackingNumber.trim(),
-        channel: leg.channel.trim(),
-        note: leg.note.trim(),
-      })),
-    });
-    if (saved) setShipFormOpen(false);
-  };
-  const shanghaiShipLabel = (iso: string) => {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return '';
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Shanghai',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(date);
-    const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
-    const hour = part('hour') === '24' ? '00' : part('hour');
-    return `${part('year')}-${part('month')}-${part('day')} ${hour}:${part('minute')}`;
-  };
-  const shipGroups = (() => {
-    const groups = new Map<string, { label: string; local: string; legs: Array<{ id: string; trackingNumber: string; channel: string; note: string }> }>();
-    for (const row of state.inboundShipments || []) {
-      const label = shanghaiShipLabel(row.shippedAt);
-      if (!label) continue;
-      const current = groups.get(label) || { label, local: label.replace(' ', 'T'), legs: [] };
-      current.legs.push(row);
-      groups.set(label, current);
-    }
-    return [...groups.values()];
-  })();
   const shipTimeNote = (note: string) => {
     const stamp = new Intl.DateTimeFormat('zh-CN', {
       timeZone: 'Asia/Shanghai',
@@ -1861,61 +1934,15 @@ export const OrderManagementView = ({
                 <div className="mt-1 text-sm text-slate-500">SKU 可以不填。表头对上售价、数量、总价就先存入</div>
               </div>
             </div>
-            {shipFormOpen ? (
-              <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-3">
-                <div className="text-sm font-semibold text-slate-900">发货信息</div>
-                <label className="mt-3 grid gap-1 text-sm font-medium text-slate-700">发货时间
-                  <Input type="datetime-local" value={shipTime} onChange={(event) => setShipTime(event.target.value)} />
-                </label>
-                <div className="mt-3 space-y-3">
-                  {shipLegs.map((leg, index) => (
-                    <div key={leg.key} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
-                      <label className="grid gap-1 text-sm text-slate-700">物流号
-                        <Input value={leg.trackingNumber} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, trackingNumber: event.target.value } : item))} />
-                      </label>
-                      <label className="grid gap-1 text-sm text-slate-700">渠道
-                        <Input value={leg.channel} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, channel: event.target.value } : item))} />
-                      </label>
-                      <label className="grid gap-1 text-sm text-slate-700">备注
-                        <Input value={leg.note} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, note: event.target.value } : item))} />
-                      </label>
-                      {index > 0 ? (
-                        <Button type="button" variant="outline" className="h-10" onClick={() => setShipLegs((prev) => prev.filter((item) => item.key !== leg.key))}>删除</Button>
-                      ) : <span className="hidden sm:block" />}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={() => setShipLegs((prev) => [...prev, blankShipLeg()])}>添加物流号</Button>
-                  <Button type="button" onClick={() => void saveShipForm()} disabled={state.inboundSaving}>保存发货</Button>
-                  <Button type="button" variant="outline" onClick={() => setShipFormOpen(false)}>取消</Button>
-                </div>
-              </div>
-            ) : null}
-            {shipGroups.length ? (
-              <div className="mt-3 space-y-2">
-                {shipGroups.map((group) => (
-                  <div key={group.label} className="rounded-md border border-slate-200 bg-white px-3 py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-slate-900">发货时间 {group.label}</div>
-                      <Button type="button" size="sm" variant="outline" onClick={() => openShipForm(group.local)}>添加</Button>
-                    </div>
-                    <div className="mt-2 space-y-2">
-                      {group.legs.map((leg) => (
-                        <div key={leg.id} className="grid gap-1 text-sm text-slate-700 sm:grid-cols-3">
-                          <div className="break-all">物流号 {leg.trackingNumber || '—'}</div>
-                          <div className="break-all">渠道 {leg.channel || '—'}</div>
-                          <div className="break-all">备注 {leg.note || '—'}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
             <input ref={addonProductRef} type="file" className="hidden" multiple accept="image/*,.xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonProducts(files); event.target.value = ''; }} />
             <input ref={addonSheetRef} type="file" className="hidden" multiple accept=".xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonSheet(files); event.target.value = ''; }} />
           </div>
+          <InboundShipBar
+            shipments={state.inboundShipments || []}
+            saving={state.inboundSaving}
+            onSave={(input) => handlers.saveInboundShipment(input)}
+          >
+          {(shipButton) => (
           <DialogFooter className="shrink-0 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">
             <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
               全部到齐
@@ -1930,9 +1957,7 @@ export const OrderManagementView = ({
               <Button type="button" variant="outline" disabled={state.exportLoading} onClick={() => downloadInbound('sheet')}>
                 <Download className="mr-2 h-4 w-4" /> 下载表格
               </Button>
-              <Button type="button" variant="outline" onClick={() => openShipForm()} disabled={state.inboundSaving}>
-                发货图片
-              </Button>
+              {shipButton}
               <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>
@@ -1962,6 +1987,8 @@ export const OrderManagementView = ({
               />
             </div>
           </DialogFooter>
+          )}
+          </InboundShipBar>
         </DialogContent>
       </Dialog>
       {state.inboundOrderId && noteOpen ? (
