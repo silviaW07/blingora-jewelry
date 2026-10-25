@@ -30523,6 +30523,14 @@ function supplierLinkFromProduct(product) {
         supplierUrl
     };
 }
+function carryDiscountAmount(previousSubtotal, previousDiscount, subtotal) {
+    var _moneyAmount, _moneyAmount1;
+    const before = (_moneyAmount = moneyAmount(previousSubtotal)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+    const discountBefore = Math.max(0, (_moneyAmount1 = moneyAmount(previousDiscount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0);
+    if (!(before > 0) || !(discountBefore > 0)) return 0;
+    const next = Math.round(subtotal * (discountBefore / before) * 100) / 100;
+    return Math.min(Math.max(0, next), Math.max(0, subtotal));
+}
 function discountedUnitPrice(unitPrice, subtotal, discount) {
     if (unitPrice == null) return null;
     const sub = Number(subtotal || 0);
@@ -31220,14 +31228,14 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
     const changes = [];
     let addedCount = 0;
     await _prisma.default.$transaction(async (tx)=>{
-        var _moneyAmount, _moneyAmount1, _moneyAmount2;
+        var _moneyAmount, _moneyAmount1;
         for (const line of grouped.values()){
-            var _moneyAmount3;
+            var _moneyAmount2;
             const existing = order.items.find((item)=>item.skuCode === line.skuCode);
             if (existing) {
-                var _moneyAmount4;
+                var _moneyAmount3;
                 const nextQuantity = Math.max(1, existing.quantity + line.quantity);
-                const unit = (_moneyAmount4 = moneyAmount(existing.unitPrice)) !== null && _moneyAmount4 !== void 0 ? _moneyAmount4 : 0;
+                const unit = (_moneyAmount3 = moneyAmount(existing.unitPrice)) !== null && _moneyAmount3 !== void 0 ? _moneyAmount3 : 0;
                 const inboundQty = line.inboundQty != null && Number.isFinite(Number(line.inboundQty)) ? Math.max(0, Math.min(nextQuantity, Math.floor(Number(line.inboundQty)))) : Math.max(0, Math.min(nextQuantity, Number(existing.inboundQty) || 0));
                 await tx.orderitem.update({
                     where: {
@@ -31255,7 +31263,7 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
             const sku = skuByCode.get(line.skuCode);
             if (!(sku === null || sku === void 0 ? void 0 : sku.product)) continue;
             const sheetPrice = line.unitPrice != null && Number.isFinite(Number(line.unitPrice)) ? Number(line.unitPrice) : null;
-            const cny = (_moneyAmount3 = moneyAmount(sku.price)) !== null && _moneyAmount3 !== void 0 ? _moneyAmount3 : 0;
+            const cny = (_moneyAmount2 = moneyAmount(sku.price)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0;
             const unit = sheetPrice != null ? Math.round(sheetPrice * 100) / 100 : currency === 'CNY' ? Math.round(cny * 100) / 100 : (0, _exchangeRate.toUsdFromCny)(cny, rate);
             const quantity = line.quantity;
             const inboundQty = line.inboundQty != null && Number.isFinite(Number(line.inboundQty)) ? Math.max(0, Math.min(quantity, Math.floor(Number(line.inboundQty)))) : 0;
@@ -31291,10 +31299,9 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
             var _moneyAmount;
             return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
         }, 0) * 100) / 100;
-        const previousDiscount = (_moneyAmount = moneyAmount(order.discountAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
-        const discount = Math.min(Math.max(0, previousDiscount), subtotal);
-        const shipping = (_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
-        const gift = (_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0;
+        const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal);
+        const shipping = (_moneyAmount = moneyAmount(order.shippingAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+        const gift = (_moneyAmount1 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
         const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100;
         await tx.orderrecord.update({
             where: {
@@ -31393,7 +31400,7 @@ function normalizeManualLine(row) {
     };
 }
 async function insertManualOrderLines(tx, order, categoryId, rows, username) {
-    var _moneyAmount, _moneyAmount1, _moneyAmount2;
+    var _moneyAmount, _moneyAmount1;
     const notes = [];
     for (const [index, raw] of rows.entries()){
         var _row_costPrice;
@@ -31465,10 +31472,9 @@ async function insertManualOrderLines(tx, order, categoryId, rows, username) {
         var _moneyAmount;
         return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
     }, 0) * 100) / 100;
-    const previousDiscount = (_moneyAmount = moneyAmount(order.discountAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
-    const discount = Math.min(Math.max(0, previousDiscount), subtotal);
-    const shipping = (_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
-    const gift = (_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0;
+    const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal);
+    const shipping = (_moneyAmount = moneyAmount(order.shippingAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+    const gift = (_moneyAmount1 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
     const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100;
     await tx.orderrecord.update({
         where: {
@@ -31967,7 +31973,7 @@ const importInboundSheet = (0, _action_utils.requireRole)([
         }
         if (manual.length) await insertManualOrderLines(tx, order, category.id, manual, username);
         else {
-            var _moneyAmount1, _moneyAmount2, _moneyAmount3;
+            var _moneyAmount1, _moneyAmount2;
             const items = await tx.orderitem.findMany({
                 where: {
                     orderId: order.id
@@ -31977,8 +31983,8 @@ const importInboundSheet = (0, _action_utils.requireRole)([
                 var _moneyAmount;
                 return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
             }, 0) * 100) / 100;
-            const discount = Math.min(Math.max(0, (_moneyAmount1 = moneyAmount(order.discountAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0), subtotal);
-            const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount2 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0) + ((_moneyAmount3 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount3 !== void 0 ? _moneyAmount3 : 0)) * 100) / 100;
+            const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal);
+            const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0) + ((_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0)) * 100) / 100;
             await tx.orderrecord.update({
                 where: {
                     id: order.id
@@ -32422,7 +32428,7 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
     const lineAmount = Math.round(unitPrice * quantity * 100) / 100;
     const costPrice = input.costPrice === undefined ? undefined : manualMoney(input.costPrice);
     await _prisma.default.$transaction(async (tx)=>{
-        var _moneyAmount, _moneyAmount1, _moneyAmount2;
+        var _moneyAmount, _moneyAmount1;
         await tx.orderitem.update({
             where: {
                 id: item.id
@@ -32473,8 +32479,8 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
             var _moneyAmount;
             return sum + ((_moneyAmount = moneyAmount(row.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
         }, 0) * 100) / 100;
-        const discount = Math.min(Math.max(0, (_moneyAmount = moneyAmount(order.discountAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0), subtotal);
-        const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0) + ((_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0)) * 100) / 100;
+        const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal);
+        const total = Math.round(Math.max(0, subtotal - discount + ((_moneyAmount = moneyAmount(order.shippingAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0) + ((_moneyAmount1 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0)) * 100) / 100;
         await tx.orderrecord.update({
             where: {
                 id: order.id
