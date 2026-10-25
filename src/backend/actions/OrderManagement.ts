@@ -98,7 +98,7 @@ const inboundProductSelect = {
   },
 }
 
-const INBOUND_STAGES = new Set(['PENDING', 'PREPARING', 'TRANSIT', 'ARRIVED'])
+const INBOUND_STAGES = new Set(['PENDING', 'STOCK', 'PREPARING', 'FACTORY', 'TRANSIT', 'ARRIVED', 'PARCEL'])
 
 function cleanInboundStage(value: unknown): string {
   const text = String(value || '').trim().toUpperCase()
@@ -1564,9 +1564,12 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
 
 const INBOUND_STAGE_LABEL: Record<string, string> = {
   PENDING: '待采购',
+  STOCK: '备货',
   PREPARING: '备货中',
+  FACTORY: '工厂发货',
   TRANSIT: '运输中',
   ARRIVED: '已到货',
+  PARCEL: '包裹发货',
 }
 
 export interface InboundSheetRowInput {

@@ -567,9 +567,12 @@
     "shipping": "运费",
     "inboundStages": {
       "PENDING": "待采购",
+      "STOCK": "备货",
       "PREPARING": "备货中",
+      "FACTORY": "工厂发货",
       "TRANSIT": "运输中",
-      "ARRIVED": "已到货"
+      "ARRIVED": "已到货",
+      "PARCEL": "包裹发货"
     },
     "statuses": {
       "PENDING_PAYMENT": "待付款",

@@ -205,7 +205,7 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
     quantity: item.quantity,
     unitPrice: toNum(item.unitPrice),
     lineAmount: toNum(item.lineAmount),
-    inboundStage: ['PENDING', 'PREPARING', 'TRANSIT', 'ARRIVED'].includes(String(item.inboundStage || '').toUpperCase())
+    inboundStage: ['PENDING', 'STOCK', 'PREPARING', 'FACTORY', 'TRANSIT', 'ARRIVED', 'PARCEL'].includes(String(item.inboundStage || '').toUpperCase())
       ? String(item.inboundStage).toUpperCase()
       : 'PENDING',
   })),

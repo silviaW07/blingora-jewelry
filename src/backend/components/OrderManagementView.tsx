@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { OrderManagement } from '@/backend/route-params';
 import type { OrderStatus, OrderShipMethod, PaymentMethodType } from '@/backend/actions/OrderManagement';
 import type { OrderManagementState, OrderManagementHandlers } from '@/backend/hooks/useOrderManagement';
+import { readInboundSelection, writeInboundSelection } from '@/backend/hooks/useOrderManagement';
 import EditableImg from '@/@base/EditableImg';
 
 // Lucide Icons
@@ -91,6 +92,16 @@ const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
   ['stage', '商品状态', 'w-[10%]'],
   ['inboundQty', '到货数量', 'w-[10%]'],
 ];
+const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
+  ['PENDING', '待采购'],
+  ['STOCK', '备货'],
+  ['PREPARING', '备货中'],
+  ['FACTORY', '工厂发货'],
+  ['TRANSIT', '运输中'],
+  ['ARRIVED', '已到货'],
+  ['PARCEL', '包裹发货'],
+];
+const INBOUND_STAGE_LABEL: Record<string, string> = Object.fromEntries(INBOUND_STAGE_OPTIONS);
 type InboundImportRow = {
   key: string;
   imageUrl: string;
@@ -161,6 +172,8 @@ export const OrderManagementView = ({
 
   const [inboundColumns, setInboundColumns] = React.useState<Record<string, boolean>>(() => Object.fromEntries(INBOUND_EXPORT_COLUMNS.map(([key]) => [key, false])));
   const [inboundSelected, setInboundSelected] = React.useState<string[]>([]);
+  const [stageFilter, setStageFilter] = React.useState('ALL');
+  const [batchNote, setBatchNote] = React.useState('');
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
@@ -184,12 +197,40 @@ export const OrderManagementView = ({
   };
   React.useEffect(() => {
     if (!state.inboundOrderId) return;
-    setInboundSelected([]);
     setInboundColumns(Object.fromEntries(INBOUND_EXPORT_COLUMNS.map(([key]) => [key, false])));
     setImportOpen(false);
     setImportRows([]);
+    setStageFilter('ALL');
+    setBatchNote('');
+    setInboundSelected(readInboundSelection(state.inboundOrderId));
   }, [state.inboundOrderId]);
-  const allInboundSelected = state.inboundDrafts.length > 0 && state.inboundDrafts.every((line) => inboundSelected.includes(line.id));
+  const visibleInboundDrafts = stageFilter === 'ALL'
+    ? state.inboundDrafts
+    : state.inboundDrafts.filter((line) => (line.inboundStage || 'PENDING') === stageFilter);
+  const allInboundSelected = visibleInboundDrafts.length > 0 && visibleInboundDrafts.every((line) => inboundSelected.includes(line.id));
+  const setInboundSelectedPersist = (next: string[]) => {
+    setInboundSelected(next);
+    if (state.inboundOrderId) writeInboundSelection(state.inboundOrderId, next);
+  };
+  const applyBatchStage = (stage: string) => {
+    if (!inboundSelected.length) {
+      toast.error('请先勾选商品');
+      return;
+    }
+    for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundStage: stage });
+  };
+  const fillBatchNote = () => {
+    const text = batchNote.trim();
+    if (!inboundSelected.length) {
+      toast.error('请先勾选商品');
+      return;
+    }
+    if (!text) {
+      toast.error('请先输入备注');
+      return;
+    }
+    for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundNote: text });
+  };
   const patchImportRow = (key: string, patch: Partial<InboundImportRow>) => {
     setImportRows((prev) => prev.map((row) => row.key === key ? { ...row, ...patch } : row));
   };
@@ -1094,7 +1135,40 @@ export const OrderManagementView = ({
                 </div>
               </div>
             ) : null}
-            <table className="w-full table-fixed border-collapse text-sm">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('STOCK')}>备货</Button>
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('FACTORY')}>工厂发货</Button>
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('ARRIVED')}>已到货</Button>
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => applyBatchStage('PARCEL')}>包裹发货</Button>
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                商品状态
+                <select
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
+                  aria-label="按商品状态筛选"
+                  value={stageFilter}
+                  onChange={(event) => setStageFilter(event.target.value)}
+                >
+                  <option value="ALL">全部</option>
+                  {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              <input
+                className="h-9 min-w-[12rem] flex-1 rounded-md border border-slate-200 px-3 text-sm"
+                placeholder="备注内容"
+                aria-label="批量备注"
+                value={batchNote}
+                onChange={(event) => setBatchNote(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') return;
+                  event.preventDefault();
+                  fillBatchNote();
+                }}
+              />
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={fillBatchNote}>填入备注</Button>
+            </div>
+            <table className="w-full min-w-[1180px] table-fixed border-collapse text-sm">
               <colgroup>
                 <col style={{ width: '22%' }} />
                 <col style={{ width: '8%' }} />
@@ -1118,7 +1192,12 @@ export const OrderManagementView = ({
                             className="mt-0.5 h-4 w-4 shrink-0"
                             aria-label="全选商品"
                             checked={allInboundSelected}
-                            onChange={(event) => setInboundSelected(event.target.checked ? state.inboundDrafts.map((line) => line.id) : [])}
+                            onChange={(event) => {
+                              const visibleIds = visibleInboundDrafts.map((line) => line.id);
+                              setInboundSelectedPersist(event.target.checked
+                                ? [...new Set([...inboundSelected, ...visibleIds])]
+                                : inboundSelected.filter((id) => !visibleIds.includes(id)));
+                            }}
                           />
                         ) : null}
                       <label className="flex items-start gap-1 whitespace-normal break-words">
@@ -1137,7 +1216,7 @@ export const OrderManagementView = ({
                 </tr>
               </thead>
               <tbody>
-                {state.inboundDrafts.map((line) => {
+                {visibleInboundDrafts.map((line) => {
                   const imageUrl = line.shipmentImageUrl || line.mainImageUrl
                   return (
                     <tr
@@ -1161,7 +1240,7 @@ export const OrderManagementView = ({
                             className="mt-2 h-4 w-4 shrink-0"
                             aria-label={`选择 ${line.productName}`}
                             checked={inboundSelected.includes(line.id)}
-                            onChange={(event) => setInboundSelected((prev) => event.target.checked ? [...prev, line.id] : prev.filter((id) => id !== line.id))}
+                            onChange={(event) => setInboundSelectedPersist(event.target.checked ? [...inboundSelected, line.id] : inboundSelected.filter((id) => id !== line.id))}
                           />
                           <button
                             type="button"
@@ -1186,6 +1265,9 @@ export const OrderManagementView = ({
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div>
+                            <div className="mt-1">
+                              <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">{INBOUND_STAGE_LABEL[line.inboundStage || 'PENDING'] || '待采购'}</span>
+                            </div>
                             <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>
                           </div>
                         </div>
@@ -1219,10 +1301,9 @@ export const OrderManagementView = ({
                           value={line.inboundStage || 'PENDING'}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
                         >
-                          <option value="PENDING">待采购</option>
-                          <option value="PREPARING">备货中</option>
-                          <option value="TRANSIT">运输中</option>
-                          <option value="ARRIVED">已到货</option>
+                          {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
                         </select>
                       </td>
                       <td className="overflow-hidden px-2 py-3 align-middle">

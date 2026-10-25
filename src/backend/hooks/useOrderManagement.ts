@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { OrderManagement, UserManagement } from '@/backend/route-params'
@@ -168,6 +168,54 @@ export interface OrderManagementHandlers {
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
+const INBOUND_DRAFT_PREFIX = 'sj-inbound-draft:'
+
+type StoredInboundLine = {
+  inboundQty: number
+  inboundNote: string
+  inboundStage: string
+  shipmentImageUrl: string | null
+}
+
+function readInboundDraftStore(orderId: string): { lines: Record<string, StoredInboundLine>; selected: string[] } | null {
+  if (typeof window === 'undefined' || !orderId) return null
+  try {
+    const raw = window.sessionStorage.getItem(INBOUND_DRAFT_PREFIX + orderId)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { lines?: Record<string, StoredInboundLine>; selected?: unknown }
+    const selected = Array.isArray(parsed?.selected) ? parsed.selected.map((id) => String(id)) : []
+    return {
+      lines: parsed?.lines && typeof parsed.lines === 'object' ? parsed.lines : {},
+      selected,
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeInboundDraftStore(orderId: string, patch: { lines?: Record<string, StoredInboundLine>; selected?: string[] }) {
+  if (typeof window === 'undefined' || !orderId) return
+  const prev = readInboundDraftStore(orderId)
+  const next = {
+    lines: patch.lines ?? prev?.lines ?? {},
+    selected: patch.selected ?? prev?.selected ?? [],
+  }
+  window.sessionStorage.setItem(INBOUND_DRAFT_PREFIX + orderId, JSON.stringify(next))
+}
+
+export function readInboundSelection(orderId: string): string[] {
+  return readInboundDraftStore(orderId)?.selected || []
+}
+
+export function writeInboundSelection(orderId: string, selected: string[]) {
+  writeInboundDraftStore(orderId, { selected })
+}
+
+function clearInboundDraftStore(orderId: string | null) {
+  if (typeof window === 'undefined' || !orderId) return
+  window.sessionStorage.removeItem(INBOUND_DRAFT_PREFIX + orderId)
+}
+
 export const useOrderManagement = (): { state: OrderManagementState, handlers: OrderManagementHandlers } => {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -221,6 +269,8 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [inboundOrderId, setInboundOrderId] = useState<string | null>(null)
   const [inboundDrafts, setInboundDrafts] = useState<OrderInboundLine[]>([])
   const [inboundSaving, setInboundSaving] = useState(false)
+  const inboundBooted = useRef<string | null>(null)
+  const inboundClosing = useRef(false)
 
   const fetchStats = async () => {
     try {
@@ -491,7 +541,21 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const openInboundDialog = (orderId: string) => {
+  const syncInboundQuery = (open: boolean, orderId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (open && orderId) {
+      params.set('orderId', orderId)
+      params.set('inbound', '1')
+    } else {
+      params.delete('inbound')
+      params.delete('orderId')
+    }
+    const next = params.toString()
+    if (next === searchParams.toString()) return
+    router.replace(next ? `${OrderManagement.path}?${next}` : OrderManagement.path, { scroll: false })
+  }
+
+  const openInboundDialog = (orderId: string, options?: { skipUrl?: boolean }) => {
     const row = list.find((item) => item.id === orderId)
     const source = (detailData && detailData.id === orderId && detailData.inboundLines?.length
       ? detailData.inboundLines
@@ -500,24 +564,69 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       toast.error('这笔订单没有可登记的商品')
       return
     }
-    setInboundDrafts(source.map((line) => ({
-      ...line,
-      inboundNote: line.inboundNote || '',
-      inboundStage: line.inboundStage || 'PENDING',
-      shipmentImageUrl: line.shipmentImageUrl || null,
-      acknowledged: false,
-      openedQty: line.inboundQty,
-      openedNote: line.inboundNote || '',
-      openedStage: line.inboundStage || 'PENDING',
-      openedImage: line.shipmentImageUrl || '',
-    })))
+    const saved = readInboundDraftStore(orderId)
+    setInboundDrafts(source.map((line) => {
+      const extra = saved?.lines?.[line.id]
+      const ordered = Math.max(0, Number(line.quantity) || 0)
+      const rawQty = extra && Number.isFinite(Number(extra.inboundQty))
+        ? Math.floor(Number(extra.inboundQty))
+        : line.inboundQty
+      const inboundQty = ordered > 0 ? Math.min(ordered, Math.max(0, rawQty)) : Math.max(0, rawQty)
+      return {
+        ...line,
+        inboundQty,
+        inboundNote: extra ? String(extra.inboundNote || '') : (line.inboundNote || ''),
+        inboundStage: extra?.inboundStage || line.inboundStage || 'PENDING',
+        shipmentImageUrl: extra ? (extra.shipmentImageUrl || null) : (line.shipmentImageUrl || null),
+        acknowledged: false,
+        openedQty: line.inboundQty,
+        openedNote: line.inboundNote || '',
+        openedStage: line.inboundStage || 'PENDING',
+        openedImage: line.shipmentImageUrl || '',
+      }
+    }))
     setInboundOrderId(orderId)
+    inboundBooted.current = orderId
+    inboundClosing.current = false
+    if (!options?.skipUrl) syncInboundQuery(true, orderId)
   }
 
   const closeInboundDialog = () => {
     if (inboundSaving) return
+    if (inboundOrderId) clearInboundDraftStore(inboundOrderId)
+    inboundClosing.current = true
+    syncInboundQuery(false, null)
     setInboundOrderId(null)
   }
+
+  useEffect(() => {
+    if (!inboundOrderId || inboundDrafts.length === 0) return
+    const lines: Record<string, StoredInboundLine> = {}
+    for (const line of inboundDrafts) {
+      lines[line.id] = {
+        inboundQty: line.inboundQty,
+        inboundNote: line.inboundNote || '',
+        inboundStage: line.inboundStage || 'PENDING',
+        shipmentImageUrl: line.shipmentImageUrl || null,
+      }
+    }
+    writeInboundDraftStore(inboundOrderId, { lines })
+  }, [inboundOrderId, inboundDrafts])
+
+  useEffect(() => {
+    if (searchParams.get('inbound') !== '1' || !queryOrderId) {
+      inboundClosing.current = false
+      inboundBooted.current = null
+      return
+    }
+    if (inboundClosing.current) return
+    if (inboundOrderId === queryOrderId || inboundBooted.current === queryOrderId) return
+    const row = list.find((item) => item.id === queryOrderId)
+    const detailLines = detailData && detailData.id === queryOrderId ? detailData.inboundLines : undefined
+    const source = (detailLines && detailLines.length ? detailLines : row?.inboundLines) || []
+    if (!source.length) return
+    openInboundDialog(queryOrderId, { skipUrl: true })
+  }, [list, detailData, queryOrderId, searchParams, inboundOrderId])
 
   const setInboundDraft = (
     lineId: string,
@@ -659,7 +768,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         }
       })
       toast.success('入库情况已保存')
-      if (!options?.keepOpen) setInboundOrderId(null)
+      if (!options?.keepOpen) {
+        clearInboundDraftStore(inboundOrderId)
+        inboundClosing.current = true
+        syncInboundQuery(false, null)
+        setInboundOrderId(null)
+      }
     } catch (err: any) {
       toast.error(err.message || '入库保存失败')
     } finally {

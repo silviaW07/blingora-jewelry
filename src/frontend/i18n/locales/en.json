@@ -689,9 +689,12 @@
     "shipping": "Shipping",
     "inboundStages": {
       "PENDING": "Pending purchase",
+      "STOCK": "Stocking",
       "PREPARING": "Preparing",
+      "FACTORY": "Shipped from factory",
       "TRANSIT": "In transit",
-      "ARRIVED": "Arrived"
+      "ARRIVED": "Arrived",
+      "PARCEL": "Parcel shipped"
     },
     "statuses": {
       "PENDING_PAYMENT": "Pending",
