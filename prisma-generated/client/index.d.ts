@@ -29865,6 +29865,7 @@ export namespace Prisma {
     inboundNote: string | null
     inboundAt: Date | null
     inboundStage: string | null
+    shipmentImageUrl: string | null
     unitPrice: Decimal | null
     lineAmount: Decimal | null
     giftWrapSelected: boolean | null
@@ -29888,6 +29889,7 @@ export namespace Prisma {
     inboundNote: string | null
     inboundAt: Date | null
     inboundStage: string | null
+    shipmentImageUrl: string | null
     unitPrice: Decimal | null
     lineAmount: Decimal | null
     giftWrapSelected: boolean | null
@@ -29911,6 +29913,7 @@ export namespace Prisma {
     inboundNote: number
     inboundAt: number
     inboundStage: number
+    shipmentImageUrl: number
     unitPrice: number
     lineAmount: number
     giftWrapSelected: number
@@ -29950,6 +29953,7 @@ export namespace Prisma {
     inboundNote?: true
     inboundAt?: true
     inboundStage?: true
+    shipmentImageUrl?: true
     unitPrice?: true
     lineAmount?: true
     giftWrapSelected?: true
@@ -29973,6 +29977,7 @@ export namespace Prisma {
     inboundNote?: true
     inboundAt?: true
     inboundStage?: true
+    shipmentImageUrl?: true
     unitPrice?: true
     lineAmount?: true
     giftWrapSelected?: true
@@ -29996,6 +30001,7 @@ export namespace Prisma {
     inboundNote?: true
     inboundAt?: true
     inboundStage?: true
+    shipmentImageUrl?: true
     unitPrice?: true
     lineAmount?: true
     giftWrapSelected?: true
@@ -30106,6 +30112,7 @@ export namespace Prisma {
     inboundNote: string | null
     inboundAt: Date | null
     inboundStage: string | null
+    shipmentImageUrl: string | null
     unitPrice: Decimal
     lineAmount: Decimal
     giftWrapSelected: boolean
@@ -30148,6 +30155,7 @@ export namespace Prisma {
     inboundNote?: boolean
     inboundAt?: boolean
     inboundStage?: boolean
+    shipmentImageUrl?: boolean
     unitPrice?: boolean
     lineAmount?: boolean
     giftWrapSelected?: boolean
@@ -30176,6 +30184,7 @@ export namespace Prisma {
     inboundNote?: boolean
     inboundAt?: boolean
     inboundStage?: boolean
+    shipmentImageUrl?: boolean
     unitPrice?: boolean
     lineAmount?: boolean
     giftWrapSelected?: boolean
@@ -30183,7 +30192,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type orderitemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderId" | "productId" | "productSkuId" | "productName" | "skuCode" | "materialLabel" | "sizeLabel" | "engravingText" | "engravingFont" | "quantity" | "inboundQty" | "inboundNote" | "inboundAt" | "inboundStage" | "unitPrice" | "lineAmount" | "giftWrapSelected" | "createdAt" | "updatedAt", ExtArgs["result"]["orderitem"]>
+  export type orderitemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderId" | "productId" | "productSkuId" | "productName" | "skuCode" | "materialLabel" | "sizeLabel" | "engravingText" | "engravingFont" | "quantity" | "inboundQty" | "inboundNote" | "inboundAt" | "inboundStage" | "shipmentImageUrl" | "unitPrice" | "lineAmount" | "giftWrapSelected" | "createdAt" | "updatedAt", ExtArgs["result"]["orderitem"]>
   export type orderitemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     order?: boolean | orderrecordDefaultArgs<ExtArgs>
     product?: boolean | productDefaultArgs<ExtArgs>
@@ -30213,6 +30222,7 @@ export namespace Prisma {
       inboundNote: string | null
       inboundAt: Date | null
       inboundStage: string | null
+      shipmentImageUrl: string | null
       unitPrice: Prisma.Decimal
       lineAmount: Prisma.Decimal
       giftWrapSelected: boolean
@@ -30605,6 +30615,7 @@ export namespace Prisma {
     readonly inboundNote: FieldRef<"orderitem", 'String'>
     readonly inboundAt: FieldRef<"orderitem", 'DateTime'>
     readonly inboundStage: FieldRef<"orderitem", 'String'>
+    readonly shipmentImageUrl: FieldRef<"orderitem", 'String'>
     readonly unitPrice: FieldRef<"orderitem", 'Decimal'>
     readonly lineAmount: FieldRef<"orderitem", 'Decimal'>
     readonly giftWrapSelected: FieldRef<"orderitem", 'Boolean'>
@@ -61917,6 +61928,7 @@ export namespace Prisma {
     inboundNote: 'inboundNote',
     inboundAt: 'inboundAt',
     inboundStage: 'inboundStage',
+    shipmentImageUrl: 'shipmentImageUrl',
     unitPrice: 'unitPrice',
     lineAmount: 'lineAmount',
     giftWrapSelected: 'giftWrapSelected',
@@ -62707,7 +62719,8 @@ export namespace Prisma {
     engravingText: 'engravingText',
     engravingFont: 'engravingFont',
     inboundNote: 'inboundNote',
-    inboundStage: 'inboundStage'
+    inboundStage: 'inboundStage',
+    shipmentImageUrl: 'shipmentImageUrl'
   };
 
   export type orderitemOrderByRelevanceFieldEnum = (typeof orderitemOrderByRelevanceFieldEnum)[keyof typeof orderitemOrderByRelevanceFieldEnum]
@@ -65833,6 +65846,7 @@ export namespace Prisma {
     inboundNote?: StringNullableFilter<"orderitem"> | string | null
     inboundAt?: DateTimeNullableFilter<"orderitem"> | Date | string | null
     inboundStage?: StringNullableFilter<"orderitem"> | string | null
+    shipmentImageUrl?: StringNullableFilter<"orderitem"> | string | null
     unitPrice?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFilter<"orderitem"> | boolean
@@ -65859,6 +65873,7 @@ export namespace Prisma {
     inboundNote?: SortOrderInput | SortOrder
     inboundAt?: SortOrderInput | SortOrder
     inboundStage?: SortOrderInput | SortOrder
+    shipmentImageUrl?: SortOrderInput | SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -65889,6 +65904,7 @@ export namespace Prisma {
     inboundNote?: StringNullableFilter<"orderitem"> | string | null
     inboundAt?: DateTimeNullableFilter<"orderitem"> | Date | string | null
     inboundStage?: StringNullableFilter<"orderitem"> | string | null
+    shipmentImageUrl?: StringNullableFilter<"orderitem"> | string | null
     unitPrice?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFilter<"orderitem"> | boolean
@@ -65915,6 +65931,7 @@ export namespace Prisma {
     inboundNote?: SortOrderInput | SortOrder
     inboundAt?: SortOrderInput | SortOrder
     inboundStage?: SortOrderInput | SortOrder
+    shipmentImageUrl?: SortOrderInput | SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -65946,6 +65963,7 @@ export namespace Prisma {
     inboundNote?: StringNullableWithAggregatesFilter<"orderitem"> | string | null
     inboundAt?: DateTimeNullableWithAggregatesFilter<"orderitem"> | Date | string | null
     inboundStage?: StringNullableWithAggregatesFilter<"orderitem"> | string | null
+    shipmentImageUrl?: StringNullableWithAggregatesFilter<"orderitem"> | string | null
     unitPrice?: DecimalWithAggregatesFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalWithAggregatesFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolWithAggregatesFilter<"orderitem"> | boolean
@@ -71272,6 +71290,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -71298,6 +71317,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -71318,6 +71338,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -71344,6 +71365,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -71367,6 +71389,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -71387,6 +71410,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -71410,6 +71434,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -76474,6 +76499,7 @@ export namespace Prisma {
     inboundNote?: SortOrder
     inboundAt?: SortOrder
     inboundStage?: SortOrder
+    shipmentImageUrl?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -76504,6 +76530,7 @@ export namespace Prisma {
     inboundNote?: SortOrder
     inboundAt?: SortOrder
     inboundStage?: SortOrder
+    shipmentImageUrl?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -76527,6 +76554,7 @@ export namespace Prisma {
     inboundNote?: SortOrder
     inboundAt?: SortOrder
     inboundStage?: SortOrder
+    shipmentImageUrl?: SortOrder
     unitPrice?: SortOrder
     lineAmount?: SortOrder
     giftWrapSelected?: SortOrder
@@ -85166,6 +85194,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -85190,6 +85219,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -85774,6 +85804,7 @@ export namespace Prisma {
     inboundNote?: StringNullableFilter<"orderitem"> | string | null
     inboundAt?: DateTimeNullableFilter<"orderitem"> | Date | string | null
     inboundStage?: StringNullableFilter<"orderitem"> | string | null
+    shipmentImageUrl?: StringNullableFilter<"orderitem"> | string | null
     unitPrice?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFilter<"orderitem"> | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFilter<"orderitem"> | boolean
@@ -86124,6 +86155,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -86148,6 +86180,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -90693,6 +90726,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -90717,6 +90751,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -98929,6 +98964,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -99368,6 +99404,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99392,6 +99429,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99414,6 +99452,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99646,6 +99685,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -99728,6 +99768,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99752,6 +99793,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -99774,6 +99816,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -100539,6 +100582,7 @@ export namespace Prisma {
     inboundNote?: string | null
     inboundAt?: Date | string | null
     inboundStage?: string | null
+    shipmentImageUrl?: string | null
     unitPrice: Decimal | DecimalJsLike | number | string
     lineAmount: Decimal | DecimalJsLike | number | string
     giftWrapSelected?: boolean
@@ -100595,6 +100639,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -100619,6 +100664,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean
@@ -100641,6 +100687,7 @@ export namespace Prisma {
     inboundNote?: NullableStringFieldUpdateOperationsInput | string | null
     inboundAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     inboundStage?: NullableStringFieldUpdateOperationsInput | string | null
+    shipmentImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
     unitPrice?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     lineAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapSelected?: BoolFieldUpdateOperationsInput | boolean

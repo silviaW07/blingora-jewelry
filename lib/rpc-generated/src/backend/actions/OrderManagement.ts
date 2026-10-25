@@ -18,5 +18,7 @@ export const updateOrderInbound = (...args: Parameters<Actions["updateOrderInbou
   rpcCall<Awaited<ReturnType<Actions["updateOrderInbound"]>>>("src.backend.actions.OrderManagement.updateOrderInbound", ...args);
 export const updateOrderRemark = (...args: Parameters<Actions["updateOrderRemark"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderRemark"]>>>("src.backend.actions.OrderManagement.updateOrderRemark", ...args);
+export const exportInboundSheet = (...args: Parameters<Actions["exportInboundSheet"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["exportInboundSheet"]>>>("src.backend.actions.OrderManagement.exportInboundSheet", ...args);
 export const exportOrdersExcel = (...args: Parameters<Actions["exportOrdersExcel"]>) => 
   rpcCall<Awaited<ReturnType<Actions["exportOrdersExcel"]>>>("src.backend.actions.OrderManagement.exportOrdersExcel", ...args);

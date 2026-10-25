@@ -31,7 +31,9 @@ import {
   updateOrderRemark,
   updateOrderInbound,
   exportOrdersExcel,
+  exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
+import type { ExportInboundSheetInput } from '@/backend/actions/OrderManagement'
 
 /** Decode server-returned Excel payload to bytes (standard / URL-safe / data-URL base64). */
 function decodeExcelBase64(raw: unknown): Uint8Array {
@@ -152,7 +154,7 @@ export interface OrderManagementHandlers {
   /** 关闭入库登记 */
   closeInboundDialog: () => void
   /** 修改一行入库草稿 */
-  setInboundDraft: (lineId: string, patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote' | 'inboundStage'>>) => void
+  setInboundDraft: (lineId: string, patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote' | 'inboundStage' | 'shipmentImageUrl' | 'unitPrice' | 'lineAmount' | 'costPrice' | 'supplierName' | 'supplierUrl'>>) => void
   /** 本行按订购数量填到货数量，并记为已确认 */
   markInboundLineFull: (lineId: string) => void
   /** 确认这一行的到货数量。0 只有确认后才是缺货。 */
@@ -160,7 +162,10 @@ export interface OrderManagementHandlers {
   /** 全部商品标为已到齐 */
   markInboundAllFull: () => void
   /** 保存入库登记 */
-  submitInbound: () => Promise<void>
+  submitInbound: (options?: { allowEmpty?: boolean; keepOpen?: boolean }) => Promise<void>
+  /** 把导入的图片和可选字段写进当前商品，空字段不覆盖。 */
+  applyInboundImport: (patches: Array<{ id: string } & Partial<OrderInboundLine>>) => Promise<void>
+  exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
 export const useOrderManagement = (): { state: OrderManagementState, handlers: OrderManagementHandlers } => {
@@ -499,10 +504,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       ...line,
       inboundNote: line.inboundNote || '',
       inboundStage: line.inboundStage || 'PENDING',
+      shipmentImageUrl: line.shipmentImageUrl || null,
       acknowledged: false,
       openedQty: line.inboundQty,
       openedNote: line.inboundNote || '',
       openedStage: line.inboundStage || 'PENDING',
+      openedImage: line.shipmentImageUrl || '',
     })))
     setInboundOrderId(orderId)
   }
@@ -514,7 +521,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const setInboundDraft = (
     lineId: string,
-    patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote' | 'inboundStage'>>,
+    patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote' | 'inboundStage' | 'shipmentImageUrl' | 'unitPrice' | 'lineAmount' | 'costPrice' | 'supplierName' | 'supplierUrl'>>,
   ) => {
     setInboundDrafts((prev) => prev.map((line) => {
       if (line.id !== lineId) return line
@@ -542,15 +549,68 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity, acknowledged: true, inboundStage: 'ARRIVED' })))
   }
 
-  const submitInbound = async () => {
+  const rememberInboundResult = (orderId: string, drafts: OrderInboundLine[], result: { lines: OrderInboundLine[]; orderedQty: number; receivedQty: number; state: 'NONE' | 'PARTIAL' | 'DONE' }) => {
+    setList((prev) => prev.map((row) => (
+      row.id === orderId
+        ? {
+            ...row,
+            inboundLines: result.lines,
+            inboundOrderedQty: result.orderedQty,
+            inboundReceivedQty: result.receivedQty,
+            inboundState: result.state,
+          }
+        : row
+    )))
+    setDetailData((prev) => {
+      if (!prev || prev.id !== orderId) return prev
+      const byId = new Map(result.lines.map((line) => [line.id, line]))
+      return {
+        ...prev,
+        inboundLines: result.lines,
+        inboundOrderedQty: result.orderedQty,
+        inboundReceivedQty: result.receivedQty,
+        inboundState: result.state,
+        items: prev.items.map((item) => {
+          const line = byId.get(item.id)
+          return line
+            ? { ...item, inboundQty: line.inboundQty, inboundNote: line.inboundNote || null }
+            : item
+        }),
+      }
+    })
+    setInboundDrafts(result.lines.map((line) => {
+      const prev = drafts.find((item) => item.id === line.id)
+      return {
+        ...line,
+        unitPrice: prev?.unitPrice ?? line.unitPrice,
+        lineAmount: prev?.lineAmount ?? line.lineAmount,
+        costPrice: prev?.costPrice ?? line.costPrice,
+        supplierName: prev?.supplierName || line.supplierName,
+        supplierUrl: prev?.supplierUrl || line.supplierUrl,
+        shipmentImageUrl: line.shipmentImageUrl || prev?.shipmentImageUrl || null,
+        acknowledged: false,
+        openedQty: line.inboundQty,
+        openedNote: line.inboundNote || '',
+        openedStage: line.inboundStage || 'PENDING',
+        openedImage: line.shipmentImageUrl || '',
+      }
+    }))
+  }
+
+  const saveInboundDrafts = async (drafts: OrderInboundLine[], options?: { allowEmpty?: boolean; keepOpen?: boolean }) => {
     if (!inboundOrderId) return
-    const changed = inboundDrafts.filter((line) => (
+    const changed = drafts.filter((line) => (
       line.acknowledged
       || line.inboundQty !== line.openedQty
       || (line.inboundNote || '') !== (line.openedNote || '')
       || (line.inboundStage || 'PENDING') !== (line.openedStage || 'PENDING')
+      || (line.shipmentImageUrl || '') !== (line.openedImage || '')
     ))
     if (!changed.length) {
+      if (options?.allowEmpty) {
+        toast.success('已保存')
+        return
+      }
       toast.error('请先修改到货数量，或点这一行的确认')
       return
     }
@@ -564,8 +624,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           inboundNote: line.inboundNote,
           inboundStage: line.inboundStage || 'PENDING',
           confirmed: Boolean(line.acknowledged) || line.inboundQty !== line.openedQty,
+          ...((line.shipmentImageUrl || '') !== (line.openedImage || '')
+            ? { shipmentImageUrl: line.shipmentImageUrl || '' }
+            : {}),
         })),
       })
+      rememberInboundResult(inboundOrderId, drafts, result)
       setList((prev) => prev.map((row) => (
         row.id === inboundOrderId
           ? {
@@ -595,11 +659,65 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         }
       })
       toast.success('入库情况已保存')
-      setInboundOrderId(null)
+      if (!options?.keepOpen) setInboundOrderId(null)
     } catch (err: any) {
       toast.error(err.message || '入库保存失败')
     } finally {
       setInboundSaving(false)
+    }
+  }
+
+  const submitInbound = async (options?: { allowEmpty?: boolean; keepOpen?: boolean }) => {
+    await saveInboundDrafts(inboundDrafts, options)
+  }
+
+  const applyInboundImport = async (patches: Array<{ id: string } & Partial<OrderInboundLine>>) => {
+    const byId = new Map(patches.map((patch) => [patch.id, patch]))
+    const next = inboundDrafts.map((line) => {
+      const patch = byId.get(line.id)
+      if (!patch) return line
+      const merged = { ...line, ...patch }
+      const ordered = Math.max(0, Number(line.quantity) || 0)
+      const qty = Math.max(0, Math.floor(Number(merged.inboundQty) || 0))
+      merged.inboundQty = ordered > 0 ? Math.min(ordered, qty) : 0
+      return merged
+    })
+    setInboundDrafts(next)
+    await saveInboundDrafts(next, { allowEmpty: true, keepOpen: true })
+  }
+
+  const exportInboundSheet = async (input: ExportInboundSheetInput) => {
+    if (!input.rows?.length) {
+      toast.error('请先勾选要导出的商品')
+      return
+    }
+    if (input.mode !== 'images' && !input.columns?.length) {
+      toast.error('请先勾选要导出的列')
+      return
+    }
+    try {
+      setExportLoading(true)
+      const toastId = 'inbound-sheet'
+      toast.loading(input.mode === 'images' ? '正在导出发货图片…' : '正在下载表格…', { id: toastId })
+      const result = await exportInboundSheetAction(input, { __rpcTimeoutMs: 90_000 })
+      const bytes = decodeExcelBase64(result?.fileBase64)
+      const blob = new Blob([bytes], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = result.fileName || (input.mode === 'images' ? 'shipping-images.xlsx' : 'inbound.xlsx')
+      anchor.rel = 'noopener'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast.success(result.embeddedThumbnails ? '表格已下载（含商品图片）' : '表格已下载', { id: toastId })
+    } catch (err: any) {
+      toast.error(err.message || '导出失败', { id: 'inbound-sheet' })
+    } finally {
+      setExportLoading(false)
     }
   }
 
@@ -661,6 +779,8 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       acknowledgeInboundLine,
       markInboundAllFull,
       submitInbound,
+      applyInboundImport,
+      exportInboundSheet,
     },
   }
 }

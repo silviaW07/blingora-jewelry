@@ -537,6 +537,7 @@ exports.Prisma.OrderitemScalarFieldEnum = {
   inboundNote: 'inboundNote',
   inboundAt: 'inboundAt',
   inboundStage: 'inboundStage',
+  shipmentImageUrl: 'shipmentImageUrl',
   unitPrice: 'unitPrice',
   lineAmount: 'lineAmount',
   giftWrapSelected: 'giftWrapSelected',
@@ -1153,7 +1154,8 @@ exports.Prisma.orderitemOrderByRelevanceFieldEnum = {
   engravingText: 'engravingText',
   engravingFont: 'engravingFont',
   inboundNote: 'inboundNote',
-  inboundStage: 'inboundStage'
+  inboundStage: 'inboundStage',
+  shipmentImageUrl: 'shipmentImageUrl'
 };
 
 exports.Prisma.productreviewOrderByRelevanceFieldEnum = {

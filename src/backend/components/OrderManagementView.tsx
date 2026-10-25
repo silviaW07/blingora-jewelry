@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ===== 枚举映射与样式助手 =====
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -77,6 +78,46 @@ const GOODS_STATUS_LABEL: Record<string, string> = {
   OUT_OF_STOCK: '缺货',
   PREORDER: '预售',
 };
+
+const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
+  ['product', '商品', 'w-[300px]'],
+  ['unitPrice', '售价', 'w-28'],
+  ['quantity', '数量', 'w-20'],
+  ['lineAmount', '总价', 'w-28'],
+  ['costPrice', '成本价', 'w-28'],
+  ['supplier', '供应商', 'w-40'],
+  ['note', '备注', 'min-w-[180px]'],
+  ['stage', '商品状态', 'w-32'],
+  ['inboundQty', '到货数量', 'w-36'],
+];
+type InboundImportRow = {
+  key: string;
+  imageUrl: string;
+  sku: string;
+  unitPrice: string;
+  quantity: string;
+  lineAmount: string;
+  costPrice: string;
+  supplierUrl: string;
+  supplierName: string;
+  note: string;
+  inboundQty: string;
+  stage: string;
+};
+const emptyImportRow = (partial: Partial<InboundImportRow>): InboundImportRow => ({
+  key: partial.key || `import-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  imageUrl: partial.imageUrl || '',
+  sku: partial.sku || '',
+  unitPrice: partial.unitPrice || '',
+  quantity: partial.quantity || '',
+  lineAmount: partial.lineAmount || '',
+  costPrice: partial.costPrice || '',
+  supplierUrl: partial.supplierUrl || '',
+  supplierName: partial.supplierName || '',
+  note: partial.note || '',
+  inboundQty: partial.inboundQty || '',
+  stage: partial.stage || '',
+});
 const formatInboundMoney = (amount: number | null | undefined, currency?: string) => {
   if (amount == null || Number.isNaN(Number(amount))) return '—';
   const text = (Math.round(Number(amount) * 100) / 100).toFixed(2);
@@ -116,6 +157,164 @@ export const OrderManagementView = ({
 }: Props) => {
   const router = useRouter();
   const [inboundZoom, setInboundZoom] = React.useState<{ src: string; name: string } | null>(null);
+
+  const [inboundColumns, setInboundColumns] = React.useState<Record<string, boolean>>({});
+  const [inboundSelected, setInboundSelected] = React.useState<string[]>([]);
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
+  const [inboundDragOver, setInboundDragOver] = React.useState(false);
+  const importFileRef = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (!state.inboundOrderId) return;
+    setInboundSelected(state.inboundDrafts.map((line) => line.id));
+    setInboundColumns(Object.fromEntries(INBOUND_EXPORT_COLUMNS.map(([key]) => [key, true])));
+    setImportOpen(false);
+    setImportRows([]);
+  }, [state.inboundOrderId]);
+  const allInboundSelected = state.inboundDrafts.length > 0 && state.inboundDrafts.every((line) => inboundSelected.includes(line.id));
+  const patchImportRow = (key: string, patch: Partial<InboundImportRow>) => {
+    setImportRows((prev) => prev.map((row) => row.key === key ? { ...row, ...patch } : row));
+  };
+  const uploadInboundImage = async (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch('/api/upload-image', { method: 'POST', body, credentials: 'same-origin' });
+    const json = await res.json().catch(() => null);
+    const url = json?.data?.image_url || json?.image_url || json?.data?.url || '';
+    if (!res.ok || !url) throw new Error('图片上传失败');
+    return String(url);
+  };
+  const receiveImportFiles = async (files: FileList | File[]) => {
+    const list = [...files];
+    if (!list.length) return;
+    setImportOpen(true);
+    const images = list.filter((file) => file.type.startsWith('image/'));
+    const sheets = list.filter((file) => !file.type.startsWith('image/'));
+    const nextRows: InboundImportRow[] = [];
+    try {
+      for (const file of images) {
+        const imageUrl = await uploadInboundImage(file);
+        nextRows.push(emptyImportRow({ imageUrl }));
+      }
+      if (sheets.length) {
+        const XLSX = await import('xlsx');
+        for (const file of sheets) {
+          const book = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+          const sheet = book.Sheets[book.SheetNames[0]];
+          const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+          const stageOf = (value: unknown) => {
+            const text = String(value || '').trim();
+            if (text === '待采购' || text === 'PENDING') return 'PENDING';
+            if (text === '备货中' || text === 'PREPARING') return 'PREPARING';
+            if (text === '运输中' || text === 'TRANSIT') return 'TRANSIT';
+            if (text === '已到货' || text === 'ARRIVED') return 'ARRIVED';
+            return '';
+          };
+          for (const record of records) {
+            const pick = (...names: string[]) => {
+              for (const name of names) {
+                const hit = Object.entries(record).find(([key]) => key.trim() === name);
+                if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
+              }
+              return '';
+            };
+            nextRows.push(emptyImportRow({
+              sku: pick('SKU', 'sku', 'Sku'),
+              unitPrice: pick('售价', '售价(美金)', '单价', '折扣价(美金)'),
+              quantity: pick('数量'),
+              lineAmount: pick('总价', '总价(美金)'),
+              costPrice: pick('成本价', '采购价'),
+              supplierUrl: pick('供应商链接'),
+              supplierName: pick('供应商名称', '供应商'),
+              note: pick('备注', '入库备注'),
+              inboundQty: pick('到货数量', '已入库数量'),
+              stage: stageOf(pick('商品状态')),
+            }));
+          }
+        }
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '导入失败');
+      return;
+    }
+    if (!nextRows.length) {
+      toast.error('没有读到商品或图片');
+      return;
+    }
+    setImportRows((prev) => [...prev, ...nextRows]);
+    toast.success(`已导入 ${nextRows.length} 条，信息可以不填`);
+  };
+  const attachImageToLine = async (lineId: string, files: FileList | File[]) => {
+    const image = [...files].find((file) => file.type.startsWith('image/'));
+    if (!image) {
+      void receiveImportFiles(files);
+      return;
+    }
+    try {
+      const imageUrl = await uploadInboundImage(image);
+      handlers.setInboundDraft(lineId, { shipmentImageUrl: imageUrl });
+      toast.success('图片已放到这个商品上');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '图片上传失败');
+    }
+  };
+  const saveImportRows = async () => {
+    const selected = new Set(inboundSelected);
+    const targets = state.inboundDrafts.filter((line) => selected.has(line.id));
+    const pool = targets.length ? targets : state.inboundDrafts;
+    const used = new Set<string>();
+    const patches: Array<{ id: string } & Record<string, unknown>> = [];
+    importRows.forEach((row) => {
+      const sku = row.sku.trim();
+      const matched = sku ? pool.find((line) => line.skuCode.trim() === sku && !used.has(line.id)) : null;
+      const line = matched || pool.find((item) => !used.has(item.id));
+      if (!line) return;
+      used.add(line.id);
+      const patch: { id: string } & Record<string, unknown> = { id: line.id };
+      if (row.imageUrl) patch.shipmentImageUrl = row.imageUrl;
+      if (row.note.trim()) patch.inboundNote = row.note.trim();
+      if (row.supplierName.trim()) patch.supplierName = row.supplierName.trim();
+      if (row.supplierUrl.trim() && /^https?:\/\//i.test(row.supplierUrl.trim())) patch.supplierUrl = row.supplierUrl.trim();
+      if (row.unitPrice.trim() && Number.isFinite(Number(row.unitPrice))) patch.unitPrice = Number(row.unitPrice);
+      if (row.lineAmount.trim() && Number.isFinite(Number(row.lineAmount))) patch.lineAmount = Number(row.lineAmount);
+      if (row.costPrice.trim() && Number.isFinite(Number(row.costPrice))) patch.costPrice = Number(row.costPrice);
+      if (row.inboundQty.trim() && Number.isFinite(Number(row.inboundQty))) {
+        patch.inboundQty = Number(row.inboundQty);
+        patch.acknowledged = true;
+      }
+      if (row.stage) patch.inboundStage = row.stage;
+      patches.push(patch as { id: string });
+    });
+    await handlers.applyInboundImport(patches);
+    setImportOpen(false);
+    setImportRows([]);
+  };
+  const downloadInbound = (mode: 'sheet' | 'images') => {
+    const selected = new Set(inboundSelected);
+    const rows = state.inboundDrafts.filter((line) => selected.has(line.id));
+    const orderNo = state.list.find((row) => row.id === state.inboundOrderId)?.orderNo
+      || (state.detailData?.id === state.inboundOrderId ? state.detailData.orderNo : '');
+    void handlers.exportInboundSheet({
+      orderNo: orderNo || '',
+      mode,
+      columns: INBOUND_EXPORT_COLUMNS.filter(([key]) => inboundColumns[key] !== false).map(([key]) => key),
+      rows: rows.map((line) => ({
+        productName: line.productName,
+        skuCode: line.skuCode,
+        imageUrl: line.shipmentImageUrl || line.mainImageUrl || '',
+        unitPrice: line.unitPrice,
+        currencyCode: line.currencyCode,
+        quantity: line.quantity,
+        lineAmount: line.lineAmount,
+        costPrice: line.costPrice,
+        supplierName: line.supplierName,
+        supplierUrl: line.supplierUrl,
+        inboundNote: line.inboundNote,
+        inboundStage: line.inboundStage,
+        inboundQty: line.inboundQty,
+      })),
+    });
+  };
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id="ordermanagementview-r1f69bc6332e634b8-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
       
       {/* 1. 关键指标看板 Section */}
@@ -763,11 +962,25 @@ export const OrderManagementView = ({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) { setInboundZoom(null); handlers.closeInboundDialog() } }}>
-        <DialogContent className="inset-0 top-0 left-0 flex h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 shadow-none">
+      <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) { setInboundZoom(null); setImportOpen(false); handlers.closeInboundDialog() } }}>
+        <DialogContent
+          className="inset-0 top-0 left-0 flex h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 shadow-none"
+          onDragOver={(event) => {
+            if (![...event.dataTransfer.types].includes('Files')) return
+            event.preventDefault()
+            setInboundDragOver(true)
+          }}
+          onDragLeave={() => setInboundDragOver(false)}
+          onDrop={(event) => {
+            if (![...event.dataTransfer.types].includes('Files')) return
+            event.preventDefault()
+            setInboundDragOver(false)
+            void receiveImportFiles(event.dataTransfer.files)
+          }}
+        >
           <DialogHeader className="shrink-0 border-b px-4 py-4 text-left sm:px-6">
-            <DialogTitle>登记入库</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-2xl">登记入库</DialogTitle>
+            <DialogDescription className="text-base">
               {(() => {
                 const orderNo = state.list.find((row) => row.id === state.inboundOrderId)?.orderNo
                   || (state.detailData?.id === state.inboundOrderId ? state.detailData.orderNo : '')
@@ -778,50 +991,168 @@ export const OrderManagementView = ({
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6">
-            <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" className="h-10 text-base" onClick={() => importFileRef.current?.click()}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> 导入商品/表格
+              </Button>
+              <Button type="button" variant="outline" className="h-10 text-base" disabled={state.exportLoading} onClick={() => downloadInbound('sheet')}>
+                <Download className="mr-2 h-4 w-4" /> 下载表格
+              </Button>
+              <Button type="button" variant="outline" className="h-10 text-base" disabled={state.exportLoading} onClick={() => downloadInbound('images')}>
+                发货图片
+              </Button>
+              <input
+                ref={importFileRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept=".xlsx,.xls,.csv,image/*"
+                onChange={(event) => {
+                  const files = event.target.files
+                  if (files?.length) void receiveImportFiles(files)
+                  event.target.value = ''
+                }}
+              />
+            </div>
+            {importOpen ? (
+              <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4">
+                <div className="text-lg font-semibold text-slate-900">导入商品 / 图片</div>
+                <p className="mt-1 text-sm text-slate-600">把表格或图片拖到这里。图片可以拖动调整顺序，再按当前商品顺序对应。下面这些都可以不填，直接保存。</p>
+                <div
+                  className={`mt-3 rounded-md border border-dashed px-4 py-6 text-center text-base ${inboundDragOver ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 text-slate-600'}`}
+                >
+                  拖拽表格或图片到此处
+                </div>
+                <div className="mt-3 space-y-3">
+                  {importRows.map((row, index) => (
+                    <div
+                      key={row.key}
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData('text/import-index', String(index))
+                        event.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        if ([...event.dataTransfer.types].includes('Files')) return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        const from = Number(event.dataTransfer.getData('text/import-index'))
+                        if (!Number.isInteger(from) || from === index) return
+                        setImportRows((prev) => {
+                          const next = [...prev]
+                          const [moved] = next.splice(from, 1)
+                          if (!moved) return prev
+                          next.splice(index, 0, moved)
+                          return next
+                        })
+                      }}
+                      className="flex cursor-grab flex-wrap items-end gap-2 rounded-md border bg-white p-3"
+                    >
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded border bg-slate-100">
+                        {row.imageUrl ? (
+                          <img src={row.imageUrl} alt="" className="h-full w-full object-contain" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-xs text-slate-400">无图</div>
+                        )}
+                      </div>
+                      <label className="grid gap-1 text-sm font-medium text-slate-700">售价<input className="h-9 w-24 rounded-md border px-2 text-sm" value={row.unitPrice} onChange={(event) => patchImportRow(row.key, { unitPrice: event.target.value })} /></label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-700">数量<input className="h-9 w-20 rounded-md border px-2 text-sm" value={row.quantity} onChange={(event) => patchImportRow(row.key, { quantity: event.target.value })} /></label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-700">总价<input className="h-9 w-24 rounded-md border px-2 text-sm" value={row.lineAmount} onChange={(event) => patchImportRow(row.key, { lineAmount: event.target.value })} /></label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-700">成本价<input className="h-9 w-24 rounded-md border px-2 text-sm" value={row.costPrice} onChange={(event) => patchImportRow(row.key, { costPrice: event.target.value })} /></label>
+                      <label className="grid min-w-[12rem] flex-1 gap-1 text-sm font-medium text-slate-700">供应商链接<input className="h-9 rounded-md border px-2 text-sm" value={row.supplierUrl} onChange={(event) => patchImportRow(row.key, { supplierUrl: event.target.value })} /></label>
+                      <label className="grid min-w-[10rem] flex-1 gap-1 text-sm font-medium text-slate-700">供应商名称<input className="h-9 rounded-md border px-2 text-sm" value={row.supplierName} onChange={(event) => patchImportRow(row.key, { supplierName: event.target.value })} /></label>
+                      <label className="grid min-w-[10rem] flex-1 gap-1 text-sm font-medium text-slate-700">备注<input className="h-9 rounded-md border px-2 text-sm" value={row.note} onChange={(event) => patchImportRow(row.key, { note: event.target.value })} /></label>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end gap-2 border-t pt-3">
+                  <Button type="button" variant="outline" onClick={() => { setImportOpen(false); setImportRows([]) }}>取消</Button>
+                  <Button type="button" onClick={() => void saveImportRows()} disabled={state.inboundSaving}>保存入库</Button>
+                </div>
+              </div>
+            ) : null}
+            <table className="w-full min-w-[1180px] table-fixed border-collapse text-left text-base">
               <thead className="sticky top-0 z-10 bg-white">
-                <tr className="border-b text-xs font-semibold text-slate-500">
-                  <th className="w-[280px] px-2 py-2 font-semibold">商品</th>
-                  <th className="w-24 px-2 py-2 text-right font-semibold">售价</th>
-                  <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
-                  <th className="w-24 px-2 py-2 text-right font-semibold">总价</th>
-                  <th className="w-24 px-2 py-2 text-right font-semibold">成本价</th>
-                  <th className="w-36 px-2 py-2 font-semibold">供应商</th>
-                  <th className="min-w-[180px] px-2 py-2 font-semibold">备注</th>
-                  <th className="w-24 px-2 py-2 font-semibold">商品状态</th>
-                  <th className="w-36 px-2 py-2 font-semibold">到货数量</th>
+                <tr className="border-b text-base font-semibold text-slate-800">
+                  <th className="w-10 px-2 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      aria-label="全选商品"
+                      checked={allInboundSelected}
+                      onChange={(event) => setInboundSelected(event.target.checked ? state.inboundDrafts.map((line) => line.id) : [])}
+                    />
+                  </th>
+                  {INBOUND_EXPORT_COLUMNS.map(([key, label, width]) => (
+                    <th key={key} className={`${width} px-2 py-3 font-semibold`}>
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          aria-label={`导出${label}`}
+                          checked={inboundColumns[key] !== false}
+                          onChange={(event) => setInboundColumns((prev) => ({ ...prev, [key]: event.target.checked }))}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {state.inboundDrafts.map((line) => {
+                  const imageUrl = line.shipmentImageUrl || line.mainImageUrl
                   return (
-                    <tr key={line.id} className="border-b align-top">
+                    <tr
+                      key={line.id}
+                      className="border-b align-top"
+                      onDragOver={(event) => {
+                        if ([...event.dataTransfer.types].includes('Files')) event.preventDefault()
+                      }}
+                      onDrop={(event) => {
+                        if (![...event.dataTransfer.types].includes('Files')) return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setInboundDragOver(false)
+                        void attachImageToLine(line.id, event.dataTransfer.files)
+                      }}
+                    >
+                      <td className="px-2 py-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          aria-label={`选择 ${line.productName}`}
+                          checked={inboundSelected.includes(line.id)}
+                          onChange={(event) => setInboundSelected((prev) => event.target.checked ? [...prev, line.id] : prev.filter((id) => id !== line.id))}
+                        />
+                      </td>
                       <td className="px-2 py-3">
                         <div className="flex items-start gap-3">
                           <button
                             type="button"
-                            className="h-28 w-28 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
-                            aria-label={line.mainImageUrl ? `查看 ${line.productName}` : undefined}
-                            disabled={!line.mainImageUrl}
+                            className="h-32 w-32 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            aria-label={imageUrl ? `查看 ${line.productName}` : undefined}
+                            disabled={!imageUrl}
                             onClick={() => {
-                              if (!line.mainImageUrl) return
-                              setInboundZoom({ src: line.mainImageUrl, name: line.productName })
+                              if (!imageUrl) return
+                              setInboundZoom({ src: imageUrl, name: line.productName })
                             }}
                           >
-                            {line.mainImageUrl ? (
+                            {imageUrl ? (
                               <EditableImg
                                 propKey={`inbound-${line.id}`}
-                                keywords={line.mainImageUrl}
+                                keywords={imageUrl}
                                 description={line.productName}
-                                className="h-full w-full object-cover"
+                                className="h-full w-full object-contain"
                                 proxyWidth={480}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
+                                style={{ width: '100%', height: '100%', objectFit: 'contain', aspectRatio: '1 / 1' }}
                               />
                             ) : null}
                           </button>
-                          <div className="min-w-0 w-[9.5rem] max-w-[9.5rem]">
-                            <div className="line-clamp-2 whitespace-normal break-words text-sm font-semibold leading-5 text-slate-900" title={line.productName}>{line.productName}</div>
-                            <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">SKU: {line.skuCode}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div>
+                            <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>
                           </div>
                         </div>
                       </td>
@@ -831,14 +1162,14 @@ export const OrderManagementView = ({
                       <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.costPrice, 'CNY')}</td>
                       <td className="px-2 py-3">
                         {line.supplierUrl ? (
-                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
+                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-2 text-base font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
                         ) : (
-                          <span className="text-sm text-slate-700">{line.supplierName || '未录入'}</span>
+                          <span className="text-base text-slate-700">{line.supplierName || '未录入'}</span>
                         )}
                       </td>
                       <td className="px-2 py-3">
                         <Input
-                          className="h-9"
+                          className="h-10 text-base"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
                           value={line.inboundNote}
@@ -847,7 +1178,7 @@ export const OrderManagementView = ({
                       </td>
                       <td className="px-2 py-3">
                         <select
-                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs"
+                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
                           aria-label={`${line.productName} 商品状态`}
                           value={line.inboundStage || 'PENDING'}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
@@ -864,7 +1195,7 @@ export const OrderManagementView = ({
                             type="number"
                             min={0}
                             max={line.quantity}
-                            className="h-9"
+                            className="h-10 text-base"
                             aria-label={`${line.productName} 到货数量`}
                             value={String(line.inboundQty)}
                             onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })}

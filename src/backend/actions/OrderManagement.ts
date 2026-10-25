@@ -40,6 +40,7 @@ export interface OrderInboundLine {
   goodsStatus: string
   /** PENDING 待采购 | PREPARING 备货中 | TRANSIT 运输中 | ARRIVED 已到货 */
   inboundStage: string
+  shipmentImageUrl: string | null
   /** Saved quantity 0 means this line was confirmed out of stock. Unsaved 0 is not. */
   outOfStock: boolean
   /** Set in the check-in screen after the operator clicks 确认. */
@@ -47,6 +48,7 @@ export interface OrderInboundLine {
   openedQty?: number
   openedNote?: string
   openedStage?: string
+  openedImage?: string
 }
 
 function clampInboundQty(quantity: number, raw: number) {
@@ -86,6 +88,7 @@ const inboundProductSelect = {
   status: true,
   goodsStatus: true,
   tradeInfoJson: true,
+  galleryJson: true,
   importTaskItems: {
     select: { sourceUrl: true, supplierName: true },
     orderBy: { updatedAt: 'desc' as const },
@@ -126,10 +129,13 @@ function mapInboundLine(item: {
   inboundNote?: string | null
   inboundAt?: Date | string | null
   inboundStage?: string | null
+  shipmentImageUrl?: string | null
   unitPrice?: unknown
   lineAmount?: unknown
+  productSku?: { imageUrl?: string | null } | null
   product?: {
     mainImageUrl?: string | null
+    galleryJson?: unknown
     costPrice?: unknown
     supplierName?: string | null
     status?: string | null
@@ -148,7 +154,8 @@ function mapInboundLine(item: {
     quantity,
     inboundQty,
     inboundNote: String(item.inboundNote || ''),
-    mainImageUrl: item.product?.mainImageUrl || null,
+    mainImageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl || firstGalleryUrl(item.product?.galleryJson) || null,
+    shipmentImageUrl: String(item.shipmentImageUrl || '').trim() || null,
     unitPrice: moneyAmount(item.unitPrice),
     lineAmount: moneyAmount(item.lineAmount),
     currencyCode: String(currencyCode || 'USD'),
@@ -350,6 +357,7 @@ export interface UpdateOrderInboundLineInput {
   /** True when the operator confirmed this line. Quantity 0 is out of stock only then. */
   confirmed?: boolean
   inboundStage?: string
+  shipmentImageUrl?: string | null
 }
 
 export interface UpdateOrderInboundInput {
@@ -470,9 +478,11 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
           user: true,
           address: true,
           items: {
+            orderBy: { createdAt: 'asc' },
             include: {
-              product: { select: inboundProductSelect }
-            }
+              product: { select: inboundProductSelect },
+              productSku: { select: { imageUrl: true } },
+            },
           }
         }
       })
@@ -535,9 +545,11 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         user: true,
         address: true,
         items: {
+          orderBy: { createdAt: 'asc' },
           include: {
-            product: { select: inboundProductSelect }
-          }
+            product: { select: inboundProductSelect },
+            productSku: { select: { imageUrl: true } },
+          },
         },
         logistics: {
           orderBy: { createdAt: 'desc' }
@@ -803,7 +815,11 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
       where: { id: input.orderId },
       include: {
         items: {
-          include: { product: { select: inboundProductSelect } },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            product: { select: inboundProductSelect },
+            productSku: { select: { imageUrl: true } },
+          },
         },
       },
     })
@@ -830,7 +846,17 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
         const nextStage = line.inboundStage
           ? cleanInboundStage(line.inboundStage)
           : (recordArrival ? 'ARRIVED' : prevStage)
-        if (nextQty === prevQty && nextNote === prevNote && nextStage === prevStage && !(markStockout && !inboundWasRecorded(item.inboundAt))) continue
+        const hasImage = line.shipmentImageUrl !== undefined
+        const nextImage = hasImage ? String(line.shipmentImageUrl || '').trim().slice(0, 512) : String(item.shipmentImageUrl || '')
+        const prevImage = String(item.shipmentImageUrl || '')
+        const imageChanged = hasImage && nextImage !== prevImage
+        if (
+          nextQty === prevQty
+          && nextNote === prevNote
+          && nextStage === prevStage
+          && !imageChanged
+          && !(markStockout && !inboundWasRecorded(item.inboundAt))
+        ) continue
         await tx.orderitem.update({
           where: { id: item.id },
           data: {
@@ -838,10 +864,12 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
             inboundNote: nextNote || null,
             inboundAt: markStockout || recordArrival ? new Date() : item.inboundAt,
             inboundStage: nextStage,
+            ...(hasImage ? { shipmentImageUrl: nextImage || null } : {}),
           },
         })
         const stockoutLabel = markStockout ? '缺货 ' : ''
-        changes.push(`${stockoutLabel}${item.skuCode || item.productName} ${prevQty}->${nextQty}${nextNote ? `（${nextNote}）` : ''}`)
+        const imageLabel = imageChanged ? ' 发货图片' : ''
+        changes.push(`${stockoutLabel}${item.skuCode || item.productName} ${prevQty}->${nextQty}${nextNote ? `（${nextNote}）` : ''}${imageLabel}`)
       }
       if (changes.length) {
         await tx.orderoperationlog.create({
@@ -857,7 +885,10 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
 
     const fresh = await prisma.orderitem.findMany({
       where: { orderId: order.id },
-      include: { product: { select: inboundProductSelect } },
+      include: {
+        product: { select: inboundProductSelect },
+        productSku: { select: { imageUrl: true } },
+      },
       orderBy: { createdAt: 'asc' },
     })
     const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode))
@@ -1515,6 +1546,170 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
   const fileBase64 = Buffer.from(out as any).toString('base64')
   return { fileName, fileBase64, embeddedThumbnails: embeddedCount > 0 }
 }
+
+
+const INBOUND_STAGE_LABEL: Record<string, string> = {
+  PENDING: '待采购',
+  PREPARING: '备货中',
+  TRANSIT: '运输中',
+  ARRIVED: '已到货',
+}
+
+export interface InboundSheetRowInput {
+  productName: string
+  skuCode: string
+  imageUrl: string
+  unitPrice: number | null
+  currencyCode: string
+  quantity: number
+  lineAmount: number | null
+  costPrice: number | null
+  supplierName: string
+  supplierUrl: string
+  inboundNote: string
+  inboundStage: string
+  inboundQty: number
+}
+
+export interface ExportInboundSheetInput {
+  orderNo?: string
+  mode: 'sheet' | 'images'
+  columns: string[]
+  rows: InboundSheetRowInput[]
+}
+
+function publicSupplierUrl(value: unknown): string {
+  const text = String(value || '').trim()
+  return /^https?:\/\//i.test(text) ? text : ''
+}
+
+function inboundMoneyCell(value: unknown): number | '' {
+  if (value == null || value === '') return ''
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return ''
+  return Math.round(amount * 100) / 100
+}
+
+async function buildInboundSheetFile(input: ExportInboundSheetInput): Promise<ExportOrdersExcelFileOutput> {
+  const rows = (Array.isArray(input.rows) ? input.rows : []).slice(0, 200)
+  if (!rows.length) throw new Error('请先勾选要导出的商品')
+  const imagesOnly = input.mode === 'images'
+  const selected = new Set((input.columns || []).map((key) => String(key)))
+  const want = (key: string) => imagesOnly || selected.has(key)
+  if (!imagesOnly && !['product', 'unitPrice', 'quantity', 'lineAmount', 'costPrice', 'supplier', 'note', 'stage', 'inboundQty'].some(want)) {
+    throw new Error('请先勾选要导出的列')
+  }
+
+  const orderNo = String(input.orderNo || '').trim() || 'inbound'
+  const fileName = imagesOnly ? `shipping-images-${orderNo}.xlsx` : `inbound-${orderNo}.xlsx`
+  const currency = String(rows.find((row) => row.currencyCode)?.currencyCode || 'USD').toUpperCase()
+  const priceHeader = currency === 'USD' ? '售价(美金)' : `售价(${currency})`
+  const totalHeader = currency === 'USD' ? '总价(美金)' : `总价(${currency})`
+
+  type Col = { header: string; key: string; width: number; value: (row: InboundSheetRowInput) => string | number }
+  const columns: Col[] = []
+  if (imagesOnly || want('product')) {
+    columns.push({ header: '图片', key: 'image', width: 20, value: () => '' })
+    columns.push({ header: 'SKU', key: 'sku', width: 22, value: (row) => row.skuCode || '' })
+    columns.push({ header: '商品名称（中文）', key: 'productName', width: 36, value: (row) => row.productName || '' })
+  }
+  if (!imagesOnly && want('unitPrice')) columns.push({ header: priceHeader, key: 'unitPrice', width: 14, value: (row) => inboundMoneyCell(row.unitPrice) })
+  if (imagesOnly || want('quantity')) columns.push({ header: '数量', key: 'quantity', width: 10, value: (row) => row.quantity })
+  if (!imagesOnly && want('lineAmount')) columns.push({ header: totalHeader, key: 'lineAmount', width: 14, value: (row) => inboundMoneyCell(row.lineAmount) })
+  if (!imagesOnly && want('costPrice')) columns.push({ header: '成本价', key: 'costPrice', width: 12, value: (row) => inboundMoneyCell(row.costPrice) })
+  if (!imagesOnly && want('supplier')) {
+    columns.push({ header: '供应商名称', key: 'supplierName', width: 22, value: (row) => String(row.supplierName || '').trim() })
+    columns.push({ header: '供应商链接', key: 'supplierUrl', width: 42, value: (row) => publicSupplierUrl(row.supplierUrl) })
+  }
+  if (!imagesOnly && want('note')) columns.push({ header: '备注', key: 'note', width: 24, value: (row) => String(row.inboundNote || '') })
+  if (!imagesOnly && want('stage')) columns.push({ header: '商品状态', key: 'stage', width: 12, value: (row) => INBOUND_STAGE_LABEL[cleanInboundStage(row.inboundStage)] || '待采购' })
+  if (!imagesOnly && want('inboundQty')) columns.push({ header: '到货数量', key: 'inboundQty', width: 12, value: (row) => row.inboundQty })
+
+  const ExcelJS = loadExcelJS()
+  if (!ExcelJS?.Workbook) {
+    const XLSX = await import('xlsx')
+    const sheetRows = rows.map((row) => {
+      const record: Record<string, string | number> = {}
+      for (const column of columns) record[column.header] = column.value(row)
+      return record
+    })
+    const worksheet = XLSX.utils.json_to_sheet(sheetRows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, imagesOnly ? '发货图片' : '入库明细')
+    const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+    return { fileName, fileBase64: Buffer.from(buf).toString('base64'), embeddedThumbnails: false }
+  }
+
+  const workbook = new ExcelJS.Workbook()
+  workbook.created = new Date()
+  const worksheet = workbook.addWorksheet(imagesOnly ? '发货图片' : '入库明细', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+  })
+  const imageColWidth = 20
+  const imageRowHeight = 105
+  worksheet.columns = columns.map((column) => ({
+    header: column.header,
+    key: column.key,
+    width: column.key === 'image' ? imageColWidth : column.width,
+  }))
+  const headerRow = worksheet.getRow(1)
+  headerRow.height = 28
+  headerRow.font = { bold: true, size: 12 }
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
+
+  for (const row of rows) {
+    const record: Record<string, string | number> = {}
+    for (const column of columns) record[column.key] = column.value(row)
+    worksheet.addRow(record)
+  }
+
+  const imageColumn = columns.find((column) => column.key === 'image')
+  const imageIdByUrl = new Map<string, number>()
+  const imageDeadline = Date.now() + 45_000
+  let embeddedCount = 0
+  const imageColIndex = imageColumn ? worksheet.getColumn('image').number : 0
+  if (imageColIndex) worksheet.getColumn(imageColIndex).alignment = { vertical: 'middle', horizontal: 'center' }
+  for (let i = 0; i < rows.length; i++) {
+    const rowNumber = i + 2
+    const excelRow = worksheet.getRow(rowNumber)
+    excelRow.height = imageColumn ? imageRowHeight : 22
+    excelRow.alignment = { vertical: 'middle', wrapText: true }
+    const imageUrl = String(rows[i]?.imageUrl || '').trim()
+    if (!imageColumn || !imageUrl) continue
+    let imageId = imageIdByUrl.get(imageUrl)
+    if (imageId == null) {
+      if (Date.now() > imageDeadline) continue
+      const img = await tryFetchImageBuffer(imageUrl)
+      if (!img) continue
+      imageId = workbook.addImage({ buffer: img.buffer, extension: img.extension })
+      imageIdByUrl.set(imageUrl, imageId)
+    }
+    worksheet.addImage(imageId, {
+      tl: { col: imageColIndex - 1, row: rowNumber - 1 },
+      br: { col: imageColIndex, row: rowNumber },
+      editAs: 'twoCell',
+    })
+    embeddedCount += 1
+  }
+
+  const out = await workbook.xlsx.writeBuffer()
+  return {
+    fileName,
+    fileBase64: Buffer.from(out as any).toString('base64'),
+    embeddedThumbnails: embeddedCount > 0,
+  }
+}
+
+/**
+ * 登记入库表格 / 发货图片。行顺序与勾选顺序无关，按入库表当前顺序导出。
+ * 图片沿用订单 Excel：240 内等比缩放，单元格约正方形，避免拉变形。
+ */
+export const exportInboundSheet = requireRole([UserRole.ADMIN])(
+  withResult(async (input: ExportInboundSheetInput): Promise<ExportOrdersExcelFileOutput> => {
+    return buildInboundSheetFile(input)
+  }),
+)
 
 /**
  * 导出订单明细 Excel（服务端生成；“图片”列优先内嵌 SKU 大图）

@@ -794,6 +794,7 @@ model orderitem {
   inboundNote      String?   @db.VarChar(255)
   inboundAt        DateTime?
   inboundStage     String?   @db.VarChar(20)
+  shipmentImageUrl String?   @db.VarChar(512)
   unitPrice        Decimal   @db.Decimal(10, 2)
   lineAmount       Decimal   @db.Decimal(10, 2)
   giftWrapSelected Boolean   @default(false)
