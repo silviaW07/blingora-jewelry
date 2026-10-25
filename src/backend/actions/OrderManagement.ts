@@ -1328,6 +1328,7 @@ const SHEET_HEADERS: Array<[keyof ManualOrderLineInput | 'sku', string[]]> = [
   ['lineAmount', ['总价', '总价(美金)']],
   ['costPrice', ['成本价', '采购价']],
   ['sku', ['SKU', 'sku', 'Sku']],
+  ['inboundNote', ['备注', '入库备注', '说明']],
 ]
 
 function loadJSZip(): any | null {
@@ -1621,9 +1622,10 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
       const quantityText = read(rowNumber, 'quantity')
       const totalText = read(rowNumber, 'lineAmount')
       const costText = read(rowNumber, 'costPrice')
+      const noteText = read(rowNumber, 'inboundNote')
       let image = imagesByRow.get(rowNumber)
-    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift()
-      if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText)) image = unplacedCellImages.shift()
+      if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !image) {
         emptyRun += 1
         if (emptyRun >= 3) break
         continue
@@ -1643,6 +1645,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
         quantity: quantityText ? Number(quantityText) : null,
         lineAmount: totalText ? Number(totalText) : null,
         costPrice: costText ? Number(costText) : null,
+        inboundNote: noteText || null,
       })
     }
     if (!parsed.length) throw new Error('没有读到商品')
@@ -1670,6 +1673,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
               quantity: nextQuantity,
               unitPrice: unit,
               lineAmount: manualMoney(row.lineAmount) ?? Math.round(unit * nextQuantity * 100) / 100,
+              ...(row.inboundNote ? { inboundNote: String(row.inboundNote).slice(0, 255) } : {}),
             },
           })
           continue
@@ -1694,6 +1698,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
               lineAmount: total,
               inboundQty: 0,
               inboundStage: 'PENDING',
+              inboundNote: row.inboundNote ? String(row.inboundNote).slice(0, 255) : null,
               shipmentImageUrl: row.imageUrl || null,
               giftWrapSelected: false,
             },
@@ -1811,9 +1816,10 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
     const quantityText = read(rowNumber, 'quantity')
     const totalText = read(rowNumber, 'lineAmount')
     const costText = read(rowNumber, 'costPrice')
+    const noteText = read(rowNumber, 'inboundNote')
     let image = imagesByRow.get(rowNumber)
-    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift()
-    if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText)) image = unplacedCellImages.shift()
+    if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !image) {
       emptyRun += 1
       if (emptyRun >= 3) break
       continue
@@ -1833,6 +1839,7 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
       quantity: quantityText ? Number(quantityText) : null,
       lineAmount: totalText ? Number(totalText) : null,
       costPrice: costText ? Number(costText) : null,
+      inboundNote: noteText || null,
     })
   }
   if (!parsed.length) throw new Error('没有读到商品')

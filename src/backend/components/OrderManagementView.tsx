@@ -1787,9 +1787,9 @@ export const OrderManagementView = ({
                                 propKey={`inbound-${line.id}`}
                                 keywords={imageUrl}
                                 description={line.productName}
-                                className="h-full w-full object-contain"
+                                className="h-full w-full object-cover"
                                 proxyWidth={480}
-                                style={{ width: '100%', height: '100%', objectFit: 'contain', aspectRatio: '1 / 1' }}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
                               />
                             ) : null}
                           </button>
@@ -1834,7 +1834,7 @@ export const OrderManagementView = ({
                       {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
                           rows={2}
-                          className="w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
+                          className="box-border h-full min-h-24 w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
                           value={line.inboundNote}
