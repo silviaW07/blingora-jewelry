@@ -30394,6 +30394,9 @@ _export(exports, {
     get shipOrder () {
         return shipOrder;
     },
+    get updateInboundShipment () {
+        return updateInboundShipment;
+    },
     get updateManualOrderLine () {
         return updateManualOrderLine;
     },
@@ -32526,6 +32529,60 @@ const saveInboundShipment = (0, _action_utils.requireRole)([
                 orderId: order.id,
                 actionType: '入库发货',
                 actionNote: `登记 ${blocks.length} 批发货`.slice(0, 4000),
+                operatorName: username
+            }
+        });
+    });
+    return listInboundShipmentRows(order.id);
+}));
+const updateInboundShipment = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const existing = await _prisma.default.orderlogisticssegment.findFirst({
+        where: {
+            id: input.id,
+            orderId: order.id,
+            segmentType: INBOUND_SHIP_SEGMENT
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!existing) throw new Error('发货记录不存在');
+    const shippedAt = parseShanghaiDateTime(String(input.shippedAt || ''));
+    const images = (input.images || []).map((url)=>String(url || '').trim()).filter(Boolean).slice(0, 12);
+    await _prisma.default.$transaction(async (tx)=>{
+        await tx.orderlogisticssegment.update({
+            where: {
+                id: existing.id
+            },
+            data: {
+                carrierName: String(input.channel || '').trim().slice(0, 100) || null,
+                trackingNumber: String(input.trackingNumber || '').trim().slice(0, 120) || null,
+                shippedAt,
+                remark: String(input.note || '').trim().slice(0, 2000) || null,
+                timelineJson: images.map((imageUrl)=>({
+                        time: shippedAt.toISOString(),
+                        label: '发货图片',
+                        imageUrl
+                    }))
+            }
+        });
+        await tx.orderoperationlog.create({
+            data: {
+                orderId: order.id,
+                actionType: '入库发货',
+                actionNote: '修改发货记录',
                 operatorName: username
             }
         });
