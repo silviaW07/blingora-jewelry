@@ -1876,7 +1876,7 @@ export const OrderManagementView = ({
                           style={inboundStageFill(line.inboundStage)}
                           aria-label={`${line.productName} 商品状态`}
                           value={normalizedInboundStage(line.inboundStage)}
-                          onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
+                          onChange={(e) => handlers.persistInboundLine(line.id, { inboundStage: e.target.value })}
                         >
                           {normalizedInboundStage(line.inboundStage) === 'STOCK' ? <option value="STOCK" style={INBOUND_STAGE_FILL.STOCK}>备货</option> : null}
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
@@ -1893,12 +1893,12 @@ export const OrderManagementView = ({
                             className="h-10 text-base"
                             aria-label={`${line.productName} 到货数量`}
                             value={String(line.inboundQty)}
-                            onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })}
+                            onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })} onBlur={() => handlers.persistInboundLine(line.id, undefined, { quiet: true })}
                           />
                           <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.acknowledgeInboundLine(line.id)}>
                             {line.acknowledged ? '已确认' : '确认'}
                           </Button>
-                          <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.markInboundLineFull(line.id)}>
+                          <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.persistInboundLine(line.id, { inboundQty: line.quantity, acknowledged: true, inboundStage: line.quantity > 0 ? 'ARRIVED' : (line.inboundStage || 'PENDING') })}>
                             本行到齐
                           </Button>
                         </div>

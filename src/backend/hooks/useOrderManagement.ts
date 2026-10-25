@@ -169,6 +169,7 @@ export interface OrderManagementHandlers {
   markInboundLineFull: (lineId: string) => void
   /** 确认这一行的到货数量。0 只有确认后才是缺货。 */
   acknowledgeInboundLine: (lineId: string) => void
+  persistInboundLine: (lineId: string, patch?: Partial<OrderInboundLine>, options?: { quiet?: boolean }) => void
   /** 全部商品标为已到齐 */
   markInboundAllFull: () => void
   /** 保存入库登记 */
@@ -703,9 +704,24 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const acknowledgeInboundLine = (lineId: string) => {
-    setInboundDrafts((prev) => prev.map((line) => (
-      line.id === lineId ? { ...line, acknowledged: true, inboundStage: line.inboundQty > 0 ? 'ARRIVED' : (line.inboundStage || 'PENDING') } : line
-    )))
+    persistInboundLine(lineId, { acknowledged: true })
+  }
+
+  const persistInboundLine = (lineId: string, patch?: Partial<OrderInboundLine>, options?: { quiet?: boolean }) => {
+    const next = inboundDrafts.map((line) => {
+      if (line.id !== lineId) return line
+      const merged = { ...line, ...patch }
+      const ordered = Math.max(0, Number(line.quantity) || 0)
+      const qty = Math.max(0, Math.floor(Number(merged.inboundQty) || 0))
+      merged.inboundQty = ordered > 0 ? Math.min(ordered, qty) : 0
+      if (patch?.acknowledged) {
+        merged.acknowledged = true
+        if (!patch.inboundStage) merged.inboundStage = merged.inboundQty > 0 ? 'ARRIVED' : (merged.inboundStage || 'PENDING')
+      }
+      return merged
+    })
+    setInboundDrafts(next)
+    void saveInboundDrafts(next, { keepOpen: true, allowEmpty: true, quiet: options?.quiet })
   }
 
   const markInboundAllFull = () => {
@@ -760,7 +776,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }))
   }
 
-  const saveInboundDrafts = async (drafts: OrderInboundLine[], options?: { allowEmpty?: boolean; keepOpen?: boolean }) => {
+  const saveInboundDrafts = async (drafts: OrderInboundLine[], options?: { allowEmpty?: boolean; keepOpen?: boolean; quiet?: boolean }) => {
     if (!inboundOrderId) return
     const changed = drafts.filter((line) => (
       line.acknowledged
@@ -771,7 +787,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     ))
     if (!changed.length) {
       if (options?.allowEmpty) {
-        toast.success('已保存')
+        if (!options?.quiet) toast.success('已保存')
         return
       }
       toast.error('请先修改到货数量，或点这一行的确认')
@@ -835,7 +851,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const submitInbound = async (options?: { allowEmpty?: boolean; keepOpen?: boolean }) => {
+  const submitInbound = async (options?: { allowEmpty?: boolean; keepOpen?: boolean; quiet?: boolean }) => {
     await saveInboundDrafts(inboundDrafts, options)
   }
 
@@ -1329,6 +1345,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       setInboundDraft,
       markInboundLineFull,
       acknowledgeInboundLine,
+      persistInboundLine,
       markInboundAllFull,
       submitInbound,
       applyInboundImport,

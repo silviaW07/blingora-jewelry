@@ -199,11 +199,11 @@ function OrderItemRow({
   const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
   return (
-    <div className="grid grid-cols-[52px_minmax(0,1fr)_9.5rem_4.75rem] items-center gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0">
+    <div className="grid grid-cols-[52px_minmax(0,1fr)_9.5rem_4.75rem] items-center gap-2 border-b border-[#f0f0f0] py-2 last:border-b-0 sm:grid-cols-[96px_minmax(0,1fr)_9.5rem_5.5rem] sm:gap-3 sm:py-3">
       <button
         type="button"
         onClick={onOpenProduct}
-        className="relative h-14 w-14 shrink-0 overflow-hidden bg-[#F1F5F9]"
+        className="relative h-14 w-14 shrink-0 overflow-hidden bg-[#F1F5F9] sm:h-24 sm:w-24"
         aria-label={item.productName}
       >
         <EditableImg
