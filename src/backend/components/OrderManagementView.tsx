@@ -429,6 +429,7 @@ export const OrderManagementView = ({
   const [batchNote, setBatchNote] = React.useState('');
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [stageOpen, setStageOpen] = React.useState(false);
+  const [stagePick, setStagePick] = React.useState('');
   const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>>([]);
   const [importOrderOpen, setImportOrderOpen] = React.useState(false);
   const [importOrderEmail, setImportOrderEmail] = React.useState('');
@@ -532,17 +533,21 @@ export const OrderManagementView = ({
       toast.error('请先勾选商品');
       return;
     }
+    setStagePick('');
     setStageOpen(true);
   };
-  const applyBatchStage = (stage: string) => {
+  const applyBatchStage = () => {
     if (!inboundSelected.length) {
       toast.error('请先勾选商品');
       return;
     }
-    for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundStage: stage });
+    if (!stagePick) {
+      toast.error('请先选择状态');
+      return;
+    }
+    handlers.persistInboundStages(inboundSelected, stagePick);
     setStageOpen(false);
-    const label = INBOUND_STAGE_LABEL[stage] || stage;
-    toast.success(`已把 ${inboundSelected.length} 个商品改为${label}`);
+    setStagePick('');
   };
   const patchImportRow = (key: string, patch: Partial<InboundImportRow>) => {
     setImportRows((prev) => prev.map((row) => row.key === key ? { ...row, ...patch } : row));
@@ -2124,14 +2129,15 @@ export const OrderManagementView = ({
         <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="发货状态" onClick={() => setStageOpen(false)}>
           <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
             <div className="text-lg font-semibold text-slate-900">发货状态</div>
-            <p className="mt-1 text-sm text-slate-500">改已勾选的 {inboundSelected.length} 个商品，保存入库后写入订单。</p>
+            <p className="mt-1 text-sm text-slate-500">先点一个状态，再点确认。将写入已勾选的 {inboundSelected.length} 个商品。</p>
             <div className="mt-4 grid gap-2">
               {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
-                <Button key={value} type="button" variant="outline" className="border-transparent font-medium" style={INBOUND_STAGE_FILL[value]} onClick={() => applyBatchStage(value)}>{label}</Button>
+                <Button key={value} type="button" variant="outline" className={"border-2 font-medium " + (stagePick === value ? "border-slate-900 ring-2 ring-slate-900" : "border-transparent")} style={INBOUND_STAGE_FILL[value]} onClick={() => setStagePick(value)}>{label}</Button>
               ))}
             </div>
-            <div className="mt-4 flex justify-end">
-              <Button type="button" variant="outline" onClick={() => setStageOpen(false)}>取消</Button>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => { setStageOpen(false); setStagePick(''); }}>取消</Button>
+              <Button type="button" disabled={!stagePick} onClick={applyBatchStage}>确认</Button>
             </div>
           </div>
         </div>

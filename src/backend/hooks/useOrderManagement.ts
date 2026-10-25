@@ -170,6 +170,7 @@ export interface OrderManagementHandlers {
   /** 确认这一行的到货数量。0 只有确认后才是缺货。 */
   acknowledgeInboundLine: (lineId: string) => void
   persistInboundLine: (lineId: string, patch?: Partial<OrderInboundLine>, options?: { quiet?: boolean }) => void
+  persistInboundStages: (lineIds: string[], stage: string) => void
   /** 全部商品标为已到齐 */
   markInboundAllFull: () => void
   /** 保存入库登记 */
@@ -728,6 +729,13 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const acknowledgeInboundLine = (lineId: string) => {
     persistInboundLine(lineId, { acknowledged: true })
+  }
+
+  const persistInboundStages = (lineIds: string[], stage: string) => {
+    const ids = new Set(lineIds)
+    const next = inboundDrafts.map((line) => ids.has(line.id) ? { ...line, inboundStage: stage } : line)
+    setInboundDrafts(next)
+    void saveInboundDrafts(next, { keepOpen: true })
   }
 
   const persistInboundLine = (lineId: string, patch?: Partial<OrderInboundLine>, options?: { quiet?: boolean }) => {
@@ -1369,6 +1377,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       markInboundLineFull,
       acknowledgeInboundLine,
       persistInboundLine,
+      persistInboundStages,
       markInboundAllFull,
       submitInbound,
       applyInboundImport,
