@@ -145,15 +145,15 @@ export default function AccountOrdersView() {
           <Table className="w-full border-y border-[#ebe6dc]">
             <TableHeader className="bg-[#fbfaf7]">
               <TableRow className="hover:bg-[#fbfaf7]">
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.orderNumber')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.date')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.items')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.status')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.total')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.shippingMethod')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.weight')}</TableHead>
-                <TableHead className={`${HEAD} whitespace-nowrap`}>{t('accountOrders.orderNote')}</TableHead>
-                <TableHead className={`${HEAD} account-orders-actions whitespace-nowrap bg-[#fbfaf7] text-right`}>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.orderNumber')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.date')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.items')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.status')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.total')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.shippingMethod')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.weight')}</TableHead>
+                <TableHead className={`${HEAD} whitespace-normal break-words`}>{t('accountOrders.orderNote')}</TableHead>
+                <TableHead className={`${HEAD} account-orders-actions whitespace-normal break-words bg-[#fbfaf7] text-right`}>
                   {t('accountOrders.operations')}
                 </TableHead>
               </TableRow>

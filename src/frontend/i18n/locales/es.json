@@ -674,7 +674,17 @@
     "backToOrders": "Volver a Mis pedidos",
     "notFound": "Este pedido no existe o no pertenece a esta cuenta.",
     "paymentMethod": "Método de pago",
-    "payNow": "Pagar ahora",
+        "payNow": "Pagar ahora",
+    "originalTotal": "Total original",
+    "discount": "Descuento",
+    "merchandiseTotal": "Total",
+    "shipping": "Envío",
+    "inboundStages": {
+      "PENDING": "Pendiente de compra",
+      "PREPARING": "En preparación",
+      "TRANSIT": "En tránsito",
+      "ARRIVED": "Recibido"
+    },
     "statuses": {
       "PENDING_PAYMENT": "Pendiente",
       "PAID": "Pagado",

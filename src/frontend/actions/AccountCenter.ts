@@ -61,6 +61,8 @@ export interface CustomerOrderItem {
   quantity: number
   unitPrice: number
   lineAmount: number
+  /** PENDING | PREPARING | TRANSIT | ARRIVED. Mirrors warehouse check-in. */
+  inboundStage: string
 }
 
 export type CustomerOrderShipMethod = 'STANDARD' | 'EXPRESS'
@@ -70,6 +72,9 @@ export interface CustomerOrderSummary {
   orderNo: string
   status: CustomerOrderStatus
   currencyCode: string
+  subtotalAmount: number
+  discountAmount: number
+  shippingAmount: number
   totalAmount: number
   paymentMethod: string
   shipMethod: CustomerOrderShipMethod
@@ -170,6 +175,9 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
   orderNo: row.orderNo,
   status: row.status as CustomerOrderStatus,
   currencyCode: row.currencyCode,
+  subtotalAmount: toNum(row.subtotalAmount),
+  discountAmount: toNum(row.discountAmount),
+  shippingAmount: toNum(row.shippingAmount),
   totalAmount: toNum(row.totalAmount),
   paymentMethod: row.paymentMethod,
   shipMethod: row.shipMethod as CustomerOrderShipMethod,
@@ -197,6 +205,9 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
     quantity: item.quantity,
     unitPrice: toNum(item.unitPrice),
     lineAmount: toNum(item.lineAmount),
+    inboundStage: ['PENDING', 'PREPARING', 'TRANSIT', 'ARRIVED'].includes(String(item.inboundStage || '').toUpperCase())
+      ? String(item.inboundStage).toUpperCase()
+      : 'PENDING',
   })),
 })
 

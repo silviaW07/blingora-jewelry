@@ -80,7 +80,7 @@ const GOODS_STATUS_LABEL: Record<string, string> = {
 };
 
 const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
-  ['product', '商品', 'w-[16%]'],
+  ['product', '商品', 'w-[22%]'],
   ['unitPrice', '售价', 'w-[8%]'],
   ['discountPrice', '折扣价', 'w-[8%]'],
   ['quantity', '数量', 'w-[7%]'],
@@ -165,6 +165,23 @@ export const OrderManagementView = ({
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
+  const shipImageRef = React.useRef<HTMLInputElement>(null);
+  const shipTimeNote = (note: string) => {
+    const stamp = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date()).replace(/\//g, '-');
+    const line = `发货时间 ${stamp}`;
+    const prev = String(note || '').trim();
+    if (!prev) return line;
+    if (/发货时间/.test(prev)) return prev.replace(/发货时间\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/, line);
+    return `${prev}\n${line}`;
+  };
   React.useEffect(() => {
     if (!state.inboundOrderId) return;
     setInboundSelected([]);
@@ -253,8 +270,30 @@ export const OrderManagementView = ({
     }
     try {
       const imageUrl = await uploadInboundImage(image);
-      handlers.setInboundDraft(lineId, { shipmentImageUrl: imageUrl });
-      toast.success('图片已放到这个商品上');
+      const line = state.inboundDrafts.find((item) => item.id === lineId);
+      handlers.setInboundDraft(lineId, { shipmentImageUrl: imageUrl, inboundNote: shipTimeNote(line?.inboundNote || '') });
+      toast.success('发货图片已上传，备注已写入发货时间');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '图片上传失败');
+    }
+  };
+  const uploadShippingImages = async (files: FileList | File[]) => {
+    const images = [...files].filter((file) => file.type.startsWith('image/'));
+    if (!images.length) {
+      toast.error('请选择图片');
+      return;
+    }
+    const selected = new Set(inboundSelected);
+    const picked = state.inboundDrafts.filter((line) => selected.has(line.id));
+    const targets = picked.length ? picked : state.inboundDrafts;
+    try {
+      const count = Math.min(images.length, targets.length);
+      for (let index = 0; index < count; index += 1) {
+        const imageUrl = await uploadInboundImage(images[index]);
+        const line = targets[index];
+        handlers.setInboundDraft(line.id, { shipmentImageUrl: imageUrl, inboundNote: shipTimeNote(line.inboundNote) });
+      }
+      toast.success(count > 1 ? `已上传 ${count} 张发货图片，备注已写入发货时间` : '发货图片已上传，备注已写入发货时间');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '图片上传失败');
     }
@@ -977,7 +1016,11 @@ export const OrderManagementView = ({
             if (![...event.dataTransfer.types].includes('Files')) return
             event.preventDefault()
             setInboundDragOver(false)
-            void receiveImportFiles(event.dataTransfer.files)
+            const dropped = [...event.dataTransfer.files];
+            const images = dropped.filter((file) => file.type.startsWith('image/'));
+            const sheets = dropped.filter((file) => !file.type.startsWith('image/'));
+            if (images.length && !sheets.length) void uploadShippingImages(images);
+            else void receiveImportFiles(dropped);
           }}
         >
           <DialogHeader className="shrink-0 border-b px-4 py-4 text-left sm:px-6">
@@ -1051,20 +1094,33 @@ export const OrderManagementView = ({
                 </div>
               </div>
             ) : null}
-            <table className="w-full table-fixed border-collapse text-left text-sm">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <colgroup>
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+              </colgroup>
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b text-sm font-semibold text-slate-800">
-                  <th className="w-[4%] px-1 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      aria-label="全选商品"
-                      checked={allInboundSelected}
-                      onChange={(event) => setInboundSelected(event.target.checked ? state.inboundDrafts.map((line) => line.id) : [])}
-                    />
-                  </th>
-                  {INBOUND_EXPORT_COLUMNS.map(([key, label, width]) => (
-                    <th key={key} className={`${width} px-2 py-3 font-semibold`}>
+                  {INBOUND_EXPORT_COLUMNS.map(([key, label]) => (
+                    <th key={key} className={`overflow-hidden px-2 py-2 align-middle font-semibold ${key === 'product' ? 'text-left' : 'text-center'}`}>
+                      <div className="flex items-start gap-2">
+                        {key === 'product' ? (
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0"
+                            aria-label="全选商品"
+                            checked={allInboundSelected}
+                            onChange={(event) => setInboundSelected(event.target.checked ? state.inboundDrafts.map((line) => line.id) : [])}
+                          />
+                        ) : null}
                       <label className="flex items-start gap-1 whitespace-normal break-words">
                         <input
                           type="checkbox"
@@ -1075,6 +1131,7 @@ export const OrderManagementView = ({
                         />
                         <span>{label}</span>
                       </label>
+                      </div>
                     </th>
                   ))}
                 </tr>
@@ -1097,20 +1154,18 @@ export const OrderManagementView = ({
                         void attachImageToLine(line.id, event.dataTransfer.files)
                       }}
                     >
-                      <td className="px-2 py-3">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          aria-label={`选择 ${line.productName}`}
-                          checked={inboundSelected.includes(line.id)}
-                          onChange={(event) => setInboundSelected((prev) => event.target.checked ? [...prev, line.id] : prev.filter((id) => id !== line.id))}
-                        />
-                      </td>
-                      <td className="px-2 py-3">
-                        <div className="flex items-start gap-3">
+                      <td className="overflow-hidden px-2 py-3 align-middle">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-2 h-4 w-4 shrink-0"
+                            aria-label={`选择 ${line.productName}`}
+                            checked={inboundSelected.includes(line.id)}
+                            onChange={(event) => setInboundSelected((prev) => event.target.checked ? [...prev, line.id] : prev.filter((id) => id !== line.id))}
+                          />
                           <button
                             type="button"
-                            className="h-16 w-16 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
                             aria-label={imageUrl ? `查看 ${line.productName}` : undefined}
                             disabled={!imageUrl}
                             onClick={() => {
@@ -1135,19 +1190,19 @@ export const OrderManagementView = ({
                           </div>
                         </div>
                       </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{line.quantity}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>
-                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.costPrice, 'CNY')}</td>
-                      <td className="px-2 py-3">
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.quantity}</td>
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.costPrice, 'CNY')}</td>
+                      <td className="overflow-hidden px-2 py-3 align-middle text-center">
                         {line.supplierUrl ? (
                           <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-3 break-words text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
                         ) : (
                           <span className="line-clamp-3 break-words text-sm text-slate-700">{line.supplierName || '未录入'}</span>
                         )}
                       </td>
-                      <td className="px-2 py-3">
+                      <td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
                           rows={2}
                           className="w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
@@ -1157,7 +1212,7 @@ export const OrderManagementView = ({
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
                         />
                       </td>
-                      <td className="px-2 py-3">
+                      <td className="overflow-hidden px-2 py-3 align-middle">
                         <select
                           className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
                           aria-label={`${line.productName} 商品状态`}
@@ -1170,7 +1225,7 @@ export const OrderManagementView = ({
                           <option value="ARRIVED">已到货</option>
                         </select>
                       </td>
-                      <td className="px-2 py-3">
+                      <td className="overflow-hidden px-2 py-3 align-middle">
                         <div className="space-y-2">
                           <Input
                             type="number"
@@ -1209,12 +1264,24 @@ export const OrderManagementView = ({
               <Button type="button" variant="outline" disabled={state.exportLoading} onClick={() => downloadInbound('sheet')}>
                 <Download className="mr-2 h-4 w-4" /> 下载表格
               </Button>
-              <Button type="button" variant="outline" disabled={state.exportLoading} onClick={() => downloadInbound('images')}>
+              <Button type="button" variant="outline" onClick={() => shipImageRef.current?.click()} disabled={state.inboundSaving}>
                 发货图片
               </Button>
               <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>
+              <input
+                ref={shipImageRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept="image/*"
+                onChange={(event) => {
+                  const files = event.target.files;
+                  if (files?.length) void uploadShippingImages(files);
+                  event.target.value = '';
+                }}
+              />
               <input
                 ref={importFileRef}
                 type="file"

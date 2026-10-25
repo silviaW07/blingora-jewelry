@@ -134,7 +134,16 @@ export default function AccountOrderDetailView() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailField label={t('accountOrders.total')} value={`${order.currencyCode} ${order.totalAmount.toFixed(2)}`} />
+            <div className="rounded-2xl border border-[#ebe6dc] bg-white p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#8a8073]">{t('accountOrders.total')}</p>
+              <p className="mt-2 text-lg font-semibold text-[#1f1a14]">{order.currencyCode} {order.totalAmount.toFixed(2)}</p>
+              <div className="mt-3 space-y-1.5 text-sm text-[#6f6558]">
+                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.originalTotal')}</span><span className="font-medium text-[#2f2a24]">{order.currencyCode} {order.subtotalAmount.toFixed(2)}</span></p>
+                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.discount')}</span><span className="font-medium text-[#2f2a24]">{order.discountAmount > 0 ? '-' : ''}{order.currencyCode} {order.discountAmount.toFixed(2)}</span></p>
+                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.merchandiseTotal')}</span><span className="font-medium text-[#2f2a24]">{order.currencyCode} {Math.max(0, order.subtotalAmount - order.discountAmount).toFixed(2)}</span></p>
+                <p className="flex items-center justify-between gap-3"><span>{t('accountOrders.shipping')}</span><span className="font-medium text-[#2f2a24]">{order.currencyCode} {order.shippingAmount.toFixed(2)}</span></p>
+              </div>
+            </div>
             <DetailField
               label={t('accountOrders.shippingMethod')}
               value={
@@ -161,6 +170,7 @@ export default function AccountOrderDetailView() {
                   key={item.itemId}
                   item={item}
                   currencyCode={order.currencyCode}
+                  discountRate={order.subtotalAmount > 0 && order.discountAmount > 0.009 ? Math.max(0, (order.subtotalAmount - order.discountAmount) / order.subtotalAmount) : 1}
                   onOpenProduct={() => hardNavigate(productHref(item.productId))}
                 />
               ))}
@@ -195,14 +205,19 @@ function SpecChip({ label, value }: { label: string; value: string }) {
 function OrderItemRow({
   item,
   currencyCode,
+  discountRate,
   onOpenProduct,
 }: {
   item: CustomerOrderItem
   currencyCode: string
+  discountRate: number
   onOpenProduct: () => void
 }) {
   const { t } = useTranslation()
   const thumbSrc = item.imageUrl || item.mainImageUrl || undefined
+  const rate = Number.isFinite(discountRate) ? discountRate : 1
+  const discountUnit = Math.round(item.unitPrice * rate * 100) / 100
+  const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
   return (
     <div className="border-b border-[#f0f0f0] py-4 last:border-b-0">
@@ -227,12 +242,12 @@ function OrderItemRow({
 
         <div className="flex min-w-0 flex-col gap-2.5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 space-y-1.5">
-              <h3 className="text-base font-semibold leading-snug text-[#0F172A]">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <h3 className="whitespace-normal break-words text-base font-semibold leading-snug text-[#0F172A]">
                 <button
                   type="button"
                   onClick={onOpenProduct}
-                  className="text-left transition-colors hover:text-[#f254a6] hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
+                  className="block w-full whitespace-normal break-words text-left transition-colors hover:text-[#f254a6] hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f254a6]/40"
                 >
                   {item.productName}
                 </button>
@@ -249,14 +264,20 @@ function OrderItemRow({
               </div>
 
               <p className="text-sm font-bold text-[#0F172A]">
-                {currencyCode} {item.unitPrice.toFixed(2)}
+                {currencyCode} {discountUnit.toFixed(2)}
               </p>
+            </div>
+
+            <div className="flex shrink-0 items-center xl:px-3">
+              <span className="inline-flex rounded-full border border-[#eadfce] bg-[#fbfaf7] px-3 py-1 text-xs font-semibold text-[#6b5e52]">
+                {t(`accountOrders.inboundStages.${item.inboundStage || 'PENDING'}`)}
+              </span>
             </div>
 
             <div className="shrink-0 text-sm text-[#64748B] xl:text-right">
               <p>×{item.quantity}</p>
               <p className="mt-1 font-medium text-[#0F172A]">
-                {currencyCode} {item.lineAmount.toFixed(2)}
+                {currencyCode} {discountLine.toFixed(2)}
               </p>
             </div>
           </div>

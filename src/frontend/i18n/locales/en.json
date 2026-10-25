@@ -682,7 +682,17 @@
     "backToOrders": "Back to My Orders",
     "notFound": "This order was not found or is not available to this account.",
     "paymentMethod": "Payment Method",
-    "payNow": "Pay Now",
+        "payNow": "Pay Now",
+    "originalTotal": "Original total",
+    "discount": "Discount",
+    "merchandiseTotal": "Total",
+    "shipping": "Shipping",
+    "inboundStages": {
+      "PENDING": "Pending purchase",
+      "PREPARING": "Preparing",
+      "TRANSIT": "In transit",
+      "ARRIVED": "Arrived"
+    },
     "statuses": {
       "PENDING_PAYMENT": "Pending",
       "PAID": "Paid",

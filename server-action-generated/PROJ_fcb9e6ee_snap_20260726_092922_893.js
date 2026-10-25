@@ -44830,6 +44830,9 @@ const mapCustomerOrder = (row)=>({
         orderNo: row.orderNo,
         status: row.status,
         currencyCode: row.currencyCode,
+        subtotalAmount: toNum(row.subtotalAmount),
+        discountAmount: toNum(row.discountAmount),
+        shippingAmount: toNum(row.shippingAmount),
         totalAmount: toNum(row.totalAmount),
         paymentMethod: row.paymentMethod,
         shipMethod: row.shipMethod,
@@ -44857,7 +44860,13 @@ const mapCustomerOrder = (row)=>({
                 mainImageUrl: ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.mainImageUrl) || '',
                 quantity: item.quantity,
                 unitPrice: toNum(item.unitPrice),
-                lineAmount: toNum(item.lineAmount)
+                lineAmount: toNum(item.lineAmount),
+                inboundStage: [
+                    'PENDING',
+                    'PREPARING',
+                    'TRANSIT',
+                    'ARRIVED'
+                ].includes(String(item.inboundStage || '').toUpperCase()) ? String(item.inboundStage).toUpperCase() : 'PENDING'
             };
         })
     });
