@@ -32432,13 +32432,21 @@ async function listInboundShipmentRows(orderId) {
             }
         ]
     });
-    return rows.map((row)=>({
+    return rows.map((row)=>{
+        const timeline = Array.isArray(row.timelineJson) ? row.timelineJson : [];
+        const images = timeline.map((item)=>{
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return '';
+            return String(item.imageUrl || '');
+        }).filter(Boolean);
+        return {
             id: row.id,
             shippedAt: row.shippedAt ? row.shippedAt.toISOString() : '',
             trackingNumber: String(row.trackingNumber || ''),
             channel: String(row.carrierName || ''),
-            note: String(row.remark || '')
-        }));
+            note: String(row.remark || ''),
+            images
+        };
+    });
 }
 const listInboundShipments = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -32449,7 +32457,7 @@ const listInboundShipments = (0, _action_utils.requireRole)([
 const saveInboundShipment = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
-    var _input_legs;
+    var _input_blocks;
     const { username } = (0, _action_utils.getAuthContext)();
     const order = await _prisma.default.orderrecord.findUnique({
         where: {
@@ -32460,25 +32468,38 @@ const saveInboundShipment = (0, _action_utils.requireRole)([
         }
     });
     if (!order) throw new Error('订单不存在');
-    const shippedAt = parseShanghaiDateTime(input.shippedAt);
-    const legs = (((_input_legs = input.legs) === null || _input_legs === void 0 ? void 0 : _input_legs.length) ? input.legs : [
+    const blocks = (((_input_blocks = input.blocks) === null || _input_blocks === void 0 ? void 0 : _input_blocks.length) ? input.blocks : (input.legs || [
         {}
     ]).map((leg)=>({
-            trackingNumber: String((leg === null || leg === void 0 ? void 0 : leg.trackingNumber) || '').trim().slice(0, 120),
-            channel: String((leg === null || leg === void 0 ? void 0 : leg.channel) || '').trim().slice(0, 100),
-            note: String((leg === null || leg === void 0 ? void 0 : leg.note) || '').trim().slice(0, 2000)
+            shippedAt: input.shippedAt,
+            trackingNumber: leg === null || leg === void 0 ? void 0 : leg.trackingNumber,
+            channel: leg === null || leg === void 0 ? void 0 : leg.channel,
+            note: leg === null || leg === void 0 ? void 0 : leg.note,
+            images: []
+        }))).map((block)=>({
+            shippedAt: parseShanghaiDateTime(String((block === null || block === void 0 ? void 0 : block.shippedAt) || '')),
+            shippedAtText: String((block === null || block === void 0 ? void 0 : block.shippedAt) || ''),
+            trackingNumber: String((block === null || block === void 0 ? void 0 : block.trackingNumber) || '').trim().slice(0, 120),
+            channel: String((block === null || block === void 0 ? void 0 : block.channel) || '').trim().slice(0, 100),
+            note: String((block === null || block === void 0 ? void 0 : block.note) || '').trim().slice(0, 2000),
+            images: ((block === null || block === void 0 ? void 0 : block.images) || []).map((url)=>String(url || '').trim()).filter(Boolean).slice(0, 12)
         }));
     await _prisma.default.$transaction(async (tx)=>{
-        for (const leg of legs){
+        for (const block of blocks){
             await tx.orderlogisticssegment.create({
                 data: {
                     orderId: order.id,
                     segmentType: INBOUND_SHIP_SEGMENT,
-                    carrierName: leg.channel || null,
-                    trackingNumber: leg.trackingNumber || null,
+                    carrierName: block.channel || null,
+                    trackingNumber: block.trackingNumber || null,
                     statusLabel: '已发货',
-                    shippedAt,
-                    remark: leg.note || null
+                    shippedAt: block.shippedAt,
+                    remark: block.note || null,
+                    timelineJson: block.images.map((imageUrl)=>({
+                            time: block.shippedAt.toISOString(),
+                            label: '发货图片',
+                            imageUrl
+                        }))
                 }
             });
         }
@@ -32486,7 +32507,7 @@ const saveInboundShipment = (0, _action_utils.requireRole)([
             data: {
                 orderId: order.id,
                 actionType: '入库发货',
-                actionNote: `发货时间 ${input.shippedAt}，${legs.length} 条物流`.slice(0, 4000),
+                actionNote: `登记 ${blocks.length} 批发货`.slice(0, 4000),
                 operatorName: username
             }
         });
