@@ -92,18 +92,30 @@ const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
   ['stage', '商品状态', 'w-[10%]'],
   ['inboundQty', '到货数量', 'w-[10%]'],
 ];
-const INBOUND_COLUMN_WIDTH: Record<string, number> = {
-  product: 280,
-  unitPrice: 96,
-  discountPrice: 96,
-  quantity: 72,
-  lineAmount: 88,
-  costPrice: 88,
-  supplier: 140,
-  note: 168,
-  stage: 112,
-  inboundQty: 128,
+const INBOUND_COLUMN_PERCENT: Record<string, number> = {
+  product: 22,
+  unitPrice: 8,
+  discountPrice: 8,
+  quantity: 6,
+  lineAmount: 8,
+  costPrice: 8,
+  supplier: 12,
+  note: 12,
+  stage: 8,
+  inboundQty: 8,
 };
+const inboundSpuKey = (skuCode?: string | null) => {
+  const sku = String(skuCode || '').trim()
+  const cut = sku.indexOf('-')
+  return (cut > 0 ? sku.slice(0, cut) : sku).toLowerCase()
+}
+const compareInboundRows = (a: { spu?: string | null; skuCode?: string | null }, b: { spu?: string | null; skuCode?: string | null }) => {
+  const left = String(a.spu || inboundSpuKey(a.skuCode))
+  const right = String(b.spu || inboundSpuKey(b.skuCode))
+  const spu = left.localeCompare(right, 'en', { numeric: true, sensitivity: 'base' })
+  if (spu) return spu
+  return String(a.skuCode || '').localeCompare(String(b.skuCode || ''), 'en', { numeric: true, sensitivity: 'base' })
+}
 const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
   ['PENDING', '待采购'],
   ['PREPARING', '备货中'],
@@ -231,9 +243,10 @@ export const OrderManagementView = ({
     setAddonCards([]);
     setInboundSelected(readInboundSelection(state.inboundOrderId));
   }, [state.inboundOrderId]);
-  const visibleInboundDrafts = stageFilter === 'ALL'
+  const visibleInboundDrafts = (stageFilter === 'ALL'
     ? state.inboundDrafts
-    : state.inboundDrafts.filter((line) => normalizedInboundStage(line.inboundStage) === stageFilter);
+    : state.inboundDrafts.filter((line) => normalizedInboundStage(line.inboundStage) === stageFilter)
+  ).slice().sort(compareInboundRows);
   const allInboundSelected = visibleInboundDrafts.length > 0 && visibleInboundDrafts.every((line) => inboundSelected.includes(line.id));
   const setInboundSelectedPersist = (next: string[]) => {
     setInboundSelected(next);
@@ -241,7 +254,7 @@ export const OrderManagementView = ({
   };
   const columnVisible = (key: string) => hiddenColumns[key] !== true;
   const visibleInboundColumns = INBOUND_EXPORT_COLUMNS.filter(([key]) => columnVisible(key));
-  const visibleTableWidth = visibleInboundColumns.reduce((sum, [key]) => sum + (INBOUND_COLUMN_WIDTH[key] || 96), 0);
+  const visibleTablePercent = visibleInboundColumns.reduce((sum, [key]) => sum + (INBOUND_COLUMN_PERCENT[key] || 8), 0);
   const hideInboundColumn = (key: string) => {
     const remaining = INBOUND_EXPORT_COLUMNS.filter(([item]) => item !== key && columnVisible(item));
     if (!remaining.length) {
@@ -893,7 +906,7 @@ export const OrderManagementView = ({
                         </CardHeader>
                         <CardContent className="p-0" data-api-unique-id="ordermanagementview-rfb0a6d9007c97a49-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                           <div className="divide-y">
-                            {state.detailData.items.map((sku) => {
+                            {[...state.detailData.items].sort(compareInboundRows).map((sku) => {
                               const qty = Math.max(0, Number(sku.quantity) || 0)
                               return (
                                 <div key={sku.id} className="flex items-start gap-3 px-4 py-4">
@@ -1209,7 +1222,15 @@ export const OrderManagementView = ({
             else void receiveImportFiles(dropped);
           }}
         >
-          <DialogHeader className="shrink-0 border-b px-4 py-4 text-left sm:px-6">
+          <DialogHeader className="relative shrink-0 border-b px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16">
+            <button
+              type="button"
+              aria-label="关闭"
+              className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100"
+              onClick={() => { setInboundZoom(null); setImportOpen(false); handlers.closeInboundDialog(); }}
+            >
+              <X className="h-5 w-5" />
+            </button>
             <DialogTitle className="text-2xl">登记入库</DialogTitle>
             <DialogDescription className="text-base">
               {(() => {
@@ -1312,10 +1333,10 @@ export const OrderManagementView = ({
                 ))}
               </div>
             ) : null}
-            <table className="table-fixed border-collapse text-sm" style={{ width: visibleTableWidth }}>
+            <table className="table-fixed border-collapse text-sm" style={{ width: `${visibleTablePercent}%` }}>
               <colgroup>
                 {visibleInboundColumns.map(([key]) => (
-                  <col key={key} style={{ width: INBOUND_COLUMN_WIDTH[key] || 96 }} />
+                  <col key={key} style={{ width: `${((INBOUND_COLUMN_PERCENT[key] || 8) / visibleTablePercent) * 100}%` }} />
                 ))}
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white">

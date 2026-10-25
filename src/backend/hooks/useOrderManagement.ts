@@ -594,11 +594,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const closeInboundDialog = () => {
-    if (inboundSaving) return
-    if (inboundOrderId) clearInboundDraftStore(inboundOrderId)
     inboundClosing.current = true
+    inboundBooted.current = null
+    if (inboundOrderId) clearInboundDraftStore(inboundOrderId)
     syncInboundQuery(false, null)
     setInboundOrderId(null)
+    setInboundSaving(false)
   }
 
   useEffect(() => {

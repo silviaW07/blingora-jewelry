@@ -26,6 +26,8 @@ export interface OrderInboundLine {
   id: string
   productName: string
   skuCode: string
+  /** Product code, used to group purchasing lines. */
+  spu: string
   quantity: number
   inboundQty: number
   inboundNote: string
@@ -83,6 +85,7 @@ function moneyAmount(value: unknown): number | null {
 }
 
 const inboundProductSelect = {
+  productCode: true,
   mainImageUrl: true,
   weightGram: true,
   costPrice: true,
@@ -132,6 +135,20 @@ function discountedUnitPrice(unitPrice: number | null, subtotal: unknown, discou
   return Math.round(unitPrice * Math.max(0, ratio) * 100) / 100
 }
 
+function inboundSpuOf(item: { skuCode?: string | null; product?: { productCode?: string | null } | null }) {
+  const code = String(item.product?.productCode || '').trim()
+  if (code) return code
+  const sku = String(item.skuCode || '').trim()
+  const cut = sku.indexOf('-')
+  return cut > 0 ? sku.slice(0, cut) : sku
+}
+
+function compareInboundSpu(a: { spu?: string | null; skuCode?: string | null }, b: { spu?: string | null; skuCode?: string | null }) {
+  const spu = String(a.spu || '').localeCompare(String(b.spu || ''), 'en', { numeric: true, sensitivity: 'base' })
+  if (spu) return spu
+  return String(a.skuCode || '').localeCompare(String(b.skuCode || ''), 'en', { numeric: true, sensitivity: 'base' })
+}
+
 function mapInboundLine(item: {
   id: string
   productName: string
@@ -146,6 +163,7 @@ function mapInboundLine(item: {
   lineAmount?: unknown
   productSku?: { imageUrl?: string | null } | null
   product?: {
+    productCode?: string | null
     mainImageUrl?: string | null
     galleryJson?: unknown
     costPrice?: unknown
@@ -164,6 +182,7 @@ function mapInboundLine(item: {
     id: item.id,
     productName: item.productName,
     skuCode: item.skuCode,
+    spu: inboundSpuOf(item),
     quantity,
     inboundQty,
     inboundNote: String(item.inboundNote || ''),
@@ -515,7 +534,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         const unitGrams = item.product?.weightGram != null ? Number(item.product.weightGram) : 0
         return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity
       }, 0)
-      const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode, record))
+      const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode, record)).sort(compareInboundSpu)
       const inbound = summarizeInbound(inboundLines)
 
       return {
@@ -617,7 +636,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
       }, 0) * 100) / 100,
       internalNote: record.internalNote || null,
       ...(() => {
-        const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode, record))
+        const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode, record)).sort(compareInboundSpu)
         const inbound = summarizeInbound(inboundLines)
         return {
           inboundOrderedQty: inbound.orderedQty,
@@ -639,7 +658,10 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         postalCode: record.address.postalCode,
       } : null,
 
-      items: record.items.map(item => ({
+      items: [...record.items].sort((a, b) => compareInboundSpu(
+        { spu: inboundSpuOf(a), skuCode: a.skuCode },
+        { spu: inboundSpuOf(b), skuCode: b.skuCode },
+      )).map(item => ({
         id: item.id,
         productId: item.productId,
         productSkuId: item.productSkuId,
@@ -905,7 +927,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
       },
       orderBy: { createdAt: 'asc' },
     })
-    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, order))
+    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, order)).sort(compareInboundSpu)
     const summary = summarizeInbound(lines)
     return {
       lines,
@@ -1074,7 +1096,7 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
       subtotalAmount: freshOrder?.subtotalAmount,
       discountAmount: freshOrder?.discountAmount,
     }
-    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, amounts))
+    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, amounts)).sort(compareInboundSpu)
     const summary = summarizeInbound(lines)
     return {
       lines,
