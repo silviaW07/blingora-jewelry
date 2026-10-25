@@ -182,7 +182,7 @@ export interface OrderManagementHandlers {
   updateInboundDiscount: (discountPercent: number) => Promise<void>
   appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => Promise<boolean>
   importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
-  updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => Promise<boolean>
+  updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null; productName?: string | null }) => Promise<boolean>
   deleteInboundLines: (lineIds: string[]) => Promise<boolean>
   saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   updateInboundShipment: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
@@ -1158,7 +1158,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const updateManualOrderLineOnOrder = async (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => {
+  const updateManualOrderLineOnOrder = async (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null; productName?: string | null }) => {
     if (!inboundOrderId) return false
     try {
       setInboundSaving(true)

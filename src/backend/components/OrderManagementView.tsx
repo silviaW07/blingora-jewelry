@@ -477,7 +477,7 @@ export const OrderManagementView = ({
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
-  const [cellEdit, setCellEdit] = React.useState<{ id: string; field: 'unit' | 'discount' } | null>(null);
+  const [cellEdit, setCellEdit] = React.useState<{ id: string; field: 'unit' | 'discount' | 'title' } | null>(null);
   const [cellDraft, setCellDraft] = React.useState('');
   const [hiddenColumns, setHiddenColumns] = React.useState<Record<string, boolean>>({});
   const [importOpen, setImportOpen] = React.useState(false);
@@ -628,8 +628,8 @@ export const OrderManagementView = ({
     try {
       const imageUrl = await uploadInboundImage(image);
       const line = state.inboundDrafts.find((item) => item.id === lineId);
-      handlers.setInboundDraft(lineId, { shipmentImageUrl: imageUrl, inboundNote: shipTimeNote(line?.inboundNote || '') });
-      toast.success('发货图片已上传，备注已写入发货时间');
+      handlers.setInboundDraft(lineId, { shipmentImageUrl: imageUrl });
+      toast.success('发货图片已上传');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '图片上传失败');
     }
@@ -648,9 +648,9 @@ export const OrderManagementView = ({
       for (let index = 0; index < count; index += 1) {
         const imageUrl = await uploadInboundImage(images[index]);
         const line = targets[index];
-        handlers.setInboundDraft(line.id, { shipmentImageUrl: imageUrl, inboundNote: shipTimeNote(line.inboundNote) });
+        handlers.setInboundDraft(line.id, { shipmentImageUrl: imageUrl });
       }
-      toast.success(count > 1 ? `已上传 ${count} 张发货图片，备注已写入发货时间` : '发货图片已上传，备注已写入发货时间');
+      toast.success(count > 1 ? `已上传 ${count} 张发货图片` : '发货图片已上传');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '图片上传失败');
     }
@@ -1883,31 +1883,25 @@ export const OrderManagementView = ({
                             ) : null}
                           </button>
                           <div className="min-w-0 flex-1">
-                            {line.productName.trim() ? <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div> : null}
+                            {cellEdit?.id === line.id && cellEdit.field === 'title' ? (
+                              <input
+                                autoFocus
+                                aria-label="商品标题"
+                                className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-sm text-slate-900"
+                                value={cellDraft}
+                                onChange={(event) => setCellDraft(event.target.value)}
+                                onBlur={() => { const name = cellDraft.trim(); setCellEdit(null); if (name && name !== line.productName.trim()) void handlers.updateManualOrderLine({ orderItemId: line.id, productName: name }); }}
+                                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }}
+                              />
+                            ) : line.productName.trim() ? (
+                              <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName} onDoubleClick={() => { setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</div>
+                            ) : (
+                              <button type="button" className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-left text-sm text-slate-400" title="双击填写标题" onDoubleClick={() => { setCellDraft(''); setCellEdit({ id: line.id, field: 'title' }); }}>标题</button>
+                            )}
                             <div className="mt-1">
                               <span className="inline-flex rounded px-1.5 py-0.5 text-xs font-medium" style={inboundStageFill(line.inboundStage)}>{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
                             </div>
                             {String(line.skuCode || '').startsWith('ADD-') ? null : <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>}
-                            {line.shipmentImageUrl ? (
-                              <div className="mt-2">
-                                <div className="text-xs font-semibold text-slate-700">发货图片</div>
-                                <button
-                                  type="button"
-                                  className="mt-1 h-16 w-16 overflow-hidden rounded border bg-slate-50"
-                                  aria-label="查看发货图片"
-                                  onClick={() => setInboundZoom({ src: line.shipmentImageUrl || '', name: `${line.productName} 发货图片` })}
-                                >
-                                  <EditableImg
-                                    propKey={`ship-${line.id}`}
-                                    keywords={line.shipmentImageUrl}
-                                    description="发货图片"
-                                    className="h-full w-full object-contain"
-                                    proxyWidth={320}
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain', aspectRatio: '1 / 1' }}
-                                  />
-                                </button>
-                              </div>
-                            ) : null}
                           </div>
                         </div>
                       </td>) : null}
@@ -1926,7 +1920,7 @@ export const OrderManagementView = ({
                           className="box-border h-full min-h-24 w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
-                          value={line.inboundNote}
+                          value={String(line.inboundNote || '').replace(/(?:^|\n)\s*发货时间\s*\d{4}[-/]\d{2}[-/]\d{2}(?:\s+\d{2}:\d{2})?\s*/g, '\n').replace(/^\n+|\n+$/g, '')}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
                         />
                       </td>) : null}

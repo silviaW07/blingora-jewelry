@@ -2170,6 +2170,7 @@ export interface UpdateManualOrderLineInput {
   lineAmount?: number | null
   costPrice?: number | null
   supplierName?: string | null
+  productName?: string | null
 }
 
 /**
@@ -2196,6 +2197,7 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
           unitPrice,
           lineAmount,
           inboundQty: Math.min(Math.max(0, Number(item.inboundQty) || 0), quantity),
+          ...(input.productName !== undefined ? { productName: String(input.productName || '').trim().slice(0, 200) } : {}),
         },
       })
       if (costPrice !== undefined) {
