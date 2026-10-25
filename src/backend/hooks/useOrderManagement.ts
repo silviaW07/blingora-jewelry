@@ -636,8 +636,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const saveInboundShipmentRows = async (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => {
     if (!inboundOrderId) return false
-    if (!String(input.shippedAt || '').trim()) {
-      toast.error('请填写发货时间')
+    const blocks = input.blocks || []
+    if (!blocks.length || blocks.some((block) => !String(block.shippedAt || '').trim())) {
+      toast.error('请填写发货日期')
       return false
     }
     try {

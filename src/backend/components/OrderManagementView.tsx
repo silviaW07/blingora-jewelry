@@ -268,7 +268,7 @@ function InboundShipBar({
       return
     }
     if (filled.some((block) => !block.shippedAt.trim())) {
-      toast.error('请填写发货时间')
+      toast.error('请填写发货日期')
       return
     }
     const saved = await onSave({
@@ -300,7 +300,7 @@ function InboundShipBar({
     }).formatToParts(date)
     const part = (type: string) => parts.find((item) => item.type === type)?.value || ''
     const hour = part('hour') === '24' ? '00' : part('hour')
-    return `${part('year')}-${part('month')}-${part('day')} ${hour}:${part('minute')}`
+    return `${part('year')}-${part('month')}-${part('day')}`
   }
   return (
     <>
@@ -342,7 +342,7 @@ function InboundShipBar({
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
                     <label className="grid w-56 max-w-full gap-1 text-sm font-medium text-slate-700">发货时间
-                      <Input className="h-9 border-slate-600 bg-white" type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
+                      <Input className="h-9 border-slate-600 bg-white" type="date" value={block.shippedAt.slice(0, 10)} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
                     </label>
                     <div className="space-y-2">
                       {block.legs.map((leg, legIndex) => (

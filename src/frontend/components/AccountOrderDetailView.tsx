@@ -174,7 +174,7 @@ export default function AccountOrderDetailView() {
                     </div>
                   ) : null}
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                    <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.shippedAt')}</span> <span className="text-[#2f2a24]">{row.shippedAt ? new Date(row.shippedAt).toLocaleString(locale) : '—'}</span></p>
+                    <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.shippedAt')}</span> <span className="text-[#2f2a24]">{row.shippedAt ? new Date(row.shippedAt).toLocaleDateString(locale) : '—'}</span></p>
                     <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.channel')}</span> <span className="text-[#2f2a24]">{row.channel || '—'}</span></p>
                     <p className="flex justify-between gap-3 sm:col-span-2 sm:block">
                       <span className="text-[#8a8073]">{t('accountOrders.trackingNo')}</span>{' '}

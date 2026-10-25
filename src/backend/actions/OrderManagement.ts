@@ -2028,10 +2028,11 @@ export interface InboundShipmentRow {
 const INBOUND_SHIP_SEGMENT = '入库发货'
 
 function parseShanghaiDateTime(value: string): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value || '').trim())
-  if (!match) throw new Error('请填写发货时间')
-  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:00+08:00`)
-  if (Number.isNaN(date.getTime())) throw new Error('请填写发货时间')
+  const text = String(value || '').trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(text)
+  if (!match) throw new Error('请填写发货日期')
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4] || '00'}:${match[5] || '00'}:00+08:00`)
+  if (Number.isNaN(date.getTime())) throw new Error('请填写发货日期')
   return date
 }
 
