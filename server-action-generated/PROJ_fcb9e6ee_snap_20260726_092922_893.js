@@ -30494,11 +30494,21 @@ function supplierLinkFromProduct(product) {
         supplierUrl
     };
 }
-function mapInboundLine(item, currencyCode) {
+function discountedUnitPrice(unitPrice, subtotal, discount) {
+    if (unitPrice == null) return null;
+    const sub = Number(subtotal || 0);
+    const disc = Number(discount || 0);
+    if (!(disc > 0.009) || !(sub > 0)) return unitPrice;
+    const ratio = (sub - disc) / sub;
+    if (!Number.isFinite(ratio) || ratio >= 1) return unitPrice;
+    return Math.round(unitPrice * Math.max(0, ratio) * 100) / 100;
+}
+function mapInboundLine(item, currencyCode, orderAmounts) {
     var _item_productSku, _item_product, _item_product1, _item_product2, _item_product3, _item_product4;
     const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
     const inboundQty = clampInboundQty(quantity, Number(item.inboundQty) || 0);
     const supplier = supplierLinkFromProduct(item.product);
+    const unitPrice = moneyAmount(item.unitPrice);
     return {
         id: item.id,
         productName: item.productName,
@@ -30508,7 +30518,8 @@ function mapInboundLine(item, currencyCode) {
         inboundNote: String(item.inboundNote || ''),
         mainImageUrl: ((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.imageUrl) || ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.mainImageUrl) || firstGalleryUrl((_item_product1 = item.product) === null || _item_product1 === void 0 ? void 0 : _item_product1.galleryJson) || null,
         shipmentImageUrl: String(item.shipmentImageUrl || '').trim() || null,
-        unitPrice: moneyAmount(item.unitPrice),
+        unitPrice,
+        discountUnitPrice: discountedUnitPrice(unitPrice, orderAmounts === null || orderAmounts === void 0 ? void 0 : orderAmounts.subtotalAmount, orderAmounts === null || orderAmounts === void 0 ? void 0 : orderAmounts.discountAmount),
         lineAmount: moneyAmount(item.lineAmount),
         currencyCode: String(currencyCode || 'USD'),
         costPrice: moneyAmount((_item_product2 = item.product) === null || _item_product2 === void 0 ? void 0 : _item_product2.costPrice),
@@ -30659,7 +30670,7 @@ const getOrderList = (0, _action_utils.requireRole)([
             const unitGrams = ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.weightGram) != null ? Number(item.product.weightGram) : 0;
             return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity;
         }, 0);
-        const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode));
+        const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record));
         const inbound = summarizeInbound(inboundLines);
         return {
             id: record.id,
@@ -30770,7 +30781,7 @@ const getOrderDetail = (0, _action_utils.requireRole)([
         }, 0) * 100) / 100,
         internalNote: record.internalNote || null,
         ...(()=>{
-            const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode));
+            const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record));
             const inbound = summarizeInbound(inboundLines);
             return {
                 inboundOrderedQty: inbound.orderedQty,
@@ -31073,7 +31084,7 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
             createdAt: 'asc'
         }
     });
-    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode));
+    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, order));
     const summary = summarizeInbound(lines);
     return {
         lines,
@@ -31782,6 +31793,7 @@ async function buildInboundSheetFile(input) {
     if (!imagesOnly && ![
         'product',
         'unitPrice',
+        'discountPrice',
         'quantity',
         'lineAmount',
         'costPrice',
@@ -31796,6 +31808,7 @@ async function buildInboundSheetFile(input) {
     const fileName = imagesOnly ? `shipping-images-${orderNo}.xlsx` : `inbound-${orderNo}.xlsx`;
     const currency = String(((_rows_find = rows.find((row)=>row.currencyCode)) === null || _rows_find === void 0 ? void 0 : _rows_find.currencyCode) || 'USD').toUpperCase();
     const priceHeader = currency === 'USD' ? '售价(美金)' : `售价(${currency})`;
+    const discountHeader = currency === 'USD' ? '折扣价(美金)' : `折扣价(${currency})`;
     const totalHeader = currency === 'USD' ? '总价(美金)' : `总价(${currency})`;
     const columns = [];
     if (imagesOnly || want('product')) {
@@ -31823,6 +31836,15 @@ async function buildInboundSheetFile(input) {
         key: 'unitPrice',
         width: 14,
         value: (row)=>inboundMoneyCell(row.unitPrice)
+    });
+    if (!imagesOnly && want('discountPrice')) columns.push({
+        header: discountHeader,
+        key: 'discountPrice',
+        width: 14,
+        value: (row)=>{
+            var _row_discountUnitPrice;
+            return inboundMoneyCell((_row_discountUnitPrice = row.discountUnitPrice) !== null && _row_discountUnitPrice !== void 0 ? _row_discountUnitPrice : row.unitPrice);
+        }
     });
     if (imagesOnly || want('quantity')) columns.push({
         header: '数量',

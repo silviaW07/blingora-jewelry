@@ -31,6 +31,8 @@ export interface OrderInboundLine {
   inboundNote: string
   mainImageUrl: string | null
   unitPrice: number | null
+  /** Unit price after the order discount. Equals unitPrice when the order has no discount. */
+  discountUnitPrice: number | null
   lineAmount: number | null
   currencyCode: string
   costPrice: number | null
@@ -120,6 +122,16 @@ function supplierLinkFromProduct(product: {
   return { supplierName, supplierUrl }
 }
 
+function discountedUnitPrice(unitPrice: number | null, subtotal: unknown, discount: unknown): number | null {
+  if (unitPrice == null) return null
+  const sub = Number(subtotal || 0)
+  const disc = Number(discount || 0)
+  if (!(disc > 0.009) || !(sub > 0)) return unitPrice
+  const ratio = (sub - disc) / sub
+  if (!Number.isFinite(ratio) || ratio >= 1) return unitPrice
+  return Math.round(unitPrice * Math.max(0, ratio) * 100) / 100
+}
+
 function mapInboundLine(item: {
   id: string
   productName: string
@@ -143,10 +155,11 @@ function mapInboundLine(item: {
     tradeInfoJson?: unknown
     importTaskItems?: Array<{ sourceUrl?: string | null; supplierName?: string | null }> | null
   } | null
-}, currencyCode?: string | null): OrderInboundLine {
+}, currencyCode?: string | null, orderAmounts?: { subtotalAmount?: unknown; discountAmount?: unknown } | null): OrderInboundLine {
   const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0))
   const inboundQty = clampInboundQty(quantity, Number(item.inboundQty) || 0)
   const supplier = supplierLinkFromProduct(item.product)
+  const unitPrice = moneyAmount(item.unitPrice)
   return {
     id: item.id,
     productName: item.productName,
@@ -156,7 +169,8 @@ function mapInboundLine(item: {
     inboundNote: String(item.inboundNote || ''),
     mainImageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl || firstGalleryUrl(item.product?.galleryJson) || null,
     shipmentImageUrl: String(item.shipmentImageUrl || '').trim() || null,
-    unitPrice: moneyAmount(item.unitPrice),
+    unitPrice,
+    discountUnitPrice: discountedUnitPrice(unitPrice, orderAmounts?.subtotalAmount, orderAmounts?.discountAmount),
     lineAmount: moneyAmount(item.lineAmount),
     currencyCode: String(currencyCode || 'USD'),
     costPrice: moneyAmount(item.product?.costPrice),
@@ -501,7 +515,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         const unitGrams = item.product?.weightGram != null ? Number(item.product.weightGram) : 0
         return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity
       }, 0)
-      const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode))
+      const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode, record))
       const inbound = summarizeInbound(inboundLines)
 
       return {
@@ -603,7 +617,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
       }, 0) * 100) / 100,
       internalNote: record.internalNote || null,
       ...(() => {
-        const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode))
+        const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode, record))
         const inbound = summarizeInbound(inboundLines)
         return {
           inboundOrderedQty: inbound.orderedQty,
@@ -891,7 +905,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
       },
       orderBy: { createdAt: 'asc' },
     })
-    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode))
+    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode, order))
     const summary = summarizeInbound(lines)
     return {
       lines,
@@ -1560,6 +1574,7 @@ export interface InboundSheetRowInput {
   skuCode: string
   imageUrl: string
   unitPrice: number | null
+  discountUnitPrice: number | null
   currencyCode: string
   quantity: number
   lineAmount: number | null
@@ -1596,7 +1611,7 @@ async function buildInboundSheetFile(input: ExportInboundSheetInput): Promise<Ex
   const imagesOnly = input.mode === 'images'
   const selected = new Set((input.columns || []).map((key) => String(key)))
   const want = (key: string) => imagesOnly || selected.has(key)
-  if (!imagesOnly && !['product', 'unitPrice', 'quantity', 'lineAmount', 'costPrice', 'supplier', 'note', 'stage', 'inboundQty'].some(want)) {
+  if (!imagesOnly && !['product', 'unitPrice', 'discountPrice', 'quantity', 'lineAmount', 'costPrice', 'supplier', 'note', 'stage', 'inboundQty'].some(want)) {
     throw new Error('请先勾选要导出的列')
   }
 
@@ -1604,6 +1619,7 @@ async function buildInboundSheetFile(input: ExportInboundSheetInput): Promise<Ex
   const fileName = imagesOnly ? `shipping-images-${orderNo}.xlsx` : `inbound-${orderNo}.xlsx`
   const currency = String(rows.find((row) => row.currencyCode)?.currencyCode || 'USD').toUpperCase()
   const priceHeader = currency === 'USD' ? '售价(美金)' : `售价(${currency})`
+  const discountHeader = currency === 'USD' ? '折扣价(美金)' : `折扣价(${currency})`
   const totalHeader = currency === 'USD' ? '总价(美金)' : `总价(${currency})`
 
   type Col = { header: string; key: string; width: number; value: (row: InboundSheetRowInput) => string | number }
@@ -1614,6 +1630,7 @@ async function buildInboundSheetFile(input: ExportInboundSheetInput): Promise<Ex
     columns.push({ header: '商品名称（中文）', key: 'productName', width: 36, value: (row) => row.productName || '' })
   }
   if (!imagesOnly && want('unitPrice')) columns.push({ header: priceHeader, key: 'unitPrice', width: 14, value: (row) => inboundMoneyCell(row.unitPrice) })
+  if (!imagesOnly && want('discountPrice')) columns.push({ header: discountHeader, key: 'discountPrice', width: 14, value: (row) => inboundMoneyCell(row.discountUnitPrice ?? row.unitPrice) })
   if (imagesOnly || want('quantity')) columns.push({ header: '数量', key: 'quantity', width: 10, value: (row) => row.quantity })
   if (!imagesOnly && want('lineAmount')) columns.push({ header: totalHeader, key: 'lineAmount', width: 14, value: (row) => inboundMoneyCell(row.lineAmount) })
   if (!imagesOnly && want('costPrice')) columns.push({ header: '成本价', key: 'costPrice', width: 12, value: (row) => inboundMoneyCell(row.costPrice) })

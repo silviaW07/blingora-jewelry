@@ -80,15 +80,16 @@ const GOODS_STATUS_LABEL: Record<string, string> = {
 };
 
 const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
-  ['product', '商品', 'w-[300px]'],
-  ['unitPrice', '售价', 'w-28'],
-  ['quantity', '数量', 'w-20'],
-  ['lineAmount', '总价', 'w-28'],
-  ['costPrice', '成本价', 'w-28'],
-  ['supplier', '供应商', 'w-40'],
-  ['note', '备注', 'min-w-[180px]'],
-  ['stage', '商品状态', 'w-32'],
-  ['inboundQty', '到货数量', 'w-36'],
+  ['product', '商品', 'w-[16%]'],
+  ['unitPrice', '售价', 'w-[8%]'],
+  ['discountPrice', '折扣价', 'w-[8%]'],
+  ['quantity', '数量', 'w-[7%]'],
+  ['lineAmount', '总价', 'w-[8%]'],
+  ['costPrice', '成本价', 'w-[8%]'],
+  ['supplier', '供应商', 'w-[11%]'],
+  ['note', '备注', 'w-[12%]'],
+  ['stage', '商品状态', 'w-[10%]'],
+  ['inboundQty', '到货数量', 'w-[10%]'],
 ];
 type InboundImportRow = {
   key: string;
@@ -303,6 +304,7 @@ export const OrderManagementView = ({
         skuCode: line.skuCode,
         imageUrl: line.shipmentImageUrl || line.mainImageUrl || '',
         unitPrice: line.unitPrice,
+        discountUnitPrice: line.discountUnitPrice ?? line.unitPrice,
         currencyCode: line.currencyCode,
         quantity: line.quantity,
         lineAmount: line.lineAmount,
@@ -1072,10 +1074,10 @@ export const OrderManagementView = ({
                 </div>
               </div>
             ) : null}
-            <table className="w-full min-w-[1180px] table-fixed border-collapse text-left text-base">
+            <table className="w-full table-fixed border-collapse text-left text-sm">
               <thead className="sticky top-0 z-10 bg-white">
-                <tr className="border-b text-base font-semibold text-slate-800">
-                  <th className="w-10 px-2 py-3">
+                <tr className="border-b text-sm font-semibold text-slate-800">
+                  <th className="w-[4%] px-1 py-3 text-center">
                     <input
                       type="checkbox"
                       className="h-4 w-4"
@@ -1086,7 +1088,7 @@ export const OrderManagementView = ({
                   </th>
                   {INBOUND_EXPORT_COLUMNS.map(([key, label, width]) => (
                     <th key={key} className={`${width} px-2 py-3 font-semibold`}>
-                      <label className="inline-flex items-center gap-2">
+                      <label className="flex items-start gap-1 whitespace-normal break-words">
                         <input
                           type="checkbox"
                           className="h-4 w-4"
@@ -1131,7 +1133,7 @@ export const OrderManagementView = ({
                         <div className="flex items-start gap-3">
                           <button
                             type="button"
-                            className="h-32 w-32 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            className="h-16 w-16 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
                             aria-label={imageUrl ? `查看 ${line.productName}` : undefined}
                             disabled={!imageUrl}
                             onClick={() => {
@@ -1157,19 +1159,21 @@ export const OrderManagementView = ({
                         </div>
                       </td>
                       <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>
                       <td className="px-2 py-3 text-right tabular-nums">{line.quantity}</td>
                       <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>
                       <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.costPrice, 'CNY')}</td>
                       <td className="px-2 py-3">
                         {line.supplierUrl ? (
-                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-2 text-base font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
+                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-3 break-words text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
                         ) : (
-                          <span className="text-base text-slate-700">{line.supplierName || '未录入'}</span>
+                          <span className="line-clamp-3 break-words text-sm text-slate-700">{line.supplierName || '未录入'}</span>
                         )}
                       </td>
                       <td className="px-2 py-3">
-                        <Input
-                          className="h-10 text-base"
+                        <textarea
+                          rows={2}
+                          className="w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
                           value={line.inboundNote}
@@ -1231,29 +1235,30 @@ export const OrderManagementView = ({
       </Dialog>
       {state.inboundOrderId && inboundZoom ? (
         <div
-          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 p-16"
           role="dialog"
           aria-label="大图"
           onClick={() => setInboundZoom(null)}
         >
           <button
             type="button"
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 shadow"
+            className="absolute right-6 top-6 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow"
             aria-label="关闭大图"
-            onClick={() => setInboundZoom(null)}
+            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); setInboundZoom(null) }}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); setInboundZoom(null) }}
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="flex max-h-[94vh] max-w-[94vw] items-center justify-center" onClick={(event) => event.stopPropagation()}>
+          <div className="z-0 flex max-h-[72vh] max-w-[880px] items-center justify-center" onClick={(event) => event.stopPropagation()}>
             <EditableImg
               propKey={`inbound-zoom-${inboundZoom.src}`}
               keywords={inboundZoom.src}
               description={inboundZoom.name}
               needLargeImage
-              proxyWidth={1600}
+              proxyWidth={1200}
               proxyQuality={90}
               className="h-auto w-auto object-contain"
-              style={{ width: 'auto', height: '100vh', maxHeight: '100vh', maxWidth: '100vw', aspectRatio: 'auto', objectFit: 'contain' }}
+              style={{ width: 'auto', height: 'auto', maxHeight: '72vh', maxWidth: '880px', aspectRatio: 'auto', objectFit: 'contain' }}
             />
           </div>
         </div>
