@@ -30355,6 +30355,9 @@ _export(exports, {
     get addLogisticsSegment () {
         return addLogisticsSegment;
     },
+    get appendOrderGoods () {
+        return appendOrderGoods;
+    },
     get exportInboundSheet () {
         return exportInboundSheet;
     },
@@ -31094,6 +31097,207 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
         orderedQty: summary.orderedQty,
         receivedQty: summary.inboundQty,
         state: summary.state
+    };
+}));
+const appendOrderGoods = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    var _moneyAmount;
+    const { username } = (0, _action_utils.getAuthContext)();
+    const grouped = new Map();
+    for (const line of input.lines || []){
+        const skuCode = String(line.skuCode || '').trim();
+        if (!skuCode) continue;
+        const quantity = Math.max(1, Math.floor(Number(line.quantity) || 1));
+        const prev = grouped.get(skuCode);
+        if (!prev) {
+            grouped.set(skuCode, {
+                ...line,
+                skuCode,
+                quantity
+            });
+        } else {
+            prev.quantity += quantity;
+            if (line.unitPrice != null && Number.isFinite(Number(line.unitPrice))) prev.unitPrice = Number(line.unitPrice);
+            if (line.inboundQty != null && Number.isFinite(Number(line.inboundQty))) prev.inboundQty = Number(line.inboundQty);
+            if (String(line.inboundNote || '').trim()) prev.inboundNote = String(line.inboundNote);
+            if (String(line.inboundStage || '').trim()) prev.inboundStage = String(line.inboundStage);
+            if (String(line.shipmentImageUrl || '').trim()) prev.shipmentImageUrl = String(line.shipmentImageUrl);
+        }
+    }
+    if (!grouped.size) throw new Error('请填写要加货的 SKU');
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        },
+        include: {
+            items: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const skuRows = await _prisma.default.productsku.findMany({
+        where: {
+            skuCode: {
+                in: [
+                    ...grouped.keys()
+                ]
+            }
+        },
+        include: {
+            product: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
+    });
+    const skuByCode = new Map(skuRows.map((row)=>[
+            row.skuCode,
+            row
+        ]));
+    const missingSkus = [
+        ...grouped.keys()
+    ].filter((sku)=>!skuByCode.has(sku) && !order.items.some((item)=>item.skuCode === sku));
+    const rate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
+    const currency = String(order.currencyCode || 'USD').toUpperCase();
+    const changes = [];
+    let addedCount = 0;
+    await _prisma.default.$transaction(async (tx)=>{
+        var _moneyAmount, _moneyAmount1, _moneyAmount2;
+        for (const line of grouped.values()){
+            var _moneyAmount3;
+            const existing = order.items.find((item)=>item.skuCode === line.skuCode);
+            if (existing) {
+                var _moneyAmount4;
+                const nextQuantity = Math.max(1, existing.quantity + line.quantity);
+                const unit = (_moneyAmount4 = moneyAmount(existing.unitPrice)) !== null && _moneyAmount4 !== void 0 ? _moneyAmount4 : 0;
+                const inboundQty = line.inboundQty != null && Number.isFinite(Number(line.inboundQty)) ? Math.max(0, Math.min(nextQuantity, Math.floor(Number(line.inboundQty)))) : Math.max(0, Math.min(nextQuantity, Number(existing.inboundQty) || 0));
+                await tx.orderitem.update({
+                    where: {
+                        id: existing.id
+                    },
+                    data: {
+                        quantity: nextQuantity,
+                        lineAmount: Math.round(unit * nextQuantity * 100) / 100,
+                        inboundQty,
+                        ...String(line.inboundNote || '').trim() ? {
+                            inboundNote: String(line.inboundNote).trim().slice(0, 255)
+                        } : {},
+                        ...String(line.inboundStage || '').trim() ? {
+                            inboundStage: cleanInboundStage(line.inboundStage)
+                        } : {},
+                        ...String(line.shipmentImageUrl || '').trim() ? {
+                            shipmentImageUrl: String(line.shipmentImageUrl).trim().slice(0, 512)
+                        } : {}
+                    }
+                });
+                changes.push(`${line.skuCode} 加货 ${existing.quantity}->${nextQuantity}`);
+                addedCount += 1;
+                continue;
+            }
+            const sku = skuByCode.get(line.skuCode);
+            if (!(sku === null || sku === void 0 ? void 0 : sku.product)) continue;
+            const sheetPrice = line.unitPrice != null && Number.isFinite(Number(line.unitPrice)) ? Number(line.unitPrice) : null;
+            const cny = (_moneyAmount3 = moneyAmount(sku.price)) !== null && _moneyAmount3 !== void 0 ? _moneyAmount3 : 0;
+            const unit = sheetPrice != null ? Math.round(sheetPrice * 100) / 100 : currency === 'CNY' ? Math.round(cny * 100) / 100 : (0, _exchangeRate.toUsdFromCny)(cny, rate);
+            const quantity = line.quantity;
+            const inboundQty = line.inboundQty != null && Number.isFinite(Number(line.inboundQty)) ? Math.max(0, Math.min(quantity, Math.floor(Number(line.inboundQty)))) : 0;
+            await tx.orderitem.create({
+                data: {
+                    orderId: order.id,
+                    productId: sku.productId,
+                    productSkuId: sku.id,
+                    productName: String(sku.product.name || line.skuCode).slice(0, 200),
+                    skuCode: sku.skuCode,
+                    materialLabel: sku.materialLabel,
+                    sizeLabel: sku.sizeLabel,
+                    quantity,
+                    unitPrice: unit,
+                    lineAmount: Math.round(unit * quantity * 100) / 100,
+                    inboundQty,
+                    inboundNote: String(line.inboundNote || '').trim().slice(0, 255) || null,
+                    inboundStage: String(line.inboundStage || '').trim() ? cleanInboundStage(line.inboundStage) : inboundQty > 0 ? 'ARRIVED' : 'PENDING',
+                    inboundAt: inboundQty > 0 ? new Date() : null,
+                    shipmentImageUrl: String(line.shipmentImageUrl || '').trim().slice(0, 512) || null,
+                    giftWrapSelected: false
+                }
+            });
+            changes.push(`${sku.skuCode} 新增加货 x${quantity}`);
+            addedCount += 1;
+        }
+        const items = await tx.orderitem.findMany({
+            where: {
+                orderId: order.id
+            }
+        });
+        const subtotal = Math.round(items.reduce((sum, item)=>{
+            var _moneyAmount;
+            return sum + ((_moneyAmount = moneyAmount(item.lineAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0);
+        }, 0) * 100) / 100;
+        const previousDiscount = (_moneyAmount = moneyAmount(order.discountAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0;
+        const discount = Math.min(Math.max(0, previousDiscount), subtotal);
+        const shipping = (_moneyAmount1 = moneyAmount(order.shippingAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0;
+        const gift = (_moneyAmount2 = moneyAmount(order.giftWrapAmount)) !== null && _moneyAmount2 !== void 0 ? _moneyAmount2 : 0;
+        const total = Math.round(Math.max(0, subtotal - discount + shipping + gift) * 100) / 100;
+        await tx.orderrecord.update({
+            where: {
+                id: order.id
+            },
+            data: {
+                subtotalAmount: subtotal,
+                discountAmount: discount,
+                totalAmount: total
+            }
+        });
+        if (changes.length) {
+            await tx.orderoperationlog.create({
+                data: {
+                    orderId: order.id,
+                    actionType: '客户加货',
+                    actionNote: changes.join('；').slice(0, 4000),
+                    operatorName: username
+                }
+            });
+        }
+    });
+    const freshOrder = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: order.id
+        }
+    });
+    const fresh = await _prisma.default.orderitem.findMany({
+        where: {
+            orderId: order.id
+        },
+        include: {
+            product: {
+                select: inboundProductSelect
+            },
+            productSku: {
+                select: {
+                    imageUrl: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    const amounts = {
+        subtotalAmount: freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.subtotalAmount,
+        discountAmount: freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.discountAmount
+    };
+    const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, amounts));
+    const summary = summarizeInbound(lines);
+    return {
+        lines,
+        orderedQty: summary.orderedQty,
+        receivedQty: summary.inboundQty,
+        state: summary.state,
+        addedCount,
+        missingSkus,
+        totalAmount: (_moneyAmount = moneyAmount(freshOrder === null || freshOrder === void 0 ? void 0 : freshOrder.totalAmount)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0
     };
 }));
 const updateOrderRemark = (0, _action_utils.requireRole)([
