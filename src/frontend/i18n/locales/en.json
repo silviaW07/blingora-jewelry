@@ -723,6 +723,9 @@
       "INSUFFICIENT_STOCK": "{{product}} ({{sku}}): only {{stock}} available",
       "MIN_ORDER_CHANGED": "{{product}} ({{sku}}): minimum quantity is now {{minimum}}"
     },
-    "goodsStatus": "Goods status"
+    "goodsStatus": "Goods status",
+    "shipmentStatus": "Status",
+    "shipped": "Shipped",
+    "closePhoto": "Close"
   }
 }

@@ -26,6 +26,7 @@ export default function AccountOrderDetailView() {
   const [order, setOrder] = useState<CustomerOrderSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [reordering, setReordering] = useState(false)
+  const [shipZoom, setShipZoom] = useState('')
 
   const load = useCallback(async () => {
     if (!orderId) {
@@ -166,14 +167,14 @@ export default function AccountOrderDetailView() {
                   {row.images?.length ? (
                     <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
                       {row.images.map((url) => (
-                        <a key={url} href={url} download className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-[#ebe6dc] bg-[#fbfaf7] sm:h-20 sm:w-20" title={t('accountOrders.downloadPhoto')}>
+                        <button key={url} type="button" className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-[#ebe6dc] bg-[#fbfaf7] sm:h-24 sm:w-24" onClick={() => setShipZoom(url)}>
                           <img src={url} alt="" className="h-full w-full object-cover" />
-                          <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[10px] text-white">{t('accountOrders.downloadPhoto')}</span>
-                        </a>
+                        </button>
                       ))}
                     </div>
                   ) : null}
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.shipmentStatus')}</span> <span className="text-[#2f2a24]">{t('accountOrders.shipped')}</span></p>
                     <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.shippedAt')}</span> <span className="text-[#2f2a24]">{row.shippedAt ? new Date(row.shippedAt).toLocaleDateString(locale) : '—'}</span></p>
                     <p className="flex justify-between gap-3 sm:block"><span className="text-[#8a8073]">{t('accountOrders.channel')}</span> <span className="text-[#2f2a24]">{row.channel || '—'}</span></p>
                     <p className="flex justify-between gap-3 sm:col-span-2 sm:block">
@@ -189,32 +190,15 @@ export default function AccountOrderDetailView() {
             </div>
           ) : null}
 
-          <div>
-            <h2 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8a8073]">{t('accountOrders.goodsStatus')}</h2>
-            <div className="overflow-hidden rounded-xl border border-[#ebe6dc] bg-white">
-              {order.items.map((item) => {
-                const stage = item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')
-                const thumb = item.imageUrl || item.mainImageUrl
-                return (
-                  <div key={item.itemId} className="flex items-center gap-2 border-b border-[#f0ebe3] px-2.5 py-2 last:border-b-0 sm:gap-3 sm:px-3">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-[#F1F5F9] sm:h-12 sm:w-12">
-                      {thumb ? <img src={thumb} alt="" className="h-full w-full object-contain" /> : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-[11px] font-medium leading-4 text-[#1f1a14] sm:text-xs">{item.productName}</p>
-                      <p className="mt-0.5 text-[10px] text-[#8a8073]">{t('accountOrders.inStockCount', { arrived: item.inboundQty || 0, ordered: item.quantity })}</p>
-                    </div>
-                    <span className="max-w-[7.5rem] shrink-0 rounded-full border border-[#eadfce] bg-[#fbfaf7] px-2 py-0.5 text-center text-[10px] font-medium leading-4 text-[#6b5e52] sm:text-[11px]">
-                      {t(`accountOrders.inboundStages.${stage}`)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
         </div>
       )}
+
+      {shipZoom ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4" onClick={() => setShipZoom('')}>
+          <button type="button" className="absolute right-4 top-4 rounded-md bg-white px-3 py-1.5 text-sm text-slate-900" onClick={() => setShipZoom('')}>{t('accountOrders.closePhoto')}</button>
+          <img src={shipZoom} alt="" className="max-h-[92vh] max-w-[94vw] object-contain" onClick={(event) => event.stopPropagation()} />
+        </div>
+      ) : null}
     </AccountShell>
   )
 }

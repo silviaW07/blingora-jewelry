@@ -595,6 +595,9 @@
       "INSUFFICIENT_STOCK": "{{product}}（{{sku}}）：仅余 {{stock}} 件",
       "MIN_ORDER_CHANGED": "{{product}}（{{sku}}）：当前起订量为 {{minimum}} 件"
     },
-    "goodsStatus": "商品状态"
+    "goodsStatus": "商品状态",
+    "shipmentStatus": "发货状态",
+    "shipped": "已发货",
+    "closePhoto": "关闭"
   }
 }
