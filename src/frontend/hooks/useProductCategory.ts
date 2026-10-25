@@ -408,6 +408,7 @@ export const useProductCategory = (
     () => parseCategorySlugFromPathname(pathname),
     [pathname],
   )
+  const categorySlugSeenRef = useRef<string | null>(null)
 
   const [queryState, setQueryState] = useState(() => {
     // Warm-start categoryId from SSR seed / nav cache so listing HTML is not empty.
@@ -601,9 +602,16 @@ export const useProductCategory = (
       .finally(() => setIsLoadingCategories(false))
   }, [localeTick])
 
-  // Switch /category/[slug]: reset listing filters when the slug segment changes.
+  // Switch /category/[slug]: reset listing filters only when the slug actually changes.
+  // The first paint of a category page must keep brandCategoryId and page from the URL.
   useEffect(() => {
-    if (!isCategorySlugRoute) return
+    if (!isCategorySlugRoute) {
+      categorySlugSeenRef.current = null
+      return
+    }
+    const previousSlug = categorySlugSeenRef.current
+    categorySlugSeenRef.current = routeCategorySlug
+    if (!previousSlug || previousSlug === routeCategorySlug) return
     setQueryState((prev) => {
       if (prev.page === 1 && !prev.brandCategoryId && !prev.keywordId && !prev.keywordGroupId) {
         return prev
@@ -1233,7 +1241,10 @@ export const useProductCategory = (
     page?: number
     clearPage?: boolean
   }) => {
-    const params = new URLSearchParams(searchParams.toString())
+    const liveSearch = typeof window !== 'undefined'
+      ? window.location.search.replace(/^\?/, '')
+      : searchParams.toString()
+    const params = new URLSearchParams(liveSearch)
 
     if (patch.sortBy !== undefined) {
       if (!patch.sortBy || patch.sortBy === 'NEWEST') {
@@ -1276,21 +1287,30 @@ export const useProductCategory = (
     const qs = params.toString()
     const nextUrl = qs ? `${pathname || '/'}?${qs}` : pathname || '/'
     router.replace(nextUrl, { scroll: false })
+    notifyStorefrontUrl()
+    if (typeof window !== 'undefined') {
+      window.setTimeout(notifyStorefrontUrl, 0)
+      window.setTimeout(notifyStorefrontUrl, 80)
+    }
   }, [pathname, router, searchParams])
 
   const handleFilterChange = useCallback(<K extends keyof ProductCategoryState['queryState']>(field: K, value: ProductCategoryState['queryState'][K]) => {
-    setQueryState((prev) => ({
-      ...prev,
-      [field]: value,
-      ...(field === 'categoryId' ? { brandCategoryId: '' } : {}),
-      ...(field === 'categoryId' && !value ? { keywordId: '', keywordGroupId: '' } : {}),
-      ...(field === 'keywordId' ? { keywordGroupId: '' } : {}),
-      page: field === 'page' ? (value as number) : 1
-    }))
-    if (field === 'page') {
-      const nextPage = Math.max(1, Number(value) || 1)
-      syncListingQueryToUrl({ page: nextPage })
-    }
+    setQueryState((prev) => {
+      if (field === 'page') {
+        const nextPage = Math.max(1, Number(value) || 1)
+        const brandCategoryId = prev.brandCategoryId
+        queueMicrotask(() => syncListingQueryToUrl({ page: nextPage, brandCategoryId }))
+        return { ...prev, page: nextPage }
+      }
+      return {
+        ...prev,
+        [field]: value,
+        ...(field === 'categoryId' ? { brandCategoryId: '' } : {}),
+        ...(field === 'categoryId' && !value ? { keywordId: '', keywordGroupId: '' } : {}),
+        ...(field === 'keywordId' ? { keywordGroupId: '' } : {}),
+        page: 1,
+      }
+    })
   }, [syncListingQueryToUrl])
 
   const buildCurrentReturnTo = useCallback(() => {
@@ -1809,7 +1829,7 @@ export const useProductCategory = (
     setQueryState((prev) => {
       if (productsRef.current.length >= totalCount) return prev
       const nextPage = prev.page + 1
-      syncListingQueryToUrl({ page: nextPage })
+      syncListingQueryToUrl({ page: nextPage, brandCategoryId: prev.brandCategoryId })
       return { ...prev, page: nextPage }
     })
   }, [isLoadingMore, isLoadingProducts, syncListingQueryToUrl, totalCount])

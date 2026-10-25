@@ -29,6 +29,8 @@ export interface OrderInboundLine {
   inboundQty: number
   inboundNote: string
   mainImageUrl: string | null
+  /** Saved quantity 0 means the line was checked in as out of stock. */
+  outOfStock: boolean
 }
 
 function clampInboundQty(quantity: number, raw: number) {
@@ -43,6 +45,12 @@ function inboundStateOf(orderedQty: number, inboundQty: number): InboundState {
   return 'PARTIAL'
 }
 
+function inboundWasRecorded(inboundAt: Date | string | null | undefined) {
+  if (inboundAt == null) return false
+  if (inboundAt instanceof Date) return !Number.isNaN(inboundAt.getTime())
+  return String(inboundAt).trim() !== ''
+}
+
 function mapInboundLine(item: {
   id: string
   productName: string
@@ -50,17 +58,20 @@ function mapInboundLine(item: {
   quantity: number
   inboundQty?: number | null
   inboundNote?: string | null
+  inboundAt?: Date | string | null
   product?: { mainImageUrl?: string | null } | null
 }): OrderInboundLine {
   const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0))
+  const inboundQty = clampInboundQty(quantity, Number(item.inboundQty) || 0)
   return {
     id: item.id,
     productName: item.productName,
     skuCode: item.skuCode,
     quantity,
-    inboundQty: clampInboundQty(quantity, Number(item.inboundQty) || 0),
+    inboundQty,
     inboundNote: String(item.inboundNote || ''),
     mainImageUrl: item.product?.mainImageUrl || null,
+    outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0,
   }
 }
 
@@ -693,7 +704,7 @@ export const updateOrderStatus = requireRole([UserRole.ADMIN])(
 )
 
 /**
- * 登记订单商品入库数量。数量不能超过下单件数，0 表示未入库。
+ * 登记订单商品入库数量。数量不能超过下单件数。保存 0 表示这行缺货。
  */
 export const updateOrderInbound = requireRole([UserRole.ADMIN])(
   withResult(async (input: UpdateOrderInboundInput): Promise<UpdateOrderInboundOutput> => {
@@ -723,16 +734,18 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
         const nextNote = String(line.inboundNote || '').trim().slice(0, 255)
         const prevQty = clampInboundQty(item.quantity, Number(item.inboundQty) || 0)
         const prevNote = String(item.inboundNote || '')
-        if (nextQty === prevQty && nextNote === prevNote) continue
+        const confirmingStockout = nextQty <= 0 && !inboundWasRecorded(item.inboundAt)
+        if (nextQty === prevQty && nextNote === prevNote && !confirmingStockout) continue
         await tx.orderitem.update({
           where: { id: item.id },
           data: {
             inboundQty: nextQty,
             inboundNote: nextNote || null,
-            inboundAt: nextQty > 0 ? new Date() : null,
+            inboundAt: new Date(),
           },
         })
-        changes.push(`${item.skuCode || item.productName} ${prevQty}->${nextQty}${nextNote ? `（${nextNote}）` : ''}`)
+        const stockoutLabel = nextQty <= 0 ? '缺货 ' : ''
+        changes.push(`${stockoutLabel}${item.skuCode || item.productName} ${prevQty}->${nextQty}${nextNote ? `（${nextNote}）` : ''}`)
       }
       if (changes.length) {
         await tx.orderoperationlog.create({

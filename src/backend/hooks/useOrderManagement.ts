@@ -486,15 +486,20 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const openInboundDialog = (orderId: string) => {
     const fromDetail = detailData && detailData.id === orderId
-      ? detailData.items.map((item) => ({
-          id: item.id,
-          productName: item.productName,
-          skuCode: item.skuCode,
-          quantity: Math.max(0, Number(item.quantity) || 0),
-          inboundQty: Math.max(0, Number(item.inboundQty) || 0),
-          inboundNote: item.inboundNote || '',
-          mainImageUrl: item.mainImageUrl || null,
-        }))
+      ? detailData.items.map((item) => {
+          const saved = detailData.inboundLines.find((line) => line.id === item.id)
+          const inboundQty = Math.max(0, Number(item.inboundQty) || 0)
+          return {
+            id: item.id,
+            productName: item.productName,
+            skuCode: item.skuCode,
+            quantity: Math.max(0, Number(item.quantity) || 0),
+            inboundQty,
+            inboundNote: item.inboundNote || '',
+            mainImageUrl: item.mainImageUrl || null,
+            outOfStock: saved?.outOfStock ?? false,
+          }
+        })
       : null
     const row = list.find((item) => item.id === orderId)
     const lines = fromDetail || row?.inboundLines || []

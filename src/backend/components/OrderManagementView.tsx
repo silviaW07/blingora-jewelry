@@ -57,8 +57,14 @@ const INBOUND_BADGE: Record<'NONE' | 'PARTIAL' | 'DONE', string> = {
   PARTIAL: 'bg-amber-100 text-amber-900 border-amber-200',
   DONE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
 };
-const inboundBadgeLabel = (state: 'NONE' | 'PARTIAL' | 'DONE', received: number, ordered: number) => {
+const inboundBadgeLabel = (
+  state: 'NONE' | 'PARTIAL' | 'DONE',
+  received: number,
+  ordered: number,
+  lines?: { outOfStock?: boolean }[],
+) => {
   if (ordered <= 0) return '无商品';
+  if (lines && lines.length > 0 && lines.every((line) => line.outOfStock)) return '缺货';
   if (state === 'DONE') return '已入库';
   if (state === 'PARTIAL') return `部分 ${received}/${ordered}`;
   return '未入库';
@@ -82,6 +88,7 @@ export const OrderManagementView = ({
   handlers
 }: Props) => {
   const router = useRouter();
+  const [inboundZoom, setInboundZoom] = React.useState<{ src: string; name: string } | null>(null);
   return <div className="min-h-screen bg-background font-body text-foreground" data-api-unique-id="ordermanagementview-r1f69bc6332e634b8-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
       
       {/* 1. 关键指标看板 Section */}
@@ -270,7 +277,7 @@ export const OrderManagementView = ({
                           <TableCell className="pt-4">
                             <div className="flex flex-col items-start gap-2">
                               <Badge className={cn('border font-semibold hover:bg-inherit', INBOUND_BADGE[row.inboundState] || INBOUND_BADGE.NONE)}>
-                                {inboundBadgeLabel(row.inboundState, row.inboundReceivedQty, row.inboundOrderedQty)}
+                                {inboundBadgeLabel(row.inboundState, row.inboundReceivedQty, row.inboundOrderedQty, row.inboundLines)}
                               </Badge>
                               <Button
                                 type="button"
@@ -455,7 +462,9 @@ export const OrderManagementView = ({
                                       SKU: {sku.skuCode}
                                     </div>
                                     <div className="mt-1 text-xs text-muted-foreground">
-                                      入库 {Math.max(0, Number(sku.inboundQty) || 0)}/{qty}
+                                      {state.detailData.inboundLines.find((line) => line.id === sku.id)?.outOfStock
+                                        ? '缺货'
+                                        : `入库 ${Math.max(0, Number(sku.inboundQty) || 0)}/${qty}`}
                                       {sku.inboundNote ? ` · ${sku.inboundNote}` : ''}
                                     </div>
                                   </div>
@@ -727,9 +736,9 @@ export const OrderManagementView = ({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) handlers.closeInboundDialog() }}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
+      <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) { setInboundZoom(null); handlers.closeInboundDialog() } }}>
+        <DialogContent className="inset-0 top-0 left-0 flex h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 shadow-none">
+          <DialogHeader className="shrink-0 border-b px-4 py-4 text-left sm:px-6">
             <DialogTitle>登记入库</DialogTitle>
             <DialogDescription>
               {(() => {
@@ -737,14 +746,23 @@ export const OrderManagementView = ({
                   || (state.detailData?.id === state.inboundOrderId ? state.detailData.orderNo : '')
                 const received = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.inboundQty) || 0), 0)
                 const ordered = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)
-                return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写已到仓库的数量。当前 ${received}/${ordered} 件。`
+                return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写已到仓库的数量。当前 ${received}/${ordered} 件。数量填 0，点保存入库就是缺货。`
               })()}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-6">
             {state.inboundDrafts.map((line) => (
               <div key={line.id} className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
-                <div className="h-12 w-12 shrink-0 overflow-hidden rounded border bg-slate-50">
+                <button
+                  type="button"
+                  className="h-16 w-16 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                  aria-label={line.mainImageUrl ? `查看 ${line.productName}` : undefined}
+                  disabled={!line.mainImageUrl}
+                  onClick={() => {
+                    if (!line.mainImageUrl) return
+                    setInboundZoom({ src: line.mainImageUrl, name: line.productName })
+                  }}
+                >
                   {line.mainImageUrl ? (
                     <EditableImg
                       propKey={`inbound-${line.id}`}
@@ -753,13 +771,19 @@ export const OrderManagementView = ({
                       className="h-full w-full object-cover"
                     />
                   ) : null}
-                </div>
+                </button>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold leading-5 break-words">{line.productName}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold leading-5 break-words">{line.productName}</div>
+                    {Number(line.inboundQty) <= 0 ? (
+                      <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">缺货</span>
+                    ) : null}
+                  </div>
                   <div className="mt-0.5 font-mono text-[10px] text-muted-foreground break-all">SKU: {line.skuCode} · 订购 {line.quantity}</div>
                   <Input
                     className="mt-2 h-9"
                     placeholder="货位或缺货说明，可不填"
+                    aria-label={`${line.productName} 备注`}
                     value={line.inboundNote}
                     onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
                   />
@@ -771,6 +795,7 @@ export const OrderManagementView = ({
                     min={0}
                     max={line.quantity}
                     className="h-9"
+                    aria-label={`${line.productName} 入库数量`}
                     value={String(line.inboundQty)}
                     onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })}
                   />
@@ -781,7 +806,7 @@ export const OrderManagementView = ({
               </div>
             ))}
           </div>
-          <DialogFooter className="gap-2 sm:justify-between">
+          <DialogFooter className="shrink-0 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">
             <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
               全部到齐
             </Button>
@@ -789,13 +814,28 @@ export const OrderManagementView = ({
               <Button type="button" variant="outline" onClick={handlers.closeInboundDialog} disabled={state.inboundSaving}>
                 取消
               </Button>
-              <Button type="button" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
+              <Button type="button" aria-label="保存入库" onClick={() => handlers.submitInbound()} disabled={state.inboundSaving}>
                 {state.inboundSaving ? '保存中…' : '保存入库'}
               </Button>
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {state.inboundOrderId && inboundZoom ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 p-4"
+          aria-label="关闭大图"
+          onClick={() => setInboundZoom(null)}
+        >
+          <EditableImg
+            propKey={`inbound-zoom-${inboundZoom.src}`}
+            keywords={inboundZoom.src}
+            description={inboundZoom.name}
+            className="h-[80vh] max-h-[92vh] w-auto max-w-[92vw] object-contain"
+          />
+        </button>
+      ) : null}
     </div>;
 };
 export default OrderManagementView;
