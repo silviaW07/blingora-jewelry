@@ -30,6 +30,7 @@ import {
   updateOrderStatus,
   updateOrderRemark,
   updateOrderInbound,
+  appendOrderGoods,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -165,6 +166,7 @@ export interface OrderManagementHandlers {
   submitInbound: (options?: { allowEmpty?: boolean; keepOpen?: boolean }) => Promise<void>
   /** 把导入的图片和可选字段写进当前商品，空字段不覆盖。 */
   applyInboundImport: (patches: Array<{ id: string } & Partial<OrderInboundLine>>) => Promise<void>
+  appendInboundGoods: (lines: Array<{ skuCode: string; quantity?: number; unitPrice?: number | null; inboundQty?: number; inboundNote?: string; inboundStage?: string; shipmentImageUrl?: string | null }>) => Promise<{ missingSkus: string[]; addedCount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -800,6 +802,31 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     await saveInboundDrafts(next, { allowEmpty: true, keepOpen: true })
   }
 
+  const appendInboundGoods = async (lines: Array<{ skuCode: string; quantity?: number; unitPrice?: number | null; inboundQty?: number; inboundNote?: string; inboundStage?: string; shipmentImageUrl?: string | null }>) => {
+    if (!inboundOrderId) return null
+    const ready = (lines || []).filter((line) => String(line.skuCode || '').trim())
+    if (!ready.length) {
+      toast.error('请填写要加货的 SKU')
+      return null
+    }
+    try {
+      setInboundSaving(true)
+      const result = await appendOrderGoods({ orderId: inboundOrderId, lines: ready })
+      rememberInboundResult(inboundOrderId, inboundDrafts, result)
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId ? { ...row, totalAmount: result.totalAmount } : row
+      )))
+      if (result.missingSkus?.length) toast.error(`未找到 SKU：${result.missingSkus.join('、')}`)
+      if (result.addedCount) toast.success(`已加货 ${result.addedCount} 个商品`)
+      return { missingSkus: result.missingSkus || [], addedCount: result.addedCount || 0 }
+    } catch (err: any) {
+      toast.error(err.message || '加货失败')
+      return null
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
   const exportInboundSheet = async (input: ExportInboundSheetInput) => {
     if (!input.rows?.length) {
       toast.error('请先勾选要导出的商品')
@@ -894,6 +921,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       markInboundAllFull,
       submitInbound,
       applyInboundImport,
+      appendInboundGoods,
       exportInboundSheet,
     },
   }
