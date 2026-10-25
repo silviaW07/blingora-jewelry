@@ -30476,9 +30476,12 @@ const inboundProductSelect = {
 };
 const INBOUND_STAGES = new Set([
     'PENDING',
+    'STOCK',
     'PREPARING',
+    'FACTORY',
     'TRANSIT',
-    'ARRIVED'
+    'ARRIVED',
+    'PARCEL'
 ]);
 function cleanInboundStage(value) {
     const text = String(value || '').trim().toUpperCase();
@@ -31769,9 +31772,12 @@ async function buildOrderExcelFile(orderIds) {
 }
 const INBOUND_STAGE_LABEL = {
     PENDING: '待采购',
+    STOCK: '备货',
     PREPARING: '备货中',
+    FACTORY: '工厂发货',
     TRANSIT: '运输中',
-    ARRIVED: '已到货'
+    ARRIVED: '已到货',
+    PARCEL: '包裹发货'
 };
 function publicSupplierUrl(value) {
     const text = String(value || '').trim();
@@ -44863,9 +44869,12 @@ const mapCustomerOrder = (row)=>({
                 lineAmount: toNum(item.lineAmount),
                 inboundStage: [
                     'PENDING',
+                    'STOCK',
                     'PREPARING',
+                    'FACTORY',
                     'TRANSIT',
-                    'ARRIVED'
+                    'ARRIVED',
+                    'PARCEL'
                 ].includes(String(item.inboundStage || '').toUpperCase()) ? String(item.inboundStage).toUpperCase() : 'PENDING'
             };
         })
