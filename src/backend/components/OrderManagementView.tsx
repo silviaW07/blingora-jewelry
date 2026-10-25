@@ -131,10 +131,20 @@ const INBOUND_STAGE_LABEL: Record<string, string> = {
   STOCK: '备货',
   FACTORY: '工厂发货',
 };
+const INBOUND_STAGE_FILL: Record<string, { background: string; color: string }> = {
+  PENDING: { background: '#facc15', color: '#422006' },
+  STOCK: { background: '#60a5fa', color: '#172554' },
+  PREPARING: { background: '#60a5fa', color: '#172554' },
+  TRANSIT: { background: '#c084fc', color: '#3b0764' },
+  FACTORY: { background: '#c084fc', color: '#3b0764' },
+  ARRIVED: { background: '#4ade80', color: '#052e16' },
+  PARCEL: { background: '#fb923c', color: '#431407' },
+};
 const normalizedInboundStage = (stage?: string | null) => {
   const value = String(stage || 'PENDING').toUpperCase();
   return value === 'FACTORY' ? 'TRANSIT' : value;
 };
+const inboundStageFill = (stage?: string | null) => INBOUND_STAGE_FILL[normalizedInboundStage(stage)] || INBOUND_STAGE_FILL.PENDING;
 type InboundImportRow = {
   key: string;
   imageUrl: string;
@@ -1672,14 +1682,15 @@ export const OrderManagementView = ({
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 商品状态
                 <select
-                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
+                  className="h-9 rounded-md border border-transparent px-2 text-sm font-medium"
+                  style={stageFilter === 'ALL' ? { background: '#ffffff', color: '#334155' } : inboundStageFill(stageFilter)}
                   aria-label="按商品状态筛选"
                   value={stageFilter}
                   onChange={(event) => setStageFilter(event.target.value)}
                 >
-                  <option value="ALL">全部</option>
+                  <option value="ALL" style={{ background: '#ffffff', color: '#334155' }}>全部</option>
                   {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                    <option key={value} value={value} style={INBOUND_STAGE_FILL[value]}>{label}</option>
                   ))}
                 </select>
               </label>
@@ -1814,7 +1825,7 @@ export const OrderManagementView = ({
                           <div className="min-w-0 flex-1">
                             {line.productName.trim() ? <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName}>{line.productName}</div> : null}
                             <div className="mt-1">
-                              <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
+                              <span className="inline-flex rounded px-1.5 py-0.5 text-xs font-medium" style={inboundStageFill(line.inboundStage)}>{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
                             </div>
                             {String(line.skuCode || '').startsWith('ADD-') ? null : <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>}
                             {line.shipmentImageUrl ? (
@@ -1861,14 +1872,15 @@ export const OrderManagementView = ({
                       </td>) : null}
                       {columnVisible('stage') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <select
-                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
+                          className="h-10 w-full rounded-md border border-transparent px-2 text-sm font-medium"
+                          style={inboundStageFill(line.inboundStage)}
                           aria-label={`${line.productName} 商品状态`}
                           value={normalizedInboundStage(line.inboundStage)}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
                         >
-                          {normalizedInboundStage(line.inboundStage) === 'STOCK' ? <option value="STOCK">备货</option> : null}
+                          {normalizedInboundStage(line.inboundStage) === 'STOCK' ? <option value="STOCK" style={INBOUND_STAGE_FILL.STOCK}>备货</option> : null}
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
+                            <option key={value} value={value} style={INBOUND_STAGE_FILL[value]}>{label}</option>
                           ))}
                         </select>
                       </td>) : null}
@@ -1946,8 +1958,8 @@ export const OrderManagementView = ({
                     ) : null}
                     {columnVisible('stage') ? (
                       <td className="overflow-hidden px-1 py-3 align-middle">
-                        <select aria-label="商品状态" className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" value={card.stage} onChange={(event) => patchAddonCard(card.key, { stage: event.target.value })}>
-                          {INBOUND_STAGE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        <select aria-label="商品状态" className="h-10 w-full rounded-md border border-transparent px-2 text-sm font-medium" style={inboundStageFill(card.stage)} value={card.stage} onChange={(event) => patchAddonCard(card.key, { stage: event.target.value })}>
+                          {INBOUND_STAGE_OPTIONS.map(([value, label]) => <option key={value} value={value} style={INBOUND_STAGE_FILL[value]}>{label}</option>)}
                         </select>
                       </td>
                     ) : null}
@@ -2093,7 +2105,7 @@ export const OrderManagementView = ({
             <p className="mt-1 text-sm text-slate-500">改已勾选的 {inboundSelected.length} 个商品，保存入库后写入订单。</p>
             <div className="mt-4 grid gap-2">
               {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
-                <Button key={value} type="button" variant="outline" onClick={() => applyBatchStage(value)}>{label}</Button>
+                <Button key={value} type="button" variant="outline" className="border-transparent font-medium" style={INBOUND_STAGE_FILL[value]} onClick={() => applyBatchStage(value)}>{label}</Button>
               ))}
             </div>
             <div className="mt-4 flex justify-end">
