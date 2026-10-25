@@ -29,8 +29,20 @@ export interface OrderInboundLine {
   inboundQty: number
   inboundNote: string
   mainImageUrl: string | null
-  /** Saved quantity 0 means the line was checked in as out of stock. */
+  unitPrice: number | null
+  lineAmount: number | null
+  currencyCode: string
+  costPrice: number | null
+  supplierName: string
+  supplierUrl: string
+  productStatus: string
+  goodsStatus: string
+  /** Saved quantity 0 means this line was confirmed out of stock. Unsaved 0 is not. */
   outOfStock: boolean
+  /** Set in the check-in screen after the operator clicks 确认. */
+  acknowledged?: boolean
+  openedQty?: number
+  openedNote?: string
 }
 
 function clampInboundQty(quantity: number, raw: number) {
@@ -51,6 +63,30 @@ function inboundWasRecorded(inboundAt: Date | string | null | undefined) {
   return String(inboundAt).trim() !== ''
 }
 
+function moneyAmount(value: unknown): number | null {
+  if (value == null || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'object' && value && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
+    const n = (value as { toNumber: () => number }).toNumber()
+    return Number.isFinite(n) ? n : null
+  }
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+const inboundProductSelect = {
+  mainImageUrl: true,
+  weightGram: true,
+  costPrice: true,
+  supplierName: true,
+  status: true,
+  goodsStatus: true,
+  importTaskItems: {
+    select: { sourceUrl: true, supplierName: true },
+    take: 5,
+  },
+} as const
+
 function mapInboundLine(item: {
   id: string
   productName: string
@@ -59,10 +95,30 @@ function mapInboundLine(item: {
   inboundQty?: number | null
   inboundNote?: string | null
   inboundAt?: Date | string | null
-  product?: { mainImageUrl?: string | null } | null
-}): OrderInboundLine {
+  unitPrice?: unknown
+  lineAmount?: unknown
+  product?: {
+    mainImageUrl?: string | null
+    costPrice?: unknown
+    supplierName?: string | null
+    status?: string | null
+    goodsStatus?: string | null
+    importTaskItems?: Array<{ sourceUrl?: string | null; supplierName?: string | null }> | null
+  } | null
+}, currencyCode?: string | null): OrderInboundLine {
   const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0))
   const inboundQty = clampInboundQty(quantity, Number(item.inboundQty) || 0)
+  const sources = item.product?.importTaskItems || []
+  const supplierUrl = String(
+    sources.find((row) => /1688\.com/i.test(String(row.sourceUrl || '')))?.sourceUrl
+    || sources.find((row) => String(row.sourceUrl || '').trim())?.sourceUrl
+    || ''
+  ).trim()
+  const supplierName = String(
+    item.product?.supplierName
+    || sources.find((row) => String(row.supplierName || '').trim())?.supplierName
+    || ''
+  ).trim()
   return {
     id: item.id,
     productName: item.productName,
@@ -71,6 +127,14 @@ function mapInboundLine(item: {
     inboundQty,
     inboundNote: String(item.inboundNote || ''),
     mainImageUrl: item.product?.mainImageUrl || null,
+    unitPrice: moneyAmount(item.unitPrice),
+    lineAmount: moneyAmount(item.lineAmount),
+    currencyCode: String(currencyCode || 'USD'),
+    costPrice: moneyAmount(item.product?.costPrice),
+    supplierName,
+    supplierUrl,
+    productStatus: String(item.product?.status || ''),
+    goodsStatus: String(item.product?.goodsStatus || ''),
     outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0,
   }
 }
@@ -260,6 +324,8 @@ export interface UpdateOrderInboundLineInput {
   orderItemId: string
   inboundQty: number
   inboundNote?: string
+  /** True when the operator confirmed this line. Quantity 0 is out of stock only then. */
+  confirmed?: boolean
 }
 
 export interface UpdateOrderInboundInput {
@@ -381,7 +447,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
           address: true,
           items: {
             include: {
-              product: { select: { mainImageUrl: true, weightGram: true } }
+              product: { select: inboundProductSelect }
             }
           }
         }
@@ -401,7 +467,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         const unitGrams = item.product?.weightGram != null ? Number(item.product.weightGram) : 0
         return sum + (Number.isFinite(unitGrams) ? unitGrams : 0) * item.quantity
       }, 0)
-      const inboundLines = record.items.map((item) => mapInboundLine(item))
+      const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode))
       const inbound = summarizeInbound(inboundLines)
 
       return {
@@ -446,7 +512,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         address: true,
         items: {
           include: {
-            product: { select: { mainImageUrl: true, weightGram: true } }
+            product: { select: inboundProductSelect }
           }
         },
         logistics: {
@@ -501,7 +567,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
       }, 0) * 100) / 100,
       internalNote: record.internalNote || null,
       ...(() => {
-        const inboundLines = record.items.map((item) => mapInboundLine(item))
+        const inboundLines = record.items.map((item) => mapInboundLine(item, record.currencyCode))
         const inbound = summarizeInbound(inboundLines)
         return {
           inboundOrderedQty: inbound.orderedQty,
@@ -713,7 +779,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
       where: { id: input.orderId },
       include: {
         items: {
-          include: { product: { select: { mainImageUrl: true } } },
+          include: { product: { select: inboundProductSelect } },
         },
       },
     })
@@ -734,17 +800,18 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
         const nextNote = String(line.inboundNote || '').trim().slice(0, 255)
         const prevQty = clampInboundQty(item.quantity, Number(item.inboundQty) || 0)
         const prevNote = String(item.inboundNote || '')
-        const confirmingStockout = nextQty <= 0 && !inboundWasRecorded(item.inboundAt)
-        if (nextQty === prevQty && nextNote === prevNote && !confirmingStockout) continue
+        const markStockout = nextQty <= 0 && line.confirmed === true
+        const recordArrival = nextQty > 0
+        if (nextQty === prevQty && nextNote === prevNote && !(markStockout && !inboundWasRecorded(item.inboundAt))) continue
         await tx.orderitem.update({
           where: { id: item.id },
           data: {
             inboundQty: nextQty,
             inboundNote: nextNote || null,
-            inboundAt: new Date(),
+            inboundAt: markStockout || recordArrival ? new Date() : item.inboundAt,
           },
         })
-        const stockoutLabel = nextQty <= 0 ? '缺货 ' : ''
+        const stockoutLabel = markStockout ? '缺货 ' : ''
         changes.push(`${stockoutLabel}${item.skuCode || item.productName} ${prevQty}->${nextQty}${nextNote ? `（${nextNote}）` : ''}`)
       }
       if (changes.length) {
@@ -761,10 +828,10 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
 
     const fresh = await prisma.orderitem.findMany({
       where: { orderId: order.id },
-      include: { product: { select: { mainImageUrl: true } } },
+      include: { product: { select: inboundProductSelect } },
       orderBy: { createdAt: 'asc' },
     })
-    const lines = fresh.map((item) => mapInboundLine(item))
+    const lines = fresh.map((item) => mapInboundLine(item, order.currencyCode))
     const summary = summarizeInbound(lines)
     return {
       lines,

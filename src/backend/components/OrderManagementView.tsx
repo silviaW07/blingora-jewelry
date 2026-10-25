@@ -8,7 +8,7 @@ import type { OrderManagementState, OrderManagementHandlers } from '@/backend/ho
 import EditableImg from '@/@base/EditableImg';
 
 // Lucide Icons
-import { Package, Truck, CreditCard, Calendar, Search, Filter, RefreshCcw, ChevronRight, User, Globe, Plus, History, Info, ExternalLink, ChevronLeft, ShoppingBag, Download, FileSpreadsheet } from 'lucide-react';
+import { Package, Truck, CreditCard, Calendar, Search, Filter, RefreshCcw, ChevronRight, User, Globe, Plus, History, Info, ExternalLink, ChevronLeft, ShoppingBag, Download, FileSpreadsheet, X } from 'lucide-react';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,33 @@ const inboundBadgeLabel = (
   if (state === 'DONE') return '已入库';
   if (state === 'PARTIAL') return `部分 ${received}/${ordered}`;
   return '未入库';
+};
+const GOODS_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: '已上架',
+  INACTIVE: '已下架',
+  DRAFT: '待上传',
+  DELETED: '已删除',
+  OUT_OF_STOCK: '缺货',
+  PREORDER: '预售',
+};
+const formatInboundMoney = (amount: number | null | undefined, currency?: string) => {
+  if (amount == null || Number.isNaN(Number(amount))) return '—';
+  const text = (Math.round(Number(amount) * 100) / 100).toFixed(2);
+  const code = String(currency || '').toUpperCase();
+  if (code === 'CNY' || code === 'RMB') return `¥${text}`;
+  if (code === 'USD') return `$${text}`;
+  return code ? `${code} ${text}` : text;
+};
+const inboundGoodsStatus = (line: { inboundQty: number; acknowledged?: boolean; outOfStock?: boolean; openedQty?: number; goodsStatus?: string; productStatus?: string }) => {
+  const confirmedZero = Number(line.inboundQty) <= 0 && (
+    Boolean(line.acknowledged) || (Boolean(line.outOfStock) && line.inboundQty === line.openedQty)
+  );
+  if (confirmedZero) return { label: '缺货', className: 'border-rose-200 bg-rose-50 text-rose-700' };
+  const key = String(line.goodsStatus || line.productStatus || '').toUpperCase();
+  return {
+    label: GOODS_STATUS_LABEL[key] || '—',
+    className: key === 'ACTIVE' ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600',
+  };
 };
 const getListStatusClassName = (status: OrderStatus) =>
   LIST_STATUS_OPTIONS.find((o) => o.value === status)?.className ||
@@ -746,65 +773,107 @@ export const OrderManagementView = ({
                   || (state.detailData?.id === state.inboundOrderId ? state.detailData.orderNo : '')
                 const received = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.inboundQty) || 0), 0)
                 const ordered = state.inboundDrafts.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)
-                return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写已到仓库的数量。当前 ${received}/${ordered} 件。数量填 0，点保存入库就是缺货。`
+                return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写到货数量。当前 ${received}/${ordered} 件。改完后点这一行的确认；数量 0 在确认前不会记为缺货。`
               })()}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-6">
-            {state.inboundDrafts.map((line) => (
-              <div key={line.id} className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
-                <button
-                  type="button"
-                  className="h-16 w-16 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
-                  aria-label={line.mainImageUrl ? `查看 ${line.productName}` : undefined}
-                  disabled={!line.mainImageUrl}
-                  onClick={() => {
-                    if (!line.mainImageUrl) return
-                    setInboundZoom({ src: line.mainImageUrl, name: line.productName })
-                  }}
-                >
-                  {line.mainImageUrl ? (
-                    <EditableImg
-                      propKey={`inbound-${line.id}`}
-                      keywords={line.mainImageUrl}
-                      description={line.productName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : null}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-sm font-semibold leading-5 break-words">{line.productName}</div>
-                    {Number(line.inboundQty) <= 0 ? (
-                      <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">缺货</span>
-                    ) : null}
-                  </div>
-                  <div className="mt-0.5 font-mono text-[10px] text-muted-foreground break-all">SKU: {line.skuCode} · 订购 {line.quantity}</div>
-                  <Input
-                    className="mt-2 h-9"
-                    placeholder="货位或缺货说明，可不填"
-                    aria-label={`${line.productName} 备注`}
-                    value={line.inboundNote}
-                    onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
-                  />
-                </div>
-                <div className="w-[8.5rem] shrink-0 space-y-2">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">已入库</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={line.quantity}
-                    className="h-9"
-                    aria-label={`${line.productName} 入库数量`}
-                    value={String(line.inboundQty)}
-                    onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })}
-                  />
-                  <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.markInboundLineFull(line.id)}>
-                    本行到齐
-                  </Button>
-                </div>
-              </div>
-            ))}
+          <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6">
+            <table className="w-full min-w-[1280px] border-collapse text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-white">
+                <tr className="border-b text-xs font-semibold text-slate-500">
+                  <th className="min-w-[280px] px-2 py-2 font-semibold">商品</th>
+                  <th className="w-24 px-2 py-2 text-right font-semibold">售价</th>
+                  <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
+                  <th className="w-24 px-2 py-2 text-right font-semibold">总价</th>
+                  <th className="w-24 px-2 py-2 text-right font-semibold">成本价</th>
+                  <th className="w-28 px-2 py-2 font-semibold">供应商链接</th>
+                  <th className="min-w-[140px] px-2 py-2 font-semibold">供应商名称</th>
+                  <th className="min-w-[180px] px-2 py-2 font-semibold">备注</th>
+                  <th className="w-24 px-2 py-2 font-semibold">商品状态</th>
+                  <th className="w-36 px-2 py-2 font-semibold">到货数量</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.inboundDrafts.map((line) => {
+                  const status = inboundGoodsStatus(line)
+                  return (
+                    <tr key={line.id} className="border-b align-top">
+                      <td className="px-2 py-3">
+                        <div className="flex items-start gap-3">
+                          <button
+                            type="button"
+                            className="h-14 w-14 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            aria-label={line.mainImageUrl ? `查看 ${line.productName}` : undefined}
+                            disabled={!line.mainImageUrl}
+                            onClick={() => {
+                              if (!line.mainImageUrl) return
+                              setInboundZoom({ src: line.mainImageUrl, name: line.productName })
+                            }}
+                          >
+                            {line.mainImageUrl ? (
+                              <EditableImg
+                                propKey={`inbound-${line.id}`}
+                                keywords={line.mainImageUrl}
+                                description={line.productName}
+                                className="h-full w-full object-cover"
+                                proxyWidth={160}
+                              />
+                            ) : null}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="whitespace-normal break-words text-sm font-semibold leading-5 text-slate-900">{line.productName}</div>
+                            <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">SKU: {line.skuCode}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{line.quantity}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.costPrice, 'CNY')}</td>
+                      <td className="px-2 py-3">
+                        {line.supplierUrl ? (
+                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="text-sky-700 underline-offset-2 hover:underline">打开链接</a>
+                        ) : '—'}
+                      </td>
+                      <td className="px-2 py-3">
+                        <div className="whitespace-normal break-words leading-5">{line.supplierName || '—'}</div>
+                      </td>
+                      <td className="px-2 py-3">
+                        <Input
+                          className="h-9"
+                          placeholder="货位或缺货说明，可不填"
+                          aria-label={`${line.productName} 备注`}
+                          value={line.inboundNote}
+                          onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
+                        />
+                      </td>
+                      <td className="px-2 py-3">
+                        <span className={cn('inline-flex rounded border px-1.5 py-0.5 text-[11px] font-semibold', status.className)}>{status.label}</span>
+                      </td>
+                      <td className="px-2 py-3">
+                        <div className="space-y-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={line.quantity}
+                            className="h-9"
+                            aria-label={`${line.productName} 到货数量`}
+                            value={String(line.inboundQty)}
+                            onChange={(e) => handlers.setInboundDraft(line.id, { inboundQty: Number(e.target.value) })}
+                          />
+                          <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.acknowledgeInboundLine(line.id)}>
+                            {line.acknowledged ? '已确认' : '确认'}
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" className="h-8 w-full" onClick={() => handlers.markInboundLineFull(line.id)}>
+                            本行到齐
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
           <DialogFooter className="shrink-0 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">
             <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
@@ -822,19 +891,33 @@ export const OrderManagementView = ({
         </DialogContent>
       </Dialog>
       {state.inboundOrderId && inboundZoom ? (
-        <button
-          type="button"
+        <div
           className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 p-4"
-          aria-label="关闭大图"
+          role="dialog"
+          aria-label="大图"
           onClick={() => setInboundZoom(null)}
         >
-          <EditableImg
-            propKey={`inbound-zoom-${inboundZoom.src}`}
-            keywords={inboundZoom.src}
-            description={inboundZoom.name}
-            className="h-[80vh] max-h-[92vh] w-auto max-w-[92vw] object-contain"
-          />
-        </button>
+          <button
+            type="button"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 shadow"
+            aria-label="关闭大图"
+            onClick={() => setInboundZoom(null)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="flex max-h-[94vh] max-w-[94vw] items-center justify-center" onClick={(event) => event.stopPropagation()}>
+            <EditableImg
+              propKey={`inbound-zoom-${inboundZoom.src}`}
+              keywords={inboundZoom.src}
+              description={inboundZoom.name}
+              needLargeImage
+              proxyWidth={1600}
+              proxyQuality={90}
+              className="h-auto w-auto object-contain"
+              style={{ width: 'auto', height: 'auto', maxHeight: '94vh', maxWidth: '94vw', aspectRatio: 'auto', objectFit: 'contain' }}
+            />
+          </div>
+        </div>
       ) : null}
     </div>;
 };

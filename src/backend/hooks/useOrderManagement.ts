@@ -153,9 +153,11 @@ export interface OrderManagementHandlers {
   closeInboundDialog: () => void
   /** 修改一行入库草稿 */
   setInboundDraft: (lineId: string, patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote'>>) => void
-  /** 本行按订购数量标为已入库 */
+  /** 本行按订购数量填到货数量，并记为已确认 */
   markInboundLineFull: (lineId: string) => void
-  /** 全部商品标为已入库 */
+  /** 确认这一行的到货数量。0 只有确认后才是缺货。 */
+  acknowledgeInboundLine: (lineId: string) => void
+  /** 全部商品标为已到齐 */
   markInboundAllFull: () => void
   /** 保存入库登记 */
   submitInbound: () => Promise<void>
@@ -485,29 +487,21 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const openInboundDialog = (orderId: string) => {
-    const fromDetail = detailData && detailData.id === orderId
-      ? detailData.items.map((item) => {
-          const saved = detailData.inboundLines.find((line) => line.id === item.id)
-          const inboundQty = Math.max(0, Number(item.inboundQty) || 0)
-          return {
-            id: item.id,
-            productName: item.productName,
-            skuCode: item.skuCode,
-            quantity: Math.max(0, Number(item.quantity) || 0),
-            inboundQty,
-            inboundNote: item.inboundNote || '',
-            mainImageUrl: item.mainImageUrl || null,
-            outOfStock: saved?.outOfStock ?? false,
-          }
-        })
-      : null
     const row = list.find((item) => item.id === orderId)
-    const lines = fromDetail || row?.inboundLines || []
-    if (!lines.length) {
+    const source = (detailData && detailData.id === orderId && detailData.inboundLines?.length
+      ? detailData.inboundLines
+      : row?.inboundLines) || []
+    if (!source.length) {
       toast.error('这笔订单没有可登记的商品')
       return
     }
-    setInboundDrafts(lines.map((line) => ({ ...line, inboundNote: line.inboundNote || '' })))
+    setInboundDrafts(source.map((line) => ({
+      ...line,
+      inboundNote: line.inboundNote || '',
+      acknowledged: false,
+      openedQty: line.inboundQty,
+      openedNote: line.inboundNote || '',
+    })))
     setInboundOrderId(orderId)
   }
 
@@ -532,24 +526,40 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const markInboundLineFull = (lineId: string) => {
     setInboundDrafts((prev) => prev.map((line) => (
-      line.id === lineId ? { ...line, inboundQty: line.quantity } : line
+      line.id === lineId ? { ...line, inboundQty: line.quantity, acknowledged: true } : line
+    )))
+  }
+
+  const acknowledgeInboundLine = (lineId: string) => {
+    setInboundDrafts((prev) => prev.map((line) => (
+      line.id === lineId ? { ...line, acknowledged: true } : line
     )))
   }
 
   const markInboundAllFull = () => {
-    setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity })))
+    setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity, acknowledged: true })))
   }
 
   const submitInbound = async () => {
     if (!inboundOrderId) return
+    const changed = inboundDrafts.filter((line) => (
+      line.acknowledged
+      || line.inboundQty !== line.openedQty
+      || (line.inboundNote || '') !== (line.openedNote || '')
+    ))
+    if (!changed.length) {
+      toast.error('请先修改到货数量，或点这一行的确认')
+      return
+    }
     try {
       setInboundSaving(true)
       const result = await updateOrderInbound({
         orderId: inboundOrderId,
-        lines: inboundDrafts.map((line) => ({
+        lines: changed.map((line) => ({
           orderItemId: line.id,
           inboundQty: line.inboundQty,
           inboundNote: line.inboundNote,
+          confirmed: Boolean(line.acknowledged) || line.inboundQty !== line.openedQty,
         })),
       })
       setList((prev) => prev.map((row) => (
@@ -644,6 +654,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       closeInboundDialog,
       setInboundDraft,
       markInboundLineFull,
+      acknowledgeInboundLine,
       markInboundAllFull,
       submitInbound,
     },
