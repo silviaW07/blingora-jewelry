@@ -31617,6 +31617,14 @@ const SHEET_HEADERS = [
             'sku',
             'Sku'
         ]
+    ],
+    [
+        'inboundNote',
+        [
+            '备注',
+            '入库备注',
+            '说明'
+        ]
     ]
 ];
 function loadJSZip() {
@@ -31954,9 +31962,10 @@ const importInboundSheet = (0, _action_utils.requireRole)([
         const quantityText = read(rowNumber, 'quantity');
         const totalText = read(rowNumber, 'lineAmount');
         const costText = read(rowNumber, 'costPrice');
+        const noteText = read(rowNumber, 'inboundNote');
         let image = imagesByRow.get(rowNumber);
-        if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift();
-        if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+        if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText)) image = unplacedCellImages.shift();
+        if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !image) {
             emptyRun += 1;
             if (emptyRun >= 3) break;
             continue;
@@ -31975,7 +31984,8 @@ const importInboundSheet = (0, _action_utils.requireRole)([
             unitPrice: unitText ? Number(unitText) : null,
             quantity: quantityText ? Number(quantityText) : null,
             lineAmount: totalText ? Number(totalText) : null,
-            costPrice: costText ? Number(costText) : null
+            costPrice: costText ? Number(costText) : null,
+            inboundNote: noteText || null
         });
     }
     if (!parsed.length) throw new Error('没有读到商品');
@@ -32024,7 +32034,10 @@ const importInboundSheet = (0, _action_utils.requireRole)([
                     data: {
                         quantity: nextQuantity,
                         unitPrice: unit,
-                        lineAmount: (_manualMoney1 = manualMoney(row.lineAmount)) !== null && _manualMoney1 !== void 0 ? _manualMoney1 : Math.round(unit * nextQuantity * 100) / 100
+                        lineAmount: (_manualMoney1 = manualMoney(row.lineAmount)) !== null && _manualMoney1 !== void 0 ? _manualMoney1 : Math.round(unit * nextQuantity * 100) / 100,
+                        ...row.inboundNote ? {
+                            inboundNote: String(row.inboundNote).slice(0, 255)
+                        } : {}
                     }
                 });
                 continue;
@@ -32048,6 +32061,7 @@ const importInboundSheet = (0, _action_utils.requireRole)([
                         lineAmount: total,
                         inboundQty: 0,
                         inboundStage: 'PENDING',
+                        inboundNote: row.inboundNote ? String(row.inboundNote).slice(0, 255) : null,
                         shipmentImageUrl: row.imageUrl || null,
                         giftWrapSelected: false
                     }
@@ -32182,9 +32196,10 @@ async function readGoodsSheet(fileBase64, fileName) {
         const quantityText = read(rowNumber, 'quantity');
         const totalText = read(rowNumber, 'lineAmount');
         const costText = read(rowNumber, 'costPrice');
+        const noteText = read(rowNumber, 'inboundNote');
         let image = imagesByRow.get(rowNumber);
-        if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift();
-        if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
+        if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText)) image = unplacedCellImages.shift();
+        if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !image) {
             emptyRun += 1;
             if (emptyRun >= 3) break;
             continue;
@@ -32203,7 +32218,8 @@ async function readGoodsSheet(fileBase64, fileName) {
             unitPrice: unitText ? Number(unitText) : null,
             quantity: quantityText ? Number(quantityText) : null,
             lineAmount: totalText ? Number(totalText) : null,
-            costPrice: costText ? Number(costText) : null
+            costPrice: costText ? Number(costText) : null,
+            inboundNote: noteText || null
         });
     }
     if (!parsed.length) throw new Error('没有读到商品');
