@@ -32621,7 +32621,10 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
                 quantity,
                 unitPrice,
                 lineAmount,
-                inboundQty: Math.min(Math.max(0, Number(item.inboundQty) || 0), quantity)
+                inboundQty: Math.min(Math.max(0, Number(item.inboundQty) || 0), quantity),
+                ...input.productName !== undefined ? {
+                    productName: String(input.productName || '').trim().slice(0, 200)
+                } : {}
             }
         });
         if (costPrice !== undefined) {
