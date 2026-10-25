@@ -92,6 +92,18 @@ const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
   ['stage', '商品状态', 'w-[10%]'],
   ['inboundQty', '到货数量', 'w-[10%]'],
 ];
+const INBOUND_COLUMN_WEIGHT: Record<string, number> = {
+  product: 22,
+  unitPrice: 8,
+  discountPrice: 8,
+  quantity: 7,
+  lineAmount: 8,
+  costPrice: 8,
+  supplier: 11,
+  note: 12,
+  stage: 10,
+  inboundQty: 10,
+};
 const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
   ['PENDING', '待采购'],
   ['STOCK', '备货'],
@@ -181,6 +193,7 @@ export const OrderManagementView = ({
   const [stageFilter, setStageFilter] = React.useState('ALL');
   const [batchNote, setBatchNote] = React.useState('');
   const [noteOpen, setNoteOpen] = React.useState(false);
+  const [hiddenColumns, setHiddenColumns] = React.useState<Record<string, boolean>>({});
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
@@ -210,6 +223,7 @@ export const OrderManagementView = ({
     setStageFilter('ALL');
     setBatchNote('');
     setNoteOpen(false);
+    setHiddenColumns({});
     setInboundSelected(readInboundSelection(state.inboundOrderId));
   }, [state.inboundOrderId]);
   const visibleInboundDrafts = stageFilter === 'ALL'
@@ -226,6 +240,20 @@ export const OrderManagementView = ({
       return;
     }
     for (const id of inboundSelected) handlers.setInboundDraft(id, { inboundStage: stage });
+  };
+  const columnVisible = (key: string) => hiddenColumns[key] !== true;
+  const visibleInboundColumns = INBOUND_EXPORT_COLUMNS.filter(([key]) => columnVisible(key));
+  const visibleColumnWeight = visibleInboundColumns.reduce((sum, [key]) => sum + (INBOUND_COLUMN_WEIGHT[key] || 8), 0) || 1;
+  const hideInboundColumn = (key: string) => {
+    const remaining = INBOUND_EXPORT_COLUMNS.filter(([item]) => item !== key && columnVisible(item));
+    if (!remaining.length) {
+      toast.error('至少保留一列');
+      return;
+    }
+    setHiddenColumns((prev) => ({ ...prev, [key]: true }));
+  };
+  const showInboundColumn = (key: string) => {
+    setHiddenColumns((prev) => ({ ...prev, [key]: false }));
   };
   const openBatchNote = () => {
     if (!inboundSelected.length) {
@@ -1169,23 +1197,31 @@ export const OrderManagementView = ({
                 </select>
               </label>
               <Button type="button" size="sm" variant="outline" className="h-9" onClick={openBatchNote}>添加备注</Button>
+              <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setHiddenColumns({})}>取消隐藏</Button>
             </div>
-            <table className="w-full min-w-[1180px] table-fixed border-collapse text-sm">
+            {INBOUND_EXPORT_COLUMNS.some(([key]) => hiddenColumns[key]) ? (
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                {INBOUND_EXPORT_COLUMNS.filter(([key]) => hiddenColumns[key]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                    onClick={() => showInboundColumn(key)}
+                  >
+                    {label} 展开
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <table className="w-full table-fixed border-collapse text-sm">
               <colgroup>
-                <col style={{ width: '22%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '6%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '8%' }} />
+                {visibleInboundColumns.map(([key]) => (
+                  <col key={key} style={{ width: `${((INBOUND_COLUMN_WEIGHT[key] || 8) / visibleColumnWeight) * 100}%` }} />
+                ))}
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b text-sm font-semibold text-slate-800">
-                  {INBOUND_EXPORT_COLUMNS.map(([key, label]) => (
+                  {visibleInboundColumns.map(([key, label]) => (
                     <th key={key} className={`overflow-hidden px-1 py-2 align-middle font-semibold ${key === 'product' ? 'text-left' : 'text-center'}`}>
                       {key === 'product' ? (
                         <div className="flex items-center gap-2">
@@ -1211,8 +1247,10 @@ export const OrderManagementView = ({
                             />
                             <span>{label}</span>
                           </label>
+                          <button type="button" className="text-[11px] font-normal text-slate-400" aria-label={"隐藏" + label} onClick={() => hideInboundColumn(key)}>隐藏</button>
                         </div>
                       ) : (
+                        <div className="flex flex-col items-center">
                         <div className="grid w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center">
                           <input
                             type="checkbox"
@@ -1224,6 +1262,8 @@ export const OrderManagementView = ({
                           <span className="text-center leading-5">{label}</span>
                           <span aria-hidden="true" />
                         </div>
+                        <button type="button" className="mt-0.5 text-[11px] font-normal leading-none text-slate-400" aria-label={"隐藏" + label} onClick={() => hideInboundColumn(key)}>隐藏</button>
+                        </div>
                       )}
                     </th>
                   ))}
@@ -1232,7 +1272,7 @@ export const OrderManagementView = ({
               <tbody>
                 {visibleInboundDrafts.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500">没有这个状态的商品</td>
+                    <td colSpan={Math.max(visibleInboundColumns.length, 1)} className="px-3 py-10 text-center text-sm text-slate-500">没有这个状态的商品</td>
                   </tr>
                 ) : null}
                 {visibleInboundDrafts.map((line) => {
@@ -1252,7 +1292,7 @@ export const OrderManagementView = ({
                         void attachImageToLine(line.id, event.dataTransfer.files)
                       }}
                     >
-                      <td className="overflow-hidden px-2 py-3 align-middle">
+                      {columnVisible('product') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <div className="flex min-w-0 items-center gap-2">
                           <input
                             type="checkbox"
@@ -1310,20 +1350,20 @@ export const OrderManagementView = ({
                             ) : null}
                           </div>
                         </div>
-                      </td>
-                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>
-                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>
-                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.quantity}</td>
-                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>
-                      <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.costPrice, 'CNY')}</td>
-                      <td className="overflow-hidden px-2 py-3 align-middle text-center">
+                      </td>) : null}
+                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.unitPrice, line.currencyCode)}</td>) : null}
+                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>) : null}
+                      {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{line.quantity}</td>) : null}
+                      {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.lineAmount, line.currencyCode)}</td>) : null}
+                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.costPrice, 'CNY')}</td>) : null}
+                      {columnVisible('supplier') ? (<td className="overflow-hidden px-2 py-3 align-middle text-center">
                         {line.supplierUrl ? (
                           <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-3 break-words text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
                         ) : (
                           <span className="line-clamp-3 break-words text-sm text-slate-700">{line.supplierName || '未录入'}</span>
                         )}
-                      </td>
-                      <td className="overflow-hidden px-2 py-3 align-middle">
+                      </td>) : null}
+                      {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
                           rows={2}
                           className="w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
@@ -1332,8 +1372,8 @@ export const OrderManagementView = ({
                           value={line.inboundNote}
                           onChange={(e) => handlers.setInboundDraft(line.id, { inboundNote: e.target.value })}
                         />
-                      </td>
-                      <td className="overflow-hidden px-2 py-3 align-middle">
+                      </td>) : null}
+                      {columnVisible('stage') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <select
                           className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
                           aria-label={`${line.productName} 商品状态`}
@@ -1344,8 +1384,8 @@ export const OrderManagementView = ({
                             <option key={value} value={value}>{label}</option>
                           ))}
                         </select>
-                      </td>
-                      <td className="overflow-hidden px-2 py-3 align-middle">
+                      </td>) : null}
+                      {columnVisible('inboundQty') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <div className="space-y-2">
                           <Input
                             type="number"
@@ -1363,7 +1403,7 @@ export const OrderManagementView = ({
                             本行到齐
                           </Button>
                         </div>
-                      </td>
+                      </td>) : null}
                     </tr>
                   )
                 })}
