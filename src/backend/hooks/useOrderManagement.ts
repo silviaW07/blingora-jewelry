@@ -585,7 +585,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       return
     }
     const saved = readInboundDraftStore(orderId)
-    setInboundDrafts(source.map((line) => {
+    const drafts = source.map((line) => {
       const extra = saved?.lines?.[line.id]
       const ordered = Math.max(0, Number(line.quantity) || 0)
       const rawQty = extra && Number.isFinite(Number(extra.inboundQty))
@@ -604,8 +604,16 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         openedStage: line.inboundStage || 'PENDING',
         openedImage: line.shipmentImageUrl || '',
       }
-    }))
+    })
+    setInboundDrafts(drafts)
     setInboundOrderId(orderId)
+    const dirty = drafts.some((line) => (
+      Number(line.inboundQty) !== Number(line.openedQty)
+      || (line.inboundNote || '') !== (line.openedNote || '')
+      || (line.inboundStage || 'PENDING') !== (line.openedStage || 'PENDING')
+      || (line.shipmentImageUrl || '') !== (line.openedImage || '')
+    ))
+    if (dirty) window.setTimeout(() => { void saveInboundDrafts(drafts, { keepOpen: true, quiet: true }) }, 0)
     inboundBooted.current = orderId
     inboundClosing.current = false
     if (!options?.skipUrl) syncInboundQuery(true, orderId)
