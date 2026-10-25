@@ -1992,17 +1992,20 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export interface InboundShipmentLegInput {
+export interface InboundShipmentBlockInput {
+  shippedAt: string
   trackingNumber?: string
   channel?: string
   note?: string
+  images?: string[]
 }
 
 export interface SaveInboundShipmentInput {
   orderId: string
-  /** 浏览器 datetime-local，按北京时间理解。 */
-  shippedAt: string
-  legs: InboundShipmentLegInput[]
+  /** 一块对应一次发货。旧的 shippedAt + legs 仍可用。 */
+  blocks?: InboundShipmentBlockInput[]
+  shippedAt?: string
+  legs?: Array<{ trackingNumber?: string; channel?: string; note?: string }>
 }
 
 export interface InboundShipmentRow {
@@ -2011,6 +2014,7 @@ export interface InboundShipmentRow {
   trackingNumber: string
   channel: string
   note: string
+  images: string[]
 }
 
 const INBOUND_SHIP_SEGMENT = '入库发货'
@@ -2028,13 +2032,21 @@ async function listInboundShipmentRows(orderId: string): Promise<InboundShipment
     where: { orderId, segmentType: INBOUND_SHIP_SEGMENT },
     orderBy: [{ shippedAt: 'asc' }, { createdAt: 'asc' }],
   })
-  return rows.map((row) => ({
-    id: row.id,
-    shippedAt: row.shippedAt ? row.shippedAt.toISOString() : '',
-    trackingNumber: String(row.trackingNumber || ''),
-    channel: String(row.carrierName || ''),
-    note: String(row.remark || ''),
-  }))
+  return rows.map((row) => {
+    const timeline = Array.isArray(row.timelineJson) ? row.timelineJson : []
+    const images = timeline.map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return ''
+      return String((item as { imageUrl?: unknown }).imageUrl || '')
+    }).filter(Boolean)
+    return {
+      id: row.id,
+      shippedAt: row.shippedAt ? row.shippedAt.toISOString() : '',
+      trackingNumber: String(row.trackingNumber || ''),
+      channel: String(row.carrierName || ''),
+      note: String(row.remark || ''),
+      images,
+    }
+  })
 }
 
 export const listInboundShipments = requireRole([UserRole.ADMIN])(
@@ -2052,23 +2064,32 @@ export const saveInboundShipment = requireRole([UserRole.ADMIN])(
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId }, select: { id: true } })
     if (!order) throw new Error('订单不存在')
-    const shippedAt = parseShanghaiDateTime(input.shippedAt)
-    const legs = (input.legs?.length ? input.legs : [{}]).map((leg) => ({
-      trackingNumber: String(leg?.trackingNumber || '').trim().slice(0, 120),
-      channel: String(leg?.channel || '').trim().slice(0, 100),
-      note: String(leg?.note || '').trim().slice(0, 2000),
+    const blocks = (input.blocks?.length ? input.blocks : (input.legs || [{}]).map((leg) => ({
+      shippedAt: input.shippedAt,
+      trackingNumber: leg?.trackingNumber,
+      channel: leg?.channel,
+      note: leg?.note,
+      images: [],
+    }))).map((block) => ({
+      shippedAt: parseShanghaiDateTime(String(block?.shippedAt || '')),
+      shippedAtText: String(block?.shippedAt || ''),
+      trackingNumber: String(block?.trackingNumber || '').trim().slice(0, 120),
+      channel: String(block?.channel || '').trim().slice(0, 100),
+      note: String(block?.note || '').trim().slice(0, 2000),
+      images: (block?.images || []).map((url) => String(url || '').trim()).filter(Boolean).slice(0, 12),
     }))
     await prisma.$transaction(async (tx) => {
-      for (const leg of legs) {
+      for (const block of blocks) {
         await tx.orderlogisticssegment.create({
           data: {
             orderId: order.id,
             segmentType: INBOUND_SHIP_SEGMENT,
-            carrierName: leg.channel || null,
-            trackingNumber: leg.trackingNumber || null,
+            carrierName: block.channel || null,
+            trackingNumber: block.trackingNumber || null,
             statusLabel: '已发货',
-            shippedAt,
-            remark: leg.note || null,
+            shippedAt: block.shippedAt,
+            remark: block.note || null,
+            timelineJson: block.images.map((imageUrl) => ({ time: block.shippedAt.toISOString(), label: '发货图片', imageUrl })),
           },
         })
       }
@@ -2076,7 +2097,7 @@ export const saveInboundShipment = requireRole([UserRole.ADMIN])(
         data: {
           orderId: order.id,
           actionType: '入库发货',
-          actionNote: `发货时间 ${input.shippedAt}，${legs.length} 条物流`.slice(0, 4000),
+          actionNote: `登记 ${blocks.length} 批发货`.slice(0, 4000),
           operatorName: username,
         },
       })

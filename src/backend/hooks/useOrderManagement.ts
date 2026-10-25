@@ -181,7 +181,7 @@ export interface OrderManagementHandlers {
   importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
   updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => Promise<boolean>
   deleteInboundLines: (lineIds: string[]) => Promise<boolean>
-  saveInboundShipment: (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => Promise<boolean>
+  saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
@@ -624,7 +624,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     return () => { cancelled = true }
   }, [inboundOrderId])
 
-  const saveInboundShipmentRows = async (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => {
+  const saveInboundShipmentRows = async (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => {
     if (!inboundOrderId) return false
     if (!String(input.shippedAt || '').trim()) {
       toast.error('请填写发货时间')

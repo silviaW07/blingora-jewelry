@@ -202,31 +202,68 @@ function InboundShipBar({
   onSave,
   children,
 }: {
-  shipments: Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>
+  shipments: Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string; images?: string[] }>
   saving: boolean
-  onSave: (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => Promise<boolean>
+  onSave: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   children: (button: React.ReactNode) => React.ReactNode
 }) {
-  const blankLeg = () => ({ key: `ship-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, trackingNumber: '', channel: '', note: '' })
+  const blankBlock = () => ({
+    key: `ship-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    images: [] as string[],
+    shippedAt: '',
+    trackingNumber: '',
+    channel: '',
+    note: '',
+  })
   const [open, setOpen] = React.useState(false)
-  const [shipTime, setShipTime] = React.useState('')
-  const [shipLegs, setShipLegs] = React.useState<Array<{ key: string; trackingNumber: string; channel: string; note: string }>>([blankLeg()])
-  const openForm = (shippedAt = '') => {
-    setShipTime(shippedAt)
-    setShipLegs([blankLeg()])
+  const [blocks, setBlocks] = React.useState<Array<{ key: string; images: string[]; shippedAt: string; trackingNumber: string; channel: string; note: string }>>([blankBlock()])
+  const [uploadingKey, setUploadingKey] = React.useState('')
+  const openForm = () => {
+    setBlocks([blankBlock()])
     setOpen(true)
   }
+  const uploadFiles = async (key: string, files: File[]) => {
+    const images = files.filter((file) => file.type.startsWith('image/'))
+    if (!images.length) {
+      toast.error('请选择图片')
+      return
+    }
+    setUploadingKey(key)
+    try {
+      const urls: string[] = []
+      for (const file of images) {
+        const body = new FormData()
+        body.append('file', file)
+        const res = await fetch('/api/upload-image', { method: 'POST', body, credentials: 'same-origin' })
+        const json = await res.json().catch(() => null)
+        const url = json?.data?.image_url || json?.image_url || json?.data?.url || ''
+        if (!res.ok || !url) throw new Error('图片上传失败')
+        urls.push(String(url))
+      }
+      setBlocks((prev) => prev.map((block) => block.key === key ? { ...block, images: [...block.images, ...urls].slice(0, 12) } : block))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '图片上传失败')
+    } finally {
+      setUploadingKey('')
+    }
+  }
   const saveForm = async () => {
-    if (!shipTime.trim()) {
+    const filled = blocks.filter((block) => block.shippedAt.trim() || block.trackingNumber.trim() || block.channel.trim() || block.note.trim() || block.images.length)
+    if (!filled.length) {
+      toast.error('请填写发货信息')
+      return
+    }
+    if (filled.some((block) => !block.shippedAt.trim())) {
       toast.error('请填写发货时间')
       return
     }
     const saved = await onSave({
-      shippedAt: shipTime,
-      legs: shipLegs.map((leg) => ({
-        trackingNumber: leg.trackingNumber.trim(),
-        channel: leg.channel.trim(),
-        note: leg.note.trim(),
+      blocks: filled.map((block) => ({
+        shippedAt: block.shippedAt,
+        trackingNumber: block.trackingNumber.trim(),
+        channel: block.channel.trim(),
+        note: block.note.trim(),
+        images: block.images,
       })),
     })
     if (saved) setOpen(false)
@@ -247,66 +284,92 @@ function InboundShipBar({
     const hour = part('hour') === '24' ? '00' : part('hour')
     return `${part('year')}-${part('month')}-${part('day')} ${hour}:${part('minute')}`
   }
-  const groups = (() => {
-    const map = new Map<string, { label: string; local: string; legs: Array<{ id: string; trackingNumber: string; channel: string; note: string }> }>()
-    for (const row of shipments) {
-      const label = shanghaiShipLabel(row.shippedAt)
-      if (!label) continue
-      const current = map.get(label) || { label, local: label.replace(' ', 'T'), legs: [] }
-      current.legs.push(row)
-      map.set(label, current)
-    }
-    return [...map.values()]
-  })()
   return (
     <>
       {open ? (
-        <div className="shrink-0 border-t bg-white px-4 py-3 sm:px-6">
-          <div className="text-sm font-semibold text-slate-900">发货信息</div>
-          <label className="mt-3 grid max-w-xs gap-1 text-sm font-medium text-slate-700">发货时间
-            <Input type="datetime-local" value={shipTime} onChange={(event) => setShipTime(event.target.value)} />
-          </label>
-          <div className="mt-3 max-h-48 space-y-3 overflow-auto">
-            {shipLegs.map((leg, index) => (
-              <div key={leg.key} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
-                <label className="grid gap-1 text-sm text-slate-700">物流号
-                  <Input value={leg.trackingNumber} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, trackingNumber: event.target.value } : item))} />
-                </label>
-                <label className="grid gap-1 text-sm text-slate-700">渠道
-                  <Input value={leg.channel} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, channel: event.target.value } : item))} />
-                </label>
-                <label className="grid gap-1 text-sm text-slate-700">备注
-                  <Input value={leg.note} onChange={(event) => setShipLegs((prev) => prev.map((item) => item.key === leg.key ? { ...item, note: event.target.value } : item))} />
-                </label>
-                {index > 0 ? (
-                  <Button type="button" variant="outline" className="h-10" onClick={() => setShipLegs((prev) => prev.filter((item) => item.key !== leg.key))}>删除</Button>
-                ) : <span className="hidden sm:block" />}
+        <div className="shrink-0 space-y-3 border-t bg-white px-4 py-3 sm:px-6">
+          {blocks.map((block, index) => {
+            const slots = Math.max(4, block.images.length)
+            return (
+              <div key={block.key} className="rounded-md border border-slate-200 p-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                  <div
+                    className="grid w-[17.5rem] shrink-0 grid-cols-4 gap-2"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      void uploadFiles(block.key, [...event.dataTransfer.files])
+                    }}
+                  >
+                    {Array.from({ length: slots }, (_, slot) => {
+                      const url = block.images[slot]
+                      return (
+                        <label key={`${block.key}-${slot}`} className="relative flex h-16 w-16 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-slate-300 bg-slate-50 text-[11px] text-slate-400">
+                          {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : (uploadingKey === block.key ? '上传中' : '发货图片')}
+                          {url ? null : <input type="file" accept="image/*" className="hidden" onChange={(event) => { const files = event.target.files; if (files?.length) void uploadFiles(block.key, [...files]); event.target.value = '' }} />}
+                          {url ? (
+                            <button type="button" className="absolute right-0.5 top-0.5 rounded bg-white/90 px-1 text-xs text-slate-700" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, images: item.images.filter((_, imageIndex) => imageIndex !== slot) } : item)) }}>×</button>
+                          ) : null}
+                        </label>
+                      )
+                    })}
+                    <button type="button" className="h-16 w-16 rounded-md border border-slate-200 text-xs text-slate-600" onClick={() => {
+                      const input = document.createElement('input')
+                      input.type = 'file'
+                      input.accept = 'image/*'
+                      input.multiple = true
+                      input.onchange = () => { if (input.files?.length) void uploadFiles(block.key, [...input.files]) }
+                      input.click()
+                    }}>新增</button>
+                  </div>
+                  <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                    <label className="grid gap-1 text-sm font-medium text-slate-700 sm:col-span-2">发货时间
+                      <Input type="datetime-local" value={block.shippedAt} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, shippedAt: event.target.value } : item))} />
+                    </label>
+                    <label className="grid gap-1 text-sm text-slate-700">物流号
+                      <Input value={block.trackingNumber} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, trackingNumber: event.target.value } : item))} />
+                    </label>
+                    <label className="grid gap-1 text-sm text-slate-700">渠道
+                      <Input value={block.channel} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, channel: event.target.value } : item))} />
+                    </label>
+                    <label className="grid gap-1 text-sm text-slate-700 sm:col-span-2">备注
+                      <Input value={block.note} onChange={(event) => setBlocks((prev) => prev.map((item) => item.key === block.key ? { ...item, note: event.target.value } : item))} />
+                    </label>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <Button type="button" variant="outline" onClick={() => setBlocks((prev) => {
+                      const next = [...prev]
+                      next.splice(index + 1, 0, blankBlock())
+                      return next
+                    })}>复制区块</Button>
+                    {blocks.length > 1 ? (
+                      <Button type="button" variant="outline" onClick={() => setBlocks((prev) => prev.filter((item) => item.key !== block.key))}>删除</Button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => setShipLegs((prev) => [...prev, blankLeg()])}>添加物流号</Button>
+            )
+          })}
+          <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => void saveForm()} disabled={saving}>保存发货</Button>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>取消</Button>
           </div>
         </div>
       ) : null}
-      {groups.length ? (
-        <div className="max-h-36 shrink-0 space-y-2 overflow-auto border-t bg-slate-50 px-4 py-3 sm:px-6">
-          {groups.map((group) => (
-            <div key={group.label} className="rounded-md border border-slate-200 bg-white px-3 py-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-slate-900">发货时间 {group.label}</div>
-                <Button type="button" size="sm" variant="outline" onClick={() => openForm(group.local)}>添加</Button>
-              </div>
-              <div className="mt-2 space-y-1">
-                {group.legs.map((leg) => (
-                  <div key={leg.id} className="grid gap-1 text-sm text-slate-700 sm:grid-cols-3">
-                    <div className="break-all">物流号 {leg.trackingNumber || '—'}</div>
-                    <div className="break-all">渠道 {leg.channel || '—'}</div>
-                    <div className="break-all">备注 {leg.note || '—'}</div>
-                  </div>
+      {shipments.length ? (
+        <div className="max-h-48 shrink-0 space-y-2 overflow-auto border-t bg-slate-50 px-4 py-3 sm:px-6">
+          {shipments.map((row) => (
+            <div key={row.id} className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center">
+              <div className="flex gap-1">
+                {(row.images || []).slice(0, 4).map((url) => (
+                  <img key={url} src={url} alt="" className="h-12 w-12 rounded border object-cover" />
                 ))}
+              </div>
+              <div className="grid flex-1 gap-1 text-sm text-slate-700 sm:grid-cols-4">
+                <div>发货时间 {shanghaiShipLabel(row.shippedAt) || '—'}</div>
+                <div className="break-all">物流号 {row.trackingNumber || '—'}</div>
+                <div className="break-all">渠道 {row.channel || '—'}</div>
+                <div className="break-all">备注 {row.note || '—'}</div>
               </div>
             </div>
           ))}
@@ -320,7 +383,6 @@ function InboundShipBar({
     </>
   )
 }
-
 
 export const OrderManagementView = ({
   state,
