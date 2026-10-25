@@ -31366,15 +31366,30 @@ function normalizeManualLine(row) {
     const quantity = row.quantity == null || !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0 ? 1 : Math.max(1, Math.floor(Number(row.quantity)));
     const unitPrice = manualMoney(row.unitPrice);
     const lineAmount = manualMoney(row.lineAmount);
-    const unit = unitPrice !== null && unitPrice !== void 0 ? unitPrice : lineAmount != null ? Math.round(lineAmount / quantity * 100) / 100 : 0;
-    const total = lineAmount !== null && lineAmount !== void 0 ? lineAmount : Math.round(unit * quantity * 100) / 100;
+    const unit = unitPrice != null ? unitPrice : lineAmount != null ? Math.round(lineAmount / quantity * 100) / 100 : 0;
+    const total = Math.round(unit * quantity * 100) / 100;
     const costPrice = manualMoney(row.costPrice);
+    const stageText = String(row.inboundStage || 'PENDING').toUpperCase();
+    const inboundStage = [
+        'PENDING',
+        'PREPARING',
+        'TRANSIT',
+        'ARRIVED',
+        'PARCEL',
+        'STOCK',
+        'FACTORY'
+    ].includes(stageText) ? stageText : 'PENDING';
+    const inboundQty = Math.max(0, Math.min(quantity, Math.floor(Number(row.inboundQty) || 0)));
     return {
         quantity,
         unitPrice: unit,
         lineAmount: total,
         costPrice,
-        imageUrl: String(row.imageUrl || '').trim().slice(0, 700)
+        imageUrl: String(row.imageUrl || '').trim().slice(0, 700),
+        supplierName: String(row.supplierName || '').trim().slice(0, 160),
+        inboundNote: String(row.inboundNote || '').trim().slice(0, 255),
+        inboundStage,
+        inboundQty
     };
 }
 async function insertManualOrderLines(tx, order, categoryId, rows, username) {
@@ -31392,6 +31407,7 @@ async function insertManualOrderLines(tx, order, categoryId, rows, username) {
                 source: 'MANUAL',
                 status: 'DRAFT',
                 costPrice: row.costPrice,
+                supplierName: row.supplierName || null,
                 mainImageUrl: row.imageUrl,
                 galleryJson: row.imageUrl ? [
                     {
@@ -31432,8 +31448,9 @@ async function insertManualOrderLines(tx, order, categoryId, rows, username) {
                 quantity: row.quantity,
                 unitPrice: row.unitPrice,
                 lineAmount: row.lineAmount,
-                inboundQty: 0,
-                inboundStage: 'PENDING',
+                inboundQty: row.inboundQty,
+                inboundNote: row.inboundNote || null,
+                inboundStage: row.inboundStage,
                 giftWrapSelected: false
             }
         });
@@ -32228,7 +32245,7 @@ const saveInboundShipment = (0, _action_utils.requireRole)([
 const updateManualOrderLine = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
-    var _moneyAmount, _moneyAmount1;
+    var _moneyAmount;
     const order = await _prisma.default.orderrecord.findUnique({
         where: {
             id: input.orderId
@@ -32242,12 +32259,10 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
         }
     });
     if (!item) throw new Error('订单商品不存在');
-    if (!String(item.skuCode || '').startsWith('ADD-')) throw new Error('只能修改手动加货行');
     const quantity = input.quantity == null || !Number.isFinite(Number(input.quantity)) || Number(input.quantity) <= 0 ? Math.max(1, item.quantity) : Math.max(1, Math.floor(Number(input.quantity)));
     const statedUnit = input.unitPrice === undefined ? (_moneyAmount = moneyAmount(item.unitPrice)) !== null && _moneyAmount !== void 0 ? _moneyAmount : 0 : manualMoney(input.unitPrice);
-    const statedTotal = input.lineAmount === undefined ? (_moneyAmount1 = moneyAmount(item.lineAmount)) !== null && _moneyAmount1 !== void 0 ? _moneyAmount1 : 0 : manualMoney(input.lineAmount);
-    const unitPrice = statedUnit !== null && statedUnit !== void 0 ? statedUnit : statedTotal != null ? Math.round(statedTotal / quantity * 100) / 100 : 0;
-    const lineAmount = statedTotal !== null && statedTotal !== void 0 ? statedTotal : Math.round(unitPrice * quantity * 100) / 100;
+    const unitPrice = statedUnit !== null && statedUnit !== void 0 ? statedUnit : 0;
+    const lineAmount = Math.round(unitPrice * quantity * 100) / 100;
     const costPrice = input.costPrice === undefined ? undefined : manualMoney(input.costPrice);
     await _prisma.default.$transaction(async (tx)=>{
         var _moneyAmount, _moneyAmount1, _moneyAmount2;
@@ -32271,12 +32286,24 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
                     costPrice
                 }
             });
-            await tx.productsku.update({
+            if (String(item.skuCode || '').startsWith('ADD-')) {
+                await tx.productsku.update({
+                    where: {
+                        id: item.productSkuId
+                    },
+                    data: {
+                        price: costPrice !== null && costPrice !== void 0 ? costPrice : 0
+                    }
+                });
+            }
+        }
+        if (input.supplierName !== undefined) {
+            await tx.product.update({
                 where: {
-                    id: item.productSkuId
+                    id: item.productId
                 },
                 data: {
-                    price: costPrice !== null && costPrice !== void 0 ? costPrice : 0
+                    supplierName: String(input.supplierName || '').trim().slice(0, 160) || null
                 }
             });
         }
