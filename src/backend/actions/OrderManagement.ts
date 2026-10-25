@@ -1126,6 +1126,10 @@ export interface ManualOrderLineInput {
   quantity?: number | null
   costPrice?: number | null
   lineAmount?: number | null
+  supplierName?: string | null
+  inboundNote?: string | null
+  inboundStage?: string | null
+  inboundQty?: number | null
 }
 
 export interface AppendManualOrderLineInput extends ManualOrderLineInput {
@@ -1146,15 +1150,22 @@ function normalizeManualLine(row: ManualOrderLineInput) {
     : Math.max(1, Math.floor(Number(row.quantity)))
   const unitPrice = manualMoney(row.unitPrice)
   const lineAmount = manualMoney(row.lineAmount)
-  const unit = unitPrice ?? (lineAmount != null ? Math.round((lineAmount / quantity) * 100) / 100 : 0)
-  const total = lineAmount ?? Math.round(unit * quantity * 100) / 100
+  const unit = unitPrice != null ? unitPrice : (lineAmount != null ? Math.round((lineAmount / quantity) * 100) / 100 : 0)
+  const total = Math.round(unit * quantity * 100) / 100
   const costPrice = manualMoney(row.costPrice)
+  const stageText = String(row.inboundStage || 'PENDING').toUpperCase()
+  const inboundStage = ['PENDING', 'PREPARING', 'TRANSIT', 'ARRIVED', 'PARCEL', 'STOCK', 'FACTORY'].includes(stageText) ? stageText : 'PENDING'
+  const inboundQty = Math.max(0, Math.min(quantity, Math.floor(Number(row.inboundQty) || 0)))
   return {
     quantity,
     unitPrice: unit,
     lineAmount: total,
     costPrice,
     imageUrl: String(row.imageUrl || '').trim().slice(0, 700),
+    supplierName: String(row.supplierName || '').trim().slice(0, 160),
+    inboundNote: String(row.inboundNote || '').trim().slice(0, 255),
+    inboundStage,
+    inboundQty,
   }
 }
 
@@ -1177,6 +1188,7 @@ async function insertManualOrderLines(
         source: 'MANUAL',
         status: 'DRAFT',
         costPrice: row.costPrice,
+        supplierName: row.supplierName || null,
         mainImageUrl: row.imageUrl,
         galleryJson: row.imageUrl ? [{ url: row.imageUrl, sort: 1, type: 'image' }] : [],
         category: { connect: { id: categoryId } },
@@ -1205,8 +1217,9 @@ async function insertManualOrderLines(
         quantity: row.quantity,
         unitPrice: row.unitPrice,
         lineAmount: row.lineAmount,
-        inboundQty: 0,
-        inboundStage: 'PENDING',
+        inboundQty: row.inboundQty,
+        inboundNote: row.inboundNote || null,
+        inboundStage: row.inboundStage,
         giftWrapSelected: false,
       },
     })
@@ -1854,6 +1867,7 @@ export interface UpdateManualOrderLineInput {
   quantity?: number | null
   lineAmount?: number | null
   costPrice?: number | null
+  supplierName?: string | null
 }
 
 /**
@@ -1865,14 +1879,12 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
     if (!order) throw new Error('订单不存在')
     const item = await prisma.orderitem.findFirst({ where: { id: input.orderItemId, orderId: order.id } })
     if (!item) throw new Error('订单商品不存在')
-    if (!String(item.skuCode || '').startsWith('ADD-')) throw new Error('只能修改手动加货行')
     const quantity = input.quantity == null || !Number.isFinite(Number(input.quantity)) || Number(input.quantity) <= 0
       ? Math.max(1, item.quantity)
       : Math.max(1, Math.floor(Number(input.quantity)))
     const statedUnit = input.unitPrice === undefined ? (moneyAmount(item.unitPrice) ?? 0) : manualMoney(input.unitPrice)
-    const statedTotal = input.lineAmount === undefined ? (moneyAmount(item.lineAmount) ?? 0) : manualMoney(input.lineAmount)
-    const unitPrice = statedUnit ?? (statedTotal != null ? Math.round((statedTotal / quantity) * 100) / 100 : 0)
-    const lineAmount = statedTotal ?? Math.round(unitPrice * quantity * 100) / 100
+    const unitPrice = statedUnit ?? 0
+    const lineAmount = Math.round(unitPrice * quantity * 100) / 100
     const costPrice = input.costPrice === undefined ? undefined : manualMoney(input.costPrice)
     await prisma.$transaction(async (tx) => {
       await tx.orderitem.update({
@@ -1886,7 +1898,15 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
       })
       if (costPrice !== undefined) {
         await tx.product.update({ where: { id: item.productId }, data: { costPrice } })
-        await tx.productsku.update({ where: { id: item.productSkuId }, data: { price: costPrice ?? 0 } })
+        if (String(item.skuCode || '').startsWith('ADD-')) {
+          await tx.productsku.update({ where: { id: item.productSkuId }, data: { price: costPrice ?? 0 } })
+        }
+      }
+      if (input.supplierName !== undefined) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { supplierName: String(input.supplierName || '').trim().slice(0, 160) || null },
+        })
       }
       const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
       const subtotal = Math.round(items.reduce((sum: number, row: { lineAmount: unknown }) => sum + (moneyAmount(row.lineAmount) ?? 0), 0) * 100) / 100

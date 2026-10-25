@@ -178,7 +178,7 @@ export interface OrderManagementHandlers {
   updateInboundDiscount: (discountPercent: number) => Promise<void>
   appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => Promise<boolean>
   importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
-  updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null }) => Promise<boolean>
+  updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => Promise<boolean>
   saveInboundShipment: (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
@@ -928,7 +928,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           unitPrice: prev.unitPrice ?? line.unitPrice,
           lineAmount: prev.lineAmount ?? line.lineAmount,
           costPrice: prev.costPrice ?? line.costPrice,
-          supplierName: prev.supplierName || line.supplierName,
+          supplierName: line.supplierName,
           supplierUrl: prev.supplierUrl || line.supplierUrl,
           acknowledged: prev.acknowledged,
           openedQty: prev.openedQty,
@@ -1085,7 +1085,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const updateManualOrderLineOnOrder = async (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null }) => {
+  const updateManualOrderLineOnOrder = async (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => {
     if (!inboundOrderId) return false
     try {
       setInboundSaving(true)

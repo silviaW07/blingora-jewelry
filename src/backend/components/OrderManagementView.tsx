@@ -208,7 +208,7 @@ export const OrderManagementView = ({
   const [stageFilter, setStageFilter] = React.useState('ALL');
   const [batchNote, setBatchNote] = React.useState('');
   const [noteOpen, setNoteOpen] = React.useState(false);
-  const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }>>([]);
+  const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>>([]);
   const [importOrderOpen, setImportOrderOpen] = React.useState(false);
   const [importOrderEmail, setImportOrderEmail] = React.useState('');
   const [importOrderFile, setImportOrderFile] = React.useState<File | null>(null);
@@ -218,7 +218,7 @@ export const OrderManagementView = ({
   const [importOrderStatus, setImportOrderStatus] = React.useState<OrderStatus>('PROCESSING');
   const [importOrderSaving, setImportOrderSaving] = React.useState(false);
 
-  const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; lineAmount: string; costPrice: string }>>({});
+  const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; costPrice: string; supplierName: string }>>({});
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
@@ -524,10 +524,10 @@ export const OrderManagementView = ({
     const images = list.filter((file) => file.type.startsWith('image/'));
     const sheets = list.filter((file) => !file.type.startsWith('image/') && /\.(xlsx|xls|csv)$/i.test(file.name));
     try {
-      const cards: Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }> = [];
+      const cards: Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }> = [];
       for (const file of images) {
         const imageUrl = await uploadInboundImage(file);
-        cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, quantity: '1', unitPrice: '', costPrice: '' });
+        cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, quantity: '1', unitPrice: '', costPrice: '', supplierName: '', note: '', stage: 'PENDING', inboundQty: '0' });
       }
       if (cards.length) setAddonCards((prev) => [...prev, ...cards]);
       for (const file of sheets) await importSheetNow(file);
@@ -548,39 +548,46 @@ export const OrderManagementView = ({
       toast.error(error instanceof Error ? error.message : '传入表格失败');
     }
   };
-  const patchAddonCard = (key: string, patch: Partial<{ quantity: string; unitPrice: string; costPrice: string }>) => {
+  const patchAddonCard = (key: string, patch: Partial<{ quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>) => {
     setAddonCards((prev) => prev.map((item) => item.key === key ? { ...item, ...patch } : item));
   };
-  const saveAddonRow = async (card: { key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string }) => {
+  const saveAddonRow = async (card: { key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }) => {
     const unitRaw = card.unitPrice.trim();
     const costRaw = card.costPrice.trim();
     const unitPrice = unitRaw === '' ? 0 : Number(unitRaw);
     const costPrice = costRaw === '' ? null : Number(costRaw);
+    const quantity = Math.max(1, Math.floor(Number(card.quantity) || 1));
+    const inboundQty = Math.max(0, Math.min(quantity, Math.floor(Number(card.inboundQty) || 0)));
     if (!Number.isFinite(unitPrice) || unitPrice < 0 || (costPrice != null && (!Number.isFinite(costPrice) || costPrice < 0))) {
       toast.error('请填写正确的售价和成本价');
       return;
     }
     const saved = await handlers.appendManualOrderLine({
       imageUrl: card.imageUrl,
-      quantity: Math.max(1, Math.floor(Number(card.quantity) || 1)),
+      quantity,
       unitPrice,
+      lineAmount: Math.round(unitPrice * quantity * 100) / 100,
       costPrice,
+      supplierName: card.supplierName.trim(),
+      inboundNote: card.note.trim(),
+      inboundStage: card.stage || 'PENDING',
+      inboundQty,
     });
     if (saved) setAddonCards((prev) => prev.filter((item) => item.key !== card.key));
   };
 
-  const manualDraftOf = (line: { id: string; unitPrice: number | null; quantity: number; lineAmount: number | null; costPrice: number | null }) => (
+  const manualDraftOf = (line: { id: string; unitPrice: number | null; quantity: number; costPrice: number | null; supplierName?: string | null }) => (
     manualDrafts[line.id] || {
       unitPrice: line.unitPrice ? String(line.unitPrice) : '',
       quantity: line.quantity ? String(line.quantity) : '',
-      lineAmount: line.lineAmount ? String(line.lineAmount) : '',
       costPrice: line.costPrice == null ? '' : String(line.costPrice),
+      supplierName: line.supplierName || '',
     }
   );
-  const patchManualDraft = (line: { id: string; unitPrice: number | null; quantity: number; lineAmount: number | null; costPrice: number | null }, patch: Partial<{ unitPrice: string; quantity: string; lineAmount: string; costPrice: string }>) => {
+  const patchManualDraft = (line: { id: string; unitPrice: number | null; quantity: number; costPrice: number | null; supplierName?: string | null }, patch: Partial<{ unitPrice: string; quantity: string; costPrice: string; supplierName: string }>) => {
     setManualDrafts((prev) => ({ ...prev, [line.id]: { ...manualDraftOf(line), ...prev[line.id], ...patch } }));
   };
-  const saveManualDraft = async (line: { id: string; unitPrice: number | null; quantity: number; lineAmount: number | null; costPrice: number | null }) => {
+  const saveManualDraft = async (line: { id: string; unitPrice: number | null; quantity: number; costPrice: number | null; supplierName?: string | null }) => {
     const draft = manualDrafts[line.id];
     if (!draft) return;
     const numberOrNull = (value: string) => {
@@ -591,13 +598,13 @@ export const OrderManagementView = ({
     };
     const unitPrice = numberOrNull(draft.unitPrice);
     const quantity = numberOrNull(draft.quantity);
-    const lineAmount = numberOrNull(draft.lineAmount);
     const costPrice = numberOrNull(draft.costPrice);
-    if ([unitPrice, quantity, lineAmount, costPrice].some((value) => Number.isNaN(value)) || (unitPrice != null && unitPrice < 0) || (quantity != null && quantity <= 0) || (lineAmount != null && lineAmount < 0) || (costPrice != null && costPrice < 0)) {
-      toast.error('请填写正确的售价、数量或总价');
+    if ([unitPrice, quantity, costPrice].some((value) => Number.isNaN(value)) || (unitPrice != null && unitPrice < 0) || (quantity != null && quantity <= 0) || (costPrice != null && costPrice < 0)) {
+      toast.error('请填写正确的售价、数量或成本价');
       return;
     }
-    const saved = await handlers.updateManualOrderLine({ orderItemId: line.id, unitPrice, quantity, lineAmount, costPrice });
+    const lineAmount = unitPrice == null || quantity == null ? null : Math.round(unitPrice * quantity * 100) / 100;
+    const saved = await handlers.updateManualOrderLine({ orderItemId: line.id, unitPrice, quantity, lineAmount, costPrice, supplierName: draft.supplierName.trim() });
     if (saved) setManualDrafts((prev) => {
       const next = { ...prev };
       delete next[line.id];
@@ -1656,19 +1663,14 @@ export const OrderManagementView = ({
                           </div>
                         </div>
                       </td>) : null}
-                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : formatInboundMoney(line.unitPrice, line.currencyCode)}</td>) : null}
-                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{formatInboundMoney(line.discountUnitPrice ?? line.unitPrice, line.currencyCode)}</td>) : null}
-                      {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).quantity} onChange={(event) => patchManualDraft(line, { quantity: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : line.quantity}</td>) : null}
-                      {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="总价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).lineAmount} onChange={(event) => patchManualDraft(line, { lineAmount: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : formatInboundMoney(line.lineAmount, line.currencyCode)}</td>) : null}
-                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{String(line.skuCode || '').startsWith('ADD-') ? <input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).costPrice} onChange={(event) => patchManualDraft(line, { costPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /> : (line.costPrice == null ? '' : formatInboundMoney(line.costPrice, 'CNY'))}</td>) : null}
-                      {columnVisible('supplier') ? (<td className="overflow-hidden px-2 py-3 align-middle text-center">
-                        {line.supplierUrl ? (
-                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-3 break-words text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
-                        ) : line.supplierName ? (
-                          <span className="line-clamp-3 break-words text-sm text-slate-700">{line.supplierName}</span>
-                        ) : String(line.skuCode || '').startsWith('ADD-') ? null : (
-                          <span className="line-clamp-3 break-words text-sm text-slate-700">未录入</span>
-                        )}
+                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
+                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{(() => { const unit = Number(manualDraftOf(line).unitPrice); const rate = orderSubtotal > 0 ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal : 1; return manualDraftOf(line).unitPrice.trim() && Number.isFinite(unit) ? formatInboundMoney(Math.round(unit * rate * 100) / 100, line.currencyCode) : ''; })()}</td>) : null}
+                      {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).quantity} onChange={(event) => patchManualDraft(line, { quantity: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
+                      {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{(() => { const unit = Number(manualDraftOf(line).unitPrice); const qty = Number(manualDraftOf(line).quantity); return manualDraftOf(line).unitPrice.trim() && manualDraftOf(line).quantity.trim() && Number.isFinite(unit) && Number.isFinite(qty) ? formatInboundMoney(Math.round(unit * qty * 100) / 100, line.currencyCode) : ''; })()}</td>) : null}
+                      {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).costPrice} onChange={(event) => patchManualDraft(line, { costPrice: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
+                      {columnVisible('supplier') ? (<td className="overflow-hidden px-1 py-3 align-middle text-center">
+                        <input aria-label="供应商" className="mx-auto h-9 w-full rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).supplierName} onChange={(event) => patchManualDraft(line, { supplierName: event.target.value })} onBlur={() => void saveManualDraft(line)} />
+                        {line.supplierUrl ? <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-sky-700 underline-offset-2 hover:underline">打开链接</a> : null}
                       </td>) : null}
                       {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
@@ -1716,7 +1718,15 @@ export const OrderManagementView = ({
                   )
                 })}
 
-                {addonCards.map((card) => (
+                {addonCards.map((card) => {
+                  const addonUnit = Number(card.unitPrice);
+                  const addonQty = Number(card.quantity);
+                  const addonTotal = card.unitPrice.trim() && card.quantity.trim() && Number.isFinite(addonUnit) && Number.isFinite(addonQty)
+                    ? Math.round(addonUnit * addonQty * 100) / 100
+                    : null;
+                  const addonRate = orderSubtotal > 0 ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal : 1;
+                  const addonDiscount = card.unitPrice.trim() && Number.isFinite(addonUnit) ? Math.round(addonUnit * addonRate * 100) / 100 : null;
+                  return (
                   <tr key={card.key} className="border-b bg-sky-50/40 align-middle">
                     {columnVisible('product') ? (
                       <td className="overflow-hidden px-2 py-3 align-middle">
@@ -1732,29 +1742,49 @@ export const OrderManagementView = ({
                       </td>
                     ) : null}
                     {columnVisible('unitPrice') ? (
-                      <td className="px-1 py-3 align-middle">
-                        <input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} />
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle">
+                        <input aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} />
                       </td>
                     ) : null}
-                    {columnVisible('discountPrice') ? <td /> : null}
+                    {columnVisible('discountPrice') ? <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums">{addonDiscount == null ? '' : formatInboundMoney(addonDiscount, inboundCurrency)}</td> : null}
                     {columnVisible('quantity') ? (
-                      <td className="px-1 py-3 align-middle">
-                        <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm" value={card.quantity} onChange={(event) => patchAddonCard(card.key, { quantity: event.target.value })} />
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle">
+                        <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.quantity} onChange={(event) => patchAddonCard(card.key, { quantity: event.target.value })} />
                       </td>
                     ) : null}
-                    {columnVisible('lineAmount') ? <td /> : null}
+                    {columnVisible('lineAmount') ? <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums">{addonTotal == null ? '' : formatInboundMoney(addonTotal, inboundCurrency)}</td> : null}
                     {columnVisible('costPrice') ? (
-                      <td className="px-1 py-3 align-middle">
-                        <input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm" value={card.costPrice} onChange={(event) => patchAddonCard(card.key, { costPrice: event.target.value })} />
+                      <td className="overflow-hidden px-1 py-3 text-center align-middle">
+                        <input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.costPrice} onChange={(event) => patchAddonCard(card.key, { costPrice: event.target.value })} />
                       </td>
                     ) : null}
-                    {columnVisible('supplier') ? <td /> : null}
-                    {columnVisible('note') ? <td /> : null}
-                    {columnVisible('stage') ? <td /> : null}
-                    {columnVisible('inboundQty') ? <td /> : null}
+                    {columnVisible('supplier') ? (
+                      <td className="overflow-hidden px-1 py-3 align-middle">
+                        <input aria-label="供应商" className="h-9 w-full rounded-md border px-2 text-center text-sm" value={card.supplierName} onChange={(event) => patchAddonCard(card.key, { supplierName: event.target.value })} />
+                      </td>
+                    ) : null}
+                    {columnVisible('note') ? (
+                      <td className="overflow-hidden px-1 py-3 align-middle">
+                        <textarea rows={2} aria-label="备注" className="w-full resize-none rounded-md border px-2 py-1 text-sm" value={card.note} onChange={(event) => patchAddonCard(card.key, { note: event.target.value })} />
+                      </td>
+                    ) : null}
+                    {columnVisible('stage') ? (
+                      <td className="overflow-hidden px-1 py-3 align-middle">
+                        <select aria-label="商品状态" className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" value={card.stage} onChange={(event) => patchAddonCard(card.key, { stage: event.target.value })}>
+                          {INBOUND_STAGE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </td>
+                    ) : null}
+                    {columnVisible('inboundQty') ? (
+                      <td className="overflow-hidden px-1 py-3 align-middle">
+                        <input aria-label="到货数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.inboundQty} onChange={(event) => patchAddonCard(card.key, { inboundQty: event.target.value })} />
+                      </td>
+                    ) : null}
                   </tr>
-                ))}
-              </tbody>
+                  );
+                })}
+
+</tbody>
             </table>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
