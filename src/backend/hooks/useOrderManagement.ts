@@ -35,6 +35,7 @@ import {
   appendManualOrderLine,
   importInboundSheet,
   updateManualOrderLine,
+  deleteInboundLines,
   importCustomerOrder,
   listInboundShipments,
   saveInboundShipment,
@@ -179,6 +180,7 @@ export interface OrderManagementHandlers {
   appendManualOrderLine: (input: { imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null; lines?: Array<{ imageUrl?: string | null; unitPrice?: number | null; quantity?: number | null; costPrice?: number | null; lineAmount?: number | null }> }) => Promise<boolean>
   importInboundSheet: (input: { fileBase64: string; fileName?: string }) => Promise<boolean>
   updateManualOrderLine: (input: { orderItemId: string; unitPrice?: number | null; quantity?: number | null; lineAmount?: number | null; costPrice?: number | null; supplierName?: string | null }) => Promise<boolean>
+  deleteInboundLines: (lineIds: string[]) => Promise<boolean>
   saveInboundShipment: (input: { shippedAt: string; legs: Array<{ trackingNumber?: string; channel?: string; note?: string }> }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
@@ -1154,6 +1156,72 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+
+  const deleteInboundLinesOnOrder = async (lineIds: string[]) => {
+    if (!inboundOrderId) return false
+    const ids = [...new Set(lineIds.map((id) => String(id || '').trim()).filter(Boolean))]
+    if (!ids.length) {
+      toast.error('请先勾选要删除的商品')
+      return false
+    }
+    try {
+      setInboundSaving(true)
+      const result = await deleteInboundLines({ orderId: inboundOrderId, lineIds: ids })
+      const drafts = inboundDrafts
+      setList((prev) => prev.map((row) => (
+        row.id === inboundOrderId
+          ? {
+              ...row,
+              subtotalAmount: result.subtotalAmount,
+              discountAmount: result.discountAmount,
+              totalAmount: result.totalAmount,
+              inboundLines: result.lines,
+              inboundOrderedQty: result.orderedQty,
+              inboundReceivedQty: result.receivedQty,
+              inboundState: result.state,
+            }
+          : row
+      )))
+      setDetailData((prev) => {
+        if (!prev || prev.id !== inboundOrderId) return prev
+        return {
+          ...prev,
+          subtotalAmount: result.subtotalAmount,
+          discountAmount: result.discountAmount,
+          totalAmount: result.totalAmount,
+          inboundLines: result.lines,
+        }
+      })
+      setInboundDrafts(result.lines.map((line) => {
+        const prev = drafts.find((item) => item.id === line.id)
+        if (!prev) {
+          return {
+            ...line,
+            acknowledged: false,
+            openedQty: line.inboundQty,
+            openedNote: line.inboundNote || '',
+            openedStage: line.inboundStage || 'PENDING',
+            openedImage: line.shipmentImageUrl || '',
+          }
+        }
+        return {
+          ...prev,
+          ...line,
+          inboundQty: Math.min(prev.inboundQty, line.quantity),
+          inboundNote: prev.inboundNote,
+          inboundStage: prev.inboundStage,
+        }
+      }))
+      toast.success(ids.length > 1 ? `已删除 ${ids.length} 件商品` : '已删除商品')
+      return true
+    } catch (err: any) {
+      toast.error(err.message || '删除失败')
+      return false
+    } finally {
+      setInboundSaving(false)
+    }
+  }
+
   const importCustomerOrderFile = async (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => {
     try {
       const result = await importCustomerOrder(input, { __rpcTimeoutMs: 90_000 })
@@ -1269,6 +1337,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       appendManualOrderLine: appendManualOrderLineToOrder,
       importInboundSheet: importInboundSheetFile,
       updateManualOrderLine: updateManualOrderLineOnOrder,
+      deleteInboundLines: deleteInboundLinesOnOrder,
       importCustomerOrder: importCustomerOrderFile,
       saveInboundShipment: saveInboundShipmentRows,
       exportInboundSheet,

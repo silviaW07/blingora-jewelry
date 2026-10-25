@@ -1530,6 +1530,11 @@ export const OrderManagementView = ({
               </label>
               <Button type="button" size="sm" variant="outline" className="h-9" onClick={openBatchNote}>添加备注</Button>
               <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setHiddenColumns({})}>取消隐藏</Button>
+              <Button type="button" size="sm" variant="outline" className="h-9 text-red-600" disabled={state.inboundSaving} onClick={() => {
+                if (!inboundSelected.length) { toast.error('请先勾选要删除的商品'); return }
+                if (!window.confirm(`删除选中的 ${inboundSelected.length} 件商品？`)) return
+                void handlers.deleteInboundLines(inboundSelected).then((ok) => { if (ok) setInboundSelectedPersist([]) })
+              }}>删除</Button>
             </div>
             {INBOUND_EXPORT_COLUMNS.some(([key]) => hiddenColumns[key]) ? (
               <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1605,7 +1610,7 @@ export const OrderManagementView = ({
                   </tr>
                 ) : null}
                 {visibleInboundDrafts.map((line) => {
-                  const imageUrl = line.mainImageUrl
+                  const imageUrl = line.mainImageUrl || line.shipmentImageUrl
                   return (
                     <tr
                       key={line.id}

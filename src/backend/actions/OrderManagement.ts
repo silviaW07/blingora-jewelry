@@ -1344,7 +1344,7 @@ function loadJSZip(): any | null {
 }
 
 function resolveZipTarget(fromFile: string, target: string) {
-  const clean = target.split('?')[0]
+  const clean = target.split('?')[0].replace(/\\/g, '/')
   if (clean.startsWith('/')) return clean.replace(/^\/+/, '')
   const dir = fromFile.split('/').slice(0, -1)
   for (const part of clean.split('/')) {
@@ -1354,24 +1354,33 @@ function resolveZipTarget(fromFile: string, target: string) {
   return dir.join('/')
 }
 
-/** WPS / Excel 嵌入单元格的图片不在 drawing 里，要从压缩包的 cellimages 或 richData 读。 */
-async function embeddedCellImages(raw: Buffer): Promise<Map<number, { buffer: Buffer; extension: string }>> {
-  const out = new Map<number, { buffer: Buffer; extension: string }>()
+type SheetCellImage = { buffer: Buffer; extension: string }
+
+/** WPS 嵌入单元格、Excel 单元格图片、以及画在格子上但没被 exceljs 认到的图。 */
+async function embeddedCellImages(raw: Buffer): Promise<{ byRow: Map<number, SheetCellImage>; ordered: SheetCellImage[] }> {
+  const byRow = new Map<number, SheetCellImage>()
+  const ordered: SheetCellImage[] = []
   const JSZip = loadJSZip()
-  if (!JSZip) return out
-  let zip: { file: (name: string) => { async: (type: string) => Promise<Buffer | string> } | null }
+  if (!JSZip) return { byRow, ordered }
+  let zip: { files?: Record<string, { async: (type: string) => Promise<Buffer | string> }>; file: (name: string) => { async: (type: string) => Promise<Buffer | string> } | null }
   try {
     zip = await JSZip.loadAsync(raw)
   } catch {
-    return out
+    return { byRow, ordered }
+  }
+  const entries = Object.keys(zip.files || {})
+  const byLower = new Map(entries.map((name) => [name.toLowerCase(), name]))
+  const entry = (name: string) => {
+    const hit = byLower.get(name.toLowerCase())
+    return hit ? zip.file(hit) : null
   }
   const readMedia = async (filePath: string) => {
-    const hit = zip.file(filePath)
+    const hit = entry(filePath) || entry(filePath.replace(/^xl\//i, ''))
     if (!hit) return null
     const buffer = Buffer.from(await hit.async('nodebuffer'))
     if (!buffer.length) return null
-    const ext = (filePath.split('.').pop() || 'png').toLowerCase()
-    return { buffer, extension: ext === 'jpeg' ? 'jpg' : ext }
+    const ext = (filePath.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')
+    return { buffer, extension: ext === 'jpeg' ? 'jpg' : ext || 'png' }
   }
   const relMapFrom = (xml: string) => {
     const relMap = new Map<string, string>()
@@ -1384,58 +1393,94 @@ async function embeddedCellImages(raw: Buffer): Promise<Map<number, { buffer: Bu
     }
     return relMap
   }
-  const cellImages = zip.file('xl/cellimages.xml')
-  const cellRels = zip.file('xl/_rels/cellimages.xml.rels')
-  const idToMedia = new Map<string, { buffer: Buffer; extension: string }>()
-  if (cellImages && cellRels) {
-    const xml = String(await cellImages.async('string'))
-    const relMap = relMapFrom(String(await cellRels.async('string')))
-    const chunks = xml.match(/<[^>]*:?cellImage\b[\s\S]*?<\/[^>]*:?cellImage>/g) || []
+  const imageIdIn = (xml: string) => xml.match(/DISPIMG\(\s*(?:&quot;|&#34;|["'“”])([^"'“”&<]+)/i)?.[1]?.trim() || ''
+  const remember = (row: number, img: SheetCellImage | null | undefined) => {
+    if (!row || !img || byRow.has(row)) return
+    byRow.set(row, img)
+  }
+
+  const cellImageNames = entries.filter((name) => /(^|\/)cellimages\.xml$/i.test(name) && !/\/_rels\//i.test(name))
+  const idToMedia = new Map<string, SheetCellImage>()
+  for (const imageName of cellImageNames) {
+    const xmlFile = zip.file(imageName)
+    const relFile = entry(imageName.replace(/^(.*\/)?([^/]+)$/i, '$1_rels/$2.rels'))
+      || entry('xl/_rels/cellimages.xml.rels')
+    if (!xmlFile || !relFile) continue
+    const xml = String(await xmlFile.async('string'))
+    const relMap = relMapFrom(String(await relFile.async('string')))
+    const chunks = xml.match(/<[^>]*:?cellImage\b[\s\S]*?<\/[^>]*:?cellImage>/gi) || []
     for (const chunk of chunks) {
-      const name = chunk.match(/\bname="([^"]+)"/)?.[1]
-      const rid = chunk.match(/\br:embed="([^"]+)"/)?.[1]
-      const target = name && rid ? relMap.get(rid) : ''
-      if (!name || !target) continue
-      const img = await readMedia(resolveZipTarget('xl/cellimages.xml', target))
-      if (img) idToMedia.set(name, img)
+      const name = chunk.match(/\b(?:name|descr)="([^"]+)"/i)?.[1]
+      const rid = chunk.match(/\br:(?:embed|link)="([^"]+)"/i)?.[1]
+      const target = rid ? relMap.get(rid) : ''
+      if (!target) continue
+      const img = await readMedia(resolveZipTarget(imageName, target))
+      if (!img) continue
+      ordered.push(img)
+      if (name) idToMedia.set(name, img)
     }
   }
-  const workbookXml = zip.file('xl/workbook.xml')
-  const workbookRels = zip.file('xl/_rels/workbook.xml.rels')
+
+  const workbookXml = entry('xl/workbook.xml')
+  const workbookRels = entry('xl/_rels/workbook.xml.rels')
   let sheetPath = 'xl/worksheets/sheet1.xml'
   if (workbookXml && workbookRels) {
     const wbXml = String(await workbookXml.async('string'))
-    const rid = wbXml.match(/<sheet\b[^>]*\br:id="([^"]+)"/)?.[1]
+    const rid = wbXml.match(/<sheet\b[^>]*\br:id="([^"]+)"/i)?.[1]
     const relMap = relMapFrom(String(await workbookRels.async('string')))
     const target = rid ? relMap.get(rid) : ''
     if (target) sheetPath = resolveZipTarget('xl/workbook.xml', target)
   }
-  const sheetFile = zip.file(sheetPath)
+  const sheetFile = entry(sheetPath)
   const sheetXml = sheetFile ? String(await sheetFile.async('string')) : ''
-  const cellRe = /<c\b([^>]*)>([\s\S]*?)<\/c>/g
-  let cell: RegExpExecArray | null
-  while ((cell = cellRe.exec(sheetXml))) {
-    const ref = cell[1].match(/\br="[A-Z]+(\d+)"/)
-    if (!ref) continue
-    const row = Number(ref[1])
-    if (!row || out.has(row)) continue
-    const imageId = cell[2].match(/DISPIMG\(\s*(?:&quot;|")([^"&]+)/)?.[1]
-    const img = imageId ? idToMedia.get(imageId) : undefined
-    if (img) out.set(row, img)
+  const sharedFile = entry('xl/sharedStrings.xml')
+  const sharedStrings: string[] = []
+  if (sharedFile) {
+    const sharedXml = String(await sharedFile.async('string'))
+    for (const item of sharedXml.match(/<si\b[\s\S]*?<\/si>/g) || []) {
+      sharedStrings.push(item.replace(/<[^>]+>/g, ''))
+    }
   }
-  const metaFile = zip.file('xl/metadata.xml')
-  const richFile = zip.file('xl/richData/rdrichvalue.xml')
-  const richRelFile = zip.file('xl/richData/richValueRel.xml')
-  const richRelRels = zip.file('xl/richData/_rels/richValueRel.xml.rels')
-  if (metaFile && richFile && richRelFile && richRelRels && sheetXml) {
+  const formulaRows: number[] = []
+  if (sheetXml) {
+    const rowRe = /<row\b([^>]*)>([\s\S]*?)<\/row>/g
+    let rowMatch: RegExpExecArray | null
+    let fallbackRow = 1
+    while ((rowMatch = rowRe.exec(sheetXml))) {
+      const row = Number(rowMatch[1].match(/\br="(\d+)"/)?.[1] || fallbackRow)
+      fallbackRow = row + 1
+      const body = rowMatch[2]
+      let imageId = imageIdIn(body)
+      if (!imageId) {
+        const stringIndex = body.match(/\bt="s"[^>]*>[\s\S]*?<v>(\d+)<\/v>/)?.[1]
+          || body.match(/<v>(\d+)<\/v>[\s\S]*?\bt="s"/)?.[1]
+        if (stringIndex && imageIdIn(sharedStrings[Number(stringIndex)] || '')) imageId = imageIdIn(sharedStrings[Number(stringIndex)] || '')
+      }
+      const named = imageId ? idToMedia.get(imageId) : undefined
+      if (named) {
+        remember(row, named)
+        formulaRows.push(row)
+      } else if (imageId) formulaRows.push(row)
+    }
+    if (!byRow.size && formulaRows.length && formulaRows.length === ordered.length) {
+      formulaRows.forEach((row, index) => remember(row, ordered[index]))
+    }
+  }
+
+  const metaFile = entry('xl/metadata.xml')
+  const richFile = entry('xl/richData/rdrichvalue.xml') || entry('xl/richData/rdRichValue.xml')
+  const richRelPath = byLower.get('xl/richdata/richvaluerel.xml') || byLower.get('xl/richdata/rdrichvaluerel.xml') || ''
+  const richRelFile = richRelPath ? zip.file(richRelPath) : null
+  const richRelRelsFile = entry('xl/richData/_rels/richValueRel.xml.rels') || entry('xl/richData/_rels/rdRichValueRel.xml.rels')
+  if (metaFile && richFile && richRelFile && richRelRelsFile && sheetXml && !byRow.size) {
     const meta = String(await metaFile.async('string'))
     const richXml = String(await richFile.async('string'))
     const richRelXml = String(await richRelFile.async('string'))
-    const rels = relMapFrom(String(await richRelRels.async('string')))
+    const rels = relMapFrom(String(await richRelRelsFile.async('string')))
     const vmToRich: number[] = []
-    const vmBlocks = meta.match(/<valueMetadata\b[\s\S]*?<\/valueMetadata>/)?.[0] || ''
+    const vmBlocks = meta.match(/<valueMetadata\b[\s\S]*?<\/valueMetadata>/i)?.[0] || ''
     for (const block of vmBlocks.match(/<bk\b[\s\S]*?<\/bk>/g) || []) {
-      const index = block.match(/<rc\b[^>]*\bv="(\d+)"/)?.[1]
+      const index = block.match(/\bv="(\d+)"/)?.[1]
       vmToRich.push(index == null ? -1 : Number(index))
     }
     const richValues: number[][] = []
@@ -1443,10 +1488,11 @@ async function embeddedCellImages(raw: Buffer): Promise<Map<number, { buffer: Bu
       richValues.push([...block.matchAll(/<v>(\d+)<\/v>/g)].map((item) => Number(item[1])))
     }
     const relIds = [...richRelXml.matchAll(/\br:id="([^"]+)"/g)].map((item) => item[1])
-    const mediaByRel: Array<{ buffer: Buffer; extension: string } | null> = []
+    const mediaByRel: Array<SheetCellImage | null> = []
     for (const id of relIds) {
       const target = rels.get(id)
-      mediaByRel.push(target ? await readMedia(resolveZipTarget('xl/richData/richValueRel.xml', target)) : null)
+      const img = target ? await readMedia(resolveZipTarget(richRelPath, target)) : null
+      mediaByRel.push(img)
     }
     const richCellRe = /<c\b([^>]*)>/g
     let richCell: RegExpExecArray | null
@@ -1454,15 +1500,39 @@ async function embeddedCellImages(raw: Buffer): Promise<Map<number, { buffer: Bu
       const vm = richCell[1].match(/\bvm="(\d+)"/)?.[1]
       const ref = richCell[1].match(/\br="[A-Z]+(\d+)"/)
       if (!vm || !ref) continue
-      const row = Number(ref[1])
-      if (!row || out.has(row)) continue
       const values = richValues[vmToRich[Number(vm) - 1]] || []
       const relIndex = values.find((value) => value >= 0 && value < mediaByRel.length && mediaByRel[value])
-      const img = relIndex == null ? null : mediaByRel[relIndex]
-      if (img) out.set(row, img)
+      remember(Number(ref[1]), relIndex == null ? null : mediaByRel[relIndex])
+    }
+    if (!ordered.length) {
+      for (const img of mediaByRel) if (img) ordered.push(img)
     }
   }
-  return out
+
+  if (!byRow.size) {
+    const drawingNames = entries.filter((name) => /xl\/drawings\/drawing[^/]*\.xml$/i.test(name))
+    for (const drawingName of drawingNames) {
+      const drawingFile = zip.file(drawingName)
+      const relName = drawingName.replace(/\/([^/]+)$/, '/_rels/$1.rels')
+      const relFile = entry(relName)
+      if (!drawingFile || !relFile) continue
+      const drawingXml = String(await drawingFile.async('string'))
+      const relMap = relMapFrom(String(await relFile.async('string')))
+      const anchors = drawingXml.match(/<(?:[^:>]+:)?(?:twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/(?:[^:>]+:)?(?:twoCellAnchor|oneCellAnchor)>/gi) || []
+      const drawingImages: SheetCellImage[] = []
+      for (const anchor of anchors) {
+        const rowText = anchor.match(/<(?:[^:>]+:)?row>(\d+)<\/(?:[^:>]+:)?row>/i)?.[1]
+        const rid = anchor.match(/\br:embed="([^"]+)"/i)?.[1]
+        const target = rid ? relMap.get(rid) : ''
+        if (rowText == null || !target) continue
+        const img = await readMedia(resolveZipTarget(drawingName, target))
+        remember(Number(rowText) + 1, img)
+        if (img) drawingImages.push(img)
+      }
+      if (!ordered.length) ordered.push(...drawingImages)
+    }
+  }
+  return { byRow, ordered }
 }
 
 /**
@@ -1479,6 +1549,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
     const raw = Buffer.from(String(input.fileBase64 || ''), 'base64')
     const fileName = String(input.fileName || '')
     const imagesByRow = new Map<number, { buffer?: Buffer | Uint8Array | ArrayBuffer; extension?: string }>()
+  const unplacedCellImages: Array<{ buffer: Buffer; extension: string }> = []
     const matrix: string[][] = []
     if (/\.(csv|xls)$/i.test(fileName)) {
       const XLSX = require('xlsx') as { read: Function; utils: { sheet_to_json: Function } }
@@ -1502,9 +1573,10 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
         if (media?.buffer) imagesByRow.set(row, media)
       }
       const embedded = await embeddedCellImages(raw)
-      for (const [row, media] of embedded) {
+      for (const [row, media] of embedded.byRow) {
         if (!imagesByRow.has(row)) imagesByRow.set(row, media)
       }
+      if (!embedded.byRow.size) unplacedCellImages.push(...embedded.ordered)
       const last = Math.max(sheet.rowCount || 1, ...[...imagesByRow.keys(), 1])
       for (let rowNumber = 1; rowNumber <= last; rowNumber += 1) {
         const line: string[] = []
@@ -1549,7 +1621,8 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
       const quantityText = read(rowNumber, 'quantity')
       const totalText = read(rowNumber, 'lineAmount')
       const costText = read(rowNumber, 'costPrice')
-      const image = imagesByRow.get(rowNumber)
+      let image = imagesByRow.get(rowNumber)
+    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift()
       if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
         emptyRun += 1
         if (emptyRun >= 3) break
@@ -1666,6 +1739,7 @@ export interface ImportCustomerOrderOutput {
 async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Array<ManualOrderLineInput & { skuCode: string }>> {
   const raw = Buffer.from(String(fileBase64 || ''), 'base64')
   const imagesByRow = new Map<number, { buffer?: Buffer | Uint8Array | ArrayBuffer; extension?: string }>()
+  const unplacedCellImages: Array<{ buffer: Buffer; extension: string }> = []
   const matrix: string[][] = []
   if (/\.(csv|xls)$/i.test(fileName)) {
     const XLSX = require('xlsx') as { read: Function; utils: { sheet_to_json: Function } }
@@ -1689,9 +1763,10 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
       if (media?.buffer) imagesByRow.set(row, media)
     }
     const embedded = await embeddedCellImages(raw)
-    for (const [row, media] of embedded) {
+    for (const [row, media] of embedded.byRow) {
       if (!imagesByRow.has(row)) imagesByRow.set(row, media)
     }
+    if (!embedded.byRow.size) unplacedCellImages.push(...embedded.ordered)
     const last = Math.max(sheet.rowCount || 1, ...[...imagesByRow.keys(), 1])
     for (let rowNumber = 1; rowNumber <= last; rowNumber += 1) {
       const line: string[] = []
@@ -1736,7 +1811,8 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
     const quantityText = read(rowNumber, 'quantity')
     const totalText = read(rowNumber, 'lineAmount')
     const costText = read(rowNumber, 'costPrice')
-    const image = imagesByRow.get(rowNumber)
+    let image = imagesByRow.get(rowNumber)
+    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText)) image = unplacedCellImages.shift()
     if (!skuCode && !unitText && !quantityText && !totalText && !costText && !image) {
       emptyRun += 1
       if (emptyRun >= 3) break
@@ -2057,6 +2133,32 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
           data: { supplierName: String(input.supplierName || '').trim().slice(0, 160) || null },
         })
       }
+      const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
+      const subtotal = Math.round(items.reduce((sum: number, row: { lineAmount: unknown }) => sum + (moneyAmount(row.lineAmount) ?? 0), 0) * 100) / 100
+      const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal)
+      const total = Math.round(Math.max(0, subtotal - discount + (moneyAmount(order.shippingAmount) ?? 0) + (moneyAmount(order.giftWrapAmount) ?? 0)) * 100) / 100
+      await tx.orderrecord.update({
+        where: { id: order.id },
+        data: { subtotalAmount: subtotal, discountAmount: discount, totalAmount: total },
+      })
+    })
+    return inboundLinesAfterGoods(order.id, order.currencyCode)
+  }),
+)
+
+
+export const deleteInboundLines = requireRole([UserRole.ADMIN])(
+  withResult(async (input: { orderId: string; lineIds: string[] }): Promise<UpdateOrderDiscountOutput> => {
+    const order = await prisma.orderrecord.findUnique({
+      where: { id: input.orderId },
+      include: { items: { select: { id: true } } },
+    })
+    if (!order) throw new Error('订单不存在')
+    const ids = [...new Set((input.lineIds || []).map((id) => String(id || '').trim()).filter(Boolean))]
+      .filter((id) => order.items.some((item) => item.id === id))
+    if (!ids.length) throw new Error('请先勾选商品')
+    await prisma.$transaction(async (tx) => {
+      await tx.orderitem.deleteMany({ where: { orderId: order.id, id: { in: ids } } })
       const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
       const subtotal = Math.round(items.reduce((sum: number, row: { lineAmount: unknown }) => sum + (moneyAmount(row.lineAmount) ?? 0), 0) * 100) / 100
       const discount = carryDiscountAmount(order.subtotalAmount, order.discountAmount, subtotal)
