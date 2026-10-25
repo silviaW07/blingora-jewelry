@@ -8,6 +8,7 @@ import {
   UserRole
 } from '@/backend/action_utils'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
+import { normalizeSupplierSourceUrl, tradeImportSourceUrl } from '@/shared/supplierSourceUrl'
 import { isPlaceholderCompareAt, resolveListedCompareAt } from '@/shared/pricingPromotionCalc'
 
 // ===== Enums =====
@@ -37,12 +38,15 @@ export interface OrderInboundLine {
   supplierUrl: string
   productStatus: string
   goodsStatus: string
+  /** PENDING 待采购 | PREPARING 备货中 | TRANSIT 运输中 | ARRIVED 已到货 */
+  inboundStage: string
   /** Saved quantity 0 means this line was confirmed out of stock. Unsaved 0 is not. */
   outOfStock: boolean
   /** Set in the check-in screen after the operator clicks 确认. */
   acknowledged?: boolean
   openedQty?: number
   openedNote?: string
+  openedStage?: string
 }
 
 function clampInboundQty(quantity: number, raw: number) {
@@ -81,11 +85,37 @@ const inboundProductSelect = {
   supplierName: true,
   status: true,
   goodsStatus: true,
+  tradeInfoJson: true,
   importTaskItems: {
     select: { sourceUrl: true, supplierName: true },
-    take: 5,
+    orderBy: { updatedAt: 'desc' as const },
+    take: 8,
   },
-} as const
+}
+
+const INBOUND_STAGES = new Set(['PENDING', 'PREPARING', 'TRANSIT', 'ARRIVED'])
+
+function cleanInboundStage(value: unknown): string {
+  const text = String(value || '').trim().toUpperCase()
+  return INBOUND_STAGES.has(text) ? text : 'PENDING'
+}
+
+function supplierLinkFromProduct(product: {
+  supplierName?: string | null
+  tradeInfoJson?: unknown
+  importTaskItems?: Array<{ sourceUrl?: string | null; supplierName?: string | null }> | null
+} | null | undefined): { supplierName: string; supplierUrl: string } {
+  const sources = product?.importTaskItems || []
+  const supplierName = String(
+    product?.supplierName
+    || sources.find((row) => String(row.supplierName || '').trim())?.supplierName
+    || ''
+  ).trim()
+  const supplierUrl = tradeImportSourceUrl(product?.tradeInfoJson)
+    || sources.map((row) => normalizeSupplierSourceUrl(row.sourceUrl)).find(Boolean)
+    || ''
+  return { supplierName, supplierUrl }
+}
 
 function mapInboundLine(item: {
   id: string
@@ -95,6 +125,7 @@ function mapInboundLine(item: {
   inboundQty?: number | null
   inboundNote?: string | null
   inboundAt?: Date | string | null
+  inboundStage?: string | null
   unitPrice?: unknown
   lineAmount?: unknown
   product?: {
@@ -103,22 +134,13 @@ function mapInboundLine(item: {
     supplierName?: string | null
     status?: string | null
     goodsStatus?: string | null
+    tradeInfoJson?: unknown
     importTaskItems?: Array<{ sourceUrl?: string | null; supplierName?: string | null }> | null
   } | null
 }, currencyCode?: string | null): OrderInboundLine {
   const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0))
   const inboundQty = clampInboundQty(quantity, Number(item.inboundQty) || 0)
-  const sources = item.product?.importTaskItems || []
-  const supplierUrl = String(
-    sources.find((row) => /1688\.com/i.test(String(row.sourceUrl || '')))?.sourceUrl
-    || sources.find((row) => String(row.sourceUrl || '').trim())?.sourceUrl
-    || ''
-  ).trim()
-  const supplierName = String(
-    item.product?.supplierName
-    || sources.find((row) => String(row.supplierName || '').trim())?.supplierName
-    || ''
-  ).trim()
+  const supplier = supplierLinkFromProduct(item.product)
   return {
     id: item.id,
     productName: item.productName,
@@ -131,10 +153,11 @@ function mapInboundLine(item: {
     lineAmount: moneyAmount(item.lineAmount),
     currencyCode: String(currencyCode || 'USD'),
     costPrice: moneyAmount(item.product?.costPrice),
-    supplierName,
-    supplierUrl,
+    supplierName: supplier.supplierName,
+    supplierUrl: supplier.supplierUrl,
     productStatus: String(item.product?.status || ''),
     goodsStatus: String(item.product?.goodsStatus || ''),
+    inboundStage: cleanInboundStage(item.inboundStage),
     outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0,
   }
 }
@@ -326,6 +349,7 @@ export interface UpdateOrderInboundLineInput {
   inboundNote?: string
   /** True when the operator confirmed this line. Quantity 0 is out of stock only then. */
   confirmed?: boolean
+  inboundStage?: string
 }
 
 export interface UpdateOrderInboundInput {
@@ -802,13 +826,18 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
         const prevNote = String(item.inboundNote || '')
         const markStockout = nextQty <= 0 && line.confirmed === true
         const recordArrival = nextQty > 0
-        if (nextQty === prevQty && nextNote === prevNote && !(markStockout && !inboundWasRecorded(item.inboundAt))) continue
+        const prevStage = cleanInboundStage(item.inboundStage)
+        const nextStage = line.inboundStage
+          ? cleanInboundStage(line.inboundStage)
+          : (recordArrival ? 'ARRIVED' : prevStage)
+        if (nextQty === prevQty && nextNote === prevNote && nextStage === prevStage && !(markStockout && !inboundWasRecorded(item.inboundAt))) continue
         await tx.orderitem.update({
           where: { id: item.id },
           data: {
             inboundQty: nextQty,
             inboundNote: nextNote || null,
             inboundAt: markStockout || recordArrival ? new Date() : item.inboundAt,
+            inboundStage: nextStage,
           },
         })
         const stockoutLabel = markStockout ? '缺货 ' : ''

@@ -152,7 +152,7 @@ export interface OrderManagementHandlers {
   /** 关闭入库登记 */
   closeInboundDialog: () => void
   /** 修改一行入库草稿 */
-  setInboundDraft: (lineId: string, patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote'>>) => void
+  setInboundDraft: (lineId: string, patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote' | 'inboundStage'>>) => void
   /** 本行按订购数量填到货数量，并记为已确认 */
   markInboundLineFull: (lineId: string) => void
   /** 确认这一行的到货数量。0 只有确认后才是缺货。 */
@@ -498,9 +498,11 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     setInboundDrafts(source.map((line) => ({
       ...line,
       inboundNote: line.inboundNote || '',
+      inboundStage: line.inboundStage || 'PENDING',
       acknowledged: false,
       openedQty: line.inboundQty,
       openedNote: line.inboundNote || '',
+      openedStage: line.inboundStage || 'PENDING',
     })))
     setInboundOrderId(orderId)
   }
@@ -512,7 +514,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const setInboundDraft = (
     lineId: string,
-    patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote'>>,
+    patch: Partial<Pick<OrderInboundLine, 'inboundQty' | 'inboundNote' | 'inboundStage'>>,
   ) => {
     setInboundDrafts((prev) => prev.map((line) => {
       if (line.id !== lineId) return line
@@ -526,18 +528,18 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const markInboundLineFull = (lineId: string) => {
     setInboundDrafts((prev) => prev.map((line) => (
-      line.id === lineId ? { ...line, inboundQty: line.quantity, acknowledged: true } : line
+      line.id === lineId ? { ...line, inboundQty: line.quantity, acknowledged: true, inboundStage: line.quantity > 0 ? 'ARRIVED' : (line.inboundStage || 'PENDING') } : line
     )))
   }
 
   const acknowledgeInboundLine = (lineId: string) => {
     setInboundDrafts((prev) => prev.map((line) => (
-      line.id === lineId ? { ...line, acknowledged: true } : line
+      line.id === lineId ? { ...line, acknowledged: true, inboundStage: line.inboundQty > 0 ? 'ARRIVED' : (line.inboundStage || 'PENDING') } : line
     )))
   }
 
   const markInboundAllFull = () => {
-    setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity, acknowledged: true })))
+    setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity, acknowledged: true, inboundStage: 'ARRIVED' })))
   }
 
   const submitInbound = async () => {
@@ -546,6 +548,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       line.acknowledged
       || line.inboundQty !== line.openedQty
       || (line.inboundNote || '') !== (line.openedNote || '')
+      || (line.inboundStage || 'PENDING') !== (line.openedStage || 'PENDING')
     ))
     if (!changed.length) {
       toast.error('请先修改到货数量，或点这一行的确认')
@@ -559,6 +562,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           orderItemId: line.id,
           inboundQty: line.inboundQty,
           inboundNote: line.inboundNote,
+          inboundStage: line.inboundStage || 'PENDING',
           confirmed: Boolean(line.acknowledged) || line.inboundQty !== line.openedQty,
         })),
       })

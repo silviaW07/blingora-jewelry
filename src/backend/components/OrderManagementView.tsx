@@ -778,16 +778,15 @@ export const OrderManagementView = ({
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6">
-            <table className="w-full min-w-[1280px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b text-xs font-semibold text-slate-500">
-                  <th className="min-w-[280px] px-2 py-2 font-semibold">商品</th>
+                  <th className="w-[280px] px-2 py-2 font-semibold">商品</th>
                   <th className="w-24 px-2 py-2 text-right font-semibold">售价</th>
                   <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
                   <th className="w-24 px-2 py-2 text-right font-semibold">总价</th>
                   <th className="w-24 px-2 py-2 text-right font-semibold">成本价</th>
-                  <th className="w-28 px-2 py-2 font-semibold">供应商链接</th>
-                  <th className="min-w-[140px] px-2 py-2 font-semibold">供应商名称</th>
+                  <th className="w-36 px-2 py-2 font-semibold">供应商</th>
                   <th className="min-w-[180px] px-2 py-2 font-semibold">备注</th>
                   <th className="w-24 px-2 py-2 font-semibold">商品状态</th>
                   <th className="w-36 px-2 py-2 font-semibold">到货数量</th>
@@ -795,14 +794,13 @@ export const OrderManagementView = ({
               </thead>
               <tbody>
                 {state.inboundDrafts.map((line) => {
-                  const status = inboundGoodsStatus(line)
                   return (
                     <tr key={line.id} className="border-b align-top">
                       <td className="px-2 py-3">
                         <div className="flex items-start gap-3">
                           <button
                             type="button"
-                            className="h-14 w-14 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            className="h-28 w-28 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
                             aria-label={line.mainImageUrl ? `查看 ${line.productName}` : undefined}
                             disabled={!line.mainImageUrl}
                             onClick={() => {
@@ -816,12 +814,13 @@ export const OrderManagementView = ({
                                 keywords={line.mainImageUrl}
                                 description={line.productName}
                                 className="h-full w-full object-cover"
-                                proxyWidth={160}
+                                proxyWidth={480}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
                               />
                             ) : null}
                           </button>
-                          <div className="min-w-0 flex-1">
-                            <div className="whitespace-normal break-words text-sm font-semibold leading-5 text-slate-900">{line.productName}</div>
+                          <div className="min-w-0 w-[9.5rem] max-w-[9.5rem]">
+                            <div className="line-clamp-2 whitespace-normal break-words text-sm font-semibold leading-5 text-slate-900" title={line.productName}>{line.productName}</div>
                             <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">SKU: {line.skuCode}</div>
                           </div>
                         </div>
@@ -832,11 +831,10 @@ export const OrderManagementView = ({
                       <td className="px-2 py-3 text-right tabular-nums">{formatInboundMoney(line.costPrice, 'CNY')}</td>
                       <td className="px-2 py-3">
                         {line.supplierUrl ? (
-                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="text-sky-700 underline-offset-2 hover:underline">打开链接</a>
-                        ) : '—'}
-                      </td>
-                      <td className="px-2 py-3">
-                        <div className="whitespace-normal break-words leading-5">{line.supplierName || '—'}</div>
+                          <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{line.supplierName || '打开链接'}</a>
+                        ) : (
+                          <span className="text-sm text-slate-700">{line.supplierName || '未录入'}</span>
+                        )}
                       </td>
                       <td className="px-2 py-3">
                         <Input
@@ -848,7 +846,17 @@ export const OrderManagementView = ({
                         />
                       </td>
                       <td className="px-2 py-3">
-                        <span className={cn('inline-flex rounded border px-1.5 py-0.5 text-[11px] font-semibold', status.className)}>{status.label}</span>
+                        <select
+                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs"
+                          aria-label={`${line.productName} 商品状态`}
+                          value={line.inboundStage || 'PENDING'}
+                          onChange={(e) => handlers.setInboundDraft(line.id, { inboundStage: e.target.value })}
+                        >
+                          <option value="PENDING">待采购</option>
+                          <option value="PREPARING">备货中</option>
+                          <option value="TRANSIT">运输中</option>
+                          <option value="ARRIVED">已到货</option>
+                        </select>
                       </td>
                       <td className="px-2 py-3">
                         <div className="space-y-2">
@@ -914,7 +922,7 @@ export const OrderManagementView = ({
               proxyWidth={1600}
               proxyQuality={90}
               className="h-auto w-auto object-contain"
-              style={{ width: 'auto', height: 'auto', maxHeight: '94vh', maxWidth: '94vw', aspectRatio: 'auto', objectFit: 'contain' }}
+              style={{ width: 'auto', height: '100vh', maxHeight: '100vh', maxWidth: '100vw', aspectRatio: 'auto', objectFit: 'contain' }}
             />
           </div>
         </div>
