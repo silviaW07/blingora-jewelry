@@ -464,6 +464,17 @@ export const OrderManagementView = ({
   const [stageOpen, setStageOpen] = React.useState(false);
   const [stagePick, setStagePick] = React.useState('');
   const stageMenuRef = React.useRef<HTMLDivElement>(null);
+  const inboundTitleRef = React.useRef<HTMLDivElement>(null);
+  const [inboundTitleHeight, setInboundTitleHeight] = React.useState(0);
+  React.useEffect(() => {
+    const node = inboundTitleRef.current;
+    if (!node) return;
+    const measure = () => setInboundTitleHeight(node.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [state.inboundOrderId]);
   const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>>([]);
   const [importOrderOpen, setImportOrderOpen] = React.useState(false);
   const [importOrderEmail, setImportOrderEmail] = React.useState('');
@@ -1665,7 +1676,7 @@ export const OrderManagementView = ({
             else void receiveImportFiles(dropped);
           }}
         >
-          <DialogHeader className="sticky top-0 z-20 border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16">
+          <DialogHeader ref={inboundTitleRef} className="sticky top-0 z-20 border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16">
             <button
               type="button"
               aria-label="关闭"
@@ -1809,16 +1820,16 @@ export const OrderManagementView = ({
                 ))}
               </div>
             ) : null}
-            <table className="table-fixed border-collapse text-sm" style={{ width: `${visibleTablePercent}%` }}>
+            <table className="table-fixed border-separate border-spacing-0 text-sm" style={{ width: `${visibleTablePercent}%` }}>
               <colgroup>
                 {visibleInboundColumns.map(([key]) => (
                   <col key={key} style={{ width: `${((INBOUND_COLUMN_PERCENT[key] || 8) / visibleTablePercent) * 100}%` }} />
                 ))}
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-white">
-                <tr className="border-b text-sm font-semibold text-slate-800">
+              <thead>
+                <tr className="text-sm font-semibold text-slate-800">
                   {visibleInboundColumns.map(([key, label]) => (
-                    <th key={key} className={`overflow-hidden px-1 py-2 align-middle font-semibold ${key === 'product' ? 'text-left' : 'text-center'}`}>
+                    <th key={key} className={`sticky z-10 overflow-hidden border-b bg-slate-50 px-1 py-2 align-middle font-semibold shadow-[0_1px_0_#e2e8f0] ${key === 'product' ? 'text-left' : 'text-center'}`} style={{ top: inboundTitleHeight }}>
                       {key === 'product' ? (
                         <div className="flex items-center gap-2">
                           <input
