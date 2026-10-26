@@ -475,6 +475,8 @@ export const OrderManagementView = ({
 
   const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; costPrice: string; supplierName: string }>>({});
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
+  const [sheetProgress, setSheetProgress] = React.useState<number | null>(null);
+  const sheetJobRef = React.useRef(0);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
   const [cellEdit, setCellEdit] = React.useState<{ id: string; field: 'unit' | 'discount' | 'title' } | null>(null);
@@ -728,18 +730,42 @@ export const OrderManagementView = ({
   };
 
 
-  const fileToBase64 = async (file: File) => {
+  const fileToBase64 = async (file: File, onProgress?: (ratio: number) => void) => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     let binary = '';
     const size = 0x8000;
     for (let index = 0; index < bytes.length; index += size) {
       binary += String.fromCharCode(...bytes.subarray(index, index + size));
+      if (onProgress && bytes.length) onProgress(Math.min(1, (index + size) / bytes.length));
     }
     return btoa(binary);
   };
   const importSheetNow = async (file: File) => {
-    const fileBase64 = await fileToBase64(file);
-    return handlers.importInboundSheet({ fileBase64, fileName: file.name });
+    const job = sheetJobRef.current + 1;
+    sheetJobRef.current = job;
+    setSheetProgress(1);
+    const fileBase64 = await fileToBase64(file, (ratio) => {
+      if (sheetJobRef.current !== job) return;
+      setSheetProgress(Math.max(1, Math.min(30, Math.round(ratio * 30))));
+    });
+    if (sheetJobRef.current !== job) return false;
+    setSheetProgress(32);
+    const timer = window.setInterval(() => {
+      setSheetProgress((current) => {
+        if (current == null || current >= 92) return current;
+        return Math.min(92, current + Math.max(1, Math.round((92 - current) * 0.12)));
+      });
+    }, 500);
+    try {
+      const result = await handlers.importInboundSheet({ fileBase64, fileName: file.name });
+      if (sheetJobRef.current === job) setSheetProgress(100);
+      return result;
+    } finally {
+      window.clearInterval(timer);
+      window.setTimeout(() => {
+        if (sheetJobRef.current === job) setSheetProgress(null);
+      }, 700);
+    }
   };
   const receiveAddonProducts = async (files: FileList | File[]) => {
     const list = [...files];
@@ -2063,14 +2089,25 @@ export const OrderManagementView = ({
                 <div className="mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
               </div>
               <div
-                className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${addonDrag === 'sheet' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
-                onClick={() => addonSheetRef.current?.click()}
+                className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${sheetProgress != null || addonDrag === 'sheet' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
+                onClick={() => { if (sheetProgress == null) addonSheetRef.current?.click(); }}
                 onDragOver={(event) => { event.preventDefault(); setAddonDrag('sheet'); }}
                 onDragLeave={() => setAddonDrag((current) => current === 'sheet' ? null : current)}
                 onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonSheet(event.dataTransfer.files); }}
               >
-                <div className="text-base font-semibold">传入表格</div>
-                <div className="mt-1 text-sm text-slate-500">SKU 可以不填。表头对上售价、数量、总价就先存入</div>
+                {sheetProgress != null ? (
+                  <>
+                    <div className="text-base font-semibold">正在传入 {sheetProgress}%</div>
+                    <div className="mt-3 h-2 w-full max-w-xs overflow-hidden rounded-full bg-white">
+                      <div className="h-full rounded-full bg-sky-600 transition-[width] duration-300" style={{ width: `${sheetProgress}%` }} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-base font-semibold">传入表格</div>
+                    <div className="mt-1 text-sm text-slate-500">SKU 可以不填。表头对上售价、数量、总价就先存入</div>
+                  </>
+                )}
               </div>
             </div>
             <input ref={addonProductRef} type="file" className="hidden" multiple accept="image/*,.xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonProducts(files); event.target.value = ''; }} />

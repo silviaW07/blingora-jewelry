@@ -1118,7 +1118,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     if (!inboundOrderId) return false
     try {
       setInboundSaving(true)
-      const result = await importInboundSheet({ orderId: inboundOrderId, ...input })
+      const result = await importInboundSheet({ orderId: inboundOrderId, ...input }, { __rpcTimeoutMs: 300000 } as never)
       const drafts = inboundDrafts
       setList((prev) => prev.map((row) => (
         row.id === inboundOrderId
