@@ -1279,23 +1279,56 @@ const activeListedProductWhere = {
   },
 }
 
+/** No Brand 货架商品不进入每日上新（主类目、品牌字段、关联类目任一命中即排除）。 */
+const loadNoBrandCategoryIds = async () => {
+  const rows = await prisma.category.findMany({
+    where: {
+      OR: [
+        { slug: 'no-brand' },
+        { name: 'No Brand' },
+        { name: '无品牌' },
+      ],
+    },
+    select: { id: true },
+  })
+  return rows.map((row) => row.id)
+}
+
+const excludeNoBrandProducts = (categoryIds: string[]) => {
+  if (categoryIds.length === 0) return {}
+  return {
+    NOT: {
+      OR: [
+        { categoryId: { in: categoryIds } },
+        { brandCategoryId: { in: categoryIds } },
+        { relationCategories: { some: { categoryId: { in: categoryIds } } } },
+      ],
+    },
+  }
+}
+
 /**
  * 读取已上架商品，按 createdAt 归入最近 6 个月（New 月历）。
  * 用 6 次 count（走 status+createdAt 索引），禁止把窗口内全部行拉进内存。
  */
 export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyNewArrivalCalendarOutput> => {
-  const cacheKey = 'calendar:v2'
+  const cacheKey = 'calendar:v3'
   const cached = readDailyNewCache(dailyNewCalendarCache, cacheKey)
   if (cached) return cached
 
   const months = buildLast6Months()
+  const noBrandIds = await loadNoBrandCategoryIds()
+  const listedWhere = {
+    ...activeListedProductWhere,
+    ...excludeNoBrandProducts(noBrandIds),
+  }
   const [totalActiveProducts, ...monthCounts] = await Promise.all([
-    prisma.product.count({ where: activeListedProductWhere }),
+    prisma.product.count({ where: listedWhere }),
     ...months.map(async (item) => {
       const { start, end } = getMonthDateRange(item.year, item.month)
       const productCount = await prisma.product.count({
         where: {
-          ...activeListedProductWhere,
+          ...listedWhere,
           createdAt: { gte: start, lt: end },
         },
       })
@@ -1342,12 +1375,14 @@ export const getDailyNewArrivalProducts = withResult(async (
   const lang = normalizeProductLang(input.lang)
   const customerPromo = await loadCustomerPromo()
   const customerCoef = resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount)
-  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef ?? 1}`
+  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef ?? 1}:nb`
   const cached = readDailyNewCache(dailyNewProductsCache, cacheKey)
   if (cached) return cached
 
+  const noBrandIds = await loadNoBrandCategoryIds()
   const where = {
     ...activeListedProductWhere,
+    ...excludeNoBrandProducts(noBrandIds),
     createdAt: { gte: rangeStart, lt: rangeEnd },
   }
 
