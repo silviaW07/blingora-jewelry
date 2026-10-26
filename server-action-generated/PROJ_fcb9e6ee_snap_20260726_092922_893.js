@@ -30515,6 +30515,8 @@ const inboundProductSelect = {
 };
 const INBOUND_STAGES = new Set([
     'PENDING',
+    'RESTOCK',
+    'SHORTAGE',
     'STOCK',
     'PREPARING',
     'FACTORY',
@@ -31392,6 +31394,8 @@ function normalizeManualLine(row) {
     const stageText = String(row.inboundStage || 'PENDING').toUpperCase();
     const inboundStage = [
         'PENDING',
+        'RESTOCK',
+        'SHORTAGE',
         'PREPARING',
         'TRANSIT',
         'ARRIVED',
@@ -33506,6 +33510,8 @@ async function buildOrderExcelFile(orderIds) {
 }
 const INBOUND_STAGE_LABEL = {
     PENDING: '待采购',
+    RESTOCK: '补采',
+    SHORTAGE: '缺货',
     STOCK: '备货',
     PREPARING: '备货中',
     FACTORY: '工厂发货',
@@ -46639,6 +46645,8 @@ const mapCustomerOrder = (row)=>({
                 lineAmount: toNum(item.lineAmount),
                 inboundStage: [
                     'PENDING',
+                    'RESTOCK',
+                    'SHORTAGE',
                     'STOCK',
                     'PREPARING',
                     'FACTORY',
