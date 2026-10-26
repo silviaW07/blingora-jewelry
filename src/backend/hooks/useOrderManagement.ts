@@ -294,6 +294,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [inboundShipments, setInboundShipments] = useState<Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>>([])
   const inboundBooted = useRef<string | null>(null)
   const inboundClosing = useRef(false)
+  const inboundSaveChain = useRef(Promise.resolve())
 
   const fetchStats = async () => {
     try {
@@ -599,7 +600,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         ...line,
         inboundQty,
         inboundNote: extra ? String(extra.inboundNote || '') : (line.inboundNote || ''),
-        inboundStage: extra?.inboundStage || line.inboundStage || 'PENDING',
+        inboundStage: (line.inboundStage && line.inboundStage !== 'PENDING')
+          ? line.inboundStage
+          : (extra?.inboundStage || line.inboundStage || 'PENDING'),
         shipmentImageUrl: extra ? (extra.shipmentImageUrl || null) : (line.shipmentImageUrl || null),
         acknowledged: false,
         openedQty: line.inboundQty,
@@ -681,7 +684,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const closeInboundDialog = () => {
     inboundClosing.current = true
     inboundBooted.current = null
-    if (inboundOrderId) clearInboundDraftStore(inboundOrderId)
+    if (inboundOrderId) clearInboundDraftStore(orderId)
     syncInboundQuery(false, null)
     setInboundOrderId(null)
     setInboundSaving(false)
@@ -832,7 +835,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const saveInboundDrafts = async (drafts: OrderInboundLine[], options?: { allowEmpty?: boolean; keepOpen?: boolean; quiet?: boolean }) => {
-    if (!inboundOrderId) return
+    const orderId = inboundOrderId
+    if (!orderId) return
+    const run = async () => {
     const changed = drafts.filter((line) => (
       line.acknowledged
       || line.inboundQty !== line.openedQty
@@ -851,7 +856,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     try {
       setInboundSaving(true)
       const result = await updateOrderInbound({
-        orderId: inboundOrderId,
+        orderId,
         lines: changed.map((line) => ({
           orderItemId: line.id,
           inboundQty: line.inboundQty,
@@ -863,9 +868,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
             : {}),
         })),
       })
-      rememberInboundResult(inboundOrderId, drafts, result)
+      rememberInboundResult(orderId, drafts, result)
       setList((prev) => prev.map((row) => (
-        row.id === inboundOrderId
+        row.id === orderId
           ? {
               ...row,
               inboundLines: result.lines,
@@ -876,7 +881,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           : row
       )))
       setDetailData((prev) => {
-        if (!prev || prev.id !== inboundOrderId) return prev
+        if (!prev || prev.id !== orderId) return prev
         const byId = new Map(result.lines.map((line) => [line.id, line]))
         return {
           ...prev,
@@ -904,6 +909,10 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     } finally {
       setInboundSaving(false)
     }
+    }
+    const job = inboundSaveChain.current.then(run, run)
+    inboundSaveChain.current = job.then(() => undefined, () => undefined)
+    return job
   }
 
   const submitInbound = async (options?: { allowEmpty?: boolean; keepOpen?: boolean; quiet?: boolean }) => {
