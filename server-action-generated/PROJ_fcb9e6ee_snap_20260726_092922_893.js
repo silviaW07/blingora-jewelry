@@ -16538,7 +16538,14 @@ const saveCategoryTopPromotionConfig = (0, _action_utils.requireRole)([
                             level: 1,
                             status: 'ACTIVE',
                             sortWeight: -9999,
-                            isBrandCategory: false
+                            isBrandCategory: false,
+                            navConfig: {
+                                create: {
+                                    isVisible: false,
+                                    navTitle: '未分类',
+                                    sortWeight: -9999
+                                }
+                            }
                         },
                         select: {
                             id: true
@@ -34739,7 +34746,14 @@ async function ensureUncategorizedCategoryId(tx) {
             level: 1,
             status: 'ACTIVE',
             sortWeight: -9999,
-            isBrandCategory: false
+            isBrandCategory: false,
+            navConfig: {
+                create: {
+                    isVisible: false,
+                    navTitle: '未分类',
+                    sortWeight: -9999
+                }
+            }
         },
         select: {
             id: true
@@ -51235,9 +51249,14 @@ const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
             }
         ]
     });
+    const hiddenFromNav = (cat)=>{
+        const slug = String(cat.slug || '').trim().toLowerCase();
+        const name = String(cat.name || '').trim();
+        return slug === 'uncategorized' || name === '未分类';
+    };
     const mainCategories = categories.filter((cat)=>{
         var _cat_navConfig;
-        return isStorefrontLevel1(cat) && !cat.isBrandCategory && ((_cat_navConfig = cat.navConfig) === null || _cat_navConfig === void 0 ? void 0 : _cat_navConfig.isVisible) !== false;
+        return isStorefrontLevel1(cat) && !cat.isBrandCategory && ((_cat_navConfig = cat.navConfig) === null || _cat_navConfig === void 0 ? void 0 : _cat_navConfig.isVisible) !== false && !hiddenFromNav(cat);
     });
     const childCategories = categories.filter((cat)=>isStorefrontLevel2(cat) && !cat.isBrandCategory);
     const brandCategories = categories.filter((cat)=>cat.isBrandCategory);
