@@ -696,6 +696,8 @@
     "inStockCount": "in stock {{arrived}}",
     "inboundStages": {
       "PENDING": "To purchase",
+      "RESTOCK": "Restock",
+      "SHORTAGE": "Shortage",
       "STOCK": "Preparing",
       "PREPARING": "Preparing",
       "FACTORY": "waiting products",

@@ -121,6 +121,8 @@ const compareInboundRows = (a: { spu?: string | null; skuCode?: string | null },
 }
 const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
   ['PENDING', '待采购'],
+  ['RESTOCK', '补采'],
+  ['SHORTAGE', '缺货'],
   ['PREPARING', '备货中'],
   ['TRANSIT', '工厂发货'],
   ['ARRIVED', '到达仓库'],
@@ -133,6 +135,8 @@ const INBOUND_STAGE_LABEL: Record<string, string> = {
 };
 const INBOUND_STAGE_FILL: Record<string, { background: string; color: string }> = {
   PENDING: { background: '#facc15', color: '#422006' },
+  RESTOCK: { background: '#f472b6', color: '#831843' },
+  SHORTAGE: { background: '#f87171', color: '#450a0a' },
   STOCK: { background: '#60a5fa', color: '#172554' },
   PREPARING: { background: '#60a5fa', color: '#172554' },
   TRANSIT: { background: '#c084fc', color: '#3b0764' },

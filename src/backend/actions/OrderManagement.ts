@@ -102,7 +102,7 @@ const inboundProductSelect = {
   },
 }
 
-const INBOUND_STAGES = new Set(['PENDING', 'STOCK', 'PREPARING', 'FACTORY', 'TRANSIT', 'ARRIVED', 'PARCEL'])
+const INBOUND_STAGES = new Set(['PENDING', 'RESTOCK', 'SHORTAGE', 'STOCK', 'PREPARING', 'FACTORY', 'TRANSIT', 'ARRIVED', 'PARCEL'])
 
 function cleanInboundStage(value: unknown): string {
   const text = String(value || '').trim().toUpperCase()
@@ -1162,7 +1162,7 @@ function normalizeManualLine(row: ManualOrderLineInput) {
   const total = Math.round(unit * quantity * 100) / 100
   const costPrice = manualMoney(row.costPrice)
   const stageText = String(row.inboundStage || 'PENDING').toUpperCase()
-  const inboundStage = ['PENDING', 'PREPARING', 'TRANSIT', 'ARRIVED', 'PARCEL', 'STOCK', 'FACTORY'].includes(stageText) ? stageText : 'PENDING'
+  const inboundStage = ['PENDING', 'RESTOCK', 'SHORTAGE', 'PREPARING', 'TRANSIT', 'ARRIVED', 'PARCEL', 'STOCK', 'FACTORY'].includes(stageText) ? stageText : 'PENDING'
   const inboundQty = Math.max(0, Math.min(quantity, Math.floor(Number(row.inboundQty) || 0)))
   return {
     quantity,
@@ -2975,6 +2975,8 @@ async function buildOrderExcelFile(orderIds: string[]): Promise<ExportOrdersExce
 
 const INBOUND_STAGE_LABEL: Record<string, string> = {
   PENDING: '待采购',
+  RESTOCK: '补采',
+  SHORTAGE: '缺货',
   STOCK: '备货',
   PREPARING: '备货中',
   FACTORY: '工厂发货',

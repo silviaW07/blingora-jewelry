@@ -568,6 +568,8 @@
     "inStockCount": "到货 {{arrived}}",
     "inboundStages": {
       "PENDING": "待采购",
+      "RESTOCK": "补采",
+      "SHORTAGE": "缺货",
       "STOCK": "备货",
       "PREPARING": "备货中",
       "FACTORY": "工厂发货",
