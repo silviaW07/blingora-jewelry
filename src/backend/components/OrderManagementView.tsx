@@ -1879,7 +1879,7 @@ export const OrderManagementView = ({
                     <td colSpan={Math.max(visibleInboundColumns.length, 1)} className="px-3 py-10 text-center text-sm text-slate-500">没有这个状态的商品</td>
                   </tr>
                 ) : null}
-                {visibleInboundDrafts.map((line) => {
+                {visibleInboundDrafts.map((line, lineIndex) => {
                   const imageUrl = line.mainImageUrl || line.shipmentImageUrl
                   return (
                     <tr
@@ -1898,13 +1898,16 @@ export const OrderManagementView = ({
                     >
                       {columnVisible('product') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <div className="flex min-w-0 items-center gap-1">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 shrink-0"
-                            aria-label={`选择 ${line.productName}`}
-                            checked={inboundSelected.includes(line.id)}
-                            onChange={(event) => setInboundSelectedPersist(event.target.checked ? [...inboundSelected, line.id] : inboundSelected.filter((id) => id !== line.id))}
-                          />
+                          <div className="flex w-6 shrink-0 flex-col items-center gap-1">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              aria-label={`选择 ${line.productName}`}
+                              checked={inboundSelected.includes(line.id)}
+                              onChange={(event) => setInboundSelectedPersist(event.target.checked ? [...inboundSelected, line.id] : inboundSelected.filter((id) => id !== line.id))}
+                            />
+                            <span className="text-[11px] tabular-nums leading-none text-slate-500">{lineIndex + 1}</span>
+                          </div>
                           <button
                             type="button"
                             className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
