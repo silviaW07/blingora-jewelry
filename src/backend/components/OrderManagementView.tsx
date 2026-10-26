@@ -463,6 +463,7 @@ export const OrderManagementView = ({
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [stageOpen, setStageOpen] = React.useState(false);
   const [stagePick, setStagePick] = React.useState('');
+  const stageMenuRef = React.useRef<HTMLDivElement>(null);
   const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>>([]);
   const [importOrderOpen, setImportOrderOpen] = React.useState(false);
   const [importOrderEmail, setImportOrderEmail] = React.useState('');
@@ -564,6 +565,10 @@ export const OrderManagementView = ({
     toast.success('备注已填入勾选商品');
   };
   const openBatchStage = () => {
+    if (stageOpen) {
+      setStageOpen(false);
+      return;
+    }
     if (!inboundSelected.length) {
       toast.error('请先勾选商品');
       return;
@@ -571,6 +576,16 @@ export const OrderManagementView = ({
     setStagePick('');
     setStageOpen(true);
   };
+  React.useEffect(() => {
+    if (!stageOpen) return;
+    const close = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && stageMenuRef.current?.contains(target)) return;
+      setStageOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [stageOpen]);
   const applyBatchStage = () => {
     if (!inboundSelected.length) {
       toast.error('请先勾选商品');
@@ -2125,9 +2140,26 @@ export const OrderManagementView = ({
               全部到齐
             </Button>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button type="button" variant="outline" onClick={openBatchStage} disabled={state.inboundSaving}>
-                发货状态
-              </Button>
+              <div className="relative" ref={stageMenuRef}>
+                <Button type="button" variant="outline" onClick={openBatchStage} disabled={state.inboundSaving}>
+                  发货状态
+                </Button>
+                {stageOpen ? (
+                  <div className="absolute bottom-full right-0 z-[90] mb-2 w-64 rounded-lg border border-slate-200 bg-white p-3 shadow-xl" role="dialog" aria-label="发货状态">
+                    <div className="text-sm font-semibold text-slate-900">发货状态</div>
+                    <p className="mt-1 text-xs text-slate-500">写入已勾选的 {inboundSelected.length} 个商品</p>
+                    <div className="mt-2 grid gap-1.5">
+                      {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
+                        <Button key={value} type="button" variant="outline" className={"h-9 border-2 font-medium " + (stagePick === value ? "border-slate-900 ring-2 ring-slate-900" : "border-transparent")} style={INBOUND_STAGE_FILL[value]} onClick={() => setStagePick(value)}>{label}</Button>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <Button type="button" variant="outline" className="h-8" onClick={() => { setStageOpen(false); setStagePick(''); }}>取消</Button>
+                      <Button type="button" className="h-8" disabled={!stagePick} onClick={applyBatchStage}>确认</Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <Button type="button" variant="outline" onClick={handlers.closeInboundDialog} disabled={state.inboundSaving}>
                 取消
               </Button>
@@ -2180,23 +2212,6 @@ export const OrderManagementView = ({
           </DialogFooter>
           )}
           </InboundShipBar>
-      {state.inboundOrderId && stageOpen ? (
-        <div className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="发货状态" onClick={() => setStageOpen(false)}>
-          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
-            <div className="text-lg font-semibold text-slate-900">发货状态</div>
-            <p className="mt-1 text-sm text-slate-500">先点一个状态，再点确认。将写入已勾选的 {inboundSelected.length} 个商品。</p>
-            <div className="mt-4 grid gap-2">
-              {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
-                <Button key={value} type="button" variant="outline" className={"border-2 font-medium " + (stagePick === value ? "border-slate-900 ring-2 ring-slate-900" : "border-transparent")} style={INBOUND_STAGE_FILL[value]} onClick={() => setStagePick(value)}>{label}</Button>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { setStageOpen(false); setStagePick(''); }}>取消</Button>
-              <Button type="button" disabled={!stagePick} onClick={applyBatchStage}>确认</Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {state.inboundOrderId && noteOpen ? (
         <div className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-label="添加备注" onClick={() => setNoteOpen(false)}>
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
