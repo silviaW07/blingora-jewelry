@@ -1614,7 +1614,7 @@ export const OrderManagementView = ({
 
       <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) { setInboundZoom(null); setImportOpen(false); handlers.closeInboundDialog() } }}>
         <DialogContent
-          className="inset-0 top-0 left-0 flex h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 shadow-none"
+          className="inset-0 top-0 left-0 block h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto overscroll-contain rounded-none border-0 p-0 shadow-none data-[state=open]:animate-none data-[state=closed]:animate-none"
           onDragOver={(event) => {
             if (![...event.dataTransfer.types].includes('Files')) return
             event.preventDefault()
@@ -1632,7 +1632,7 @@ export const OrderManagementView = ({
             else void receiveImportFiles(dropped);
           }}
         >
-          <DialogHeader className="relative shrink-0 border-b px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16">
+          <DialogHeader className="sticky top-0 z-20 border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16">
             <button
               type="button"
               aria-label="关闭"
@@ -1679,7 +1679,7 @@ export const OrderManagementView = ({
             </div>
             </div>
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6">
+          <div className="px-4 py-4 sm:px-6">
             {importOpen ? (
               <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4">
                 <div className="text-lg font-semibold text-slate-900">导入商品 / 图片</div>
@@ -2091,7 +2091,7 @@ export const OrderManagementView = ({
             onUpdate={(input) => handlers.updateInboundShipment(input)}
           >
           {(shipButton) => (
-          <DialogFooter className="shrink-0 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">
+          <DialogFooter className="sticky bottom-0 z-20 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">
             <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
               全部到齐
             </Button>
