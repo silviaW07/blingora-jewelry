@@ -856,8 +856,13 @@ export const getCategoryList = withResult(async (input?: GetCategoryListInput): 
     ]
   })
 
+  const hiddenFromNav = (cat: { slug?: string | null; name?: string | null }) => {
+    const slug = String(cat.slug || '').trim().toLowerCase()
+    const name = String(cat.name || '').trim()
+    return slug === 'uncategorized' || name === '未分类'
+  }
   const mainCategories = categories.filter(
-    cat => isStorefrontLevel1(cat) && !cat.isBrandCategory && cat.navConfig?.isVisible !== false,
+    cat => isStorefrontLevel1(cat) && !cat.isBrandCategory && cat.navConfig?.isVisible !== false && !hiddenFromNav(cat),
   )
   const childCategories = categories.filter(cat => isStorefrontLevel2(cat) && !cat.isBrandCategory)
   const brandCategories = categories.filter(cat => cat.isBrandCategory)

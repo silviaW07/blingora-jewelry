@@ -1419,6 +1419,7 @@ async function ensureUncategorizedCategoryId(tx: any): Promise<string> {
       status: 'ACTIVE',
       sortWeight: -9999,
       isBrandCategory: false,
+      navConfig: { create: { isVisible: false, navTitle: '未分类', sortWeight: -9999 } },
     },
     select: { id: true },
   })
