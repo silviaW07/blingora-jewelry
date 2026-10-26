@@ -234,6 +234,7 @@ function OrderItemRow({
   const { t } = useTranslation()
   const thumbSrc = item.imageUrl || item.mainImageUrl || undefined
   const rate = Number.isFinite(discountRate) ? discountRate : 1
+  const discounted = rate < 0.999
   const discountUnit = Math.round(item.unitPrice * rate * 100) / 100
   const discountLine = Math.round(item.lineAmount * rate * 100) / 100
 
@@ -265,7 +266,7 @@ function OrderItemRow({
         <p className="mt-0.5 truncate text-[10px] leading-3 text-[#64748B]">
           {[item.skuCode && !item.skuCode.startsWith('ADD-') ? `SKU ${item.skuCode}` : '', item.materialLabel, item.sizeLabel].filter(Boolean).join(' · ')}
         </p>
-        <p className="text-[11px] font-semibold leading-4 text-[#0F172A] sm:text-xs">{currencyCode} {discountUnit.toFixed(2)}</p>
+        <p className="text-[11px] font-semibold leading-4 text-[#0F172A] sm:text-xs">{discounted ? <span className="mr-1 font-normal text-[#94a3b8] line-through">{currencyCode} {item.unitPrice.toFixed(2)}</span> : null}{currencyCode} {discountUnit.toFixed(2)}</p>
         <div className="mt-1 flex items-start justify-between gap-2 sm:hidden">
           <div className="min-w-0 text-[10px] leading-3 text-[#6b5e52]">
             <p>{t(`accountOrders.inboundStages.${item.inboundStage === 'FACTORY' ? 'TRANSIT' : (item.inboundStage || 'PENDING')}`)}</p>
@@ -273,7 +274,7 @@ function OrderItemRow({
           </div>
           <div className="shrink-0 text-right text-[11px] leading-4 text-[#64748B]">
             <p>×{item.quantity}</p>
-            <p className="font-medium text-[#0F172A]">{currencyCode} {discountLine.toFixed(2)}</p>
+            <p className="font-medium text-[#0F172A]">{discounted ? <span className="mr-1 font-normal text-[#94a3b8] line-through">{currencyCode} {item.lineAmount.toFixed(2)}</span> : null}{currencyCode} {discountLine.toFixed(2)}</p>
           </div>
         </div>
       </div>
@@ -285,7 +286,7 @@ function OrderItemRow({
       </div>
       <div className="hidden text-right text-xs leading-4 text-[#64748B] sm:block">
         <p>×{item.quantity}</p>
-        <p className="font-medium text-[#0F172A]">{currencyCode} {discountLine.toFixed(2)}</p>
+        <p className="font-medium text-[#0F172A]">{discounted ? <span className="mr-1 font-normal text-[#94a3b8] line-through">{currencyCode} {item.lineAmount.toFixed(2)}</span> : null}{currencyCode} {discountLine.toFixed(2)}</p>
       </div>
     </div>
   )
