@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, Trash2, AlertCircle, ShoppingBag, ArrowRight, Store, BadgeDollarSign, RefreshCw, CheckCircle2, MessageCircle, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -169,9 +169,21 @@ export const CartView = ({
 
   const itemIds = useMemo(() => state.items.map((item) => item.cartItemId), [state.items]);
 
+  const seenCartIds = useRef<Set<string>>(new Set());
+  const selectionTouched = useRef(false);
   useEffect(() => {
-    setSelectedIds((prev) => prev.filter((id) => itemIds.includes(id)));
-  }, [itemIds]);
+    if (!hydrated || guest) {
+      setSelectedIds((prev) => prev.filter((id) => itemIds.includes(id)));
+      return;
+    }
+    setSelectedIds((prev) => {
+      const fresh = itemIds.filter((id) => !seenCartIds.current.has(id));
+      seenCartIds.current = new Set(itemIds);
+      if (!selectionTouched.current && prev.length === 0) return itemIds;
+      const kept = prev.filter((id) => itemIds.includes(id));
+      return [...kept, ...fresh.filter((id) => !kept.includes(id))];
+    });
+  }, [guest, hydrated, itemIds]);
 
   useEffect(() => {
     persistCartSelectedIds(selectedIds);
@@ -209,10 +221,12 @@ export const CartView = ({
   const someSelected = selectedIds.length > 0 && !allSelected;
 
   const toggleSelectAll = (checked: boolean) => {
+    selectionTouched.current = true;
     setSelectedIds(checked ? itemIds : []);
   };
 
   const toggleSelectItem = (cartItemId: string, checked: boolean) => {
+    selectionTouched.current = true;
     setSelectedIds((prev) => {
       if (checked) {
         return prev.includes(cartItemId) ? prev : [...prev, cartItemId];
