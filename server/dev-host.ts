@@ -1394,9 +1394,9 @@ app.get('/healthz', (_req, res) => {
   })
 })
 
-// 12mb: browser-captured 1688 offer HTML routinely exceeds the 100kb default.
+// 200mb: order spreadsheets with embedded photos are posted as base64 JSON.
 // Route-level express.json({ limit }) does not override this global parser.
-app.use(express.json({ limit: '12mb' }))
+app.use(express.json({ limit: '200mb' }))
 
 // 中间件：拦截请求头，从头组装 ALS 上下文
 app.use((req, _res, next) => {

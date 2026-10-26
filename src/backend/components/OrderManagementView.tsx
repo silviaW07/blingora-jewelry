@@ -738,10 +738,6 @@ export const OrderManagementView = ({
     return btoa(binary);
   };
   const importSheetNow = async (file: File) => {
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error('表格超过 8MB，请压缩图片后再导入');
-      return false;
-    }
     const fileBase64 = await fileToBase64(file);
     return handlers.importInboundSheet({ fileBase64, fileName: file.name });
   };
@@ -847,10 +843,6 @@ export const OrderManagementView = ({
     }
     if (!importOrderFile) {
       toast.error('请上传表格');
-      return;
-    }
-    if (importOrderFile.size > 8 * 1024 * 1024) {
-      toast.error('表格超过 8MB，请压缩图片后再导入');
       return;
     }
     const weightText = importOrderWeight.trim();
