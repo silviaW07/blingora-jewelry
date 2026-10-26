@@ -50149,20 +50149,74 @@ const activeListedProductWhere = {
         status: 'ACTIVE'
     }
 };
+/** No Brand 货架商品不进入每日上新（主类目、品牌字段、关联类目任一命中即排除）。 */ const loadNoBrandCategoryIds = async ()=>{
+    const rows = await _prisma.default.category.findMany({
+        where: {
+            OR: [
+                {
+                    slug: 'no-brand'
+                },
+                {
+                    name: 'No Brand'
+                },
+                {
+                    name: '无品牌'
+                }
+            ]
+        },
+        select: {
+            id: true
+        }
+    });
+    return rows.map((row)=>row.id);
+};
+const excludeNoBrandProducts = (categoryIds)=>{
+    if (categoryIds.length === 0) return {};
+    return {
+        NOT: {
+            OR: [
+                {
+                    categoryId: {
+                        in: categoryIds
+                    }
+                },
+                {
+                    brandCategoryId: {
+                        in: categoryIds
+                    }
+                },
+                {
+                    relationCategories: {
+                        some: {
+                            categoryId: {
+                                in: categoryIds
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    };
+};
 const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
-    const cacheKey = 'calendar:v2';
+    const cacheKey = 'calendar:v3';
     const cached = readDailyNewCache(dailyNewCalendarCache, cacheKey);
     if (cached) return cached;
     const months = (0, _dailyNewArrival.buildLast6Months)();
+    const noBrandIds = await loadNoBrandCategoryIds();
+    const listedWhere = {
+        ...activeListedProductWhere,
+        ...excludeNoBrandProducts(noBrandIds)
+    };
     const [totalActiveProducts, ...monthCounts] = await Promise.all([
         _prisma.default.product.count({
-            where: activeListedProductWhere
+            where: listedWhere
         }),
         ...months.map(async (item)=>{
             const { start, end } = (0, _dailyNewArrival.getMonthDateRange)(item.year, item.month);
             const productCount = await _prisma.default.product.count({
                 where: {
-                    ...activeListedProductWhere,
+                    ...listedWhere,
                     createdAt: {
                         gte: start,
                         lt: end
@@ -50197,11 +50251,13 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
     const lang = (0, _productTranslation.normalizeProductLang)(input.lang);
     const customerPromo = await (0, _loadCustomerPromoKind.loadCustomerPromo)();
     const customerCoef = (0, _customerPromoPolicy.resolveGoodsCoef)(customerPromo.kind, customerPromo.vipDiscount);
-    const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef !== null && customerCoef !== void 0 ? customerCoef : 1}`;
+    const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef !== null && customerCoef !== void 0 ? customerCoef : 1}:nb`;
     const cached = readDailyNewCache(dailyNewProductsCache, cacheKey);
     if (cached) return cached;
+    const noBrandIds = await loadNoBrandCategoryIds();
     const where = {
         ...activeListedProductWhere,
+        ...excludeNoBrandProducts(noBrandIds),
         createdAt: {
             gte: rangeStart,
             lt: rangeEnd
