@@ -295,6 +295,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const inboundBooted = useRef<string | null>(null)
   const inboundClosing = useRef(false)
   const inboundSaveChain = useRef(Promise.resolve())
+  const inboundHistoryReady = useRef('')
 
   const fetchStats = async () => {
     try {
@@ -720,9 +721,25 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }, [inboundOrderId, inboundDrafts, inboundSaving])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (searchParams.get('inbound') !== '1' || !queryOrderId) return
+    if (inboundHistoryReady.current === queryOrderId) return
+    inboundHistoryReady.current = queryOrderId
+    const current = `${window.location.pathname}${window.location.search}`
+    window.history.replaceState(window.history.state, '', OrderManagement.path)
+    window.history.pushState({ ...(window.history.state || {}), inboundSheet: queryOrderId }, '', current)
+  }, [searchParams, queryOrderId])
+
+  useEffect(() => {
     if (searchParams.get('inbound') !== '1' || !queryOrderId) {
+      if (inboundOrderId) {
+        inboundClosing.current = true
+        setInboundOrderId(null)
+        setInboundSaving(false)
+      }
       inboundClosing.current = false
       inboundBooted.current = null
+      inboundHistoryReady.current = ''
       return
     }
     if (inboundClosing.current) return
