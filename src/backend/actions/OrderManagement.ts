@@ -1128,6 +1128,7 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
 
 
 export interface ManualOrderLineInput {
+  productName?: string | null
   imageUrl?: string | null
   unitPrice?: number | null
   quantity?: number | null
@@ -1168,6 +1169,7 @@ function normalizeManualLine(row: ManualOrderLineInput) {
     unitPrice: unit,
     lineAmount: total,
     costPrice,
+    productName: String(row.productName || '').trim().slice(0, 200),
     imageUrl: String(row.imageUrl || '').trim().slice(0, 700),
     supplierName: String(row.supplierName || '').trim().slice(0, 160),
     inboundNote: String(row.inboundNote || '').trim().slice(0, 255),
@@ -1187,7 +1189,7 @@ async function insertManualOrderLines(
   for (const [index, raw] of rows.entries()) {
     const row = normalizeManualLine(raw)
     const code = `ADD-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 100)
-    const addedName = String(row.inboundNote || '').trim().slice(0, 200)
+    const addedName = String(row.productName || row.inboundNote || '').trim().slice(0, 200)
     const product = await tx.product.create({
       data: {
         name: addedName,
@@ -1329,6 +1331,7 @@ const SHEET_HEADERS: Array<[keyof ManualOrderLineInput | 'sku', string[]]> = [
   ['lineAmount', ['总价', '总价(美金)']],
   ['costPrice', ['成本价', '采购价']],
   ['sku', ['SKU', 'sku', 'Sku']],
+  ['productName', ['标题', '商品标题', '商品名称', '名称']],
   ['inboundNote', ['备注', '入库备注', '说明']],
 ]
 
@@ -1624,9 +1627,10 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
       const totalText = read(rowNumber, 'lineAmount')
       const costText = read(rowNumber, 'costPrice')
       const noteText = read(rowNumber, 'inboundNote')
+      const titleText = read(rowNumber, 'productName')
       let image = imagesByRow.get(rowNumber)
-    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText)) image = unplacedCellImages.shift()
-      if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !image) {
+    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText || titleText)) image = unplacedCellImages.shift()
+      if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !titleText && !image) {
         emptyRun += 1
         if (emptyRun >= 3) break
         continue
@@ -1647,6 +1651,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
         lineAmount: totalText ? Number(totalText) : null,
         costPrice: costText ? Number(costText) : null,
         inboundNote: noteText || null,
+        productName: titleText || null,
       })
     }
     if (!parsed.length) throw new Error('没有读到商品')
@@ -1675,6 +1680,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
               unitPrice: unit,
               lineAmount: manualMoney(row.lineAmount) ?? Math.round(unit * nextQuantity * 100) / 100,
               ...(row.inboundNote ? { inboundNote: String(row.inboundNote).slice(0, 255) } : {}),
+              ...(row.productName ? { productName: String(row.productName).trim().slice(0, 200) } : {}),
             },
           })
           continue
@@ -1690,7 +1696,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
               orderId: order.id,
               productId: known.productId,
               productSkuId: known.id,
-              productName: String(known.product.name || row.skuCode).slice(0, 200),
+              productName: String(row.productName || known.product.name || row.skuCode).trim().slice(0, 200),
               skuCode: known.skuCode,
               materialLabel: known.materialLabel,
               sizeLabel: known.sizeLabel,
@@ -1818,9 +1824,10 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
     const totalText = read(rowNumber, 'lineAmount')
     const costText = read(rowNumber, 'costPrice')
     const noteText = read(rowNumber, 'inboundNote')
+    const titleText = read(rowNumber, 'productName')
     let image = imagesByRow.get(rowNumber)
-    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText)) image = unplacedCellImages.shift()
-    if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !image) {
+    if (!image && unplacedCellImages.length && (skuCode || unitText || quantityText || totalText || costText || noteText || titleText)) image = unplacedCellImages.shift()
+    if (!skuCode && !unitText && !quantityText && !totalText && !costText && !noteText && !titleText && !image) {
       emptyRun += 1
       if (emptyRun >= 3) break
       continue
@@ -1841,6 +1848,7 @@ async function readGoodsSheet(fileBase64: string, fileName: string): Promise<Arr
       lineAmount: totalText ? Number(totalText) : null,
       costPrice: costText ? Number(costText) : null,
       inboundNote: noteText || null,
+      productName: titleText || null,
     })
   }
   if (!parsed.length) throw new Error('没有读到商品')
@@ -1944,7 +1952,7 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
               orderId: order.id,
               productId: known.productId,
               productSkuId: known.id,
-              productName: String(known.product.name || row.skuCode).slice(0, 200),
+              productName: String(row.productName || known.product.name || row.skuCode).trim().slice(0, 200),
               skuCode: known.skuCode,
               materialLabel: known.materialLabel,
               sizeLabel: known.sizeLabel,
