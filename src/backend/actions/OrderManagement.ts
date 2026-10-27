@@ -694,7 +694,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         inboundNote: item.inboundNote || null,
         unitPrice: item.unitPrice.toNumber(),
         lineAmount: item.lineAmount.toNumber(),
-        mainImageUrl: item.product?.mainImageUrl
+        mainImageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl
       })),
 
       logistics: record.logistics.map(log => ({
