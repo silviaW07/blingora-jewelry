@@ -471,6 +471,7 @@ export const OrderManagementView = ({
   const [stageOpen, setStageOpen] = React.useState(false);
   const [stagePick, setStagePick] = React.useState('');
   const stageMenuRef = React.useRef<HTMLDivElement>(null);
+  const titleClickTimer = React.useRef(0);
   const inboundTitleRef = React.useRef<HTMLDivElement>(null);
   const [inboundTitleHeight, setInboundTitleHeight] = React.useState(0);
   React.useEffect(() => {
@@ -1947,7 +1948,7 @@ export const OrderManagementView = ({
                                 onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') setCellEdit(null); }}
                               />
                             ) : line.productName.trim() ? (
-                              <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName} onDoubleClick={() => { setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</div>
+                              <button type="button" className="line-clamp-2 w-full break-words text-left text-base font-semibold leading-6 text-slate-900 hover:underline" title={line.productName} onClick={() => { window.clearTimeout(titleClickTimer.current); titleClickTimer.current = window.setTimeout(() => { if (!line.productId) return; window.open(`/productdetail/?productId=${encodeURIComponent(line.productId)}`, '_blank', 'noopener'); }, 220); }} onDoubleClick={() => { window.clearTimeout(titleClickTimer.current); setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</button>
                             ) : (
                               <button type="button" className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-left text-sm text-slate-400" title="双击填写标题" onDoubleClick={() => { setCellDraft(''); setCellEdit({ id: line.id, field: 'title' }); }}>标题</button>
                             )}

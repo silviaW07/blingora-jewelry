@@ -25,6 +25,7 @@ export type InboundState = 'NONE' | 'PARTIAL' | 'DONE'
 
 export interface OrderInboundLine {
   id: string
+  productId: string
   productName: string
   skuCode: string
   /** Product code, used to group purchasing lines. */
@@ -163,6 +164,7 @@ function compareInboundSpu(a: { spu?: string | null; skuCode?: string | null }, 
 
 function mapInboundLine(item: {
   id: string
+  productId?: string | null
   productName: string
   skuCode: string
   quantity: number
@@ -192,6 +194,7 @@ function mapInboundLine(item: {
   const unitPrice = moneyAmount(item.unitPrice)
   return {
     id: item.id,
+    productId: String(item.productId || ''),
     productName: item.productName,
     skuCode: item.skuCode,
     spu: inboundSpuOf(item),
