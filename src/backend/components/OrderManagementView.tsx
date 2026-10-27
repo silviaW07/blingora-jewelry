@@ -958,14 +958,9 @@ export const OrderManagementView = ({
     if (!Number.isFinite(unit)) return null;
     return Math.round(unit * orderKeepRate * 100) / 100;
   };
-  const costDiscountTotal = state.inboundDrafts.reduce((sum, line) => {
-    const price = discountFromSale(line.unitPrice == null ? '' : String(line.unitPrice));
-    return price == null ? sum : sum + price * line.quantity;
-  }, 0);
-  const costInStockDiscountTotal = state.inboundDrafts.reduce((sum, line) => {
-    const price = discountFromSale(line.unitPrice == null ? '' : String(line.unitPrice));
-    return price == null ? sum : sum + price * (Number(line.inboundQty) || 0);
-  }, 0);
+  const roundMoney = (amount: number) => Math.round(amount * 100) / 100;
+  const costDiscountTotal = roundMoney(originalTotal * orderKeepRate);
+  const costInStockDiscountTotal = roundMoney(inStockTotal * orderKeepRate);
   const saveDiscountPercent = async () => {
     const percent = Number(discountDraft.replace('%', '').trim());
     if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
