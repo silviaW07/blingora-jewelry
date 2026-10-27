@@ -144,6 +144,9 @@ const INBOUND_STAGE_FILL: Record<string, { background: string; color: string }> 
   ARRIVED: { background: '#4ade80', color: '#052e16' },
   PARCEL: { background: '#fb923c', color: '#431407' },
 };
+const imeKey = (event: { nativeEvent: { isComposing?: boolean; keyCode?: number } }) =>
+  Boolean(event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)
+
 const normalizedInboundStage = (stage?: string | null) => {
   const value = String(stage || 'PENDING').toUpperCase();
   return value === 'FACTORY' ? 'TRANSIT' : value;
@@ -1939,10 +1942,9 @@ export const OrderManagementView = ({
                                 autoFocus
                                 aria-label="商品标题"
                                 className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-sm text-slate-900"
-                                value={cellDraft}
-                                onChange={(event) => setCellDraft(event.target.value)}
-                                onBlur={() => { const name = cellDraft.trim(); setCellEdit(null); if (name && name !== line.productName.trim()) void handlers.updateManualOrderLine({ orderItemId: line.id, productName: name }); }}
-                                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }}
+                                defaultValue={line.productName}
+                                onBlur={(event) => { const name = event.currentTarget.value.trim(); setCellEdit(null); if (name && name !== line.productName.trim()) void handlers.updateManualOrderLine({ orderItemId: line.id, productName: name }); }}
+                                onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') setCellEdit(null); }}
                               />
                             ) : line.productName.trim() ? (
                               <div className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900" title={line.productName} onDoubleClick={() => { setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</div>
@@ -2244,6 +2246,7 @@ export const OrderManagementView = ({
               value={batchNote}
               onChange={(event) => setBatchNote(event.target.value)}
               onKeyDown={(event) => {
+                if (imeKey(event)) return;
                 if (event.key !== 'Enter' || event.shiftKey) return;
                 event.preventDefault();
                 confirmBatchNote();
