@@ -30888,7 +30888,7 @@ const getOrderDetail = (0, _action_utils.requireRole)([
                 spu: inboundSpuOf(b),
                 skuCode: b.skuCode
             })).map((item)=>{
-            var _item_product;
+            var _item_productSku, _item_product;
             return {
                 id: item.id,
                 productId: item.productId,
@@ -30903,7 +30903,7 @@ const getOrderDetail = (0, _action_utils.requireRole)([
                 inboundNote: item.inboundNote || null,
                 unitPrice: item.unitPrice.toNumber(),
                 lineAmount: item.lineAmount.toNumber(),
-                mainImageUrl: (_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.mainImageUrl
+                mainImageUrl: ((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.imageUrl) || ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.mainImageUrl)
             };
         }),
         logistics: record.logistics.map((log)=>{
