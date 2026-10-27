@@ -30585,6 +30585,7 @@ function mapInboundLine(item, currencyCode, orderAmounts) {
     const unitPrice = moneyAmount(item.unitPrice);
     return {
         id: item.id,
+        productId: String(item.productId || ''),
         productName: item.productName,
         skuCode: item.skuCode,
         spu: inboundSpuOf(item),
