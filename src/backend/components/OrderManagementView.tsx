@@ -9,7 +9,7 @@ import { readInboundSelection, writeInboundSelection } from '@/backend/hooks/use
 import EditableImg from '@/@base/EditableImg';
 
 // Lucide Icons
-import { Package, Truck, CreditCard, Calendar, Search, Filter, RefreshCcw, ChevronRight, User, Globe, Plus, History, Info, ExternalLink, ChevronLeft, ShoppingBag, Download, FileSpreadsheet, X } from 'lucide-react';
+import { Package, Truck, CreditCard, Calendar, Search, Filter, RefreshCcw, ChevronRight, ChevronUp, ChevronDown, User, Globe, Plus, History, Info, ExternalLink, ChevronLeft, ShoppingBag, Download, FileSpreadsheet, X } from 'lucide-react';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -147,6 +147,21 @@ const INBOUND_STAGE_FILL: Record<string, { background: string; color: string }> 
   ARRIVED: { background: '#4ade80', color: '#052e16' },
   PARCEL: { background: '#fb923c', color: '#431407' },
 };
+
+function scrollPane(from: HTMLElement, edge: 'top' | 'bottom') {
+  let node: HTMLElement | null = from.parentElement;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 4) {
+      node.scrollTo({ top: edge === 'top' ? 0 : node.scrollHeight, behavior: 'smooth' });
+      return;
+    }
+    node = node.parentElement;
+  }
+  const page = document.scrollingElement || document.documentElement;
+  page.scrollTo({ top: edge === 'top' ? 0 : page.scrollHeight, behavior: 'smooth' });
+}
+
 const imeKey = (event: { nativeEvent: { isComposing?: boolean; keyCode?: number } }) =>
   Boolean(event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)
 
@@ -1803,7 +1818,7 @@ export const OrderManagementView = ({
           <DialogHeader ref={inboundTitleRef} className="sticky top-0 z-20 cursor-pointer border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16" title="点这里回到顶部" onClick={(event) => {
             const target = event.target as HTMLElement
             if (target.closest('button, input, a, select, textarea')) return
-            event.currentTarget.closest('[role="dialog"]')?.scrollTo({ top: 0, behavior: 'smooth' })
+            scrollPane(event.currentTarget, 'top')
           }}>
             <button
               type="button"
@@ -2393,13 +2408,14 @@ export const OrderManagementView = ({
           </div>
         </div>
       ) : null}
-          <button
-            type="button"
-            className="fixed bottom-24 right-6 z-30 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg"
-            onClick={(event) => event.currentTarget.closest('[role="dialog"]')?.scrollTo({ top: 0, behavior: 'smooth' })}
-          >
-            回顶部
-          </button>
+          <div className="fixed bottom-24 right-5 z-40 flex flex-col gap-2">
+            <button type="button" aria-label="回到顶部" title="回到顶部" className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-900 shadow-lg" onClick={(event) => scrollPane(event.currentTarget, 'top')}>
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <button type="button" aria-label="回到底部" title="回到底部" className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-900 shadow-lg" onClick={(event) => scrollPane(event.currentTarget, 'bottom')}>
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
       {state.inboundOrderId && inboundZoom ? (
