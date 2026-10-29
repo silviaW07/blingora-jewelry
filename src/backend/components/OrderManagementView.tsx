@@ -84,30 +84,30 @@ const GOODS_STATUS_LABEL: Record<string, string> = {
 };
 
 const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
-  ['product', '商品', 'w-[30%]'],
-  ['unitPrice', '售价', 'w-[7%]'],
-  ['priceCoefficient', '系数', 'w-[5%]'],
-  ['discountPrice', '折扣价', 'w-[7%]'],
-  ['quantity', '数量', 'w-[5%]'],
-  ['lineAmount', '总价', 'w-[7%]'],
-  ['costPrice', '成本价', 'w-[7%]'],
+  ['product', '商品', 'w-[22%]'],
+  ['unitPrice', '售价', 'w-[8%]'],
+  ['priceCoefficient', '系数', 'w-[7%]'],
+  ['discountPrice', '折扣价', 'w-[8%]'],
+  ['quantity', '数量', 'w-[7%]'],
+  ['lineAmount', '总价', 'w-[8%]'],
+  ['costPrice', '成本价', 'w-[8%]'],
   ['supplier', '供应商', 'w-[8%]'],
-  ['note', '备注', 'w-[9%]'],
+  ['note', '备注', 'w-[8%]'],
   ['stage', '商品状态', 'w-[8%]'],
-  ['inboundQty', '到货数量', 'w-[7%]'],
+  ['inboundQty', '到货数量', 'w-[8%]'],
 ];
 const INBOUND_COLUMN_PERCENT: Record<string, number> = {
-  product: 30,
-  unitPrice: 7,
-  priceCoefficient: 5,
-  discountPrice: 7,
-  quantity: 5,
-  lineAmount: 7,
-  costPrice: 7,
+  product: 22,
+  unitPrice: 8,
+  priceCoefficient: 7,
+  discountPrice: 8,
+  quantity: 7,
+  lineAmount: 8,
+  costPrice: 8,
   supplier: 8,
-  note: 9,
+  note: 8,
   stage: 8,
-  inboundQty: 7,
+  inboundQty: 8,
 };
 const inboundSpuKey = (skuCode?: string | null) => {
   const sku = String(skuCode || '').trim()
