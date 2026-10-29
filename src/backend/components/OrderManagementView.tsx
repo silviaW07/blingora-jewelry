@@ -84,30 +84,30 @@ const GOODS_STATUS_LABEL: Record<string, string> = {
 };
 
 const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
-  ['product', '商品', 'w-[22%]'],
-  ['unitPrice', '售价', 'w-[8%]'],
-  ['priceCoefficient', '系数', 'w-[6%]'],
-  ['discountPrice', '折扣价', 'w-[8%]'],
-  ['quantity', '数量', 'w-[7%]'],
-  ['lineAmount', '总价', 'w-[8%]'],
-  ['costPrice', '成本价', 'w-[8%]'],
-  ['supplier', '供应商', 'w-[11%]'],
-  ['note', '备注', 'w-[12%]'],
-  ['stage', '商品状态', 'w-[10%]'],
-  ['inboundQty', '到货数量', 'w-[10%]'],
+  ['product', '商品', 'w-[20%]'],
+  ['unitPrice', '售价', 'w-[7%]'],
+  ['priceCoefficient', '系数', 'w-[5%]'],
+  ['discountPrice', '折扣价', 'w-[7%]'],
+  ['quantity', '数量', 'w-[5%]'],
+  ['lineAmount', '总价', 'w-[7%]'],
+  ['costPrice', '成本价', 'w-[7%]'],
+  ['supplier', '供应商', 'w-[12%]'],
+  ['note', '备注', 'w-[14%]'],
+  ['stage', '商品状态', 'w-[9%]'],
+  ['inboundQty', '到货数量', 'w-[7%]'],
 ];
 const INBOUND_COLUMN_PERCENT: Record<string, number> = {
-  product: 22,
-  unitPrice: 8,
-  priceCoefficient: 6,
-  discountPrice: 8,
-  quantity: 6,
-  lineAmount: 8,
-  costPrice: 8,
+  product: 20,
+  unitPrice: 7,
+  priceCoefficient: 5,
+  discountPrice: 7,
+  quantity: 5,
+  lineAmount: 7,
+  costPrice: 7,
   supplier: 12,
-  note: 12,
-  stage: 8,
-  inboundQty: 8,
+  note: 14,
+  stage: 9,
+  inboundQty: 7,
 };
 const inboundSpuKey = (skuCode?: string | null) => {
   const sku = String(skuCode || '').trim()
@@ -1978,7 +1978,7 @@ export const OrderManagementView = ({
                 ))}
               </div>
             ) : null}
-            <table className="table-fixed border-separate border-spacing-0 text-sm" style={{ width: `${visibleTablePercent}%` }}>
+            <table className="inbound-checkin w-full max-w-full table-fixed border-separate border-spacing-0 text-sm">
               <colgroup>
                 {visibleInboundColumns.map(([key]) => (
                   <col key={key} style={{ width: `${((INBOUND_COLUMN_PERCENT[key] || 8) / visibleTablePercent) * 100}%` }} />
@@ -2015,7 +2015,7 @@ export const OrderManagementView = ({
                           <button type="button" className="text-[11px] font-normal text-slate-400" aria-label={"隐藏" + label} onClick={() => hideInboundColumn(key)}>隐藏</button>
                         </div>
                       ) : (
-                        <div className="inline-flex max-w-full items-center justify-center gap-1">
+                        <div className="inline-flex max-w-full items-center justify-center gap-0.5">
                           <input
                             type="checkbox"
                             className="h-4 w-4 shrink-0"
@@ -2068,7 +2068,7 @@ export const OrderManagementView = ({
                           </div>
                           <button
                             type="button"
-                            className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            className="h-14 w-14 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
                             aria-label={imageUrl ? `查看 ${line.productName}` : undefined}
                             disabled={!imageUrl}
                             onClick={() => {
@@ -2098,7 +2098,7 @@ export const OrderManagementView = ({
                                 onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') setCellEdit(null); }}
                               />
                             ) : line.productName.trim() ? (
-                              <button type="button" className="line-clamp-2 w-full break-words text-left text-base font-semibold leading-6 text-slate-900 hover:underline" title={line.productName} onClick={() => { window.clearTimeout(titleClickTimer.current); titleClickTimer.current = window.setTimeout(() => { if (!line.productId) return; window.open(`/productdetail/?productId=${encodeURIComponent(line.productId)}`, '_blank', 'noopener'); }, 220); }} onDoubleClick={() => { window.clearTimeout(titleClickTimer.current); setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</button>
+                              <button type="button" className="line-clamp-2 w-full break-words text-left text-sm font-semibold leading-5 text-slate-900 hover:underline" title={line.productName} onClick={() => { window.clearTimeout(titleClickTimer.current); titleClickTimer.current = window.setTimeout(() => { if (!line.productId) return; window.open(`/productdetail/?productId=${encodeURIComponent(line.productId)}`, '_blank', 'noopener'); }, 220); }} onDoubleClick={() => { window.clearTimeout(titleClickTimer.current); setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</button>
                             ) : (
                               <button type="button" className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-left text-sm text-slate-400" title="双击填写标题" onDoubleClick={() => { setCellDraft(''); setCellEdit({ id: line.id, field: 'title' }); }}>标题</button>
                             )}
@@ -2110,9 +2110,9 @@ export const OrderManagementView = ({
                           </div>
                         </div>
                       </td>) : null}
-                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle">{cellEdit?.id === line.id && cellEdit.field === 'unit' ? <input autoFocus aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => { setCellEdit(null); void saveManualDraft(line); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改售价" onDoubleClick={() => setCellEdit({ id: line.id, field: 'unit' })}>{manualDraftOf(line).unitPrice}</button>}</td>) : null}
-                      {columnVisible('priceCoefficient') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle">{cellEdit?.id === line.id && cellEdit.field === 'coeff' ? <input autoFocus aria-label="系数" inputMode="decimal" className="mx-auto h-9 w-full max-w-[5.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => setCellDraft(event.target.value)} onBlur={() => { const text = cellDraft.trim(); const coeff = text === '' ? null : Number(text); setCellEdit(null); if (coeff != null && (!Number.isFinite(coeff) || coeff <= 0)) { toast.error('请填写大于 0 的系数'); return; } const linked = saleFromCost(manualDraftOf(line).costPrice, coeff); void saveManualDraft(line, { ...(linked ? { unitPrice: linked } : {}), priceCoefficient: coeff }); }} onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[3.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改系数" onDoubleClick={() => { setCellDraft(line.priceCoefficient == null ? '' : String(line.priceCoefficient)); setCellEdit({ id: line.id, field: 'coeff' }); }}>{line.priceCoefficient == null ? '' : line.priceCoefficient}</button>}</td>) : null}
-                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{cellEdit?.id === line.id && cellEdit.field === 'discount' ? <input autoFocus aria-label="折扣价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => { const text = event.target.value; setCellDraft(text); if (!text.trim()) { patchManualDraft(line, { unitPrice: '' }); return; } const entered = Number(text); if (Number.isFinite(entered) && orderKeepRate > 0) patchManualDraft(line, { unitPrice: String(Math.round((entered / orderKeepRate) * 100) / 100) }); }} onBlur={() => { setCellEdit(null); void saveManualDraft(line); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改折扣价" onDoubleClick={() => { const current = discountFromSale(manualDraftOf(line).unitPrice); setCellDraft(current == null ? '' : String(current)); setCellEdit({ id: line.id, field: 'discount' }); }}>{(() => { const price = discountFromSale(manualDraftOf(line).unitPrice); return price == null ? '' : formatInboundMoney(price, line.currencyCode); })()}</button>}</td>) : null}
+                      {columnVisible('unitPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle">{cellEdit?.id === line.id && cellEdit.field === 'unit' ? <input autoFocus aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).unitPrice} onChange={(event) => patchManualDraft(line, { unitPrice: event.target.value })} onBlur={() => { setCellEdit(null); void saveManualDraft(line); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-0 items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改售价" onDoubleClick={() => setCellEdit({ id: line.id, field: 'unit' })}>{manualDraftOf(line).unitPrice}</button>}</td>) : null}
+                      {columnVisible('priceCoefficient') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle">{cellEdit?.id === line.id && cellEdit.field === 'coeff' ? <input autoFocus aria-label="系数" inputMode="decimal" className="mx-auto h-9 w-full max-w-[5.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => setCellDraft(event.target.value)} onBlur={() => { const text = cellDraft.trim(); const coeff = text === '' ? null : Number(text); setCellEdit(null); if (coeff != null && (!Number.isFinite(coeff) || coeff <= 0)) { toast.error('请填写大于 0 的系数'); return; } const linked = saleFromCost(manualDraftOf(line).costPrice, coeff); void saveManualDraft(line, { ...(linked ? { unitPrice: linked } : {}), priceCoefficient: coeff }); }} onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-0 items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改系数" onDoubleClick={() => { setCellDraft(line.priceCoefficient == null ? '' : String(line.priceCoefficient)); setCellEdit({ id: line.id, field: 'coeff' }); }}>{line.priceCoefficient == null ? '' : line.priceCoefficient}</button>}</td>) : null}
+                      {columnVisible('discountPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{cellEdit?.id === line.id && cellEdit.field === 'discount' ? <input autoFocus aria-label="折扣价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => { const text = event.target.value; setCellDraft(text); if (!text.trim()) { patchManualDraft(line, { unitPrice: '' }); return; } const entered = Number(text); if (Number.isFinite(entered) && orderKeepRate > 0) patchManualDraft(line, { unitPrice: String(Math.round((entered / orderKeepRate) * 100) / 100) }); }} onBlur={() => { setCellEdit(null); void saveManualDraft(line); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); } if (event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-0 items-center justify-center rounded-md px-2 text-sm tabular-nums text-slate-900 hover:bg-slate-100" title="双击修改折扣价" onDoubleClick={() => { const current = discountFromSale(manualDraftOf(line).unitPrice); setCellDraft(current == null ? '' : String(current)); setCellEdit({ id: line.id, field: 'discount' }); }}>{(() => { const price = discountFromSale(manualDraftOf(line).unitPrice); return price == null ? '' : formatInboundMoney(price, line.currencyCode); })()}</button>}</td>) : null}
                       {columnVisible('quantity') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).quantity} onChange={(event) => patchManualDraft(line, { quantity: event.target.value })} onBlur={() => void saveManualDraft(line)} /></td>) : null}
                       {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{(() => { const unit = Number(manualDraftOf(line).unitPrice); const qty = Number(manualDraftOf(line).quantity); return manualDraftOf(line).unitPrice.trim() && manualDraftOf(line).quantity.trim() && Number.isFinite(unit) && Number.isFinite(qty) ? formatInboundMoney(Math.round(unit * qty * 100) / 100, line.currencyCode) : ''; })()}</td>) : null}
                       {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).costPrice} onChange={(event) => { const costPrice = event.target.value; const linked = saleFromCost(costPrice, line.priceCoefficient); patchManualDraft(line, linked ? { costPrice, unitPrice: linked } : { costPrice }); }} onBlur={(event) => { const costPrice = event.currentTarget.value; const linked = saleFromCost(costPrice, line.priceCoefficient); void saveManualDraft(line, linked ? { costPrice, unitPrice: linked } : { costPrice }); }} /></td>) : null}
@@ -2123,7 +2123,7 @@ export const OrderManagementView = ({
                       {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
                           rows={2}
-                          className="box-border h-full min-h-24 w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
+                          className="box-border h-full min-h-14 w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
                           value={String(line.inboundNote || '').replace(/(?:^|\n)\s*发货时间\s*\d{4}[-/]\d{2}[-/]\d{2}(?:\s+\d{2}:\d{2})?\s*/g, '\n').replace(/^\n+|\n+$/g, '')}
@@ -2180,7 +2180,7 @@ export const OrderManagementView = ({
                       <td className="overflow-hidden px-2 py-3 align-middle">
                         <div className="flex min-w-0 items-center gap-1">
                           <div className="w-6 shrink-0" />
-                          <div className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-white">
+                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded border bg-white">
                             {card.imageUrl ? <img src={card.imageUrl} alt="" className="h-full w-full object-contain" /> : null}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -2204,11 +2204,11 @@ export const OrderManagementView = ({
                     ) : null}
                     {columnVisible('unitPrice') ? (
                       <td className="overflow-hidden px-1 py-3 text-center align-middle">
-                        {cellEdit?.id === card.key && cellEdit.field === 'unit' ? <input autoFocus aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} onBlur={() => setCellEdit(null)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums hover:bg-slate-100" title="双击修改售价" onDoubleClick={() => setCellEdit({ id: card.key, field: 'unit' })}>{card.unitPrice}</button>}
+                        {cellEdit?.id === card.key && cellEdit.field === 'unit' ? <input autoFocus aria-label="售价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.unitPrice} onChange={(event) => patchAddonCard(card.key, { unitPrice: event.target.value })} onBlur={() => setCellEdit(null)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-0 items-center justify-center rounded-md px-2 text-sm tabular-nums hover:bg-slate-100" title="双击修改售价" onDoubleClick={() => setCellEdit({ id: card.key, field: 'unit' })}>{card.unitPrice}</button>}
                       </td>
                     ) : null}
                     {columnVisible('priceCoefficient') ? <td className="overflow-hidden px-1 py-3 text-center align-middle text-sm text-slate-400">—</td> : null}
-                    {columnVisible('discountPrice') ? <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums">{cellEdit?.id === card.key && cellEdit.field === 'discount' ? <input autoFocus aria-label="折扣价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => { const text = event.target.value; setCellDraft(text); if (!text.trim()) { patchAddonCard(card.key, { unitPrice: '' }); return; } const entered = Number(text); if (Number.isFinite(entered) && orderKeepRate > 0) patchAddonCard(card.key, { unitPrice: String(Math.round((entered / orderKeepRate) * 100) / 100) }); }} onBlur={() => setCellEdit(null)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md px-2 text-sm tabular-nums hover:bg-slate-100" title="双击修改折扣价" onDoubleClick={() => { setCellDraft(addonDiscount == null ? '' : String(addonDiscount)); setCellEdit({ id: card.key, field: 'discount' }); }}>{addonDiscount == null ? '' : formatInboundMoney(addonDiscount, inboundCurrency)}</button>}</td> : null}
+                    {columnVisible('discountPrice') ? <td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums">{cellEdit?.id === card.key && cellEdit.field === 'discount' ? <input autoFocus aria-label="折扣价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={cellDraft} onChange={(event) => { const text = event.target.value; setCellDraft(text); if (!text.trim()) { patchAddonCard(card.key, { unitPrice: '' }); return; } const entered = Number(text); if (Number.isFinite(entered) && orderKeepRate > 0) patchAddonCard(card.key, { unitPrice: String(Math.round((entered / orderKeepRate) * 100) / 100) }); }} onBlur={() => setCellEdit(null)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') setCellEdit(null); }} /> : <button type="button" className="inline-flex h-9 min-w-0 items-center justify-center rounded-md px-2 text-sm tabular-nums hover:bg-slate-100" title="双击修改折扣价" onDoubleClick={() => { setCellDraft(addonDiscount == null ? '' : String(addonDiscount)); setCellEdit({ id: card.key, field: 'discount' }); }}>{addonDiscount == null ? '' : formatInboundMoney(addonDiscount, inboundCurrency)}</button>}</td> : null}
                     {columnVisible('quantity') ? (
                       <td className="overflow-hidden px-1 py-3 text-center align-middle">
                         <input aria-label="数量" inputMode="numeric" className="mx-auto h-9 w-full max-w-[4.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={card.quantity} onChange={(event) => patchAddonCard(card.key, { quantity: event.target.value })} />

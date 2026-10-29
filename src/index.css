@@ -5330,3 +5330,21 @@ html.is-narrow .home-zone-section__view-all {
     border-right: none;
   }
 }
+
+.inbound-checkin th,
+.inbound-checkin td {
+  padding: 0.2rem 0.15rem !important;
+}
+.inbound-checkin input,
+.inbound-checkin select,
+.inbound-checkin textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+.inbound-checkin input:not([type="checkbox"]),
+.inbound-checkin select {
+  height: 1.75rem;
+}
+.inbound-checkin textarea {
+  min-height: 3.25rem;
+}
