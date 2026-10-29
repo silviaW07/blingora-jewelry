@@ -1087,7 +1087,7 @@ export const OrderManagementView = ({
           <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full max-w-full overflow-x-auto sm:w-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <TabsList className="h-10 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <TabsTrigger value="ALL" className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
-              <TabsTrigger value="TODAY_PURCHASE" className="shrink-0 px-3 sm:px-6">今日待采购</TabsTrigger>
+              <TabsTrigger value="TODAY_PURCHASE" className="shrink-0 gap-1.5 px-3 sm:px-6">今日待采购{Number(state.stats?.todayPurchaseCount || 0) > 0 ? <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{Number(state.stats.todayPurchaseCount) > 99 ? '99+' : state.stats.todayPurchaseCount}</span> : null}</TabsTrigger>
               {LIST_STATUS_OPTIONS.map((opt) => <TabsTrigger key={opt.value} value={opt.value} className="shrink-0 px-3 sm:px-6">
                   {opt.label}
                 </TabsTrigger>)}

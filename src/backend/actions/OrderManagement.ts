@@ -352,6 +352,7 @@ export interface OrderDetail extends OrderListItem {
 export interface GetDashboardStatsOutput {
   pendingShipmentCount: number // 待发货
   todayNewOrderCount: number   // 今日新增
+  todayPurchaseCount: number   // 仍有待采购商品的订单
   refundingCount: number       // 退款处理中
   totalOrderCount: number      // 全部订单数
 }
@@ -466,9 +467,13 @@ export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
 
     const totalOrderCount = await prisma.orderrecord.count()
 
+    const todayPurchaseCount = await prisma.orderrecord.count({
+      where: { items: { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } } },
+    })
     return {
       pendingShipmentCount,
       todayNewOrderCount,
+      todayPurchaseCount,
       refundingCount,
       totalOrderCount
     }
@@ -492,11 +497,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
     const whereCondition: any = {}
 
     if (status === 'TODAY_PURCHASE') {
-      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-      const start = new Date(`${day}T00:00:00+08:00`)
-      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000)
-      whereCondition.createdAt = { gte: start, lt: end }
-      whereCondition.items = { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }] } }
+      whereCondition.items = { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } }
     } else if (status === 'PAID') {
       whereCondition.status = { in: PAID_TAB_STATUSES }
     } else if (status) {

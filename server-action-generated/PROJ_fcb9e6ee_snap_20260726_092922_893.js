@@ -30647,9 +30647,29 @@ const getOrderDashboardStats = (0, _action_utils.requireRole)([
         } // 根据需求可以独立扩展 REFUNDING 等，按Schema用已退款或找退款申请，此处用已有REFUNDED近似替代
     });
     const totalOrderCount = await _prisma.default.orderrecord.count();
+    const todayPurchaseCount = await _prisma.default.orderrecord.count({
+        where: {
+            items: {
+                some: {
+                    OR: [
+                        {
+                            inboundStage: 'PENDING'
+                        },
+                        {
+                            inboundStage: null
+                        },
+                        {
+                            inboundStage: ''
+                        }
+                    ]
+                }
+            }
+        }
+    });
     return {
         pendingShipmentCount,
         todayNewOrderCount,
+        todayPurchaseCount,
         refundingCount,
         totalOrderCount
     };
@@ -30663,18 +30683,6 @@ const getOrderList = (0, _action_utils.requireRole)([
     // 构建过滤条件
     const whereCondition = {};
     if (status === 'TODAY_PURCHASE') {
-        const day = new Intl.DateTimeFormat('en-CA', {
-            timeZone: 'Asia/Shanghai',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-        }).format(new Date());
-        const start = new Date(`${day}T00:00:00+08:00`);
-        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-        whereCondition.createdAt = {
-            gte: start,
-            lt: end
-        };
         whereCondition.items = {
             some: {
                 OR: [
@@ -30683,6 +30691,9 @@ const getOrderList = (0, _action_utils.requireRole)([
                     },
                     {
                         inboundStage: null
+                    },
+                    {
+                        inboundStage: ''
                     }
                 ]
             }

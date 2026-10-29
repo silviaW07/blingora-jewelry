@@ -925,6 +925,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         }
       })
       toast.success('入库情况已保存')
+      fetchStats()
       if (!options?.keepOpen) {
         clearInboundDraftStore(inboundOrderId)
         inboundClosing.current = true
