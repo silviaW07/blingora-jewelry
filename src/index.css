@@ -5333,7 +5333,7 @@ html.is-narrow .home-zone-section__view-all {
 
 .inbound-checkin th,
 .inbound-checkin td {
-  padding: 0.2rem 0.15rem !important;
+  padding: 0.35rem 0.25rem !important;
 }
 .inbound-checkin input,
 .inbound-checkin select,
@@ -5345,8 +5345,15 @@ html.is-narrow .home-zone-section__view-all {
 .inbound-checkin select {
   height: 1.75rem;
 }
-.inbound-checkin textarea {
-  min-height: 3.25rem;
+.inbound-checkin textarea.supplier-box,
+.inbound-checkin textarea.note-box {
+  height: auto;
+  min-height: 2.75rem;
+  max-height: 4.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
 }
 
 .inbound-checkin .coeff-box {

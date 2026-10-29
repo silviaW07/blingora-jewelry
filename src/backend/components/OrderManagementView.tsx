@@ -84,29 +84,29 @@ const GOODS_STATUS_LABEL: Record<string, string> = {
 };
 
 const INBOUND_EXPORT_COLUMNS: Array<[string, string, string]> = [
-  ['product', '商品', 'w-[20%]'],
+  ['product', '商品', 'w-[30%]'],
   ['unitPrice', '售价', 'w-[7%]'],
   ['priceCoefficient', '系数', 'w-[5%]'],
   ['discountPrice', '折扣价', 'w-[7%]'],
   ['quantity', '数量', 'w-[5%]'],
   ['lineAmount', '总价', 'w-[7%]'],
   ['costPrice', '成本价', 'w-[7%]'],
-  ['supplier', '供应商', 'w-[12%]'],
-  ['note', '备注', 'w-[14%]'],
-  ['stage', '商品状态', 'w-[9%]'],
+  ['supplier', '供应商', 'w-[8%]'],
+  ['note', '备注', 'w-[9%]'],
+  ['stage', '商品状态', 'w-[8%]'],
   ['inboundQty', '到货数量', 'w-[7%]'],
 ];
 const INBOUND_COLUMN_PERCENT: Record<string, number> = {
-  product: 20,
+  product: 30,
   unitPrice: 7,
   priceCoefficient: 5,
   discountPrice: 7,
   quantity: 5,
   lineAmount: 7,
   costPrice: 7,
-  supplier: 12,
-  note: 14,
-  stage: 9,
+  supplier: 8,
+  note: 9,
+  stage: 8,
   inboundQty: 7,
 };
 const inboundSpuKey = (skuCode?: string | null) => {
@@ -2074,7 +2074,7 @@ export const OrderManagementView = ({
                           </div>
                           <button
                             type="button"
-                            className="h-14 w-14 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
+                            className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-slate-50 disabled:cursor-default"
                             aria-label={imageUrl ? `查看 ${line.productName}` : undefined}
                             disabled={!imageUrl}
                             onClick={() => {
@@ -2123,13 +2123,13 @@ export const OrderManagementView = ({
                       {columnVisible('lineAmount') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle tabular-nums whitespace-nowrap">{(() => { const unit = Number(manualDraftOf(line).unitPrice); const qty = Number(manualDraftOf(line).quantity); return manualDraftOf(line).unitPrice.trim() && manualDraftOf(line).quantity.trim() && Number.isFinite(unit) && Number.isFinite(qty) ? formatInboundMoney(Math.round(unit * qty * 100) / 100, line.currencyCode) : ''; })()}</td>) : null}
                       {columnVisible('costPrice') ? (<td className="overflow-hidden px-1 py-3 text-center align-middle"><input aria-label="成本价" inputMode="decimal" className="mx-auto h-9 w-full max-w-[6.5rem] rounded-md border px-2 text-center text-sm tabular-nums" value={manualDraftOf(line).costPrice} onChange={(event) => { const costPrice = event.target.value; const linked = saleFromCost(costPrice, line.priceCoefficient); patchManualDraft(line, linked ? { costPrice, unitPrice: linked } : { costPrice }); }} onBlur={(event) => { const costPrice = event.currentTarget.value; const linked = saleFromCost(costPrice, line.priceCoefficient); void saveManualDraft(line, linked ? { costPrice, unitPrice: linked } : { costPrice }); }} /></td>) : null}
                       {columnVisible('supplier') ? (<td className="overflow-hidden px-1 py-3 align-middle text-center">
-                        <input aria-label="供应商" className="mx-auto h-9 w-full rounded-md border px-2 text-center text-sm" value={manualDraftOf(line).supplierName} onChange={(event) => patchManualDraft(line, { supplierName: event.target.value })} onBlur={() => void saveManualDraft(line)} />
-                        {line.supplierUrl ? <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-sky-700 underline-offset-2 hover:underline">打开链接</a> : null}
+                        <textarea rows={2} aria-label="供应商" className="supplier-box box-border w-full resize-none whitespace-pre-wrap break-words rounded-md border px-1 py-1 text-left text-xs leading-4" value={manualDraftOf(line).supplierName} onChange={(event) => patchManualDraft(line, { supplierName: event.target.value })} onBlur={() => void saveManualDraft(line)} />
+                        {line.supplierUrl ? <a href={line.supplierUrl} target="_blank" rel="noreferrer" className="mt-1 block break-all text-xs text-sky-700 underline-offset-2 hover:underline">打开链接</a> : null}
                       </td>) : null}
                       {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
                           rows={2}
-                          className="box-border h-full min-h-14 w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1 text-sm leading-5"
+                          className="note-box box-border w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-1 py-1 text-xs leading-4"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
                           value={String(line.inboundNote || '').replace(/(?:^|\n)\s*发货时间\s*\d{4}[-/]\d{2}[-/]\d{2}(?:\s+\d{2}:\d{2})?\s*/g, '\n').replace(/^\n+|\n+$/g, '')}
@@ -2186,7 +2186,7 @@ export const OrderManagementView = ({
                       <td className="overflow-hidden px-2 py-3 align-middle">
                         <div className="flex min-w-0 items-center gap-1">
                           <div className="w-6 shrink-0" />
-                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded border bg-white">
+                          <div className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-white">
                             {card.imageUrl ? <img src={card.imageUrl} alt="" className="h-full w-full object-contain" /> : null}
                           </div>
                           <div className="min-w-0 flex-1">
