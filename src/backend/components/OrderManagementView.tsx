@@ -2095,18 +2095,19 @@ export const OrderManagementView = ({
                           </button>
                           <div className="min-w-0 flex-1">
                             {cellEdit?.id === line.id && cellEdit.field === 'title' ? (
-                              <input
+                              <textarea
+                                rows={3}
                                 autoFocus
                                 aria-label="商品标题"
-                                className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-sm text-slate-900"
+                                className="inbound-title box-border w-full max-w-[15rem] resize-none whitespace-pre-wrap break-words rounded-md border border-slate-600 bg-white px-2 py-1 text-sm leading-5 text-slate-900"
                                 defaultValue={line.productName}
                                 onBlur={(event) => { const name = event.currentTarget.value.trim(); setCellEdit(null); if (name && name !== line.productName.trim()) void handlers.updateManualOrderLine({ orderItemId: line.id, productName: name }); }}
-                                onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') setCellEdit(null); }}
+                                onKeyDown={(event) => { if (imeKey(event)) return; if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') setCellEdit(null); }}
                               />
                             ) : line.productName.trim() ? (
-                              <button type="button" className="line-clamp-2 w-full break-words text-left text-sm font-semibold leading-5 text-slate-900 hover:underline" title={line.productName} onClick={() => { window.clearTimeout(titleClickTimer.current); titleClickTimer.current = window.setTimeout(() => { if (!line.productId) return; window.open(`/productdetail/?productId=${encodeURIComponent(line.productId)}`, '_blank', 'noopener'); }, 220); }} onDoubleClick={() => { window.clearTimeout(titleClickTimer.current); setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</button>
+                              <button type="button" className="inbound-title block w-full max-w-[15rem] whitespace-normal break-words text-left text-sm font-semibold leading-5 text-slate-900 hover:underline" title={line.productName} onClick={() => { window.clearTimeout(titleClickTimer.current); titleClickTimer.current = window.setTimeout(() => { if (!line.productId) return; window.open(`/productdetail/?productId=${encodeURIComponent(line.productId)}`, '_blank', 'noopener'); }, 220); }} onDoubleClick={() => { window.clearTimeout(titleClickTimer.current); setCellDraft(line.productName); setCellEdit({ id: line.id, field: 'title' }); }}>{line.productName}</button>
                             ) : (
-                              <button type="button" className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-left text-sm text-slate-400" title="双击填写标题" onDoubleClick={() => { setCellDraft(''); setCellEdit({ id: line.id, field: 'title' }); }}>标题</button>
+                              <button type="button" className="inbound-title block h-9 w-full max-w-[15rem] rounded-md border border-slate-600 bg-white px-2 text-left text-sm text-slate-400" title="双击填写标题" onDoubleClick={() => { setCellDraft(''); setCellEdit({ id: line.id, field: 'title' }); }}>标题</button>
                             )}
                             <div className="mt-1">
                               <span className="inline-flex rounded px-1.5 py-0.5 text-xs font-medium" style={inboundStageFill(line.inboundStage)}>{INBOUND_STAGE_LABEL[normalizedInboundStage(line.inboundStage)] || '待采购'}</span>
@@ -2190,10 +2191,11 @@ export const OrderManagementView = ({
                             {card.imageUrl ? <img src={card.imageUrl} alt="" className="h-full w-full object-contain" /> : null}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <input
+                            <textarea
+                              rows={2}
                               aria-label="商品标题"
                               placeholder="标题"
-                              className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400"
+                              className="inbound-title box-border w-full max-w-[15rem] resize-none whitespace-pre-wrap break-words rounded-md border border-slate-600 bg-white px-2 py-1 text-sm leading-5 text-slate-900 placeholder:text-slate-400"
                               value={card.productName}
                               onChange={(event) => patchAddonCard(card.key, { productName: event.target.value })}
                             />
