@@ -1736,7 +1736,7 @@ export const importInboundSheet = requireRole([UserRole.ADMIN])(
 )
 
 export interface ImportCustomerOrderInput {
-  email: string
+  customerName: string
   fileName?: string
   fileBase64: string
   shippingMethod?: string
@@ -1899,16 +1899,12 @@ const IMPORT_ORDER_STATUSES: OrderStatus[] = ['PENDING_PAYMENT', 'PAID', 'PROCES
 export const importCustomerOrder = requireRole([UserRole.ADMIN])(
   withResult(async (input: ImportCustomerOrderInput): Promise<ImportCustomerOrderOutput> => {
     const { username } = getAuthContext()
-    const email = String(input.email || '').trim().toLowerCase()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请填写客户邮箱')
-    const users = await prisma.$queryRawUnsafe(
-      'SELECT id, status FROM sysuser WHERE LOWER(email) = ? LIMIT 1',
-      email,
-    ) as Array<{ id: string; status: string }>
-    const user = users[0]
-    if (!user) throw new Error('没有这个客户邮箱，请让客户先用这个邮箱注册')
-    if (String(user.status || '').toUpperCase() !== 'ACTIVE') throw new Error('这个客户账号已停用')
+    const customerName = String(input.customerName || '').trim().slice(0, 100)
+    if (!customerName) throw new Error('请填写客户姓名')
     const status = IMPORT_ORDER_STATUSES.includes(input.status as OrderStatus) ? input.status as OrderStatus : 'PROCESSING'
+    const email = `${randomUUID()}@guest.local`
+    const account = `m_${createHash('sha256').update(email).digest('hex').slice(0, 40)}`
+    const password = createHash('sha256').update(randomUUID()).digest('hex')
     const parsed = await readGoodsSheet(String(input.fileBase64 || ''), String(input.fileName || ''))
     const category = await prisma.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
     if (!category) throw new Error('没有可用分类，无法保存订单')
@@ -1922,7 +1918,20 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
     const weight = input.weightGrams == null || !Number.isFinite(Number(input.weightGrams)) || Number(input.weightGrams) <= 0
       ? 0
       : Math.round(Number(input.weightGrams) * 100) / 100
-    const created = await prisma.$transaction(async (tx) => withNextOrderNo(tx, async (orderNo) => {
+    const created = await prisma.$transaction(async (tx) => {
+      const user = await tx.sysuser.create({
+        data: {
+          account,
+          email,
+          password,
+          role: 'CUSTOMER',
+          status: 'ACTIVE',
+          username: customerName,
+          customerType: 'NEW',
+        },
+        select: { id: true },
+      })
+      return withNextOrderNo(tx, async (orderNo) => {
       const order = await tx.orderrecord.create({
         data: {
           orderNo,
@@ -1997,7 +2006,7 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
         data: {
           orderId: order.id,
           actionType: '导入订单',
-          actionNote: `邮箱 ${email}，${fresh?.items.length || 0} 行`.slice(0, 4000),
+          actionNote: `姓名 ${customerName}，${fresh?.items.length || 0} 行`.slice(0, 4000),
           operatorName: username,
         },
       })
@@ -2007,7 +2016,8 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
         itemCount: (fresh?.items || []).reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0),
         totalAmount: moneyAmount(fresh?.totalAmount) ?? 0,
       }
-    }))
+      })
+    })
     return created
   }),
 )

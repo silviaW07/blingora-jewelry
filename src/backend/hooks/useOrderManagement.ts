@@ -188,7 +188,7 @@ export interface OrderManagementHandlers {
   deleteInboundLines: (lineIds: string[]) => Promise<boolean>
   saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   updateInboundShipment: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
-  importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
+  importCustomerOrder: (input: { customerName: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   createCustomerOrder: (input: { customerName: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   updateOrderCustomerProfile: (input: { orderId: string; customerName?: string; phone?: string | null; customerEmail?: string }) => Promise<{ customerName: string; customerWhatsapp: string | null; customerEmail: string } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
@@ -1327,7 +1327,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const importCustomerOrderFile = async (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => {
+  const importCustomerOrderFile = async (input: { customerName: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => {
     try {
       const result = await importCustomerOrder(input, { __rpcTimeoutMs: 90_000 })
       toast.success(`已生成订单 ${result.orderNo}`)

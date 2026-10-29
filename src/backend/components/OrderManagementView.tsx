@@ -901,9 +901,9 @@ export const OrderManagementView = ({
   };
 
   const submitImportOrder = async () => {
-    const email = importOrderEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('请填写客户邮箱');
+    const customerName = importOrderEmail.trim();
+    if (!customerName) {
+      toast.error('请填写客户姓名');
       return;
     }
     if (!importOrderFile) {
@@ -920,7 +920,7 @@ export const OrderManagementView = ({
       setImportOrderSaving(true);
       const fileBase64 = await fileToBase64(importOrderFile);
       const created = await handlers.importCustomerOrder({
-        email,
+        customerName,
         fileBase64,
         fileName: importOrderFile.name,
         shippingMethod: importOrderShip.trim(),
@@ -1110,11 +1110,11 @@ export const OrderManagementView = ({
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>导入订单</DialogTitle>
-                <DialogDescription>填写客户邮箱并上传表格。表头对上售价、数量、总价就可以，SKU 可以不填。客户登录这个邮箱后，在我的订单里能看到订单号、日期、件数、状态、总价、运输方式、重量和备注。</DialogDescription>
+                <DialogDescription>填写客户姓名并上传表格。表头对上售价、数量、总价就可以，SKU 可以不填。邮箱可以在订单列表里双击添加。</DialogDescription>
               </DialogHeader>
               <div className="grid gap-3">
-                <label className="grid gap-1 text-sm font-medium text-slate-700">客户邮箱
-                  <Input value={importOrderEmail} onChange={(event) => setImportOrderEmail(event.target.value)} placeholder="customer@email.com" autoComplete="off" />
+                <label className="grid gap-1 text-sm font-medium text-slate-700">客户姓名
+                  <Input value={importOrderEmail} onChange={(event) => setImportOrderEmail(event.target.value)} placeholder="客户姓名" autoComplete="off" />
                 </label>
                 <label className="grid gap-1 text-sm font-medium text-slate-700">表格
                   <Input type="file" accept=".xlsx,.xls,.csv" onChange={(event) => setImportOrderFile(event.target.files?.[0] || null)} />
