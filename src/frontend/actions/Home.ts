@@ -1316,7 +1316,7 @@ const excludeNoBrandProducts = (categoryIds: string[]) => {
     NOT: {
       OR: [
         { categoryId: { in: categoryIds } },
-        { brandCategoryId: { in: categoryIds } },
+        { AND: [{ brandCategoryId: { not: null } }, { brandCategoryId: { in: categoryIds } }] },
         { relationCategories: { some: { categoryId: { in: categoryIds } } } },
       ],
     },

@@ -50528,9 +50528,18 @@ const excludeNoBrandProducts = (categoryIds)=>{
                     }
                 },
                 {
-                    brandCategoryId: {
-                        in: categoryIds
-                    }
+                    AND: [
+                        {
+                            brandCategoryId: {
+                                not: null
+                            }
+                        },
+                        {
+                            brandCategoryId: {
+                                in: categoryIds
+                            }
+                        }
+                    ]
                 },
                 {
                     relationCategories: {
