@@ -486,7 +486,7 @@ export const OrderManagementView = ({
     observer.observe(node);
     return () => observer.disconnect();
   }, [state.inboundOrderId]);
-  const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>>([]);
+  const [addonCards, setAddonCards] = React.useState<Array<{ key: string; imageUrl: string; productName: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>>([]);
   const [importOrderOpen, setImportOrderOpen] = React.useState(false);
   const [importOrderEmail, setImportOrderEmail] = React.useState('');
   const [importOrderFile, setImportOrderFile] = React.useState<File | null>(null);
@@ -815,10 +815,10 @@ export const OrderManagementView = ({
     const images = list.filter((file) => file.type.startsWith('image/'));
     const sheets = list.filter((file) => !file.type.startsWith('image/') && /\.(xlsx|xls|csv)$/i.test(file.name));
     try {
-      const cards: Array<{ key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }> = [];
+      const cards: Array<{ key: string; imageUrl: string; productName: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }> = [];
       for (const file of images) {
         const imageUrl = await uploadInboundImage(file);
-        cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, quantity: '1', unitPrice: '', costPrice: '', supplierName: '', note: '', stage: 'PENDING', inboundQty: '0' });
+        cards.push({ key: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, imageUrl, productName: '', quantity: '1', unitPrice: '', costPrice: '', supplierName: '', note: '', stage: 'PENDING', inboundQty: '0' });
       }
       if (cards.length) setAddonCards((prev) => [...prev, ...cards]);
       for (const file of sheets) await importSheetNow(file);
@@ -839,10 +839,10 @@ export const OrderManagementView = ({
       toast.error(error instanceof Error ? error.message : '传入表格失败');
     }
   };
-  const patchAddonCard = (key: string, patch: Partial<{ quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>) => {
+  const patchAddonCard = (key: string, patch: Partial<{ productName: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }>) => {
     setAddonCards((prev) => prev.map((item) => item.key === key ? { ...item, ...patch } : item));
   };
-  const saveAddonRow = async (card: { key: string; imageUrl: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }) => {
+  const saveAddonRow = async (card: { key: string; imageUrl: string; productName: string; quantity: string; unitPrice: string; costPrice: string; supplierName: string; note: string; stage: string; inboundQty: string }) => {
     const unitRaw = card.unitPrice.trim();
     const costRaw = card.costPrice.trim();
     const unitPrice = unitRaw === '' ? 0 : Number(unitRaw);
@@ -855,6 +855,7 @@ export const OrderManagementView = ({
     }
     const saved = await handlers.appendManualOrderLine({
       imageUrl: card.imageUrl,
+      productName: card.productName.trim(),
       quantity,
       unitPrice,
       lineAmount: Math.round(unitPrice * quantity * 100) / 100,
@@ -2140,13 +2141,26 @@ export const OrderManagementView = ({
                   <tr key={card.key} className="border-b bg-sky-50/40 align-middle">
                     {columnVisible('product') ? (
                       <td className="overflow-hidden px-2 py-3 align-middle">
-                        <div className="flex min-w-0 items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <div className="w-6 shrink-0" />
                           <div className="h-24 w-24 shrink-0 overflow-hidden rounded border bg-white">
                             {card.imageUrl ? <img src={card.imageUrl} alt="" className="h-full w-full object-contain" /> : null}
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <Button type="button" size="sm" className="h-8" disabled={state.inboundSaving} onClick={() => void saveAddonRow(card)}>保存</Button>
-                            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setAddonCards((prev) => prev.filter((item) => item.key !== card.key))}>删除</Button>
+                          <div className="min-w-0 flex-1">
+                            <input
+                              aria-label="商品标题"
+                              placeholder="标题"
+                              className="h-9 w-full rounded-md border border-slate-600 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400"
+                              value={card.productName}
+                              onChange={(event) => patchAddonCard(card.key, { productName: event.target.value })}
+                            />
+                            <div className="mt-1">
+                              <span className="inline-flex rounded px-1.5 py-0.5 text-xs font-medium" style={inboundStageFill(card.stage)}>{INBOUND_STAGE_LABEL[normalizedInboundStage(card.stage)] || '待采购'}</span>
+                            </div>
+                            <div className="mt-1 flex gap-1">
+                              <Button type="button" size="sm" className="h-8" disabled={state.inboundSaving} onClick={() => void saveAddonRow(card)}>保存</Button>
+                              <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setAddonCards((prev) => prev.filter((item) => item.key !== card.key))}>删除</Button>
+                            </div>
                           </div>
                         </div>
                       </td>
