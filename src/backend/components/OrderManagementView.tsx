@@ -1204,7 +1204,8 @@ export const OrderManagementView = ({
                 <Table className="min-w-[960px]" data-api-unique-id="ordermanagementview-r90a9eeedb50f830d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <TableHeader className="bg-slate-50/80" data-api-unique-id="ordermanagementview-rb0510531d2e123f5-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     <TableRow data-api-unique-id="ordermanagementview-r2829fce95c941439-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                      <TableHead className="w-[150px] font-bold py-4 pl-6">订单编号</TableHead>
+                      <TableHead className="font-bold min-w-[140px] py-4 pl-6">下单时间</TableHead>
+                      <TableHead className="w-[150px] font-bold">订单编号</TableHead>
                       <TableHead className="font-bold min-w-[160px]">客户Email</TableHead>
                       <TableHead className="font-bold min-w-[110px]">客户名称</TableHead>
                       <TableHead className="font-bold min-w-[120px]">订单状态</TableHead>
@@ -1212,7 +1213,6 @@ export const OrderManagementView = ({
                       <TableHead className="font-bold min-w-[120px]">WhatsApp</TableHead>
                       <TableHead className="font-bold min-w-[100px]">金额</TableHead>
                       <TableHead className="font-bold min-w-[90px]">总重量(g)</TableHead>
-                      <TableHead className="font-bold min-w-[140px]">下单时间</TableHead>
                       <TableHead className="font-bold min-w-[220px]">订单备注</TableHead>
                       <TableHead className="text-right font-bold pr-6 min-w-[140px]">操作</TableHead>
                     </TableRow>
@@ -1229,7 +1229,10 @@ export const OrderManagementView = ({
                     ) : (
                       state.list.map((row) => (
                         <TableRow key={row.id} className="hover:bg-slate-50/50 transition-colors align-top">
-                          <TableCell className="font-mono text-sm pl-6 pt-4" scrollX scrollXClassName="max-w-[220px]">
+                          <TableCell className="pl-6 pt-4 text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm pt-4" scrollX scrollXClassName="max-w-[220px]">
                             {row.orderNo}
                           </TableCell>
                           <TableCell className="pt-4" scrollX scrollXClassName="max-w-[260px]">
@@ -1343,9 +1346,6 @@ export const OrderManagementView = ({
                           </TableCell>
                           <TableCell className="pt-4 text-sm tabular-nums">
                             {Number(row.totalWeightGrams || 0).toLocaleString()}
-                          </TableCell>
-                          <TableCell className="pt-4 text-xs text-muted-foreground whitespace-nowrap">
-                            {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
                           </TableCell>
                           <TableCell className="pt-3 pb-3">
                             <div className="flex items-start gap-2 min-w-[200px]">
