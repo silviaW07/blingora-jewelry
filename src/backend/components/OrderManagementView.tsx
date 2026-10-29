@@ -1087,6 +1087,7 @@ export const OrderManagementView = ({
           <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full max-w-full overflow-x-auto sm:w-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <TabsList className="h-10 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <TabsTrigger value="ALL" className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
+              <TabsTrigger value="TODAY_PURCHASE" className="shrink-0 px-3 sm:px-6">今日待采购</TabsTrigger>
               {LIST_STATUS_OPTIONS.map((opt) => <TabsTrigger key={opt.value} value={opt.value} className="shrink-0 px-3 sm:px-6">
                   {opt.label}
                 </TabsTrigger>)}
@@ -1781,7 +1782,7 @@ export const OrderManagementView = ({
 
       <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) { setInboundZoom(null); setImportOpen(false); handlers.closeInboundDialog() } }}>
         <DialogContent
-          className="inset-0 top-0 left-0 block h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto overscroll-contain rounded-none border-0 p-0 shadow-none data-[state=open]:animate-none data-[state=closed]:animate-none"
+          className="inset-0 top-0 left-0 block h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-scroll overscroll-contain rounded-none border-0 p-0 shadow-none data-[state=open]:animate-none data-[state=closed]:animate-none"
           onDragOver={(event) => {
             if (![...event.dataTransfer.types].includes('Files')) return
             event.preventDefault()
@@ -1799,7 +1800,11 @@ export const OrderManagementView = ({
             else void receiveImportFiles(dropped);
           }}
         >
-          <DialogHeader ref={inboundTitleRef} className="sticky top-0 z-20 border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16">
+          <DialogHeader ref={inboundTitleRef} className="sticky top-0 z-20 cursor-pointer border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16" title="点这里回到顶部" onClick={(event) => {
+            const target = event.target as HTMLElement
+            if (target.closest('button, input, a, select, textarea')) return
+            event.currentTarget.closest('[role="dialog"]')?.scrollTo({ top: 0, behavior: 'smooth' })
+          }}>
             <button
               type="button"
               aria-label="关闭"
@@ -2388,6 +2393,13 @@ export const OrderManagementView = ({
           </div>
         </div>
       ) : null}
+          <button
+            type="button"
+            className="fixed bottom-24 right-6 z-30 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg"
+            onClick={(event) => event.currentTarget.closest('[role="dialog"]')?.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            回顶部
+          </button>
         </DialogContent>
       </Dialog>
       {state.inboundOrderId && inboundZoom ? (

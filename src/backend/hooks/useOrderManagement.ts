@@ -379,7 +379,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const handleTabChange = (value: string) => {
-    const status = value === 'ALL' ? undefined : (value as OrderStatus)
+    const status = value === 'ALL' ? undefined : (value as GetOrderListInput['status'])
     handleFilterChange('status', status)
     handleFilterChange('page', 1)
   }
@@ -811,7 +811,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     setInboundDrafts((prev) => prev.map((line) => ({ ...line, inboundQty: line.quantity, acknowledged: true, inboundStage: 'ARRIVED' })))
   }
 
-  const rememberInboundResult = (orderId: string, drafts: OrderInboundLine[], result: { lines: OrderInboundLine[]; orderedQty: number; receivedQty: number; state: 'NONE' | 'PARTIAL' | 'DONE' }) => {
+  const rememberInboundResult = (orderId: string, drafts: OrderInboundLine[], result: { lines: OrderInboundLine[]; orderedQty: number; receivedQty: number; state: 'NONE' | 'PARTIAL' | 'DONE'; status?: OrderStatus }) => {
     setList((prev) => prev.map((row) => (
       row.id === orderId
         ? {
@@ -820,6 +820,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
             inboundOrderedQty: result.orderedQty,
             inboundReceivedQty: result.receivedQty,
             inboundState: result.state,
+            ...(result.status ? { status: result.status } : {}),
           }
         : row
     )))
@@ -902,6 +903,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
               inboundOrderedQty: result.orderedQty,
               inboundReceivedQty: result.receivedQty,
               inboundState: result.state,
+              ...(result.status ? { status: result.status } : {}),
             }
           : row
       )))

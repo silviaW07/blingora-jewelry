@@ -30662,7 +30662,32 @@ const getOrderList = (0, _action_utils.requireRole)([
     const skip = (Math.max(1, page) - 1) * safePageSize;
     // 构建过滤条件
     const whereCondition = {};
-    if (status === 'PAID') {
+    if (status === 'TODAY_PURCHASE') {
+        const day = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
+        const start = new Date(`${day}T00:00:00+08:00`);
+        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        whereCondition.createdAt = {
+            gte: start,
+            lt: end
+        };
+        whereCondition.items = {
+            some: {
+                OR: [
+                    {
+                        inboundStage: 'PENDING'
+                    },
+                    {
+                        inboundStage: null
+                    }
+                ]
+            }
+        };
+    } else if (status === 'PAID') {
         whereCondition.status = {
             in: PAID_TAB_STATUSES
         };
@@ -31179,11 +31204,41 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
     });
     const lines = fresh.map((item)=>mapInboundLine(item, order.currencyCode, order)).sort(compareInboundSpu);
     const summary = summarizeInbound(lines);
+    const purchaseDone = fresh.length > 0 && fresh.every((item)=>cleanInboundStage(item.inboundStage) !== 'PENDING');
+    const locked = new Set([
+        'SHIPPED',
+        'DELIVERED',
+        'CANCELLED',
+        'REFUNDED'
+    ]);
+    let nextStatus = order.status;
+    if (purchaseDone && !locked.has(String(order.status || ''))) {
+        nextStatus = 'PROCESSING';
+        if (order.status !== 'PROCESSING') {
+            await _prisma.default.orderrecord.update({
+                where: {
+                    id: order.id
+                },
+                data: {
+                    status: 'PROCESSING'
+                }
+            });
+            await _prisma.default.orderoperationlog.create({
+                data: {
+                    orderId: order.id,
+                    actionType: '状态变更',
+                    actionNote: '采购完成，进入处理中',
+                    operatorName: username
+                }
+            });
+        }
+    }
     return {
         lines,
         orderedQty: summary.orderedQty,
         receivedQty: summary.inboundQty,
-        state: summary.state
+        state: summary.state,
+        status: nextStatus
     };
 }));
 const appendOrderGoods = (0, _action_utils.requireRole)([
