@@ -1,6 +1,7 @@
 'use server'
 
 import prisma from '@/tools/prisma'
+import { createHash, randomUUID } from 'crypto'
 import { saveUploadedImage } from '@/lib/uploadStorage'
 import {
   requireRole,
@@ -2014,82 +2015,95 @@ export const importCustomerOrder = requireRole([UserRole.ADMIN])(
 
 
 export interface CreateCustomerOrderInput {
-  email: string
-  shippingMethod?: string
-  weightGrams?: number | null
-  orderNote?: string
+  customerName: string
   status?: OrderStatus
 }
 
-/** 给已注册客户建一张空订单。订单号沿用 BJ + 日期 + 全局序号。 */
+const PLACEHOLDER_EMAIL_DOMAIN = '@guest.local'
+
+function isPlaceholderCustomerEmail(email: string): boolean {
+  return String(email || '').trim().toLowerCase().endsWith(PLACEHOLDER_EMAIL_DOMAIN)
+}
+
+/** 按客户姓名建一张空订单。没有邮箱时先挂一个占位账号，之后在列表里双击补邮箱。 */
 export const createCustomerOrder = requireRole([UserRole.ADMIN])(
   withResult(async (input: CreateCustomerOrderInput): Promise<ImportCustomerOrderOutput> => {
     const { username } = getAuthContext()
-    const email = String(input.email || '').trim().toLowerCase()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请填写客户邮箱')
-    const users = await prisma.$queryRawUnsafe(
-      'SELECT id, status FROM sysuser WHERE LOWER(email) = ? LIMIT 1',
-      email,
-    ) as Array<{ id: string; status: string }>
-    const user = users[0]
-    if (!user) throw new Error('没有这个客户邮箱，请让客户先用这个邮箱注册')
-    if (String(user.status || '').toUpperCase() !== 'ACTIVE') throw new Error('这个客户账号已停用')
+    const customerName = String(input.customerName || '').trim().slice(0, 100)
+    if (!customerName) throw new Error('请填写客户姓名')
     const status = IMPORT_ORDER_STATUSES.includes(input.status as OrderStatus) ? input.status as OrderStatus : 'PROCESSING'
-    const shippingText = String(input.shippingMethod || '').trim().slice(0, 255)
-    const note = String(input.orderNote || '').trim().slice(0, 4000)
-    const created = await prisma.$transaction(async (tx) => withNextOrderNo(tx, async (orderNo) => {
-      const order = await tx.orderrecord.create({
+    const email = `${randomUUID()}${PLACEHOLDER_EMAIL_DOMAIN}`
+    const account = `m_${createHash('sha256').update(email).digest('hex').slice(0, 40)}`
+    const password = createHash('sha256').update(randomUUID()).digest('hex')
+    const created = await prisma.$transaction(async (tx) => {
+      const user = await tx.sysuser.create({
         data: {
-          orderNo,
-          userId: user.id,
-          status,
-          currencyCode: 'USD',
-          localeCode: 'en',
-          subtotalAmount: 0,
-          discountAmount: 0,
-          shippingAmount: 0,
-          giftWrapAmount: 0,
-          totalAmount: 0,
-          paymentMethod: 'BANK_TRANSFER',
-          paymentStatus: status === 'PENDING_PAYMENT' ? 'UNPAID' : 'PAID',
-          shipMethod: 'STANDARD',
-          trackingCarrier: shippingText || null,
-          internalNote: note || null,
+          account,
+          email,
+          password,
+          role: 'CUSTOMER',
+          status: 'ACTIVE',
+          username: customerName,
+          customerType: 'NEW',
         },
+        select: { id: true },
       })
-      await tx.orderoperationlog.create({
-        data: {
-          orderId: order.id,
-          actionType: '创建订单',
-          actionNote: `邮箱 ${email}`.slice(0, 4000),
-          operatorName: username,
-        },
+      return withNextOrderNo(tx, async (orderNo) => {
+        const order = await tx.orderrecord.create({
+          data: {
+            orderNo,
+            userId: user.id,
+            status,
+            currencyCode: 'USD',
+            localeCode: 'en',
+            subtotalAmount: 0,
+            discountAmount: 0,
+            shippingAmount: 0,
+            giftWrapAmount: 0,
+            totalAmount: 0,
+            paymentMethod: 'BANK_TRANSFER',
+            paymentStatus: status === 'PENDING_PAYMENT' ? 'UNPAID' : 'PAID',
+            shipMethod: 'STANDARD',
+          },
+        })
+        await tx.orderoperationlog.create({
+          data: {
+            orderId: order.id,
+            actionType: '创建订单',
+            actionNote: `姓名 ${customerName}`.slice(0, 4000),
+            operatorName: username,
+          },
+        })
+        return { orderId: order.id, orderNo, itemCount: 0, totalAmount: 0 }
       })
-      return { orderId: order.id, orderNo, itemCount: 0, totalAmount: 0 }
-    }))
+    })
     return created
   }),
 )
 
 export interface UpdateOrderCustomerProfileInput {
-  email: string
+  orderId: string
   customerName?: string
   phone?: string | null
+  customerEmail?: string
 }
 
-/** 订单列表里双击改客户姓名或手机号，写回该邮箱对应的客户资料。 */
+/** 订单列表里双击改客户姓名、手机号或邮箱。 */
 export const updateOrderCustomerProfile = requireRole([UserRole.ADMIN])(
-  withResult(async (input: UpdateOrderCustomerProfileInput): Promise<{ customerName: string; customerWhatsapp: string | null }> => {
-    const email = String(input.email || '').trim().toLowerCase()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('客户邮箱不正确')
-    const users = await prisma.sysuser.findMany({
-      where: { email },
-      select: { id: true, username: true, phone: true },
-      take: 1,
+  withResult(async (input: UpdateOrderCustomerProfileInput): Promise<{ customerName: string; customerWhatsapp: string | null; customerEmail: string }> => {
+    const orderId = String(input.orderId || '').trim()
+    if (!orderId) throw new Error('缺少订单')
+    const order = await prisma.orderrecord.findUnique({
+      where: { id: orderId },
+      select: { userId: true },
     })
-    const user = users[0]
+    if (!order) throw new Error('没有这笔订单')
+    const user = await prisma.sysuser.findUnique({
+      where: { id: order.userId },
+      select: { id: true, username: true, phone: true, email: true, account: true },
+    })
     if (!user) throw new Error('没有这个客户')
-    const data: { username?: string; phone?: string | null } = {}
+    const data: { username?: string; phone?: string | null; email?: string; account?: string } = {}
     if (input.customerName !== undefined) {
       const name = String(input.customerName || '').trim().slice(0, 100)
       if (!name) throw new Error('请填写姓名')
@@ -2099,15 +2113,29 @@ export const updateOrderCustomerProfile = requireRole([UserRole.ADMIN])(
       const phone = String(input.phone || '').trim().slice(0, 30)
       data.phone = phone || null
     }
+    if (input.customerEmail !== undefined) {
+      const email = String(input.customerEmail || '').trim().toLowerCase()
+      if (!email) throw new Error('请填写邮箱')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || isPlaceholderCustomerEmail(email)) throw new Error('请填写正确的邮箱')
+      const taken = await prisma.sysuser.findFirst({
+        where: { email, NOT: { id: user.id } },
+        select: { id: true },
+      })
+      if (taken) throw new Error('这个邮箱已经有客户')
+      data.email = email
+      if (isPlaceholderCustomerEmail(user.email) || user.account === user.email || user.account.startsWith('m_')) {
+        data.account = email.length <= 50 ? email : `e_${createHash('sha256').update(email).digest('hex').slice(0, 40)}`
+      }
+    }
     if (!Object.keys(data).length) {
-      return { customerName: user.username, customerWhatsapp: user.phone || null }
+      return { customerName: user.username, customerWhatsapp: user.phone || null, customerEmail: user.email }
     }
     const saved = await prisma.sysuser.update({
       where: { id: user.id },
       data,
-      select: { username: true, phone: true },
+      select: { username: true, phone: true, email: true },
     })
-    return { customerName: saved.username, customerWhatsapp: saved.phone || null }
+    return { customerName: saved.username, customerWhatsapp: saved.phone || null, customerEmail: saved.email }
   }),
 )
 

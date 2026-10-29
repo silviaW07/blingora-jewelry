@@ -493,9 +493,9 @@ export const OrderManagementView = ({
   const [importOrderStatus, setImportOrderStatus] = React.useState<OrderStatus>('PROCESSING');
   const [importOrderSaving, setImportOrderSaving] = React.useState(false);
   const [createOrderOpen, setCreateOrderOpen] = React.useState(false);
-  const [createOrderEmail, setCreateOrderEmail] = React.useState('');
+  const [createOrderName, setCreateOrderName] = React.useState('');
   const [createOrderSaving, setCreateOrderSaving] = React.useState(false);
-  const [contactEdit, setContactEdit] = React.useState<{ id: string; field: 'name' | 'phone' } | null>(null);
+  const [contactEdit, setContactEdit] = React.useState<{ id: string; field: 'name' | 'phone' | 'email' } | null>(null);
   const [contactDraft, setContactDraft] = React.useState('');
 
   const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; costPrice: string; supplierName: string }>>({});
@@ -942,23 +942,25 @@ export const OrderManagementView = ({
   };
 
   const submitCreateOrder = async () => {
-    const email = createOrderEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('请填写客户邮箱');
+    const customerName = createOrderName.trim();
+    if (!customerName) {
+      toast.error('请填写客户姓名');
       return;
     }
     try {
       setCreateOrderSaving(true);
-      const created = await handlers.createCustomerOrder({ email, status: 'PROCESSING' });
+      const created = await handlers.createCustomerOrder({ customerName, status: 'PROCESSING' });
       if (!created) return;
       setCreateOrderOpen(false);
-      setCreateOrderEmail('');
+      setCreateOrderName('');
     } finally {
       setCreateOrderSaving(false);
     }
   };
 
-  const saveCustomerContact = async (row: { customerEmail: string; customerName: string; customerWhatsapp: string | null }, field: 'name' | 'phone') => {
+  const visibleCustomerEmail = (email: string) => (email || '').trim().toLowerCase().endsWith('@guest.local') ? '' : (email || '');
+
+  const saveCustomerContact = async (row: { id: string; customerEmail: string; customerName: string; customerWhatsapp: string | null }, field: 'name' | 'phone' | 'email') => {
     const value = contactDraft.trim();
     setContactEdit(null);
     if (field === 'name') {
@@ -967,11 +969,21 @@ export const OrderManagementView = ({
         return;
       }
       if (value === (row.customerName || '')) return;
-      await handlers.updateOrderCustomerProfile({ email: row.customerEmail, customerName: value });
+      await handlers.updateOrderCustomerProfile({ orderId: row.id, customerName: value });
+      return;
+    }
+    if (field === 'email') {
+      const current = visibleCustomerEmail(row.customerEmail);
+      if (!value) {
+        toast.error('请填写邮箱');
+        return;
+      }
+      if (value.toLowerCase() === current.trim().toLowerCase()) return;
+      await handlers.updateOrderCustomerProfile({ orderId: row.id, customerEmail: value });
       return;
     }
     if (value === (row.customerWhatsapp || '')) return;
-    await handlers.updateOrderCustomerProfile({ email: row.customerEmail, phone: value });
+    await handlers.updateOrderCustomerProfile({ orderId: row.id, phone: value });
   };
 
   const inboundCurrency = state.inboundDrafts.find((line) => line.currencyCode)?.currencyCode || 'USD';
@@ -1082,10 +1094,10 @@ export const OrderManagementView = ({
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>创建新单</DialogTitle>
-                <DialogDescription>填写客户邮箱后确认，会按现有订单号规则生成一条新订单。姓名和手机号可以在列表里双击修改。</DialogDescription>
+                <DialogDescription>填写客户姓名后确认，会按现有订单号规则生成一条新订单。邮箱可以在列表里双击添加，姓名和手机号也可以双击修改。</DialogDescription>
               </DialogHeader>
-              <label className="grid gap-1 text-sm font-medium text-slate-700">客户邮箱
-                <Input value={createOrderEmail} onChange={(event) => setCreateOrderEmail(event.target.value)} placeholder="customer@email.com" autoComplete="off" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void submitCreateOrder(); } }} />
+              <label className="grid gap-1 text-sm font-medium text-slate-700">客户姓名
+                <Input value={createOrderName} onChange={(event) => setCreateOrderName(event.target.value)} placeholder="客户姓名" autoComplete="off" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void submitCreateOrder(); } }} />
               </label>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setCreateOrderOpen(false)} disabled={createOrderSaving}>取消</Button>
@@ -1221,13 +1233,30 @@ export const OrderManagementView = ({
                             {row.orderNo}
                           </TableCell>
                           <TableCell className="pt-4" scrollX scrollXClassName="max-w-[260px]">
-                            <button
-                              type="button"
-                              className="text-sm text-primary hover:underline text-left break-all"
-                              onClick={() => handlers.jumpToCustomer(row.customerEmail)}
-                            >
-                              {row.customerEmail}
-                            </button>
+                            {contactEdit?.id === row.id && contactEdit.field === 'email' ? (
+                              <input
+                                autoFocus
+                                aria-label="客户邮箱"
+                                className="h-9 w-full min-w-[160px] rounded-md border border-slate-200 px-2 text-sm"
+                                value={contactDraft}
+                                onChange={(event) => setContactDraft(event.target.value)}
+                                onBlur={() => { void saveCustomerContact(row, 'email'); }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
+                                  if (event.key === 'Escape') setContactEdit(null);
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="text-left text-sm text-primary hover:underline break-all"
+                                title="双击添加邮箱"
+                                onClick={() => { if (visibleCustomerEmail(row.customerEmail)) handlers.jumpToCustomer(row.customerEmail); }}
+                                onDoubleClick={() => { setContactDraft(visibleCustomerEmail(row.customerEmail)); setContactEdit({ id: row.id, field: 'email' }); }}
+                              >
+                                {visibleCustomerEmail(row.customerEmail) || '—'}
+                              </button>
+                            )}
                           </TableCell>
                           <TableCell className="pt-4 text-sm font-medium">
                             {contactEdit?.id === row.id && contactEdit.field === 'name' ? (

@@ -189,8 +189,8 @@ export interface OrderManagementHandlers {
   saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   updateInboundShipment: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
-  createCustomerOrder: (input: { email: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
-  updateOrderCustomerProfile: (input: { email: string; customerName?: string; phone?: string | null }) => Promise<{ customerName: string; customerWhatsapp: string | null } | null>
+  createCustomerOrder: (input: { customerName: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
+  updateOrderCustomerProfile: (input: { orderId: string; customerName?: string; phone?: string | null; customerEmail?: string }) => Promise<{ customerName: string; customerWhatsapp: string | null; customerEmail: string } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -1343,7 +1343,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
 
-  const createCustomerOrderBlank = async (input: { email: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => {
+  const createCustomerOrderBlank = async (input: { customerName: string; status?: OrderStatus }) => {
     try {
       const result = await createCustomerOrder(input)
       toast.success(`已创建订单 ${result.orderNo}`)
@@ -1359,15 +1359,16 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
 
-  const saveOrderCustomerProfile = async (input: { email: string; customerName?: string; phone?: string | null }) => {
+  const saveOrderCustomerProfile = async (input: { orderId: string; customerName?: string; phone?: string | null; customerEmail?: string }) => {
     try {
+      const current = list.find((row) => row.id === input.orderId)
+      const previousEmail = current?.customerEmail.trim().toLowerCase() || ''
       const saved = await updateOrderCustomerProfile(input)
-      const email = input.email.trim().toLowerCase()
-      setList((prev) => prev.map((row) => row.customerEmail.trim().toLowerCase() === email
-        ? { ...row, customerName: saved.customerName, customerWhatsapp: saved.customerWhatsapp }
+      setList((prev) => prev.map((row) => row.customerEmail.trim().toLowerCase() === previousEmail
+        ? { ...row, customerName: saved.customerName, customerWhatsapp: saved.customerWhatsapp, customerEmail: saved.customerEmail }
         : row))
-      if (detailData && detailData.customerEmail.trim().toLowerCase() === email) {
-        setDetailData({ ...detailData, customerName: saved.customerName, customerWhatsapp: saved.customerWhatsapp })
+      if (detailData && detailData.customerEmail.trim().toLowerCase() === previousEmail) {
+        setDetailData({ ...detailData, customerName: saved.customerName, customerWhatsapp: saved.customerWhatsapp, customerEmail: saved.customerEmail })
       }
       toast.success('已保存')
       return saved

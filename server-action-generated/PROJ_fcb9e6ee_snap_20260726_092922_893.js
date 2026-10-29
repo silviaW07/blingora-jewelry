@@ -30427,6 +30427,7 @@ _export(exports, {
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
+const _crypto = __webpack_require__(6982);
 const _uploadStorage = __webpack_require__(5791);
 const _action_utils = __webpack_require__(9360);
 const _exchangeRate = __webpack_require__(3928);
@@ -32464,20 +32465,36 @@ const importCustomerOrder = (0, _action_utils.requireRole)([
         }));
     return created;
 }));
+const PLACEHOLDER_EMAIL_DOMAIN = '@guest.local';
+function isPlaceholderCustomerEmail(email) {
+    return String(email || '').trim().toLowerCase().endsWith(PLACEHOLDER_EMAIL_DOMAIN);
+}
 const createCustomerOrder = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
     const { username } = (0, _action_utils.getAuthContext)();
-    const email = String(input.email || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请填写客户邮箱');
-    const users = await _prisma.default.$queryRawUnsafe('SELECT id, status FROM sysuser WHERE LOWER(email) = ? LIMIT 1', email);
-    const user = users[0];
-    if (!user) throw new Error('没有这个客户邮箱，请让客户先用这个邮箱注册');
-    if (String(user.status || '').toUpperCase() !== 'ACTIVE') throw new Error('这个客户账号已停用');
+    const customerName = String(input.customerName || '').trim().slice(0, 100);
+    if (!customerName) throw new Error('请填写客户姓名');
     const status = IMPORT_ORDER_STATUSES.includes(input.status) ? input.status : 'PROCESSING';
-    const shippingText = String(input.shippingMethod || '').trim().slice(0, 255);
-    const note = String(input.orderNote || '').trim().slice(0, 4000);
-    const created = await _prisma.default.$transaction(async (tx)=>withNextOrderNo(tx, async (orderNo)=>{
+    const email = `${(0, _crypto.randomUUID)()}${PLACEHOLDER_EMAIL_DOMAIN}`;
+    const account = `m_${(0, _crypto.createHash)('sha256').update(email).digest('hex').slice(0, 40)}`;
+    const password = (0, _crypto.createHash)('sha256').update((0, _crypto.randomUUID)()).digest('hex');
+    const created = await _prisma.default.$transaction(async (tx)=>{
+        const user = await tx.sysuser.create({
+            data: {
+                account,
+                email,
+                password,
+                role: 'CUSTOMER',
+                status: 'ACTIVE',
+                username: customerName,
+                customerType: 'NEW'
+            },
+            select: {
+                id: true
+            }
+        });
+        return withNextOrderNo(tx, async (orderNo)=>{
             const order = await tx.orderrecord.create({
                 data: {
                     orderNo,
@@ -32492,16 +32509,14 @@ const createCustomerOrder = (0, _action_utils.requireRole)([
                     totalAmount: 0,
                     paymentMethod: 'BANK_TRANSFER',
                     paymentStatus: status === 'PENDING_PAYMENT' ? 'UNPAID' : 'PAID',
-                    shipMethod: 'STANDARD',
-                    trackingCarrier: shippingText || null,
-                    internalNote: note || null
+                    shipMethod: 'STANDARD'
                 }
             });
             await tx.orderoperationlog.create({
                 data: {
                     orderId: order.id,
                     actionType: '创建订单',
-                    actionNote: `邮箱 ${email}`.slice(0, 4000),
+                    actionNote: `姓名 ${customerName}`.slice(0, 4000),
                     operatorName: username
                 }
             });
@@ -32511,26 +32526,36 @@ const createCustomerOrder = (0, _action_utils.requireRole)([
                 itemCount: 0,
                 totalAmount: 0
             };
-        }));
+        });
+    });
     return created;
 }));
 const updateOrderCustomerProfile = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
-    const email = String(input.email || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('客户邮箱不正确');
-    const users = await _prisma.default.sysuser.findMany({
+    const orderId = String(input.orderId || '').trim();
+    if (!orderId) throw new Error('缺少订单');
+    const order = await _prisma.default.orderrecord.findUnique({
         where: {
-            email
+            id: orderId
+        },
+        select: {
+            userId: true
+        }
+    });
+    if (!order) throw new Error('没有这笔订单');
+    const user = await _prisma.default.sysuser.findUnique({
+        where: {
+            id: order.userId
         },
         select: {
             id: true,
             username: true,
-            phone: true
-        },
-        take: 1
+            phone: true,
+            email: true,
+            account: true
+        }
     });
-    const user = users[0];
     if (!user) throw new Error('没有这个客户');
     const data = {};
     if (input.customerName !== undefined) {
@@ -32542,10 +32567,32 @@ const updateOrderCustomerProfile = (0, _action_utils.requireRole)([
         const phone = String(input.phone || '').trim().slice(0, 30);
         data.phone = phone || null;
     }
+    if (input.customerEmail !== undefined) {
+        const email = String(input.customerEmail || '').trim().toLowerCase();
+        if (!email) throw new Error('请填写邮箱');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || isPlaceholderCustomerEmail(email)) throw new Error('请填写正确的邮箱');
+        const taken = await _prisma.default.sysuser.findFirst({
+            where: {
+                email,
+                NOT: {
+                    id: user.id
+                }
+            },
+            select: {
+                id: true
+            }
+        });
+        if (taken) throw new Error('这个邮箱已经有客户');
+        data.email = email;
+        if (isPlaceholderCustomerEmail(user.email) || user.account === user.email || user.account.startsWith('m_')) {
+            data.account = email.length <= 50 ? email : `e_${(0, _crypto.createHash)('sha256').update(email).digest('hex').slice(0, 40)}`;
+        }
+    }
     if (!Object.keys(data).length) {
         return {
             customerName: user.username,
-            customerWhatsapp: user.phone || null
+            customerWhatsapp: user.phone || null,
+            customerEmail: user.email
         };
     }
     const saved = await _prisma.default.sysuser.update({
@@ -32555,12 +32602,14 @@ const updateOrderCustomerProfile = (0, _action_utils.requireRole)([
         data,
         select: {
             username: true,
-            phone: true
+            phone: true,
+            email: true
         }
     });
     return {
         customerName: saved.username,
-        customerWhatsapp: saved.phone || null
+        customerWhatsapp: saved.phone || null,
+        customerEmail: saved.email
     };
 }));
 const INBOUND_SHIP_SEGMENT = '入库发货';
