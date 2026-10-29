@@ -1854,7 +1854,13 @@ export const OrderManagementView = ({
                 return `${orderNo ? `订单 ${orderNo} · ` : ''}按商品填写到货数量。当前 ${received}/${ordered} 件。改完后点这一行的确认；数量 0 在确认前不会记为缺货。`
               })()}
             </DialogDescription>
-            <div className="shrink-0 pt-0.5 text-right">
+            <div className="flex shrink-0 items-center justify-end gap-1 pt-0.5">
+              <button type="button" aria-label="回到顶部" title="回到顶部" className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-900" onClick={(event) => scrollPane(event.currentTarget, 'top')}>
+                <ChevronUp className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="回到底部" title="回到底部" className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-900" onClick={(event) => scrollPane(event.currentTarget, 'bottom')}>
+                <ChevronDown className="h-4 w-4" />
+              </button>
               {discountEditing ? (
                 <input
                   autoFocus
@@ -2426,14 +2432,6 @@ export const OrderManagementView = ({
           </div>
         </div>
       ) : null}
-          <div className="fixed bottom-24 right-5 z-40 flex flex-col gap-2">
-            <button type="button" aria-label="回到顶部" title="回到顶部" className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-900 shadow-lg" onClick={(event) => scrollPane(event.currentTarget, 'top')}>
-              <ChevronUp className="h-5 w-5" />
-            </button>
-            <button type="button" aria-label="回到底部" title="回到底部" className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-900 shadow-lg" onClick={(event) => scrollPane(event.currentTarget, 'bottom')}>
-              <ChevronDown className="h-5 w-5" />
-            </button>
-          </div>
         </DialogContent>
       </Dialog>
       {state.inboundOrderId && inboundZoom ? (
