@@ -1,3 +1,4 @@
+import { excludeNoBrandShelfWhere, isNoBrandCategoryName } from '@/shared/noBrandShelf'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -766,9 +767,15 @@ export const getRelatedProducts = withResult(
       getSiteWidePercentCoef(pricingConfig),
       resolveGoodsCoef(relatedPromo.kind, relatedPromo.vipDiscount),
     )
+    const relatedCategory = input.categoryId
+      ? await prisma.category.findUnique({ where: { id: input.categoryId }, select: { name: true, slug: true } })
+      : null
     const products = await prisma.product.findMany({
       where: {
         ...storefrontVisibilityWhere(),
+        ...(relatedCategory && (isNoBrandCategoryName(relatedCategory.name) || relatedCategory.slug === 'no-brand')
+          ? {}
+          : excludeNoBrandShelfWhere()),
         categoryId: input.categoryId,
         id: { not: input.excludeProductId },
         category: {

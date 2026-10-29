@@ -1,3 +1,4 @@
+import { excludeNoBrandShelfWhere, isNoBrandCategoryName } from '@/shared/noBrandShelf'
 'use server'
 
 import {
@@ -431,10 +432,25 @@ export const getHomeRecommendZones = async (input?: {
       }
       return Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, 8)
     }
+    const noBrandRows = await prisma.category.findMany({
+      where: {
+        OR: [
+          { slug: 'no-brand' },
+          { name: 'No Brand' },
+          { name: 'NoBrand' },
+          { name: '无品牌' },
+        ],
+      },
+      select: { id: true, name: true },
+    })
+    const noBrandCategoryIds = new Set(
+      noBrandRows.map((row) => row.id),
+    )
     const fetchLatestForCategory = (categoryId: string) =>
       prisma.product.findMany({
       where: {
         ...storefrontVisibilityWhere(),
+        ...(noBrandCategoryIds.has(categoryId) ? {} : excludeNoBrandShelfWhere()),
         OR: [
           { categoryId },
           { brandCategoryId: categoryId },

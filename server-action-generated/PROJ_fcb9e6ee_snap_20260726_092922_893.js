@@ -49438,8 +49438,8 @@ const saveCustomerServiceConfig = (0, _action_utils.withResult)(async (input)=>{
 /***/ 9123
 (__unused_webpack_module, exports, __webpack_require__) {
 
-'use server';
 "use strict";
+
 Object.defineProperty(exports, "__esModule", ({
     value: true
 }));
@@ -49493,6 +49493,7 @@ _export(exports, {
         return _ProductCategory.getProductList;
     }
 });
+const _noBrandShelf = __webpack_require__(4075);
 const _ProductCategory = __webpack_require__(6481);
 const _homeRecommendZoneCache = __webpack_require__(4561);
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
@@ -49513,6 +49514,7 @@ function _interop_require_default(obj) {
         default: obj
     };
 }
+'use server';
 const DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT = 4;
 function scaleListedUsd(price, coef) {
     if (price == null || !(price > 0)) return null;
@@ -49809,9 +49811,33 @@ const getHomeRecommendZones = async (input)=>{
             }
             return Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, 8);
         };
+        const noBrandRows = await _prisma.default.category.findMany({
+            where: {
+                OR: [
+                    {
+                        slug: 'no-brand'
+                    },
+                    {
+                        name: 'No Brand'
+                    },
+                    {
+                        name: 'NoBrand'
+                    },
+                    {
+                        name: '无品牌'
+                    }
+                ]
+            },
+            select: {
+                id: true,
+                name: true
+            }
+        });
+        const noBrandCategoryIds = new Set(noBrandRows.map((row)=>row.id));
         const fetchLatestForCategory = (categoryId)=>_prisma.default.product.findMany({
                 where: {
                     ...(0, _storefrontProductVisibility.storefrontVisibilityWhere)(),
+                    ...noBrandCategoryIds.has(categoryId) ? {} : (0, _noBrandShelf.excludeNoBrandShelfWhere)(),
                     OR: [
                         {
                             categoryId
@@ -51020,8 +51046,8 @@ const savePageDecorateConfig = (0, _action_utils.withResult)(async (input)=>{
 /***/ 6481
 (__unused_webpack_module, exports, __webpack_require__) {
 
-'use server';
 "use strict";
+
 Object.defineProperty(exports, "__esModule", ({
     value: true
 }));
@@ -51072,6 +51098,7 @@ _export(exports, {
         return resolveCategoryRouteKey;
     }
 });
+const _noBrandShelf = __webpack_require__(4075);
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
 const _homeRecommendZoneCache = __webpack_require__(4561);
 const _loadStorefrontBootstrap = __webpack_require__(5380);
@@ -51097,6 +51124,7 @@ function _interop_require_default(obj) {
         default: obj
     };
 }
+'use server';
 const DEFAULT_BRAND_COLLAPSED_ROWS = 3;
 const CATEGORY_TOP_PROMOTION_TITLE = 'CATEGORY_TOP_PROMOTION';
 const DEFAULT_KEYWORD_SCENE_AREAS = [
@@ -51584,6 +51612,12 @@ const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, 
     // product.name alone misses "chanel bag" when the stored name is Chinese/CL.
     // Token AND fuzzy matching runs in-memory after fetch (see getProductList).
     void searchKeyword;
+    if (!(0, _noBrandShelf.isNoBrandCategoryName)(context.matchedCategoryName) && !(0, _noBrandShelf.isNoBrandCategoryName)(context.rootCategoryName)) {
+        where.AND = [
+            ...where.AND || [],
+            (0, _noBrandShelf.excludeNoBrandShelfWhere)()
+        ];
+    }
     return where;
 };
 const getCategoryList = (0, _action_utils.withResult)(async (input)=>{
@@ -53217,8 +53251,8 @@ const getWishlistProducts = (0, _action_utils.withResult)(async (input)=>{
 /***/ 1920
 (__unused_webpack_module, exports, __webpack_require__) {
 
-'use server';
 "use strict";
+
 Object.defineProperty(exports, "__esModule", ({
     value: true
 }));
@@ -53245,6 +53279,7 @@ _export(exports, {
         return setCartSkuQuantity;
     }
 });
+const _noBrandShelf = __webpack_require__(4075);
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
 const _action_utils = __webpack_require__(2348);
 const _priceCoefficient = __webpack_require__(9829);
@@ -53269,6 +53304,7 @@ function _interop_require_default(obj) {
         default: obj
     };
 }
+'use server';
 function normalizeCartLines(input) {
     const fromLines = Array.isArray(input.lines) ? input.lines : [];
     const mapped = fromLines.map((line)=>({
@@ -53756,9 +53792,19 @@ const getRelatedProducts = (0, _action_utils.withResult)(async (input)=>{
     ]);
     const relatedPromo = await (0, _loadCustomerPromoKind.loadCustomerPromo)();
     const siteWideCoef = (0, _customerPromoPolicy.combinePriceCoef)((0, _pricingPromotionCalc.getSiteWidePercentCoef)(pricingConfig), (0, _customerPromoPolicy.resolveGoodsCoef)(relatedPromo.kind, relatedPromo.vipDiscount));
+    const relatedCategory = input.categoryId ? await _prisma.default.category.findUnique({
+        where: {
+            id: input.categoryId
+        },
+        select: {
+            name: true,
+            slug: true
+        }
+    }) : null;
     const products = await _prisma.default.product.findMany({
         where: {
             ...(0, _storefrontProductVisibility.storefrontVisibilityWhere)(),
+            ...relatedCategory && ((0, _noBrandShelf.isNoBrandCategoryName)(relatedCategory.name) || relatedCategory.slug === 'no-brand') ? {} : (0, _noBrandShelf.excludeNoBrandShelfWhere)(),
             categoryId: input.categoryId,
             id: {
                 not: input.excludeProductId
@@ -60088,6 +60134,73 @@ function formatUsd(amount) {
 function formatUsdCompact(amount) {
     if (typeof amount !== 'number' || Number.isNaN(amount)) return '--';
     return amount.toFixed(2);
+}
+
+
+/***/ },
+
+/***/ 4075
+(__unused_webpack_module, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get excludeNoBrandShelfWhere () {
+        return excludeNoBrandShelfWhere;
+    },
+    get isNoBrandCategoryName () {
+        return isNoBrandCategoryName;
+    }
+});
+/** Storefront shelf that collects products without a real brand. */ const NO_BRAND_CATEGORY_MATCH = {
+    OR: [
+        {
+            slug: 'no-brand'
+        },
+        {
+            name: 'No Brand'
+        },
+        {
+            name: 'NoBrand'
+        },
+        {
+            name: '无品牌'
+        }
+    ]
+};
+function isNoBrandCategoryName(name) {
+    const normalized = String(name || '').replace(/[\s_-]+/g, '').toLowerCase();
+    return normalized === 'nobrand' || normalized === 'nobrands' || normalized === '无品牌';
+}
+function excludeNoBrandShelfWhere() {
+    return {
+        NOT: {
+            OR: [
+                {
+                    category: NO_BRAND_CATEGORY_MATCH
+                },
+                {
+                    brandCategory: NO_BRAND_CATEGORY_MATCH
+                },
+                {
+                    relationCategories: {
+                        some: {
+                            category: NO_BRAND_CATEGORY_MATCH
+                        }
+                    }
+                }
+            ]
+        }
+    };
 }
 
 

@@ -1,3 +1,4 @@
+import { excludeNoBrandShelfWhere, isNoBrandCategoryName } from '@/shared/noBrandShelf'
 'use server'
 
 // ===== Enums =====
@@ -809,6 +810,10 @@ const buildProductWhere = (
   // product.name alone misses "chanel bag" when the stored name is Chinese/CL.
   // Token AND fuzzy matching runs in-memory after fetch (see getProductList).
   void searchKeyword
+
+  if (!isNoBrandCategoryName(context.matchedCategoryName) && !isNoBrandCategoryName(context.rootCategoryName)) {
+    where.AND = [...(where.AND || []), excludeNoBrandShelfWhere()]
+  }
 
   return where
 }
