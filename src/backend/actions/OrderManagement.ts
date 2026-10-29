@@ -468,7 +468,10 @@ export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
     const totalOrderCount = await prisma.orderrecord.count()
 
     const todayPurchaseCount = await prisma.orderrecord.count({
-      where: { items: { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } } },
+      where: {
+        status: { notIn: ['PENDING_PAYMENT', 'CANCELLED', 'REFUNDED'] },
+        items: { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } },
+      },
     })
     return {
       pendingShipmentCount,
@@ -497,6 +500,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
     const whereCondition: any = {}
 
     if (status === 'TODAY_PURCHASE') {
+      whereCondition.status = { notIn: ['PENDING_PAYMENT', 'CANCELLED', 'REFUNDED'] }
       whereCondition.items = { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } }
     } else if (status === 'PAID') {
       whereCondition.status = { in: PAID_TAB_STATUSES }

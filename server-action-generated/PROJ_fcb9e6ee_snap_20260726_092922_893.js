@@ -30649,6 +30649,13 @@ const getOrderDashboardStats = (0, _action_utils.requireRole)([
     const totalOrderCount = await _prisma.default.orderrecord.count();
     const todayPurchaseCount = await _prisma.default.orderrecord.count({
         where: {
+            status: {
+                notIn: [
+                    'PENDING_PAYMENT',
+                    'CANCELLED',
+                    'REFUNDED'
+                ]
+            },
             items: {
                 some: {
                     OR: [
@@ -30683,6 +30690,13 @@ const getOrderList = (0, _action_utils.requireRole)([
     // 构建过滤条件
     const whereCondition = {};
     if (status === 'TODAY_PURCHASE') {
+        whereCondition.status = {
+            notIn: [
+                'PENDING_PAYMENT',
+                'CANCELLED',
+                'REFUNDED'
+            ]
+        };
         whereCondition.items = {
             some: {
                 OR: [
