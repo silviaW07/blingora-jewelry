@@ -790,19 +790,32 @@
   max-width: 100%;
   transform: none;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   border-radius: 0 0 2px 2px;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 0.15rem 0.3rem;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  line-height: 1.2;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 0.12rem 0.2rem 0.16rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.15;
   color: #fff;
   text-align: center;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  opacity: 1;
+}
+
+.product-color-swatch-label-color,
+.product-color-swatch-label-sku {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-color-swatch-label-sku {
+  margin-top: 0.05rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.5625rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
 .product-color-swatch.is-selected .product-color-swatch-label {
@@ -2996,7 +3009,7 @@ html.is-narrow .product-detail-page .product-detail-buy-actions button.is-disabl
 
 html.is-narrow .product-color-swatch-label {
   display: block !important;
-  opacity: 0;
+  opacity: 1;
 }
 
 html.is-narrow .product-color-swatch.is-selected .product-color-swatch-label {

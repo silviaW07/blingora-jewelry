@@ -12,6 +12,7 @@ import {
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { normalizeSupplierSourceUrl, tradeImportSourceUrl } from '@/shared/supplierSourceUrl'
 import { isPlaceholderCompareAt, resolveListedCompareAt } from '@/shared/pricingPromotionCalc'
+import { toDecimalNumber } from '@/shared/priceCoefficient'
 
 // ===== Enums =====
 
@@ -48,6 +49,10 @@ export interface OrderInboundLine {
   /** PENDING 待采购 | PREPARING 备货中 | TRANSIT 运输中 | ARRIVED 已到货 */
   inboundStage: string
   shipmentImageUrl: string | null
+  /** Color the customer picked for this SKU. */
+  colorLabel: string
+  /** Product selling coefficient. Empty when the product has none. */
+  priceCoefficient: number | null
   /** Saved quantity 0 means this line was confirmed out of stock. Unsaved 0 is not. */
   outOfStock: boolean
   /** Set in the check-in screen after the operator clicks 确认. */
@@ -92,6 +97,7 @@ const inboundProductSelect = {
   mainImageUrl: true,
   weightGram: true,
   costPrice: true,
+  priceCoefficient: true,
   supplierName: true,
   status: true,
   goodsStatus: true,
@@ -163,6 +169,25 @@ function compareInboundSpu(a: { spu?: string | null; skuCode?: string | null }, 
   return String(a.skuCode || '').localeCompare(String(b.skuCode || ''), 'en', { numeric: true, sensitivity: 'base' })
 }
 
+
+function inboundColorLabel(item: {
+  materialLabel?: string | null
+  productSku?: { attributeJson?: unknown; materialLabel?: string | null } | null
+}): string {
+  const colorPattern = /颜色|顏色|color|colour|款式|style/i
+  const attributes = Array.isArray(item.productSku?.attributeJson) ? item.productSku?.attributeJson : []
+  for (const entry of attributes) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const row = entry as Record<string, unknown>
+    const name = String(row.name || row.label || row.key || '')
+    const value = String(row.value || row.labelValue || '').trim()
+    if (value && colorPattern.test(name)) return value
+  }
+  const snapshot = String(item.materialLabel || '').trim()
+  if (snapshot) return snapshot
+  return String(item.productSku?.materialLabel || '').trim()
+}
+
 function mapInboundLine(item: {
   id: string
   productId?: string | null
@@ -174,14 +199,16 @@ function mapInboundLine(item: {
   inboundAt?: Date | string | null
   inboundStage?: string | null
   shipmentImageUrl?: string | null
+  materialLabel?: string | null
   unitPrice?: unknown
   lineAmount?: unknown
-  productSku?: { imageUrl?: string | null } | null
+  productSku?: { imageUrl?: string | null; attributeJson?: unknown; materialLabel?: string | null } | null
   product?: {
     productCode?: string | null
     mainImageUrl?: string | null
     galleryJson?: unknown
     costPrice?: unknown
+    priceCoefficient?: unknown
     supplierName?: string | null
     status?: string | null
     goodsStatus?: string | null
@@ -209,11 +236,13 @@ function mapInboundLine(item: {
     lineAmount: moneyAmount(item.lineAmount),
     currencyCode: String(currencyCode || 'USD'),
     costPrice: moneyAmount(item.product?.costPrice),
+    priceCoefficient: toDecimalNumber(item.product?.priceCoefficient),
     supplierName: supplier.supplierName,
     supplierUrl: supplier.supplierUrl,
     productStatus: String(item.product?.status || ''),
     goodsStatus: String(item.product?.goodsStatus || ''),
     inboundStage: cleanInboundStage(item.inboundStage),
+    colorLabel: inboundColorLabel(item),
     outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0,
   }
 }
@@ -544,7 +573,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
             orderBy: { createdAt: 'asc' },
             include: {
               product: { select: inboundProductSelect },
-              productSku: { select: { imageUrl: true } },
+              productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
             },
           }
         }
@@ -613,7 +642,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
           orderBy: { createdAt: 'asc' },
           include: {
             product: { select: inboundProductSelect },
-            productSku: { select: { imageUrl: true } },
+            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
           },
         },
         logistics: {
@@ -886,7 +915,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
           orderBy: { createdAt: 'asc' },
           include: {
             product: { select: inboundProductSelect },
-            productSku: { select: { imageUrl: true } },
+            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
           },
         },
       },
@@ -955,7 +984,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
       where: { orderId: order.id },
       include: {
         product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true } },
+        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
@@ -1137,7 +1166,7 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
       where: { orderId: order.id },
       include: {
         product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true } },
+        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
@@ -1295,7 +1324,7 @@ async function inboundLinesAfterGoods(orderId: string, currencyCode: string | nu
     where: { orderId },
     include: {
       product: { select: inboundProductSelect },
-      productSku: { select: { imageUrl: true } },
+      productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
     },
     orderBy: { createdAt: 'asc' },
   })
@@ -2350,6 +2379,8 @@ export interface UpdateManualOrderLineInput {
   costPrice?: number | null
   supplierName?: string | null
   productName?: string | null
+  /** Product coefficient. Null clears it. Sale price is cost / 6.5 * coefficient when the client sends a linked unit price. */
+  priceCoefficient?: number | null
 }
 
 /**
@@ -2389,6 +2420,17 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
         await tx.product.update({
           where: { id: item.productId },
           data: { supplierName: String(input.supplierName || '').trim().slice(0, 160) || null },
+        })
+      }
+      if (input.priceCoefficient !== undefined) {
+        const raw = input.priceCoefficient
+        const numeric = raw == null ? null : Number(raw)
+        const priceCoefficient = numeric == null || !Number.isFinite(numeric) || numeric <= 0
+          ? null
+          : Math.round(Math.min(numeric, 9999.99) * 100) / 100
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { priceCoefficient },
         })
       }
       const items = await tx.orderitem.findMany({ where: { orderId: order.id } })
@@ -2476,7 +2518,7 @@ export const updateOrderDiscount = requireRole([UserRole.ADMIN])(
       where: { orderId: order.id },
       include: {
         product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true } },
+        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
       },
       orderBy: { createdAt: 'asc' },
     })

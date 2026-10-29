@@ -85,6 +85,7 @@ interface Props {
 
 function ColorSwatchButton({
   colorLabel,
+  skuCode,
   previewUrl,
   isSelected,
   isPurchasable,
@@ -93,6 +94,7 @@ function ColorSwatchButton({
   onPreheat,
 }: {
   colorLabel: string
+  skuCode: string
   previewUrl: string
   isSelected: boolean
   isPurchasable: boolean
@@ -107,7 +109,8 @@ function ColorSwatchButton({
       type="button"
       ref={tap.ref}
       aria-pressed={isSelected}
-      aria-label={colorLabel}
+      aria-label={skuCode ? `${colorLabel} ${skuCode}` : colorLabel}
+      title={skuCode || colorLabel}
       data-selected={isSelected ? 'true' : 'false'}
       data-no-hard-nav=""
       aria-disabled={!isPurchasable}
@@ -121,9 +124,10 @@ function ColorSwatchButton({
       onClick={tap.onClick}
       onContextMenu={(event) => event.preventDefault()}
     >
-      {colorLabel ? (
+      {colorLabel || skuCode ? (
         <span className="product-color-swatch-label" aria-hidden={!isSelected}>
-          {colorLabel}
+          {colorLabel ? <span className="product-color-swatch-label-color">{colorLabel}</span> : null}
+          {skuCode ? <span className="product-color-swatch-label-sku">{skuCode}</span> : null}
         </span>
       ) : null}
       <span className="product-color-swatch-frame">
@@ -835,6 +839,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                               <ColorSwatchButton
                                 key={swatch.value}
                                 colorLabel={displayColorLabel(t, swatch.value, swatchIndex)}
+                                skuCode={String(swatch.sku?.skuCode || '').trim()}
                                 previewUrl={swatch.imageUrl || ''}
                                 isSelected={attrEquals(selectedColorValue, swatch.value)}
                                 isPurchasable={isPurchasable}

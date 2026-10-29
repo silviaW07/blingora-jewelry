@@ -30433,6 +30433,7 @@ const _action_utils = __webpack_require__(9360);
 const _exchangeRate = __webpack_require__(3928);
 const _supplierSourceUrl = __webpack_require__(7713);
 const _pricingPromotionCalc = __webpack_require__(2557);
+const _priceCoefficient = __webpack_require__(9829);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -30504,6 +30505,7 @@ const inboundProductSelect = {
     mainImageUrl: true,
     weightGram: true,
     costPrice: true,
+    priceCoefficient: true,
     supplierName: true,
     status: true,
     goodsStatus: true,
@@ -30584,8 +30586,23 @@ function compareInboundSpu(a, b) {
         sensitivity: 'base'
     });
 }
+function inboundColorLabel(item) {
+    var _item_productSku, _item_productSku1, _item_productSku2;
+    const colorPattern = /颜色|顏色|color|colour|款式|style/i;
+    const attributes = Array.isArray((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.attributeJson) ? (_item_productSku1 = item.productSku) === null || _item_productSku1 === void 0 ? void 0 : _item_productSku1.attributeJson : [];
+    for (const entry of attributes){
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+        const row = entry;
+        const name = String(row.name || row.label || row.key || '');
+        const value = String(row.value || row.labelValue || '').trim();
+        if (value && colorPattern.test(name)) return value;
+    }
+    const snapshot = String(item.materialLabel || '').trim();
+    if (snapshot) return snapshot;
+    return String(((_item_productSku2 = item.productSku) === null || _item_productSku2 === void 0 ? void 0 : _item_productSku2.materialLabel) || '').trim();
+}
 function mapInboundLine(item, currencyCode, orderAmounts) {
-    var _item_productSku, _item_product, _item_product1, _item_product2, _item_product3, _item_product4;
+    var _item_productSku, _item_product, _item_product1, _item_product2, _item_product3, _item_product4, _item_product5;
     const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
     const inboundQty = clampInboundQty(quantity, Number(item.inboundQty) || 0);
     const supplier = supplierLinkFromProduct(item.product);
@@ -30606,11 +30623,13 @@ function mapInboundLine(item, currencyCode, orderAmounts) {
         lineAmount: moneyAmount(item.lineAmount),
         currencyCode: String(currencyCode || 'USD'),
         costPrice: moneyAmount((_item_product2 = item.product) === null || _item_product2 === void 0 ? void 0 : _item_product2.costPrice),
+        priceCoefficient: (0, _priceCoefficient.toDecimalNumber)((_item_product3 = item.product) === null || _item_product3 === void 0 ? void 0 : _item_product3.priceCoefficient),
         supplierName: supplier.supplierName,
         supplierUrl: supplier.supplierUrl,
-        productStatus: String(((_item_product3 = item.product) === null || _item_product3 === void 0 ? void 0 : _item_product3.status) || ''),
-        goodsStatus: String(((_item_product4 = item.product) === null || _item_product4 === void 0 ? void 0 : _item_product4.goodsStatus) || ''),
+        productStatus: String(((_item_product4 = item.product) === null || _item_product4 === void 0 ? void 0 : _item_product4.status) || ''),
+        goodsStatus: String(((_item_product5 = item.product) === null || _item_product5 === void 0 ? void 0 : _item_product5.goodsStatus) || ''),
         inboundStage: cleanInboundStage(item.inboundStage),
+        colorLabel: inboundColorLabel(item),
         outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0
     };
 }
@@ -30781,7 +30800,9 @@ const getOrderList = (0, _action_utils.requireRole)([
                         },
                         productSku: {
                             select: {
-                                imageUrl: true
+                                imageUrl: true,
+                                attributeJson: true,
+                                materialLabel: true
                             }
                         }
                     }
@@ -30858,7 +30879,9 @@ const getOrderDetail = (0, _action_utils.requireRole)([
                     },
                     productSku: {
                         select: {
-                            imageUrl: true
+                            imageUrl: true,
+                            attributeJson: true,
+                            materialLabel: true
                         }
                     }
                 }
@@ -31146,7 +31169,9 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
                     },
                     productSku: {
                         select: {
-                            imageUrl: true
+                            imageUrl: true,
+                            attributeJson: true,
+                            materialLabel: true
                         }
                     }
                 }
@@ -31219,7 +31244,9 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
             },
             productSku: {
                 select: {
-                    imageUrl: true
+                    imageUrl: true,
+                    attributeJson: true,
+                    materialLabel: true
                 }
             }
         },
@@ -31442,7 +31469,9 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
             },
             productSku: {
                 select: {
-                    imageUrl: true
+                    imageUrl: true,
+                    attributeJson: true,
+                    materialLabel: true
                 }
             }
         },
@@ -31619,7 +31648,9 @@ async function inboundLinesAfterGoods(orderId, currencyCode) {
             },
             productSku: {
                 select: {
-                    imageUrl: true
+                    imageUrl: true,
+                    attributeJson: true,
+                    materialLabel: true
                 }
             }
         },
@@ -32935,6 +32966,19 @@ const updateManualOrderLine = (0, _action_utils.requireRole)([
                 }
             });
         }
+        if (input.priceCoefficient !== undefined) {
+            const raw = input.priceCoefficient;
+            const numeric = raw == null ? null : Number(raw);
+            const priceCoefficient = numeric == null || !Number.isFinite(numeric) || numeric <= 0 ? null : Math.round(Math.min(numeric, 9999.99) * 100) / 100;
+            await tx.product.update({
+                where: {
+                    id: item.productId
+                },
+                data: {
+                    priceCoefficient
+                }
+            });
+        }
         const items = await tx.orderitem.findMany({
             where: {
                 orderId: order.id
@@ -33060,7 +33104,9 @@ const updateOrderDiscount = (0, _action_utils.requireRole)([
             },
             productSku: {
                 select: {
-                    imageUrl: true
+                    imageUrl: true,
+                    attributeJson: true,
+                    materialLabel: true
                 }
             }
         },
