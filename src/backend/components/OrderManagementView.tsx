@@ -32,9 +32,9 @@ import { toast } from 'sonner';
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING_PAYMENT: '待付款',
   PAID: '已支付',
-  PROCESSING: '待发货',
-  SHIPPED: '运输中',
-  DELIVERED: '已送达',
+  PROCESSING: '处理中',
+  SHIPPED: '已发货',
+  DELIVERED: '已完成',
   CANCELLED: '已取消',
   REFUNDED: '已退款'
 };
@@ -43,6 +43,9 @@ const LIST_STATUS_OPTIONS: { value: OrderStatus; label: string; className: strin
   { value: 'PENDING_PAYMENT', label: '待付款', className: 'bg-amber-100 text-amber-900 border-amber-200' },
   { value: 'PROCESSING', label: '处理中', className: 'bg-sky-100 text-sky-800 border-sky-200' },
   { value: 'SHIPPED', label: '已发货', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  { value: 'DELIVERED', label: '已完成', className: 'bg-green-100 text-green-800 border-green-200' },
+  { value: 'CANCELLED', label: '已取消', className: 'bg-slate-200 text-slate-700 border-slate-300' },
+  { value: 'REFUNDED', label: '已退款', className: 'bg-orange-100 text-orange-800 border-orange-200' },
 ];
 const LIST_STATUS_VALUES = new Set(LIST_STATUS_OPTIONS.map((o) => o.value));
 const ORDER_STATUS_VARIANTS: Record<OrderStatus, string> = {
@@ -1083,8 +1086,8 @@ export const OrderManagementView = ({
           <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full max-w-full overflow-x-auto sm:w-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
             <TabsList className="h-10 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <TabsTrigger value="ALL" className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
-              {Object.entries(ORDER_STATUS_LABELS).map(([k, v], index) => <TabsTrigger key={k} value={k} className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r180c0dacb82b1231-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" data-api-in-loop="1">
-                  {v}
+              {LIST_STATUS_OPTIONS.map((opt) => <TabsTrigger key={opt.value} value={opt.value} className="shrink-0 px-3 sm:px-6">
+                  {opt.label}
                 </TabsTrigger>)}
             </TabsList>
           </Tabs>
@@ -1130,11 +1133,7 @@ export const OrderManagementView = ({
                 </label>
                 <label className="grid gap-1 text-sm font-medium text-slate-700">状态
                   <select className="h-10 rounded-md border border-slate-200 bg-white px-2 text-sm" value={importOrderStatus} onChange={(event) => setImportOrderStatus(event.target.value as OrderStatus)}>
-                    <option value="PROCESSING">处理中</option>
-                    <option value="PENDING_PAYMENT">待付款</option>
-                    <option value="PAID">已支付</option>
-                    <option value="SHIPPED">已发货</option>
-                    <option value="DELIVERED">已送达</option>
+                    {LIST_STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                   </select>
                 </label>
               </div>
@@ -1185,7 +1184,7 @@ export const OrderManagementView = ({
             <div className="flex flex-col items-stretch justify-between gap-3 border-b bg-white px-4 py-4 sm:flex-row sm:items-center sm:px-6">
               <div className="text-sm font-medium text-muted-foreground">
                 {state.filterForm.status === 'PAID'
-                  ? '已支付包含待发货、运输中、已送达 · 按线下单时间排序'
+                  ? '已支付包含处理中、已发货、已完成 · 按线下单时间排序'
                   : '按线下单时间排序 · 可用上方状态 Tab 快速筛选'}
               </div>
               <Button
