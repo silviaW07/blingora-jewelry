@@ -492,6 +492,11 @@ export const OrderManagementView = ({
   const [importOrderNote, setImportOrderNote] = React.useState('');
   const [importOrderStatus, setImportOrderStatus] = React.useState<OrderStatus>('PROCESSING');
   const [importOrderSaving, setImportOrderSaving] = React.useState(false);
+  const [createOrderOpen, setCreateOrderOpen] = React.useState(false);
+  const [createOrderEmail, setCreateOrderEmail] = React.useState('');
+  const [createOrderSaving, setCreateOrderSaving] = React.useState(false);
+  const [contactEdit, setContactEdit] = React.useState<{ id: string; field: 'name' | 'phone' } | null>(null);
+  const [contactDraft, setContactDraft] = React.useState('');
 
   const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; costPrice: string; supplierName: string }>>({});
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
@@ -935,6 +940,40 @@ export const OrderManagementView = ({
       setImportOrderSaving(false);
     }
   };
+
+  const submitCreateOrder = async () => {
+    const email = createOrderEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('请填写客户邮箱');
+      return;
+    }
+    try {
+      setCreateOrderSaving(true);
+      const created = await handlers.createCustomerOrder({ email, status: 'PROCESSING' });
+      if (!created) return;
+      setCreateOrderOpen(false);
+      setCreateOrderEmail('');
+    } finally {
+      setCreateOrderSaving(false);
+    }
+  };
+
+  const saveCustomerContact = async (row: { customerEmail: string; customerName: string; customerWhatsapp: string | null }, field: 'name' | 'phone') => {
+    const value = contactDraft.trim();
+    setContactEdit(null);
+    if (field === 'name') {
+      if (!value) {
+        toast.error('请填写姓名');
+        return;
+      }
+      if (value === (row.customerName || '')) return;
+      await handlers.updateOrderCustomerProfile({ email: row.customerEmail, customerName: value });
+      return;
+    }
+    if (value === (row.customerWhatsapp || '')) return;
+    await handlers.updateOrderCustomerProfile({ email: row.customerEmail, phone: value });
+  };
+
   const inboundCurrency = state.inboundDrafts.find((line) => line.currencyCode)?.currencyCode || 'USD';
   const originalTotal = state.inboundDrafts.reduce((sum, line) => sum + (line.lineAmount != null ? Number(line.lineAmount) : (Number(line.unitPrice) || 0) * line.quantity), 0);
   const discountTotal = state.inboundDrafts.reduce((sum, line) => sum + ((line.discountUnitPrice ?? line.unitPrice ?? 0) * line.quantity), 0);
@@ -1037,7 +1076,23 @@ export const OrderManagementView = ({
                 </TabsTrigger>)}
             </TabsList>
           </Tabs>
+          <Button type="button" variant="outline" className="h-10 shrink-0" onClick={() => setCreateOrderOpen(true)}>创建新单</Button>
           <Button type="button" className="h-10 shrink-0" onClick={() => setImportOrderOpen(true)}>导入订单</Button>
+          <Dialog open={createOrderOpen} onOpenChange={setCreateOrderOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>创建新单</DialogTitle>
+                <DialogDescription>填写客户邮箱后确认，会按现有订单号规则生成一条新订单。姓名和手机号可以在列表里双击修改。</DialogDescription>
+              </DialogHeader>
+              <label className="grid gap-1 text-sm font-medium text-slate-700">客户邮箱
+                <Input value={createOrderEmail} onChange={(event) => setCreateOrderEmail(event.target.value)} placeholder="customer@email.com" autoComplete="off" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void submitCreateOrder(); } }} />
+              </label>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setCreateOrderOpen(false)} disabled={createOrderSaving}>取消</Button>
+                <Button type="button" onClick={() => void submitCreateOrder()} disabled={createOrderSaving}>{createOrderSaving ? '正在创建…' : '确认'}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           </div>
           <Dialog open={importOrderOpen} onOpenChange={setImportOrderOpen}>
             <DialogContent className="max-w-lg">
@@ -1174,7 +1229,26 @@ export const OrderManagementView = ({
                               {row.customerEmail}
                             </button>
                           </TableCell>
-                          <TableCell className="pt-4 text-sm font-medium">{row.customerName}</TableCell>
+                          <TableCell className="pt-4 text-sm font-medium">
+                            {contactEdit?.id === row.id && contactEdit.field === 'name' ? (
+                              <input
+                                autoFocus
+                                aria-label="客户名称"
+                                className="h-9 w-full min-w-[96px] rounded-md border border-slate-200 px-2 text-sm font-medium"
+                                value={contactDraft}
+                                onChange={(event) => setContactDraft(event.target.value)}
+                                onBlur={() => { void saveCustomerContact(row, 'name'); }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
+                                  if (event.key === 'Escape') setContactEdit(null);
+                                }}
+                              />
+                            ) : (
+                              <button type="button" className="text-left text-sm font-medium" title="双击修改姓名" onDoubleClick={() => { setContactDraft(row.customerName || ''); setContactEdit({ id: row.id, field: 'name' }); }}>
+                                {row.customerName || '—'}
+                              </button>
+                            )}
+                          </TableCell>
                           <TableCell className="pt-4">
                             <Select
                               value={LIST_STATUS_VALUES.has(row.status) ? row.status : row.status}
@@ -1214,7 +1288,24 @@ export const OrderManagementView = ({
                             </div>
                           </TableCell>
                           <TableCell className="pt-4 text-sm text-muted-foreground">
-                            {row.customerWhatsapp || '—'}
+                            {contactEdit?.id === row.id && contactEdit.field === 'phone' ? (
+                              <input
+                                autoFocus
+                                aria-label="手机号"
+                                className="h-9 w-full min-w-[108px] rounded-md border border-slate-200 px-2 text-sm"
+                                value={contactDraft}
+                                onChange={(event) => setContactDraft(event.target.value)}
+                                onBlur={() => { void saveCustomerContact(row, 'phone'); }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
+                                  if (event.key === 'Escape') setContactEdit(null);
+                                }}
+                              />
+                            ) : (
+                              <button type="button" className="text-left text-sm text-muted-foreground" title="双击修改手机号" onDoubleClick={() => { setContactDraft(row.customerWhatsapp || ''); setContactEdit({ id: row.id, field: 'phone' }); }}>
+                                {row.customerWhatsapp || '—'}
+                              </button>
+                            )}
                           </TableCell>
                           <TableCell className="pt-4">
                             <div className="text-sm font-bold whitespace-nowrap">

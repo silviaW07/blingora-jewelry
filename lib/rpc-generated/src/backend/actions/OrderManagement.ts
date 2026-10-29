@@ -24,6 +24,10 @@ export const importInboundSheet = (...args: Parameters<Actions["importInboundShe
   rpcCall<Awaited<ReturnType<Actions["importInboundSheet"]>>>("src.backend.actions.OrderManagement.importInboundSheet", ...args);
 export const importCustomerOrder = (...args: Parameters<Actions["importCustomerOrder"]>) => 
   rpcCall<Awaited<ReturnType<Actions["importCustomerOrder"]>>>("src.backend.actions.OrderManagement.importCustomerOrder", ...args);
+export const createCustomerOrder = (...args: Parameters<Actions["createCustomerOrder"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["createCustomerOrder"]>>>("src.backend.actions.OrderManagement.createCustomerOrder", ...args);
+export const updateOrderCustomerProfile = (...args: Parameters<Actions["updateOrderCustomerProfile"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateOrderCustomerProfile"]>>>("src.backend.actions.OrderManagement.updateOrderCustomerProfile", ...args);
 export const listInboundShipments = (...args: Parameters<Actions["listInboundShipments"]>) => 
   rpcCall<Awaited<ReturnType<Actions["listInboundShipments"]>>>("src.backend.actions.OrderManagement.listInboundShipments", ...args);
 export const saveInboundShipment = (...args: Parameters<Actions["saveInboundShipment"]>) => 

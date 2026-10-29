@@ -37,6 +37,8 @@ import {
   updateManualOrderLine,
   deleteInboundLines,
   importCustomerOrder,
+  createCustomerOrder,
+  updateOrderCustomerProfile,
   listInboundShipments,
   saveInboundShipment,
   updateInboundShipment,
@@ -187,6 +189,8 @@ export interface OrderManagementHandlers {
   saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   updateInboundShipment: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
   importCustomerOrder: (input: { email: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
+  createCustomerOrder: (input: { email: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
+  updateOrderCustomerProfile: (input: { email: string; customerName?: string; phone?: string | null }) => Promise<{ customerName: string; customerWhatsapp: string | null } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -586,7 +590,11 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       ? detailData.inboundLines
       : row?.inboundLines) || []
     if (!source.length) {
-      toast.error('这笔订单没有可登记的商品')
+      setInboundDrafts([])
+      setInboundOrderId(orderId)
+      inboundBooted.current = orderId
+      inboundClosing.current = false
+      if (!options?.skipUrl) syncInboundQuery(true, orderId)
       return
     }
     const saved = readInboundDraftStore(orderId)
@@ -1334,6 +1342,41 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+
+  const createCustomerOrderBlank = async (input: { email: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => {
+    try {
+      const result = await createCustomerOrder(input)
+      toast.success(`已创建订单 ${result.orderNo}`)
+      const nextForm = { ...filterForm, status: undefined, page: 1 }
+      setFilterForm(nextForm)
+      await fetchList(nextForm)
+      fetchStats()
+      return result
+    } catch (err: any) {
+      toast.error(err.message || '创建订单失败')
+      return null
+    }
+  }
+
+
+  const saveOrderCustomerProfile = async (input: { email: string; customerName?: string; phone?: string | null }) => {
+    try {
+      const saved = await updateOrderCustomerProfile(input)
+      const email = input.email.trim().toLowerCase()
+      setList((prev) => prev.map((row) => row.customerEmail.trim().toLowerCase() === email
+        ? { ...row, customerName: saved.customerName, customerWhatsapp: saved.customerWhatsapp }
+        : row))
+      if (detailData && detailData.customerEmail.trim().toLowerCase() === email) {
+        setDetailData({ ...detailData, customerName: saved.customerName, customerWhatsapp: saved.customerWhatsapp })
+      }
+      toast.success('已保存')
+      return saved
+    } catch (err: any) {
+      toast.error(err.message || '保存失败')
+      return null
+    }
+  }
+
   const exportInboundSheet = async (input: ExportInboundSheetInput) => {
     if (!input.rows?.length) {
       toast.error('请先勾选要导出的商品')
@@ -1438,6 +1481,8 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       updateManualOrderLine: updateManualOrderLineOnOrder,
       deleteInboundLines: deleteInboundLinesOnOrder,
       importCustomerOrder: importCustomerOrderFile,
+      createCustomerOrder: createCustomerOrderBlank,
+      updateOrderCustomerProfile: saveOrderCustomerProfile,
       saveInboundShipment: saveInboundShipmentRows,
       updateInboundShipment: updateInboundShipmentRow,
       exportInboundSheet,

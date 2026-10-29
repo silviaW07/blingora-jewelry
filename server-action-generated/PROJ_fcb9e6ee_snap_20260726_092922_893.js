@@ -30368,6 +30368,9 @@ _export(exports, {
     get appendOrderGoods () {
         return appendOrderGoods;
     },
+    get createCustomerOrder () {
+        return createCustomerOrder;
+    },
     get deleteInboundLines () {
         return deleteInboundLines;
     },
@@ -30406,6 +30409,9 @@ _export(exports, {
     },
     get updateManualOrderLine () {
         return updateManualOrderLine;
+    },
+    get updateOrderCustomerProfile () {
+        return updateOrderCustomerProfile;
     },
     get updateOrderDiscount () {
         return updateOrderDiscount;
@@ -32457,6 +32463,105 @@ const importCustomerOrder = (0, _action_utils.requireRole)([
             };
         }));
     return created;
+}));
+const createCustomerOrder = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const email = String(input.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请填写客户邮箱');
+    const users = await _prisma.default.$queryRawUnsafe('SELECT id, status FROM sysuser WHERE LOWER(email) = ? LIMIT 1', email);
+    const user = users[0];
+    if (!user) throw new Error('没有这个客户邮箱，请让客户先用这个邮箱注册');
+    if (String(user.status || '').toUpperCase() !== 'ACTIVE') throw new Error('这个客户账号已停用');
+    const status = IMPORT_ORDER_STATUSES.includes(input.status) ? input.status : 'PROCESSING';
+    const shippingText = String(input.shippingMethod || '').trim().slice(0, 255);
+    const note = String(input.orderNote || '').trim().slice(0, 4000);
+    const created = await _prisma.default.$transaction(async (tx)=>withNextOrderNo(tx, async (orderNo)=>{
+            const order = await tx.orderrecord.create({
+                data: {
+                    orderNo,
+                    userId: user.id,
+                    status,
+                    currencyCode: 'USD',
+                    localeCode: 'en',
+                    subtotalAmount: 0,
+                    discountAmount: 0,
+                    shippingAmount: 0,
+                    giftWrapAmount: 0,
+                    totalAmount: 0,
+                    paymentMethod: 'BANK_TRANSFER',
+                    paymentStatus: status === 'PENDING_PAYMENT' ? 'UNPAID' : 'PAID',
+                    shipMethod: 'STANDARD',
+                    trackingCarrier: shippingText || null,
+                    internalNote: note || null
+                }
+            });
+            await tx.orderoperationlog.create({
+                data: {
+                    orderId: order.id,
+                    actionType: '创建订单',
+                    actionNote: `邮箱 ${email}`.slice(0, 4000),
+                    operatorName: username
+                }
+            });
+            return {
+                orderId: order.id,
+                orderNo,
+                itemCount: 0,
+                totalAmount: 0
+            };
+        }));
+    return created;
+}));
+const updateOrderCustomerProfile = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const email = String(input.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('客户邮箱不正确');
+    const users = await _prisma.default.sysuser.findMany({
+        where: {
+            email
+        },
+        select: {
+            id: true,
+            username: true,
+            phone: true
+        },
+        take: 1
+    });
+    const user = users[0];
+    if (!user) throw new Error('没有这个客户');
+    const data = {};
+    if (input.customerName !== undefined) {
+        const name = String(input.customerName || '').trim().slice(0, 100);
+        if (!name) throw new Error('请填写姓名');
+        data.username = name;
+    }
+    if (input.phone !== undefined) {
+        const phone = String(input.phone || '').trim().slice(0, 30);
+        data.phone = phone || null;
+    }
+    if (!Object.keys(data).length) {
+        return {
+            customerName: user.username,
+            customerWhatsapp: user.phone || null
+        };
+    }
+    const saved = await _prisma.default.sysuser.update({
+        where: {
+            id: user.id
+        },
+        data,
+        select: {
+            username: true,
+            phone: true
+        }
+    });
+    return {
+        customerName: saved.username,
+        customerWhatsapp: saved.phone || null
+    };
 }));
 const INBOUND_SHIP_SEGMENT = '入库发货';
 function parseShanghaiDateTime(value) {
