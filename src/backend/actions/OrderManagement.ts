@@ -883,6 +883,40 @@ export const updateOrderStatus = requireRole([UserRole.ADMIN])(
         return // 状态无变化，不做处理
       }
 
+      const refundAmount = Math.round((moneyAmount(order.totalAmount) ?? 0) * 100) / 100
+      if (newStatus === 'REFUNDED' && order.status !== 'REFUNDED' && refundAmount > 0) {
+        const already = await tx.customerbalanceentry.findUnique({
+          where: { orderId_kind: { orderId: order.id, kind: 'REFUND' } },
+        })
+        if (!already) {
+          await tx.customerbalanceentry.create({
+            data: {
+              userId: order.userId,
+              orderId: order.id,
+              amount: refundAmount,
+              kind: 'REFUND',
+              note: `${order.orderNo} 退款入账`.slice(0, 255),
+            },
+          })
+          await tx.sysuser.update({
+            where: { id: order.userId },
+            data: { balance: { increment: refundAmount } },
+          })
+        }
+      }
+      if (order.status === 'REFUNDED' && newStatus !== 'REFUNDED') {
+        const already = await tx.customerbalanceentry.findUnique({
+          where: { orderId_kind: { orderId: order.id, kind: 'REFUND' } },
+        })
+        if (already) {
+          await tx.sysuser.update({
+            where: { id: order.userId },
+            data: { balance: { decrement: already.amount } },
+          })
+          await tx.customerbalanceentry.delete({ where: { id: already.id } })
+        }
+      }
+
       // 1. 更新状态
       await tx.orderrecord.update({
         where: { id: orderId },

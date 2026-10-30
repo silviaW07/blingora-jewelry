@@ -72,6 +72,8 @@ export interface UserListItem {
   customerType: string
   /** 0 = 不单独打折；95 = 95vip */
   vipDiscount: number
+  /** 客户余额。订单改为已退款时按订单总额入账。 */
+  balance: number
   customerTagCode: CustomerTagCode
   customerTagName: string | null
   cartItemCount: number
@@ -93,6 +95,7 @@ export interface UserDetail {
   lastLoginAt: string | null
   adminNote: string | null
   vipDiscount: number
+  balance: number
   customerTagCode: CustomerTagCode
   customerTagName: string | null
   cartId: string | null
@@ -477,6 +480,7 @@ export const getUserList = requireRole([UserRole.ADMIN])(
         adminNote: user.adminNote || null,
         customerType: (user as any).customerType || DEFAULT_CUSTOMER_TYPE,
         vipDiscount: vipMap.get(user.id) ?? 0,
+        balance: Number(user.balance ?? 0),
         customerTagCode: tag.customerTagCode,
         customerTagName: tag.customerTagName,
         cartItemCount: cart?._count?.items ?? 0,
@@ -657,6 +661,7 @@ export const getUserDetail = requireRole([UserRole.ADMIN])(
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
       adminNote: user.adminNote || null,
       vipDiscount: (await loadVipDiscountMap([user.id])).get(user.id) ?? 0,
+      balance: Number(user.balance ?? 0),
       customerTagCode: tag.customerTagCode,
       customerTagName: tag.customerTagName,
       cartId: cart?.id ?? null,

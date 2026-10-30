@@ -273,6 +273,11 @@ export type buyershowcomment = $Result.DefaultSelection<Prisma.$buyershowcomment
  * 买家秀真实性证明：一张图加一段说明，前台展示在照片墙上方
  */
 export type buyershowproof = $Result.DefaultSelection<Prisma.$buyershowproofPayload>
+/**
+ * Model customerbalanceentry
+ * 
+ */
+export type customerbalanceentry = $Result.DefaultSelection<Prisma.$customerbalanceentryPayload>
 
 /**
  * Enums
@@ -1288,6 +1293,16 @@ export class PrismaClient<
     * ```
     */
   get buyershowproof(): Prisma.buyershowproofDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.customerbalanceentry`: Exposes CRUD operations for the **customerbalanceentry** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Customerbalanceentries
+    * const customerbalanceentries = await prisma.customerbalanceentry.findMany()
+    * ```
+    */
+  get customerbalanceentry(): Prisma.customerbalanceentryDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -1780,7 +1795,8 @@ export namespace Prisma {
     brandalias: 'brandalias',
     buyershowmedia: 'buyershowmedia',
     buyershowcomment: 'buyershowcomment',
-    buyershowproof: 'buyershowproof'
+    buyershowproof: 'buyershowproof',
+    customerbalanceentry: 'customerbalanceentry'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1799,7 +1815,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment" | "buyershowproof"
+      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment" | "buyershowproof" | "customerbalanceentry"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -5235,6 +5251,72 @@ export namespace Prisma {
           }
         }
       }
+      customerbalanceentry: {
+        payload: Prisma.$customerbalanceentryPayload<ExtArgs>
+        fields: Prisma.customerbalanceentryFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.customerbalanceentryFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.customerbalanceentryFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>
+          }
+          findFirst: {
+            args: Prisma.customerbalanceentryFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.customerbalanceentryFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>
+          }
+          findMany: {
+            args: Prisma.customerbalanceentryFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>[]
+          }
+          create: {
+            args: Prisma.customerbalanceentryCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>
+          }
+          createMany: {
+            args: Prisma.customerbalanceentryCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.customerbalanceentryDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>
+          }
+          update: {
+            args: Prisma.customerbalanceentryUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>
+          }
+          deleteMany: {
+            args: Prisma.customerbalanceentryDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.customerbalanceentryUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.customerbalanceentryUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customerbalanceentryPayload>
+          }
+          aggregate: {
+            args: Prisma.CustomerbalanceentryAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCustomerbalanceentry>
+          }
+          groupBy: {
+            args: Prisma.customerbalanceentryGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CustomerbalanceentryGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.customerbalanceentryCountArgs<ExtArgs>
+            result: $Utils.Optional<CustomerbalanceentryCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -5383,6 +5465,7 @@ export namespace Prisma {
     buyershowmedia?: buyershowmediaOmit
     buyershowcomment?: buyershowcommentOmit
     buyershowproof?: buyershowproofOmit
+    customerbalanceentry?: customerbalanceentryOmit
   }
 
   /* Types for Logging */
@@ -5464,6 +5547,7 @@ export namespace Prisma {
 
   export type SysuserCountOutputType = {
     carts: number
+    balanceEntries: number
     importTasks: number
     importTaskItems: number
     addresses: number
@@ -5478,6 +5562,7 @@ export namespace Prisma {
 
   export type SysuserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     carts?: boolean | SysuserCountOutputTypeCountCartsArgs
+    balanceEntries?: boolean | SysuserCountOutputTypeCountBalanceEntriesArgs
     importTasks?: boolean | SysuserCountOutputTypeCountImportTasksArgs
     importTaskItems?: boolean | SysuserCountOutputTypeCountImportTaskItemsArgs
     addresses?: boolean | SysuserCountOutputTypeCountAddressesArgs
@@ -5506,6 +5591,13 @@ export namespace Prisma {
    */
   export type SysuserCountOutputTypeCountCartsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: cartWhereInput
+  }
+
+  /**
+   * SysuserCountOutputType without action
+   */
+  export type SysuserCountOutputTypeCountBalanceEntriesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: customerbalanceentryWhereInput
   }
 
   /**
@@ -6391,11 +6483,13 @@ export namespace Prisma {
   export type SysuserAvgAggregateOutputType = {
     purchaseCount: number | null
     vipDiscount: number | null
+    balance: Decimal | null
   }
 
   export type SysuserSumAggregateOutputType = {
     purchaseCount: number | null
     vipDiscount: number | null
+    balance: Decimal | null
   }
 
   export type SysuserMinAggregateOutputType = {
@@ -6422,6 +6516,7 @@ export namespace Prisma {
     ringSizeEu: string | null
     braceletSize: string | null
     lastLoginAt: Date | null
+    balance: Decimal | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -6450,6 +6545,7 @@ export namespace Prisma {
     ringSizeEu: string | null
     braceletSize: string | null
     lastLoginAt: Date | null
+    balance: Decimal | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -6480,6 +6576,7 @@ export namespace Prisma {
     savedPreferencesJson: number
     savedSizesJson: number
     lastLoginAt: number
+    balance: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -6489,11 +6586,13 @@ export namespace Prisma {
   export type SysuserAvgAggregateInputType = {
     purchaseCount?: true
     vipDiscount?: true
+    balance?: true
   }
 
   export type SysuserSumAggregateInputType = {
     purchaseCount?: true
     vipDiscount?: true
+    balance?: true
   }
 
   export type SysuserMinAggregateInputType = {
@@ -6520,6 +6619,7 @@ export namespace Prisma {
     ringSizeEu?: true
     braceletSize?: true
     lastLoginAt?: true
+    balance?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -6548,6 +6648,7 @@ export namespace Prisma {
     ringSizeEu?: true
     braceletSize?: true
     lastLoginAt?: true
+    balance?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -6578,6 +6679,7 @@ export namespace Prisma {
     savedPreferencesJson?: true
     savedSizesJson?: true
     lastLoginAt?: true
+    balance?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -6695,6 +6797,7 @@ export namespace Prisma {
     savedPreferencesJson: JsonValue | null
     savedSizesJson: JsonValue | null
     lastLoginAt: Date | null
+    balance: Decimal
     createdAt: Date
     updatedAt: Date
     _count: SysuserCountAggregateOutputType | null
@@ -6744,9 +6847,11 @@ export namespace Prisma {
     savedPreferencesJson?: boolean
     savedSizesJson?: boolean
     lastLoginAt?: boolean
+    balance?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     carts?: boolean | sysuser$cartsArgs<ExtArgs>
+    balanceEntries?: boolean | sysuser$balanceEntriesArgs<ExtArgs>
     importTasks?: boolean | sysuser$importTasksArgs<ExtArgs>
     importTaskItems?: boolean | sysuser$importTaskItemsArgs<ExtArgs>
     addresses?: boolean | sysuser$addressesArgs<ExtArgs>
@@ -6788,13 +6893,15 @@ export namespace Prisma {
     savedPreferencesJson?: boolean
     savedSizesJson?: boolean
     lastLoginAt?: boolean
+    balance?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "customerTypeUpdatedAt" | "vipDiscount" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
+  export type sysuserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "account" | "password" | "passwordPlain" | "email" | "role" | "status" | "username" | "avatarUrl" | "phone" | "preferredCurrency" | "preferredLocale" | "countryCode" | "countryName" | "purchaseCount" | "adminNote" | "customerType" | "customerTypeUpdatedAt" | "vipDiscount" | "ringSizeUs" | "ringSizeEu" | "braceletSize" | "savedPreferencesJson" | "savedSizesJson" | "lastLoginAt" | "balance" | "createdAt" | "updatedAt", ExtArgs["result"]["sysuser"]>
   export type sysuserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     carts?: boolean | sysuser$cartsArgs<ExtArgs>
+    balanceEntries?: boolean | sysuser$balanceEntriesArgs<ExtArgs>
     importTasks?: boolean | sysuser$importTasksArgs<ExtArgs>
     importTaskItems?: boolean | sysuser$importTaskItemsArgs<ExtArgs>
     addresses?: boolean | sysuser$addressesArgs<ExtArgs>
@@ -6812,6 +6919,7 @@ export namespace Prisma {
     name: "sysuser"
     objects: {
       carts: Prisma.$cartPayload<ExtArgs>[]
+      balanceEntries: Prisma.$customerbalanceentryPayload<ExtArgs>[]
       importTasks: Prisma.$importtaskPayload<ExtArgs>[]
       importTaskItems: Prisma.$importtaskitemPayload<ExtArgs>[]
       addresses: Prisma.$useraddressPayload<ExtArgs>[]
@@ -6849,6 +6957,7 @@ export namespace Prisma {
       savedPreferencesJson: Prisma.JsonValue | null
       savedSizesJson: Prisma.JsonValue | null
       lastLoginAt: Date | null
+      balance: Prisma.Decimal
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["sysuser"]>
@@ -7192,6 +7301,7 @@ export namespace Prisma {
   export interface Prisma__sysuserClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     carts<T extends sysuser$cartsArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$cartsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$cartPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    balanceEntries<T extends sysuser$balanceEntriesArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$balanceEntriesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     importTasks<T extends sysuser$importTasksArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$importTasksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$importtaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     importTaskItems<T extends sysuser$importTaskItemsArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$importTaskItemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$importtaskitemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     addresses<T extends sysuser$addressesArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$addressesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$useraddressPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -7256,6 +7366,7 @@ export namespace Prisma {
     readonly savedPreferencesJson: FieldRef<"sysuser", 'Json'>
     readonly savedSizesJson: FieldRef<"sysuser", 'Json'>
     readonly lastLoginAt: FieldRef<"sysuser", 'DateTime'>
+    readonly balance: FieldRef<"sysuser", 'Decimal'>
     readonly createdAt: FieldRef<"sysuser", 'DateTime'>
     readonly updatedAt: FieldRef<"sysuser", 'DateTime'>
   }
@@ -7622,6 +7733,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: CartScalarFieldEnum | CartScalarFieldEnum[]
+  }
+
+  /**
+   * sysuser.balanceEntries
+   */
+  export type sysuser$balanceEntriesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    where?: customerbalanceentryWhereInput
+    orderBy?: customerbalanceentryOrderByWithRelationInput | customerbalanceentryOrderByWithRelationInput[]
+    cursor?: customerbalanceentryWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: CustomerbalanceentryScalarFieldEnum | CustomerbalanceentryScalarFieldEnum[]
   }
 
   /**
@@ -61439,6 +61574,991 @@ export namespace Prisma {
 
 
   /**
+   * Model customerbalanceentry
+   */
+
+  export type AggregateCustomerbalanceentry = {
+    _count: CustomerbalanceentryCountAggregateOutputType | null
+    _avg: CustomerbalanceentryAvgAggregateOutputType | null
+    _sum: CustomerbalanceentrySumAggregateOutputType | null
+    _min: CustomerbalanceentryMinAggregateOutputType | null
+    _max: CustomerbalanceentryMaxAggregateOutputType | null
+  }
+
+  export type CustomerbalanceentryAvgAggregateOutputType = {
+    amount: Decimal | null
+  }
+
+  export type CustomerbalanceentrySumAggregateOutputType = {
+    amount: Decimal | null
+  }
+
+  export type CustomerbalanceentryMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    orderId: string | null
+    amount: Decimal | null
+    kind: string | null
+    note: string | null
+    createdAt: Date | null
+  }
+
+  export type CustomerbalanceentryMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    orderId: string | null
+    amount: Decimal | null
+    kind: string | null
+    note: string | null
+    createdAt: Date | null
+  }
+
+  export type CustomerbalanceentryCountAggregateOutputType = {
+    id: number
+    userId: number
+    orderId: number
+    amount: number
+    kind: number
+    note: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type CustomerbalanceentryAvgAggregateInputType = {
+    amount?: true
+  }
+
+  export type CustomerbalanceentrySumAggregateInputType = {
+    amount?: true
+  }
+
+  export type CustomerbalanceentryMinAggregateInputType = {
+    id?: true
+    userId?: true
+    orderId?: true
+    amount?: true
+    kind?: true
+    note?: true
+    createdAt?: true
+  }
+
+  export type CustomerbalanceentryMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    orderId?: true
+    amount?: true
+    kind?: true
+    note?: true
+    createdAt?: true
+  }
+
+  export type CustomerbalanceentryCountAggregateInputType = {
+    id?: true
+    userId?: true
+    orderId?: true
+    amount?: true
+    kind?: true
+    note?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type CustomerbalanceentryAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which customerbalanceentry to aggregate.
+     */
+    where?: customerbalanceentryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customerbalanceentries to fetch.
+     */
+    orderBy?: customerbalanceentryOrderByWithRelationInput | customerbalanceentryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: customerbalanceentryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customerbalanceentries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customerbalanceentries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned customerbalanceentries
+    **/
+    _count?: true | CustomerbalanceentryCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: CustomerbalanceentryAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: CustomerbalanceentrySumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CustomerbalanceentryMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CustomerbalanceentryMaxAggregateInputType
+  }
+
+  export type GetCustomerbalanceentryAggregateType<T extends CustomerbalanceentryAggregateArgs> = {
+        [P in keyof T & keyof AggregateCustomerbalanceentry]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCustomerbalanceentry[P]>
+      : GetScalarType<T[P], AggregateCustomerbalanceentry[P]>
+  }
+
+
+
+
+  export type customerbalanceentryGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: customerbalanceentryWhereInput
+    orderBy?: customerbalanceentryOrderByWithAggregationInput | customerbalanceentryOrderByWithAggregationInput[]
+    by: CustomerbalanceentryScalarFieldEnum[] | CustomerbalanceentryScalarFieldEnum
+    having?: customerbalanceentryScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CustomerbalanceentryCountAggregateInputType | true
+    _avg?: CustomerbalanceentryAvgAggregateInputType
+    _sum?: CustomerbalanceentrySumAggregateInputType
+    _min?: CustomerbalanceentryMinAggregateInputType
+    _max?: CustomerbalanceentryMaxAggregateInputType
+  }
+
+  export type CustomerbalanceentryGroupByOutputType = {
+    id: string
+    userId: string
+    orderId: string | null
+    amount: Decimal
+    kind: string
+    note: string | null
+    createdAt: Date
+    _count: CustomerbalanceentryCountAggregateOutputType | null
+    _avg: CustomerbalanceentryAvgAggregateOutputType | null
+    _sum: CustomerbalanceentrySumAggregateOutputType | null
+    _min: CustomerbalanceentryMinAggregateOutputType | null
+    _max: CustomerbalanceentryMaxAggregateOutputType | null
+  }
+
+  type GetCustomerbalanceentryGroupByPayload<T extends customerbalanceentryGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CustomerbalanceentryGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CustomerbalanceentryGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CustomerbalanceentryGroupByOutputType[P]>
+            : GetScalarType<T[P], CustomerbalanceentryGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type customerbalanceentrySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    orderId?: boolean
+    amount?: boolean
+    kind?: boolean
+    note?: boolean
+    createdAt?: boolean
+    user?: boolean | sysuserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["customerbalanceentry"]>
+
+
+
+  export type customerbalanceentrySelectScalar = {
+    id?: boolean
+    userId?: boolean
+    orderId?: boolean
+    amount?: boolean
+    kind?: boolean
+    note?: boolean
+    createdAt?: boolean
+  }
+
+  export type customerbalanceentryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "orderId" | "amount" | "kind" | "note" | "createdAt", ExtArgs["result"]["customerbalanceentry"]>
+  export type customerbalanceentryInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | sysuserDefaultArgs<ExtArgs>
+  }
+
+  export type $customerbalanceentryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "customerbalanceentry"
+    objects: {
+      user: Prisma.$sysuserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      orderId: string | null
+      amount: Prisma.Decimal
+      kind: string
+      note: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["customerbalanceentry"]>
+    composites: {}
+  }
+
+  type customerbalanceentryGetPayload<S extends boolean | null | undefined | customerbalanceentryDefaultArgs> = $Result.GetResult<Prisma.$customerbalanceentryPayload, S>
+
+  type customerbalanceentryCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<customerbalanceentryFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CustomerbalanceentryCountAggregateInputType | true
+    }
+
+  export interface customerbalanceentryDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['customerbalanceentry'], meta: { name: 'customerbalanceentry' } }
+    /**
+     * Find zero or one Customerbalanceentry that matches the filter.
+     * @param {customerbalanceentryFindUniqueArgs} args - Arguments to find a Customerbalanceentry
+     * @example
+     * // Get one Customerbalanceentry
+     * const customerbalanceentry = await prisma.customerbalanceentry.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends customerbalanceentryFindUniqueArgs>(args: SelectSubset<T, customerbalanceentryFindUniqueArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Customerbalanceentry that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {customerbalanceentryFindUniqueOrThrowArgs} args - Arguments to find a Customerbalanceentry
+     * @example
+     * // Get one Customerbalanceentry
+     * const customerbalanceentry = await prisma.customerbalanceentry.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends customerbalanceentryFindUniqueOrThrowArgs>(args: SelectSubset<T, customerbalanceentryFindUniqueOrThrowArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Customerbalanceentry that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customerbalanceentryFindFirstArgs} args - Arguments to find a Customerbalanceentry
+     * @example
+     * // Get one Customerbalanceentry
+     * const customerbalanceentry = await prisma.customerbalanceentry.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends customerbalanceentryFindFirstArgs>(args?: SelectSubset<T, customerbalanceentryFindFirstArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Customerbalanceentry that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customerbalanceentryFindFirstOrThrowArgs} args - Arguments to find a Customerbalanceentry
+     * @example
+     * // Get one Customerbalanceentry
+     * const customerbalanceentry = await prisma.customerbalanceentry.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends customerbalanceentryFindFirstOrThrowArgs>(args?: SelectSubset<T, customerbalanceentryFindFirstOrThrowArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Customerbalanceentries that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customerbalanceentryFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Customerbalanceentries
+     * const customerbalanceentries = await prisma.customerbalanceentry.findMany()
+     * 
+     * // Get first 10 Customerbalanceentries
+     * const customerbalanceentries = await prisma.customerbalanceentry.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const customerbalanceentryWithIdOnly = await prisma.customerbalanceentry.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends customerbalanceentryFindManyArgs>(args?: SelectSubset<T, customerbalanceentryFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Customerbalanceentry.
+     * @param {customerbalanceentryCreateArgs} args - Arguments to create a Customerbalanceentry.
+     * @example
+     * // Create one Customerbalanceentry
+     * const Customerbalanceentry = await prisma.customerbalanceentry.create({
+     *   data: {
+     *     // ... data to create a Customerbalanceentry
+     *   }
+     * })
+     * 
+     */
+    create<T extends customerbalanceentryCreateArgs>(args: SelectSubset<T, customerbalanceentryCreateArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Customerbalanceentries.
+     * @param {customerbalanceentryCreateManyArgs} args - Arguments to create many Customerbalanceentries.
+     * @example
+     * // Create many Customerbalanceentries
+     * const customerbalanceentry = await prisma.customerbalanceentry.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends customerbalanceentryCreateManyArgs>(args?: SelectSubset<T, customerbalanceentryCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Customerbalanceentry.
+     * @param {customerbalanceentryDeleteArgs} args - Arguments to delete one Customerbalanceentry.
+     * @example
+     * // Delete one Customerbalanceentry
+     * const Customerbalanceentry = await prisma.customerbalanceentry.delete({
+     *   where: {
+     *     // ... filter to delete one Customerbalanceentry
+     *   }
+     * })
+     * 
+     */
+    delete<T extends customerbalanceentryDeleteArgs>(args: SelectSubset<T, customerbalanceentryDeleteArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Customerbalanceentry.
+     * @param {customerbalanceentryUpdateArgs} args - Arguments to update one Customerbalanceentry.
+     * @example
+     * // Update one Customerbalanceentry
+     * const customerbalanceentry = await prisma.customerbalanceentry.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends customerbalanceentryUpdateArgs>(args: SelectSubset<T, customerbalanceentryUpdateArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Customerbalanceentries.
+     * @param {customerbalanceentryDeleteManyArgs} args - Arguments to filter Customerbalanceentries to delete.
+     * @example
+     * // Delete a few Customerbalanceentries
+     * const { count } = await prisma.customerbalanceentry.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends customerbalanceentryDeleteManyArgs>(args?: SelectSubset<T, customerbalanceentryDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Customerbalanceentries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customerbalanceentryUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Customerbalanceentries
+     * const customerbalanceentry = await prisma.customerbalanceentry.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends customerbalanceentryUpdateManyArgs>(args: SelectSubset<T, customerbalanceentryUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Customerbalanceentry.
+     * @param {customerbalanceentryUpsertArgs} args - Arguments to update or create a Customerbalanceentry.
+     * @example
+     * // Update or create a Customerbalanceentry
+     * const customerbalanceentry = await prisma.customerbalanceentry.upsert({
+     *   create: {
+     *     // ... data to create a Customerbalanceentry
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Customerbalanceentry we want to update
+     *   }
+     * })
+     */
+    upsert<T extends customerbalanceentryUpsertArgs>(args: SelectSubset<T, customerbalanceentryUpsertArgs<ExtArgs>>): Prisma__customerbalanceentryClient<$Result.GetResult<Prisma.$customerbalanceentryPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Customerbalanceentries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customerbalanceentryCountArgs} args - Arguments to filter Customerbalanceentries to count.
+     * @example
+     * // Count the number of Customerbalanceentries
+     * const count = await prisma.customerbalanceentry.count({
+     *   where: {
+     *     // ... the filter for the Customerbalanceentries we want to count
+     *   }
+     * })
+    **/
+    count<T extends customerbalanceentryCountArgs>(
+      args?: Subset<T, customerbalanceentryCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CustomerbalanceentryCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Customerbalanceentry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CustomerbalanceentryAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CustomerbalanceentryAggregateArgs>(args: Subset<T, CustomerbalanceentryAggregateArgs>): Prisma.PrismaPromise<GetCustomerbalanceentryAggregateType<T>>
+
+    /**
+     * Group by Customerbalanceentry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customerbalanceentryGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends customerbalanceentryGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: customerbalanceentryGroupByArgs['orderBy'] }
+        : { orderBy?: customerbalanceentryGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, customerbalanceentryGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCustomerbalanceentryGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the customerbalanceentry model
+   */
+  readonly fields: customerbalanceentryFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for customerbalanceentry.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__customerbalanceentryClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends sysuserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, sysuserDefaultArgs<ExtArgs>>): Prisma__sysuserClient<$Result.GetResult<Prisma.$sysuserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the customerbalanceentry model
+   */
+  interface customerbalanceentryFieldRefs {
+    readonly id: FieldRef<"customerbalanceentry", 'String'>
+    readonly userId: FieldRef<"customerbalanceentry", 'String'>
+    readonly orderId: FieldRef<"customerbalanceentry", 'String'>
+    readonly amount: FieldRef<"customerbalanceentry", 'Decimal'>
+    readonly kind: FieldRef<"customerbalanceentry", 'String'>
+    readonly note: FieldRef<"customerbalanceentry", 'String'>
+    readonly createdAt: FieldRef<"customerbalanceentry", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * customerbalanceentry findUnique
+   */
+  export type customerbalanceentryFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * Filter, which customerbalanceentry to fetch.
+     */
+    where: customerbalanceentryWhereUniqueInput
+  }
+
+  /**
+   * customerbalanceentry findUniqueOrThrow
+   */
+  export type customerbalanceentryFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * Filter, which customerbalanceentry to fetch.
+     */
+    where: customerbalanceentryWhereUniqueInput
+  }
+
+  /**
+   * customerbalanceentry findFirst
+   */
+  export type customerbalanceentryFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * Filter, which customerbalanceentry to fetch.
+     */
+    where?: customerbalanceentryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customerbalanceentries to fetch.
+     */
+    orderBy?: customerbalanceentryOrderByWithRelationInput | customerbalanceentryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for customerbalanceentries.
+     */
+    cursor?: customerbalanceentryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customerbalanceentries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customerbalanceentries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of customerbalanceentries.
+     */
+    distinct?: CustomerbalanceentryScalarFieldEnum | CustomerbalanceentryScalarFieldEnum[]
+  }
+
+  /**
+   * customerbalanceentry findFirstOrThrow
+   */
+  export type customerbalanceentryFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * Filter, which customerbalanceentry to fetch.
+     */
+    where?: customerbalanceentryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customerbalanceentries to fetch.
+     */
+    orderBy?: customerbalanceentryOrderByWithRelationInput | customerbalanceentryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for customerbalanceentries.
+     */
+    cursor?: customerbalanceentryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customerbalanceentries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customerbalanceentries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of customerbalanceentries.
+     */
+    distinct?: CustomerbalanceentryScalarFieldEnum | CustomerbalanceentryScalarFieldEnum[]
+  }
+
+  /**
+   * customerbalanceentry findMany
+   */
+  export type customerbalanceentryFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * Filter, which customerbalanceentries to fetch.
+     */
+    where?: customerbalanceentryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customerbalanceentries to fetch.
+     */
+    orderBy?: customerbalanceentryOrderByWithRelationInput | customerbalanceentryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing customerbalanceentries.
+     */
+    cursor?: customerbalanceentryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customerbalanceentries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customerbalanceentries.
+     */
+    skip?: number
+    distinct?: CustomerbalanceentryScalarFieldEnum | CustomerbalanceentryScalarFieldEnum[]
+  }
+
+  /**
+   * customerbalanceentry create
+   */
+  export type customerbalanceentryCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * The data needed to create a customerbalanceentry.
+     */
+    data: XOR<customerbalanceentryCreateInput, customerbalanceentryUncheckedCreateInput>
+  }
+
+  /**
+   * customerbalanceentry createMany
+   */
+  export type customerbalanceentryCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many customerbalanceentries.
+     */
+    data: customerbalanceentryCreateManyInput | customerbalanceentryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * customerbalanceentry update
+   */
+  export type customerbalanceentryUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * The data needed to update a customerbalanceentry.
+     */
+    data: XOR<customerbalanceentryUpdateInput, customerbalanceentryUncheckedUpdateInput>
+    /**
+     * Choose, which customerbalanceentry to update.
+     */
+    where: customerbalanceentryWhereUniqueInput
+  }
+
+  /**
+   * customerbalanceentry updateMany
+   */
+  export type customerbalanceentryUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update customerbalanceentries.
+     */
+    data: XOR<customerbalanceentryUpdateManyMutationInput, customerbalanceentryUncheckedUpdateManyInput>
+    /**
+     * Filter which customerbalanceentries to update
+     */
+    where?: customerbalanceentryWhereInput
+    /**
+     * Limit how many customerbalanceentries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * customerbalanceentry upsert
+   */
+  export type customerbalanceentryUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * The filter to search for the customerbalanceentry to update in case it exists.
+     */
+    where: customerbalanceentryWhereUniqueInput
+    /**
+     * In case the customerbalanceentry found by the `where` argument doesn't exist, create a new customerbalanceentry with this data.
+     */
+    create: XOR<customerbalanceentryCreateInput, customerbalanceentryUncheckedCreateInput>
+    /**
+     * In case the customerbalanceentry was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<customerbalanceentryUpdateInput, customerbalanceentryUncheckedUpdateInput>
+  }
+
+  /**
+   * customerbalanceentry delete
+   */
+  export type customerbalanceentryDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+    /**
+     * Filter which customerbalanceentry to delete.
+     */
+    where: customerbalanceentryWhereUniqueInput
+  }
+
+  /**
+   * customerbalanceentry deleteMany
+   */
+  export type customerbalanceentryDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which customerbalanceentries to delete
+     */
+    where?: customerbalanceentryWhereInput
+    /**
+     * Limit how many customerbalanceentries to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * customerbalanceentry without action
+   */
+  export type customerbalanceentryDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customerbalanceentry
+     */
+    select?: customerbalanceentrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customerbalanceentry
+     */
+    omit?: customerbalanceentryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customerbalanceentryInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -61478,6 +62598,7 @@ export namespace Prisma {
     savedPreferencesJson: 'savedPreferencesJson',
     savedSizesJson: 'savedSizesJson',
     lastLoginAt: 'lastLoginAt',
+    balance: 'balance',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -62383,6 +63504,19 @@ export namespace Prisma {
   export type BuyershowproofScalarFieldEnum = (typeof BuyershowproofScalarFieldEnum)[keyof typeof BuyershowproofScalarFieldEnum]
 
 
+  export const CustomerbalanceentryScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    orderId: 'orderId',
+    amount: 'amount',
+    kind: 'kind',
+    note: 'note',
+    createdAt: 'createdAt'
+  };
+
+  export type CustomerbalanceentryScalarFieldEnum = (typeof CustomerbalanceentryScalarFieldEnum)[keyof typeof CustomerbalanceentryScalarFieldEnum]
+
+
   export const SortOrder: {
     asc: 'asc',
     desc: 'desc'
@@ -63054,6 +64188,17 @@ export namespace Prisma {
   export type buyershowproofOrderByRelevanceFieldEnum = (typeof buyershowproofOrderByRelevanceFieldEnum)[keyof typeof buyershowproofOrderByRelevanceFieldEnum]
 
 
+  export const customerbalanceentryOrderByRelevanceFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    orderId: 'orderId',
+    kind: 'kind',
+    note: 'note'
+  };
+
+  export type customerbalanceentryOrderByRelevanceFieldEnum = (typeof customerbalanceentryOrderByRelevanceFieldEnum)[keyof typeof customerbalanceentryOrderByRelevanceFieldEnum]
+
+
   /**
    * Field references
    */
@@ -63109,6 +64254,13 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Decimal'
+   */
+  export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
+    
+
+
+  /**
    * Reference to a field of type 'categorystatus'
    */
   export type EnumcategorystatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'categorystatus'>
@@ -63119,13 +64271,6 @@ export namespace Prisma {
    * Reference to a field of type 'Boolean'
    */
   export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
-    
-
-
-  /**
-   * Reference to a field of type 'Decimal'
-   */
-  export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
     
 
 
@@ -63322,9 +64467,11 @@ export namespace Prisma {
     savedPreferencesJson?: JsonNullableFilter<"sysuser">
     savedSizesJson?: JsonNullableFilter<"sysuser">
     lastLoginAt?: DateTimeNullableFilter<"sysuser"> | Date | string | null
+    balance?: DecimalFilter<"sysuser"> | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFilter<"sysuser"> | Date | string
     updatedAt?: DateTimeFilter<"sysuser"> | Date | string
     carts?: CartListRelationFilter
+    balanceEntries?: CustomerbalanceentryListRelationFilter
     importTasks?: ImporttaskListRelationFilter
     importTaskItems?: ImporttaskitemListRelationFilter
     addresses?: UseraddressListRelationFilter
@@ -63363,9 +64510,11 @@ export namespace Prisma {
     savedPreferencesJson?: SortOrderInput | SortOrder
     savedSizesJson?: SortOrderInput | SortOrder
     lastLoginAt?: SortOrderInput | SortOrder
+    balance?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     carts?: cartOrderByRelationAggregateInput
+    balanceEntries?: customerbalanceentryOrderByRelationAggregateInput
     importTasks?: importtaskOrderByRelationAggregateInput
     importTaskItems?: importtaskitemOrderByRelationAggregateInput
     addresses?: useraddressOrderByRelationAggregateInput
@@ -63408,9 +64557,11 @@ export namespace Prisma {
     savedPreferencesJson?: JsonNullableFilter<"sysuser">
     savedSizesJson?: JsonNullableFilter<"sysuser">
     lastLoginAt?: DateTimeNullableFilter<"sysuser"> | Date | string | null
+    balance?: DecimalFilter<"sysuser"> | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFilter<"sysuser"> | Date | string
     updatedAt?: DateTimeFilter<"sysuser"> | Date | string
     carts?: CartListRelationFilter
+    balanceEntries?: CustomerbalanceentryListRelationFilter
     importTasks?: ImporttaskListRelationFilter
     importTaskItems?: ImporttaskitemListRelationFilter
     addresses?: UseraddressListRelationFilter
@@ -63449,6 +64600,7 @@ export namespace Prisma {
     savedPreferencesJson?: SortOrderInput | SortOrder
     savedSizesJson?: SortOrderInput | SortOrder
     lastLoginAt?: SortOrderInput | SortOrder
+    balance?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: sysuserCountOrderByAggregateInput
@@ -63487,6 +64639,7 @@ export namespace Prisma {
     savedPreferencesJson?: JsonNullableWithAggregatesFilter<"sysuser">
     savedSizesJson?: JsonNullableWithAggregatesFilter<"sysuser">
     lastLoginAt?: DateTimeNullableWithAggregatesFilter<"sysuser"> | Date | string | null
+    balance?: DecimalWithAggregatesFilter<"sysuser"> | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeWithAggregatesFilter<"sysuser"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"sysuser"> | Date | string
   }
@@ -68297,6 +69450,75 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"buyershowproof"> | Date | string
   }
 
+  export type customerbalanceentryWhereInput = {
+    AND?: customerbalanceentryWhereInput | customerbalanceentryWhereInput[]
+    OR?: customerbalanceentryWhereInput[]
+    NOT?: customerbalanceentryWhereInput | customerbalanceentryWhereInput[]
+    id?: StringFilter<"customerbalanceentry"> | string
+    userId?: StringFilter<"customerbalanceentry"> | string
+    orderId?: StringNullableFilter<"customerbalanceentry"> | string | null
+    amount?: DecimalFilter<"customerbalanceentry"> | Decimal | DecimalJsLike | number | string
+    kind?: StringFilter<"customerbalanceentry"> | string
+    note?: StringNullableFilter<"customerbalanceentry"> | string | null
+    createdAt?: DateTimeFilter<"customerbalanceentry"> | Date | string
+    user?: XOR<SysuserScalarRelationFilter, sysuserWhereInput>
+  }
+
+  export type customerbalanceentryOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    orderId?: SortOrderInput | SortOrder
+    amount?: SortOrder
+    kind?: SortOrder
+    note?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    user?: sysuserOrderByWithRelationInput
+    _relevance?: customerbalanceentryOrderByRelevanceInput
+  }
+
+  export type customerbalanceentryWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    orderId_kind?: customerbalanceentryOrderIdKindCompoundUniqueInput
+    AND?: customerbalanceentryWhereInput | customerbalanceentryWhereInput[]
+    OR?: customerbalanceentryWhereInput[]
+    NOT?: customerbalanceentryWhereInput | customerbalanceentryWhereInput[]
+    userId?: StringFilter<"customerbalanceentry"> | string
+    orderId?: StringNullableFilter<"customerbalanceentry"> | string | null
+    amount?: DecimalFilter<"customerbalanceentry"> | Decimal | DecimalJsLike | number | string
+    kind?: StringFilter<"customerbalanceentry"> | string
+    note?: StringNullableFilter<"customerbalanceentry"> | string | null
+    createdAt?: DateTimeFilter<"customerbalanceentry"> | Date | string
+    user?: XOR<SysuserScalarRelationFilter, sysuserWhereInput>
+  }, "id" | "orderId_kind">
+
+  export type customerbalanceentryOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    orderId?: SortOrderInput | SortOrder
+    amount?: SortOrder
+    kind?: SortOrder
+    note?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: customerbalanceentryCountOrderByAggregateInput
+    _avg?: customerbalanceentryAvgOrderByAggregateInput
+    _max?: customerbalanceentryMaxOrderByAggregateInput
+    _min?: customerbalanceentryMinOrderByAggregateInput
+    _sum?: customerbalanceentrySumOrderByAggregateInput
+  }
+
+  export type customerbalanceentryScalarWhereWithAggregatesInput = {
+    AND?: customerbalanceentryScalarWhereWithAggregatesInput | customerbalanceentryScalarWhereWithAggregatesInput[]
+    OR?: customerbalanceentryScalarWhereWithAggregatesInput[]
+    NOT?: customerbalanceentryScalarWhereWithAggregatesInput | customerbalanceentryScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"customerbalanceentry"> | string
+    userId?: StringWithAggregatesFilter<"customerbalanceentry"> | string
+    orderId?: StringNullableWithAggregatesFilter<"customerbalanceentry"> | string | null
+    amount?: DecimalWithAggregatesFilter<"customerbalanceentry"> | Decimal | DecimalJsLike | number | string
+    kind?: StringWithAggregatesFilter<"customerbalanceentry"> | string
+    note?: StringNullableWithAggregatesFilter<"customerbalanceentry"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"customerbalanceentry"> | Date | string
+  }
+
   export type sysuserCreateInput = {
     id?: string
     account: string
@@ -68323,9 +69545,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -68364,9 +69588,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -68405,9 +69631,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -68446,9 +69674,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -68487,6 +69717,7 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -68517,6 +69748,7 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -68547,6 +69779,7 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -73908,6 +75141,75 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type customerbalanceentryCreateInput = {
+    id?: string
+    orderId?: string | null
+    amount: Decimal | DecimalJsLike | number | string
+    kind: string
+    note?: string | null
+    createdAt?: Date | string
+    user: sysuserCreateNestedOneWithoutBalanceEntriesInput
+  }
+
+  export type customerbalanceentryUncheckedCreateInput = {
+    id?: string
+    userId: string
+    orderId?: string | null
+    amount: Decimal | DecimalJsLike | number | string
+    kind: string
+    note?: string | null
+    createdAt?: Date | string
+  }
+
+  export type customerbalanceentryUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: sysuserUpdateOneRequiredWithoutBalanceEntriesNestedInput
+  }
+
+  export type customerbalanceentryUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customerbalanceentryCreateManyInput = {
+    id?: string
+    userId: string
+    orderId?: string | null
+    amount: Decimal | DecimalJsLike | number | string
+    kind: string
+    note?: string | null
+    createdAt?: Date | string
+  }
+
+  export type customerbalanceentryUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customerbalanceentryUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -73997,6 +75299,17 @@ export namespace Prisma {
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
+  export type DecimalFilter<$PrismaModel = never> = {
+    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    not?: NestedDecimalFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
+  }
+
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[]
@@ -74012,6 +75325,12 @@ export namespace Prisma {
     every?: cartWhereInput
     some?: cartWhereInput
     none?: cartWhereInput
+  }
+
+  export type CustomerbalanceentryListRelationFilter = {
+    every?: customerbalanceentryWhereInput
+    some?: customerbalanceentryWhereInput
+    none?: customerbalanceentryWhereInput
   }
 
   export type ImporttaskListRelationFilter = {
@@ -74080,6 +75399,10 @@ export namespace Prisma {
   }
 
   export type cartOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type customerbalanceentryOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -74155,6 +75478,7 @@ export namespace Prisma {
     savedPreferencesJson?: SortOrder
     savedSizesJson?: SortOrder
     lastLoginAt?: SortOrder
+    balance?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -74162,6 +75486,7 @@ export namespace Prisma {
   export type sysuserAvgOrderByAggregateInput = {
     purchaseCount?: SortOrder
     vipDiscount?: SortOrder
+    balance?: SortOrder
   }
 
   export type sysuserMaxOrderByAggregateInput = {
@@ -74188,6 +75513,7 @@ export namespace Prisma {
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
     lastLoginAt?: SortOrder
+    balance?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -74216,6 +75542,7 @@ export namespace Prisma {
     ringSizeEu?: SortOrder
     braceletSize?: SortOrder
     lastLoginAt?: SortOrder
+    balance?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -74223,6 +75550,7 @@ export namespace Prisma {
   export type sysuserSumOrderByAggregateInput = {
     purchaseCount?: SortOrder
     vipDiscount?: SortOrder
+    balance?: SortOrder
   }
 
   export type StringWithAggregatesFilter<$PrismaModel = never> = {
@@ -74335,6 +75663,22 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedJsonNullableFilter<$PrismaModel>
     _max?: NestedJsonNullableFilter<$PrismaModel>
+  }
+
+  export type DecimalWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    not?: NestedDecimalWithAggregatesFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedDecimalFilter<$PrismaModel>
+    _sum?: NestedDecimalFilter<$PrismaModel>
+    _min?: NestedDecimalFilter<$PrismaModel>
+    _max?: NestedDecimalFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -75059,17 +76403,6 @@ export namespace Prisma {
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
   }
 
-  export type DecimalFilter<$PrismaModel = never> = {
-    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    not?: NestedDecimalFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
-  }
-
   export type EnumstockstatusFilter<$PrismaModel = never> = {
     equals?: $Enums.stockstatus | EnumstockstatusFieldRefInput<$PrismaModel>
     in?: $Enums.stockstatus[]
@@ -75212,22 +76545,6 @@ export namespace Prisma {
     _sum?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedIntNullableFilter<$PrismaModel>
     _max?: NestedIntNullableFilter<$PrismaModel>
-  }
-
-  export type DecimalWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    not?: NestedDecimalWithAggregatesFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedDecimalFilter<$PrismaModel>
-    _sum?: NestedDecimalFilter<$PrismaModel>
-    _min?: NestedDecimalFilter<$PrismaModel>
-    _max?: NestedDecimalFilter<$PrismaModel>
   }
 
   export type EnumstockstatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -78182,11 +79499,67 @@ export namespace Prisma {
     sortWeight?: SortOrder
   }
 
+  export type customerbalanceentryOrderByRelevanceInput = {
+    fields: customerbalanceentryOrderByRelevanceFieldEnum | customerbalanceentryOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type customerbalanceentryOrderIdKindCompoundUniqueInput = {
+    orderId: string
+    kind: string
+  }
+
+  export type customerbalanceentryCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    orderId?: SortOrder
+    amount?: SortOrder
+    kind?: SortOrder
+    note?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type customerbalanceentryAvgOrderByAggregateInput = {
+    amount?: SortOrder
+  }
+
+  export type customerbalanceentryMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    orderId?: SortOrder
+    amount?: SortOrder
+    kind?: SortOrder
+    note?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type customerbalanceentryMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    orderId?: SortOrder
+    amount?: SortOrder
+    kind?: SortOrder
+    note?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type customerbalanceentrySumOrderByAggregateInput = {
+    amount?: SortOrder
+  }
+
   export type cartCreateNestedManyWithoutAccountInput = {
     create?: XOR<cartCreateWithoutAccountInput, cartUncheckedCreateWithoutAccountInput> | cartCreateWithoutAccountInput[] | cartUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
     createMany?: cartCreateManyAccountInputEnvelope
     connect?: cartWhereUniqueInput | cartWhereUniqueInput[]
+  }
+
+  export type customerbalanceentryCreateNestedManyWithoutUserInput = {
+    create?: XOR<customerbalanceentryCreateWithoutUserInput, customerbalanceentryUncheckedCreateWithoutUserInput> | customerbalanceentryCreateWithoutUserInput[] | customerbalanceentryUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: customerbalanceentryCreateOrConnectWithoutUserInput | customerbalanceentryCreateOrConnectWithoutUserInput[]
+    createMany?: customerbalanceentryCreateManyUserInputEnvelope
+    connect?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
   }
 
   export type importtaskCreateNestedManyWithoutCreatorInput = {
@@ -78264,6 +79637,13 @@ export namespace Prisma {
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
     createMany?: cartCreateManyAccountInputEnvelope
     connect?: cartWhereUniqueInput | cartWhereUniqueInput[]
+  }
+
+  export type customerbalanceentryUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<customerbalanceentryCreateWithoutUserInput, customerbalanceentryUncheckedCreateWithoutUserInput> | customerbalanceentryCreateWithoutUserInput[] | customerbalanceentryUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: customerbalanceentryCreateOrConnectWithoutUserInput | customerbalanceentryCreateOrConnectWithoutUserInput[]
+    createMany?: customerbalanceentryCreateManyUserInputEnvelope
+    connect?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
   }
 
   export type importtaskUncheckedCreateNestedManyWithoutCreatorInput = {
@@ -78364,6 +79744,14 @@ export namespace Prisma {
     set?: Date | string | null
   }
 
+  export type DecimalFieldUpdateOperationsInput = {
+    set?: Decimal | DecimalJsLike | number | string
+    increment?: Decimal | DecimalJsLike | number | string
+    decrement?: Decimal | DecimalJsLike | number | string
+    multiply?: Decimal | DecimalJsLike | number | string
+    divide?: Decimal | DecimalJsLike | number | string
+  }
+
   export type DateTimeFieldUpdateOperationsInput = {
     set?: Date | string
   }
@@ -78380,6 +79768,20 @@ export namespace Prisma {
     update?: cartUpdateWithWhereUniqueWithoutAccountInput | cartUpdateWithWhereUniqueWithoutAccountInput[]
     updateMany?: cartUpdateManyWithWhereWithoutAccountInput | cartUpdateManyWithWhereWithoutAccountInput[]
     deleteMany?: cartScalarWhereInput | cartScalarWhereInput[]
+  }
+
+  export type customerbalanceentryUpdateManyWithoutUserNestedInput = {
+    create?: XOR<customerbalanceentryCreateWithoutUserInput, customerbalanceentryUncheckedCreateWithoutUserInput> | customerbalanceentryCreateWithoutUserInput[] | customerbalanceentryUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: customerbalanceentryCreateOrConnectWithoutUserInput | customerbalanceentryCreateOrConnectWithoutUserInput[]
+    upsert?: customerbalanceentryUpsertWithWhereUniqueWithoutUserInput | customerbalanceentryUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: customerbalanceentryCreateManyUserInputEnvelope
+    set?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    disconnect?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    delete?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    connect?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    update?: customerbalanceentryUpdateWithWhereUniqueWithoutUserInput | customerbalanceentryUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: customerbalanceentryUpdateManyWithWhereWithoutUserInput | customerbalanceentryUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: customerbalanceentryScalarWhereInput | customerbalanceentryScalarWhereInput[]
   }
 
   export type importtaskUpdateManyWithoutCreatorNestedInput = {
@@ -78534,6 +79936,20 @@ export namespace Prisma {
     update?: cartUpdateWithWhereUniqueWithoutAccountInput | cartUpdateWithWhereUniqueWithoutAccountInput[]
     updateMany?: cartUpdateManyWithWhereWithoutAccountInput | cartUpdateManyWithWhereWithoutAccountInput[]
     deleteMany?: cartScalarWhereInput | cartScalarWhereInput[]
+  }
+
+  export type customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<customerbalanceentryCreateWithoutUserInput, customerbalanceentryUncheckedCreateWithoutUserInput> | customerbalanceentryCreateWithoutUserInput[] | customerbalanceentryUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: customerbalanceentryCreateOrConnectWithoutUserInput | customerbalanceentryCreateOrConnectWithoutUserInput[]
+    upsert?: customerbalanceentryUpsertWithWhereUniqueWithoutUserInput | customerbalanceentryUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: customerbalanceentryCreateManyUserInputEnvelope
+    set?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    disconnect?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    delete?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    connect?: customerbalanceentryWhereUniqueInput | customerbalanceentryWhereUniqueInput[]
+    update?: customerbalanceentryUpdateWithWhereUniqueWithoutUserInput | customerbalanceentryUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: customerbalanceentryUpdateManyWithWhereWithoutUserInput | customerbalanceentryUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: customerbalanceentryScalarWhereInput | customerbalanceentryScalarWhereInput[]
   }
 
   export type importtaskUncheckedUpdateManyWithoutCreatorNestedInput = {
@@ -79832,14 +81248,6 @@ export namespace Prisma {
     decrement?: number
     multiply?: number
     divide?: number
-  }
-
-  export type DecimalFieldUpdateOperationsInput = {
-    set?: Decimal | DecimalJsLike | number | string
-    increment?: Decimal | DecimalJsLike | number | string
-    decrement?: Decimal | DecimalJsLike | number | string
-    multiply?: Decimal | DecimalJsLike | number | string
-    divide?: Decimal | DecimalJsLike | number | string
   }
 
   export type EnumstockstatusFieldUpdateOperationsInput = {
@@ -81828,6 +83236,20 @@ export namespace Prisma {
     set?: $Enums.buyershowcommentstatus
   }
 
+  export type sysuserCreateNestedOneWithoutBalanceEntriesInput = {
+    create?: XOR<sysuserCreateWithoutBalanceEntriesInput, sysuserUncheckedCreateWithoutBalanceEntriesInput>
+    connectOrCreate?: sysuserCreateOrConnectWithoutBalanceEntriesInput
+    connect?: sysuserWhereUniqueInput
+  }
+
+  export type sysuserUpdateOneRequiredWithoutBalanceEntriesNestedInput = {
+    create?: XOR<sysuserCreateWithoutBalanceEntriesInput, sysuserUncheckedCreateWithoutBalanceEntriesInput>
+    connectOrCreate?: sysuserCreateOrConnectWithoutBalanceEntriesInput
+    upsert?: sysuserUpsertWithoutBalanceEntriesInput
+    connect?: sysuserWhereUniqueInput
+    update?: XOR<XOR<sysuserUpdateToOneWithWhereWithoutBalanceEntriesInput, sysuserUpdateWithoutBalanceEntriesInput>, sysuserUncheckedUpdateWithoutBalanceEntriesInput>
+  }
+
   export type NestedStringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -81892,6 +83314,17 @@ export namespace Prisma {
     gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
+  export type NestedDecimalFilter<$PrismaModel = never> = {
+    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    not?: NestedDecimalFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
   }
 
   export type NestedDateTimeFilter<$PrismaModel = never> = {
@@ -82034,6 +83467,22 @@ export namespace Prisma {
     gt?: InputJsonValue
     gte?: InputJsonValue
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
+
+  export type NestedDecimalWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    not?: NestedDecimalWithAggregatesFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedDecimalFilter<$PrismaModel>
+    _sum?: NestedDecimalFilter<$PrismaModel>
+    _min?: NestedDecimalFilter<$PrismaModel>
+    _max?: NestedDecimalFilter<$PrismaModel>
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -82231,17 +83680,6 @@ export namespace Prisma {
     _max?: NestedFloatFilter<$PrismaModel>
   }
 
-  export type NestedDecimalFilter<$PrismaModel = never> = {
-    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    not?: NestedDecimalFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
-  }
-
   export type NestedEnumstockstatusFilter<$PrismaModel = never> = {
     equals?: $Enums.stockstatus | EnumstockstatusFieldRefInput<$PrismaModel>
     in?: $Enums.stockstatus[]
@@ -82274,22 +83712,6 @@ export namespace Prisma {
     gt?: number | FloatFieldRefInput<$PrismaModel>
     gte?: number | FloatFieldRefInput<$PrismaModel>
     not?: NestedFloatNullableFilter<$PrismaModel> | number | null
-  }
-
-  export type NestedDecimalWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    not?: NestedDecimalWithAggregatesFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedDecimalFilter<$PrismaModel>
-    _sum?: NestedDecimalFilter<$PrismaModel>
-    _min?: NestedDecimalFilter<$PrismaModel>
-    _max?: NestedDecimalFilter<$PrismaModel>
   }
 
   export type NestedEnumstockstatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -82612,6 +84034,34 @@ export namespace Prisma {
 
   export type cartCreateManyAccountInputEnvelope = {
     data: cartCreateManyAccountInput | cartCreateManyAccountInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type customerbalanceentryCreateWithoutUserInput = {
+    id?: string
+    orderId?: string | null
+    amount: Decimal | DecimalJsLike | number | string
+    kind: string
+    note?: string | null
+    createdAt?: Date | string
+  }
+
+  export type customerbalanceentryUncheckedCreateWithoutUserInput = {
+    id?: string
+    orderId?: string | null
+    amount: Decimal | DecimalJsLike | number | string
+    kind: string
+    note?: string | null
+    createdAt?: Date | string
+  }
+
+  export type customerbalanceentryCreateOrConnectWithoutUserInput = {
+    where: customerbalanceentryWhereUniqueInput
+    create: XOR<customerbalanceentryCreateWithoutUserInput, customerbalanceentryUncheckedCreateWithoutUserInput>
+  }
+
+  export type customerbalanceentryCreateManyUserInputEnvelope = {
+    data: customerbalanceentryCreateManyUserInput | customerbalanceentryCreateManyUserInput[]
     skipDuplicates?: boolean
   }
 
@@ -83105,6 +84555,35 @@ export namespace Prisma {
     accountId?: StringFilter<"cart"> | string
     createdAt?: DateTimeFilter<"cart"> | Date | string
     updatedAt?: DateTimeFilter<"cart"> | Date | string
+  }
+
+  export type customerbalanceentryUpsertWithWhereUniqueWithoutUserInput = {
+    where: customerbalanceentryWhereUniqueInput
+    update: XOR<customerbalanceentryUpdateWithoutUserInput, customerbalanceentryUncheckedUpdateWithoutUserInput>
+    create: XOR<customerbalanceentryCreateWithoutUserInput, customerbalanceentryUncheckedCreateWithoutUserInput>
+  }
+
+  export type customerbalanceentryUpdateWithWhereUniqueWithoutUserInput = {
+    where: customerbalanceentryWhereUniqueInput
+    data: XOR<customerbalanceentryUpdateWithoutUserInput, customerbalanceentryUncheckedUpdateWithoutUserInput>
+  }
+
+  export type customerbalanceentryUpdateManyWithWhereWithoutUserInput = {
+    where: customerbalanceentryScalarWhereInput
+    data: XOR<customerbalanceentryUpdateManyMutationInput, customerbalanceentryUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type customerbalanceentryScalarWhereInput = {
+    AND?: customerbalanceentryScalarWhereInput | customerbalanceentryScalarWhereInput[]
+    OR?: customerbalanceentryScalarWhereInput[]
+    NOT?: customerbalanceentryScalarWhereInput | customerbalanceentryScalarWhereInput[]
+    id?: StringFilter<"customerbalanceentry"> | string
+    userId?: StringFilter<"customerbalanceentry"> | string
+    orderId?: StringNullableFilter<"customerbalanceentry"> | string | null
+    amount?: DecimalFilter<"customerbalanceentry"> | Decimal | DecimalJsLike | number | string
+    kind?: StringFilter<"customerbalanceentry"> | string
+    note?: StringNullableFilter<"customerbalanceentry"> | string | null
+    createdAt?: DateTimeFilter<"customerbalanceentry"> | Date | string
   }
 
   export type importtaskUpsertWithWhereUniqueWithoutCreatorInput = {
@@ -86465,8 +87944,10 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -86505,8 +87986,10 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -86601,8 +88084,10 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -86641,8 +88126,10 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -87177,9 +88664,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
     wishlists?: wishlistitemCreateNestedManyWithoutUserInput
@@ -87217,9 +88706,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
     wishlists?: wishlistitemUncheckedCreateNestedManyWithoutUserInput
@@ -87369,9 +88860,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
     wishlists?: wishlistitemUpdateManyWithoutUserNestedInput
@@ -87409,9 +88902,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
     wishlists?: wishlistitemUncheckedUpdateManyWithoutUserNestedInput
@@ -87518,9 +89013,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
     wishlists?: wishlistitemCreateNestedManyWithoutUserInput
@@ -87558,9 +89055,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
     wishlists?: wishlistitemUncheckedCreateNestedManyWithoutUserInput
@@ -87816,9 +89315,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
     wishlists?: wishlistitemUpdateManyWithoutUserNestedInput
@@ -87856,9 +89357,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
     wishlists?: wishlistitemUncheckedUpdateManyWithoutUserNestedInput
@@ -88045,9 +89548,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     wishlists?: wishlistitemCreateNestedManyWithoutUserInput
@@ -88085,9 +89590,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     wishlists?: wishlistitemUncheckedCreateNestedManyWithoutUserInput
@@ -88215,9 +89722,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     wishlists?: wishlistitemUpdateManyWithoutUserNestedInput
@@ -88255,9 +89764,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     wishlists?: wishlistitemUncheckedUpdateManyWithoutUserNestedInput
@@ -88311,9 +89822,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -88351,9 +89864,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -88550,9 +90065,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -88590,9 +90107,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -90572,9 +92091,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -90612,9 +92133,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -90908,9 +92431,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -90948,9 +92473,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -91899,9 +93426,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -91939,9 +93468,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -92213,9 +93744,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -92253,9 +93786,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -92368,9 +93903,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -92408,9 +93945,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -92719,9 +94258,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -92759,9 +94300,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -93072,9 +94615,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -93112,9 +94657,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -93168,9 +94715,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -93208,9 +94757,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -94288,9 +95839,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -94328,9 +95881,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -94409,9 +95964,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -94449,9 +96006,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -94520,9 +96079,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
     importTasks?: importtaskCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
     addresses?: useraddressCreateNestedManyWithoutUserInput
@@ -94560,9 +96121,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
     createdAt?: Date | string
     updatedAt?: Date | string
     carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
     importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
     importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
     addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
@@ -94616,9 +96179,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUpdateManyWithoutUserNestedInput
@@ -94656,9 +96221,11 @@ export namespace Prisma {
     savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
     savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
     lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
     importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
     importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
     addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
@@ -97267,10 +98834,203 @@ export namespace Prisma {
     recommendCollections?: homeRecommendCollectionItemUncheckedUpdateManyWithoutProductNestedInput
   }
 
+  export type sysuserCreateWithoutBalanceEntriesInput = {
+    id?: string
+    account: string
+    password: string
+    passwordPlain?: string | null
+    email: string
+    role: $Enums.userrole
+    status?: $Enums.userstatus
+    username: string
+    avatarUrl?: string | null
+    phone?: string | null
+    preferredCurrency?: string | null
+    preferredLocale?: string | null
+    countryCode?: string | null
+    countryName?: string | null
+    purchaseCount?: number
+    adminNote?: string | null
+    customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
+    ringSizeUs?: string | null
+    ringSizeEu?: string | null
+    braceletSize?: string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    carts?: cartCreateNestedManyWithoutAccountInput
+    importTasks?: importtaskCreateNestedManyWithoutCreatorInput
+    importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
+    addresses?: useraddressCreateNestedManyWithoutUserInput
+    wishlists?: wishlistitemCreateNestedManyWithoutUserInput
+    orders?: orderrecordCreateNestedManyWithoutUserInput
+    reviews?: productreviewCreateNestedManyWithoutUserInput
+    tickets?: customerticketCreateNestedManyWithoutUserInput
+    customOrders?: customorderCreateNestedManyWithoutUserInput
+    customerTags?: customertaglinkCreateNestedManyWithoutUserInput
+    communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+  }
+
+  export type sysuserUncheckedCreateWithoutBalanceEntriesInput = {
+    id?: string
+    account: string
+    password: string
+    passwordPlain?: string | null
+    email: string
+    role: $Enums.userrole
+    status?: $Enums.userstatus
+    username: string
+    avatarUrl?: string | null
+    phone?: string | null
+    preferredCurrency?: string | null
+    preferredLocale?: string | null
+    countryCode?: string | null
+    countryName?: string | null
+    purchaseCount?: number
+    adminNote?: string | null
+    customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
+    ringSizeUs?: string | null
+    ringSizeEu?: string | null
+    braceletSize?: string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
+    importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
+    addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
+    wishlists?: wishlistitemUncheckedCreateNestedManyWithoutUserInput
+    orders?: orderrecordUncheckedCreateNestedManyWithoutUserInput
+    reviews?: productreviewUncheckedCreateNestedManyWithoutUserInput
+    tickets?: customerticketUncheckedCreateNestedManyWithoutUserInput
+    customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
+    customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
+    communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+  }
+
+  export type sysuserCreateOrConnectWithoutBalanceEntriesInput = {
+    where: sysuserWhereUniqueInput
+    create: XOR<sysuserCreateWithoutBalanceEntriesInput, sysuserUncheckedCreateWithoutBalanceEntriesInput>
+  }
+
+  export type sysuserUpsertWithoutBalanceEntriesInput = {
+    update: XOR<sysuserUpdateWithoutBalanceEntriesInput, sysuserUncheckedUpdateWithoutBalanceEntriesInput>
+    create: XOR<sysuserCreateWithoutBalanceEntriesInput, sysuserUncheckedCreateWithoutBalanceEntriesInput>
+    where?: sysuserWhereInput
+  }
+
+  export type sysuserUpdateToOneWithWhereWithoutBalanceEntriesInput = {
+    where?: sysuserWhereInput
+    data: XOR<sysuserUpdateWithoutBalanceEntriesInput, sysuserUncheckedUpdateWithoutBalanceEntriesInput>
+  }
+
+  export type sysuserUpdateWithoutBalanceEntriesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    account?: StringFieldUpdateOperationsInput | string
+    password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
+    status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
+    username?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredCurrency?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredLocale?: NullableStringFieldUpdateOperationsInput | string | null
+    countryCode?: NullableStringFieldUpdateOperationsInput | string | null
+    countryName?: NullableStringFieldUpdateOperationsInput | string | null
+    purchaseCount?: IntFieldUpdateOperationsInput | number
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
+    ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
+    ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
+    braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    carts?: cartUpdateManyWithoutAccountNestedInput
+    importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
+    importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
+    addresses?: useraddressUpdateManyWithoutUserNestedInput
+    wishlists?: wishlistitemUpdateManyWithoutUserNestedInput
+    orders?: orderrecordUpdateManyWithoutUserNestedInput
+    reviews?: productreviewUpdateManyWithoutUserNestedInput
+    tickets?: customerticketUpdateManyWithoutUserNestedInput
+    customOrders?: customorderUpdateManyWithoutUserNestedInput
+    customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
+    communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+  }
+
+  export type sysuserUncheckedUpdateWithoutBalanceEntriesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    account?: StringFieldUpdateOperationsInput | string
+    password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
+    status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
+    username?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredCurrency?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredLocale?: NullableStringFieldUpdateOperationsInput | string | null
+    countryCode?: NullableStringFieldUpdateOperationsInput | string | null
+    countryName?: NullableStringFieldUpdateOperationsInput | string | null
+    purchaseCount?: IntFieldUpdateOperationsInput | number
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
+    ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
+    ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
+    braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
+    importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
+    addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
+    wishlists?: wishlistitemUncheckedUpdateManyWithoutUserNestedInput
+    orders?: orderrecordUncheckedUpdateManyWithoutUserNestedInput
+    reviews?: productreviewUncheckedUpdateManyWithoutUserNestedInput
+    tickets?: customerticketUncheckedUpdateManyWithoutUserNestedInput
+    customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
+    customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
+    communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+  }
+
   export type cartCreateManyAccountInput = {
     id?: string
     createdAt?: Date | string
     updatedAt?: Date | string
+  }
+
+  export type customerbalanceentryCreateManyUserInput = {
+    id?: string
+    orderId?: string | null
+    amount: Decimal | DecimalJsLike | number | string
+    kind: string
+    note?: string | null
+    createdAt?: Date | string
   }
 
   export type importtaskCreateManyCreatorInput = {
@@ -97468,6 +99228,33 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customerbalanceentryUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customerbalanceentryUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customerbalanceentryUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    kind?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type importtaskUpdateWithoutCreatorInput = {

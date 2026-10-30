@@ -188,6 +188,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-semibold text-xs uppercase">姓名</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">VIP</TableHead>
+                    <TableHead className="font-semibold text-xs uppercase">余额</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">WhatsApp号</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">邮箱</TableHead>
                     <TableHead className="font-semibold text-xs uppercase">密码</TableHead>
@@ -203,7 +204,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                 <TableBody>
                   {state.loading ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="h-40 text-center text-muted-foreground">
+                      <TableCell colSpan={13} className="h-40 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <RefreshCcw className="h-6 w-6 animate-spin text-primary" />
                           数据加载中...
@@ -262,6 +263,7 @@ export default function UserManagementView({ state, handlers }: Props) {
                             </span>
                           )}
                         </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-sm tabular-nums">{Number(user.balance || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-muted-foreground">{user.whatsapp || '--'}</TableCell>
                         <TableCell className="text-muted-foreground" scrollX scrollXClassName="max-w-[260px]">
                           <button
@@ -472,6 +474,7 @@ function CustomerDetailPanel({ state, handlers }: Props) {
               <CardContent className="grid gap-4 p-6 md:grid-cols-3">
                 <InfoItem label="姓名" value={detail.username} />
                 <InfoItem label="WhatsApp号" value={detail.whatsapp || '--'} />
+                <InfoItem label="余额" value={Number(detail.balance || 0).toFixed(2)} />
                 <InfoItem label="邮箱" value={detail.email} />
                 <InfoItem label="密码" value={detail.passwordPlain || '--'} />
                 <InfoItem label="注册时间" value={handlers.formatDateTime(detail.createdAt)} />

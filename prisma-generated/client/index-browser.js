@@ -147,6 +147,7 @@ exports.Prisma.SysuserScalarFieldEnum = {
   savedPreferencesJson: 'savedPreferencesJson',
   savedSizesJson: 'savedSizesJson',
   lastLoginAt: 'lastLoginAt',
+  balance: 'balance',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -896,6 +897,16 @@ exports.Prisma.BuyershowproofScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.CustomerbalanceentryScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  orderId: 'orderId',
+  amount: 'amount',
+  kind: 'kind',
+  note: 'note',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1392,6 +1403,14 @@ exports.Prisma.buyershowproofOrderByRelevanceFieldEnum = {
   title: 'title',
   body: 'body'
 };
+
+exports.Prisma.customerbalanceentryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  orderId: 'orderId',
+  kind: 'kind',
+  note: 'note'
+};
 exports.userrole = exports.$Enums.userrole = {
   CUSTOMER: 'CUSTOMER',
   ADMIN: 'ADMIN',
@@ -1641,7 +1660,8 @@ exports.Prisma.ModelName = {
   brandalias: 'brandalias',
   buyershowmedia: 'buyershowmedia',
   buyershowcomment: 'buyershowcomment',
-  buyershowproof: 'buyershowproof'
+  buyershowproof: 'buyershowproof',
+  customerbalanceentry: 'customerbalanceentry'
 };
 
 /**

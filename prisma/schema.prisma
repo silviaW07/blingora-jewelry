@@ -224,10 +224,12 @@ model sysuser {
   savedPreferencesJson Json?           // 用户偏好，格式：{ "recentMaterials": ["GOLD_14K"], "recentSearches": ["pearl ring"] }
   savedSizesJson    Json?              // 保存尺寸，格式：[{ "type": "ring", "label": "US 6" }]
   lastLoginAt       DateTime?
+  balance           Decimal            @default(0) @db.Decimal(12, 2) // 客户余额，退款入账
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt @default(now())
 
   carts             cart[]
+  balanceEntries    customerbalanceentry[]
   importTasks       importtask[]
   importTaskItems   importtaskitem[]
   addresses         useraddress[]
@@ -1338,3 +1340,18 @@ model buyershowproof {
   @@map("buyer_show_proof")
 }
 
+
+model customerbalanceentry {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  orderId   String?  @db.VarChar(36)
+  amount    Decimal  @db.Decimal(12, 2)
+  kind      String   @db.VarChar(20)
+  note      String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
+
+  user      sysuser  @relation(fields: [userId], references: [id])
+
+  @@unique([orderId, kind])
+  @@index([userId])
+}
