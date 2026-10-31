@@ -1599,8 +1599,13 @@ export const OrderManagementView = ({
                                 <span className="text-muted-foreground font-normal" data-api-unique-id="ordermanagementview-r424084486a2db0b0-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">{state.detailData.address.phone}</span>
                               </div>
                               <div className="text-muted-foreground leading-relaxed" data-api-unique-id="ordermanagementview-r203881b409d59886-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                                {state.detailData.address.addressLine1} {state.detailData.address.addressLine2}<br data-api-unique-id="ordermanagementview-ra796fb0d9d9f3c90-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" />
-                                {state.detailData.address.cityName}, {state.detailData.address.stateName}, {state.detailData.address.countryName}
+                                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">物流地址</div>
+                                <div className="text-slate-800">{state.detailData.address.addressLine1}</div>
+                                {state.detailData.address.addressLine2 ? <div className="text-slate-800">{state.detailData.address.addressLine2}</div> : null}
+                                <div>
+                                  {[state.detailData.address.cityName, state.detailData.address.stateName, state.detailData.address.postalCode].filter(Boolean).join(', ')}
+                                </div>
+                                <div>{state.detailData.address.countryName}</div>
                               </div>
                             </div> : <div className="text-sm text-muted-foreground italic" data-api-unique-id="ordermanagementview-r2e56e6804fb6db95-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">无详细收货地址</div>}
                         </CardContent>
