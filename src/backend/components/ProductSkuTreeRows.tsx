@@ -87,6 +87,7 @@ function ProductTreeRowsInner({
 }: ProductTreeRowsProps) {
   const expanded = state.expandedProductIds.includes(item.product_id)
   const skus = item.skus || []
+  const skuCount = skus.length || Number(item.sku_count || 0)
   const usdRate = Number(state.usdExchangeRate) > 0 ? Number(state.usdExchangeRate) : DEFAULT_USD_EXCHANGE_RATE
   const sellRange = listItemSellPriceRange(item, usdRate)
   const skuSpread =
@@ -163,7 +164,7 @@ function ProductTreeRowsInner({
                 placeholder="请输入商品名称"
               />
               <span className="text-xs text-muted-foreground font-mono">
-                主编码: {item.sku_code_base || '--'} · {skus.length} 个 SKU
+                主编码: {item.sku_code_base || '--'} · {skuCount} 个 SKU
               </span>
             </div>
           </div>
@@ -402,6 +403,11 @@ function ProductTreeRowsInner({
         </TableCell>
       </TableRow>
 
+      {expanded && skus.length === 0 && skuCount > 0 && (
+        <TableRow className="bg-slate-50/90">
+          <TableCell colSpan={12} className="py-3 text-sm text-slate-500">正在加载 SKU…</TableCell>
+        </TableRow>
+      )}
       {expanded && skus.map(sku => {
         const editing = state.productSkuEditingCell
         const isEditing = (field: string) =>

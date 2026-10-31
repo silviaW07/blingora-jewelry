@@ -129,6 +129,8 @@ export interface ProductListItem {
   status: ProductStatus
   created_at: string
   updated_at: string
+  /** 列表不带 SKU 行，展开时再取。 */
+  sku_count: number
   skus: ProductListSkuItem[]
 }
 export interface CategoryOption {
@@ -363,22 +365,6 @@ const PRODUCT_LIST_QUERY_SELECT = {
       categoryId: true,
       category: { select: { id: true, name: true } },
     },
-  },
-  skus: {
-    select: {
-      id: true,
-      skuCode: true,
-      price: true,
-      originalPrice: true,
-      stock: true,
-      weightKg: true,
-      sizeLabel: true,
-      materialLabel: true,
-      minOrderQty: true,
-    },
-    // Cap list payload — extreme color×size grids otherwise stall admin RPC/page.
-    orderBy: { skuCode: 'asc' as const },
-    take: 80,
   },
 } as const
 
@@ -1023,7 +1009,25 @@ async function findPublishedImportProductByName(name?: string | null): Promise<P
       id: matchedItem.importedProductId,
       source: 'IMPORT_1688'
     },
-    select: PRODUCT_LIST_QUERY_SELECT,
+    select: {
+      ...PRODUCT_LIST_QUERY_SELECT,
+      skus: {
+        select: {
+          id: true,
+          skuCode: true,
+          price: true,
+          originalPrice: true,
+          stock: true,
+          weightKg: true,
+          sizeLabel: true,
+          materialLabel: true,
+          minOrderQty: true,
+          attributeJson: true,
+        },
+        orderBy: { skuCode: 'asc' as const },
+        take: 80,
+      },
+    },
   })
 }
 
@@ -1104,6 +1108,7 @@ async function mapProductToListItem(
     status: product.status as ProductStatus,
     created_at: product.createdAt.toISOString(),
     updated_at: product.updatedAt.toISOString(),
+    sku_count: product.skus.length,
     skus: mapProductSkusToListItems(product, usdExchangeRate, sellRange.linkedRmb)
   }
 }
@@ -1998,12 +2003,6 @@ const PRODUCT_CHARSET_REPAIR_INTERVAL_MS = 10 * 60 * 1000
 
 export const getProductList = requireRole([UserRole.ADMIN])(
   withResult(async (input: GetProductListInput): Promise<GetProductListOutput> => {
-    try {
-      await prisma.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
-    } catch (error) {
-      console.error('[getProductList] failed to set utf8mb4 session charset', error)
-    }
-
     // Side-effect repair must not block first paint (was awaited on every interval hit).
     if (Date.now() - lastProductCharsetRepairAt >= PRODUCT_CHARSET_REPAIR_INTERVAL_MS) {
       lastProductCharsetRepairAt = Date.now()
@@ -2103,15 +2102,31 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       p.brandCategoryId,
       ...(p.relationCategories || []).map((rel: { categoryId: string }) => rel.categoryId),
     ]).filter(Boolean) as string[]
-    const { categoryMap } = await getCategoryMetaMap(prisma, allCategoryIds)
-    void persistUniformSkuPricesFromCost(products, categoryMap).catch((error) => {
-      console.error('[getProductList] persistUniformSkuPricesFromCost failed', error)
-    })
-    const sourceUrlById = await resolveListSupplierUrls(products)
+    const productIds = products.map(p => p.id)
+    const [categoryMeta, skuStats, sourceUrlById] = await Promise.all([
+      getCategoryMetaMap(prisma, allCategoryIds),
+      productIds.length
+        ? prisma.productsku.groupBy({
+            by: ['productId'],
+            where: { productId: { in: productIds } },
+            _count: { _all: true },
+            _sum: { stock: true },
+            _min: { price: true },
+            _max: { price: true },
+          })
+        : Promise.resolve([]),
+      resolveListSupplierUrls(products),
+    ])
+    const { categoryMap } = categoryMeta
+    const skuStatByProduct = new Map(skuStats.map(row => [row.productId, row]))
 
     const list: ProductListItem[] = products.map(p => {
-      const prices = p.skus.map(s => toNumber(s.price) ?? 0)
-      const totalStock = p.skus.reduce((sum, s) => sum + s.stock, 0)
+      const stat = skuStatByProduct.get(p.id)
+      const priceMin = toNumber(stat?._min.price)
+      const priceMax = toNumber(stat?._max.price)
+      const prices = priceMin == null ? [] : (priceMax != null && Math.abs(priceMax - priceMin) >= 0.02 ? [priceMin, priceMax] : [priceMin])
+      const totalStock = Number(stat?._sum.stock || 0)
+      const skuCount = Number(stat?._count._all || 0)
       const boundCategories = buildBoundCategories(p, categoryMap)
       const pricingCategoryId =
         boundCategories.find(tag => tag.is_pricing)?.category_id ||
@@ -2172,7 +2187,8 @@ export const getProductList = requireRole([UserRole.ADMIN])(
         status: p.status as ProductStatus,
         created_at: p.createdAt.toISOString(),
         updated_at: p.updatedAt.toISOString(),
-        skus: mapProductSkusToListItems(p, usdExchangeRate, sellRange.linkedRmb)
+        sku_count: skuCount,
+        skus: [],
       }
     }).filter(item => {
       if (!effectiveStatusList || effectiveStatusList.length === 0) {
@@ -2194,6 +2210,48 @@ export const getProductList = requireRole([UserRole.ADMIN])(
 
     return { list, total, published_import_match, usd_exchange_rate: usdExchangeRate }
   })
+)
+
+
+export const getProductListSkus = requireRole([UserRole.ADMIN])(
+  withResult(async (productId: string): Promise<ProductListSkuItem[]> => {
+    const id = String(productId || '').trim()
+    if (!id) return []
+    const product = await prisma.product.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        costPrice: true,
+        priceCoefficient: true,
+        categoryId: true,
+        category: { select: { id: true, name: true, parentId: true, level: true, priceCoefficient: true } },
+        skus: {
+          select: {
+            id: true,
+            skuCode: true,
+            price: true,
+            originalPrice: true,
+            stock: true,
+            weightKg: true,
+            sizeLabel: true,
+            materialLabel: true,
+            minOrderQty: true,
+            attributeJson: true,
+          },
+          orderBy: { skuCode: 'asc' },
+          take: 200,
+        },
+      },
+    })
+    if (!product) return []
+    const usdExchangeRate = await getUsdExchangeRate(prisma)
+    const { categoryMap } = await getCategoryMetaMap(prisma, [product.categoryId])
+    const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId, product.category)
+    const coefficient = resolveListDisplayCoefficient(toNumber(product.priceCoefficient), own, parent)
+    const prices = product.skus.map(sku => toNumber(sku.price) ?? 0)
+    const sellRange = resolveCostLinkedSellRange(toNumber(product.costPrice), coefficient, usdExchangeRate, prices)
+    return mapProductSkusToListItems(product, usdExchangeRate, sellRange.linkedRmb)
+  }),
 )
 
 export const getProductDetail = requireRole([UserRole.ADMIN])(

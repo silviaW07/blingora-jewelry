@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ProductManagement, ImportFrom1688 } from '@/backend/route-params'
 import {
   getProductList,
+  getProductListSkus,
   getCategoryOptions,
   getProductDetail,
   createProduct,
@@ -2885,7 +2886,20 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }
 
   const toggleProductExpand = (productId: string) => {
-    setExpandedProductIds(prev => prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId])
+    setExpandedProductIds(prev => {
+      const opening = !prev.includes(productId)
+      if (opening) {
+        const current = list.find(item => item.product_id === productId)
+        if (current && !(current.skus || []).length && Number(current.sku_count || 0) > 0) {
+          void getProductListSkus(productId).then((skus) => {
+            setList(rows => rows.map(row => row.product_id === productId ? { ...row, skus, sku_count: skus.length || row.sku_count } : row))
+          }).catch(() => {
+            toast.error('SKU 加载失败')
+          })
+        }
+      }
+      return opening ? [...prev, productId] : prev.filter(id => id !== productId)
+    })
   }
 
   const togglePendingImportExpand = (itemId: string) => {

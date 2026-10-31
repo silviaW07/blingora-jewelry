@@ -479,29 +479,26 @@ export interface ExportOrdersExcelFileOutput {
 export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
   withResult(async (): Promise<GetDashboardStatsOutput> => {
     // 待发货 (PROCESSING 或 PENDING_PAYMENT等视具体业务而定，按需求一般把 PAID/PROCESSING 当作待发货)
-    const pendingShipmentCount = await prisma.orderrecord.count({
-      where: { status: 'PROCESSING' }
-    })
-
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
-    
-    const todayNewOrderCount = await prisma.orderrecord.count({
-      where: { createdAt: { gte: todayStart } }
-    })
-
-    const refundingCount = await prisma.orderrecord.count({
-      where: { status: 'REFUNDED' } // 根据需求可以独立扩展 REFUNDING 等，按Schema用已退款或找退款申请，此处用已有REFUNDED近似替代
-    })
-
-    const totalOrderCount = await prisma.orderrecord.count()
-
-    const todayPurchaseCount = await prisma.orderrecord.count({
-      where: {
-        status: { notIn: ['PENDING_PAYMENT', 'CANCELLED', 'REFUNDED'] },
-        items: { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } },
-      },
-    })
+    const [
+      pendingShipmentCount,
+      todayNewOrderCount,
+      refundingCount,
+      totalOrderCount,
+      todayPurchaseCount,
+    ] = await Promise.all([
+      prisma.orderrecord.count({ where: { status: 'PROCESSING' } }),
+      prisma.orderrecord.count({ where: { createdAt: { gte: todayStart } } }),
+      prisma.orderrecord.count({ where: { status: 'REFUNDED' } }),
+      prisma.orderrecord.count(),
+      prisma.orderrecord.count({
+        where: {
+          status: { notIn: ['PENDING_PAYMENT', 'CANCELLED', 'REFUNDED'] },
+          items: { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } },
+        },
+      }),
+    ])
     return {
       pendingShipmentCount,
       todayNewOrderCount,
@@ -567,12 +564,24 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
         take: safePageSize,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: true,
-          address: true,
+          user: { select: { username: true, email: true, phone: true } },
+          address: { select: { countryName: true } },
           items: {
             orderBy: { createdAt: 'asc' },
             include: {
-              product: { select: inboundProductSelect },
+              product: {
+                select: {
+                  productCode: true,
+                  mainImageUrl: true,
+                  weightGram: true,
+                  costPrice: true,
+                  priceCoefficient: true,
+                  supplierName: true,
+                  status: true,
+                  goodsStatus: true,
+                  tradeInfoJson: true,
+                },
+              },
               productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
             },
           }

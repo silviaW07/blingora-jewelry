@@ -30646,52 +30646,54 @@ const getOrderDashboardStats = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async ()=>{
     // 待发货 (PROCESSING 或 PENDING_PAYMENT等视具体业务而定，按需求一般把 PAID/PROCESSING 当作待发货)
-    const pendingShipmentCount = await _prisma.default.orderrecord.count({
-        where: {
-            status: 'PROCESSING'
-        }
-    });
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const todayNewOrderCount = await _prisma.default.orderrecord.count({
-        where: {
-            createdAt: {
-                gte: todayStart
+    const [pendingShipmentCount, todayNewOrderCount, refundingCount, totalOrderCount, todayPurchaseCount] = await Promise.all([
+        _prisma.default.orderrecord.count({
+            where: {
+                status: 'PROCESSING'
             }
-        }
-    });
-    const refundingCount = await _prisma.default.orderrecord.count({
-        where: {
-            status: 'REFUNDED'
-        } // 根据需求可以独立扩展 REFUNDING 等，按Schema用已退款或找退款申请，此处用已有REFUNDED近似替代
-    });
-    const totalOrderCount = await _prisma.default.orderrecord.count();
-    const todayPurchaseCount = await _prisma.default.orderrecord.count({
-        where: {
-            status: {
-                notIn: [
-                    'PENDING_PAYMENT',
-                    'CANCELLED',
-                    'REFUNDED'
-                ]
-            },
-            items: {
-                some: {
-                    OR: [
-                        {
-                            inboundStage: 'PENDING'
-                        },
-                        {
-                            inboundStage: null
-                        },
-                        {
-                            inboundStage: ''
-                        }
-                    ]
+        }),
+        _prisma.default.orderrecord.count({
+            where: {
+                createdAt: {
+                    gte: todayStart
                 }
             }
-        }
-    });
+        }),
+        _prisma.default.orderrecord.count({
+            where: {
+                status: 'REFUNDED'
+            }
+        }),
+        _prisma.default.orderrecord.count(),
+        _prisma.default.orderrecord.count({
+            where: {
+                status: {
+                    notIn: [
+                        'PENDING_PAYMENT',
+                        'CANCELLED',
+                        'REFUNDED'
+                    ]
+                },
+                items: {
+                    some: {
+                        OR: [
+                            {
+                                inboundStage: 'PENDING'
+                            },
+                            {
+                                inboundStage: null
+                            },
+                            {
+                                inboundStage: ''
+                            }
+                        ]
+                    }
+                }
+            }
+        })
+    ]);
     return {
         pendingShipmentCount,
         todayNewOrderCount,
@@ -30788,15 +30790,35 @@ const getOrderList = (0, _action_utils.requireRole)([
                 createdAt: 'desc'
             },
             include: {
-                user: true,
-                address: true,
+                user: {
+                    select: {
+                        username: true,
+                        email: true,
+                        phone: true
+                    }
+                },
+                address: {
+                    select: {
+                        countryName: true
+                    }
+                },
                 items: {
                     orderBy: {
                         createdAt: 'asc'
                     },
                     include: {
                         product: {
-                            select: inboundProductSelect
+                            select: {
+                                productCode: true,
+                                mainImageUrl: true,
+                                weightGram: true,
+                                costPrice: true,
+                                priceCoefficient: true,
+                                supplierName: true,
+                                status: true,
+                                goodsStatus: true,
+                                tradeInfoJson: true
+                            }
                         },
                         productSku: {
                             select: {
@@ -34355,6 +34377,9 @@ _export(exports, {
     get getProductList () {
         return getProductList;
     },
+    get getProductListSkus () {
+        return getProductListSkus;
+    },
     get inlineUpdatePendingImportItemField () {
         return inlineUpdatePendingImportItemField;
     },
@@ -34486,24 +34511,6 @@ function _interop_require_default(obj) {
                 }
             }
         }
-    },
-    skus: {
-        select: {
-            id: true,
-            skuCode: true,
-            price: true,
-            originalPrice: true,
-            stock: true,
-            weightKg: true,
-            sizeLabel: true,
-            materialLabel: true,
-            minOrderQty: true
-        },
-        // Cap list payload — extreme color×size grids otherwise stall admin RPC/page.
-        orderBy: {
-            skuCode: 'asc'
-        },
-        take: 80
     }
 };
 let categoryDescendantsCache = null;
@@ -34739,7 +34746,27 @@ async function findPublishedImportProductByName(name) {
             id: matchedItem.importedProductId,
             source: 'IMPORT_1688'
         },
-        select: PRODUCT_LIST_QUERY_SELECT
+        select: {
+            ...PRODUCT_LIST_QUERY_SELECT,
+            skus: {
+                select: {
+                    id: true,
+                    skuCode: true,
+                    price: true,
+                    originalPrice: true,
+                    stock: true,
+                    weightKg: true,
+                    sizeLabel: true,
+                    materialLabel: true,
+                    minOrderQty: true,
+                    attributeJson: true
+                },
+                orderBy: {
+                    skuCode: 'asc'
+                },
+                take: 80
+            }
+        }
     });
 }
 async function mapProductToListItem(product, usdExchangeRate = _exchangeRate.DEFAULT_USD_EXCHANGE_RATE) {
@@ -34800,6 +34827,7 @@ async function mapProductToListItem(product, usdExchangeRate = _exchangeRate.DEF
         status: product.status,
         created_at: product.createdAt.toISOString(),
         updated_at: product.updatedAt.toISOString(),
+        sku_count: product.skus.length,
         skus: mapProductSkusToListItems(product, usdExchangeRate, sellRange.linkedRmb)
     };
 }
@@ -35761,11 +35789,6 @@ const PRODUCT_CHARSET_REPAIR_INTERVAL_MS = 10 * 60 * 1000;
 const getProductList = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{
-    try {
-        await _prisma.default.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
-    } catch (error) {
-        console.error('[getProductList] failed to set utf8mb4 session charset', error);
-    }
     // Side-effect repair must not block first paint (was awaited on every interval hit).
     if (Date.now() - lastProductCharsetRepairAt >= PRODUCT_CHARSET_REPAIR_INTERVAL_MS) {
         lastProductCharsetRepairAt = Date.now();
@@ -35911,19 +35934,52 @@ const getProductList = (0, _action_utils.requireRole)([
             p.brandCategoryId,
             ...(p.relationCategories || []).map((rel)=>rel.categoryId)
         ]).filter(Boolean);
-    const { categoryMap } = await getCategoryMetaMap(_prisma.default, allCategoryIds);
-    void persistUniformSkuPricesFromCost(products, categoryMap).catch((error)=>{
-        console.error('[getProductList] persistUniformSkuPricesFromCost failed', error);
-    });
-    const sourceUrlById = await resolveListSupplierUrls(products);
+    const productIds = products.map((p)=>p.id);
+    const [categoryMeta, skuStats, sourceUrlById] = await Promise.all([
+        getCategoryMetaMap(_prisma.default, allCategoryIds),
+        productIds.length ? _prisma.default.productsku.groupBy({
+            by: [
+                'productId'
+            ],
+            where: {
+                productId: {
+                    in: productIds
+                }
+            },
+            _count: {
+                _all: true
+            },
+            _sum: {
+                stock: true
+            },
+            _min: {
+                price: true
+            },
+            _max: {
+                price: true
+            }
+        }) : Promise.resolve([]),
+        resolveListSupplierUrls(products)
+    ]);
+    const { categoryMap } = categoryMeta;
+    const skuStatByProduct = new Map(skuStats.map((row)=>[
+            row.productId,
+            row
+        ]));
     const list = products.map((p)=>{
         var _ref, _ref1;
         var _boundCategories_find, _p_category, _categoryMap_get, _p_category1, _p_tradeInfoJson;
-        const prices = p.skus.map((s)=>{
-            var _toNumber;
-            return (_toNumber = toNumber(s.price)) !== null && _toNumber !== void 0 ? _toNumber : 0;
-        });
-        const totalStock = p.skus.reduce((sum, s)=>sum + s.stock, 0);
+        const stat = skuStatByProduct.get(p.id);
+        const priceMin = toNumber(stat === null || stat === void 0 ? void 0 : stat._min.price);
+        const priceMax = toNumber(stat === null || stat === void 0 ? void 0 : stat._max.price);
+        const prices = priceMin == null ? [] : priceMax != null && Math.abs(priceMax - priceMin) >= 0.02 ? [
+            priceMin,
+            priceMax
+        ] : [
+            priceMin
+        ];
+        const totalStock = Number((stat === null || stat === void 0 ? void 0 : stat._sum.stock) || 0);
+        const skuCount = Number((stat === null || stat === void 0 ? void 0 : stat._count._all) || 0);
         const boundCategories = buildBoundCategories(p, categoryMap);
         const pricingCategoryId = ((_boundCategories_find = boundCategories.find((tag)=>tag.is_pricing)) === null || _boundCategories_find === void 0 ? void 0 : _boundCategories_find.category_id) || (isBrandCategoryMeta(categoryMap.get(p.categoryId) || null, categoryMap) ? null : p.categoryId);
         const primaryMeta = categoryMap.get(p.categoryId) || null;
@@ -35965,7 +36021,8 @@ const getProductList = (0, _action_utils.requireRole)([
             status: p.status,
             created_at: p.createdAt.toISOString(),
             updated_at: p.updatedAt.toISOString(),
-            skus: mapProductSkusToListItems(p, usdExchangeRate, sellRange.linkedRmb)
+            sku_count: skuCount,
+            skus: []
         };
     }).filter((item)=>{
         if (!effectiveStatusList || effectiveStatusList.length === 0) {
@@ -35983,6 +36040,63 @@ const getProductList = (0, _action_utils.requireRole)([
         published_import_match,
         usd_exchange_rate: usdExchangeRate
     };
+}));
+const getProductListSkus = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (productId)=>{
+    const id = String(productId || '').trim();
+    if (!id) return [];
+    const product = await _prisma.default.product.findUnique({
+        where: {
+            id
+        },
+        select: {
+            id: true,
+            costPrice: true,
+            priceCoefficient: true,
+            categoryId: true,
+            category: {
+                select: {
+                    id: true,
+                    name: true,
+                    parentId: true,
+                    level: true,
+                    priceCoefficient: true
+                }
+            },
+            skus: {
+                select: {
+                    id: true,
+                    skuCode: true,
+                    price: true,
+                    originalPrice: true,
+                    stock: true,
+                    weightKg: true,
+                    sizeLabel: true,
+                    materialLabel: true,
+                    minOrderQty: true,
+                    attributeJson: true
+                },
+                orderBy: {
+                    skuCode: 'asc'
+                },
+                take: 200
+            }
+        }
+    });
+    if (!product) return [];
+    const usdExchangeRate = await (0, _exchangeRate.getUsdExchangeRate)(_prisma.default);
+    const { categoryMap } = await getCategoryMetaMap(_prisma.default, [
+        product.categoryId
+    ]);
+    const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId, product.category);
+    const coefficient = resolveListDisplayCoefficient(toNumber(product.priceCoefficient), own, parent);
+    const prices = product.skus.map((sku)=>{
+        var _toNumber;
+        return (_toNumber = toNumber(sku.price)) !== null && _toNumber !== void 0 ? _toNumber : 0;
+    });
+    const sellRange = resolveCostLinkedSellRange(toNumber(product.costPrice), coefficient, usdExchangeRate, prices);
+    return mapProductSkusToListItems(product, usdExchangeRate, sellRange.linkedRmb);
 }));
 const getProductDetail = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN

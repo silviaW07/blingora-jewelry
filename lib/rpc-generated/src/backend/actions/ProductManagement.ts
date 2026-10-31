@@ -10,6 +10,8 @@ export const getCategoryOptions = (...args: Parameters<Actions["getCategoryOptio
   rpcCall<Awaited<ReturnType<Actions["getCategoryOptions"]>>>("src.backend.actions.ProductManagement.getCategoryOptions", ...args);
 export const getProductList = (...args: Parameters<Actions["getProductList"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getProductList"]>>>("src.backend.actions.ProductManagement.getProductList", ...args);
+export const getProductListSkus = (...args: Parameters<Actions["getProductListSkus"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getProductListSkus"]>>>("src.backend.actions.ProductManagement.getProductListSkus", ...args);
 export const getProductDetail = (...args: Parameters<Actions["getProductDetail"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getProductDetail"]>>>("src.backend.actions.ProductManagement.getProductDetail", ...args);
 export const createProduct = (...args: Parameters<Actions["createProduct"]>) => 
