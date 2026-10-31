@@ -30669,13 +30669,7 @@ const getOrderDashboardStats = (0, _action_utils.requireRole)([
         _prisma.default.orderrecord.count(),
         _prisma.default.orderrecord.count({
             where: {
-                status: {
-                    notIn: [
-                        'PENDING_PAYMENT',
-                        'CANCELLED',
-                        'REFUNDED'
-                    ]
-                },
+                status: 'PROCESSING',
                 items: {
                     some: {
                         OR: [
@@ -30711,13 +30705,8 @@ const getOrderList = (0, _action_utils.requireRole)([
     // 构建过滤条件
     const whereCondition = {};
     if (status === 'TODAY_PURCHASE') {
-        whereCondition.status = {
-            notIn: [
-                'PENDING_PAYMENT',
-                'CANCELLED',
-                'REFUNDED'
-            ]
-        };
+        // 处理中，且还有商品仍是待采购。补采、缺货不进入这个页签。
+        whereCondition.status = 'PROCESSING';
         whereCondition.items = {
             some: {
                 OR: [
@@ -31211,6 +31200,24 @@ const updateOrderStatus = (0, _action_utils.requireRole)([
                     }
                 });
             }
+        }
+        if (newStatus === 'PROCESSING') {
+            await tx.orderitem.updateMany({
+                where: {
+                    orderId,
+                    OR: [
+                        {
+                            inboundStage: null
+                        },
+                        {
+                            inboundStage: ''
+                        }
+                    ]
+                },
+                data: {
+                    inboundStage: 'PENDING'
+                }
+            });
         }
         // 1. 更新状态
         await tx.orderrecord.update({
@@ -49784,6 +49791,217 @@ const normalizePcRows = (value)=>{
     if (rows > 12) return 12;
     return rows;
 };
+async function loadPopularOrderFrequencyCards(input) {
+    const { exchangeRate, lang, siteWideCoef } = input;
+    const ranked = await _prisma.default.$queryRaw`
+    SELECT i.productId AS productId, COUNT(*) AS freq
+    FROM orderitem i
+    INNER JOIN orderrecord o ON o.id = i.orderId
+    WHERE o.status NOT IN ('CANCELLED', 'REFUNDED', 'PENDING_PAYMENT')
+    GROUP BY i.productId
+    ORDER BY freq DESC
+    LIMIT 400
+  `;
+    const ids = ranked.map((row)=>String(row.productId || '').trim()).filter(Boolean);
+    if (!ids.length) return [];
+    const products = await _prisma.default.product.findMany({
+        where: {
+            id: {
+                in: ids
+            },
+            ...(0, _storefrontProductVisibility.storefrontVisibilityWhere)(),
+            ...(0, _noBrandShelf.excludeNoBrandShelfWhere)()
+        },
+        select: {
+            id: true,
+            slug: true,
+            name: true,
+            mainImageUrl: true,
+            shortDescription: true,
+            status: true,
+            categoryId: true,
+            brandCategoryId: true,
+            costPrice: true,
+            priceCoefficient: true,
+            ratingAverage: true,
+            ratingCount: true,
+            translationsJson: true,
+            createdAt: true,
+            skus: {
+                select: {
+                    id: true,
+                    skuCode: true,
+                    price: true,
+                    originalPrice: true,
+                    imageUrl: true
+                },
+                orderBy: {
+                    price: 'asc'
+                },
+                take: 6
+            },
+            category: {
+                select: {
+                    name: true,
+                    level: true,
+                    priceCoefficient: true,
+                    isBrandCategory: true,
+                    parent: {
+                        select: {
+                            name: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true
+                        }
+                    }
+                }
+            },
+            relationCategories: {
+                select: {
+                    categoryId: true,
+                    category: {
+                        select: {
+                            name: true,
+                            level: true,
+                            priceCoefficient: true,
+                            isBrandCategory: true,
+                            parent: {
+                                select: {
+                                    name: true,
+                                    priceCoefficient: true,
+                                    isBrandCategory: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    const byId = new Map(products.map((product)=>[
+            product.id,
+            product
+        ]));
+    const mapLatestProductCard = (product, itemIdPrefix)=>{
+        var _product_category;
+        const sortedSkus = [
+            ...product.skus
+        ].sort((a, b)=>a.price.toNumber() - b.price.toNumber());
+        const defaultSku = sortedSkus[0];
+        const coverUrl = pickProductCoverUrl(product.mainImageUrl, product.skus);
+        if (!defaultSku) {
+            var _product_category1;
+            if (!coverUrl) return null;
+            return {
+                itemId: `${itemIdPrefix}-${product.id}`,
+                entityType: 'PRODUCT',
+                productId: product.id,
+                categoryId: product.categoryId,
+                productName: (0, _productTranslation.resolveProductDisplayName)(product.name, product.translationsJson, lang, {
+                    categoryName: (_product_category1 = product.category) === null || _product_category1 === void 0 ? void 0 : _product_category1.name,
+                    shortDescription: product.shortDescription
+                }),
+                productSlug: product.slug,
+                imageUrl: coverUrl,
+                shortDescription: product.shortDescription,
+                status: product.status,
+                price: null,
+                priceMin: null,
+                priceMax: null,
+                skuOptions: [],
+                originalPrice: null,
+                ratingAverage: product.ratingAverage,
+                ratingCount: product.ratingCount,
+                skuCount: 0,
+                defaultSkuId: null,
+                rawProductName: product.name || null,
+                createdAtTimestamp: product.createdAt ? new Date(product.createdAt).getTime() : null
+            };
+        }
+        const pricingCoeffs = (0, _priceCoefficient.pickFrontPricingCategoryCoeffs)({
+            primary: product.category,
+            relations: (product.relationCategories || []).map((rel)=>rel.category)
+        });
+        const skuSellingRmbPrices = product.skus.map((sku)=>(0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                skuPriceRmb: sku.price.toNumber(),
+                costPrice: product.costPrice,
+                productCoefficient: product.priceCoefficient,
+                ...pricingCoeffs
+            })).filter((n)=>Number.isFinite(n) && n > 0);
+        const priceMinRmb = skuSellingRmbPrices.length ? Math.min(...skuSellingRmbPrices) : null;
+        const priceMaxRmb = skuSellingRmbPrices.length ? Math.max(...skuSellingRmbPrices) : null;
+        const priceMinUsd = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null;
+        const priceMaxUsd = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null;
+        const skuOptions = sortedSkus.map((sku, index)=>{
+            const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
+                skuPriceRmb: sku.price.toNumber(),
+                costPrice: product.costPrice,
+                productCoefficient: product.priceCoefficient,
+                ...pricingCoeffs
+            });
+            const priceUsd = priceRmb > 0 ? toUsdPrice(priceRmb, exchangeRate) : null;
+            return {
+                skuId: sku.id,
+                label: buildSkuOptionLabel(sku, index),
+                price: priceUsd,
+                originalPrice: null
+            };
+        }).filter((opt)=>opt.skuId && opt.price !== null).slice(0, 6);
+        const listed = (0, _pricingPromotionCalc.applySiteWideListedUsd)({
+            price: priceMinUsd !== null && priceMinUsd !== void 0 ? priceMinUsd : 0,
+            priceMax: priceMaxUsd,
+            originalPrice: null,
+            coef: siteWideCoef
+        });
+        const saleSkuOptions = skuOptions.map((opt)=>{
+            if (opt.price == null) return opt;
+            const skuListed = (0, _pricingPromotionCalc.applySiteWideListedUsd)({
+                price: opt.price,
+                originalPrice: opt.originalPrice,
+                coef: siteWideCoef
+            });
+            return {
+                ...opt,
+                price: skuListed.price,
+                originalPrice: skuListed.originalPrice
+            };
+        });
+        const translatedName = (0, _productTranslation.resolveProductDisplayName)(product.name, product.translationsJson, lang, {
+            categoryName: (_product_category = product.category) === null || _product_category === void 0 ? void 0 : _product_category.name,
+            shortDescription: product.shortDescription
+        });
+        return {
+            itemId: `${itemIdPrefix}-${product.id}`,
+            entityType: 'PRODUCT',
+            productId: product.id,
+            categoryId: product.categoryId,
+            productName: translatedName,
+            productSlug: product.slug,
+            imageUrl: coverUrl,
+            shortDescription: product.shortDescription,
+            status: product.status,
+            price: listed.price > 0 ? listed.price : priceMinUsd,
+            priceMin: listed.price > 0 ? listed.price : priceMinUsd,
+            priceMax: listed.priceMax,
+            skuOptions: saleSkuOptions,
+            originalPrice: listed.originalPrice,
+            ratingAverage: product.ratingAverage,
+            ratingCount: product.ratingCount,
+            skuCount: product.skus.length,
+            defaultSkuId: defaultSku.id,
+            rawProductName: product.name || null,
+            createdAtTimestamp: product.createdAt ? new Date(product.createdAt).getTime() : null
+        };
+    };
+    const cards = [];
+    for (const id of ids){
+        const product = byId.get(id);
+        if (!product) continue;
+        const card = mapLatestProductCard(product, 'order-freq');
+        if (card && String(card.imageUrl || '').trim()) cards.push(card);
+        if (cards.length >= 150) break;
+    }
+    return cards;
+}
 const getHomeRecommendZones = async (input)=>{
     const lang = (0, _productTranslation.normalizeProductLang)(input === null || input === void 0 ? void 0 : input.lang);
     const customerPromo = await (0, _loadCustomerPromoKind.loadCustomerPromo)();
@@ -50240,6 +50458,11 @@ const getHomeRecommendZones = async (input)=>{
     } else {
         await loadProductCounts();
     }
+    const orderFrequencyCards = await loadPopularOrderFrequencyCards({
+        exchangeRate,
+        lang,
+        siteWideCoef
+    });
     const result = zones.map((zone)=>{
         var _zone_pcRows;
         const categoryLatestLimit = zone.zoneType === 'CATEGORY' ? Math.max(DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT, normalizePcCols(zone.pcCols)) : DEFAULT_CATEGORY_LATEST_PRODUCT_LIMIT;
@@ -50444,6 +50667,19 @@ const getHomeRecommendZones = async (input)=>{
                     };
                 });
             }
+        }
+        const popularTitle = String(zone.title || '').trim().toLowerCase().replace(/\s+/g, '');
+        const isPopularZone = zone.zoneType === 'PRODUCT' && (popularTitle === 'popular' || popularTitle === 'popularproducts' || popularTitle.includes('热门') || popularTitle.includes('人气'));
+        if (isPopularZone) {
+            const manual = items.filter((item)=>item.entityType === 'PRODUCT');
+            const others = items.filter((item)=>item.entityType !== 'PRODUCT');
+            const seen = new Set(manual.map((item)=>item.productId));
+            const extras = orderFrequencyCards.filter((card)=>!seen.has(card.productId)).slice(0, Math.max(0, 150 - manual.length));
+            items = [
+                ...manual,
+                ...extras,
+                ...others
+            ];
         }
         // 激活专区即使暂无有效明细也保留，保证绿灯专区数量与前台区块一致
         return {

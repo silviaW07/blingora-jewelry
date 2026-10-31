@@ -228,6 +228,207 @@ const normalizePcRows = (value: number): number => {
   return rows
 }
 
+async function loadPopularOrderFrequencyCards(input: {
+  exchangeRate: number
+  lang: string
+  siteWideCoef: number
+}): Promise<HomeRecommendProductCard[]> {
+  const { exchangeRate, lang, siteWideCoef } = input
+  const ranked = await prisma.$queryRaw<Array<{ productId: string; freq: bigint | number }>>`
+    SELECT i.productId AS productId, COUNT(*) AS freq
+    FROM orderitem i
+    INNER JOIN orderrecord o ON o.id = i.orderId
+    WHERE o.status NOT IN ('CANCELLED', 'REFUNDED', 'PENDING_PAYMENT')
+    GROUP BY i.productId
+    ORDER BY freq DESC
+    LIMIT 400
+  `
+  const ids = ranked.map((row) => String(row.productId || '').trim()).filter(Boolean)
+  if (!ids.length) return []
+  const products = await prisma.product.findMany({
+    where: {
+      id: { in: ids },
+      ...storefrontVisibilityWhere(),
+      ...excludeNoBrandShelfWhere(),
+    },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      mainImageUrl: true,
+      shortDescription: true,
+      status: true,
+      categoryId: true,
+      brandCategoryId: true,
+      costPrice: true,
+      priceCoefficient: true,
+      ratingAverage: true,
+      ratingCount: true,
+      translationsJson: true,
+      createdAt: true,
+      skus: {
+        select: { id: true, skuCode: true, price: true, originalPrice: true, imageUrl: true },
+        orderBy: { price: 'asc' as const },
+        take: 6,
+      },
+      category: {
+        select: {
+          name: true, level: true, priceCoefficient: true, isBrandCategory: true,
+          parent: { select: { name: true, priceCoefficient: true, isBrandCategory: true } },
+        },
+      },
+      relationCategories: {
+        select: {
+          categoryId: true,
+          category: {
+            select: {
+              name: true, level: true, priceCoefficient: true, isBrandCategory: true,
+              parent: { select: { name: true, priceCoefficient: true, isBrandCategory: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+  const byId = new Map(products.map((product) => [product.id, product]))
+  const mapLatestProductCard = (
+    product: (typeof products)[number],
+    itemIdPrefix: string,
+  ): HomeRecommendProductCard | null => {
+      const sortedSkus = [...product.skus].sort((a, b) => a.price.toNumber() - b.price.toNumber())
+      const defaultSku = sortedSkus[0]
+      const coverUrl = pickProductCoverUrl(product.mainImageUrl, product.skus)
+      if (!defaultSku) {
+        if (!coverUrl) return null
+        return {
+          itemId: `${itemIdPrefix}-${product.id}`,
+          entityType: 'PRODUCT' as const,
+          productId: product.id,
+          categoryId: product.categoryId,
+          productName: resolveProductDisplayName(product.name, product.translationsJson, lang, {
+            categoryName: (product as { category?: { name?: string | null } }).category?.name,
+            shortDescription: product.shortDescription,
+          }),
+          productSlug: product.slug,
+          imageUrl: coverUrl,
+          shortDescription: product.shortDescription,
+          status: product.status,
+          price: null,
+          priceMin: null,
+          priceMax: null,
+          skuOptions: [],
+          originalPrice: null,
+          ratingAverage: product.ratingAverage,
+          ratingCount: product.ratingCount,
+          skuCount: 0,
+          defaultSkuId: null,
+          rawProductName: product.name || null,
+          createdAtTimestamp: product.createdAt ? new Date(product.createdAt).getTime() : null,
+        }
+      }
+
+      const pricingCoeffs = pickFrontPricingCategoryCoeffs({
+        primary: product.category,
+        relations: (product.relationCategories || []).map((rel) => rel.category),
+      })
+      const skuSellingRmbPrices = product.skus
+        .map((sku) =>
+          resolveFrontRmbSellingPrice({
+            skuPriceRmb: sku.price.toNumber(),
+            costPrice: product.costPrice,
+            productCoefficient: product.priceCoefficient,
+            ...pricingCoeffs,
+          }),
+        )
+        .filter((n) => Number.isFinite(n) && n > 0)
+
+      const priceMinRmb = skuSellingRmbPrices.length ? Math.min(...skuSellingRmbPrices) : null
+      const priceMaxRmb = skuSellingRmbPrices.length ? Math.max(...skuSellingRmbPrices) : null
+
+      const priceMinUsd = priceMinRmb !== null ? toUsdPrice(priceMinRmb, exchangeRate) : null
+      const priceMaxUsd = priceMaxRmb !== null ? toUsdPrice(priceMaxRmb, exchangeRate) : null
+
+      const skuOptions = sortedSkus
+        .map((sku, index) => {
+          const priceRmb = resolveFrontRmbSellingPrice({
+            skuPriceRmb: sku.price.toNumber(),
+            costPrice: product.costPrice,
+            productCoefficient: product.priceCoefficient,
+            ...pricingCoeffs,
+          })
+          const priceUsd = priceRmb > 0 ? toUsdPrice(priceRmb, exchangeRate) : null
+          return {
+            skuId: sku.id,
+            label: buildSkuOptionLabel(sku, index),
+            price: priceUsd,
+            originalPrice: null,
+          }
+        })
+        .filter((opt) => opt.skuId && opt.price !== null)
+        .slice(0, 6)
+
+      const listed = applySiteWideListedUsd({
+        price: priceMinUsd ?? 0,
+        priceMax: priceMaxUsd,
+        originalPrice: null,
+        coef: siteWideCoef,
+      })
+      const saleSkuOptions = skuOptions.map((opt) => {
+        if (opt.price == null) return opt
+        const skuListed = applySiteWideListedUsd({
+          price: opt.price,
+          originalPrice: opt.originalPrice,
+          coef: siteWideCoef,
+        })
+        return { ...opt, price: skuListed.price, originalPrice: skuListed.originalPrice }
+      })
+      const translatedName = resolveProductDisplayName(
+        product.name,
+        product.translationsJson,
+        lang,
+        {
+          categoryName: (product as { category?: { name?: string | null } }).category?.name,
+          shortDescription: product.shortDescription,
+        },
+      )
+
+      return {
+        itemId: `${itemIdPrefix}-${product.id}`,
+        entityType: 'PRODUCT' as const,
+        productId: product.id,
+        categoryId: product.categoryId,
+        productName: translatedName,
+        productSlug: product.slug,
+        imageUrl: coverUrl,
+        shortDescription: product.shortDescription,
+        status: product.status,
+        price: listed.price > 0 ? listed.price : priceMinUsd,
+        priceMin: listed.price > 0 ? listed.price : priceMinUsd,
+        priceMax: listed.priceMax,
+        skuOptions: saleSkuOptions,
+        originalPrice: listed.originalPrice,
+        ratingAverage: product.ratingAverage,
+        ratingCount: product.ratingCount,
+        skuCount: product.skus.length,
+        defaultSkuId: defaultSku.id,
+        rawProductName: product.name || null,
+        createdAtTimestamp: product.createdAt
+          ? new Date(product.createdAt).getTime()
+          : null,
+      }
+    }
+  const cards: HomeRecommendProductCard[] = []
+  for (const id of ids) {
+    const product = byId.get(id)
+    if (!product) continue
+    const card = mapLatestProductCard(product, 'order-freq')
+    if (card && String(card.imageUrl || '').trim()) cards.push(card)
+    if (cards.length >= 150) break
+  }
+  return cards
+}
+
+
 export const getHomeRecommendZones = async (input?: {
   lang?: string
 }): Promise<{ zones: HomeRecommendZoneSection[] }> => {
@@ -695,6 +896,12 @@ export const getHomeRecommendZones = async (input?: {
     await loadProductCounts()
   }
 
+  const orderFrequencyCards = await loadPopularOrderFrequencyCards({
+    exchangeRate,
+    lang,
+    siteWideCoef,
+  })
+
   const result = zones
     .map((zone): HomeRecommendZoneSection => {
       const categoryLatestLimit =
@@ -939,6 +1146,21 @@ export const getHomeRecommendZones = async (input?: {
             }
           })
         }
+      }
+
+      const popularTitle = String(zone.title || '').trim().toLowerCase().replace(/\s+/g, '')
+      const isPopularZone = zone.zoneType === 'PRODUCT' && (
+        popularTitle === 'popular'
+        || popularTitle === 'popularproducts'
+        || popularTitle.includes('热门')
+        || popularTitle.includes('人气')
+      )
+      if (isPopularZone) {
+        const manual = items.filter((item): item is HomeRecommendProductCard => item.entityType === 'PRODUCT')
+        const others = items.filter((item) => item.entityType !== 'PRODUCT')
+        const seen = new Set(manual.map((item) => item.productId))
+        const extras = orderFrequencyCards.filter((card) => !seen.has(card.productId)).slice(0, Math.max(0, 150 - manual.length))
+        items = [...manual, ...extras, ...others]
       }
 
       // 激活专区即使暂无有效明细也保留，保证绿灯专区数量与前台区块一致

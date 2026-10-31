@@ -17,7 +17,11 @@ export type RecommendZoneLayout = {
  * 前台展示限额：PC列数 × 行数。
  * 例：4 列 × 12 行 = 最多 48 个。
  */
-export function resolveRecommendZoneDisplayLimit(zone: Pick<RecommendZoneLayout, 'pcCols' | 'pcRows'>): number {
+export function resolveRecommendZoneDisplayLimit(zone: Pick<RecommendZoneLayout, 'pcCols' | 'pcRows' | 'title'>): number {
+  const title = String(zone.title || '').trim().toLowerCase().replace(/\s+/g, '')
+  if (title === 'popular' || title === 'popularproducts' || title.includes('热门') || title.includes('人气')) {
+    return 150
+  }
   const cols = Math.max(1, Number(zone.pcCols) || 4)
   const rows = Math.max(1, Math.min(12, Number(zone.pcRows) || 2))
   return cols * rows
