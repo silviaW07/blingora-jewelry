@@ -331,6 +331,41 @@ function pickPrimaryTag(links?: Array<{ tag?: { code?: string | null; name?: str
 /**
  * 获取客户/用户列表（支持分页、搜索、筛选、排序、购物车美金合计）
  */
+export const getNewArrivalWhatsappMessage = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<{ text: string; count: number }> => {
+    const since = new Date()
+    since.setDate(since.getDate() - 21)
+    const select = { id: true, name: true, productCode: true }
+    let products = await prisma.product.findMany({
+      where: { status: 'ACTIVE', createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select,
+    })
+    if (products.length === 0) {
+      products = await prisma.product.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select,
+      })
+    }
+    const lines = products.map((product, index) => {
+      const code = String(product.productCode || '').trim()
+      const name = String(product.name || '').trim() || code || 'New item'
+      return `${index + 1}. ${name}${code ? ` (${code})` : ''}\nhttps://sourcingjewelry.com/productdetail/?productId=${product.id}`
+    })
+    const text = [
+      'Hi, here are our new arrivals:',
+      '',
+      lines.join('\n\n'),
+      '',
+      'More: https://sourcingjewelry.com/',
+    ].join('\n')
+    return { text, count: products.length }
+  }),
+)
+
 export const getUserList = requireRole([UserRole.ADMIN])(
   withResult(async (input: GetUserListInput): Promise<GetUserListOutput> => {
     await ensureCustomerTags()

@@ -30586,20 +30586,29 @@ function compareInboundSpu(a, b) {
         sensitivity: 'base'
     });
 }
-function inboundColorLabel(item) {
+function inboundSpecLabel(item, kind) {
     var _item_productSku, _item_productSku1, _item_productSku2;
-    const colorPattern = /颜色|顏色|color|colour|款式|style/i;
+    const pattern = kind === 'color' ? /颜色|顏色|color|colour|款式|style/i : /尺码|尺碼|尺寸|size|spec/i;
     const attributes = Array.isArray((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.attributeJson) ? (_item_productSku1 = item.productSku) === null || _item_productSku1 === void 0 ? void 0 : _item_productSku1.attributeJson : [];
     for (const entry of attributes){
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
         const row = entry;
         const name = String(row.name || row.label || row.key || '');
         const value = String(row.value || row.labelValue || '').trim();
-        if (value && colorPattern.test(name)) return value;
+        if (value && pattern.test(name)) return value;
+    }
+    if (kind === 'size') {
+        var _item_productSku3;
+        const snapshot = String(item.sizeLabel || '').trim();
+        if (snapshot) return snapshot;
+        return String(((_item_productSku3 = item.productSku) === null || _item_productSku3 === void 0 ? void 0 : _item_productSku3.sizeLabel) || '').trim();
     }
     const snapshot = String(item.materialLabel || '').trim();
     if (snapshot) return snapshot;
     return String(((_item_productSku2 = item.productSku) === null || _item_productSku2 === void 0 ? void 0 : _item_productSku2.materialLabel) || '').trim();
+}
+function inboundColorLabel(item) {
+    return inboundSpecLabel(item, 'color');
 }
 function mapInboundLine(item, currencyCode, orderAmounts) {
     var _item_productSku, _item_product, _item_product1, _item_product2, _item_product3, _item_product4, _item_product5;
@@ -30630,6 +30639,7 @@ function mapInboundLine(item, currencyCode, orderAmounts) {
         goodsStatus: String(((_item_product5 = item.product) === null || _item_product5 === void 0 ? void 0 : _item_product5.goodsStatus) || ''),
         inboundStage: cleanInboundStage(item.inboundStage),
         colorLabel: inboundColorLabel(item),
+        sizeLabel: inboundSpecLabel(item, 'size'),
         outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0
     };
 }
@@ -30813,7 +30823,8 @@ const getOrderList = (0, _action_utils.requireRole)([
                             select: {
                                 imageUrl: true,
                                 attributeJson: true,
-                                materialLabel: true
+                                materialLabel: true,
+                                sizeLabel: true
                             }
                         }
                     }
@@ -30892,7 +30903,8 @@ const getOrderDetail = (0, _action_utils.requireRole)([
                         select: {
                             imageUrl: true,
                             attributeJson: true,
-                            materialLabel: true
+                            materialLabel: true,
+                            sizeLabel: true
                         }
                     }
                 }
@@ -31260,7 +31272,8 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
                         select: {
                             imageUrl: true,
                             attributeJson: true,
-                            materialLabel: true
+                            materialLabel: true,
+                            sizeLabel: true
                         }
                     }
                 }
@@ -31335,7 +31348,8 @@ const updateOrderInbound = (0, _action_utils.requireRole)([
                 select: {
                     imageUrl: true,
                     attributeJson: true,
-                    materialLabel: true
+                    materialLabel: true,
+                    sizeLabel: true
                 }
             }
         },
@@ -31560,7 +31574,8 @@ const appendOrderGoods = (0, _action_utils.requireRole)([
                 select: {
                     imageUrl: true,
                     attributeJson: true,
-                    materialLabel: true
+                    materialLabel: true,
+                    sizeLabel: true
                 }
             }
         },
@@ -31739,7 +31754,8 @@ async function inboundLinesAfterGoods(orderId, currencyCode) {
                 select: {
                     imageUrl: true,
                     attributeJson: true,
-                    materialLabel: true
+                    materialLabel: true,
+                    sizeLabel: true
                 }
             }
         },
@@ -33195,7 +33211,8 @@ const updateOrderDiscount = (0, _action_utils.requireRole)([
                 select: {
                     imageUrl: true,
                     attributeJson: true,
-                    materialLabel: true
+                    materialLabel: true,
+                    sizeLabel: true
                 }
             }
         },
@@ -40158,6 +40175,9 @@ _export(exports, {
     get deleteUser () {
         return deleteUser;
     },
+    get getNewArrivalWhatsappMessage () {
+        return getNewArrivalWhatsappMessage;
+    },
     get getUserDetail () {
         return getUserDetail;
     },
@@ -40314,6 +40334,58 @@ function pickPrimaryTag(links) {
         customerTagName: (tag === null || tag === void 0 ? void 0 : tag.name) || ((_CUSTOMER_TAG_OPTIONS_find = _customerTags.CUSTOMER_TAG_OPTIONS.find((item)=>item.code === code)) === null || _CUSTOMER_TAG_OPTIONS_find === void 0 ? void 0 : _CUSTOMER_TAG_OPTIONS_find.name) || null
     };
 }
+const getNewArrivalWhatsappMessage = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    const since = new Date();
+    since.setDate(since.getDate() - 21);
+    const select = {
+        id: true,
+        name: true,
+        productCode: true
+    };
+    let products = await _prisma.default.product.findMany({
+        where: {
+            status: 'ACTIVE',
+            createdAt: {
+                gte: since
+            }
+        },
+        orderBy: {
+            createdAt: 'desc'
+        },
+        take: 8,
+        select
+    });
+    if (products.length === 0) {
+        products = await _prisma.default.product.findMany({
+            where: {
+                status: 'ACTIVE'
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            take: 8,
+            select
+        });
+    }
+    const lines = products.map((product, index)=>{
+        const code = String(product.productCode || '').trim();
+        const name = String(product.name || '').trim() || code || 'New item';
+        return `${index + 1}. ${name}${code ? ` (${code})` : ''}\nhttps://sourcingjewelry.com/productdetail/?productId=${product.id}`;
+    });
+    const text = [
+        'Hi, here are our new arrivals:',
+        '',
+        lines.join('\n\n'),
+        '',
+        'More: https://sourcingjewelry.com/'
+    ].join('\n');
+    return {
+        text,
+        count: products.length
+    };
+}));
 const getUserList = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async (input)=>{

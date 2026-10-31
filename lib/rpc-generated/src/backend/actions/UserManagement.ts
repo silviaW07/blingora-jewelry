@@ -2,6 +2,8 @@
 import { rpcCall } from '@/tools/rpc-client';
 type Actions = typeof import('../../../../../src/backend/actions/UserManagement');
 
+export const getNewArrivalWhatsappMessage = (...args: Parameters<Actions["getNewArrivalWhatsappMessage"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getNewArrivalWhatsappMessage"]>>>("src.backend.actions.UserManagement.getNewArrivalWhatsappMessage", ...args);
 export const getUserList = (...args: Parameters<Actions["getUserList"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getUserList"]>>>("src.backend.actions.UserManagement.getUserList", ...args);
 export const getUserDetail = (...args: Parameters<Actions["getUserDetail"]>) => 

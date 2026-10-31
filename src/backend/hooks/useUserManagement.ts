@@ -13,6 +13,7 @@ import {
   updateUserCustomerType,
   updateUserVipDiscount,
   impersonateCustomer,
+  getNewArrivalWhatsappMessage,
 } from '@/backend/actions/UserManagement'
 import { CUSTOMER_TAG_OPTIONS } from '@/backend/lib/customerTags'
 import { CUSTOMER_TYPE_OPTIONS, DEFAULT_CUSTOMER_TYPE, getCustomerTypeLabel } from '@/shared/customerType'
@@ -86,6 +87,7 @@ export interface UserManagementHandlers {
   handlePageChange: (newPage: number) => void
   handlePageSizeChange: (newPageSize: number) => void
   handleOpenDetail: (id: string) => void
+  sendNewArrivalsOnWhatsapp: (phone: string | null) => Promise<void>
   handleBackToList: () => void
   handleToggleStatus: (id: string, currentStatus: SysUserStatus) => Promise<void>
   handleRequestDelete: (user: UserListItem) => void
@@ -504,6 +506,26 @@ export function useUserManagement(): {
     }
   }
 
+  const sendNewArrivalsOnWhatsapp = async (phone: string | null) => {
+    const digits = String(phone || '').replace(/\D/g, '')
+    if (!digits) {
+      toast.error('这个客户没有 WhatsApp 号')
+      return
+    }
+    try {
+      const draft = await getNewArrivalWhatsappMessage()
+      if (!draft.count) {
+        toast.error('还没有可发送的新品')
+        return
+      }
+      const url = `https://wa.me/${digits}?text=${encodeURIComponent(draft.text)}`
+      window.open(url, '_blank', 'noopener,noreferrer')
+      toast.success(`已打开 WhatsApp，带上 ${draft.count} 个新品。发出前请再点一次发送`)
+    } catch (e: any) {
+      toast.error(e.message || '打开发送失败')
+    }
+  }
+
   const handleOpenOrder = (orderId: string) => {
     OrderManagement.navigateToWithParams(router, {
       status: 'PENDING_PAYMENT',
@@ -574,6 +596,7 @@ export function useUserManagement(): {
       handlePageChange,
       handlePageSizeChange,
       handleOpenDetail,
+      sendNewArrivalsOnWhatsapp,
       handleBackToList,
       handleToggleStatus,
       handleRequestDelete,
