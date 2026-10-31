@@ -2119,6 +2119,7 @@ export const OrderManagementView = ({
                             </div>
                             {String(line.skuCode || '').startsWith('ADD-') ? null : <div className="mt-1 break-all font-mono text-xs text-muted-foreground">SKU: {line.skuCode}</div>}
                             {line.colorLabel ? <div className="mt-0.5 break-words text-xs font-medium text-slate-800">颜色: {line.colorLabel}</div> : null}
+                            {line.sizeLabel ? <div className="mt-0.5 break-words text-xs font-medium text-slate-800">尺码: {line.sizeLabel}</div> : null}
                           </div>
                         </div>
                       </td>) : null}

@@ -51,6 +51,7 @@ export interface OrderInboundLine {
   shipmentImageUrl: string | null
   /** Color the customer picked for this SKU. */
   colorLabel: string
+  sizeLabel: string
   /** Product selling coefficient. Empty when the product has none. */
   priceCoefficient: number | null
   /** Saved quantity 0 means this line was confirmed out of stock. Unsaved 0 is not. */
@@ -170,22 +171,34 @@ function compareInboundSpu(a: { spu?: string | null; skuCode?: string | null }, 
 }
 
 
-function inboundColorLabel(item: {
+function inboundSpecLabel(item: {
+  sizeLabel?: string | null
   materialLabel?: string | null
-  productSku?: { attributeJson?: unknown; materialLabel?: string | null } | null
-}): string {
-  const colorPattern = /颜色|顏色|color|colour|款式|style/i
+  productSku?: { attributeJson?: unknown; materialLabel?: string | null; sizeLabel?: string | null } | null
+}, kind: 'color' | 'size'): string {
+  const pattern = kind === 'color'
+    ? /颜色|顏色|color|colour|款式|style/i
+    : /尺码|尺碼|尺寸|size|spec/i
   const attributes = Array.isArray(item.productSku?.attributeJson) ? item.productSku?.attributeJson : []
   for (const entry of attributes) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
     const row = entry as Record<string, unknown>
     const name = String(row.name || row.label || row.key || '')
     const value = String(row.value || row.labelValue || '').trim()
-    if (value && colorPattern.test(name)) return value
+    if (value && pattern.test(name)) return value
+  }
+  if (kind === 'size') {
+    const snapshot = String(item.sizeLabel || '').trim()
+    if (snapshot) return snapshot
+    return String(item.productSku?.sizeLabel || '').trim()
   }
   const snapshot = String(item.materialLabel || '').trim()
   if (snapshot) return snapshot
   return String(item.productSku?.materialLabel || '').trim()
+}
+
+function inboundColorLabel(item: Parameters<typeof inboundSpecLabel>[0]): string {
+  return inboundSpecLabel(item, 'color')
 }
 
 function mapInboundLine(item: {
@@ -200,9 +213,10 @@ function mapInboundLine(item: {
   inboundStage?: string | null
   shipmentImageUrl?: string | null
   materialLabel?: string | null
+  sizeLabel?: string | null
   unitPrice?: unknown
   lineAmount?: unknown
-  productSku?: { imageUrl?: string | null; attributeJson?: unknown; materialLabel?: string | null } | null
+  productSku?: { imageUrl?: string | null; attributeJson?: unknown; materialLabel?: string | null; sizeLabel?: string | null } | null
   product?: {
     productCode?: string | null
     mainImageUrl?: string | null
@@ -243,6 +257,7 @@ function mapInboundLine(item: {
     goodsStatus: String(item.product?.goodsStatus || ''),
     inboundStage: cleanInboundStage(item.inboundStage),
     colorLabel: inboundColorLabel(item),
+    sizeLabel: inboundSpecLabel(item, 'size'),
     outOfStock: inboundWasRecorded(item.inboundAt) && inboundQty <= 0,
   }
 }
@@ -591,7 +606,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
                   tradeInfoJson: true,
                 },
               },
-              productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+              productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
             },
           }
         }
@@ -660,7 +675,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
           orderBy: { createdAt: 'asc' },
           include: {
             product: { select: inboundProductSelect },
-            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
           },
         },
         logistics: {
@@ -974,7 +989,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
           orderBy: { createdAt: 'asc' },
           include: {
             product: { select: inboundProductSelect },
-            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
           },
         },
       },
@@ -1043,7 +1058,7 @@ export const updateOrderInbound = requireRole([UserRole.ADMIN])(
       where: { orderId: order.id },
       include: {
         product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
@@ -1225,7 +1240,7 @@ export const appendOrderGoods = requireRole([UserRole.ADMIN])(
       where: { orderId: order.id },
       include: {
         product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
@@ -1383,7 +1398,7 @@ async function inboundLinesAfterGoods(orderId: string, currencyCode: string | nu
     where: { orderId },
     include: {
       product: { select: inboundProductSelect },
-      productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+      productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
     },
     orderBy: { createdAt: 'asc' },
   })
@@ -2577,7 +2592,7 @@ export const updateOrderDiscount = requireRole([UserRole.ADMIN])(
       where: { orderId: order.id },
       include: {
         product: { select: inboundProductSelect },
-        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true } },
+        productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
