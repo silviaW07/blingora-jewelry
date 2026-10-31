@@ -1522,9 +1522,14 @@ export const OrderManagementView = ({
                                     {sku.mainImageUrl ? (
                                       <EditableImg
                                         propKey={`sku-${sku.id}`}
-                                        keywords={sku.mainImageUrl}
+                                        src={sku.mainImageUrl}
+                                        alt={sku.productName}
+                                        disableKeywordSearch
                                         description={sku.productName}
                                         className="h-full w-full object-cover"
+                                        proxyWidth={96}
+                                        proxyQuality={55}
+                                        loading="lazy"
                                       />
                                     ) : null}
                                   </div>
@@ -2090,10 +2095,14 @@ export const OrderManagementView = ({
                             {imageUrl ? (
                               <EditableImg
                                 propKey={`inbound-${line.id}`}
-                                keywords={imageUrl}
+                                src={imageUrl}
+                                alt={line.productName}
+                                disableKeywordSearch
                                 description={line.productName}
                                 className="h-full w-full object-cover"
-                                proxyWidth={480}
+                                proxyWidth={160}
+                                proxyQuality={55}
+                                loading="lazy"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
                               />
                             ) : null}
