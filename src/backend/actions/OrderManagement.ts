@@ -499,8 +499,6 @@ export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
             { inboundStage: 'PENDING' },
             { inboundStage: null },
             { inboundStage: '' },
-            { inboundStage: 'RESTOCK' },
-            { inboundStage: 'SHORTAGE' },
           ] } },
         },
       }),
@@ -532,14 +530,12 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
     const whereCondition: any = {}
 
     if (status === 'TODAY_PURCHASE') {
-      // 处理中，且还有商品没到备货（待采购 / 补采 / 缺货 / 未填状态）。
+      // 处理中，且还有商品仍是待采购。补采、缺货不进入这个页签。
       whereCondition.status = 'PROCESSING'
       whereCondition.items = { some: { OR: [
         { inboundStage: 'PENDING' },
         { inboundStage: null },
         { inboundStage: '' },
-        { inboundStage: 'RESTOCK' },
-        { inboundStage: 'SHORTAGE' },
       ] } }
     } else if (status === 'PAID') {
       whereCondition.status = { in: PAID_TAB_STATUSES }
