@@ -494,8 +494,14 @@ export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
       prisma.orderrecord.count(),
       prisma.orderrecord.count({
         where: {
-          status: { notIn: ['PENDING_PAYMENT', 'CANCELLED', 'REFUNDED'] },
-          items: { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } },
+          status: 'PROCESSING',
+          items: { some: { OR: [
+            { inboundStage: 'PENDING' },
+            { inboundStage: null },
+            { inboundStage: '' },
+            { inboundStage: 'RESTOCK' },
+            { inboundStage: 'SHORTAGE' },
+          ] } },
         },
       }),
     ])
@@ -526,8 +532,15 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
     const whereCondition: any = {}
 
     if (status === 'TODAY_PURCHASE') {
-      whereCondition.status = { notIn: ['PENDING_PAYMENT', 'CANCELLED', 'REFUNDED'] }
-      whereCondition.items = { some: { OR: [{ inboundStage: 'PENDING' }, { inboundStage: null }, { inboundStage: '' }] } }
+      // 处理中，且还有商品没到备货（待采购 / 补采 / 缺货 / 未填状态）。
+      whereCondition.status = 'PROCESSING'
+      whereCondition.items = { some: { OR: [
+        { inboundStage: 'PENDING' },
+        { inboundStage: null },
+        { inboundStage: '' },
+        { inboundStage: 'RESTOCK' },
+        { inboundStage: 'SHORTAGE' },
+      ] } }
     } else if (status === 'PAID') {
       whereCondition.status = { in: PAID_TAB_STATUSES }
     } else if (status) {
@@ -924,6 +937,13 @@ export const updateOrderStatus = requireRole([UserRole.ADMIN])(
           })
           await tx.customerbalanceentry.delete({ where: { id: already.id } })
         }
+      }
+
+      if (newStatus === 'PROCESSING') {
+        await tx.orderitem.updateMany({
+          where: { orderId, OR: [{ inboundStage: null }, { inboundStage: '' }] },
+          data: { inboundStage: 'PENDING' },
+        })
       }
 
       // 1. 更新状态
