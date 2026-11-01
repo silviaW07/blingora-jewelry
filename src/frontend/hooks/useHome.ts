@@ -1,5 +1,6 @@
-﻿'use client';
+'use client';
 
+import { notifyStorefrontUrl } from '@/frontend/utils/hardNavigate'
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -369,6 +370,9 @@ export const useHome = (bootstrap?: StorefrontBootstrap | null): { state: HomeSt
         params.set('categoryId', categoryId)
         router.push(`${ProductCategory.path}?${params.toString()}`)
       }
+      notifyStorefrontUrl()
+      window.setTimeout(notifyStorefrontUrl, 0)
+      window.setTimeout(notifyStorefrontUrl, 80)
       handlers.handleSelectCategory(categoryId)
     }
   }

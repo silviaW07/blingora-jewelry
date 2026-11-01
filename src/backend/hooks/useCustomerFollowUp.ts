@@ -25,12 +25,17 @@ export function useCustomerFollowUp() {
 
   const reload = useCallback(async () => {
     setLoading(true)
-    const res = await getFollowUpBoard()
-    setLoading(false)
-    if (!res) return
-    setTags(res.tags)
-    setDue(res.due)
-    setAll(res.all)
+    try {
+      const res = await getFollowUpBoard()
+      if (!res) return
+      setTags(res.tags)
+      setDue(res.due)
+      setAll(res.all)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "客户列表加载失败")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {

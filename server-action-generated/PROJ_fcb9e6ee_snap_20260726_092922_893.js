@@ -12212,6 +12212,7 @@ const _OrderManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_requi
 const _ImportFrom1688 = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(7890));
 const _HomeRecommendZoneManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(3280));
 const _Dashboard = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(8306));
+const _CustomerFollowUp = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6416));
 const _CategoryManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6683));
 const _BuyerShowManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(2363));
 const _BrandAlias = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(7611));
@@ -12274,6 +12275,7 @@ const registry = {
     'src.backend.actions.ImportFrom1688': _ImportFrom1688,
     'src.backend.actions.HomeRecommendZoneManagement': _HomeRecommendZoneManagement,
     'src.backend.actions.Dashboard': _Dashboard,
+    'src.backend.actions.CustomerFollowUp': _CustomerFollowUp,
     'src.backend.actions.CategoryManagement': _CategoryManagement,
     'src.backend.actions.BuyerShowManagement': _BuyerShowManagement,
     'src.backend.actions.BrandAlias': _BrandAlias,
@@ -17380,6 +17382,339 @@ const saveCategoryProductPinOrder = (0, _action_utils.requireRole)([
 const getKeywordGroupTypeLabels = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
 ])((0, _action_utils.withResult)(async ()=>KEYWORD_GROUP_TYPE_LABELS));
+
+
+/***/ },
+
+/***/ 6416
+(__unused_webpack_module, exports, __webpack_require__) {
+
+'use server';
+"use strict";
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get getCustomerFollowLogs () {
+        return getCustomerFollowLogs;
+    },
+    get getFollowUpBoard () {
+        return getFollowUpBoard;
+    },
+    get markCustomerFollowed () {
+        return markCustomerFollowed;
+    },
+    get updateTagFollowIntervals () {
+        return updateTagFollowIntervals;
+    }
+});
+const _crypto = __webpack_require__(6982);
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
+const _action_utils = __webpack_require__(9360);
+const _customerTags = __webpack_require__(125);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+const USD_EXCHANGE_RATE = 6.5;
+const DEFAULT_INTERVAL_DAYS = 7;
+const DEFAULT_TAG_INTERVALS = {
+    NEW_REGISTERED: 1,
+    NOT_CONVERTED: 3,
+    FIRST_ORDER: 7,
+    MULTI_ORDER: 14,
+    HIGH_RISK: 2,
+    CHURNED: 30
+};
+function endOfToday() {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return end;
+}
+function addDays(from, days) {
+    const next = new Date(from);
+    next.setDate(next.getDate() + days);
+    return next;
+}
+function clampDays(value) {
+    return Math.max(1, Math.min(365, Math.floor(Number(value) || DEFAULT_INTERVAL_DAYS)));
+}
+function toUsdFromCny(amount) {
+    if (!Number.isFinite(amount)) return 0;
+    return Number((amount / USD_EXCHANGE_RATE).toFixed(2));
+}
+async function ensureTagIntervals() {
+    for (const option of _customerTags.CUSTOMER_TAG_OPTIONS){
+        const days = DEFAULT_TAG_INTERVALS[option.code];
+        await _prisma.default.customertag.upsert({
+            where: {
+                code: option.code
+            },
+            create: {
+                name: option.name,
+                code: option.code,
+                description: option.name,
+                followIntervalDays: days
+            },
+            update: {
+                name: option.name
+            }
+        });
+    }
+}
+const getFollowUpBoard = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>{
+    await ensureTagIntervals();
+    const [users, tags, cartRows] = await Promise.all([
+        _prisma.default.sysuser.findMany({
+            where: {
+                role: 'CUSTOMER'
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                id: true,
+                username: true,
+                phone: true,
+                email: true,
+                createdAt: true,
+                lastLoginAt: true,
+                customerTags: {
+                    take: 1,
+                    orderBy: {
+                        createdAt: 'desc'
+                    },
+                    include: {
+                        tag: {
+                            select: {
+                                code: true,
+                                name: true,
+                                followIntervalDays: true
+                            }
+                        }
+                    }
+                },
+                userFollow: {
+                    select: {
+                        lastFollowedAt: true,
+                        nextFollowAt: true
+                    }
+                }
+            }
+        }),
+        _prisma.default.customertag.findMany({
+            where: {
+                code: {
+                    in: _customerTags.CUSTOMER_TAG_OPTIONS.map((item)=>item.code)
+                }
+            },
+            select: {
+                code: true,
+                name: true,
+                followIntervalDays: true
+            }
+        }),
+        _prisma.default.$queryRaw`
+        SELECT c.accountId AS accountId,
+          SUM(CASE WHEN ci.status = 'VALID' THEN ci.quantity * ps.price + IFNULL(ci.giftWrapFee, 0) ELSE 0 END) AS rmb
+        FROM cart c
+        INNER JOIN cartitem ci ON ci.cartId = c.id
+        INNER JOIN productsku ps ON ps.id = ci.productSkuId
+        GROUP BY c.accountId
+      `
+    ]);
+    const cartByUser = new Map();
+    for (const row of cartRows){
+        cartByUser.set(row.accountId, toUsdFromCny(Number(row.rmb || 0)));
+    }
+    const tagByCode = new Map(tags.map((tag)=>[
+            tag.code,
+            tag
+        ]));
+    const end = endOfToday().getTime();
+    const all = users.map((user)=>{
+        var _user_customerTags_, _user_userFollow, _user_userFollow1;
+        const link = (_user_customerTags_ = user.customerTags[0]) === null || _user_customerTags_ === void 0 ? void 0 : _user_customerTags_.tag;
+        const known = link && _customerTags.CUSTOMER_TAG_OPTIONS.some((item)=>item.code === link.code);
+        const intervalDays = known ? clampDays((link === null || link === void 0 ? void 0 : link.followIntervalDays) || DEFAULT_INTERVAL_DAYS) : DEFAULT_INTERVAL_DAYS;
+        const last = ((_user_userFollow = user.userFollow) === null || _user_userFollow === void 0 ? void 0 : _user_userFollow.lastFollowedAt) || null;
+        const next = ((_user_userFollow1 = user.userFollow) === null || _user_userFollow1 === void 0 ? void 0 : _user_userFollow1.nextFollowAt) || user.createdAt;
+        const due = next.getTime() <= end;
+        return {
+            id: user.id,
+            name: user.username,
+            phone: user.phone,
+            email: user.email,
+            tagCode: known ? String((link === null || link === void 0 ? void 0 : link.code) || '') : '',
+            tagName: known ? (link === null || link === void 0 ? void 0 : link.name) || null : null,
+            intervalDays,
+            registeredAt: user.createdAt.toISOString(),
+            lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+            cartUsdTotal: cartByUser.get(user.id) || 0,
+            lastFollowedAt: last ? last.toISOString() : null,
+            nextFollowAt: next.toISOString(),
+            due
+        };
+    });
+    const tagList = _customerTags.CUSTOMER_TAG_OPTIONS.map((option)=>{
+        const row = tagByCode.get(option.code);
+        return {
+            code: option.code,
+            name: option.name,
+            intervalDays: clampDays((row === null || row === void 0 ? void 0 : row.followIntervalDays) || DEFAULT_TAG_INTERVALS[option.code])
+        };
+    });
+    return {
+        tags: tagList,
+        due: all.filter((row)=>row.due).sort((a, b)=>a.nextFollowAt.localeCompare(b.nextFollowAt)),
+        all
+    };
+}));
+const updateTagFollowIntervals = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    await ensureTagIntervals();
+    for (const item of input){
+        const option = _customerTags.CUSTOMER_TAG_OPTIONS.find((tag)=>tag.code === item.code);
+        if (!option) continue;
+        await _prisma.default.customertag.update({
+            where: {
+                code: option.code
+            },
+            data: {
+                followIntervalDays: clampDays(item.intervalDays)
+            }
+        });
+    }
+    const tags = await _prisma.default.customertag.findMany({
+        where: {
+            code: {
+                in: _customerTags.CUSTOMER_TAG_OPTIONS.map((item)=>item.code)
+            }
+        },
+        select: {
+            code: true,
+            name: true,
+            followIntervalDays: true
+        }
+    });
+    const byCode = new Map(tags.map((tag)=>[
+            tag.code,
+            tag
+        ]));
+    return _customerTags.CUSTOMER_TAG_OPTIONS.map((option)=>{
+        var _byCode_get;
+        return {
+            code: option.code,
+            name: option.name,
+            intervalDays: clampDays(((_byCode_get = byCode.get(option.code)) === null || _byCode_get === void 0 ? void 0 : _byCode_get.followIntervalDays) || DEFAULT_TAG_INTERVALS[option.code])
+        };
+    });
+}));
+async function intervalForUser(userId) {
+    var _link_tag, _link_tag1;
+    const link = await _prisma.default.customertaglink.findFirst({
+        where: {
+            userId
+        },
+        orderBy: {
+            createdAt: 'desc'
+        },
+        include: {
+            tag: {
+                select: {
+                    code: true,
+                    followIntervalDays: true
+                }
+            }
+        }
+    });
+    const code = link === null || link === void 0 ? void 0 : (_link_tag = link.tag) === null || _link_tag === void 0 ? void 0 : _link_tag.code;
+    if (!code || !_customerTags.CUSTOMER_TAG_OPTIONS.some((item)=>item.code === code)) return DEFAULT_INTERVAL_DAYS;
+    return clampDays((link === null || link === void 0 ? void 0 : (_link_tag1 = link.tag) === null || _link_tag1 === void 0 ? void 0 : _link_tag1.followIntervalDays) || DEFAULT_INTERVAL_DAYS);
+}
+const markCustomerFollowed = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const user = await _prisma.default.sysuser.findFirst({
+        where: {
+            id: input.id,
+            role: 'CUSTOMER'
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!user) throw new Error('客户不存在');
+    const followedAt = new Date();
+    const nextFollowAt = addDays(followedAt, await intervalForUser(user.id));
+    await _prisma.default.$transaction([
+        _prisma.default.customeruserfollow.upsert({
+            where: {
+                userId: user.id
+            },
+            create: {
+                userId: user.id,
+                lastFollowedAt: followedAt,
+                nextFollowAt
+            },
+            update: {
+                lastFollowedAt: followedAt,
+                nextFollowAt
+            }
+        }),
+        _prisma.default.customeruserfollowlog.create({
+            data: {
+                id: (0, _crypto.randomUUID)(),
+                userId: user.id,
+                followedAt
+            }
+        })
+    ]);
+    const logs = await _prisma.default.customeruserfollowlog.findMany({
+        where: {
+            userId: user.id
+        },
+        orderBy: {
+            followedAt: 'desc'
+        },
+        take: 8
+    });
+    return {
+        followedAt: followedAt.toISOString(),
+        nextFollowAt: nextFollowAt.toISOString(),
+        logs: logs.map((log)=>({
+                id: log.id,
+                followedAt: log.followedAt.toISOString()
+            }))
+    };
+}));
+const getCustomerFollowLogs = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (id)=>{
+    const logs = await _prisma.default.customeruserfollowlog.findMany({
+        where: {
+            userId: id
+        },
+        orderBy: {
+            followedAt: 'desc'
+        },
+        take: 8
+    });
+    return logs.map((log)=>({
+            id: log.id,
+            followedAt: log.followedAt.toISOString()
+        }));
+}));
 
 
 /***/ },
@@ -51062,10 +51397,8 @@ const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
     const cached = readDailyNewCache(dailyNewCalendarCache, cacheKey);
     if (cached) return cached;
     const months = (0, _dailyNewArrival.buildLast6Months)();
-    const noBrandIds = await loadNoBrandCategoryIds();
     const listedWhere = {
-        ...activeListedProductWhere,
-        ...excludeNoBrandProducts(noBrandIds)
+        ...activeListedProductWhere
     };
     const [totalActiveProducts, ...monthCounts] = await Promise.all([
         _prisma.default.product.count({
@@ -51076,10 +51409,27 @@ const getDailyNewArrivalCalendar = (0, _action_utils.withResult)(async ()=>{
             const productCount = await _prisma.default.product.count({
                 where: {
                     ...listedWhere,
-                    createdAt: {
-                        gte: start,
-                        lt: end
-                    }
+                    OR: [
+                        {
+                            publishedAt: {
+                                gte: start,
+                                lt: end
+                            }
+                        },
+                        {
+                            AND: [
+                                {
+                                    publishedAt: null
+                                },
+                                {
+                                    createdAt: {
+                                        gte: start,
+                                        lt: end
+                                    }
+                                }
+                            ]
+                        }
+                    ]
                 }
             });
             return productCount;
@@ -51113,14 +51463,29 @@ const getDailyNewArrivalProducts = (0, _action_utils.withResult)(async (input = 
     const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef !== null && customerCoef !== void 0 ? customerCoef : 1}:nb`;
     const cached = readDailyNewCache(dailyNewProductsCache, cacheKey);
     if (cached) return cached;
-    const noBrandIds = await loadNoBrandCategoryIds();
     const where = {
         ...activeListedProductWhere,
-        ...excludeNoBrandProducts(noBrandIds),
-        createdAt: {
-            gte: rangeStart,
-            lt: rangeEnd
-        }
+        OR: [
+            {
+                publishedAt: {
+                    gte: rangeStart,
+                    lt: rangeEnd
+                }
+            },
+            {
+                AND: [
+                    {
+                        publishedAt: null
+                    },
+                    {
+                        createdAt: {
+                            gte: rangeStart,
+                            lt: rangeEnd
+                        }
+                    }
+                ]
+            }
+        ]
     };
     const [total, dbProducts, exchangeRate, pricingConfig] = await Promise.all([
         _prisma.default.product.count({

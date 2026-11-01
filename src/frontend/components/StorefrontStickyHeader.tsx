@@ -39,6 +39,7 @@ import {
   type DailyNewArrivalMonthCard,
 } from '@/frontend/actions/Home'
 import { buildLast6Months, formatMonthLabel, isDailyNewArrivalCategoryName } from '@/frontend/utils/dailyNewArrival'
+import { notifyStorefrontUrl } from '@/frontend/utils/hardNavigate'
 import { useTranslation } from 'react-i18next'
 import { APP_LOCALES, getLocaleLabel, normalizeLocale } from '@/frontend/i18n'
 import { useSwitchAppLocale } from '@/frontend/i18n/I18nProvider'
@@ -328,10 +329,13 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
           : null)
       if (slug) {
         router.push(`/category/${encodeURIComponent(String(slug).trim())}?${params.toString()}`)
-        return
+      } else {
+        if (id) params.set('categoryId', id)
+        router.push(`/productcategory/?${params.toString()}`)
       }
-      if (id) params.set('categoryId', id)
-      router.push(`/productcategory/?${params.toString()}`)
+      notifyStorefrontUrl()
+      window.setTimeout(notifyStorefrontUrl, 0)
+      window.setTimeout(notifyStorefrontUrl, 80)
     },
     [categories, router],
   )
@@ -570,13 +574,16 @@ export const StorefrontStickyHeader = ({ isHome }: StorefrontStickyHeaderProps) 
                             className="relative flex min-w-0 flex-1 items-center justify-center bg-transparent px-2 py-2 text-center text-sm font-bold text-[#333333] transition-colors duration-200 hover:text-[#f254a6] lg:text-base lg:whitespace-nowrap"
                             onClick={(event) => {
                               event.preventDefault()
-                              // New：直接进当月列表（避免无 dailyMonth 时扫 6 个月）
-                              const current = buildLast6Months()[0]
-                              goHomeWithDailyMonth(
-                                current.monthKey,
-                                category.category_id,
-                                category.category_slug,
-                              )
+                              if (isDailyNewArrival) {
+                                const current = buildLast6Months()[0]
+                                goHomeWithDailyMonth(
+                                  current.monthKey,
+                                  category.category_id,
+                                  category.category_slug,
+                                )
+                                return
+                              }
+                              goHomeWithCategory(category.category_id, category.category_slug)
                             }}
                             aria-expanded={hasHoverPanel ? isDesktopPanelVisible : undefined}
                             aria-haspopup={hasHoverPanel ? 'menu' : undefined}

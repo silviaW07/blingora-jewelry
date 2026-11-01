@@ -23,13 +23,14 @@ import * as mod_20 from '../src/backend/actions/OrderManagement';
 import * as mod_21 from '../src/backend/actions/ImportFrom1688';
 import * as mod_22 from '../src/backend/actions/HomeRecommendZoneManagement';
 import * as mod_23 from '../src/backend/actions/Dashboard';
-import * as mod_24 from '../src/backend/actions/CategoryManagement';
-import * as mod_25 from '../src/backend/actions/BuyerShowManagement';
-import * as mod_26 from '../src/backend/actions/BrandAlias';
-import * as mod_27 from '../src/backend/actions/BannerManagement';
-import * as mod_28 from '../src/backend/actions/AdminRegister';
-import * as mod_29 from '../src/backend/actions/AdminManagement';
-import * as mod_30 from '../src/backend/actions/AdminLogin';
+import * as mod_24 from '../src/backend/actions/CustomerFollowUp';
+import * as mod_25 from '../src/backend/actions/CategoryManagement';
+import * as mod_26 from '../src/backend/actions/BuyerShowManagement';
+import * as mod_27 from '../src/backend/actions/BrandAlias';
+import * as mod_28 from '../src/backend/actions/BannerManagement';
+import * as mod_29 from '../src/backend/actions/AdminRegister';
+import * as mod_30 from '../src/backend/actions/AdminManagement';
+import * as mod_31 from '../src/backend/actions/AdminLogin';
 
 export const registry: Record<string, any> = {
   'src.frontend.actions.ProductDetail': mod_0,
@@ -56,11 +57,12 @@ export const registry: Record<string, any> = {
   'src.backend.actions.ImportFrom1688': mod_21,
   'src.backend.actions.HomeRecommendZoneManagement': mod_22,
   'src.backend.actions.Dashboard': mod_23,
-  'src.backend.actions.CategoryManagement': mod_24,
-  'src.backend.actions.BuyerShowManagement': mod_25,
-  'src.backend.actions.BrandAlias': mod_26,
-  'src.backend.actions.BannerManagement': mod_27,
-  'src.backend.actions.AdminRegister': mod_28,
-  'src.backend.actions.AdminManagement': mod_29,
-  'src.backend.actions.AdminLogin': mod_30,
+  'src.backend.actions.CustomerFollowUp': mod_24,
+  'src.backend.actions.CategoryManagement': mod_25,
+  'src.backend.actions.BuyerShowManagement': mod_26,
+  'src.backend.actions.BrandAlias': mod_27,
+  'src.backend.actions.BannerManagement': mod_28,
+  'src.backend.actions.AdminRegister': mod_29,
+  'src.backend.actions.AdminManagement': mod_30,
+  'src.backend.actions.AdminLogin': mod_31,
 };

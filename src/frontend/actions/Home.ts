@@ -1555,10 +1555,8 @@ export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyN
   if (cached) return cached
 
   const months = buildLast6Months()
-  const noBrandIds = await loadNoBrandCategoryIds()
   const listedWhere = {
     ...activeListedProductWhere,
-    ...excludeNoBrandProducts(noBrandIds),
   }
   const [totalActiveProducts, ...monthCounts] = await Promise.all([
     prisma.product.count({ where: listedWhere }),
@@ -1567,7 +1565,10 @@ export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyN
       const productCount = await prisma.product.count({
         where: {
           ...listedWhere,
-          createdAt: { gte: start, lt: end },
+          OR: [
+            { publishedAt: { gte: start, lt: end } },
+            { AND: [{ publishedAt: null }, { createdAt: { gte: start, lt: end } }] },
+          ],
         },
       })
       return productCount
@@ -1617,11 +1618,12 @@ export const getDailyNewArrivalProducts = withResult(async (
   const cached = readDailyNewCache(dailyNewProductsCache, cacheKey)
   if (cached) return cached
 
-  const noBrandIds = await loadNoBrandCategoryIds()
   const where = {
     ...activeListedProductWhere,
-    ...excludeNoBrandProducts(noBrandIds),
-    createdAt: { gte: rangeStart, lt: rangeEnd },
+    OR: [
+      { publishedAt: { gte: rangeStart, lt: rangeEnd } },
+      { AND: [{ publishedAt: null }, { createdAt: { gte: rangeStart, lt: rangeEnd } }] },
+    ],
   }
 
   const [total, dbProducts, exchangeRate, pricingConfig] = await Promise.all([
