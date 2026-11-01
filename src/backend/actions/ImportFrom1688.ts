@@ -7978,6 +7978,8 @@ const createProductRecord = async (tx: any, params: {
   skuSummaryText?: string | null
   skus?: PendingImportSkuItem[]
   linkedCategoryIds?: string[]
+  /** 传品选定 No Brand 时，不要再按价格档补其它类目 */
+  skipPriceThresholdLinks?: boolean
   brandCategoryId?: string | null
   brandMatchKeyword?: string | null
   autoBrandMatched?: boolean
@@ -8133,7 +8135,9 @@ const createProductRecord = async (tx: any, params: {
   }
 
   // Append price-threshold L2 tags by existing category name; never changes primary categoryId.
-  await syncProductPriceThresholdRelations(tx, product.id)
+  if (!params.skipPriceThresholdLinks) {
+    await syncProductPriceThresholdRelations(tx, product.id)
+  }
 
   return product
 }
@@ -11711,6 +11715,10 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             new Set((previewData.matchedCategoryIds || []).filter(Boolean)),
           )
           const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
+          const operatorChosenId = String(
+            item.targetCategoryId || previewData.categoryId || item.importTask.defaultCategoryId || '',
+          ).trim()
+          const lockToNoBrandOnly = isNoBrandCatchAllCategoryName(secondaryById.get(operatorChosenId)?.name)
           // 已一键校准 / 待上传手改类目或系数：上架信任现有主类目与系数，不再按标题重扫覆盖
           const operatorLockedCategory = previewData.categoryCalibrated === true
           const operatorLockedCoefficient = previewData.coefficientCalibrated === true
@@ -11792,12 +11800,21 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
                 secondaryById,
               ) || ''
           }
-          autoMatchedCategoryIds = mergeFilterCategoryIdsFromTitle(
-            productName,
-            autoMatchedCategoryIds,
-            filterCategories,
-            buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription),
-          )
+          if (lockToNoBrandOnly) {
+            selectedCategoryId = operatorChosenId
+            autoMatchedCategoryIds = [operatorChosenId]
+            brandCategoryId = null
+            brandMatchKeyword = null
+            pricingFromRematch = null
+            rematchedSecondaryCategories = []
+          } else {
+            autoMatchedCategoryIds = mergeFilterCategoryIdsFromTitle(
+              productName,
+              autoMatchedCategoryIds,
+              filterCategories,
+              buildCategoryMatchCorpus(item.productDetail, previewData.shortDescription),
+            )
+          }
           if (!selectedCategoryId) {
             throw new Error('请选择手提包等真实一/二级类目（品牌货架不能作为主类目）')
           }
@@ -11809,18 +11826,21 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
           }
           const categoryId = ownership.primaryCategoryId
           // 主分类 + 校准/自动命中 L2 + 原目标分类（若有）全部写入关联，并展开一级父类
-          let linkedCategoryIds = await expandLinkedCategoryIdsWithParents(tx, [
-            ...ownership.linkedCategoryIds,
-            ...autoMatchedCategoryIds,
-            item.targetCategoryId || '',
-            item.importTask.defaultCategoryId || '',
-            pricingFromRematch || '',
-            brandCategoryId || '',
-          ])
-          // 标题已命中真实品牌时，去掉 No Brand 兜底关联，避免列表显示「No Brand」
-          linkedCategoryIds = await pruneNoBrandCatchAllLinks(tx, linkedCategoryIds, {
-            hasRealBrand: Boolean(brandCategoryId),
-          })
+          let linkedCategoryIds = lockToNoBrandOnly
+            ? [operatorChosenId]
+            : await expandLinkedCategoryIdsWithParents(tx, [
+                ...ownership.linkedCategoryIds,
+                ...autoMatchedCategoryIds,
+                item.targetCategoryId || '',
+                item.importTask.defaultCategoryId || '',
+                pricingFromRematch || '',
+                brandCategoryId || '',
+              ])
+          if (!lockToNoBrandOnly) {
+            linkedCategoryIds = await pruneNoBrandCatchAllLinks(tx, linkedCategoryIds, {
+              hasRealBrand: Boolean(brandCategoryId),
+            })
+          }
           const itemCoefficient = toNumberOrNull(item.coefficient)
           const keepOperatorCoefficient =
             (operatorLockedCategory || operatorLockedCoefficient) &&
@@ -11922,6 +11942,7 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             skuSummaryText: item.skuSummaryText || null,
             skus: pendingSkus,
             linkedCategoryIds,
+            skipPriceThresholdLinks: lockToNoBrandOnly,
             brandCategoryId,
             brandMatchKeyword,
             autoBrandMatched: Boolean(brandCategoryId),

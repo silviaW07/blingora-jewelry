@@ -1,141 +1,152 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import type { FollowCustomer } from '@/backend/actions/CustomerFollowUp'
+import type { FollowTagInterval, RegisteredFollowCustomer } from '@/backend/actions/CustomerFollowUp'
 import type { useCustomerFollowUp } from '@/backend/hooks/useCustomerFollowUp'
 
 function formatWhen(iso: string | null) {
-  if (!iso) return '还没有跟进'
+  if (!iso) return '—'
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return '还没有跟进'
+  if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' })
 }
 
-function CustomerForm({
-  initial,
+function money(value: number) {
+  return `$${value.toFixed(2)}`
+}
+
+function CustomerTable({
+  rows,
   saving,
-  submitLabel,
-  onSubmit,
+  onFollow,
+  onLogs,
 }: {
-  initial?: Partial<FollowCustomer>
+  rows: RegisteredFollowCustomer[]
   saving: boolean
-  submitLabel: string
-  onSubmit: (input: { name: string; whatsapp: string; note: string; intervalDays: number }) => Promise<void>
+  onFollow: (row: RegisteredFollowCustomer) => void
+  onLogs: (row: RegisteredFollowCustomer) => void
 }) {
-  const [name, setName] = useState(initial?.name || '')
-  const [whatsapp, setWhatsapp] = useState(initial?.whatsapp || '')
-  const [note, setNote] = useState(initial?.note || '')
-  const [intervalDays, setIntervalDays] = useState(String(initial?.intervalDays || 7))
+  if (!rows.length) return <p className="px-4 py-8 text-sm text-muted-foreground">没有客户</p>
   return (
-    <form
-      className="grid gap-3"
-      onSubmit={(event) => {
-        event.preventDefault()
-        void onSubmit({ name, whatsapp, note, intervalDays: Number(intervalDays) || 7 })
-      }}
-    >
-      <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="客户名称" aria-label="客户名称" />
-      <Input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="WhatsApp" aria-label="WhatsApp" />
-      <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="客户信息，例如要看的新品、上次说的价" rows={3} />
-      <label className="flex items-center gap-2 text-sm text-slate-600">
-        跟进间隔
-        <Input className="h-9 w-20" type="number" min={1} max={365} value={intervalDays} onChange={(event) => setIntervalDays(event.target.value)} aria-label="跟进间隔天数" />
-        天
-      </label>
-      <Button type="submit" disabled={saving}>{submitLabel}</Button>
-    </form>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1080px] text-left text-sm">
+        <thead className="bg-muted/50 text-xs text-muted-foreground">
+          <tr>
+            <th className="px-3 py-2 font-medium">姓名</th>
+            <th className="px-3 py-2 font-medium">手机号</th>
+            <th className="px-3 py-2 font-medium">邮箱</th>
+            <th className="px-3 py-2 font-medium">标签</th>
+            <th className="px-3 py-2 font-medium">注册时间</th>
+            <th className="px-3 py-2 font-medium">最近登录</th>
+            <th className="px-3 py-2 font-medium">购物车金额</th>
+            <th className="px-3 py-2 font-medium">跟进频次</th>
+            <th className="px-3 py-2 font-medium">下次跟进</th>
+            <th className="px-3 py-2 font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-t">
+              <td className="px-3 py-2 font-medium">{row.name}</td>
+              <td className="px-3 py-2">{row.phone || '—'}</td>
+              <td className="px-3 py-2">{row.email}</td>
+              <td className="px-3 py-2">{row.tagName || '未标记'}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{formatWhen(row.registeredAt)}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{formatWhen(row.lastLoginAt)}</td>
+              <td className="px-3 py-2">{money(row.cartUsdTotal)}</td>
+              <td className="px-3 py-2">{row.intervalDays} 天</td>
+              <td className="px-3 py-2 whitespace-nowrap">{row.lastFollowedAt ? formatWhen(row.nextFollowAt) : '待首次跟进'}</td>
+              <td className="px-3 py-2">
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" disabled={saving} onClick={() => onFollow(row)}>跟进</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => onLogs(row)}>记录</Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
-export default function CustomerFollowUpView({
-  state,
-  handlers,
-}: ReturnType<typeof useCustomerFollowUp>) {
-  const [editing, setEditing] = useState<FollowCustomer | null>(null)
+export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowUp>) {
+  const { tags, due, all, loading, saving, active, followedAt, logs, openCustomer, openNext, saveIntervals, showLogs } = props
+  const [draft, setDraft] = useState<FollowTagInterval[] | null>(null)
+  const [query, setQuery] = useState('')
+  const [onlyDue, setOnlyDue] = useState(false)
+  const intervals = draft || tags
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return all.filter((row) => {
+      if (onlyDue && !row.due) return false
+      if (!q) return true
+      return [row.name, row.phone, row.email, row.tagName].some((value) => String(value || '').toLowerCase().includes(q))
+    })
+  }, [all, onlyDue, query])
+
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 p-4 lg:grid-cols-[320px_1fr] lg:p-6">
-      <section className="space-y-4">
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-sm font-semibold text-slate-900">添加客户</div>
-          <div className="mt-3">
-            <CustomerForm saving={state.saving} submitLabel="添加" onSubmit={handlers.addCustomer} />
-          </div>
+    <div className="grid gap-4 p-4 lg:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">客户跟进</h1>
+          <p className="mt-1 text-sm text-muted-foreground">已注册客户 {all.length} 人，今日待跟进 {due.length} 人。购物车金额为美金。</p>
         </div>
-        <div className="rounded-xl border bg-white p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-slate-900">今日待跟进 {state.due.length}</div>
-            <Button type="button" size="sm" onClick={() => void handlers.openNext()} disabled={state.saving || state.due.length === 0}>下一位</Button>
-          </div>
-          <div className="mt-3 space-y-2">
-            {state.loading ? <div className="text-sm text-slate-500">加载中...</div> : null}
-            {!state.loading && state.due.length === 0 ? <div className="text-sm text-slate-500">今天没有待跟进</div> : null}
-            {state.due.map((row) => (
-              <button key={row.id} type="button" className="w-full rounded-lg border px-3 py-2 text-left hover:bg-slate-50" onClick={() => void handlers.openCustomer(row.id)}>
-                <div className="text-sm font-medium text-slate-900">{row.name}</div>
-                <div className="text-xs text-slate-500">{row.whatsapp || '无号码'} · 每 {row.intervalDays} 天</div>
-              </button>
-            ))}
-          </div>
+        <Button type="button" disabled={saving || !due.length} onClick={() => void openNext()}>下一位待跟进</Button>
+      </div>
+
+      <section className="rounded-lg border bg-card p-4">
+        <h2 className="text-sm font-medium">按标签设置跟进频次</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {intervals.map((tag) => (
+            <label key={tag.code} className="grid gap-1 text-sm">
+              <span>{tag.name}</span>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={tag.intervalDays}
+                onChange={(event) => {
+                  const next = intervals.map((item) => item.code === tag.code ? { ...item, intervalDays: Number(event.target.value) } : item)
+                  setDraft(next)
+                }}
+              />
+            </label>
+          ))}
         </div>
+        <Button className="mt-3" type="button" disabled={saving || !intervals.length} onClick={() => void saveIntervals(intervals).then(() => setDraft(null))}>
+          保存频次
+        </Button>
       </section>
-      <section className="space-y-4">
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-sm text-slate-500">本次跟进时间</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-900">{formatWhen(state.followedAt)}</div>
-          {state.active ? (
-            <div className="mt-3 text-sm text-slate-700">
-              <div>{state.active.name}{state.active.whatsapp ? ` · ${state.active.whatsapp}` : ''}</div>
-              <div className="mt-1 text-slate-500">下次跟进 {formatWhen(state.active.nextFollowAt)} · 间隔 {state.active.intervalDays} 天</div>
-              {state.active.note ? <div className="mt-2 whitespace-pre-wrap">{state.active.note}</div> : null}
-            </div>
-          ) : <div className="mt-2 text-sm text-slate-500">从今日待跟进里点一位客户，会自动记下现在的时间。</div>}
-          {state.logs.length > 0 ? (
-            <div className="mt-4 space-y-1 border-t pt-3 text-sm text-slate-600">
-              {state.logs.map((log) => <div key={log.id}>{formatWhen(log.followedAt)}</div>)}
-            </div>
+
+      {active ? (
+        <section className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">本次跟进时间</p>
+          <p className="mt-1 text-2xl font-semibold">{formatWhen(followedAt)}</p>
+          <p className="mt-2 text-sm">{active.name} · {active.phone || '无手机号'} · {active.email} · {active.tagName || '未标记'} · 每 {active.intervalDays} 天</p>
+          <p className="mt-1 text-sm text-muted-foreground">下次跟进 {formatWhen(active.nextFollowAt)}</p>
+          {logs.length ? (
+            <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+              {logs.map((log) => <li key={log.id}>{formatWhen(log.followedAt)}</li>)}
+            </ul>
           ) : null}
+        </section>
+      ) : null}
+
+      <section className="overflow-hidden rounded-lg border bg-card">
+        <div className="flex flex-wrap items-center gap-2 border-b p-3">
+          <Input className="max-w-xs" placeholder="搜索姓名、手机号、邮箱、标签" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <Button type="button" variant={onlyDue ? 'default' : 'outline'} onClick={() => setOnlyDue((value) => !value)}>
+            {onlyDue ? '只看今日待跟进' : '显示全部客户'}
+          </Button>
         </div>
-        <div className="overflow-hidden rounded-xl border bg-white">
-          <div className="border-b px-4 py-3 text-sm font-semibold">全部客户</div>
-          <div className="divide-y">
-            {state.all.map((row) => (
-              <div key={row.id} className="grid gap-2 px-4 py-3 md:grid-cols-[1fr_auto] md:items-center">
-                <div>
-                  <div className="text-sm font-medium">{row.name}</div>
-                  <div className="text-xs text-slate-500">{row.whatsapp || '无号码'} · 上次 {formatWhen(row.lastFollowedAt)} · 下次 {formatWhen(row.nextFollowAt)}</div>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={() => void handlers.showLogs(row.id)}>记录</Button>
-                  <Button type="button" size="sm" variant="outline" onClick={() => setEditing(row)}>编辑</Button>
-                  <Button type="button" size="sm" onClick={() => void handlers.openCustomer(row.id)}>跟进</Button>
-                </div>
-              </div>
-            ))}
-            {!state.loading && state.all.length === 0 ? <div className="px-4 py-8 text-sm text-slate-500">还没有客户，先在左边添加。</div> : null}
-          </div>
-        </div>
-        {editing ? (
-          <div className="rounded-xl border bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold">编辑 {editing.name}</div>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(null)}>关闭</Button>
-            </div>
-            <CustomerForm
-              key={editing.id}
-              initial={editing}
-              saving={state.saving}
-              submitLabel="保存"
-              onSubmit={async (input) => {
-                await handlers.saveCustomer({ id: editing.id, ...input })
-                setEditing(null)
-              }}
-            />
-          </div>
-        ) : null}
+        {loading ? <p className="px-4 py-8 text-sm text-muted-foreground">正在加载客户…</p> : (
+          <CustomerTable rows={filtered} saving={saving} onFollow={(row) => void openCustomer(row)} onLogs={(row) => void showLogs(row)} />
+        )}
       </section>
     </div>
   )

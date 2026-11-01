@@ -288,6 +288,16 @@ export type customerfollowup = $Result.DefaultSelection<Prisma.$customerfollowup
  * 
  */
 export type customerfollowlog = $Result.DefaultSelection<Prisma.$customerfollowlogPayload>
+/**
+ * Model customeruserfollow
+ * 
+ */
+export type customeruserfollow = $Result.DefaultSelection<Prisma.$customeruserfollowPayload>
+/**
+ * Model customeruserfollowlog
+ * 
+ */
+export type customeruserfollowlog = $Result.DefaultSelection<Prisma.$customeruserfollowlogPayload>
 
 /**
  * Enums
@@ -1333,6 +1343,26 @@ export class PrismaClient<
     * ```
     */
   get customerfollowlog(): Prisma.customerfollowlogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.customeruserfollow`: Exposes CRUD operations for the **customeruserfollow** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Customeruserfollows
+    * const customeruserfollows = await prisma.customeruserfollow.findMany()
+    * ```
+    */
+  get customeruserfollow(): Prisma.customeruserfollowDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.customeruserfollowlog`: Exposes CRUD operations for the **customeruserfollowlog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Customeruserfollowlogs
+    * const customeruserfollowlogs = await prisma.customeruserfollowlog.findMany()
+    * ```
+    */
+  get customeruserfollowlog(): Prisma.customeruserfollowlogDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -1828,7 +1858,9 @@ export namespace Prisma {
     buyershowproof: 'buyershowproof',
     customerbalanceentry: 'customerbalanceentry',
     customerfollowup: 'customerfollowup',
-    customerfollowlog: 'customerfollowlog'
+    customerfollowlog: 'customerfollowlog',
+    customeruserfollow: 'customeruserfollow',
+    customeruserfollowlog: 'customeruserfollowlog'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1847,7 +1879,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment" | "buyershowproof" | "customerbalanceentry" | "customerfollowup" | "customerfollowlog"
+      modelProps: "sysuser" | "category" | "categorynavconfig" | "product" | "productsku" | "cart" | "cartitem" | "importtask" | "importtaskitem" | "useraddress" | "wishlistitem" | "sitesetting" | "lookbook" | "lookbookproduct" | "homeRecommendCollection" | "homeRecommendCollectionItem" | "homeRecommendZone" | "homeRecommendZoneItem" | "promotioncampaign" | "orderrecord" | "orderitem" | "productreview" | "customorder" | "sizemapping" | "customerticket" | "productcategory" | "filterspec" | "categoryfilterbinding" | "spectemplate" | "categoryspectemplatebinding" | "customertag" | "customertaglink" | "customercommunication" | "orderlogisticssegment" | "orderoperationlog" | "shippingtemplate" | "shippingchannel" | "currencysetting" | "taxrule" | "rolepermission" | "keywordgroup" | "keyworditem" | "categorykeywordlink" | "categorybanner" | "product_category_relations" | "product_keyword_relations" | "keywordgroupproduct" | "suffixconfig" | "brandalias" | "buyershowmedia" | "buyershowcomment" | "buyershowproof" | "customerbalanceentry" | "customerfollowup" | "customerfollowlog" | "customeruserfollow" | "customeruserfollowlog"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -5481,6 +5513,138 @@ export namespace Prisma {
           }
         }
       }
+      customeruserfollow: {
+        payload: Prisma.$customeruserfollowPayload<ExtArgs>
+        fields: Prisma.customeruserfollowFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.customeruserfollowFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.customeruserfollowFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>
+          }
+          findFirst: {
+            args: Prisma.customeruserfollowFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.customeruserfollowFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>
+          }
+          findMany: {
+            args: Prisma.customeruserfollowFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>[]
+          }
+          create: {
+            args: Prisma.customeruserfollowCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>
+          }
+          createMany: {
+            args: Prisma.customeruserfollowCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.customeruserfollowDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>
+          }
+          update: {
+            args: Prisma.customeruserfollowUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>
+          }
+          deleteMany: {
+            args: Prisma.customeruserfollowDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.customeruserfollowUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.customeruserfollowUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowPayload>
+          }
+          aggregate: {
+            args: Prisma.CustomeruserfollowAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCustomeruserfollow>
+          }
+          groupBy: {
+            args: Prisma.customeruserfollowGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CustomeruserfollowGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.customeruserfollowCountArgs<ExtArgs>
+            result: $Utils.Optional<CustomeruserfollowCountAggregateOutputType> | number
+          }
+        }
+      }
+      customeruserfollowlog: {
+        payload: Prisma.$customeruserfollowlogPayload<ExtArgs>
+        fields: Prisma.customeruserfollowlogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.customeruserfollowlogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.customeruserfollowlogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>
+          }
+          findFirst: {
+            args: Prisma.customeruserfollowlogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.customeruserfollowlogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>
+          }
+          findMany: {
+            args: Prisma.customeruserfollowlogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>[]
+          }
+          create: {
+            args: Prisma.customeruserfollowlogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>
+          }
+          createMany: {
+            args: Prisma.customeruserfollowlogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.customeruserfollowlogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>
+          }
+          update: {
+            args: Prisma.customeruserfollowlogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>
+          }
+          deleteMany: {
+            args: Prisma.customeruserfollowlogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.customeruserfollowlogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.customeruserfollowlogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$customeruserfollowlogPayload>
+          }
+          aggregate: {
+            args: Prisma.CustomeruserfollowlogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCustomeruserfollowlog>
+          }
+          groupBy: {
+            args: Prisma.customeruserfollowlogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CustomeruserfollowlogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.customeruserfollowlogCountArgs<ExtArgs>
+            result: $Utils.Optional<CustomeruserfollowlogCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -5632,6 +5796,8 @@ export namespace Prisma {
     customerbalanceentry?: customerbalanceentryOmit
     customerfollowup?: customerfollowupOmit
     customerfollowlog?: customerfollowlogOmit
+    customeruserfollow?: customeruserfollowOmit
+    customeruserfollowlog?: customeruserfollowlogOmit
   }
 
   /* Types for Logging */
@@ -6662,6 +6828,37 @@ export namespace Prisma {
 
 
   /**
+   * Count Type CustomeruserfollowCountOutputType
+   */
+
+  export type CustomeruserfollowCountOutputType = {
+    logs: number
+  }
+
+  export type CustomeruserfollowCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    logs?: boolean | CustomeruserfollowCountOutputTypeCountLogsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * CustomeruserfollowCountOutputType without action
+   */
+  export type CustomeruserfollowCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CustomeruserfollowCountOutputType
+     */
+    select?: CustomeruserfollowCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * CustomeruserfollowCountOutputType without action
+   */
+  export type CustomeruserfollowCountOutputTypeCountLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: customeruserfollowlogWhereInput
+  }
+
+
+  /**
    * Models
    */
 
@@ -7059,6 +7256,7 @@ export namespace Prisma {
     customOrders?: boolean | sysuser$customOrdersArgs<ExtArgs>
     customerTags?: boolean | sysuser$customerTagsArgs<ExtArgs>
     communicationLogs?: boolean | sysuser$communicationLogsArgs<ExtArgs>
+    userFollow?: boolean | sysuser$userFollowArgs<ExtArgs>
     _count?: boolean | SysuserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["sysuser"]>
 
@@ -7109,6 +7307,7 @@ export namespace Prisma {
     customOrders?: boolean | sysuser$customOrdersArgs<ExtArgs>
     customerTags?: boolean | sysuser$customerTagsArgs<ExtArgs>
     communicationLogs?: boolean | sysuser$communicationLogsArgs<ExtArgs>
+    userFollow?: boolean | sysuser$userFollowArgs<ExtArgs>
     _count?: boolean | SysuserCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -7127,6 +7326,7 @@ export namespace Prisma {
       customOrders: Prisma.$customorderPayload<ExtArgs>[]
       customerTags: Prisma.$customertaglinkPayload<ExtArgs>[]
       communicationLogs: Prisma.$customercommunicationPayload<ExtArgs>[]
+      userFollow: Prisma.$customeruserfollowPayload<ExtArgs> | null
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -7509,6 +7709,7 @@ export namespace Prisma {
     customOrders<T extends sysuser$customOrdersArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$customOrdersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customorderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     customerTags<T extends sysuser$customerTagsArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$customerTagsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customertaglinkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     communicationLogs<T extends sysuser$communicationLogsArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$communicationLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customercommunicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    userFollow<T extends sysuser$userFollowArgs<ExtArgs> = {}>(args?: Subset<T, sysuser$userFollowArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -8194,6 +8395,25 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: CustomercommunicationScalarFieldEnum | CustomercommunicationScalarFieldEnum[]
+  }
+
+  /**
+   * sysuser.userFollow
+   */
+  export type sysuser$userFollowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    where?: customeruserfollowWhereInput
   }
 
   /**
@@ -40231,8 +40451,18 @@ export namespace Prisma {
 
   export type AggregateCustomertag = {
     _count: CustomertagCountAggregateOutputType | null
+    _avg: CustomertagAvgAggregateOutputType | null
+    _sum: CustomertagSumAggregateOutputType | null
     _min: CustomertagMinAggregateOutputType | null
     _max: CustomertagMaxAggregateOutputType | null
+  }
+
+  export type CustomertagAvgAggregateOutputType = {
+    followIntervalDays: number | null
+  }
+
+  export type CustomertagSumAggregateOutputType = {
+    followIntervalDays: number | null
   }
 
   export type CustomertagMinAggregateOutputType = {
@@ -40241,6 +40471,7 @@ export namespace Prisma {
     code: string | null
     color: string | null
     description: string | null
+    followIntervalDays: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -40251,6 +40482,7 @@ export namespace Prisma {
     code: string | null
     color: string | null
     description: string | null
+    followIntervalDays: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -40261,11 +40493,20 @@ export namespace Prisma {
     code: number
     color: number
     description: number
+    followIntervalDays: number
     createdAt: number
     updatedAt: number
     _all: number
   }
 
+
+  export type CustomertagAvgAggregateInputType = {
+    followIntervalDays?: true
+  }
+
+  export type CustomertagSumAggregateInputType = {
+    followIntervalDays?: true
+  }
 
   export type CustomertagMinAggregateInputType = {
     id?: true
@@ -40273,6 +40514,7 @@ export namespace Prisma {
     code?: true
     color?: true
     description?: true
+    followIntervalDays?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -40283,6 +40525,7 @@ export namespace Prisma {
     code?: true
     color?: true
     description?: true
+    followIntervalDays?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -40293,6 +40536,7 @@ export namespace Prisma {
     code?: true
     color?: true
     description?: true
+    followIntervalDays?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -40336,6 +40580,18 @@ export namespace Prisma {
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
+     * Select which fields to average
+    **/
+    _avg?: CustomertagAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: CustomertagSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
      * Select which fields to find the minimum value
     **/
     _min?: CustomertagMinAggregateInputType
@@ -40366,6 +40622,8 @@ export namespace Prisma {
     take?: number
     skip?: number
     _count?: CustomertagCountAggregateInputType | true
+    _avg?: CustomertagAvgAggregateInputType
+    _sum?: CustomertagSumAggregateInputType
     _min?: CustomertagMinAggregateInputType
     _max?: CustomertagMaxAggregateInputType
   }
@@ -40376,9 +40634,12 @@ export namespace Prisma {
     code: string
     color: string | null
     description: string | null
+    followIntervalDays: number
     createdAt: Date
     updatedAt: Date
     _count: CustomertagCountAggregateOutputType | null
+    _avg: CustomertagAvgAggregateOutputType | null
+    _sum: CustomertagSumAggregateOutputType | null
     _min: CustomertagMinAggregateOutputType | null
     _max: CustomertagMaxAggregateOutputType | null
   }
@@ -40403,6 +40664,7 @@ export namespace Prisma {
     code?: boolean
     color?: boolean
     description?: boolean
+    followIntervalDays?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     userLinks?: boolean | customertag$userLinksArgs<ExtArgs>
@@ -40417,11 +40679,12 @@ export namespace Prisma {
     code?: boolean
     color?: boolean
     description?: boolean
+    followIntervalDays?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type customertagOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "code" | "color" | "description" | "createdAt" | "updatedAt", ExtArgs["result"]["customertag"]>
+  export type customertagOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "code" | "color" | "description" | "followIntervalDays" | "createdAt" | "updatedAt", ExtArgs["result"]["customertag"]>
   export type customertagInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     userLinks?: boolean | customertag$userLinksArgs<ExtArgs>
     _count?: boolean | CustomertagCountOutputTypeDefaultArgs<ExtArgs>
@@ -40438,6 +40701,7 @@ export namespace Prisma {
       code: string
       color: string | null
       description: string | null
+      followIntervalDays: number
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["customertag"]>
@@ -40815,6 +41079,7 @@ export namespace Prisma {
     readonly code: FieldRef<"customertag", 'String'>
     readonly color: FieldRef<"customertag", 'String'>
     readonly description: FieldRef<"customertag", 'String'>
+    readonly followIntervalDays: FieldRef<"customertag", 'Int'>
     readonly createdAt: FieldRef<"customertag", 'DateTime'>
     readonly updatedAt: FieldRef<"customertag", 'DateTime'>
   }
@@ -64707,6 +64972,1861 @@ export namespace Prisma {
 
 
   /**
+   * Model customeruserfollow
+   */
+
+  export type AggregateCustomeruserfollow = {
+    _count: CustomeruserfollowCountAggregateOutputType | null
+    _min: CustomeruserfollowMinAggregateOutputType | null
+    _max: CustomeruserfollowMaxAggregateOutputType | null
+  }
+
+  export type CustomeruserfollowMinAggregateOutputType = {
+    userId: string | null
+    lastFollowedAt: Date | null
+    nextFollowAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CustomeruserfollowMaxAggregateOutputType = {
+    userId: string | null
+    lastFollowedAt: Date | null
+    nextFollowAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CustomeruserfollowCountAggregateOutputType = {
+    userId: number
+    lastFollowedAt: number
+    nextFollowAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type CustomeruserfollowMinAggregateInputType = {
+    userId?: true
+    lastFollowedAt?: true
+    nextFollowAt?: true
+    updatedAt?: true
+  }
+
+  export type CustomeruserfollowMaxAggregateInputType = {
+    userId?: true
+    lastFollowedAt?: true
+    nextFollowAt?: true
+    updatedAt?: true
+  }
+
+  export type CustomeruserfollowCountAggregateInputType = {
+    userId?: true
+    lastFollowedAt?: true
+    nextFollowAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type CustomeruserfollowAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which customeruserfollow to aggregate.
+     */
+    where?: customeruserfollowWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollows to fetch.
+     */
+    orderBy?: customeruserfollowOrderByWithRelationInput | customeruserfollowOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: customeruserfollowWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollows from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollows.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned customeruserfollows
+    **/
+    _count?: true | CustomeruserfollowCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CustomeruserfollowMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CustomeruserfollowMaxAggregateInputType
+  }
+
+  export type GetCustomeruserfollowAggregateType<T extends CustomeruserfollowAggregateArgs> = {
+        [P in keyof T & keyof AggregateCustomeruserfollow]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCustomeruserfollow[P]>
+      : GetScalarType<T[P], AggregateCustomeruserfollow[P]>
+  }
+
+
+
+
+  export type customeruserfollowGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: customeruserfollowWhereInput
+    orderBy?: customeruserfollowOrderByWithAggregationInput | customeruserfollowOrderByWithAggregationInput[]
+    by: CustomeruserfollowScalarFieldEnum[] | CustomeruserfollowScalarFieldEnum
+    having?: customeruserfollowScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CustomeruserfollowCountAggregateInputType | true
+    _min?: CustomeruserfollowMinAggregateInputType
+    _max?: CustomeruserfollowMaxAggregateInputType
+  }
+
+  export type CustomeruserfollowGroupByOutputType = {
+    userId: string
+    lastFollowedAt: Date | null
+    nextFollowAt: Date | null
+    updatedAt: Date
+    _count: CustomeruserfollowCountAggregateOutputType | null
+    _min: CustomeruserfollowMinAggregateOutputType | null
+    _max: CustomeruserfollowMaxAggregateOutputType | null
+  }
+
+  type GetCustomeruserfollowGroupByPayload<T extends customeruserfollowGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CustomeruserfollowGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CustomeruserfollowGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CustomeruserfollowGroupByOutputType[P]>
+            : GetScalarType<T[P], CustomeruserfollowGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type customeruserfollowSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    userId?: boolean
+    lastFollowedAt?: boolean
+    nextFollowAt?: boolean
+    updatedAt?: boolean
+    user?: boolean | sysuserDefaultArgs<ExtArgs>
+    logs?: boolean | customeruserfollow$logsArgs<ExtArgs>
+    _count?: boolean | CustomeruserfollowCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["customeruserfollow"]>
+
+
+
+  export type customeruserfollowSelectScalar = {
+    userId?: boolean
+    lastFollowedAt?: boolean
+    nextFollowAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type customeruserfollowOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"userId" | "lastFollowedAt" | "nextFollowAt" | "updatedAt", ExtArgs["result"]["customeruserfollow"]>
+  export type customeruserfollowInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | sysuserDefaultArgs<ExtArgs>
+    logs?: boolean | customeruserfollow$logsArgs<ExtArgs>
+    _count?: boolean | CustomeruserfollowCountOutputTypeDefaultArgs<ExtArgs>
+  }
+
+  export type $customeruserfollowPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "customeruserfollow"
+    objects: {
+      user: Prisma.$sysuserPayload<ExtArgs>
+      logs: Prisma.$customeruserfollowlogPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      userId: string
+      lastFollowedAt: Date | null
+      nextFollowAt: Date | null
+      updatedAt: Date
+    }, ExtArgs["result"]["customeruserfollow"]>
+    composites: {}
+  }
+
+  type customeruserfollowGetPayload<S extends boolean | null | undefined | customeruserfollowDefaultArgs> = $Result.GetResult<Prisma.$customeruserfollowPayload, S>
+
+  type customeruserfollowCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<customeruserfollowFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CustomeruserfollowCountAggregateInputType | true
+    }
+
+  export interface customeruserfollowDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['customeruserfollow'], meta: { name: 'customeruserfollow' } }
+    /**
+     * Find zero or one Customeruserfollow that matches the filter.
+     * @param {customeruserfollowFindUniqueArgs} args - Arguments to find a Customeruserfollow
+     * @example
+     * // Get one Customeruserfollow
+     * const customeruserfollow = await prisma.customeruserfollow.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends customeruserfollowFindUniqueArgs>(args: SelectSubset<T, customeruserfollowFindUniqueArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Customeruserfollow that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {customeruserfollowFindUniqueOrThrowArgs} args - Arguments to find a Customeruserfollow
+     * @example
+     * // Get one Customeruserfollow
+     * const customeruserfollow = await prisma.customeruserfollow.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends customeruserfollowFindUniqueOrThrowArgs>(args: SelectSubset<T, customeruserfollowFindUniqueOrThrowArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Customeruserfollow that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowFindFirstArgs} args - Arguments to find a Customeruserfollow
+     * @example
+     * // Get one Customeruserfollow
+     * const customeruserfollow = await prisma.customeruserfollow.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends customeruserfollowFindFirstArgs>(args?: SelectSubset<T, customeruserfollowFindFirstArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Customeruserfollow that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowFindFirstOrThrowArgs} args - Arguments to find a Customeruserfollow
+     * @example
+     * // Get one Customeruserfollow
+     * const customeruserfollow = await prisma.customeruserfollow.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends customeruserfollowFindFirstOrThrowArgs>(args?: SelectSubset<T, customeruserfollowFindFirstOrThrowArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Customeruserfollows that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Customeruserfollows
+     * const customeruserfollows = await prisma.customeruserfollow.findMany()
+     * 
+     * // Get first 10 Customeruserfollows
+     * const customeruserfollows = await prisma.customeruserfollow.findMany({ take: 10 })
+     * 
+     * // Only select the `userId`
+     * const customeruserfollowWithUserIdOnly = await prisma.customeruserfollow.findMany({ select: { userId: true } })
+     * 
+     */
+    findMany<T extends customeruserfollowFindManyArgs>(args?: SelectSubset<T, customeruserfollowFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Customeruserfollow.
+     * @param {customeruserfollowCreateArgs} args - Arguments to create a Customeruserfollow.
+     * @example
+     * // Create one Customeruserfollow
+     * const Customeruserfollow = await prisma.customeruserfollow.create({
+     *   data: {
+     *     // ... data to create a Customeruserfollow
+     *   }
+     * })
+     * 
+     */
+    create<T extends customeruserfollowCreateArgs>(args: SelectSubset<T, customeruserfollowCreateArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Customeruserfollows.
+     * @param {customeruserfollowCreateManyArgs} args - Arguments to create many Customeruserfollows.
+     * @example
+     * // Create many Customeruserfollows
+     * const customeruserfollow = await prisma.customeruserfollow.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends customeruserfollowCreateManyArgs>(args?: SelectSubset<T, customeruserfollowCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Customeruserfollow.
+     * @param {customeruserfollowDeleteArgs} args - Arguments to delete one Customeruserfollow.
+     * @example
+     * // Delete one Customeruserfollow
+     * const Customeruserfollow = await prisma.customeruserfollow.delete({
+     *   where: {
+     *     // ... filter to delete one Customeruserfollow
+     *   }
+     * })
+     * 
+     */
+    delete<T extends customeruserfollowDeleteArgs>(args: SelectSubset<T, customeruserfollowDeleteArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Customeruserfollow.
+     * @param {customeruserfollowUpdateArgs} args - Arguments to update one Customeruserfollow.
+     * @example
+     * // Update one Customeruserfollow
+     * const customeruserfollow = await prisma.customeruserfollow.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends customeruserfollowUpdateArgs>(args: SelectSubset<T, customeruserfollowUpdateArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Customeruserfollows.
+     * @param {customeruserfollowDeleteManyArgs} args - Arguments to filter Customeruserfollows to delete.
+     * @example
+     * // Delete a few Customeruserfollows
+     * const { count } = await prisma.customeruserfollow.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends customeruserfollowDeleteManyArgs>(args?: SelectSubset<T, customeruserfollowDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Customeruserfollows.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Customeruserfollows
+     * const customeruserfollow = await prisma.customeruserfollow.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends customeruserfollowUpdateManyArgs>(args: SelectSubset<T, customeruserfollowUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Customeruserfollow.
+     * @param {customeruserfollowUpsertArgs} args - Arguments to update or create a Customeruserfollow.
+     * @example
+     * // Update or create a Customeruserfollow
+     * const customeruserfollow = await prisma.customeruserfollow.upsert({
+     *   create: {
+     *     // ... data to create a Customeruserfollow
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Customeruserfollow we want to update
+     *   }
+     * })
+     */
+    upsert<T extends customeruserfollowUpsertArgs>(args: SelectSubset<T, customeruserfollowUpsertArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Customeruserfollows.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowCountArgs} args - Arguments to filter Customeruserfollows to count.
+     * @example
+     * // Count the number of Customeruserfollows
+     * const count = await prisma.customeruserfollow.count({
+     *   where: {
+     *     // ... the filter for the Customeruserfollows we want to count
+     *   }
+     * })
+    **/
+    count<T extends customeruserfollowCountArgs>(
+      args?: Subset<T, customeruserfollowCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CustomeruserfollowCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Customeruserfollow.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CustomeruserfollowAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CustomeruserfollowAggregateArgs>(args: Subset<T, CustomeruserfollowAggregateArgs>): Prisma.PrismaPromise<GetCustomeruserfollowAggregateType<T>>
+
+    /**
+     * Group by Customeruserfollow.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends customeruserfollowGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: customeruserfollowGroupByArgs['orderBy'] }
+        : { orderBy?: customeruserfollowGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, customeruserfollowGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCustomeruserfollowGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the customeruserfollow model
+   */
+  readonly fields: customeruserfollowFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for customeruserfollow.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__customeruserfollowClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends sysuserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, sysuserDefaultArgs<ExtArgs>>): Prisma__sysuserClient<$Result.GetResult<Prisma.$sysuserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    logs<T extends customeruserfollow$logsArgs<ExtArgs> = {}>(args?: Subset<T, customeruserfollow$logsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the customeruserfollow model
+   */
+  interface customeruserfollowFieldRefs {
+    readonly userId: FieldRef<"customeruserfollow", 'String'>
+    readonly lastFollowedAt: FieldRef<"customeruserfollow", 'DateTime'>
+    readonly nextFollowAt: FieldRef<"customeruserfollow", 'DateTime'>
+    readonly updatedAt: FieldRef<"customeruserfollow", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * customeruserfollow findUnique
+   */
+  export type customeruserfollowFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollow to fetch.
+     */
+    where: customeruserfollowWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollow findUniqueOrThrow
+   */
+  export type customeruserfollowFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollow to fetch.
+     */
+    where: customeruserfollowWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollow findFirst
+   */
+  export type customeruserfollowFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollow to fetch.
+     */
+    where?: customeruserfollowWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollows to fetch.
+     */
+    orderBy?: customeruserfollowOrderByWithRelationInput | customeruserfollowOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for customeruserfollows.
+     */
+    cursor?: customeruserfollowWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollows from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollows.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of customeruserfollows.
+     */
+    distinct?: CustomeruserfollowScalarFieldEnum | CustomeruserfollowScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollow findFirstOrThrow
+   */
+  export type customeruserfollowFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollow to fetch.
+     */
+    where?: customeruserfollowWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollows to fetch.
+     */
+    orderBy?: customeruserfollowOrderByWithRelationInput | customeruserfollowOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for customeruserfollows.
+     */
+    cursor?: customeruserfollowWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollows from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollows.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of customeruserfollows.
+     */
+    distinct?: CustomeruserfollowScalarFieldEnum | CustomeruserfollowScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollow findMany
+   */
+  export type customeruserfollowFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollows to fetch.
+     */
+    where?: customeruserfollowWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollows to fetch.
+     */
+    orderBy?: customeruserfollowOrderByWithRelationInput | customeruserfollowOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing customeruserfollows.
+     */
+    cursor?: customeruserfollowWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollows from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollows.
+     */
+    skip?: number
+    distinct?: CustomeruserfollowScalarFieldEnum | CustomeruserfollowScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollow create
+   */
+  export type customeruserfollowCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * The data needed to create a customeruserfollow.
+     */
+    data: XOR<customeruserfollowCreateInput, customeruserfollowUncheckedCreateInput>
+  }
+
+  /**
+   * customeruserfollow createMany
+   */
+  export type customeruserfollowCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many customeruserfollows.
+     */
+    data: customeruserfollowCreateManyInput | customeruserfollowCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * customeruserfollow update
+   */
+  export type customeruserfollowUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * The data needed to update a customeruserfollow.
+     */
+    data: XOR<customeruserfollowUpdateInput, customeruserfollowUncheckedUpdateInput>
+    /**
+     * Choose, which customeruserfollow to update.
+     */
+    where: customeruserfollowWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollow updateMany
+   */
+  export type customeruserfollowUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update customeruserfollows.
+     */
+    data: XOR<customeruserfollowUpdateManyMutationInput, customeruserfollowUncheckedUpdateManyInput>
+    /**
+     * Filter which customeruserfollows to update
+     */
+    where?: customeruserfollowWhereInput
+    /**
+     * Limit how many customeruserfollows to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * customeruserfollow upsert
+   */
+  export type customeruserfollowUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * The filter to search for the customeruserfollow to update in case it exists.
+     */
+    where: customeruserfollowWhereUniqueInput
+    /**
+     * In case the customeruserfollow found by the `where` argument doesn't exist, create a new customeruserfollow with this data.
+     */
+    create: XOR<customeruserfollowCreateInput, customeruserfollowUncheckedCreateInput>
+    /**
+     * In case the customeruserfollow was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<customeruserfollowUpdateInput, customeruserfollowUncheckedUpdateInput>
+  }
+
+  /**
+   * customeruserfollow delete
+   */
+  export type customeruserfollowDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+    /**
+     * Filter which customeruserfollow to delete.
+     */
+    where: customeruserfollowWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollow deleteMany
+   */
+  export type customeruserfollowDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which customeruserfollows to delete
+     */
+    where?: customeruserfollowWhereInput
+    /**
+     * Limit how many customeruserfollows to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * customeruserfollow.logs
+   */
+  export type customeruserfollow$logsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    where?: customeruserfollowlogWhereInput
+    orderBy?: customeruserfollowlogOrderByWithRelationInput | customeruserfollowlogOrderByWithRelationInput[]
+    cursor?: customeruserfollowlogWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: CustomeruserfollowlogScalarFieldEnum | CustomeruserfollowlogScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollow without action
+   */
+  export type customeruserfollowDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollow
+     */
+    select?: customeruserfollowSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollow
+     */
+    omit?: customeruserfollowOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model customeruserfollowlog
+   */
+
+  export type AggregateCustomeruserfollowlog = {
+    _count: CustomeruserfollowlogCountAggregateOutputType | null
+    _min: CustomeruserfollowlogMinAggregateOutputType | null
+    _max: CustomeruserfollowlogMaxAggregateOutputType | null
+  }
+
+  export type CustomeruserfollowlogMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    followedAt: Date | null
+  }
+
+  export type CustomeruserfollowlogMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    followedAt: Date | null
+  }
+
+  export type CustomeruserfollowlogCountAggregateOutputType = {
+    id: number
+    userId: number
+    followedAt: number
+    _all: number
+  }
+
+
+  export type CustomeruserfollowlogMinAggregateInputType = {
+    id?: true
+    userId?: true
+    followedAt?: true
+  }
+
+  export type CustomeruserfollowlogMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    followedAt?: true
+  }
+
+  export type CustomeruserfollowlogCountAggregateInputType = {
+    id?: true
+    userId?: true
+    followedAt?: true
+    _all?: true
+  }
+
+  export type CustomeruserfollowlogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which customeruserfollowlog to aggregate.
+     */
+    where?: customeruserfollowlogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollowlogs to fetch.
+     */
+    orderBy?: customeruserfollowlogOrderByWithRelationInput | customeruserfollowlogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: customeruserfollowlogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollowlogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollowlogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned customeruserfollowlogs
+    **/
+    _count?: true | CustomeruserfollowlogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CustomeruserfollowlogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CustomeruserfollowlogMaxAggregateInputType
+  }
+
+  export type GetCustomeruserfollowlogAggregateType<T extends CustomeruserfollowlogAggregateArgs> = {
+        [P in keyof T & keyof AggregateCustomeruserfollowlog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCustomeruserfollowlog[P]>
+      : GetScalarType<T[P], AggregateCustomeruserfollowlog[P]>
+  }
+
+
+
+
+  export type customeruserfollowlogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: customeruserfollowlogWhereInput
+    orderBy?: customeruserfollowlogOrderByWithAggregationInput | customeruserfollowlogOrderByWithAggregationInput[]
+    by: CustomeruserfollowlogScalarFieldEnum[] | CustomeruserfollowlogScalarFieldEnum
+    having?: customeruserfollowlogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CustomeruserfollowlogCountAggregateInputType | true
+    _min?: CustomeruserfollowlogMinAggregateInputType
+    _max?: CustomeruserfollowlogMaxAggregateInputType
+  }
+
+  export type CustomeruserfollowlogGroupByOutputType = {
+    id: string
+    userId: string
+    followedAt: Date
+    _count: CustomeruserfollowlogCountAggregateOutputType | null
+    _min: CustomeruserfollowlogMinAggregateOutputType | null
+    _max: CustomeruserfollowlogMaxAggregateOutputType | null
+  }
+
+  type GetCustomeruserfollowlogGroupByPayload<T extends customeruserfollowlogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CustomeruserfollowlogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CustomeruserfollowlogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CustomeruserfollowlogGroupByOutputType[P]>
+            : GetScalarType<T[P], CustomeruserfollowlogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type customeruserfollowlogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    followedAt?: boolean
+    follow?: boolean | customeruserfollowDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["customeruserfollowlog"]>
+
+
+
+  export type customeruserfollowlogSelectScalar = {
+    id?: boolean
+    userId?: boolean
+    followedAt?: boolean
+  }
+
+  export type customeruserfollowlogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "followedAt", ExtArgs["result"]["customeruserfollowlog"]>
+  export type customeruserfollowlogInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    follow?: boolean | customeruserfollowDefaultArgs<ExtArgs>
+  }
+
+  export type $customeruserfollowlogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "customeruserfollowlog"
+    objects: {
+      follow: Prisma.$customeruserfollowPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      followedAt: Date
+    }, ExtArgs["result"]["customeruserfollowlog"]>
+    composites: {}
+  }
+
+  type customeruserfollowlogGetPayload<S extends boolean | null | undefined | customeruserfollowlogDefaultArgs> = $Result.GetResult<Prisma.$customeruserfollowlogPayload, S>
+
+  type customeruserfollowlogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<customeruserfollowlogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CustomeruserfollowlogCountAggregateInputType | true
+    }
+
+  export interface customeruserfollowlogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['customeruserfollowlog'], meta: { name: 'customeruserfollowlog' } }
+    /**
+     * Find zero or one Customeruserfollowlog that matches the filter.
+     * @param {customeruserfollowlogFindUniqueArgs} args - Arguments to find a Customeruserfollowlog
+     * @example
+     * // Get one Customeruserfollowlog
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends customeruserfollowlogFindUniqueArgs>(args: SelectSubset<T, customeruserfollowlogFindUniqueArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Customeruserfollowlog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {customeruserfollowlogFindUniqueOrThrowArgs} args - Arguments to find a Customeruserfollowlog
+     * @example
+     * // Get one Customeruserfollowlog
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends customeruserfollowlogFindUniqueOrThrowArgs>(args: SelectSubset<T, customeruserfollowlogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Customeruserfollowlog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowlogFindFirstArgs} args - Arguments to find a Customeruserfollowlog
+     * @example
+     * // Get one Customeruserfollowlog
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends customeruserfollowlogFindFirstArgs>(args?: SelectSubset<T, customeruserfollowlogFindFirstArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Customeruserfollowlog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowlogFindFirstOrThrowArgs} args - Arguments to find a Customeruserfollowlog
+     * @example
+     * // Get one Customeruserfollowlog
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends customeruserfollowlogFindFirstOrThrowArgs>(args?: SelectSubset<T, customeruserfollowlogFindFirstOrThrowArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Customeruserfollowlogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowlogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Customeruserfollowlogs
+     * const customeruserfollowlogs = await prisma.customeruserfollowlog.findMany()
+     * 
+     * // Get first 10 Customeruserfollowlogs
+     * const customeruserfollowlogs = await prisma.customeruserfollowlog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const customeruserfollowlogWithIdOnly = await prisma.customeruserfollowlog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends customeruserfollowlogFindManyArgs>(args?: SelectSubset<T, customeruserfollowlogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Customeruserfollowlog.
+     * @param {customeruserfollowlogCreateArgs} args - Arguments to create a Customeruserfollowlog.
+     * @example
+     * // Create one Customeruserfollowlog
+     * const Customeruserfollowlog = await prisma.customeruserfollowlog.create({
+     *   data: {
+     *     // ... data to create a Customeruserfollowlog
+     *   }
+     * })
+     * 
+     */
+    create<T extends customeruserfollowlogCreateArgs>(args: SelectSubset<T, customeruserfollowlogCreateArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Customeruserfollowlogs.
+     * @param {customeruserfollowlogCreateManyArgs} args - Arguments to create many Customeruserfollowlogs.
+     * @example
+     * // Create many Customeruserfollowlogs
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends customeruserfollowlogCreateManyArgs>(args?: SelectSubset<T, customeruserfollowlogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a Customeruserfollowlog.
+     * @param {customeruserfollowlogDeleteArgs} args - Arguments to delete one Customeruserfollowlog.
+     * @example
+     * // Delete one Customeruserfollowlog
+     * const Customeruserfollowlog = await prisma.customeruserfollowlog.delete({
+     *   where: {
+     *     // ... filter to delete one Customeruserfollowlog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends customeruserfollowlogDeleteArgs>(args: SelectSubset<T, customeruserfollowlogDeleteArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Customeruserfollowlog.
+     * @param {customeruserfollowlogUpdateArgs} args - Arguments to update one Customeruserfollowlog.
+     * @example
+     * // Update one Customeruserfollowlog
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends customeruserfollowlogUpdateArgs>(args: SelectSubset<T, customeruserfollowlogUpdateArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Customeruserfollowlogs.
+     * @param {customeruserfollowlogDeleteManyArgs} args - Arguments to filter Customeruserfollowlogs to delete.
+     * @example
+     * // Delete a few Customeruserfollowlogs
+     * const { count } = await prisma.customeruserfollowlog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends customeruserfollowlogDeleteManyArgs>(args?: SelectSubset<T, customeruserfollowlogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Customeruserfollowlogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowlogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Customeruserfollowlogs
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends customeruserfollowlogUpdateManyArgs>(args: SelectSubset<T, customeruserfollowlogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one Customeruserfollowlog.
+     * @param {customeruserfollowlogUpsertArgs} args - Arguments to update or create a Customeruserfollowlog.
+     * @example
+     * // Update or create a Customeruserfollowlog
+     * const customeruserfollowlog = await prisma.customeruserfollowlog.upsert({
+     *   create: {
+     *     // ... data to create a Customeruserfollowlog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Customeruserfollowlog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends customeruserfollowlogUpsertArgs>(args: SelectSubset<T, customeruserfollowlogUpsertArgs<ExtArgs>>): Prisma__customeruserfollowlogClient<$Result.GetResult<Prisma.$customeruserfollowlogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Customeruserfollowlogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowlogCountArgs} args - Arguments to filter Customeruserfollowlogs to count.
+     * @example
+     * // Count the number of Customeruserfollowlogs
+     * const count = await prisma.customeruserfollowlog.count({
+     *   where: {
+     *     // ... the filter for the Customeruserfollowlogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends customeruserfollowlogCountArgs>(
+      args?: Subset<T, customeruserfollowlogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CustomeruserfollowlogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Customeruserfollowlog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CustomeruserfollowlogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CustomeruserfollowlogAggregateArgs>(args: Subset<T, CustomeruserfollowlogAggregateArgs>): Prisma.PrismaPromise<GetCustomeruserfollowlogAggregateType<T>>
+
+    /**
+     * Group by Customeruserfollowlog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {customeruserfollowlogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends customeruserfollowlogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: customeruserfollowlogGroupByArgs['orderBy'] }
+        : { orderBy?: customeruserfollowlogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, customeruserfollowlogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCustomeruserfollowlogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the customeruserfollowlog model
+   */
+  readonly fields: customeruserfollowlogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for customeruserfollowlog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__customeruserfollowlogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    follow<T extends customeruserfollowDefaultArgs<ExtArgs> = {}>(args?: Subset<T, customeruserfollowDefaultArgs<ExtArgs>>): Prisma__customeruserfollowClient<$Result.GetResult<Prisma.$customeruserfollowPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the customeruserfollowlog model
+   */
+  interface customeruserfollowlogFieldRefs {
+    readonly id: FieldRef<"customeruserfollowlog", 'String'>
+    readonly userId: FieldRef<"customeruserfollowlog", 'String'>
+    readonly followedAt: FieldRef<"customeruserfollowlog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * customeruserfollowlog findUnique
+   */
+  export type customeruserfollowlogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollowlog to fetch.
+     */
+    where: customeruserfollowlogWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollowlog findUniqueOrThrow
+   */
+  export type customeruserfollowlogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollowlog to fetch.
+     */
+    where: customeruserfollowlogWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollowlog findFirst
+   */
+  export type customeruserfollowlogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollowlog to fetch.
+     */
+    where?: customeruserfollowlogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollowlogs to fetch.
+     */
+    orderBy?: customeruserfollowlogOrderByWithRelationInput | customeruserfollowlogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for customeruserfollowlogs.
+     */
+    cursor?: customeruserfollowlogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollowlogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollowlogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of customeruserfollowlogs.
+     */
+    distinct?: CustomeruserfollowlogScalarFieldEnum | CustomeruserfollowlogScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollowlog findFirstOrThrow
+   */
+  export type customeruserfollowlogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollowlog to fetch.
+     */
+    where?: customeruserfollowlogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollowlogs to fetch.
+     */
+    orderBy?: customeruserfollowlogOrderByWithRelationInput | customeruserfollowlogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for customeruserfollowlogs.
+     */
+    cursor?: customeruserfollowlogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollowlogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollowlogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of customeruserfollowlogs.
+     */
+    distinct?: CustomeruserfollowlogScalarFieldEnum | CustomeruserfollowlogScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollowlog findMany
+   */
+  export type customeruserfollowlogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * Filter, which customeruserfollowlogs to fetch.
+     */
+    where?: customeruserfollowlogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of customeruserfollowlogs to fetch.
+     */
+    orderBy?: customeruserfollowlogOrderByWithRelationInput | customeruserfollowlogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing customeruserfollowlogs.
+     */
+    cursor?: customeruserfollowlogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` customeruserfollowlogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` customeruserfollowlogs.
+     */
+    skip?: number
+    distinct?: CustomeruserfollowlogScalarFieldEnum | CustomeruserfollowlogScalarFieldEnum[]
+  }
+
+  /**
+   * customeruserfollowlog create
+   */
+  export type customeruserfollowlogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * The data needed to create a customeruserfollowlog.
+     */
+    data: XOR<customeruserfollowlogCreateInput, customeruserfollowlogUncheckedCreateInput>
+  }
+
+  /**
+   * customeruserfollowlog createMany
+   */
+  export type customeruserfollowlogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many customeruserfollowlogs.
+     */
+    data: customeruserfollowlogCreateManyInput | customeruserfollowlogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * customeruserfollowlog update
+   */
+  export type customeruserfollowlogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * The data needed to update a customeruserfollowlog.
+     */
+    data: XOR<customeruserfollowlogUpdateInput, customeruserfollowlogUncheckedUpdateInput>
+    /**
+     * Choose, which customeruserfollowlog to update.
+     */
+    where: customeruserfollowlogWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollowlog updateMany
+   */
+  export type customeruserfollowlogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update customeruserfollowlogs.
+     */
+    data: XOR<customeruserfollowlogUpdateManyMutationInput, customeruserfollowlogUncheckedUpdateManyInput>
+    /**
+     * Filter which customeruserfollowlogs to update
+     */
+    where?: customeruserfollowlogWhereInput
+    /**
+     * Limit how many customeruserfollowlogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * customeruserfollowlog upsert
+   */
+  export type customeruserfollowlogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * The filter to search for the customeruserfollowlog to update in case it exists.
+     */
+    where: customeruserfollowlogWhereUniqueInput
+    /**
+     * In case the customeruserfollowlog found by the `where` argument doesn't exist, create a new customeruserfollowlog with this data.
+     */
+    create: XOR<customeruserfollowlogCreateInput, customeruserfollowlogUncheckedCreateInput>
+    /**
+     * In case the customeruserfollowlog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<customeruserfollowlogUpdateInput, customeruserfollowlogUncheckedUpdateInput>
+  }
+
+  /**
+   * customeruserfollowlog delete
+   */
+  export type customeruserfollowlogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+    /**
+     * Filter which customeruserfollowlog to delete.
+     */
+    where: customeruserfollowlogWhereUniqueInput
+  }
+
+  /**
+   * customeruserfollowlog deleteMany
+   */
+  export type customeruserfollowlogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which customeruserfollowlogs to delete
+     */
+    where?: customeruserfollowlogWhereInput
+    /**
+     * Limit how many customeruserfollowlogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * customeruserfollowlog without action
+   */
+  export type customeruserfollowlogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the customeruserfollowlog
+     */
+    select?: customeruserfollowlogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the customeruserfollowlog
+     */
+    omit?: customeruserfollowlogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: customeruserfollowlogInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -65347,6 +67467,7 @@ export namespace Prisma {
     code: 'code',
     color: 'color',
     description: 'description',
+    followIntervalDays: 'followIntervalDays',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -65688,6 +67809,25 @@ export namespace Prisma {
   };
 
   export type CustomerfollowlogScalarFieldEnum = (typeof CustomerfollowlogScalarFieldEnum)[keyof typeof CustomerfollowlogScalarFieldEnum]
+
+
+  export const CustomeruserfollowScalarFieldEnum: {
+    userId: 'userId',
+    lastFollowedAt: 'lastFollowedAt',
+    nextFollowAt: 'nextFollowAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type CustomeruserfollowScalarFieldEnum = (typeof CustomeruserfollowScalarFieldEnum)[keyof typeof CustomeruserfollowScalarFieldEnum]
+
+
+  export const CustomeruserfollowlogScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    followedAt: 'followedAt'
+  };
+
+  export type CustomeruserfollowlogScalarFieldEnum = (typeof CustomeruserfollowlogScalarFieldEnum)[keyof typeof CustomeruserfollowlogScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -66391,6 +68531,21 @@ export namespace Prisma {
   export type customerfollowlogOrderByRelevanceFieldEnum = (typeof customerfollowlogOrderByRelevanceFieldEnum)[keyof typeof customerfollowlogOrderByRelevanceFieldEnum]
 
 
+  export const customeruserfollowOrderByRelevanceFieldEnum: {
+    userId: 'userId'
+  };
+
+  export type customeruserfollowOrderByRelevanceFieldEnum = (typeof customeruserfollowOrderByRelevanceFieldEnum)[keyof typeof customeruserfollowOrderByRelevanceFieldEnum]
+
+
+  export const customeruserfollowlogOrderByRelevanceFieldEnum: {
+    id: 'id',
+    userId: 'userId'
+  };
+
+  export type customeruserfollowlogOrderByRelevanceFieldEnum = (typeof customeruserfollowlogOrderByRelevanceFieldEnum)[keyof typeof customeruserfollowlogOrderByRelevanceFieldEnum]
+
+
   /**
    * Field references
    */
@@ -66674,6 +68829,7 @@ export namespace Prisma {
     customOrders?: CustomorderListRelationFilter
     customerTags?: CustomertaglinkListRelationFilter
     communicationLogs?: CustomercommunicationListRelationFilter
+    userFollow?: XOR<CustomeruserfollowNullableScalarRelationFilter, customeruserfollowWhereInput> | null
   }
 
   export type sysuserOrderByWithRelationInput = {
@@ -66717,6 +68873,7 @@ export namespace Prisma {
     customOrders?: customorderOrderByRelationAggregateInput
     customerTags?: customertaglinkOrderByRelationAggregateInput
     communicationLogs?: customercommunicationOrderByRelationAggregateInput
+    userFollow?: customeruserfollowOrderByWithRelationInput
     _relevance?: sysuserOrderByRelevanceInput
   }
 
@@ -66764,6 +68921,7 @@ export namespace Prisma {
     customOrders?: CustomorderListRelationFilter
     customerTags?: CustomertaglinkListRelationFilter
     communicationLogs?: CustomercommunicationListRelationFilter
+    userFollow?: XOR<CustomeruserfollowNullableScalarRelationFilter, customeruserfollowWhereInput> | null
   }, "id" | "account" | "email">
 
   export type sysuserOrderByWithAggregationInput = {
@@ -70029,6 +72187,7 @@ export namespace Prisma {
     code?: StringFilter<"customertag"> | string
     color?: StringNullableFilter<"customertag"> | string | null
     description?: StringNullableFilter<"customertag"> | string | null
+    followIntervalDays?: IntFilter<"customertag"> | number
     createdAt?: DateTimeFilter<"customertag"> | Date | string
     updatedAt?: DateTimeFilter<"customertag"> | Date | string
     userLinks?: CustomertaglinkListRelationFilter
@@ -70040,6 +72199,7 @@ export namespace Prisma {
     code?: SortOrder
     color?: SortOrderInput | SortOrder
     description?: SortOrderInput | SortOrder
+    followIntervalDays?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     userLinks?: customertaglinkOrderByRelationAggregateInput
@@ -70055,6 +72215,7 @@ export namespace Prisma {
     name?: StringFilter<"customertag"> | string
     color?: StringNullableFilter<"customertag"> | string | null
     description?: StringNullableFilter<"customertag"> | string | null
+    followIntervalDays?: IntFilter<"customertag"> | number
     createdAt?: DateTimeFilter<"customertag"> | Date | string
     updatedAt?: DateTimeFilter<"customertag"> | Date | string
     userLinks?: CustomertaglinkListRelationFilter
@@ -70066,11 +72227,14 @@ export namespace Prisma {
     code?: SortOrder
     color?: SortOrderInput | SortOrder
     description?: SortOrderInput | SortOrder
+    followIntervalDays?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: customertagCountOrderByAggregateInput
+    _avg?: customertagAvgOrderByAggregateInput
     _max?: customertagMaxOrderByAggregateInput
     _min?: customertagMinOrderByAggregateInput
+    _sum?: customertagSumOrderByAggregateInput
   }
 
   export type customertagScalarWhereWithAggregatesInput = {
@@ -70082,6 +72246,7 @@ export namespace Prisma {
     code?: StringWithAggregatesFilter<"customertag"> | string
     color?: StringNullableWithAggregatesFilter<"customertag"> | string | null
     description?: StringNullableWithAggregatesFilter<"customertag"> | string | null
+    followIntervalDays?: IntWithAggregatesFilter<"customertag"> | number
     createdAt?: DateTimeWithAggregatesFilter<"customertag"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"customertag"> | Date | string
   }
@@ -71840,6 +74005,106 @@ export namespace Prisma {
     note?: StringNullableWithAggregatesFilter<"customerfollowlog"> | string | null
   }
 
+  export type customeruserfollowWhereInput = {
+    AND?: customeruserfollowWhereInput | customeruserfollowWhereInput[]
+    OR?: customeruserfollowWhereInput[]
+    NOT?: customeruserfollowWhereInput | customeruserfollowWhereInput[]
+    userId?: StringFilter<"customeruserfollow"> | string
+    lastFollowedAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
+    nextFollowAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
+    updatedAt?: DateTimeFilter<"customeruserfollow"> | Date | string
+    user?: XOR<SysuserScalarRelationFilter, sysuserWhereInput>
+    logs?: CustomeruserfollowlogListRelationFilter
+  }
+
+  export type customeruserfollowOrderByWithRelationInput = {
+    userId?: SortOrder
+    lastFollowedAt?: SortOrderInput | SortOrder
+    nextFollowAt?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
+    user?: sysuserOrderByWithRelationInput
+    logs?: customeruserfollowlogOrderByRelationAggregateInput
+    _relevance?: customeruserfollowOrderByRelevanceInput
+  }
+
+  export type customeruserfollowWhereUniqueInput = Prisma.AtLeast<{
+    userId?: string
+    AND?: customeruserfollowWhereInput | customeruserfollowWhereInput[]
+    OR?: customeruserfollowWhereInput[]
+    NOT?: customeruserfollowWhereInput | customeruserfollowWhereInput[]
+    lastFollowedAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
+    nextFollowAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
+    updatedAt?: DateTimeFilter<"customeruserfollow"> | Date | string
+    user?: XOR<SysuserScalarRelationFilter, sysuserWhereInput>
+    logs?: CustomeruserfollowlogListRelationFilter
+  }, "userId">
+
+  export type customeruserfollowOrderByWithAggregationInput = {
+    userId?: SortOrder
+    lastFollowedAt?: SortOrderInput | SortOrder
+    nextFollowAt?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
+    _count?: customeruserfollowCountOrderByAggregateInput
+    _max?: customeruserfollowMaxOrderByAggregateInput
+    _min?: customeruserfollowMinOrderByAggregateInput
+  }
+
+  export type customeruserfollowScalarWhereWithAggregatesInput = {
+    AND?: customeruserfollowScalarWhereWithAggregatesInput | customeruserfollowScalarWhereWithAggregatesInput[]
+    OR?: customeruserfollowScalarWhereWithAggregatesInput[]
+    NOT?: customeruserfollowScalarWhereWithAggregatesInput | customeruserfollowScalarWhereWithAggregatesInput[]
+    userId?: StringWithAggregatesFilter<"customeruserfollow"> | string
+    lastFollowedAt?: DateTimeNullableWithAggregatesFilter<"customeruserfollow"> | Date | string | null
+    nextFollowAt?: DateTimeNullableWithAggregatesFilter<"customeruserfollow"> | Date | string | null
+    updatedAt?: DateTimeWithAggregatesFilter<"customeruserfollow"> | Date | string
+  }
+
+  export type customeruserfollowlogWhereInput = {
+    AND?: customeruserfollowlogWhereInput | customeruserfollowlogWhereInput[]
+    OR?: customeruserfollowlogWhereInput[]
+    NOT?: customeruserfollowlogWhereInput | customeruserfollowlogWhereInput[]
+    id?: StringFilter<"customeruserfollowlog"> | string
+    userId?: StringFilter<"customeruserfollowlog"> | string
+    followedAt?: DateTimeFilter<"customeruserfollowlog"> | Date | string
+    follow?: XOR<CustomeruserfollowScalarRelationFilter, customeruserfollowWhereInput>
+  }
+
+  export type customeruserfollowlogOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    followedAt?: SortOrder
+    follow?: customeruserfollowOrderByWithRelationInput
+    _relevance?: customeruserfollowlogOrderByRelevanceInput
+  }
+
+  export type customeruserfollowlogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: customeruserfollowlogWhereInput | customeruserfollowlogWhereInput[]
+    OR?: customeruserfollowlogWhereInput[]
+    NOT?: customeruserfollowlogWhereInput | customeruserfollowlogWhereInput[]
+    userId?: StringFilter<"customeruserfollowlog"> | string
+    followedAt?: DateTimeFilter<"customeruserfollowlog"> | Date | string
+    follow?: XOR<CustomeruserfollowScalarRelationFilter, customeruserfollowWhereInput>
+  }, "id">
+
+  export type customeruserfollowlogOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    followedAt?: SortOrder
+    _count?: customeruserfollowlogCountOrderByAggregateInput
+    _max?: customeruserfollowlogMaxOrderByAggregateInput
+    _min?: customeruserfollowlogMinOrderByAggregateInput
+  }
+
+  export type customeruserfollowlogScalarWhereWithAggregatesInput = {
+    AND?: customeruserfollowlogScalarWhereWithAggregatesInput | customeruserfollowlogScalarWhereWithAggregatesInput[]
+    OR?: customeruserfollowlogScalarWhereWithAggregatesInput[]
+    NOT?: customeruserfollowlogScalarWhereWithAggregatesInput | customeruserfollowlogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"customeruserfollowlog"> | string
+    userId?: StringWithAggregatesFilter<"customeruserfollowlog"> | string
+    followedAt?: DateTimeWithAggregatesFilter<"customeruserfollowlog"> | Date | string
+  }
+
   export type sysuserCreateInput = {
     id?: string
     account: string
@@ -71881,6 +74146,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateInput = {
@@ -71924,6 +74190,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUpdateInput = {
@@ -71967,6 +74234,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateInput = {
@@ -72010,6 +74278,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserCreateManyInput = {
@@ -75738,6 +78007,7 @@ export namespace Prisma {
     code: string
     color?: string | null
     description?: string | null
+    followIntervalDays?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     userLinks?: customertaglinkCreateNestedManyWithoutTagInput
@@ -75749,6 +78019,7 @@ export namespace Prisma {
     code: string
     color?: string | null
     description?: string | null
+    followIntervalDays?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     userLinks?: customertaglinkUncheckedCreateNestedManyWithoutTagInput
@@ -75760,6 +78031,7 @@ export namespace Prisma {
     code?: StringFieldUpdateOperationsInput | string
     color?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    followIntervalDays?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     userLinks?: customertaglinkUpdateManyWithoutTagNestedInput
@@ -75771,6 +78043,7 @@ export namespace Prisma {
     code?: StringFieldUpdateOperationsInput | string
     color?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    followIntervalDays?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     userLinks?: customertaglinkUncheckedUpdateManyWithoutTagNestedInput
@@ -75782,6 +78055,7 @@ export namespace Prisma {
     code: string
     color?: string | null
     description?: string | null
+    followIntervalDays?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -75792,6 +78066,7 @@ export namespace Prisma {
     code?: StringFieldUpdateOperationsInput | string
     color?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    followIntervalDays?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -75802,6 +78077,7 @@ export namespace Prisma {
     code?: StringFieldUpdateOperationsInput | string
     color?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    followIntervalDays?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -77667,6 +79943,99 @@ export namespace Prisma {
     note?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
+  export type customeruserfollowCreateInput = {
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+    user: sysuserCreateNestedOneWithoutUserFollowInput
+    logs?: customeruserfollowlogCreateNestedManyWithoutFollowInput
+  }
+
+  export type customeruserfollowUncheckedCreateInput = {
+    userId: string
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+    logs?: customeruserfollowlogUncheckedCreateNestedManyWithoutFollowInput
+  }
+
+  export type customeruserfollowUpdateInput = {
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: sysuserUpdateOneRequiredWithoutUserFollowNestedInput
+    logs?: customeruserfollowlogUpdateManyWithoutFollowNestedInput
+  }
+
+  export type customeruserfollowUncheckedUpdateInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    logs?: customeruserfollowlogUncheckedUpdateManyWithoutFollowNestedInput
+  }
+
+  export type customeruserfollowCreateManyInput = {
+    userId: string
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type customeruserfollowUpdateManyMutationInput = {
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customeruserfollowUncheckedUpdateManyInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customeruserfollowlogCreateInput = {
+    id: string
+    followedAt?: Date | string
+    follow: customeruserfollowCreateNestedOneWithoutLogsInput
+  }
+
+  export type customeruserfollowlogUncheckedCreateInput = {
+    id: string
+    userId: string
+    followedAt?: Date | string
+  }
+
+  export type customeruserfollowlogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    follow?: customeruserfollowUpdateOneRequiredWithoutLogsNestedInput
+  }
+
+  export type customeruserfollowlogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customeruserfollowlogCreateManyInput = {
+    id: string
+    userId: string
+    followedAt?: Date | string
+  }
+
+  export type customeruserfollowlogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customeruserfollowlogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -77848,6 +80217,11 @@ export namespace Prisma {
     every?: customercommunicationWhereInput
     some?: customercommunicationWhereInput
     none?: customercommunicationWhereInput
+  }
+
+  export type CustomeruserfollowNullableScalarRelationFilter = {
+    is?: customeruserfollowWhereInput | null
+    isNot?: customeruserfollowWhereInput | null
   }
 
   export type SortOrderInput = {
@@ -80827,8 +83201,13 @@ export namespace Prisma {
     code?: SortOrder
     color?: SortOrder
     description?: SortOrder
+    followIntervalDays?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type customertagAvgOrderByAggregateInput = {
+    followIntervalDays?: SortOrder
   }
 
   export type customertagMaxOrderByAggregateInput = {
@@ -80837,6 +83216,7 @@ export namespace Prisma {
     code?: SortOrder
     color?: SortOrder
     description?: SortOrder
+    followIntervalDays?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -80847,8 +83227,13 @@ export namespace Prisma {
     code?: SortOrder
     color?: SortOrder
     description?: SortOrder
+    followIntervalDays?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type customertagSumOrderByAggregateInput = {
+    followIntervalDays?: SortOrder
   }
 
   export type CustomertagScalarRelationFilter = {
@@ -82097,6 +84482,72 @@ export namespace Prisma {
     note?: SortOrder
   }
 
+  export type CustomeruserfollowlogListRelationFilter = {
+    every?: customeruserfollowlogWhereInput
+    some?: customeruserfollowlogWhereInput
+    none?: customeruserfollowlogWhereInput
+  }
+
+  export type customeruserfollowlogOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type customeruserfollowOrderByRelevanceInput = {
+    fields: customeruserfollowOrderByRelevanceFieldEnum | customeruserfollowOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type customeruserfollowCountOrderByAggregateInput = {
+    userId?: SortOrder
+    lastFollowedAt?: SortOrder
+    nextFollowAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type customeruserfollowMaxOrderByAggregateInput = {
+    userId?: SortOrder
+    lastFollowedAt?: SortOrder
+    nextFollowAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type customeruserfollowMinOrderByAggregateInput = {
+    userId?: SortOrder
+    lastFollowedAt?: SortOrder
+    nextFollowAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CustomeruserfollowScalarRelationFilter = {
+    is?: customeruserfollowWhereInput
+    isNot?: customeruserfollowWhereInput
+  }
+
+  export type customeruserfollowlogOrderByRelevanceInput = {
+    fields: customeruserfollowlogOrderByRelevanceFieldEnum | customeruserfollowlogOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type customeruserfollowlogCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    followedAt?: SortOrder
+  }
+
+  export type customeruserfollowlogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    followedAt?: SortOrder
+  }
+
+  export type customeruserfollowlogMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    followedAt?: SortOrder
+  }
+
   export type cartCreateNestedManyWithoutAccountInput = {
     create?: XOR<cartCreateWithoutAccountInput, cartUncheckedCreateWithoutAccountInput> | cartCreateWithoutAccountInput[] | cartUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
@@ -82181,6 +84632,12 @@ export namespace Prisma {
     connect?: customercommunicationWhereUniqueInput | customercommunicationWhereUniqueInput[]
   }
 
+  export type customeruserfollowCreateNestedOneWithoutUserInput = {
+    create?: XOR<customeruserfollowCreateWithoutUserInput, customeruserfollowUncheckedCreateWithoutUserInput>
+    connectOrCreate?: customeruserfollowCreateOrConnectWithoutUserInput
+    connect?: customeruserfollowWhereUniqueInput
+  }
+
   export type cartUncheckedCreateNestedManyWithoutAccountInput = {
     create?: XOR<cartCreateWithoutAccountInput, cartUncheckedCreateWithoutAccountInput> | cartCreateWithoutAccountInput[] | cartUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
@@ -82263,6 +84720,12 @@ export namespace Prisma {
     connectOrCreate?: customercommunicationCreateOrConnectWithoutUserInput | customercommunicationCreateOrConnectWithoutUserInput[]
     createMany?: customercommunicationCreateManyUserInputEnvelope
     connect?: customercommunicationWhereUniqueInput | customercommunicationWhereUniqueInput[]
+  }
+
+  export type customeruserfollowUncheckedCreateNestedOneWithoutUserInput = {
+    create?: XOR<customeruserfollowCreateWithoutUserInput, customeruserfollowUncheckedCreateWithoutUserInput>
+    connectOrCreate?: customeruserfollowCreateOrConnectWithoutUserInput
+    connect?: customeruserfollowWhereUniqueInput
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -82473,6 +84936,16 @@ export namespace Prisma {
     deleteMany?: customercommunicationScalarWhereInput | customercommunicationScalarWhereInput[]
   }
 
+  export type customeruserfollowUpdateOneWithoutUserNestedInput = {
+    create?: XOR<customeruserfollowCreateWithoutUserInput, customeruserfollowUncheckedCreateWithoutUserInput>
+    connectOrCreate?: customeruserfollowCreateOrConnectWithoutUserInput
+    upsert?: customeruserfollowUpsertWithoutUserInput
+    disconnect?: customeruserfollowWhereInput | boolean
+    delete?: customeruserfollowWhereInput | boolean
+    connect?: customeruserfollowWhereUniqueInput
+    update?: XOR<XOR<customeruserfollowUpdateToOneWithWhereWithoutUserInput, customeruserfollowUpdateWithoutUserInput>, customeruserfollowUncheckedUpdateWithoutUserInput>
+  }
+
   export type cartUncheckedUpdateManyWithoutAccountNestedInput = {
     create?: XOR<cartCreateWithoutAccountInput, cartUncheckedCreateWithoutAccountInput> | cartCreateWithoutAccountInput[] | cartUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: cartCreateOrConnectWithoutAccountInput | cartCreateOrConnectWithoutAccountInput[]
@@ -82639,6 +85112,16 @@ export namespace Prisma {
     update?: customercommunicationUpdateWithWhereUniqueWithoutUserInput | customercommunicationUpdateWithWhereUniqueWithoutUserInput[]
     updateMany?: customercommunicationUpdateManyWithWhereWithoutUserInput | customercommunicationUpdateManyWithWhereWithoutUserInput[]
     deleteMany?: customercommunicationScalarWhereInput | customercommunicationScalarWhereInput[]
+  }
+
+  export type customeruserfollowUncheckedUpdateOneWithoutUserNestedInput = {
+    create?: XOR<customeruserfollowCreateWithoutUserInput, customeruserfollowUncheckedCreateWithoutUserInput>
+    connectOrCreate?: customeruserfollowCreateOrConnectWithoutUserInput
+    upsert?: customeruserfollowUpsertWithoutUserInput
+    disconnect?: customeruserfollowWhereInput | boolean
+    delete?: customeruserfollowWhereInput | boolean
+    connect?: customeruserfollowWhereUniqueInput
+    update?: XOR<XOR<customeruserfollowUpdateToOneWithWhereWithoutUserInput, customeruserfollowUpdateWithoutUserInput>, customeruserfollowUncheckedUpdateWithoutUserInput>
   }
 
   export type categoryCreateNestedOneWithoutChildrenInput = {
@@ -85855,6 +88338,76 @@ export namespace Prisma {
     update?: XOR<XOR<customerfollowupUpdateToOneWithWhereWithoutLogsInput, customerfollowupUpdateWithoutLogsInput>, customerfollowupUncheckedUpdateWithoutLogsInput>
   }
 
+  export type sysuserCreateNestedOneWithoutUserFollowInput = {
+    create?: XOR<sysuserCreateWithoutUserFollowInput, sysuserUncheckedCreateWithoutUserFollowInput>
+    connectOrCreate?: sysuserCreateOrConnectWithoutUserFollowInput
+    connect?: sysuserWhereUniqueInput
+  }
+
+  export type customeruserfollowlogCreateNestedManyWithoutFollowInput = {
+    create?: XOR<customeruserfollowlogCreateWithoutFollowInput, customeruserfollowlogUncheckedCreateWithoutFollowInput> | customeruserfollowlogCreateWithoutFollowInput[] | customeruserfollowlogUncheckedCreateWithoutFollowInput[]
+    connectOrCreate?: customeruserfollowlogCreateOrConnectWithoutFollowInput | customeruserfollowlogCreateOrConnectWithoutFollowInput[]
+    createMany?: customeruserfollowlogCreateManyFollowInputEnvelope
+    connect?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+  }
+
+  export type customeruserfollowlogUncheckedCreateNestedManyWithoutFollowInput = {
+    create?: XOR<customeruserfollowlogCreateWithoutFollowInput, customeruserfollowlogUncheckedCreateWithoutFollowInput> | customeruserfollowlogCreateWithoutFollowInput[] | customeruserfollowlogUncheckedCreateWithoutFollowInput[]
+    connectOrCreate?: customeruserfollowlogCreateOrConnectWithoutFollowInput | customeruserfollowlogCreateOrConnectWithoutFollowInput[]
+    createMany?: customeruserfollowlogCreateManyFollowInputEnvelope
+    connect?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+  }
+
+  export type sysuserUpdateOneRequiredWithoutUserFollowNestedInput = {
+    create?: XOR<sysuserCreateWithoutUserFollowInput, sysuserUncheckedCreateWithoutUserFollowInput>
+    connectOrCreate?: sysuserCreateOrConnectWithoutUserFollowInput
+    upsert?: sysuserUpsertWithoutUserFollowInput
+    connect?: sysuserWhereUniqueInput
+    update?: XOR<XOR<sysuserUpdateToOneWithWhereWithoutUserFollowInput, sysuserUpdateWithoutUserFollowInput>, sysuserUncheckedUpdateWithoutUserFollowInput>
+  }
+
+  export type customeruserfollowlogUpdateManyWithoutFollowNestedInput = {
+    create?: XOR<customeruserfollowlogCreateWithoutFollowInput, customeruserfollowlogUncheckedCreateWithoutFollowInput> | customeruserfollowlogCreateWithoutFollowInput[] | customeruserfollowlogUncheckedCreateWithoutFollowInput[]
+    connectOrCreate?: customeruserfollowlogCreateOrConnectWithoutFollowInput | customeruserfollowlogCreateOrConnectWithoutFollowInput[]
+    upsert?: customeruserfollowlogUpsertWithWhereUniqueWithoutFollowInput | customeruserfollowlogUpsertWithWhereUniqueWithoutFollowInput[]
+    createMany?: customeruserfollowlogCreateManyFollowInputEnvelope
+    set?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    disconnect?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    delete?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    connect?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    update?: customeruserfollowlogUpdateWithWhereUniqueWithoutFollowInput | customeruserfollowlogUpdateWithWhereUniqueWithoutFollowInput[]
+    updateMany?: customeruserfollowlogUpdateManyWithWhereWithoutFollowInput | customeruserfollowlogUpdateManyWithWhereWithoutFollowInput[]
+    deleteMany?: customeruserfollowlogScalarWhereInput | customeruserfollowlogScalarWhereInput[]
+  }
+
+  export type customeruserfollowlogUncheckedUpdateManyWithoutFollowNestedInput = {
+    create?: XOR<customeruserfollowlogCreateWithoutFollowInput, customeruserfollowlogUncheckedCreateWithoutFollowInput> | customeruserfollowlogCreateWithoutFollowInput[] | customeruserfollowlogUncheckedCreateWithoutFollowInput[]
+    connectOrCreate?: customeruserfollowlogCreateOrConnectWithoutFollowInput | customeruserfollowlogCreateOrConnectWithoutFollowInput[]
+    upsert?: customeruserfollowlogUpsertWithWhereUniqueWithoutFollowInput | customeruserfollowlogUpsertWithWhereUniqueWithoutFollowInput[]
+    createMany?: customeruserfollowlogCreateManyFollowInputEnvelope
+    set?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    disconnect?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    delete?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    connect?: customeruserfollowlogWhereUniqueInput | customeruserfollowlogWhereUniqueInput[]
+    update?: customeruserfollowlogUpdateWithWhereUniqueWithoutFollowInput | customeruserfollowlogUpdateWithWhereUniqueWithoutFollowInput[]
+    updateMany?: customeruserfollowlogUpdateManyWithWhereWithoutFollowInput | customeruserfollowlogUpdateManyWithWhereWithoutFollowInput[]
+    deleteMany?: customeruserfollowlogScalarWhereInput | customeruserfollowlogScalarWhereInput[]
+  }
+
+  export type customeruserfollowCreateNestedOneWithoutLogsInput = {
+    create?: XOR<customeruserfollowCreateWithoutLogsInput, customeruserfollowUncheckedCreateWithoutLogsInput>
+    connectOrCreate?: customeruserfollowCreateOrConnectWithoutLogsInput
+    connect?: customeruserfollowWhereUniqueInput
+  }
+
+  export type customeruserfollowUpdateOneRequiredWithoutLogsNestedInput = {
+    create?: XOR<customeruserfollowCreateWithoutLogsInput, customeruserfollowUncheckedCreateWithoutLogsInput>
+    connectOrCreate?: customeruserfollowCreateOrConnectWithoutLogsInput
+    upsert?: customeruserfollowUpsertWithoutLogsInput
+    connect?: customeruserfollowWhereUniqueInput
+    update?: XOR<XOR<customeruserfollowUpdateToOneWithWhereWithoutLogsInput, customeruserfollowUpdateWithoutLogsInput>, customeruserfollowUncheckedUpdateWithoutLogsInput>
+  }
+
   export type NestedStringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -87136,6 +89689,25 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type customeruserfollowCreateWithoutUserInput = {
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+    logs?: customeruserfollowlogCreateNestedManyWithoutFollowInput
+  }
+
+  export type customeruserfollowUncheckedCreateWithoutUserInput = {
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+    logs?: customeruserfollowlogUncheckedCreateNestedManyWithoutFollowInput
+  }
+
+  export type customeruserfollowCreateOrConnectWithoutUserInput = {
+    where: customeruserfollowWhereUniqueInput
+    create: XOR<customeruserfollowCreateWithoutUserInput, customeruserfollowUncheckedCreateWithoutUserInput>
+  }
+
   export type cartUpsertWithWhereUniqueWithoutAccountInput = {
     where: cartWhereUniqueInput
     update: XOR<cartUpdateWithoutAccountInput, cartUncheckedUpdateWithoutAccountInput>
@@ -87566,6 +90138,31 @@ export namespace Prisma {
     content?: StringFilter<"customercommunication"> | string
     operatorName?: StringNullableFilter<"customercommunication"> | string | null
     createdAt?: DateTimeFilter<"customercommunication"> | Date | string
+  }
+
+  export type customeruserfollowUpsertWithoutUserInput = {
+    update: XOR<customeruserfollowUpdateWithoutUserInput, customeruserfollowUncheckedUpdateWithoutUserInput>
+    create: XOR<customeruserfollowCreateWithoutUserInput, customeruserfollowUncheckedCreateWithoutUserInput>
+    where?: customeruserfollowWhereInput
+  }
+
+  export type customeruserfollowUpdateToOneWithWhereWithoutUserInput = {
+    where?: customeruserfollowWhereInput
+    data: XOR<customeruserfollowUpdateWithoutUserInput, customeruserfollowUncheckedUpdateWithoutUserInput>
+  }
+
+  export type customeruserfollowUpdateWithoutUserInput = {
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    logs?: customeruserfollowlogUpdateManyWithoutFollowNestedInput
+  }
+
+  export type customeruserfollowUncheckedUpdateWithoutUserInput = {
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    logs?: customeruserfollowlogUncheckedUpdateManyWithoutFollowNestedInput
   }
 
   export type categoryCreateWithoutChildrenInput = {
@@ -90563,6 +93160,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutCartsInput = {
@@ -90605,6 +93203,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutCartsInput = {
@@ -90703,6 +93302,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutCartsInput = {
@@ -90745,6 +93345,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type cartitemUpsertWithWhereUniqueWithoutCartInput = {
@@ -91283,6 +93884,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutImportTasksInput = {
@@ -91325,6 +93927,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutImportTasksInput = {
@@ -91479,6 +94082,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutImportTasksInput = {
@@ -91521,6 +94125,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type importtaskitemUpsertWithWhereUniqueWithoutImportTaskInput = {
@@ -91632,6 +94237,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutImportTaskItemsInput = {
@@ -91674,6 +94280,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutImportTaskItemsInput = {
@@ -91934,6 +94541,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutImportTaskItemsInput = {
@@ -91976,6 +94584,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type productUpsertWithoutImportTaskItemsInput = {
@@ -92167,6 +94776,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutAddressesInput = {
@@ -92209,6 +94819,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutAddressesInput = {
@@ -92341,6 +94952,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutAddressesInput = {
@@ -92383,6 +94995,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type orderrecordUpsertWithWhereUniqueWithoutAddressInput = {
@@ -92441,6 +95054,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutWishlistsInput = {
@@ -92483,6 +95097,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutWishlistsInput = {
@@ -92684,6 +95299,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutWishlistsInput = {
@@ -92726,6 +95342,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type productUpsertWithoutWishlistItemsInput = {
@@ -94710,6 +97327,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutOrdersInput = {
@@ -94752,6 +97370,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutOrdersInput = {
@@ -95050,6 +97669,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutOrdersInput = {
@@ -95092,6 +97712,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type useraddressUpsertWithoutOrdersInput = {
@@ -96045,6 +98666,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutReviewsInput = {
@@ -96087,6 +98709,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutReviewsInput = {
@@ -96363,6 +98986,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutReviewsInput = {
@@ -96405,6 +99029,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type orderrecordUpsertWithoutReviewsInput = {
@@ -96522,6 +99147,7 @@ export namespace Prisma {
     tickets?: customerticketCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutCustomOrdersInput = {
@@ -96564,6 +99190,7 @@ export namespace Prisma {
     tickets?: customerticketUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutCustomOrdersInput = {
@@ -96877,6 +99504,7 @@ export namespace Prisma {
     tickets?: customerticketUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutCustomOrdersInput = {
@@ -96919,6 +99547,7 @@ export namespace Prisma {
     tickets?: customerticketUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type productUpsertWithoutCustomOrdersInput = {
@@ -97234,6 +99863,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutTicketsInput = {
@@ -97276,6 +99906,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutTicketsInput = {
@@ -97334,6 +99965,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutTicketsInput = {
@@ -97376,6 +100008,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type productCreateWithoutCategoryLinksInput = {
@@ -98458,6 +101091,7 @@ export namespace Prisma {
     tickets?: customerticketCreateNestedManyWithoutUserInput
     customOrders?: customorderCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutCustomerTagsInput = {
@@ -98500,6 +101134,7 @@ export namespace Prisma {
     tickets?: customerticketUncheckedCreateNestedManyWithoutUserInput
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutCustomerTagsInput = {
@@ -98513,6 +101148,7 @@ export namespace Prisma {
     code: string
     color?: string | null
     description?: string | null
+    followIntervalDays?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -98523,6 +101159,7 @@ export namespace Prisma {
     code: string
     color?: string | null
     description?: string | null
+    followIntervalDays?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -98583,6 +101220,7 @@ export namespace Prisma {
     tickets?: customerticketUpdateManyWithoutUserNestedInput
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutCustomerTagsInput = {
@@ -98625,6 +101263,7 @@ export namespace Prisma {
     tickets?: customerticketUncheckedUpdateManyWithoutUserNestedInput
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type customertagUpsertWithoutUserLinksInput = {
@@ -98644,6 +101283,7 @@ export namespace Prisma {
     code?: StringFieldUpdateOperationsInput | string
     color?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    followIntervalDays?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -98654,6 +101294,7 @@ export namespace Prisma {
     code?: StringFieldUpdateOperationsInput | string
     color?: NullableStringFieldUpdateOperationsInput | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
+    followIntervalDays?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -98698,6 +101339,7 @@ export namespace Prisma {
     tickets?: customerticketCreateNestedManyWithoutUserInput
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutCommunicationLogsInput = {
@@ -98740,6 +101382,7 @@ export namespace Prisma {
     tickets?: customerticketUncheckedCreateNestedManyWithoutUserInput
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutCommunicationLogsInput = {
@@ -98798,6 +101441,7 @@ export namespace Prisma {
     tickets?: customerticketUpdateManyWithoutUserNestedInput
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutCommunicationLogsInput = {
@@ -98840,6 +101484,7 @@ export namespace Prisma {
     tickets?: customerticketUncheckedUpdateManyWithoutUserNestedInput
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type orderrecordCreateWithoutLogisticsInput = {
@@ -101479,6 +104124,7 @@ export namespace Prisma {
     customOrders?: customorderCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowCreateNestedOneWithoutUserInput
   }
 
   export type sysuserUncheckedCreateWithoutBalanceEntriesInput = {
@@ -101521,6 +104167,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
     customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
     communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+    userFollow?: customeruserfollowUncheckedCreateNestedOneWithoutUserInput
   }
 
   export type sysuserCreateOrConnectWithoutBalanceEntriesInput = {
@@ -101579,6 +104226,7 @@ export namespace Prisma {
     customOrders?: customorderUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUpdateOneWithoutUserNestedInput
   }
 
   export type sysuserUncheckedUpdateWithoutBalanceEntriesInput = {
@@ -101621,6 +104269,7 @@ export namespace Prisma {
     customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
     customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
     communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+    userFollow?: customeruserfollowUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type customerfollowlogCreateWithoutCustomerInput = {
@@ -101732,6 +104381,283 @@ export namespace Prisma {
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type sysuserCreateWithoutUserFollowInput = {
+    id?: string
+    account: string
+    password: string
+    passwordPlain?: string | null
+    email: string
+    role: $Enums.userrole
+    status?: $Enums.userstatus
+    username: string
+    avatarUrl?: string | null
+    phone?: string | null
+    preferredCurrency?: string | null
+    preferredLocale?: string | null
+    countryCode?: string | null
+    countryName?: string | null
+    purchaseCount?: number
+    adminNote?: string | null
+    customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
+    ringSizeUs?: string | null
+    ringSizeEu?: string | null
+    braceletSize?: string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    carts?: cartCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryCreateNestedManyWithoutUserInput
+    importTasks?: importtaskCreateNestedManyWithoutCreatorInput
+    importTaskItems?: importtaskitemCreateNestedManyWithoutOperatorInput
+    addresses?: useraddressCreateNestedManyWithoutUserInput
+    wishlists?: wishlistitemCreateNestedManyWithoutUserInput
+    orders?: orderrecordCreateNestedManyWithoutUserInput
+    reviews?: productreviewCreateNestedManyWithoutUserInput
+    tickets?: customerticketCreateNestedManyWithoutUserInput
+    customOrders?: customorderCreateNestedManyWithoutUserInput
+    customerTags?: customertaglinkCreateNestedManyWithoutUserInput
+    communicationLogs?: customercommunicationCreateNestedManyWithoutUserInput
+  }
+
+  export type sysuserUncheckedCreateWithoutUserFollowInput = {
+    id?: string
+    account: string
+    password: string
+    passwordPlain?: string | null
+    email: string
+    role: $Enums.userrole
+    status?: $Enums.userstatus
+    username: string
+    avatarUrl?: string | null
+    phone?: string | null
+    preferredCurrency?: string | null
+    preferredLocale?: string | null
+    countryCode?: string | null
+    countryName?: string | null
+    purchaseCount?: number
+    adminNote?: string | null
+    customerType?: string
+    customerTypeUpdatedAt?: Date | string | null
+    vipDiscount?: number
+    ringSizeUs?: string | null
+    ringSizeEu?: string | null
+    braceletSize?: string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: Date | string | null
+    balance?: Decimal | DecimalJsLike | number | string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    carts?: cartUncheckedCreateNestedManyWithoutAccountInput
+    balanceEntries?: customerbalanceentryUncheckedCreateNestedManyWithoutUserInput
+    importTasks?: importtaskUncheckedCreateNestedManyWithoutCreatorInput
+    importTaskItems?: importtaskitemUncheckedCreateNestedManyWithoutOperatorInput
+    addresses?: useraddressUncheckedCreateNestedManyWithoutUserInput
+    wishlists?: wishlistitemUncheckedCreateNestedManyWithoutUserInput
+    orders?: orderrecordUncheckedCreateNestedManyWithoutUserInput
+    reviews?: productreviewUncheckedCreateNestedManyWithoutUserInput
+    tickets?: customerticketUncheckedCreateNestedManyWithoutUserInput
+    customOrders?: customorderUncheckedCreateNestedManyWithoutUserInput
+    customerTags?: customertaglinkUncheckedCreateNestedManyWithoutUserInput
+    communicationLogs?: customercommunicationUncheckedCreateNestedManyWithoutUserInput
+  }
+
+  export type sysuserCreateOrConnectWithoutUserFollowInput = {
+    where: sysuserWhereUniqueInput
+    create: XOR<sysuserCreateWithoutUserFollowInput, sysuserUncheckedCreateWithoutUserFollowInput>
+  }
+
+  export type customeruserfollowlogCreateWithoutFollowInput = {
+    id: string
+    followedAt?: Date | string
+  }
+
+  export type customeruserfollowlogUncheckedCreateWithoutFollowInput = {
+    id: string
+    followedAt?: Date | string
+  }
+
+  export type customeruserfollowlogCreateOrConnectWithoutFollowInput = {
+    where: customeruserfollowlogWhereUniqueInput
+    create: XOR<customeruserfollowlogCreateWithoutFollowInput, customeruserfollowlogUncheckedCreateWithoutFollowInput>
+  }
+
+  export type customeruserfollowlogCreateManyFollowInputEnvelope = {
+    data: customeruserfollowlogCreateManyFollowInput | customeruserfollowlogCreateManyFollowInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type sysuserUpsertWithoutUserFollowInput = {
+    update: XOR<sysuserUpdateWithoutUserFollowInput, sysuserUncheckedUpdateWithoutUserFollowInput>
+    create: XOR<sysuserCreateWithoutUserFollowInput, sysuserUncheckedCreateWithoutUserFollowInput>
+    where?: sysuserWhereInput
+  }
+
+  export type sysuserUpdateToOneWithWhereWithoutUserFollowInput = {
+    where?: sysuserWhereInput
+    data: XOR<sysuserUpdateWithoutUserFollowInput, sysuserUncheckedUpdateWithoutUserFollowInput>
+  }
+
+  export type sysuserUpdateWithoutUserFollowInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    account?: StringFieldUpdateOperationsInput | string
+    password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
+    status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
+    username?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredCurrency?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredLocale?: NullableStringFieldUpdateOperationsInput | string | null
+    countryCode?: NullableStringFieldUpdateOperationsInput | string | null
+    countryName?: NullableStringFieldUpdateOperationsInput | string | null
+    purchaseCount?: IntFieldUpdateOperationsInput | number
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
+    ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
+    ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
+    braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    carts?: cartUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUpdateManyWithoutUserNestedInput
+    importTasks?: importtaskUpdateManyWithoutCreatorNestedInput
+    importTaskItems?: importtaskitemUpdateManyWithoutOperatorNestedInput
+    addresses?: useraddressUpdateManyWithoutUserNestedInput
+    wishlists?: wishlistitemUpdateManyWithoutUserNestedInput
+    orders?: orderrecordUpdateManyWithoutUserNestedInput
+    reviews?: productreviewUpdateManyWithoutUserNestedInput
+    tickets?: customerticketUpdateManyWithoutUserNestedInput
+    customOrders?: customorderUpdateManyWithoutUserNestedInput
+    customerTags?: customertaglinkUpdateManyWithoutUserNestedInput
+    communicationLogs?: customercommunicationUpdateManyWithoutUserNestedInput
+  }
+
+  export type sysuserUncheckedUpdateWithoutUserFollowInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    account?: StringFieldUpdateOperationsInput | string
+    password?: StringFieldUpdateOperationsInput | string
+    passwordPlain?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    role?: EnumuserroleFieldUpdateOperationsInput | $Enums.userrole
+    status?: EnumuserstatusFieldUpdateOperationsInput | $Enums.userstatus
+    username?: StringFieldUpdateOperationsInput | string
+    avatarUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredCurrency?: NullableStringFieldUpdateOperationsInput | string | null
+    preferredLocale?: NullableStringFieldUpdateOperationsInput | string | null
+    countryCode?: NullableStringFieldUpdateOperationsInput | string | null
+    countryName?: NullableStringFieldUpdateOperationsInput | string | null
+    purchaseCount?: IntFieldUpdateOperationsInput | number
+    adminNote?: NullableStringFieldUpdateOperationsInput | string | null
+    customerType?: StringFieldUpdateOperationsInput | string
+    customerTypeUpdatedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    vipDiscount?: IntFieldUpdateOperationsInput | number
+    ringSizeUs?: NullableStringFieldUpdateOperationsInput | string | null
+    ringSizeEu?: NullableStringFieldUpdateOperationsInput | string | null
+    braceletSize?: NullableStringFieldUpdateOperationsInput | string | null
+    savedPreferencesJson?: NullableJsonNullValueInput | InputJsonValue
+    savedSizesJson?: NullableJsonNullValueInput | InputJsonValue
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    carts?: cartUncheckedUpdateManyWithoutAccountNestedInput
+    balanceEntries?: customerbalanceentryUncheckedUpdateManyWithoutUserNestedInput
+    importTasks?: importtaskUncheckedUpdateManyWithoutCreatorNestedInput
+    importTaskItems?: importtaskitemUncheckedUpdateManyWithoutOperatorNestedInput
+    addresses?: useraddressUncheckedUpdateManyWithoutUserNestedInput
+    wishlists?: wishlistitemUncheckedUpdateManyWithoutUserNestedInput
+    orders?: orderrecordUncheckedUpdateManyWithoutUserNestedInput
+    reviews?: productreviewUncheckedUpdateManyWithoutUserNestedInput
+    tickets?: customerticketUncheckedUpdateManyWithoutUserNestedInput
+    customOrders?: customorderUncheckedUpdateManyWithoutUserNestedInput
+    customerTags?: customertaglinkUncheckedUpdateManyWithoutUserNestedInput
+    communicationLogs?: customercommunicationUncheckedUpdateManyWithoutUserNestedInput
+  }
+
+  export type customeruserfollowlogUpsertWithWhereUniqueWithoutFollowInput = {
+    where: customeruserfollowlogWhereUniqueInput
+    update: XOR<customeruserfollowlogUpdateWithoutFollowInput, customeruserfollowlogUncheckedUpdateWithoutFollowInput>
+    create: XOR<customeruserfollowlogCreateWithoutFollowInput, customeruserfollowlogUncheckedCreateWithoutFollowInput>
+  }
+
+  export type customeruserfollowlogUpdateWithWhereUniqueWithoutFollowInput = {
+    where: customeruserfollowlogWhereUniqueInput
+    data: XOR<customeruserfollowlogUpdateWithoutFollowInput, customeruserfollowlogUncheckedUpdateWithoutFollowInput>
+  }
+
+  export type customeruserfollowlogUpdateManyWithWhereWithoutFollowInput = {
+    where: customeruserfollowlogScalarWhereInput
+    data: XOR<customeruserfollowlogUpdateManyMutationInput, customeruserfollowlogUncheckedUpdateManyWithoutFollowInput>
+  }
+
+  export type customeruserfollowlogScalarWhereInput = {
+    AND?: customeruserfollowlogScalarWhereInput | customeruserfollowlogScalarWhereInput[]
+    OR?: customeruserfollowlogScalarWhereInput[]
+    NOT?: customeruserfollowlogScalarWhereInput | customeruserfollowlogScalarWhereInput[]
+    id?: StringFilter<"customeruserfollowlog"> | string
+    userId?: StringFilter<"customeruserfollowlog"> | string
+    followedAt?: DateTimeFilter<"customeruserfollowlog"> | Date | string
+  }
+
+  export type customeruserfollowCreateWithoutLogsInput = {
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+    user: sysuserCreateNestedOneWithoutUserFollowInput
+  }
+
+  export type customeruserfollowUncheckedCreateWithoutLogsInput = {
+    userId: string
+    lastFollowedAt?: Date | string | null
+    nextFollowAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type customeruserfollowCreateOrConnectWithoutLogsInput = {
+    where: customeruserfollowWhereUniqueInput
+    create: XOR<customeruserfollowCreateWithoutLogsInput, customeruserfollowUncheckedCreateWithoutLogsInput>
+  }
+
+  export type customeruserfollowUpsertWithoutLogsInput = {
+    update: XOR<customeruserfollowUpdateWithoutLogsInput, customeruserfollowUncheckedUpdateWithoutLogsInput>
+    create: XOR<customeruserfollowCreateWithoutLogsInput, customeruserfollowUncheckedCreateWithoutLogsInput>
+    where?: customeruserfollowWhereInput
+  }
+
+  export type customeruserfollowUpdateToOneWithWhereWithoutLogsInput = {
+    where?: customeruserfollowWhereInput
+    data: XOR<customeruserfollowUpdateWithoutLogsInput, customeruserfollowUncheckedUpdateWithoutLogsInput>
+  }
+
+  export type customeruserfollowUpdateWithoutLogsInput = {
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: sysuserUpdateOneRequiredWithoutUserFollowNestedInput
+  }
+
+  export type customeruserfollowUncheckedUpdateWithoutLogsInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -105741,6 +108667,26 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type customeruserfollowlogCreateManyFollowInput = {
+    id: string
+    followedAt?: Date | string
+  }
+
+  export type customeruserfollowlogUpdateWithoutFollowInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customeruserfollowlogUncheckedUpdateWithoutFollowInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type customeruserfollowlogUncheckedUpdateManyWithoutFollowInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    followedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
 

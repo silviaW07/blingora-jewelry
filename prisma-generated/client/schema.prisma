@@ -239,6 +239,7 @@ model sysuser {
   customOrders      customorder[]
   customerTags      customertaglink[]
   communicationLogs customercommunication[]
+  userFollow        customeruserfollow?
 }
 
 model category {
@@ -966,13 +967,14 @@ model categoryspectemplatebinding {
 }
 
 model customertag {
-  id          String   @id @default(uuid()) @db.VarChar(36)
-  name        String   @db.VarChar(120)
-  code        String   @unique @db.VarChar(100)
-  color       String?  @db.VarChar(30)
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  id                 String   @id @default(uuid()) @db.VarChar(36)
+  name               String   @db.VarChar(120)
+  code               String   @unique @db.VarChar(100)
+  color              String?  @db.VarChar(30)
+  description        String?  @db.Text
+  followIntervalDays Int      @default(7)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
 
   userLinks customertaglink[]
 }
@@ -1382,4 +1384,24 @@ model customerfollowlog {
   customer   customerfollowup @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, followedAt])
+}
+
+model customeruserfollow {
+  userId         String    @id @db.VarChar(36)
+  lastFollowedAt DateTime?
+  nextFollowAt   DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  user sysuser                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs customeruserfollowlog[]
+}
+
+model customeruserfollowlog {
+  id         String   @id @db.VarChar(36)
+  userId     String   @db.VarChar(36)
+  followedAt DateTime @default(now())
+
+  follow customeruserfollow @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, followedAt])
 }

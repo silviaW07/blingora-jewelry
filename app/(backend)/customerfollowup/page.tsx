@@ -2,9 +2,9 @@
 'use client';
 
 import { useCustomerFollowUp } from '@/backend/hooks/useCustomerFollowUp';
-import CustomerFollowUpView from '@/backend/components/CustomerFollowUpView';
+import { CustomerFollowUpView } from '@/backend/components/CustomerFollowUpView';
 
 export default function CustomerFollowUpPage() {
-  const { state, handlers } = useCustomerFollowUp();
-  return <CustomerFollowUpView state={state} handlers={handlers} />;
+  const board = useCustomerFollowUp();
+  return <CustomerFollowUpView {...board} />;
 }

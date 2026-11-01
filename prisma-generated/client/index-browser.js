@@ -658,6 +658,7 @@ exports.Prisma.CustomertagScalarFieldEnum = {
   code: 'code',
   color: 'color',
   description: 'description',
+  followIntervalDays: 'followIntervalDays',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -924,6 +925,19 @@ exports.Prisma.CustomerfollowlogScalarFieldEnum = {
   customerId: 'customerId',
   followedAt: 'followedAt',
   note: 'note'
+};
+
+exports.Prisma.CustomeruserfollowScalarFieldEnum = {
+  userId: 'userId',
+  lastFollowedAt: 'lastFollowedAt',
+  nextFollowAt: 'nextFollowAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CustomeruserfollowlogScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  followedAt: 'followedAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -1443,6 +1457,15 @@ exports.Prisma.customerfollowlogOrderByRelevanceFieldEnum = {
   customerId: 'customerId',
   note: 'note'
 };
+
+exports.Prisma.customeruserfollowOrderByRelevanceFieldEnum = {
+  userId: 'userId'
+};
+
+exports.Prisma.customeruserfollowlogOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId'
+};
 exports.userrole = exports.$Enums.userrole = {
   CUSTOMER: 'CUSTOMER',
   ADMIN: 'ADMIN',
@@ -1695,7 +1718,9 @@ exports.Prisma.ModelName = {
   buyershowproof: 'buyershowproof',
   customerbalanceentry: 'customerbalanceentry',
   customerfollowup: 'customerfollowup',
-  customerfollowlog: 'customerfollowlog'
+  customerfollowlog: 'customerfollowlog',
+  customeruserfollow: 'customeruserfollow',
+  customeruserfollowlog: 'customeruserfollowlog'
 };
 
 /**

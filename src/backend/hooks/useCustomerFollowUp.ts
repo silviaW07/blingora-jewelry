@@ -4,98 +4,76 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  createFollowCustomer,
   getCustomerFollowLogs,
   getFollowUpBoard,
   markCustomerFollowed,
-  updateFollowCustomer,
-  type FollowCustomer,
+  updateTagFollowIntervals,
   type FollowLog,
+  type FollowTagInterval,
+  type RegisteredFollowCustomer,
 } from '@/backend/actions/CustomerFollowUp'
 
 export function useCustomerFollowUp() {
-  const [due, setDue] = useState<FollowCustomer[]>([])
-  const [all, setAll] = useState<FollowCustomer[]>([])
+  const [tags, setTags] = useState<FollowTagInterval[]>([])
+  const [due, setDue] = useState<RegisteredFollowCustomer[]>([])
+  const [all, setAll] = useState<RegisteredFollowCustomer[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [active, setActive] = useState<RegisteredFollowCustomer | null>(null)
   const [followedAt, setFollowedAt] = useState<string | null>(null)
   const [logs, setLogs] = useState<FollowLog[]>([])
-  const [saving, setSaving] = useState(false)
 
   const reload = useCallback(async () => {
-    const board = await getFollowUpBoard()
-    setDue(board.due)
-    setAll(board.all)
+    setLoading(true)
+    const res = await getFollowUpBoard()
+    setLoading(false)
+    if (!res) return
+    setTags(res.tags)
+    setDue(res.due)
+    setAll(res.all)
   }, [])
 
   useEffect(() => {
-    reload().catch((error: Error) => toast.error(error.message || '加载失败')).finally(() => setLoading(false))
+    void reload()
   }, [reload])
 
-  const openCustomer = async (id: string) => {
+  const openCustomer = useCallback(async (customer: RegisteredFollowCustomer) => {
     setSaving(true)
-    try {
-      const result = await markCustomerFollowed({ id })
-      setActiveId(id)
-      setFollowedAt(result.followedAt)
-      setLogs(result.logs)
-      await reload()
-    } catch (error: any) {
-      toast.error(error.message || '记录跟进失败')
-    } finally {
-      setSaving(false)
-    }
-  }
+    const res = await markCustomerFollowed({ id: customer.id })
+    setSaving(false)
+    if (!res) return
+    setFollowedAt(res.followedAt)
+    setLogs(res.logs)
+    setActive({ ...customer, lastFollowedAt: res.followedAt, nextFollowAt: res.nextFollowAt, due: false })
+    toast.success('已记录本次跟进时间')
+    await reload()
+  }, [reload])
 
-  const openNext = async () => {
+  const openNext = useCallback(async () => {
     const next = due[0]
     if (!next) {
       toast.message('今天没有待跟进客户')
       return
     }
-    await openCustomer(next.id)
-  }
+    await openCustomer(next)
+  }, [due, openCustomer])
 
-  const addCustomer = async (input: { name: string; whatsapp: string; note: string; intervalDays: number }) => {
+  const saveIntervals = useCallback(async (input: FollowTagInterval[]) => {
     setSaving(true)
-    try {
-      await createFollowCustomer(input)
-      toast.success('已添加，今天即可跟进')
-      await reload()
-    } catch (error: any) {
-      toast.error(error.message || '添加失败')
-    } finally {
-      setSaving(false)
-    }
-  }
+    const res = await updateTagFollowIntervals(input.map((item) => ({ code: item.code, intervalDays: item.intervalDays })))
+    setSaving(false)
+    if (!res) return
+    setTags(res)
+    toast.success('已按标签保存跟进频次')
+    await reload()
+  }, [reload])
 
-  const saveCustomer = async (input: { id: string; name: string; whatsapp: string; note: string; intervalDays: number }) => {
-    setSaving(true)
-    try {
-      await updateFollowCustomer(input)
-      toast.success('客户信息已保存')
-      await reload()
-    } catch (error: any) {
-      toast.error(error.message || '保存失败')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const showLogs = useCallback(async (customer: RegisteredFollowCustomer) => {
+    setActive(customer)
+    setFollowedAt(customer.lastFollowedAt)
+    const res = await getCustomerFollowLogs(customer.id)
+    setLogs(res || [])
+  }, [])
 
-  const showLogs = async (id: string) => {
-    setActiveId(id)
-    setFollowedAt(null)
-    try {
-      setLogs(await getCustomerFollowLogs(id))
-    } catch (error: any) {
-      toast.error(error.message || '读取记录失败')
-    }
-  }
-
-  const active = all.find((row) => row.id === activeId) || null
-
-  return {
-    state: { due, all, loading, active, followedAt, logs, saving },
-    handlers: { reload, openCustomer, openNext, addCustomer, saveCustomer, showLogs },
-  }
+  return { tags, due, all, loading, saving, active, followedAt, logs, reload, openCustomer, openNext, saveIntervals, showLogs }
 }
