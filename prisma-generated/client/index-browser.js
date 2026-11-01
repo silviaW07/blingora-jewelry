@@ -916,6 +916,7 @@ exports.Prisma.CustomerfollowupScalarFieldEnum = {
   intervalDays: 'intervalDays',
   lastFollowedAt: 'lastFollowedAt',
   nextFollowAt: 'nextFollowAt',
+  followStatus: 'followStatus',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -931,6 +932,7 @@ exports.Prisma.CustomeruserfollowScalarFieldEnum = {
   userId: 'userId',
   lastFollowedAt: 'lastFollowedAt',
   nextFollowAt: 'nextFollowAt',
+  followStatus: 'followStatus',
   updatedAt: 'updatedAt'
 };
 
@@ -1449,7 +1451,8 @@ exports.Prisma.customerfollowupOrderByRelevanceFieldEnum = {
   id: 'id',
   name: 'name',
   whatsapp: 'whatsapp',
-  note: 'note'
+  note: 'note',
+  followStatus: 'followStatus'
 };
 
 exports.Prisma.customerfollowlogOrderByRelevanceFieldEnum = {
@@ -1459,7 +1462,8 @@ exports.Prisma.customerfollowlogOrderByRelevanceFieldEnum = {
 };
 
 exports.Prisma.customeruserfollowOrderByRelevanceFieldEnum = {
-  userId: 'userId'
+  userId: 'userId',
+  followStatus: 'followStatus'
 };
 
 exports.Prisma.customeruserfollowlogOrderByRelevanceFieldEnum = {

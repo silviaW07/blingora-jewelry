@@ -4,8 +4,28 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { FollowTagInterval, RegisteredFollowCustomer } from '@/backend/actions/CustomerFollowUp'
+import { Textarea } from '@/components/ui/textarea'
+import type { FollowStatus, FollowTagInterval, RegisteredFollowCustomer } from '@/backend/actions/CustomerFollowUp'
 import type { useCustomerFollowUp } from '@/backend/hooks/useCustomerFollowUp'
+
+function phoneDigits(value?: string | null) {
+  return String(value || '').replace(/\D/g, '')
+}
+
+const STATUS_LABEL: Record<FollowStatus, string> = {
+  FOLLOWED: '已跟进',
+  DUE: '待跟进',
+  SKIP: '不跟进',
+}
+
+const TYPE_LABEL: Record<string, string> = {
+  NEW_REGISTERED: '新客户',
+  NOT_CONVERTED: '未转化',
+  FIRST_ORDER: '首单',
+  MULTI_ORDER: '多单',
+  HIGH_RISK: '高危',
+  CHURNED: '流失',
+}
 
 function formatWhen(iso: string | null) {
   if (!iso) return '—'
@@ -18,55 +38,87 @@ function money(value: number) {
   return `$${value.toFixed(2)}`
 }
 
+function whatsappHref(phone: string | null) {
+  const digits = phoneDigits(phone)
+  if (digits.length < 6) return ''
+  return `https://wa.me/${digits}`
+}
+
 function CustomerTable({
   rows,
   saving,
-  onFollow,
+  onStatus,
   onLogs,
 }: {
   rows: RegisteredFollowCustomer[]
   saving: boolean
-  onFollow: (row: RegisteredFollowCustomer) => void
+  onStatus: (row: RegisteredFollowCustomer, status: FollowStatus) => void
   onLogs: (row: RegisteredFollowCustomer) => void
 }) {
   if (!rows.length) return <p className="px-4 py-8 text-sm text-muted-foreground">没有客户</p>
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1080px] text-left text-sm">
+      <table className="w-full min-w-[1180px] text-left text-sm">
         <thead className="bg-muted/50 text-xs text-muted-foreground">
           <tr>
             <th className="px-3 py-2 font-medium">姓名</th>
             <th className="px-3 py-2 font-medium">手机号</th>
+            <th className="px-3 py-2 font-medium">下次跟进</th>
             <th className="px-3 py-2 font-medium">邮箱</th>
-            <th className="px-3 py-2 font-medium">标签</th>
+            <th className="px-3 py-2 font-medium">客户类型</th>
             <th className="px-3 py-2 font-medium">注册时间</th>
             <th className="px-3 py-2 font-medium">最近登录</th>
             <th className="px-3 py-2 font-medium">购物车金额</th>
             <th className="px-3 py-2 font-medium">跟进频次</th>
-            <th className="px-3 py-2 font-medium">下次跟进</th>
             <th className="px-3 py-2 font-medium">操作</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-t">
-              <td className="px-3 py-2 font-medium">{row.name}</td>
-              <td className="px-3 py-2">{row.phone || '—'}</td>
-              <td className="px-3 py-2">{row.email}</td>
-              <td className="px-3 py-2">{row.tagName || '未标记'}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{formatWhen(row.registeredAt)}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{formatWhen(row.lastLoginAt)}</td>
-              <td className="px-3 py-2">{money(row.cartUsdTotal)}</td>
-              <td className="px-3 py-2">{row.intervalDays} 天</td>
-              <td className="px-3 py-2 whitespace-nowrap">{row.lastFollowedAt ? formatWhen(row.nextFollowAt) : '待首次跟进'}</td>
-              <td className="px-3 py-2">
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" disabled={saving} onClick={() => onFollow(row)}>跟进</Button>
+          {rows.map((row) => {
+            const href = whatsappHref(row.phone)
+            return (
+              <tr key={`${row.kind}-${row.id}`} className="border-t">
+                <td className="px-3 py-2 font-medium">{row.name}</td>
+                <td className="px-3 py-2">
+                  {href ? (
+                    <a
+                      className="text-sky-700 underline"
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => onStatus(row, 'FOLLOWED')}
+                    >
+                      {row.phone}
+                    </a>
+                  ) : (row.phone || '—')}
+                </td>
+                <td className="px-3 py-2">
+                  <select
+                    className="h-8 rounded-md border bg-background px-2 text-sm"
+                    value={row.followStatus}
+                    disabled={saving}
+                    onChange={(event) => onStatus(row, event.target.value as FollowStatus)}
+                  >
+                    <option value="FOLLOWED">已跟进</option>
+                    <option value="DUE">待跟进</option>
+                    <option value="SKIP">不跟进</option>
+                  </select>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {row.followStatus === 'SKIP' ? '不进入下一轮' : row.followStatus === 'FOLLOWED' ? `下轮 ${formatWhen(row.nextFollowAt)}` : '本轮待跟进'}
+                  </div>
+                </td>
+                <td className="px-3 py-2">{row.email || '—'}</td>
+                <td className="px-3 py-2">{row.customerTypeLabel}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{formatWhen(row.registeredAt)}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{formatWhen(row.lastLoginAt)}</td>
+                <td className="px-3 py-2">{money(row.cartUsdTotal)}</td>
+                <td className="px-3 py-2">{row.intervalDays} 天</td>
+                <td className="px-3 py-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => onLogs(row)}>记录</Button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -74,37 +126,39 @@ function CustomerTable({
 }
 
 export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowUp>) {
-  const { tags, due, all, loading, saving, active, followedAt, logs, openCustomer, openNext, saveIntervals, showLogs } = props
+  const { tags, due, all, loading, saving, active, followedAt, logs, changeStatus, openNext, saveIntervals, showLogs, addPhones } = props
   const [draft, setDraft] = useState<FollowTagInterval[] | null>(null)
   const [query, setQuery] = useState('')
-  const [onlyDue, setOnlyDue] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'' | FollowStatus>('')
+  const [adding, setAdding] = useState(false)
+  const [phones, setPhones] = useState('')
   const intervals = draft || tags
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return all.filter((row) => {
-      if (onlyDue && !row.due) return false
+      if (statusFilter && row.followStatus !== statusFilter) return false
       if (!q) return true
-      return [row.name, row.phone, row.email, row.tagName].some((value) => String(value || '').toLowerCase().includes(q))
+      return [row.name, row.phone, row.email, row.customerTypeLabel].some((value) => String(value || '').toLowerCase().includes(q))
     })
-  }, [all, onlyDue, query])
+  }, [all, query, statusFilter])
 
   return (
     <div className="grid gap-4 p-4 lg:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">客户跟进</h1>
-          <p className="mt-1 text-sm text-muted-foreground">已注册客户 {all.length} 人，今日待跟进 {due.length} 人。购物车金额为美金。</p>
+          <p className="mt-1 text-sm text-muted-foreground">已注册及手动添加 {all.length} 人，待跟进 {due.length} 人。购物车金额为美金。到下一次跟进时间后自动回到待跟进。</p>
         </div>
         <Button type="button" disabled={saving || !due.length} onClick={() => void openNext()}>下一位待跟进</Button>
       </div>
 
       <section className="rounded-lg border bg-card p-4">
-        <h2 className="text-sm font-medium">按标签设置跟进频次</h2>
+        <h2 className="text-sm font-medium">按客户类型设置跟进频次</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {intervals.map((tag) => (
             <label key={tag.code} className="grid gap-1 text-sm">
-              <span>{tag.name}</span>
+              <span>{TYPE_LABEL[tag.code] || tag.name}</span>
               <Input
                 type="number"
                 min={1}
@@ -125,10 +179,9 @@ export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowU
 
       {active ? (
         <section className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">本次跟进时间</p>
-          <p className="mt-1 text-2xl font-semibold">{formatWhen(followedAt)}</p>
-          <p className="mt-2 text-sm">{active.name} · {active.phone || '无手机号'} · {active.email} · {active.tagName || '未标记'} · 每 {active.intervalDays} 天</p>
-          <p className="mt-1 text-sm text-muted-foreground">下次跟进 {formatWhen(active.nextFollowAt)}</p>
+          <p className="text-sm text-muted-foreground">最近跟进</p>
+          <p className="mt-1 text-2xl font-semibold">{formatWhen(followedAt)} · {STATUS_LABEL[active.followStatus]}</p>
+          <p className="mt-2 text-sm">{active.name} · {active.phone || '无手机号'} · {active.customerTypeLabel} · 每 {active.intervalDays} 天</p>
           {logs.length ? (
             <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
               {logs.map((log) => <li key={log.id}>{formatWhen(log.followedAt)}</li>)}
@@ -139,13 +192,43 @@ export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowU
 
       <section className="overflow-hidden rounded-lg border bg-card">
         <div className="flex flex-wrap items-center gap-2 border-b p-3">
-          <Input className="max-w-xs" placeholder="搜索姓名、手机号、邮箱、标签" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <Button type="button" variant={onlyDue ? 'default' : 'outline'} onClick={() => setOnlyDue((value) => !value)}>
-            {onlyDue ? '只看今日待跟进' : '显示全部客户'}
-          </Button>
+          <Input className="max-w-xs" placeholder="搜索姓名、手机号、邮箱、客户类型" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <select
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as '' | FollowStatus)}
+          >
+            <option value="">全部跟进状态</option>
+            <option value="FOLLOWED">已跟进</option>
+            <option value="DUE">待跟进</option>
+            <option value="SKIP">不跟进</option>
+          </select>
+          <Button type="button" variant={adding ? 'default' : 'outline'} onClick={() => setAdding((value) => !value)}>添加客户</Button>
         </div>
+        {adding ? (
+          <form
+            className="grid gap-2 border-b p-3"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void addPhones(phones).then(() => {
+                setPhones('')
+                setAdding(false)
+              })
+            }}
+          >
+            <Textarea
+              rows={5}
+              placeholder="批量粘贴手机号，一行一个，也可以用逗号或空格分开"
+              value={phones}
+              onChange={(event) => setPhones(event.target.value)}
+            />
+            <div>
+              <Button type="submit" disabled={saving || !phones.trim()}>加入跟进表</Button>
+            </div>
+          </form>
+        ) : null}
         {loading ? <p className="px-4 py-8 text-sm text-muted-foreground">正在加载客户…</p> : (
-          <CustomerTable rows={filtered} saving={saving} onFollow={(row) => void openCustomer(row)} onLogs={(row) => void showLogs(row)} />
+          <CustomerTable rows={filtered} saving={saving} onStatus={(row, status) => void changeStatus(row, status)} onLogs={(row) => void showLogs(row)} />
         )}
       </section>
     </div>

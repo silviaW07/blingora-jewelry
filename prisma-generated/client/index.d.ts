@@ -63048,6 +63048,7 @@ export namespace Prisma {
     intervalDays: number | null
     lastFollowedAt: Date | null
     nextFollowAt: Date | null
+    followStatus: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -63060,6 +63061,7 @@ export namespace Prisma {
     intervalDays: number | null
     lastFollowedAt: Date | null
     nextFollowAt: Date | null
+    followStatus: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -63072,6 +63074,7 @@ export namespace Prisma {
     intervalDays: number
     lastFollowedAt: number
     nextFollowAt: number
+    followStatus: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -63094,6 +63097,7 @@ export namespace Prisma {
     intervalDays?: true
     lastFollowedAt?: true
     nextFollowAt?: true
+    followStatus?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -63106,6 +63110,7 @@ export namespace Prisma {
     intervalDays?: true
     lastFollowedAt?: true
     nextFollowAt?: true
+    followStatus?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -63118,6 +63123,7 @@ export namespace Prisma {
     intervalDays?: true
     lastFollowedAt?: true
     nextFollowAt?: true
+    followStatus?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -63217,6 +63223,7 @@ export namespace Prisma {
     intervalDays: number
     lastFollowedAt: Date | null
     nextFollowAt: Date
+    followStatus: string | null
     createdAt: Date
     updatedAt: Date
     _count: CustomerfollowupCountAggregateOutputType | null
@@ -63248,6 +63255,7 @@ export namespace Prisma {
     intervalDays?: boolean
     lastFollowedAt?: boolean
     nextFollowAt?: boolean
+    followStatus?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     logs?: boolean | customerfollowup$logsArgs<ExtArgs>
@@ -63264,11 +63272,12 @@ export namespace Prisma {
     intervalDays?: boolean
     lastFollowedAt?: boolean
     nextFollowAt?: boolean
+    followStatus?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type customerfollowupOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "whatsapp" | "note" | "intervalDays" | "lastFollowedAt" | "nextFollowAt" | "createdAt" | "updatedAt", ExtArgs["result"]["customerfollowup"]>
+  export type customerfollowupOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "whatsapp" | "note" | "intervalDays" | "lastFollowedAt" | "nextFollowAt" | "followStatus" | "createdAt" | "updatedAt", ExtArgs["result"]["customerfollowup"]>
   export type customerfollowupInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     logs?: boolean | customerfollowup$logsArgs<ExtArgs>
     _count?: boolean | CustomerfollowupCountOutputTypeDefaultArgs<ExtArgs>
@@ -63287,6 +63296,7 @@ export namespace Prisma {
       intervalDays: number
       lastFollowedAt: Date | null
       nextFollowAt: Date
+      followStatus: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["customerfollowup"]>
@@ -63666,6 +63676,7 @@ export namespace Prisma {
     readonly intervalDays: FieldRef<"customerfollowup", 'Int'>
     readonly lastFollowedAt: FieldRef<"customerfollowup", 'DateTime'>
     readonly nextFollowAt: FieldRef<"customerfollowup", 'DateTime'>
+    readonly followStatus: FieldRef<"customerfollowup", 'String'>
     readonly createdAt: FieldRef<"customerfollowup", 'DateTime'>
     readonly updatedAt: FieldRef<"customerfollowup", 'DateTime'>
   }
@@ -64985,6 +64996,7 @@ export namespace Prisma {
     userId: string | null
     lastFollowedAt: Date | null
     nextFollowAt: Date | null
+    followStatus: string | null
     updatedAt: Date | null
   }
 
@@ -64992,6 +65004,7 @@ export namespace Prisma {
     userId: string | null
     lastFollowedAt: Date | null
     nextFollowAt: Date | null
+    followStatus: string | null
     updatedAt: Date | null
   }
 
@@ -64999,6 +65012,7 @@ export namespace Prisma {
     userId: number
     lastFollowedAt: number
     nextFollowAt: number
+    followStatus: number
     updatedAt: number
     _all: number
   }
@@ -65008,6 +65022,7 @@ export namespace Prisma {
     userId?: true
     lastFollowedAt?: true
     nextFollowAt?: true
+    followStatus?: true
     updatedAt?: true
   }
 
@@ -65015,6 +65030,7 @@ export namespace Prisma {
     userId?: true
     lastFollowedAt?: true
     nextFollowAt?: true
+    followStatus?: true
     updatedAt?: true
   }
 
@@ -65022,6 +65038,7 @@ export namespace Prisma {
     userId?: true
     lastFollowedAt?: true
     nextFollowAt?: true
+    followStatus?: true
     updatedAt?: true
     _all?: true
   }
@@ -65102,6 +65119,7 @@ export namespace Prisma {
     userId: string
     lastFollowedAt: Date | null
     nextFollowAt: Date | null
+    followStatus: string | null
     updatedAt: Date
     _count: CustomeruserfollowCountAggregateOutputType | null
     _min: CustomeruserfollowMinAggregateOutputType | null
@@ -65126,6 +65144,7 @@ export namespace Prisma {
     userId?: boolean
     lastFollowedAt?: boolean
     nextFollowAt?: boolean
+    followStatus?: boolean
     updatedAt?: boolean
     user?: boolean | sysuserDefaultArgs<ExtArgs>
     logs?: boolean | customeruserfollow$logsArgs<ExtArgs>
@@ -65138,10 +65157,11 @@ export namespace Prisma {
     userId?: boolean
     lastFollowedAt?: boolean
     nextFollowAt?: boolean
+    followStatus?: boolean
     updatedAt?: boolean
   }
 
-  export type customeruserfollowOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"userId" | "lastFollowedAt" | "nextFollowAt" | "updatedAt", ExtArgs["result"]["customeruserfollow"]>
+  export type customeruserfollowOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"userId" | "lastFollowedAt" | "nextFollowAt" | "followStatus" | "updatedAt", ExtArgs["result"]["customeruserfollow"]>
   export type customeruserfollowInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | sysuserDefaultArgs<ExtArgs>
     logs?: boolean | customeruserfollow$logsArgs<ExtArgs>
@@ -65158,6 +65178,7 @@ export namespace Prisma {
       userId: string
       lastFollowedAt: Date | null
       nextFollowAt: Date | null
+      followStatus: string | null
       updatedAt: Date
     }, ExtArgs["result"]["customeruserfollow"]>
     composites: {}
@@ -65533,6 +65554,7 @@ export namespace Prisma {
     readonly userId: FieldRef<"customeruserfollow", 'String'>
     readonly lastFollowedAt: FieldRef<"customeruserfollow", 'DateTime'>
     readonly nextFollowAt: FieldRef<"customeruserfollow", 'DateTime'>
+    readonly followStatus: FieldRef<"customeruserfollow", 'String'>
     readonly updatedAt: FieldRef<"customeruserfollow", 'DateTime'>
   }
     
@@ -67794,6 +67816,7 @@ export namespace Prisma {
     intervalDays: 'intervalDays',
     lastFollowedAt: 'lastFollowedAt',
     nextFollowAt: 'nextFollowAt',
+    followStatus: 'followStatus',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -67815,6 +67838,7 @@ export namespace Prisma {
     userId: 'userId',
     lastFollowedAt: 'lastFollowedAt',
     nextFollowAt: 'nextFollowAt',
+    followStatus: 'followStatus',
     updatedAt: 'updatedAt'
   };
 
@@ -68516,7 +68540,8 @@ export namespace Prisma {
     id: 'id',
     name: 'name',
     whatsapp: 'whatsapp',
-    note: 'note'
+    note: 'note',
+    followStatus: 'followStatus'
   };
 
   export type customerfollowupOrderByRelevanceFieldEnum = (typeof customerfollowupOrderByRelevanceFieldEnum)[keyof typeof customerfollowupOrderByRelevanceFieldEnum]
@@ -68532,7 +68557,8 @@ export namespace Prisma {
 
 
   export const customeruserfollowOrderByRelevanceFieldEnum: {
-    userId: 'userId'
+    userId: 'userId',
+    followStatus: 'followStatus'
   };
 
   export type customeruserfollowOrderByRelevanceFieldEnum = (typeof customeruserfollowOrderByRelevanceFieldEnum)[keyof typeof customeruserfollowOrderByRelevanceFieldEnum]
@@ -73887,6 +73913,7 @@ export namespace Prisma {
     intervalDays?: IntFilter<"customerfollowup"> | number
     lastFollowedAt?: DateTimeNullableFilter<"customerfollowup"> | Date | string | null
     nextFollowAt?: DateTimeFilter<"customerfollowup"> | Date | string
+    followStatus?: StringNullableFilter<"customerfollowup"> | string | null
     createdAt?: DateTimeFilter<"customerfollowup"> | Date | string
     updatedAt?: DateTimeFilter<"customerfollowup"> | Date | string
     logs?: CustomerfollowlogListRelationFilter
@@ -73900,6 +73927,7 @@ export namespace Prisma {
     intervalDays?: SortOrder
     lastFollowedAt?: SortOrderInput | SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     logs?: customerfollowlogOrderByRelationAggregateInput
@@ -73917,6 +73945,7 @@ export namespace Prisma {
     intervalDays?: IntFilter<"customerfollowup"> | number
     lastFollowedAt?: DateTimeNullableFilter<"customerfollowup"> | Date | string | null
     nextFollowAt?: DateTimeFilter<"customerfollowup"> | Date | string
+    followStatus?: StringNullableFilter<"customerfollowup"> | string | null
     createdAt?: DateTimeFilter<"customerfollowup"> | Date | string
     updatedAt?: DateTimeFilter<"customerfollowup"> | Date | string
     logs?: CustomerfollowlogListRelationFilter
@@ -73930,6 +73959,7 @@ export namespace Prisma {
     intervalDays?: SortOrder
     lastFollowedAt?: SortOrderInput | SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: customerfollowupCountOrderByAggregateInput
@@ -73950,6 +73980,7 @@ export namespace Prisma {
     intervalDays?: IntWithAggregatesFilter<"customerfollowup"> | number
     lastFollowedAt?: DateTimeNullableWithAggregatesFilter<"customerfollowup"> | Date | string | null
     nextFollowAt?: DateTimeWithAggregatesFilter<"customerfollowup"> | Date | string
+    followStatus?: StringNullableWithAggregatesFilter<"customerfollowup"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"customerfollowup"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"customerfollowup"> | Date | string
   }
@@ -74012,6 +74043,7 @@ export namespace Prisma {
     userId?: StringFilter<"customeruserfollow"> | string
     lastFollowedAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
     nextFollowAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
+    followStatus?: StringNullableFilter<"customeruserfollow"> | string | null
     updatedAt?: DateTimeFilter<"customeruserfollow"> | Date | string
     user?: XOR<SysuserScalarRelationFilter, sysuserWhereInput>
     logs?: CustomeruserfollowlogListRelationFilter
@@ -74021,6 +74053,7 @@ export namespace Prisma {
     userId?: SortOrder
     lastFollowedAt?: SortOrderInput | SortOrder
     nextFollowAt?: SortOrderInput | SortOrder
+    followStatus?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     user?: sysuserOrderByWithRelationInput
     logs?: customeruserfollowlogOrderByRelationAggregateInput
@@ -74034,6 +74067,7 @@ export namespace Prisma {
     NOT?: customeruserfollowWhereInput | customeruserfollowWhereInput[]
     lastFollowedAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
     nextFollowAt?: DateTimeNullableFilter<"customeruserfollow"> | Date | string | null
+    followStatus?: StringNullableFilter<"customeruserfollow"> | string | null
     updatedAt?: DateTimeFilter<"customeruserfollow"> | Date | string
     user?: XOR<SysuserScalarRelationFilter, sysuserWhereInput>
     logs?: CustomeruserfollowlogListRelationFilter
@@ -74043,6 +74077,7 @@ export namespace Prisma {
     userId?: SortOrder
     lastFollowedAt?: SortOrderInput | SortOrder
     nextFollowAt?: SortOrderInput | SortOrder
+    followStatus?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     _count?: customeruserfollowCountOrderByAggregateInput
     _max?: customeruserfollowMaxOrderByAggregateInput
@@ -74056,6 +74091,7 @@ export namespace Prisma {
     userId?: StringWithAggregatesFilter<"customeruserfollow"> | string
     lastFollowedAt?: DateTimeNullableWithAggregatesFilter<"customeruserfollow"> | Date | string | null
     nextFollowAt?: DateTimeNullableWithAggregatesFilter<"customeruserfollow"> | Date | string | null
+    followStatus?: StringNullableWithAggregatesFilter<"customeruserfollow"> | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"customeruserfollow"> | Date | string
   }
 
@@ -79815,6 +79851,7 @@ export namespace Prisma {
     intervalDays?: number
     lastFollowedAt?: Date | string | null
     nextFollowAt: Date | string
+    followStatus?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     logs?: customerfollowlogCreateNestedManyWithoutCustomerInput
@@ -79828,6 +79865,7 @@ export namespace Prisma {
     intervalDays?: number
     lastFollowedAt?: Date | string | null
     nextFollowAt: Date | string
+    followStatus?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     logs?: customerfollowlogUncheckedCreateNestedManyWithoutCustomerInput
@@ -79841,6 +79879,7 @@ export namespace Prisma {
     intervalDays?: IntFieldUpdateOperationsInput | number
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     logs?: customerfollowlogUpdateManyWithoutCustomerNestedInput
@@ -79854,6 +79893,7 @@ export namespace Prisma {
     intervalDays?: IntFieldUpdateOperationsInput | number
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     logs?: customerfollowlogUncheckedUpdateManyWithoutCustomerNestedInput
@@ -79867,6 +79907,7 @@ export namespace Prisma {
     intervalDays?: number
     lastFollowedAt?: Date | string | null
     nextFollowAt: Date | string
+    followStatus?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -79879,6 +79920,7 @@ export namespace Prisma {
     intervalDays?: IntFieldUpdateOperationsInput | number
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -79891,6 +79933,7 @@ export namespace Prisma {
     intervalDays?: IntFieldUpdateOperationsInput | number
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -79946,6 +79989,7 @@ export namespace Prisma {
   export type customeruserfollowCreateInput = {
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
     user: sysuserCreateNestedOneWithoutUserFollowInput
     logs?: customeruserfollowlogCreateNestedManyWithoutFollowInput
@@ -79955,6 +79999,7 @@ export namespace Prisma {
     userId: string
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
     logs?: customeruserfollowlogUncheckedCreateNestedManyWithoutFollowInput
   }
@@ -79962,6 +80007,7 @@ export namespace Prisma {
   export type customeruserfollowUpdateInput = {
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     user?: sysuserUpdateOneRequiredWithoutUserFollowNestedInput
     logs?: customeruserfollowlogUpdateManyWithoutFollowNestedInput
@@ -79971,6 +80017,7 @@ export namespace Prisma {
     userId?: StringFieldUpdateOperationsInput | string
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     logs?: customeruserfollowlogUncheckedUpdateManyWithoutFollowNestedInput
   }
@@ -79979,12 +80026,14 @@ export namespace Prisma {
     userId: string
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
   }
 
   export type customeruserfollowUpdateManyMutationInput = {
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -79992,6 +80041,7 @@ export namespace Prisma {
     userId?: StringFieldUpdateOperationsInput | string
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -84414,6 +84464,7 @@ export namespace Prisma {
     intervalDays?: SortOrder
     lastFollowedAt?: SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -84430,6 +84481,7 @@ export namespace Prisma {
     intervalDays?: SortOrder
     lastFollowedAt?: SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -84442,6 +84494,7 @@ export namespace Prisma {
     intervalDays?: SortOrder
     lastFollowedAt?: SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -84502,6 +84555,7 @@ export namespace Prisma {
     userId?: SortOrder
     lastFollowedAt?: SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -84509,6 +84563,7 @@ export namespace Prisma {
     userId?: SortOrder
     lastFollowedAt?: SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -84516,6 +84571,7 @@ export namespace Prisma {
     userId?: SortOrder
     lastFollowedAt?: SortOrder
     nextFollowAt?: SortOrder
+    followStatus?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -89692,6 +89748,7 @@ export namespace Prisma {
   export type customeruserfollowCreateWithoutUserInput = {
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
     logs?: customeruserfollowlogCreateNestedManyWithoutFollowInput
   }
@@ -89699,6 +89756,7 @@ export namespace Prisma {
   export type customeruserfollowUncheckedCreateWithoutUserInput = {
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
     logs?: customeruserfollowlogUncheckedCreateNestedManyWithoutFollowInput
   }
@@ -90154,6 +90212,7 @@ export namespace Prisma {
   export type customeruserfollowUpdateWithoutUserInput = {
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     logs?: customeruserfollowlogUpdateManyWithoutFollowNestedInput
   }
@@ -90161,6 +90220,7 @@ export namespace Prisma {
   export type customeruserfollowUncheckedUpdateWithoutUserInput = {
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     logs?: customeruserfollowlogUncheckedUpdateManyWithoutFollowNestedInput
   }
@@ -104328,6 +104388,7 @@ export namespace Prisma {
     intervalDays?: number
     lastFollowedAt?: Date | string | null
     nextFollowAt: Date | string
+    followStatus?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -104340,6 +104401,7 @@ export namespace Prisma {
     intervalDays?: number
     lastFollowedAt?: Date | string | null
     nextFollowAt: Date | string
+    followStatus?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -104368,6 +104430,7 @@ export namespace Prisma {
     intervalDays?: IntFieldUpdateOperationsInput | number
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -104380,6 +104443,7 @@ export namespace Prisma {
     intervalDays?: IntFieldUpdateOperationsInput | number
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -104620,6 +104684,7 @@ export namespace Prisma {
   export type customeruserfollowCreateWithoutLogsInput = {
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
     user: sysuserCreateNestedOneWithoutUserFollowInput
   }
@@ -104628,6 +104693,7 @@ export namespace Prisma {
     userId: string
     lastFollowedAt?: Date | string | null
     nextFollowAt?: Date | string | null
+    followStatus?: string | null
     updatedAt?: Date | string
   }
 
@@ -104650,6 +104716,7 @@ export namespace Prisma {
   export type customeruserfollowUpdateWithoutLogsInput = {
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     user?: sysuserUpdateOneRequiredWithoutUserFollowNestedInput
   }
@@ -104658,6 +104725,7 @@ export namespace Prisma {
     userId?: StringFieldUpdateOperationsInput | string
     lastFollowedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nextFollowAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    followStatus?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 

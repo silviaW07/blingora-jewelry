@@ -4,11 +4,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  addFollowPhones,
   getCustomerFollowLogs,
   getFollowUpBoard,
-  markCustomerFollowed,
+  setFollowStatus,
   updateTagFollowIntervals,
   type FollowLog,
+  type FollowStatus,
   type FollowTagInterval,
   type RegisteredFollowCustomer,
 } from '@/backend/actions/CustomerFollowUp'
@@ -32,7 +34,7 @@ export function useCustomerFollowUp() {
       setDue(res.due)
       setAll(res.all)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "客户列表加载失败")
+      toast.error(error instanceof Error ? error.message : '客户列表加载失败')
     } finally {
       setLoading(false)
     }
@@ -42,16 +44,20 @@ export function useCustomerFollowUp() {
     void reload()
   }, [reload])
 
-  const openCustomer = useCallback(async (customer: RegisteredFollowCustomer) => {
+  const changeStatus = useCallback(async (customer: RegisteredFollowCustomer, status: FollowStatus) => {
     setSaving(true)
-    const res = await markCustomerFollowed({ id: customer.id })
-    setSaving(false)
-    if (!res) return
-    setFollowedAt(res.followedAt)
-    setLogs(res.logs)
-    setActive({ ...customer, lastFollowedAt: res.followedAt, nextFollowAt: res.nextFollowAt, due: false })
-    toast.success('已记录本次跟进时间')
-    await reload()
+    try {
+      const res = await setFollowStatus({ id: customer.id, kind: customer.kind, status })
+      if (!res) return
+      if (status === 'FOLLOWED') {
+        setFollowedAt(res.followedAt)
+        setActive({ ...customer, followStatus: 'FOLLOWED', lastFollowedAt: res.followedAt, nextFollowAt: res.nextFollowAt })
+        toast.success('已记为已跟进')
+      }
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }, [reload])
 
   const openNext = useCallback(async () => {
@@ -60,8 +66,8 @@ export function useCustomerFollowUp() {
       toast.message('今天没有待跟进客户')
       return
     }
-    await openCustomer(next)
-  }, [due, openCustomer])
+    await changeStatus(next, 'FOLLOWED')
+  }, [due, changeStatus])
 
   const saveIntervals = useCallback(async (input: FollowTagInterval[]) => {
     setSaving(true)
@@ -69,16 +75,28 @@ export function useCustomerFollowUp() {
     setSaving(false)
     if (!res) return
     setTags(res)
-    toast.success('已按标签保存跟进频次')
+    toast.success('已按客户类型保存跟进频次')
     await reload()
   }, [reload])
 
   const showLogs = useCallback(async (customer: RegisteredFollowCustomer) => {
     setActive(customer)
     setFollowedAt(customer.lastFollowedAt)
-    const res = await getCustomerFollowLogs(customer.id)
+    const res = await getCustomerFollowLogs({ id: customer.id, kind: customer.kind })
     setLogs(res || [])
   }, [])
 
-  return { tags, due, all, loading, saving, active, followedAt, logs, reload, openCustomer, openNext, saveIntervals, showLogs }
+  const addPhones = useCallback(async (raw: string) => {
+    setSaving(true)
+    try {
+      const res = await addFollowPhones(raw)
+      if (!res) return
+      toast.success(`已添加 ${res.added} 个，跳过 ${res.skipped} 个重复号码`)
+      await reload()
+    } finally {
+      setSaving(false)
+    }
+  }, [reload])
+
+  return { tags, due, all, loading, saving, active, followedAt, logs, reload, changeStatus, openNext, saveIntervals, showLogs, addPhones }
 }
