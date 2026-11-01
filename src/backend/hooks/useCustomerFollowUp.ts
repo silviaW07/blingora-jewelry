@@ -45,20 +45,25 @@ export function useCustomerFollowUp() {
   }, [reload])
 
   const changeStatus = useCallback(async (customer: RegisteredFollowCustomer, status: FollowStatus) => {
-    setSaving(true)
-    try {
-      const res = await setFollowStatus({ id: customer.id, kind: customer.kind, status })
-      if (!res) return
-      if (status === 'FOLLOWED') {
-        setFollowedAt(res.followedAt)
-        setActive({ ...customer, followStatus: 'FOLLOWED', lastFollowedAt: res.followedAt, nextFollowAt: res.nextFollowAt })
-        toast.success('已记为已跟进')
-      }
-      await reload()
-    } finally {
-      setSaving(false)
+    const res = await setFollowStatus({ id: customer.id, kind: customer.kind, status })
+    if (!res) return
+    const nextRow: RegisteredFollowCustomer = {
+      ...customer,
+      followStatus: res.followStatus,
+      lastFollowedAt: status === 'FOLLOWED' ? res.followedAt : customer.lastFollowedAt,
+      nextFollowAt: res.nextFollowAt,
     }
-  }, [reload])
+    const same = (row: RegisteredFollowCustomer) => row.id === customer.id && row.kind === customer.kind
+    setAll((rows) => rows.map((row) => (same(row) ? nextRow : row)))
+    setDue((rows) => {
+      const rest = rows.filter((row) => !same(row))
+      return status === 'DUE' ? [nextRow, ...rest] : rest
+    })
+    if (status === 'FOLLOWED') {
+      setFollowedAt(res.followedAt)
+      setActive(nextRow)
+    }
+  }, [])
 
   const openNext = useCallback(async () => {
     const next = due[0]
