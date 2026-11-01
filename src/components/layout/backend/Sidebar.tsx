@@ -46,6 +46,12 @@ const MENU_ITEMS = [{
   icon: Users,
   roles: ['ADMIN']
 }, {
+  id: 'B22',
+  label: '客户跟进',
+  href: '/customerfollowup',
+  icon: UserRound,
+  roles: ['ADMIN']
+}, {
   id: 'B08',
   label: '订单管理',
   href: '/ordermanagement',

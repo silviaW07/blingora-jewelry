@@ -1355,3 +1355,29 @@ model customerbalanceentry {
   @@unique([orderId, kind])
   @@index([userId])
 }
+
+
+model customerfollowup {
+  id             String   @id @db.VarChar(36)
+  name           String   @db.VarChar(100)
+  whatsapp       String?  @db.VarChar(40)
+  note           String?  @db.VarChar(500)
+  intervalDays   Int      @default(7)
+  lastFollowedAt DateTime?
+  nextFollowAt   DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt @default(now())
+  logs           customerfollowlog[]
+
+  @@index([nextFollowAt])
+}
+
+model customerfollowlog {
+  id         String   @id @db.VarChar(36)
+  customerId String   @db.VarChar(36)
+  followedAt DateTime @default(now())
+  note       String?  @db.VarChar(500)
+  customer   customerfollowup @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, followedAt])
+}
