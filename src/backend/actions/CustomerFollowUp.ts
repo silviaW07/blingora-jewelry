@@ -195,7 +195,11 @@ export const getFollowUpBoard = requireRole([UserRole.ADMIN])(
           followStatus: status,
         }
       })
-    const all = [...manualRows, ...registered]
+    const all = [...manualRows, ...registered].sort((a, b) => {
+      const left = a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0
+      const right = b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0
+      return right - left
+    })
     const tagList = CUSTOMER_TAG_OPTIONS.map((option) => ({
       code: option.code,
       name: option.name,

@@ -17614,7 +17614,11 @@ const getFollowUpBoard = (0, _action_utils.requireRole)([
     const all = [
         ...manualRows,
         ...registered
-    ];
+    ].sort((a, b)=>{
+        const left = a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0;
+        const right = b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0;
+        return right - left;
+    });
     const tagList = _customerTags.CUSTOMER_TAG_OPTIONS.map((option)=>{
         var _tagByCode_get;
         return {
