@@ -16,3 +16,5 @@ export const getCustomerFollowLogs = (...args: Parameters<Actions["getCustomerFo
   rpcCall<Awaited<ReturnType<Actions["getCustomerFollowLogs"]>>>("src.backend.actions.CustomerFollowUp.getCustomerFollowLogs", ...args);
 export const addFollowPhones = (...args: Parameters<Actions["addFollowPhones"]>) => 
   rpcCall<Awaited<ReturnType<Actions["addFollowPhones"]>>>("src.backend.actions.CustomerFollowUp.addFollowPhones", ...args);
+export const updateFollowPhone = (...args: Parameters<Actions["updateFollowPhone"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateFollowPhone"]>>>("src.backend.actions.CustomerFollowUp.updateFollowPhone", ...args);

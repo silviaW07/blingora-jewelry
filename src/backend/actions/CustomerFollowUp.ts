@@ -364,3 +364,27 @@ export const addFollowPhones = requireRole([UserRole.ADMIN])(
     return { added, skipped }
   }),
 )
+
+
+export const updateFollowPhone = requireRole([UserRole.ADMIN])(
+  withResult(async (input: { id: string; kind: FollowKind; phone: string }): Promise<{ phone: string | null }> => {
+    const phone = String(input.phone || '').trim().slice(0, 30) || null
+    if (input.kind === 'manual') {
+      const current = await prisma.customerfollowup.findUnique({ where: { id: input.id } })
+      if (!current) throw new Error('客户不存在')
+      const sameName = !current.name || current.name === current.whatsapp
+      await prisma.customerfollowup.update({
+        where: { id: input.id },
+        data: {
+          whatsapp: phone,
+          ...(sameName ? { name: phone || current.name } : {}),
+        },
+      })
+      return { phone }
+    }
+    const user = await prisma.sysuser.findFirst({ where: { id: input.id, role: 'CUSTOMER' }, select: { id: true } })
+    if (!user) throw new Error('客户不存在')
+    await prisma.sysuser.update({ where: { id: user.id }, data: { phone } })
+    return { phone }
+  }),
+)

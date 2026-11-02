@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   addFollowPhones,
+  updateFollowPhone,
   getCustomerFollowLogs,
   getFollowUpBoard,
   setFollowStatus,
@@ -103,5 +104,17 @@ export function useCustomerFollowUp() {
     }
   }, [reload])
 
-  return { tags, due, all, loading, saving, active, followedAt, logs, reload, changeStatus, openNext, saveIntervals, showLogs, addPhones }
+  const savePhone = useCallback(async (customer: RegisteredFollowCustomer, phone: string) => {
+    const res = await updateFollowPhone({ id: customer.id, kind: customer.kind, phone })
+    if (!res) return
+    const nextRow = { ...customer, phone: res.phone }
+    const same = (row: RegisteredFollowCustomer) => row.id === customer.id && row.kind === customer.kind
+    setAll((rows) => rows.map((row) => (same(row) ? { ...row, phone: res.phone } : row)))
+    setDue((rows) => rows.map((row) => (same(row) ? { ...row, phone: res.phone } : row)))
+    setActive((row) => (row && same(row) ? { ...row, phone: res.phone } : row))
+    toast.success(res.phone ? "已保存手机号" : "已清空手机号")
+    return nextRow
+  }, [])
+
+  return { tags, due, all, loading, saving, active, followedAt, logs, reload, changeStatus, openNext, saveIntervals, showLogs, addPhones, savePhone }
 }

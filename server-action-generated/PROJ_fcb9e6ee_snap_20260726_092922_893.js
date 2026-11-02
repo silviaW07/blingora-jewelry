@@ -17419,6 +17419,9 @@ _export(exports, {
     get setFollowStatus () {
         return setFollowStatus;
     },
+    get updateFollowPhone () {
+        return updateFollowPhone;
+    },
     get updateTagFollowIntervals () {
         return updateTagFollowIntervals;
     }
@@ -17959,6 +17962,55 @@ const addFollowPhones = (0, _action_utils.requireRole)([
     return {
         added,
         skipped
+    };
+}));
+const updateFollowPhone = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const phone = String(input.phone || '').trim().slice(0, 30) || null;
+    if (input.kind === 'manual') {
+        const current = await _prisma.default.customerfollowup.findUnique({
+            where: {
+                id: input.id
+            }
+        });
+        if (!current) throw new Error('客户不存在');
+        const sameName = !current.name || current.name === current.whatsapp;
+        await _prisma.default.customerfollowup.update({
+            where: {
+                id: input.id
+            },
+            data: {
+                whatsapp: phone,
+                ...sameName ? {
+                    name: phone || current.name
+                } : {}
+            }
+        });
+        return {
+            phone
+        };
+    }
+    const user = await _prisma.default.sysuser.findFirst({
+        where: {
+            id: input.id,
+            role: 'CUSTOMER'
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!user) throw new Error('客户不存在');
+    await _prisma.default.sysuser.update({
+        where: {
+            id: user.id
+        },
+        data: {
+            phone
+        }
+    });
+    return {
+        phone
     };
 }));
 

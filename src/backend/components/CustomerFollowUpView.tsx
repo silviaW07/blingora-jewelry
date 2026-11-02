@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -44,16 +44,86 @@ function whatsappHref(phone: string | null) {
   return `https://wa.me/${digits}`
 }
 
+function PhoneCell({
+  row,
+  onSave,
+  onStatus,
+}: {
+  row: RegisteredFollowCustomer
+  onSave: (row: RegisteredFollowCustomer, phone: string) => void
+  onStatus: (row: RegisteredFollowCustomer, status: FollowStatus) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(row.phone || '')
+  const openTimer = useRef<number | null>(null)
+  useEffect(() => setValue(row.phone || ''), [row.phone])
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        className="h-8 w-40 rounded border px-2"
+        value={value}
+        placeholder="手机号"
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => {
+          setEditing(false)
+          const next = value.trim()
+          if (next !== (row.phone || '')) onSave(row, next)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+          if (event.key === 'Escape') {
+            setValue(row.phone || '')
+            setEditing(false)
+          }
+        }}
+      />
+    )
+  }
+  const href = whatsappHref(row.phone)
+  return (
+    <span title="双击补充手机号" onDoubleClick={() => setEditing(true)}>
+      {href ? (
+        <a
+          className="text-sky-700 underline"
+          href={href}
+          onClick={(event) => {
+            event.preventDefault()
+            if (openTimer.current) window.clearTimeout(openTimer.current)
+            openTimer.current = window.setTimeout(() => {
+              onStatus(row, 'FOLLOWED')
+              window.open(href, '_blank', 'noopener')
+            }, 250)
+          }}
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            if (openTimer.current) window.clearTimeout(openTimer.current)
+            setEditing(true)
+          }}
+        >
+          {row.phone}
+        </a>
+      ) : (
+        <button type="button" className="text-muted-foreground underline decoration-dotted" onDoubleClick={() => setEditing(true)}>
+          {row.phone || '—'}
+        </button>
+      )}
+    </span>
+  )
+}
+
 function CustomerTable({
   rows,
   saving,
   onStatus,
   onLogs,
+  onSavePhone,
 }: {
   rows: RegisteredFollowCustomer[]
   saving: boolean
   onStatus: (row: RegisteredFollowCustomer, status: FollowStatus) => void
   onLogs: (row: RegisteredFollowCustomer) => void
+  onSavePhone: (row: RegisteredFollowCustomer, phone: string) => void
 }) {
   if (!rows.length) return <p className="px-4 py-8 text-sm text-muted-foreground">没有客户</p>
   return (
@@ -75,22 +145,11 @@ function CustomerTable({
         </thead>
         <tbody>
           {rows.map((row) => {
-            const href = whatsappHref(row.phone)
             return (
               <tr key={`${row.kind}-${row.id}`} className="border-t">
                 <td className="px-3 py-2 font-medium">{row.name}</td>
                 <td className="px-3 py-2">
-                  {href ? (
-                    <a
-                      className="text-sky-700 underline"
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => onStatus(row, 'FOLLOWED')}
-                    >
-                      {row.phone}
-                    </a>
-                  ) : (row.phone || '—')}
+                  <PhoneCell row={row} onSave={onSavePhone} onStatus={onStatus} />
                 </td>
                 <td className="px-3 py-2">
                   <select
@@ -126,7 +185,7 @@ function CustomerTable({
 }
 
 export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowUp>) {
-  const { tags, due, all, loading, saving, active, followedAt, logs, changeStatus, openNext, saveIntervals, showLogs, addPhones } = props
+  const { tags, due, all, loading, saving, active, followedAt, logs, changeStatus, openNext, saveIntervals, showLogs, addPhones, savePhone } = props
   const [draft, setDraft] = useState<FollowTagInterval[] | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | FollowStatus>('')
@@ -228,7 +287,7 @@ export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowU
           </form>
         ) : null}
         {loading ? <p className="px-4 py-8 text-sm text-muted-foreground">正在加载客户…</p> : (
-          <CustomerTable rows={filtered} saving={saving} onStatus={(row, status) => void changeStatus(row, status)} onLogs={(row) => void showLogs(row)} />
+          <CustomerTable rows={filtered} saving={saving} onStatus={(row, status) => void changeStatus(row, status)} onLogs={(row) => void showLogs(row)} onSavePhone={(row, phone) => void savePhone(row, phone)} />
         )}
       </section>
     </div>
