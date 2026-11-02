@@ -39,8 +39,9 @@ function money(value: number) {
 }
 
 function whatsappHref(phone: string | null) {
-  const digits = phoneDigits(phone)
+  let digits = phoneDigits(phone)
   if (digits.length < 6) return ''
+  if (!digits.startsWith('1')) digits = `1${digits}`
   return `https://wa.me/${digits}`
 }
 
