@@ -6545,7 +6545,7 @@ const buildPendingQueueWhere = (
 }
 
 
-/** Group identical pending titles onto neighboring rows. Rows stay separate. */
+/** Same-title rows uploaded today sit together. Older rows stay in upload order. */
 const pendingProductGroupKey = (name?: string | null, id?: string) => {
   const text = String(name || '')
     .toLowerCase()
@@ -6553,6 +6553,14 @@ const pendingProductGroupKey = (name?: string | null, id?: string) => {
     .replace(/[^\p{Script=Han}a-z0-9]+/giu, '')
   return text.length >= 8 ? text : `row:${id || ''}`
 }
+
+const shanghaiDateKey = (value: Date) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value)
 
 const loadPendingImportQueueSnapshot = async (opts?: {
   page?: number
@@ -6622,24 +6630,25 @@ const loadPendingImportQueueSnapshot = async (opts?: {
       if (Number.isFinite(value)) sortIndexById.set(String(row.id), value)
     }
   }
+  const todayKey = shanghaiDateKey(new Date())
+  const rowById = new Map(orderRows.map((row) => [row.id, row]))
   const orderedIds = [...orderRows]
     .sort((a, b) => {
-      const sortA = sortIndexById.get(a.id)
-      const sortB = sortIndexById.get(b.id)
-      if (sortA !== undefined && sortB !== undefined && sortA !== sortB) return sortA - sortB
-      if (sortA !== undefined && sortB === undefined) return -1
-      if (sortA === undefined && sortB !== undefined) return 1
       const timeA = new Date(a.createdAt).getTime()
       const timeB = new Date(b.createdAt).getTime()
       if (timeA !== timeB) return timeA - timeB
+      const sortA = sortIndexById.get(a.id)
+      const sortB = sortIndexById.get(b.id)
+      if (sortA !== undefined && sortB !== undefined && sortA !== sortB) return sortA - sortB
       return String(a.id).localeCompare(String(b.id))
     })
     .map((row) => row.id)
-  const nameById = new Map(orderRows.map((row) => [row.id, row.parsedName]))
   const buckets: string[][] = []
   const seenGroups = new Map<string, number>()
   for (const id of orderedIds) {
-    const key = pendingProductGroupKey(nameById.get(id), id)
+    const row = rowById.get(id)
+    const uploadedToday = row ? shanghaiDateKey(new Date(row.createdAt)) === todayKey : false
+    const key = uploadedToday ? pendingProductGroupKey(row?.parsedName, id) : `row:${id}`
     let index = seenGroups.get(key)
     if (index === undefined) {
       index = buckets.length
