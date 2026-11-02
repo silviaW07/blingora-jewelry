@@ -25333,7 +25333,7 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
     const markedRows = itemIds.length > 0 ? [] : await _prisma.default.$queryRawUnsafe(`SELECT id FROM importtaskitem
          WHERE isPublished = 0
            AND importedProductId IS NULL
-           AND CAST(previewDataJson AS CHAR) LIKE '%"weightReview":true%'`);
+           AND JSON_EXTRACT(previewDataJson, '$.weightReview') = true`);
     const markedIds = markedRows.map((row)=>String(row.id));
     const baseWhere = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, itemIds);
     const withArea = (area)=>{
