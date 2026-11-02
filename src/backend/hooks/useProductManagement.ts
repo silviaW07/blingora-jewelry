@@ -2535,16 +2535,21 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       toast.success(enabled
         ? `已移入待修改重量 ${res.success_count} 条`
         : `已移回待上传 ${res.success_count} 条`)
+      const moved = new Set(ids)
       setPendingImportSelectedIds([])
-      if (!enabled) {
-        pendingQueueAreaRef.current = 'upload'
-        setActiveTab('pending_imports')
+      setPendingImportQueue((prev) => prev.filter((item) => !moved.has(item.item_id)))
+      const movedCount = Number(res.success_count) || ids.length
+      pendingQueueAreaRef.current = 'upload'
+      setActiveTab('pending_imports')
+      if (enabled) {
+        setPendingUploadQueueTotal((prev) => Math.max(0, prev - movedCount))
+        setPendingWeightQueueTotal((prev) => prev + movedCount)
+        setPendingImportQueueTotal((prev) => Math.max(0, prev - movedCount))
+      } else {
+        setPendingUploadQueueTotal((prev) => prev + movedCount)
+        setPendingWeightQueueTotal((prev) => Math.max(0, prev - movedCount))
+        setPendingImportQueueTotal((prev) => prev + movedCount)
       }
-      pendingImportPageRef.current = 1
-      setPendingImportPage(1)
-      pendingImportQueueLengthRef.current = 0
-      setPendingImportQueue([])
-      void refreshPendingImportQueue({ silent: true, page: 1 })
     } catch (err: any) {
       toast.error(err?.message || '移动失败')
     }
