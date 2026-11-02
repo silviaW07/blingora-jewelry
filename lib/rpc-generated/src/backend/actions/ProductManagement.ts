@@ -56,6 +56,8 @@ export const retryPendingImportTaskForProductManagement = (...args: Parameters<A
   rpcCall<Awaited<ReturnType<Actions["retryPendingImportTaskForProductManagement"]>>>("src.backend.actions.ProductManagement.retryPendingImportTaskForProductManagement", ...args);
 export const getPendingImportQueue = (...args: Parameters<Actions["getPendingImportQueue"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getPendingImportQueue"]>>>("src.backend.actions.ProductManagement.getPendingImportQueue", ...args);
+export const setPendingImportWeightReview = (...args: Parameters<Actions["setPendingImportWeightReview"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["setPendingImportWeightReview"]>>>("src.backend.actions.ProductManagement.setPendingImportWeightReview", ...args);
 export const setPendingImportReviewMark = (...args: Parameters<Actions["setPendingImportReviewMark"]>) => 
   rpcCall<Awaited<ReturnType<Actions["setPendingImportReviewMark"]>>>("src.backend.actions.ProductManagement.setPendingImportReviewMark", ...args);
 export const inlineUpdatePendingImportItemField = (...args: Parameters<Actions["inlineUpdatePendingImportItemField"]>) => 

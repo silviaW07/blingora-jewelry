@@ -655,6 +655,7 @@ import {
   cancelPendingImportParseJob as cancelImportFrom1688PendingImportParseJob,
   updatePendingImportGallery as updateImportFrom1688PendingImportGallery,
   setPendingImportReviewMark as setImportFrom1688PendingImportReviewMark,
+  setPendingImportWeightReview as setImportFrom1688PendingImportWeightReview,
   check1688OfferLiveStatus,
   loadAutoMatchSecondaryCategories,
   matchSecondaryCategoriesByTitle,
@@ -3453,6 +3454,18 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
     const queue = await getImportFrom1688PendingImportQueue(input)
     return queue as ProductManagementPendingImportQueueOutput
   })
+)
+
+export const setPendingImportWeightReview = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    item_ids: string[]
+    weight_review: boolean
+  }): Promise<BatchOperateOutput> => {
+    return setImportFrom1688PendingImportWeightReview({
+      itemIds: input.item_ids,
+      weightReview: input.weight_review,
+    })
+  }),
 )
 
 export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(

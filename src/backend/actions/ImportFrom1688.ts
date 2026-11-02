@@ -106,6 +106,8 @@ export interface PreviewDataJson {
   /** 运营人工审核过（与货物状态 DRAFT/ACTIVE 无关） */
   reviewed?: boolean
   reviewedAt?: string
+  /** 勾选后进入待修改重量，不再出现在待上传区 */
+  weightReview?: boolean
 }
 
 export type PendingImportReviewFilter = 'all' | 'reviewed' | 'unreviewed'
@@ -119,9 +121,15 @@ const pickPersistedReviewMark = (preview: unknown): Pick<PreviewDataJson, 'revie
   }
 }
 
+const pickPersistedWeightReview = (preview: unknown): Pick<PreviewDataJson, 'weightReview'> => {
+  const prev = (preview || {}) as PreviewDataJson
+  return prev.weightReview ? { weightReview: true } : {}
+}
+
 const withPersistedReviewMark = (next: PreviewDataJson, previous: unknown): PreviewDataJson => ({
   ...next,
   ...pickPersistedReviewMark(previous),
+  ...pickPersistedWeightReview(previous),
 })
 
 const isPreviewReviewed = (preview: unknown): boolean =>
@@ -133,6 +141,14 @@ const stripReviewMark = (preview: PreviewDataJson): PreviewDataJson => {
   delete next.reviewedAt
   return next
 }
+
+const PENDING_WEIGHT_REVIEW_JSON_WHERE = {
+  OR: [
+    { previewDataJson: { path: ['weightReview'], equals: true } },
+    { previewDataJson: { string_contains: '"weightReview":true' } },
+    { previewDataJson: { string_contains: '"weightReview": true' } },
+  ],
+} as const
 
 const PENDING_REVIEWED_JSON_WHERE = {
   OR: [
@@ -457,12 +473,16 @@ export interface GetPendingImportQueueInput {
   keyword?: string
   /** 人工审核标记：全部 / 已审核 / 未审核 */
   review_filter?: PendingImportReviewFilter
+  /** upload = 待上传区（默认）；weight = 待修改重量 */
+  queue_area?: 'upload' | 'weight'
 }
 
 export interface GetPendingImportQueueOutput {
   activeTask: PendingImportQueueTaskSummary | null
   list: PendingImportItemRecord[]
   total: number
+  upload_total?: number
+  weight_total?: number
   page?: number
   page_size?: number
   /** In-process collect/reparse job — survives page refresh so UI can show progress + 终止解析 */
@@ -6517,11 +6537,16 @@ const buildPendingQueueWhere = (
   keyword?: string,
   reviewFilter?: PendingImportReviewFilter,
   itemIds?: string[],
+  queueArea?: 'upload' | 'weight',
 ) => {
   const parts: Record<string, unknown>[] = [PENDING_IMPORT_QUEUE_WHERE as Record<string, unknown>]
   const ids = (itemIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 5)
   if (ids.length > 0) {
     parts.push({ id: { in: ids } })
+  } else if (queueArea === 'weight') {
+    parts.push(PENDING_WEIGHT_REVIEW_JSON_WHERE as Record<string, unknown>)
+  } else if (queueArea === 'upload') {
+    parts.push({ NOT: PENDING_WEIGHT_REVIEW_JSON_WHERE })
   }
   const kw = String(keyword || '').trim()
   if (kw) {
@@ -6567,9 +6592,10 @@ const loadPendingImportQueueSnapshot = async (opts?: {
   page_size?: number
   keyword?: string
   review_filter?: PendingImportReviewFilter
+  queue_area?: 'upload' | 'weight'
   light?: boolean
   item_ids?: string[]
-}): Promise<PendingImportQueueSnapshot & { total: number }> => {
+}): Promise<PendingImportQueueSnapshot & { total: number; uploadTotal: number; weightTotal: number }> => {
   const page = Math.max(1, Number(opts?.page) || 1)
   const pageSize = Math.min(
     MAX_PENDING_QUEUE_PAGE_SIZE,
@@ -6578,14 +6604,17 @@ const loadPendingImportQueueSnapshot = async (opts?: {
   const itemIds = (opts?.item_ids || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 5)
   const skip = itemIds.length > 0 ? 0 : (page - 1) * pageSize
   const take = itemIds.length > 0 ? itemIds.length : pageSize
-  const where = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, itemIds) as any
+  const queueArea = opts?.queue_area === 'weight' ? 'weight' : 'upload'
+  const where = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, itemIds, itemIds.length > 0 ? undefined : queueArea) as any
+  const uploadWhere = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, [], 'upload') as any
+  const weightWhere = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, [], 'weight') as any
   const light = Boolean(opts?.light)
 
   if (!light) {
     await loadBrandAliasRules()
   }
 
-  const [activeTask, total, orderRows, enrichContext] =
+  const [activeTask, total, uploadTotal, weightTotal, orderRows, enrichContext] =
     await Promise.all([
     prisma.importtask.findFirst({
       where: {
@@ -6610,6 +6639,8 @@ const loadPendingImportQueueSnapshot = async (opts?: {
       },
     }),
     prisma.importtaskitem.count({ where }),
+    prisma.importtaskitem.count({ where: uploadWhere }),
+    prisma.importtaskitem.count({ where: weightWhere }),
     prisma.importtaskitem.findMany({
       where,
       select: { id: true, parsedName: true, createdAt: true },
@@ -6739,6 +6770,8 @@ const loadPendingImportQueueSnapshot = async (opts?: {
     activeTask: task ? buildPendingTaskSummary(task) : null,
     items: sortedItems.map(item => buildPendingItemStructure(item, item.importTask, enrichContext || undefined, { light })),
     total,
+    uploadTotal,
+    weightTotal,
   }
 }
 
@@ -9048,7 +9081,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
     const includeDrafts = Boolean(input?.include_drafts) || itemIds.length > 0
     const light = skipMaintenance && !includeDrafts
     const lightCacheKey = light
-      ? `${page}|${pageSize}|${String(input?.keyword || '')}|${itemIds.join(',')}|${String(input?.review_filter || '')}`
+      ? `${page}|${pageSize}|${String(input?.keyword || '')}|${itemIds.join(',')}|${String(input?.review_filter || '')}|${String(input?.queue_area || 'upload')}`
       : ''
     if (lightCacheKey && lastPendingLightQueueCache && lastPendingLightQueueCache.key === lightCacheKey && Date.now() - lastPendingLightQueueCache.at < 3000) {
       return lastPendingLightQueueCache.result
@@ -9290,6 +9323,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       page_size: pageSize,
       keyword: input?.keyword,
       review_filter: input?.review_filter,
+      queue_area: input?.queue_area === 'weight' ? 'weight' : 'upload',
       light,
       item_ids: itemIds,
     })
@@ -9321,6 +9355,8 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
       activeTask: snapshot.activeTask,
       list: snapshot.items,
       total: snapshot.total,
+      upload_total: snapshot.uploadTotal,
+      weight_total: snapshot.weightTotal,
       page,
       page_size: pageSize,
       parse_job: getParseJobRuntimeStatus(),
@@ -11070,6 +11106,41 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
 )
 
 /** 待上传爱心审核标：只改 previewDataJson.reviewed，不改货物状态、不发布。 */
+export const setPendingImportWeightReview = requireRole([UserRole.ADMIN])(
+  withResult(async (input: {
+    itemIds: string[]
+    weightReview: boolean
+  }): Promise<{ success_count: number; fail_count: number }> => {
+    const itemIds = Array.from(
+      new Set((input.itemIds || []).map((id) => String(id || '').trim()).filter(Boolean)),
+    )
+    if (!itemIds.length) return { success_count: 0, fail_count: 0 }
+    const items = await prisma.importtaskitem.findMany({
+      where: { id: { in: itemIds }, isPublished: false },
+      select: { id: true, previewDataJson: true },
+    })
+    let success = 0
+    let fail = Math.max(0, itemIds.length - items.length)
+    for (const item of items) {
+      try {
+        const preview = { ...((item.previewDataJson || {}) as PreviewDataJson) }
+        if (input.weightReview) preview.weightReview = true
+        else delete preview.weightReview
+        await prisma.importtaskitem.update({
+          where: { id: item.id },
+          data: { previewDataJson: preview as any },
+        })
+        success += 1
+      } catch (error) {
+        console.error('[setPendingImportWeightReview] failed', item.id, error)
+        fail += 1
+      }
+    }
+    lastPendingLightQueueCache = null
+    return { success_count: success, fail_count: fail }
+  }),
+)
+
 export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
   withResult(async (input: {
     itemIds: string[]

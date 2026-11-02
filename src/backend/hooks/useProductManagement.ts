@@ -36,6 +36,7 @@ import {
   retryPendingImportTaskForProductManagement,
   getPendingImportQueue,
   setPendingImportReviewMark,
+  setPendingImportWeightReview,
   inlineUpdatePendingImportItemField,
   batchUpdatePendingImportItemField,
   inlineUpdatePendingImportSkuField,
@@ -172,7 +173,7 @@ type BatchAdjustTargetField = 'price_coefficient' | 'weight_gram'
 type ProductListFilterStatus = ProductListStatusFilter | 'ALL'
 type ProductFormGoodsStatus = ActionGoodsStatus | 'ACTIVE'
 
-type ProductManagementTab = 'products' | 'pending_imports'
+type ProductManagementTab = 'products' | 'pending_imports' | 'weight_review'
 type PendingImportFieldValue = string | number | null
 type PendingImportEditableCell = {
   itemId: string
@@ -925,6 +926,8 @@ export interface ProductManagementState {
   pendingImportQueue: PendingImportQueueItem[]
   pendingImportPagedQueue: PendingImportQueueItem[]
   pendingImportQueueTotal: number
+  pendingUploadQueueTotal: number
+  pendingWeightQueueTotal: number
   pendingImportQueueError: string | null
   pendingImportPage: number
   pendingImportPageSize: number
@@ -1100,6 +1103,7 @@ export interface ProductManagementHandlers {
   handleSelectPendingImportSkuKeys: (itemId: string, skuKeys: string[], checked: boolean) => void
   batchDeletePendingImportSelectedSkus: (itemId: string) => Promise<void>
   togglePendingImportReviewMark: (itemId: string) => Promise<void>
+  movePendingImportWeightReview: (enabled: boolean) => Promise<void>
   startPendingImportInlineEdit: (itemId: string, field: PendingImportEditableField, value: PendingImportFieldValue) => void
   changePendingImportInlineEditingValue: (value: string) => void
   cancelPendingImportInlineEdit: () => void
@@ -1360,6 +1364,10 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   })()
   const [pendingImportQueue, setPendingImportQueue] = useState<PendingImportQueueItem[]>([])
   const [pendingImportQueueTotal, setPendingImportQueueTotal] = useState(0)
+  const [pendingUploadQueueTotal, setPendingUploadQueueTotal] = useState(0)
+  const [pendingWeightQueueTotal, setPendingWeightQueueTotal] = useState(0)
+  const pendingQueueAreaRef = useRef<'upload' | 'weight'>('upload')
+  pendingQueueAreaRef.current = activeTab === 'weight_review' ? 'weight' : 'upload'
   const [pendingImportQueueError, setPendingImportQueueError] = useState<string | null>(null)
   const [pendingImportPage, setPendingImportPage] = useState(1)
   const [pendingImportPageSize, setPendingImportPageSize] = useState(30)
@@ -1679,6 +1687,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     setPendingImportQueueTotal(
       typeof result.total === 'number' ? result.total : visibleItems.length,
     )
+    if (typeof result.upload_total === 'number') setPendingUploadQueueTotal(result.upload_total)
+    if (typeof result.weight_total === 'number') setPendingWeightQueueTotal(result.weight_total)
     const previousPageIds = new Set(pendingImportVisibleIdsRef.current)
     pendingImportVisibleIdsRef.current = visibleItems.map(item => item.item_id)
     setPendingImportSelectedIds(prev => {
@@ -1771,6 +1781,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           page_size: pageSizeForFetch,
           keyword: pendingImportKeywordRef.current.trim() || undefined,
           skip_maintenance: true,
+          queue_area: pendingQueueAreaRef.current,
         } as any,
         { __rpcTimeoutMs: silent ? 20_000 : 25_000 },
       )
@@ -1907,16 +1918,20 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   // Defer heavy getPendingImportQueue until the pending tab is opened (not every products visit).
   // Revisit within 45s: keep existing rows visible and refresh silently (no blank spinner).
   useEffect(() => {
-    if (activeTab !== 'pending_imports') return
-    if (pendingImportQueueLengthRef.current > 0) return
-    void refreshPendingImportQueue({ silent: false })
+    if (activeTab !== 'pending_imports' && activeTab !== 'weight_review') return
+    pendingImportPageRef.current = 1
+    setPendingImportPage(1)
+    setPendingImportSelectedIds([])
+    pendingImportQueueLengthRef.current = 0
+    setPendingImportQueue([])
+    void refreshPendingImportQueue({ silent: false, page: 1 })
     // Only load when switching to an empty pending tab. Edits must not retrigger a full reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
   // One shared clock for pending readiness heuristics (replaces per-row 30s timers).
   useEffect(() => {
-    if (activeTab !== 'pending_imports') return
+    if (activeTab !== 'pending_imports' && activeTab !== 'weight_review') return
     setPendingImportNowMs(Date.now())
     const timer = window.setInterval(() => setPendingImportNowMs(Date.now()), 30_000)
     return () => window.clearInterval(timer)
@@ -1946,7 +1961,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
   }, [])
 
   const handleSearch = () => {
-    if (activeTab === 'pending_imports') {
+    if (activeTab === 'pending_imports' || activeTab === 'weight_review' || activeTab === 'weight_review') {
       pendingImportPageRef.current = 1
       setPendingImportPage(1)
       void refreshPendingImportQueue({ silent: false, page: 1 })
@@ -1983,7 +1998,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     pendingImportPageRef.current = 1
     setPendingImportPage(1)
     ProductManagement.navigateToAll(router)
-    if (activeTab === 'pending_imports') {
+    if (activeTab === 'pending_imports' || activeTab === 'weight_review' || activeTab === 'weight_review') {
       void refreshPendingImportQueue({ silent: false, page: 1 })
     }
   }
@@ -2504,6 +2519,34 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const handleSelectPendingImportRow = (id: string, checked: boolean) => {
     setPendingImportSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(itemId => itemId !== id))
+  }
+
+  const movePendingImportWeightReview = async (enabled: boolean) => {
+    const ids = pendingImportSelectedIds
+    if (!ids.length) {
+      toast.error('请先勾选商品')
+      return
+    }
+    try {
+      const res = await setPendingImportWeightReview({
+        item_ids: ids,
+        weight_review: enabled,
+      })
+      toast.success(enabled
+        ? `已移入待修改重量 ${res.success_count} 条`
+        : `已移回待上传 ${res.success_count} 条`)
+      setPendingImportSelectedIds([])
+      const nextTab = enabled ? 'weight_review' : 'pending_imports'
+      pendingQueueAreaRef.current = enabled ? 'weight' : 'upload'
+      setActiveTab(nextTab)
+      pendingImportPageRef.current = 1
+      setPendingImportPage(1)
+      pendingImportQueueLengthRef.current = 0
+      setPendingImportQueue([])
+      void refreshPendingImportQueue({ silent: false, page: 1 })
+    } catch (err: any) {
+      toast.error(err?.message || '移动失败')
+    }
   }
 
   const togglePendingImportReviewMark = async (itemId: string) => {
@@ -3475,7 +3518,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
 
   const handleBatchMosaicGalleries = async () => {
     if (mosaicGalleryRunning) return
-    const pendingScope = activeTab === 'pending_imports'
+    const pendingScope = activeTab === 'pending_imports' || activeTab === 'weight_review' || activeTab === 'weight_review'
     const ids = pendingScope
       ? pendingImportSelectedIds
       : selectedIds.filter((id) => !isSkuSelectionId(id))
@@ -3945,7 +3988,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
           pendingImportQueue.some((item) => item.item_id === id),
         )
         const usePendingScope =
-          activeTab === 'pending_imports' ||
+          activeTab === 'pending_imports' || activeTab === 'weight_review' ||
           (pendingTargetIds.length > 0 && targetProductIds.length === 0)
 
         if (usePendingScope) {
@@ -5313,6 +5356,8 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       pendingImportQueue,
       pendingImportPagedQueue,
       pendingImportQueueTotal,
+      pendingUploadQueueTotal,
+      pendingWeightQueueTotal,
       pendingImportQueueError,
       pendingImportPage,
       pendingImportPageSize,
@@ -5472,6 +5517,7 @@ export const useProductManagement = (): { state: ProductManagementState, handler
       handleSelectAllPendingImport,
       handleSelectPendingImportRow,
       togglePendingImportReviewMark,
+      movePendingImportWeightReview,
       startPendingImportInlineEdit,
       changePendingImportInlineEditingValue,
       cancelPendingImportInlineEdit,

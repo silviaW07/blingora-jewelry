@@ -20026,6 +20026,9 @@ _export(exports, {
     get setPendingImportReviewMark () {
         return setPendingImportReviewMark;
     },
+    get setPendingImportWeightReview () {
+        return setPendingImportWeightReview;
+    },
     get splitTableCategoryPathTokens () {
         return splitTableCategoryPathTokens;
     },
@@ -20104,9 +20107,16 @@ const pickPersistedReviewMark = (preview)=>{
         } : {}
     };
 };
+const pickPersistedWeightReview = (preview)=>{
+    const prev = preview || {};
+    return prev.weightReview ? {
+        weightReview: true
+    } : {};
+};
 const withPersistedReviewMark = (next, previous)=>({
         ...next,
-        ...pickPersistedReviewMark(previous)
+        ...pickPersistedReviewMark(previous),
+        ...pickPersistedWeightReview(previous)
     });
 const isPreviewReviewed = (preview)=>Boolean(preview === null || preview === void 0 ? void 0 : preview.reviewed);
 const stripReviewMark = (preview)=>{
@@ -20116,6 +20126,28 @@ const stripReviewMark = (preview)=>{
     delete next.reviewed;
     delete next.reviewedAt;
     return next;
+};
+const PENDING_WEIGHT_REVIEW_JSON_WHERE = {
+    OR: [
+        {
+            previewDataJson: {
+                path: [
+                    'weightReview'
+                ],
+                equals: true
+            }
+        },
+        {
+            previewDataJson: {
+                string_contains: '"weightReview":true'
+            }
+        },
+        {
+            previewDataJson: {
+                string_contains: '"weightReview": true'
+            }
+        }
+    ]
 };
 const PENDING_REVIEWED_JSON_WHERE = {
     OR: [
@@ -25229,7 +25261,7 @@ const PENDING_QUEUE_ITEM_SELECT = {
     }
 };
 const PENDING_QUEUE_ITEM_SELECT_LIGHT = Object.fromEntries(Object.entries(PENDING_QUEUE_ITEM_SELECT).filter(([key])=>key !== 'previewDataJson'));
-const buildPendingQueueWhere = (keyword, reviewFilter, itemIds)=>{
+const buildPendingQueueWhere = (keyword, reviewFilter, itemIds, queueArea)=>{
     const parts = [
         PENDING_IMPORT_QUEUE_WHERE
     ];
@@ -25239,6 +25271,12 @@ const buildPendingQueueWhere = (keyword, reviewFilter, itemIds)=>{
             id: {
                 in: ids
             }
+        });
+    } else if (queueArea === 'weight') {
+        parts.push(PENDING_WEIGHT_REVIEW_JSON_WHERE);
+    } else if (queueArea === 'upload') {
+        parts.push({
+            NOT: PENDING_WEIGHT_REVIEW_JSON_WHERE
         });
     }
     const kw = String(keyword || '').trim();
@@ -25305,12 +25343,15 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
     const itemIds = ((opts === null || opts === void 0 ? void 0 : opts.item_ids) || []).map((id)=>String(id || '').trim()).filter(Boolean).slice(0, 5);
     const skip = itemIds.length > 0 ? 0 : (page - 1) * pageSize;
     const take = itemIds.length > 0 ? itemIds.length : pageSize;
-    const where = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, itemIds);
+    const queueArea = (opts === null || opts === void 0 ? void 0 : opts.queue_area) === 'weight' ? 'weight' : 'upload';
+    const where = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, itemIds, itemIds.length > 0 ? undefined : queueArea);
+    const uploadWhere = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, [], 'upload');
+    const weightWhere = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, [], 'weight');
     const light = Boolean(opts === null || opts === void 0 ? void 0 : opts.light);
     if (!light) {
         await (0, _brandAlias.loadBrandAliasRules)();
     }
-    const [activeTask, total, orderRows, enrichContext] = await Promise.all([
+    const [activeTask, total, uploadTotal, weightTotal, orderRows, enrichContext] = await Promise.all([
         _prisma.default.importtask.findFirst({
             where: {
                 status: {
@@ -25345,6 +25386,12 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
         }),
         _prisma.default.importtaskitem.count({
             where
+        }),
+        _prisma.default.importtaskitem.count({
+            where: uploadWhere
+        }),
+        _prisma.default.importtaskitem.count({
+            where: weightWhere
         }),
         _prisma.default.importtaskitem.findMany({
             where,
@@ -25478,7 +25525,9 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
         items: sortedItems.map((item)=>buildPendingItemStructure(item, item.importTask, enrichContext || undefined, {
                 light
             })),
-        total
+        total,
+        uploadTotal,
+        weightTotal
     };
 };
 /** 判断待上传条目是否来自表格导入（绝不与 1688 链接共用合并键） */ const isTableImportSourceUrl = (sourceUrl)=>String(sourceUrl || '').startsWith('table-import://');
@@ -27497,7 +27546,7 @@ const getPendingImportQueue = (0, _action_utils.requireRole)([
     const itemIds = ((input === null || input === void 0 ? void 0 : input.item_ids) || []).map((id)=>String(id || '').trim()).filter(Boolean).slice(0, 5);
     const includeDrafts = Boolean(input === null || input === void 0 ? void 0 : input.include_drafts) || itemIds.length > 0;
     const light = skipMaintenance && !includeDrafts;
-    const lightCacheKey = light ? `${page}|${pageSize}|${String((input === null || input === void 0 ? void 0 : input.keyword) || '')}|${itemIds.join(',')}|${String((input === null || input === void 0 ? void 0 : input.review_filter) || '')}` : '';
+    const lightCacheKey = light ? `${page}|${pageSize}|${String((input === null || input === void 0 ? void 0 : input.keyword) || '')}|${itemIds.join(',')}|${String((input === null || input === void 0 ? void 0 : input.review_filter) || '')}|${String((input === null || input === void 0 ? void 0 : input.queue_area) || 'upload')}` : '';
     if (lightCacheKey && lastPendingLightQueueCache && lastPendingLightQueueCache.key === lightCacheKey && Date.now() - lastPendingLightQueueCache.at < 3000) {
         return lastPendingLightQueueCache.result;
     }
@@ -27739,6 +27788,7 @@ const getPendingImportQueue = (0, _action_utils.requireRole)([
         page_size: pageSize,
         keyword: input === null || input === void 0 ? void 0 : input.keyword,
         review_filter: input === null || input === void 0 ? void 0 : input.review_filter,
+        queue_area: (input === null || input === void 0 ? void 0 : input.queue_area) === 'weight' ? 'weight' : 'upload',
         light,
         item_ids: itemIds
     });
@@ -27773,6 +27823,8 @@ const getPendingImportQueue = (0, _action_utils.requireRole)([
         activeTask: snapshot.activeTask,
         list: snapshot.items,
         total: snapshot.total,
+        upload_total: snapshot.uploadTotal,
+        weight_total: snapshot.weightTotal,
         page,
         page_size: pageSize,
         parse_job: getParseJobRuntimeStatus()
@@ -29445,6 +29497,55 @@ const inlineUpdatePendingImportItemField = (0, _action_utils.requireRole)([
         },
         data
     });
+}));
+const setPendingImportWeightReview = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const itemIds = Array.from(new Set((input.itemIds || []).map((id)=>String(id || '').trim()).filter(Boolean)));
+    if (!itemIds.length) return {
+        success_count: 0,
+        fail_count: 0
+    };
+    const items = await _prisma.default.importtaskitem.findMany({
+        where: {
+            id: {
+                in: itemIds
+            },
+            isPublished: false
+        },
+        select: {
+            id: true,
+            previewDataJson: true
+        }
+    });
+    let success = 0;
+    let fail = Math.max(0, itemIds.length - items.length);
+    for (const item of items){
+        try {
+            const preview = {
+                ...item.previewDataJson || {}
+            };
+            if (input.weightReview) preview.weightReview = true;
+            else delete preview.weightReview;
+            await _prisma.default.importtaskitem.update({
+                where: {
+                    id: item.id
+                },
+                data: {
+                    previewDataJson: preview
+                }
+            });
+            success += 1;
+        } catch (error) {
+            console.error('[setPendingImportWeightReview] failed', item.id, error);
+            fail += 1;
+        }
+    }
+    lastPendingLightQueueCache = null;
+    return {
+        success_count: success,
+        fail_count: fail
+    };
 }));
 const setPendingImportReviewMark = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -35297,6 +35398,9 @@ _export(exports, {
     get setPendingImportReviewMark () {
         return setPendingImportReviewMark;
     },
+    get setPendingImportWeightReview () {
+        return setPendingImportWeightReview;
+    },
     get startPendingImportTaskForProductManagement () {
         return startPendingImportTaskForProductManagement;
     },
@@ -38349,6 +38453,14 @@ const getPendingImportQueue = (0, _action_utils.requireRole)([
 ])((0, _action_utils.withResult)(async (input)=>{
     const queue = await (0, _ImportFrom1688.getPendingImportQueue)(input);
     return queue;
+}));
+const setPendingImportWeightReview = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    return (0, _ImportFrom1688.setPendingImportWeightReview)({
+        itemIds: input.item_ids,
+        weightReview: input.weight_review
+    });
 }));
 const setPendingImportReviewMark = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN

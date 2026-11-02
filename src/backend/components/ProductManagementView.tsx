@@ -221,7 +221,7 @@ export const ProductManagementView = ({
   const pendingQueueAllSelected = state.pendingImportQueue.length > 0 && state.pendingImportSelectedIds.length === state.pendingImportQueue.length;
   const showPendingLandingNotice = state.shouldShowPendingImportLanding;
   const showPublishedLandingNotice = state.shouldShowPublishedDraftLanding;
-  const isPendingTab = state.activeTab === 'pending_imports';
+  const isPendingTab = state.activeTab === 'pending_imports' || state.activeTab === 'weight_review';
   const activeSelectionCount = isPendingTab ? state.pendingImportSelectedIds.length : state.selectedIds.length;
   const pendingParseActive = state.pendingImportParseActive || state.pendingImportParseCancelling;
   const pendingParseButtonLabel = state.pendingImportParseCancelling
@@ -440,7 +440,16 @@ export const ProductManagementView = ({
         onClick={() => void handlers.handleCalibratePendingImportItems()}
       >
         <Tags className={cn('w-4 h-4 mr-2 shrink-0', state.reclassifyRunning && 'animate-pulse')} />
-        <span className="inline-block min-w-[5.5rem] text-left">{state.reclassifyRunning && state.activeTab === 'pending_imports' ? '校准中...' : '一键校准选中'}</span>
+        <span className="inline-block min-w-[5.5rem] text-left">{state.reclassifyRunning && isPendingTab ? '校准中...' : '一键校准选中'}</span>
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 shrink-0 min-w-[8.5rem] justify-center"
+        disabled={!hasPendingSelected || state.pendingImportPublishing}
+        onClick={() => void handlers.movePendingImportWeightReview(state.activeTab !== 'weight_review')}
+      >
+        <span className="inline-block min-w-[5.5rem] text-left">{state.activeTab === 'weight_review' ? '移回待上传' : '待修改重量'}</span>
       </Button>
       <span className={cn('ml-2 text-sm text-muted-foreground font-medium min-w-[5.5rem]', activeSelectionCount > 0 && isPendingTab ? 'opacity-100' : 'opacity-0')} aria-hidden={!(activeSelectionCount > 0 && isPendingTab)}>
         已选择 <span className="text-primary">{Math.max(activeSelectionCount, 0)}</span> 项
@@ -457,8 +466,14 @@ export const ProductManagementView = ({
         </Button>
         <Button variant={state.activeTab === 'pending_imports' ? 'default' : 'outline'} className="h-10 px-5 shrink-0 min-w-[8.5rem]" onClick={() => handlers.setActiveTab('pending_imports')} data-api-unique-id='productmanagementview-rf97fb52fbb7ba786-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
           <Sparkles className="w-4 h-4 mr-2 shrink-0" data-api-unique-id='productmanagementview-ra3d684920e365dec-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView' />待上传区
-          <Badge className={cn('ml-2 border-0 px-2 py-0.5 min-w-[1.75rem] justify-center', state.activeTab === 'pending_imports' ? 'bg-white/20 text-current' : 'bg-slate-100 text-slate-700', state.pendingImportQueueTotal > 0 ? 'opacity-100' : 'opacity-0')} data-api-unique-id='productmanagementview-r25a7d85fd9cdfdb0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
-            {state.pendingImportQueueTotal > 0 ? state.pendingImportQueueTotal : 0}
+          <Badge className={cn('ml-2 border-0 px-2 py-0.5 min-w-[1.75rem] justify-center', state.activeTab === 'pending_imports' ? 'bg-white/20 text-current' : 'bg-slate-100 text-slate-700', state.pendingUploadQueueTotal > 0 ? 'opacity-100' : 'opacity-0')} data-api-unique-id='productmanagementview-r25a7d85fd9cdfdb0-s2030557363' data-api-unique-page-name='src/backend/components/ProductManagementView'>
+            {state.pendingUploadQueueTotal > 0 ? state.pendingUploadQueueTotal : 0}
+          </Badge>
+        </Button>
+        <Button variant={state.activeTab === 'weight_review' ? 'default' : 'outline'} className="h-10 px-5 shrink-0 min-w-[8.5rem]" onClick={() => handlers.setActiveTab('weight_review')}>
+          <Sparkles className="w-4 h-4 mr-2 shrink-0" />待修改重量
+          <Badge className={cn('ml-2 border-0 px-2 py-0.5 min-w-[1.75rem] justify-center', state.activeTab === 'weight_review' ? 'bg-white/20 text-current' : 'bg-slate-100 text-slate-700', state.pendingWeightQueueTotal > 0 ? 'opacity-100' : 'opacity-0')}>
+            {state.pendingWeightQueueTotal > 0 ? state.pendingWeightQueueTotal : 0}
           </Badge>
         </Button>
       </div>
@@ -677,8 +692,8 @@ export const ProductManagementView = ({
               </div>
             </div>
             <div
-              className={state.activeTab === 'pending_imports' ? 'space-y-4' : 'hidden'}
-              aria-hidden={state.activeTab !== 'pending_imports'}
+              className={isPendingTab ? 'space-y-4' : 'hidden'}
+              aria-hidden={!isPendingTab}
               data-controller-name="1688待上传区"
               data-api-unique-id='productmanagementview-r797d689e3a37a2c1-s2030557363'
               data-api-unique-page-name='src/backend/components/ProductManagementView'
