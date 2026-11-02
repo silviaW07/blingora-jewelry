@@ -846,6 +846,11 @@
   transition: border-color 0.12s ease;
 }
 
+.product-color-swatch-fallback {
+  display: block;
+  background: #d8d2c8;
+}
+
 .product-color-swatch-frame > *,
 .product-color-swatch-frame img {
   display: block;

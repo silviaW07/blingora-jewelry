@@ -27,6 +27,7 @@ import {
 import { isNarrowViewport } from '@/frontend/utils/isNarrowViewport';
 import { useTranslation } from 'react-i18next';
 import { translateColorName, translateAttributeValue } from '@/frontend/i18n/catalogLabels';
+import { colorChipBackground } from '@/frontend/utils/colorChip';
 import {
   translateProductSpecLabel,
   translateProductSpecValue,
@@ -85,6 +86,7 @@ interface Props {
 
 function ColorSwatchButton({
   colorLabel,
+  colorKey,
   skuCode,
   previewUrl,
   isSelected,
@@ -94,6 +96,7 @@ function ColorSwatchButton({
   onPreheat,
 }: {
   colorLabel: string
+  colorKey: string
   skuCode: string
   previewUrl: string
   isSelected: boolean
@@ -139,7 +142,12 @@ function ColorSwatchButton({
             imageWidth={160}
             priority={priority}
           />
-        ) : null}
+        ) : (
+          <span
+            className="product-color-swatch-fallback"
+            style={{ background: colorChipBackground(colorKey, colorLabel) }}
+          />
+        )}
       </span>
       {colorLabel ? <span className="product-color-swatch-name">{colorLabel}</span> : null}
     </button>
@@ -839,6 +847,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                               <ColorSwatchButton
                                 key={swatch.value}
                                 colorLabel={displayColorLabel(t, swatch.value, swatchIndex)}
+                                colorKey={String(swatch.value || '')}
                                 skuCode={String(swatch.sku?.skuCode || '').trim()}
                                 previewUrl={swatch.imageUrl || ''}
                                 isSelected={attrEquals(selectedColorValue, swatch.value)}
