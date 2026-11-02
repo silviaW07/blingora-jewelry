@@ -6544,6 +6544,16 @@ const buildPendingQueueWhere = (
   return parts.length === 1 ? parts[0] : { AND: parts }
 }
 
+
+/** Group identical pending titles onto neighboring rows. Rows stay separate. */
+const pendingProductGroupKey = (name?: string | null, id?: string) => {
+  const text = String(name || '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^\p{Script=Han}a-z0-9]+/giu, '')
+  return text.length >= 8 ? text : `row:${id || ''}`
+}
+
 const loadPendingImportQueueSnapshot = async (opts?: {
   page?: number
   page_size?: number
@@ -6567,7 +6577,7 @@ const loadPendingImportQueueSnapshot = async (opts?: {
     await loadBrandAliasRules()
   }
 
-  const [activeTask, total, items, enrichContext] =
+  const [activeTask, total, orderRows, enrichContext] =
     await Promise.all([
     prisma.importtask.findFirst({
       where: {
@@ -6594,14 +6604,60 @@ const loadPendingImportQueueSnapshot = async (opts?: {
     prisma.importtaskitem.count({ where }),
     prisma.importtaskitem.findMany({
       where,
-      // 按导入时间正序，保留 Excel 原始行顺序
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      skip,
-      take,
-      select: light ? PENDING_QUEUE_ITEM_SELECT_LIGHT : PENDING_QUEUE_ITEM_SELECT,
+      select: { id: true, parsedName: true, createdAt: true },
     }),
     light ? Promise.resolve(null) : loadPendingListEnrichContext(),
   ])
+
+  const sortIndexById = new Map<string, number>()
+  if (orderRows.length > 0) {
+    const ids = orderRows.map((row) => row.id)
+    const sortRows = await prisma.$queryRawUnsafe<Array<{ id: string; sortIndex: unknown }>>(
+      `SELECT id, JSON_EXTRACT(previewDataJson, '$.importSortIndex') AS sortIndex
+       FROM importtaskitem WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ...ids,
+    )
+    for (const row of sortRows) {
+      const value = Number(row.sortIndex)
+      if (Number.isFinite(value)) sortIndexById.set(String(row.id), value)
+    }
+  }
+  const orderedIds = [...orderRows]
+    .sort((a, b) => {
+      const sortA = sortIndexById.get(a.id)
+      const sortB = sortIndexById.get(b.id)
+      if (sortA !== undefined && sortB !== undefined && sortA !== sortB) return sortA - sortB
+      if (sortA !== undefined && sortB === undefined) return -1
+      if (sortA === undefined && sortB !== undefined) return 1
+      const timeA = new Date(a.createdAt).getTime()
+      const timeB = new Date(b.createdAt).getTime()
+      if (timeA !== timeB) return timeA - timeB
+      return String(a.id).localeCompare(String(b.id))
+    })
+    .map((row) => row.id)
+  const nameById = new Map(orderRows.map((row) => [row.id, row.parsedName]))
+  const buckets: string[][] = []
+  const seenGroups = new Map<string, number>()
+  for (const id of orderedIds) {
+    const key = pendingProductGroupKey(nameById.get(id), id)
+    let index = seenGroups.get(key)
+    if (index === undefined) {
+      index = buckets.length
+      seenGroups.set(key, index)
+      buckets.push([])
+    }
+    buckets[index].push(id)
+  }
+  const groupedIds = buckets.flat()
+  const pageIds = groupedIds.slice(skip, skip + take)
+  const loaded = pageIds.length
+    ? await prisma.importtaskitem.findMany({
+        where: { id: { in: pageIds } },
+        select: light ? PENDING_QUEUE_ITEM_SELECT_LIGHT : PENDING_QUEUE_ITEM_SELECT,
+      })
+    : []
+  const rank = new Map(pageIds.map((id, index) => [id, index]))
+  const items = loaded.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
 
   if (light && items.length > 0) {
     try {
@@ -6667,18 +6723,7 @@ const loadPendingImportQueueSnapshot = async (opts?: {
 
   const task = activeTask
 
-  const sortedItems = [...items].sort((a, b) => {
-    const timeA = new Date(a.createdAt).getTime()
-    const timeB = new Date(b.createdAt).getTime()
-    if (timeA !== timeB) return timeA - timeB
-
-    const sortA = Number((a.previewDataJson as any)?.importSortIndex)
-    const sortB = Number((b.previewDataJson as any)?.importSortIndex)
-    if (Number.isFinite(sortA) && Number.isFinite(sortB) && sortA !== sortB) {
-      return sortA - sortB
-    }
-    return String(a.id).localeCompare(String(b.id))
-  })
+  const sortedItems = items
 
   // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
   return {

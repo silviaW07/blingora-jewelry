@@ -25289,6 +25289,10 @@ const buildPendingQueueWhere = (keyword, reviewFilter, itemIds)=>{
         AND: parts
     };
 };
+/** Group identical pending titles onto neighboring rows. Rows stay separate. */ const pendingProductGroupKey = (name, id)=>{
+    const text = String(name || '').toLowerCase().replace(/\s+/g, '').replace(/[^\p{Script=Han}a-z0-9]+/giu, '');
+    return text.length >= 8 ? text : `row:${id || ''}`;
+};
 const loadPendingImportQueueSnapshot = async (opts)=>{
     const page = Math.max(1, Number(opts === null || opts === void 0 ? void 0 : opts.page) || 1);
     const pageSize = Math.min(MAX_PENDING_QUEUE_PAGE_SIZE, Math.max(1, Number(opts === null || opts === void 0 ? void 0 : opts.page_size) || DEFAULT_PENDING_QUEUE_PAGE_SIZE));
@@ -25300,7 +25304,7 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
     if (!light) {
         await (0, _brandAlias.loadBrandAliasRules)();
     }
-    const [activeTask, total, items, enrichContext] = await Promise.all([
+    const [activeTask, total, orderRows, enrichContext] = await Promise.all([
         _prisma.default.importtask.findFirst({
             where: {
                 status: {
@@ -25338,21 +25342,71 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
         }),
         _prisma.default.importtaskitem.findMany({
             where,
-            // 按导入时间正序，保留 Excel 原始行顺序
-            orderBy: [
-                {
-                    createdAt: 'asc'
-                },
-                {
-                    id: 'asc'
-                }
-            ],
-            skip,
-            take,
-            select: light ? PENDING_QUEUE_ITEM_SELECT_LIGHT : PENDING_QUEUE_ITEM_SELECT
+            select: {
+                id: true,
+                parsedName: true,
+                createdAt: true
+            }
         }),
         light ? Promise.resolve(null) : loadPendingListEnrichContext()
     ]);
+    const sortIndexById = new Map();
+    if (orderRows.length > 0) {
+        const ids = orderRows.map((row)=>row.id);
+        const sortRows = await _prisma.default.$queryRawUnsafe(`SELECT id, JSON_EXTRACT(previewDataJson, '$.importSortIndex') AS sortIndex
+       FROM importtaskitem WHERE id IN (${ids.map(()=>'?').join(',')})`, ...ids);
+        for (const row of sortRows){
+            const value = Number(row.sortIndex);
+            if (Number.isFinite(value)) sortIndexById.set(String(row.id), value);
+        }
+    }
+    const orderedIds = [
+        ...orderRows
+    ].sort((a, b)=>{
+        const sortA = sortIndexById.get(a.id);
+        const sortB = sortIndexById.get(b.id);
+        if (sortA !== undefined && sortB !== undefined && sortA !== sortB) return sortA - sortB;
+        if (sortA !== undefined && sortB === undefined) return -1;
+        if (sortA === undefined && sortB !== undefined) return 1;
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+        return String(a.id).localeCompare(String(b.id));
+    }).map((row)=>row.id);
+    const nameById = new Map(orderRows.map((row)=>[
+            row.id,
+            row.parsedName
+        ]));
+    const buckets = [];
+    const seenGroups = new Map();
+    for (const id of orderedIds){
+        const key = pendingProductGroupKey(nameById.get(id), id);
+        let index = seenGroups.get(key);
+        if (index === undefined) {
+            index = buckets.length;
+            seenGroups.set(key, index);
+            buckets.push([]);
+        }
+        buckets[index].push(id);
+    }
+    const groupedIds = buckets.flat();
+    const pageIds = groupedIds.slice(skip, skip + take);
+    const loaded = pageIds.length ? await _prisma.default.importtaskitem.findMany({
+        where: {
+            id: {
+                in: pageIds
+            }
+        },
+        select: light ? PENDING_QUEUE_ITEM_SELECT_LIGHT : PENDING_QUEUE_ITEM_SELECT
+    }) : [];
+    const rank = new Map(pageIds.map((id, index)=>[
+            id,
+            index
+        ]));
+    const items = loaded.sort((a, b)=>{
+        var _rank_get, _rank_get1;
+        return ((_rank_get = rank.get(a.id)) !== null && _rank_get !== void 0 ? _rank_get : 0) - ((_rank_get1 = rank.get(b.id)) !== null && _rank_get1 !== void 0 ? _rank_get1 : 0);
+    });
     if (light && items.length > 0) {
         try {
             const ids = items.map((item)=>item.id);
@@ -25410,20 +25464,7 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
         }
     }
     const task = activeTask;
-    const sortedItems = [
-        ...items
-    ].sort((a, b)=>{
-        var _a_previewDataJson, _b_previewDataJson;
-        const timeA = new Date(a.createdAt).getTime();
-        const timeB = new Date(b.createdAt).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        const sortA = Number((_a_previewDataJson = a.previewDataJson) === null || _a_previewDataJson === void 0 ? void 0 : _a_previewDataJson.importSortIndex);
-        const sortB = Number((_b_previewDataJson = b.previewDataJson) === null || _b_previewDataJson === void 0 ? void 0 : _b_previewDataJson.importSortIndex);
-        if (Number.isFinite(sortA) && Number.isFinite(sortB) && sortA !== sortB) {
-            return sortA - sortB;
-        }
-        return String(a.id).localeCompare(String(b.id));
-    });
+    const sortedItems = items;
     // 待上传区：每条 importtaskitem = 一行父商品；不做标题/图片/产品编号再合并
     return {
         activeTask: task ? buildPendingTaskSummary(task) : null,
