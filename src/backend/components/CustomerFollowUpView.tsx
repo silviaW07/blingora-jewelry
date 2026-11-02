@@ -94,14 +94,14 @@ function CustomerTable({
                 </td>
                 <td className="px-3 py-2">
                   <select
-                    className="h-8 rounded-md border bg-background px-2 text-sm"
+                    className={`h-8 rounded-md border px-2 text-sm font-medium ${row.followStatus === "SKIP" ? "border-red-300 bg-red-100 text-red-800" : row.followStatus === "DUE" ? "border-green-300 bg-green-100 text-green-800" : "border-pink-300 bg-pink-100 text-pink-800"}`}
                     value={row.followStatus}
                     disabled={saving}
                     onChange={(event) => onStatus(row, event.target.value as FollowStatus)}
                   >
-                    <option value="FOLLOWED">已跟进</option>
-                    <option value="DUE">待跟进</option>
-                    <option value="SKIP">不跟进</option>
+                    <option value="FOLLOWED" className="bg-pink-100 text-pink-800">已跟进</option>
+                    <option value="DUE" className="bg-green-100 text-green-800">待跟进</option>
+                    <option value="SKIP" className="bg-red-100 text-red-800">不跟进</option>
                   </select>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {row.followStatus === 'SKIP' ? '不进入下一轮' : row.followStatus === 'FOLLOWED' ? `下轮 ${formatWhen(row.nextFollowAt)}` : '本轮待跟进'}
