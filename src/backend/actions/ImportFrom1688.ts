@@ -144,7 +144,6 @@ const stripReviewMark = (preview: PreviewDataJson): PreviewDataJson => {
 
 const PENDING_WEIGHT_REVIEW_JSON_WHERE = {
   OR: [
-    { previewDataJson: { path: ['weightReview'], equals: true } },
     { previewDataJson: { string_contains: '"weightReview":true' } },
     { previewDataJson: { string_contains: '"weightReview": true' } },
   ],
