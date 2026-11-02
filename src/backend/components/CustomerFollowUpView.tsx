@@ -119,12 +119,14 @@ function CustomerTable({
   onStatus,
   onLogs,
   onSavePhone,
+  onSendPicks,
 }: {
   rows: RegisteredFollowCustomer[]
   saving: boolean
   onStatus: (row: RegisteredFollowCustomer, status: FollowStatus) => void
   onLogs: (row: RegisteredFollowCustomer) => void
   onSavePhone: (row: RegisteredFollowCustomer, phone: string) => void
+  onSendPicks: (row: RegisteredFollowCustomer) => void
 }) {
   if (!rows.length) return <p className="px-4 py-8 text-sm text-muted-foreground">没有客户</p>
   return (
@@ -150,7 +152,10 @@ function CustomerTable({
               <tr key={`${row.kind}-${row.id}`} className="border-t">
                 <td className="px-3 py-2 font-medium">{row.name}</td>
                 <td className="px-3 py-2">
-                  <PhoneCell row={row} onSave={onSavePhone} onStatus={onStatus} />
+                  <div className="flex items-center gap-2">
+                    <PhoneCell row={row} onSave={onSavePhone} onStatus={onStatus} />
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onSendPicks(row)}>发新品</Button>
+                  </div>
                 </td>
                 <td className="px-3 py-2">
                   <select
@@ -186,7 +191,7 @@ function CustomerTable({
 }
 
 export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowUp>) {
-  const { tags, due, all, loading, saving, active, followedAt, logs, changeStatus, openNext, saveIntervals, showLogs, addPhones, savePhone } = props
+  const { tags, due, all, loading, saving, active, followedAt, logs, changeStatus, openNext, saveIntervals, showLogs, addPhones, savePhone, sendWeeklyPicks } = props
   const [draft, setDraft] = useState<FollowTagInterval[] | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | FollowStatus>('')
@@ -288,7 +293,7 @@ export function CustomerFollowUpView(props: ReturnType<typeof useCustomerFollowU
           </form>
         ) : null}
         {loading ? <p className="px-4 py-8 text-sm text-muted-foreground">正在加载客户…</p> : (
-          <CustomerTable rows={filtered} saving={saving} onStatus={(row, status) => void changeStatus(row, status)} onLogs={(row) => void showLogs(row)} onSavePhone={(row, phone) => void savePhone(row, phone)} />
+          <CustomerTable rows={filtered} saving={saving} onStatus={(row, status) => void changeStatus(row, status)} onLogs={(row) => void showLogs(row)} onSavePhone={(row, phone) => void savePhone(row, phone)} onSendPicks={(row) => void sendWeeklyPicks(row)} />
         )}
       </section>
     </div>

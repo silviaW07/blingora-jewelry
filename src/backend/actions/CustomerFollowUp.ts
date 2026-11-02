@@ -392,3 +392,149 @@ export const updateFollowPhone = requireRole([UserRole.ADMIN])(
     return { phone }
   }),
 )
+
+
+const SKIP_CATEGORY_SLUGS = ['daily-new', 'no-brand']
+
+function shanghaiWeekKey(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+  const [year, month, day] = parts.split('-').map(Number)
+  const utc = new Date(Date.UTC(year, month - 1, day))
+  const weekday = utc.getUTCDay() || 7
+  utc.setUTCDate(utc.getUTCDate() - weekday + 1)
+  return utc.toISOString().slice(0, 10)
+}
+
+type HotPick = { categoryName: string; productId: string; name: string; productCode: string | null }
+
+function picksToText(picks: HotPick[]) {
+  const lines = picks.map((pick, index) => {
+    const code = String(pick.productCode || '').trim()
+    const name = String(pick.name || '').trim() || code || 'Item'
+    return `${index + 1}. ${pick.categoryName}: ${name}${code ? ` (${code})` : ''}\nhttps://sourcingjewelry.com/productdetail/?productId=${pick.productId}`
+  })
+  return ['Hi, here are this week\'s best sellers, one from each category:', '', lines.join('\n\n'), '', 'More: https://sourcingjewelry.com/'].join('\n')
+}
+
+async function buildWeeklyHotPicks(): Promise<HotPick[]> {
+  const soldRows = await prisma.$queryRaw<Array<{
+    categoryId: string
+    categoryName: string
+    sortWeight: number
+    productId: string
+    productName: string
+    productCode: string | null
+    sold: unknown
+  }>>`
+    SELECT root.id AS categoryId, root.name AS categoryName, root.sortWeight AS sortWeight,
+      p.id AS productId, p.name AS productName, p.productCode AS productCode,
+      SUM(oi.quantity) AS sold
+    FROM category root
+    INNER JOIN category node ON node.id = root.id OR node.parentId = root.id
+    INNER JOIN product p ON p.categoryId = node.id AND p.status = 'ACTIVE'
+    INNER JOIN orderitem oi ON oi.productId = p.id
+    INNER JOIN orderrecord o ON o.id = oi.orderId AND o.status NOT IN ('CANCELLED', 'REFUNDED', 'PENDING_PAYMENT')
+    WHERE root.level = 1 AND root.status = 'ACTIVE'
+      AND root.slug NOT IN ('daily-new', 'no-brand')
+      AND (p.goodsStatus IS NULL OR p.goodsStatus NOT IN ('DELETED', 'DRAFT', 'INACTIVE', 'REVIEW'))
+    GROUP BY root.id, root.name, root.sortWeight, p.id, p.name, p.productCode
+  `
+  const best = new Map<string, { sortWeight: number; sold: number; pick: HotPick }>()
+  for (const row of soldRows) {
+    const sold = Number(row.sold || 0)
+    const current = best.get(row.categoryId)
+    if (current && current.sold >= sold) continue
+    best.set(row.categoryId, {
+      sortWeight: Number(row.sortWeight || 0),
+      sold,
+      pick: {
+        categoryName: row.categoryName,
+        productId: row.productId,
+        name: row.productName,
+        productCode: row.productCode,
+      },
+    })
+  }
+  const roots = await prisma.category.findMany({
+    where: { level: 1, status: 'ACTIVE', slug: { notIn: SKIP_CATEGORY_SLUGS } },
+    select: { id: true, name: true, sortWeight: true },
+  })
+  const missing = roots.filter((root) => !best.has(root.id))
+  if (missing.length) {
+    const fallback = await prisma.$queryRaw<Array<{
+      categoryId: string
+      productId: string
+      productName: string
+      productCode: string | null
+      createdAt: Date
+    }>>`
+      SELECT root.id AS categoryId, p.id AS productId, p.name AS productName, p.productCode AS productCode, p.createdAt AS createdAt
+      FROM category root
+      INNER JOIN category node ON node.id = root.id OR node.parentId = root.id
+      INNER JOIN product p ON p.categoryId = node.id AND p.status = 'ACTIVE'
+      WHERE root.level = 1 AND root.status = 'ACTIVE'
+        AND root.slug NOT IN ('daily-new', 'no-brand')
+        AND (p.goodsStatus IS NULL OR p.goodsStatus NOT IN ('DELETED', 'DRAFT', 'INACTIVE', 'REVIEW'))
+      ORDER BY p.createdAt DESC
+    `
+    const seen = new Set<string>()
+    for (const row of fallback) {
+      if (best.has(row.categoryId) || seen.has(row.categoryId)) continue
+      seen.add(row.categoryId)
+      const root = roots.find((item) => item.id === row.categoryId)
+      if (!root) continue
+      best.set(row.categoryId, {
+        sortWeight: root.sortWeight || 0,
+        sold: 0,
+        pick: {
+          categoryName: root.name,
+          productId: row.productId,
+          name: row.productName,
+          productCode: row.productCode,
+        },
+      })
+    }
+  }
+  return Array.from(best.values())
+    .sort((a, b) => b.sortWeight - a.sortWeight || a.pick.categoryName.localeCompare(b.pick.categoryName))
+    .map((item) => item.pick)
+}
+
+export const getWeeklyHotWhatsappMessage = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<{ text: string; count: number; weekKey: string }> => {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS weeklycategorypick (
+        weekKey varchar(16) NOT NULL,
+        payloadJson json NOT NULL,
+        createdAt datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (weekKey)
+      )
+    `)
+    const weekKey = shanghaiWeekKey()
+    const cached = await prisma.$queryRaw<Array<{ payloadJson: unknown }>>`
+      SELECT payloadJson FROM weeklycategorypick WHERE weekKey = ${weekKey} LIMIT 1
+    `
+    let picks: HotPick[] = []
+    const raw = cached[0]?.payloadJson
+    if (Array.isArray(raw)) picks = raw as HotPick[]
+    else if (typeof raw === 'string') {
+      try { picks = JSON.parse(raw) } catch { picks = [] }
+    }
+    if (!picks.length) {
+      picks = await buildWeeklyHotPicks()
+      if (picks.length) {
+        await prisma.$executeRaw`
+          INSERT INTO weeklycategorypick (weekKey, payloadJson)
+          VALUES (${weekKey}, ${JSON.stringify(picks)})
+          ON DUPLICATE KEY UPDATE weekKey = weekKey
+        `
+      }
+    }
+    return { text: picksToText(picks), count: picks.length, weekKey }
+  }),
+)

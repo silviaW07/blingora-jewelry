@@ -18,3 +18,5 @@ export const addFollowPhones = (...args: Parameters<Actions["addFollowPhones"]>)
   rpcCall<Awaited<ReturnType<Actions["addFollowPhones"]>>>("src.backend.actions.CustomerFollowUp.addFollowPhones", ...args);
 export const updateFollowPhone = (...args: Parameters<Actions["updateFollowPhone"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateFollowPhone"]>>>("src.backend.actions.CustomerFollowUp.updateFollowPhone", ...args);
+export const getWeeklyHotWhatsappMessage = (...args: Parameters<Actions["getWeeklyHotWhatsappMessage"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getWeeklyHotWhatsappMessage"]>>>("src.backend.actions.CustomerFollowUp.getWeeklyHotWhatsappMessage", ...args);

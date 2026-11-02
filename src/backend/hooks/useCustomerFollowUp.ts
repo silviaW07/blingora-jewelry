@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import {
   addFollowPhones,
   updateFollowPhone,
+  getWeeklyHotWhatsappMessage,
   getCustomerFollowLogs,
   getFollowUpBoard,
   setFollowStatus,
@@ -116,5 +117,22 @@ export function useCustomerFollowUp() {
     return nextRow
   }, [])
 
-  return { tags, due, all, loading, saving, active, followedAt, logs, reload, changeStatus, openNext, saveIntervals, showLogs, addPhones, savePhone }
+  const sendWeeklyPicks = useCallback(async (customer: RegisteredFollowCustomer) => {
+    let digits = String(customer.phone || "").replace(/\D/g, "")
+    if (digits.length < 6) {
+      toast.error("这个客户没有手机号")
+      return
+    }
+    if (!digits.startsWith("1")) digits = `1${digits}`
+    const draft = await getWeeklyHotWhatsappMessage()
+    if (!draft?.count) {
+      toast.error("还没有可发送的推荐")
+      return
+    }
+    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(draft.text)}`, "_blank", "noopener,noreferrer")
+    toast.success(`已打开 WhatsApp，本周推荐 ${draft.count} 个类目热销`)
+    await changeStatus(customer, "FOLLOWED")
+  }, [changeStatus])
+
+  return { tags, due, all, loading, saving, active, followedAt, logs, reload, changeStatus, openNext, saveIntervals, showLogs, addPhones, savePhone, sendWeeklyPicks }
 }

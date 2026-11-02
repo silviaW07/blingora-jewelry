@@ -267,11 +267,6 @@ export default function UserManagementView({ state, handlers }: Props) {
                         <TableCell className="text-muted-foreground">
                           <div className="flex items-center gap-2">
                             <span>{user.whatsapp || '--'}</span>
-                            {user.whatsapp ? (
-                              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => handlers.sendNewArrivalsOnWhatsapp(user.whatsapp)}>
-                                发新品
-                              </Button>
-                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground" scrollX scrollXClassName="max-w-[260px]">
