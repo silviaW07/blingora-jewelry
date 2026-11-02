@@ -20127,7 +20127,7 @@ const stripReviewMark = (preview)=>{
     delete next.reviewedAt;
     return next;
 };
-const PENDING_WEIGHT_REVIEW_JSON_WHERE = {
+const PENDING_WEIGHT_REVIEW_JSON_WHERE = (/* unused pure expression or super */ null && ({
     OR: [
         {
             previewDataJson: {
@@ -20140,7 +20140,7 @@ const PENDING_WEIGHT_REVIEW_JSON_WHERE = {
             }
         }
     ]
-};
+}));
 const PENDING_REVIEWED_JSON_WHERE = {
     OR: [
         {
@@ -25253,7 +25253,7 @@ const PENDING_QUEUE_ITEM_SELECT = {
     }
 };
 const PENDING_QUEUE_ITEM_SELECT_LIGHT = Object.fromEntries(Object.entries(PENDING_QUEUE_ITEM_SELECT).filter(([key])=>key !== 'previewDataJson'));
-const buildPendingQueueWhere = (keyword, reviewFilter, itemIds, queueArea)=>{
+const buildPendingQueueWhere = (keyword, reviewFilter, itemIds)=>{
     const parts = [
         PENDING_IMPORT_QUEUE_WHERE
     ];
@@ -25263,12 +25263,6 @@ const buildPendingQueueWhere = (keyword, reviewFilter, itemIds, queueArea)=>{
             id: {
                 in: ids
             }
-        });
-    } else if (queueArea === 'weight') {
-        parts.push(PENDING_WEIGHT_REVIEW_JSON_WHERE);
-    } else if (queueArea === 'upload') {
-        parts.push({
-            NOT: PENDING_WEIGHT_REVIEW_JSON_WHERE
         });
     }
     const kw = String(keyword || '').trim();
@@ -25336,9 +25330,43 @@ const loadPendingImportQueueSnapshot = async (opts)=>{
     const skip = itemIds.length > 0 ? 0 : (page - 1) * pageSize;
     const take = itemIds.length > 0 ? itemIds.length : pageSize;
     const queueArea = (opts === null || opts === void 0 ? void 0 : opts.queue_area) === 'weight' ? 'weight' : 'upload';
-    const where = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, itemIds, itemIds.length > 0 ? undefined : queueArea);
-    const uploadWhere = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, [], 'upload');
-    const weightWhere = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, [], 'weight');
+    const markedRows = itemIds.length > 0 ? [] : await _prisma.default.$queryRawUnsafe(`SELECT id FROM importtaskitem
+         WHERE isPublished = 0
+           AND importedProductId IS NULL
+           AND CAST(previewDataJson AS CHAR) LIKE '%"weightReview":true%'`);
+    const markedIds = markedRows.map((row)=>String(row.id));
+    const baseWhere = buildPendingQueueWhere(opts === null || opts === void 0 ? void 0 : opts.keyword, opts === null || opts === void 0 ? void 0 : opts.review_filter, itemIds);
+    const withArea = (area)=>{
+        if (itemIds.length > 0) return baseWhere;
+        if (area === 'weight') {
+            return {
+                AND: [
+                    baseWhere,
+                    {
+                        id: {
+                            in: markedIds.length ? markedIds : [
+                                '__none__'
+                            ]
+                        }
+                    }
+                ]
+            };
+        }
+        if (!markedIds.length) return baseWhere;
+        return {
+            AND: [
+                baseWhere,
+                {
+                    id: {
+                        notIn: markedIds
+                    }
+                }
+            ]
+        };
+    };
+    const where = withArea(queueArea);
+    const uploadWhere = withArea('upload');
+    const weightWhere = withArea('weight');
     const light = Boolean(opts === null || opts === void 0 ? void 0 : opts.light);
     if (!light) {
         await (0, _brandAlias.loadBrandAliasRules)();

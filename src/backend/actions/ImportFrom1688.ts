@@ -6536,16 +6536,11 @@ const buildPendingQueueWhere = (
   keyword?: string,
   reviewFilter?: PendingImportReviewFilter,
   itemIds?: string[],
-  queueArea?: 'upload' | 'weight',
 ) => {
   const parts: Record<string, unknown>[] = [PENDING_IMPORT_QUEUE_WHERE as Record<string, unknown>]
   const ids = (itemIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 5)
   if (ids.length > 0) {
     parts.push({ id: { in: ids } })
-  } else if (queueArea === 'weight') {
-    parts.push(PENDING_WEIGHT_REVIEW_JSON_WHERE as Record<string, unknown>)
-  } else if (queueArea === 'upload') {
-    parts.push({ NOT: PENDING_WEIGHT_REVIEW_JSON_WHERE })
   }
   const kw = String(keyword || '').trim()
   if (kw) {
@@ -6604,9 +6599,27 @@ const loadPendingImportQueueSnapshot = async (opts?: {
   const skip = itemIds.length > 0 ? 0 : (page - 1) * pageSize
   const take = itemIds.length > 0 ? itemIds.length : pageSize
   const queueArea = opts?.queue_area === 'weight' ? 'weight' : 'upload'
-  const where = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, itemIds, itemIds.length > 0 ? undefined : queueArea) as any
-  const uploadWhere = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, [], 'upload') as any
-  const weightWhere = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, [], 'weight') as any
+  const markedRows = itemIds.length > 0
+    ? []
+    : await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM importtaskitem
+         WHERE isPublished = 0
+           AND importedProductId IS NULL
+           AND CAST(previewDataJson AS CHAR) LIKE '%"weightReview":true%'`,
+      )
+  const markedIds = markedRows.map((row) => String(row.id))
+  const baseWhere = buildPendingQueueWhere(opts?.keyword, opts?.review_filter, itemIds) as any
+  const withArea = (area: 'upload' | 'weight') => {
+    if (itemIds.length > 0) return baseWhere
+    if (area === 'weight') {
+      return { AND: [baseWhere, { id: { in: markedIds.length ? markedIds : ['__none__'] } }] }
+    }
+    if (!markedIds.length) return baseWhere
+    return { AND: [baseWhere, { id: { notIn: markedIds } }] }
+  }
+  const where = withArea(queueArea)
+  const uploadWhere = withArea('upload')
+  const weightWhere = withArea('weight')
   const light = Boolean(opts?.light)
 
   if (!light) {
