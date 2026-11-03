@@ -116,6 +116,7 @@ export const ProductListCard = ({
   /** Multi-color row: show all when available; hide when only a single main fallback. */
   const showColorThumbs = thumbnails.length >= 2
   const isDraft = item.status === 'DRAFT'
+  const [mainReady, setMainReady] = useState(false)
   const [previewImage, setPreviewImage] = useState(
     () => item.main_image_url?.trim() || thumbnails[0] || '',
   )
@@ -222,6 +223,7 @@ export const ProductListCard = ({
             imageWidth={400}
             quality={85}
             priority={priority}
+            onLoad={() => setMainReady(true)}
           />
         </div>
         <h3
@@ -323,6 +325,7 @@ export const ProductListCard = ({
                   )}
                   onClick={(event) => handleColorThumbClick(event, url)}
                 >
+                  {mainReady ? (
                   <OptimizedProductImage
                     src={url}
                     alt=""
@@ -331,8 +334,8 @@ export const ProductListCard = ({
                     sizes="48px"
                     imageWidth={96}
                     quality={60}
-                    priority={priority && index < 1}
                   />
+                  ) : null}
                 </button>
               )
             })}

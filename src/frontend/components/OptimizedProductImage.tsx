@@ -17,6 +17,7 @@ type Props = {
   priority?: boolean
   imageWidth?: number
   quality?: number
+  onLoad?: () => void
   fallbackSrc?: string | null
   /** 主图超过该毫秒仍未完成加载时切到 fallbackSrc */
   slowFallbackMs?: number
@@ -36,6 +37,7 @@ export function OptimizedProductImage({
   priority = false,
   imageWidth = 400,
   quality = 85,
+  onLoad,
   fallbackSrc = null,
   slowFallbackMs = 0,
 }: Props) {
@@ -93,11 +95,12 @@ export function OptimizedProductImage({
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         draggable={false}
-        fetchPriority={priority ? 'high' : 'auto'}
+        fetchPriority={priority ? 'high' : 'low'}
         referrerPolicy="no-referrer"
         onContextMenu={(event) => event.preventDefault()}
         onLoad={() => {
           loadedRef.current = true
+          onLoad?.()
         }}
         onError={() => {
           if (!useFallback && attempt < 2 && hasSrc) {
