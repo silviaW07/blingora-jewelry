@@ -42,6 +42,8 @@ import {
   listInboundShipments,
   saveInboundShipment,
   updateInboundShipment,
+  getOrderSettlementPdf,
+  saveOrderSettlementPdf,
   exportOrdersExcel,
   exportInboundSheet as exportInboundSheetAction,
 } from '@/backend/actions/OrderManagement'
@@ -296,6 +298,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [inboundDrafts, setInboundDrafts] = useState<OrderInboundLine[]>([])
   const [inboundSaving, setInboundSaving] = useState(false)
   const [inboundShipments, setInboundShipments] = useState<Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>>([])
+  const [settlementPdfUrl, setSettlementPdfUrl] = useState('')
   const inboundBooted = useRef<string | null>(null)
   const inboundClosing = useRef(false)
   const inboundSaveChain = useRef(Promise.resolve())
@@ -637,6 +640,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   useEffect(() => {
     if (!inboundOrderId) {
       setInboundShipments([])
+      setSettlementPdfUrl('')
       return
     }
     let cancelled = false
@@ -645,8 +649,38 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }).catch(() => {
       if (!cancelled) setInboundShipments([])
     })
+    getOrderSettlementPdf(inboundOrderId).then((url) => {
+      if (!cancelled) setSettlementPdfUrl(String(url || ''))
+    }).catch(() => {
+      if (!cancelled) setSettlementPdfUrl('')
+    })
     return () => { cancelled = true }
   }, [inboundOrderId])
+
+
+  const uploadSettlementPdf = async (file: File) => {
+    if (!inboundOrderId) return
+    if (!file || (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf'))) {
+      toast.error('请选择 PDF')
+      return
+    }
+    try {
+      setInboundSaving(true)
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/upload-image', { method: 'POST', body, credentials: 'same-origin' })
+      const json = await res.json().catch(() => null)
+      const url = String(json?.data?.image_url || json?.image_url || json?.data?.url || '')
+      if (!res.ok || !url) throw new Error(json?.message || 'PDF 上传失败')
+      const saved = await saveOrderSettlementPdf({ orderId: inboundOrderId, url })
+      setSettlementPdfUrl(String(saved || url))
+      toast.success('结算 PDF 已保存')
+    } catch (err: any) {
+      toast.error(err.message || 'PDF 上传失败')
+    } finally {
+      setInboundSaving(false)
+    }
+  }
 
   const saveInboundShipmentRows = async (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => {
     if (!inboundOrderId) return false
@@ -1443,6 +1477,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       inboundDrafts,
       inboundSaving,
       inboundShipments,
+      settlementPdfUrl,
     },
     handlers: {
       handleFilterChange,
@@ -1489,6 +1524,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       updateOrderCustomerProfile: saveOrderCustomerProfile,
       saveInboundShipment: saveInboundShipmentRows,
       updateInboundShipment: updateInboundShipmentRow,
+      uploadSettlementPdf,
       exportInboundSheet,
     },
   }

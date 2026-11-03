@@ -532,6 +532,8 @@ export const OrderManagementView = ({
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
+  const settlementPdfRef = React.useRef<HTMLInputElement>(null);
+  const settlementClickTimer = React.useRef<number | null>(null);
   const shipImageRef = React.useRef<HTMLInputElement>(null);
   const addonProductRef = React.useRef<HTMLInputElement>(null);
   const addonSheetRef = React.useRef<HTMLInputElement>(null);
@@ -2383,8 +2385,8 @@ export const OrderManagementView = ({
               <Button type="button" variant="outline" onClick={handlers.closeInboundDialog} disabled={state.inboundSaving}>
                 取消
               </Button>
-              <Button type="button" variant="outline" onClick={() => importFileRef.current?.click()} disabled={state.inboundSaving}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> 导入商品/表格
+              <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700" title={state.settlementPdfUrl ? '点击查看结算 PDF，双击重新导入' : '导入结算 PDF'} disabled={state.inboundSaving} onClick={() => { if (settlementClickTimer.current) window.clearTimeout(settlementClickTimer.current); settlementClickTimer.current = window.setTimeout(() => { settlementClickTimer.current = null; if (state.settlementPdfUrl) window.open(state.settlementPdfUrl, '_blank', 'noopener'); else settlementPdfRef.current?.click(); }, 220); }} onDoubleClick={() => { if (settlementClickTimer.current) window.clearTimeout(settlementClickTimer.current); settlementClickTimer.current = null; settlementPdfRef.current?.click(); }}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> 结算PDF
               </Button>
               <Button type="button" variant="outline" disabled={state.exportLoading} onClick={() => downloadInbound('sheet')}>
                 <Download className="mr-2 h-4 w-4" /> 下载表格
@@ -2414,6 +2416,17 @@ export const OrderManagementView = ({
                   const files = event.target.files;
                   if (files?.length) void uploadShippingImages(files);
                   event.target.value = '';
+                }}
+              />
+              <input
+                ref={settlementPdfRef}
+                type="file"
+                className="hidden"
+                accept="application/pdf,.pdf"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) void handlers.uploadSettlementPdf(file)
+                  event.target.value = ''
                 }}
               />
               <input

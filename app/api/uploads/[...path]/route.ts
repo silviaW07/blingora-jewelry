@@ -44,13 +44,18 @@ export async function GET(
   if (!info.isFile()) return notFound()
 
   const etag = `"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`
+  const contentType = contentTypeForKey(filePath)
   const headers: Record<string, string> = {
-    'Content-Type': contentTypeForKey(filePath),
+    'Content-Type': contentType,
     'Cache-Control': IMMUTABLE_CACHE,
     ETag: etag,
     'X-Content-Type-Options': 'nosniff',
+  }
+  if (contentType === 'application/pdf') {
+    headers['Content-Disposition'] = 'inline; filename="settlement.pdf"'
+  } else {
     // Uploaded SVGs must not be able to run scripts when opened same-origin
-    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
   }
 
   const thumb = parseUploadThumbParams(request.nextUrl.searchParams)

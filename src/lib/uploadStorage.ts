@@ -31,6 +31,7 @@ const MIME_BY_EXT: Record<string, string> = {
   webm: 'video/webm',
   mov: 'video/quicktime',
   m4v: 'video/mp4',
+  pdf: 'application/pdf',
 }
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -47,6 +48,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/webm': 'webm',
   'video/quicktime': 'mov',
+  'application/pdf': 'pdf',
 }
 
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v'])

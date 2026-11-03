@@ -772,7 +772,7 @@ export const getOrderDetail = requireRole([UserRole.ADMIN])(
         mainImageUrl: item.productSku?.imageUrl || item.product?.mainImageUrl
       })),
 
-      logistics: record.logistics.map(log => ({
+      logistics: record.logistics.filter(log => log.segmentType !== '结算PDF').map(log => ({
         id: log.id,
         segmentType: log.segmentType,
         carrierName: log.carrierName,
@@ -2441,6 +2441,54 @@ export const updateInboundShipment = requireRole([UserRole.ADMIN])(
       })
     })
     return listInboundShipmentRows(order.id)
+  }),
+)
+
+const SETTLEMENT_PDF_SEGMENT = '结算PDF'
+
+export const getOrderSettlementPdf = requireRole([UserRole.ADMIN])(
+  withResult(async (orderId: string): Promise<string> => {
+    if (!orderId) return ''
+    const row = await prisma.orderlogisticssegment.findFirst({
+      where: { orderId, segmentType: SETTLEMENT_PDF_SEGMENT },
+      orderBy: { createdAt: 'desc' },
+      select: { remark: true },
+    })
+    return String(row?.remark || '')
+  }),
+)
+
+export const saveOrderSettlementPdf = requireRole([UserRole.ADMIN])(
+  withResult(async (input: { orderId: string; url: string }): Promise<string> => {
+    const { username } = getAuthContext()
+    const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId }, select: { id: true } })
+    if (!order) throw new Error('订单不存在')
+    const url = String(input.url || '').trim()
+    if (!url.startsWith('/api/uploads/') || !url.toLowerCase().endsWith('.pdf')) {
+      throw new Error('请上传 PDF')
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.orderlogisticssegment.deleteMany({
+        where: { orderId: order.id, segmentType: SETTLEMENT_PDF_SEGMENT },
+      })
+      await tx.orderlogisticssegment.create({
+        data: {
+          orderId: order.id,
+          segmentType: SETTLEMENT_PDF_SEGMENT,
+          statusLabel: '结算PDF',
+          remark: url.slice(0, 700),
+        },
+      })
+      await tx.orderoperationlog.create({
+        data: {
+          orderId: order.id,
+          actionType: '结算PDF',
+          actionNote: '上传结算 PDF',
+          operatorName: username,
+        },
+      })
+    })
+    return url
   }),
 )
 
