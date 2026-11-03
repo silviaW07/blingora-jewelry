@@ -259,7 +259,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [filterForm, setFilterForm] = useState<GetOrderListInput>({
     page: 1,
     pageSize: 50,
-    status: (queryStatus as OrderStatus) || undefined,
+    status: (queryStatus as OrderStatus) || "PROCESSING",
   })
 
   const [detailData, setDetailData] = useState<OrderDetail | null>(null)
@@ -372,7 +372,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const handleClearFilter = () => {
-    const defaultForm: GetOrderListInput = { page: 1, pageSize: 50 }
+    const defaultForm: GetOrderListInput = { page: 1, pageSize: 50, status: "PROCESSING" }
     setFilterForm(defaultForm)
     OrderManagement.navigateToStandard(router)
     fetchList(defaultForm)
