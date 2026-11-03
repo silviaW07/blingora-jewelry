@@ -1550,13 +1550,15 @@ const excludeNoBrandProducts = (categoryIds: string[]) => {
  * 用 6 次 count（走 status+createdAt 索引），禁止把窗口内全部行拉进内存。
  */
 export const getDailyNewArrivalCalendar = withResult(async (): Promise<GetDailyNewArrivalCalendarOutput> => {
-  const cacheKey = 'calendar:v3'
+  const cacheKey = 'calendar:v4'
   const cached = readDailyNewCache(dailyNewCalendarCache, cacheKey)
   if (cached) return cached
 
   const months = buildLast6Months()
+  const noBrandCategoryIds = await loadNoBrandCategoryIds()
   const listedWhere = {
     ...activeListedProductWhere,
+    ...excludeNoBrandProducts(noBrandCategoryIds),
   }
   const [totalActiveProducts, ...monthCounts] = await Promise.all([
     prisma.product.count({ where: listedWhere }),
@@ -1614,12 +1616,14 @@ export const getDailyNewArrivalProducts = withResult(async (
   const lang = normalizeProductLang(input.lang)
   const customerPromo = await loadCustomerPromo()
   const customerCoef = resolveGoodsCoef(customerPromo.kind, customerPromo.vipDiscount)
-  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef ?? 1}:nb`
+  const cacheKey = `products:${year}-${month}:p${page}:s${pageSize}:${lang}:c${customerCoef ?? 1}:nb2`
   const cached = readDailyNewCache(dailyNewProductsCache, cacheKey)
   if (cached) return cached
 
+  const noBrandCategoryIds = await loadNoBrandCategoryIds()
   const where = {
     ...activeListedProductWhere,
+    ...excludeNoBrandProducts(noBrandCategoryIds),
     OR: [
       { publishedAt: { gte: rangeStart, lt: rangeEnd } },
       { AND: [{ publishedAt: null }, { createdAt: { gte: rangeStart, lt: rangeEnd } }] },
