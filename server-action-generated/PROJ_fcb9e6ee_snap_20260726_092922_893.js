@@ -53233,8 +53233,10 @@ const buildProductWhere = (context, brandCategoryId, keywordId, keywordGroupId, 
     // English storefront titles live in translationsJson, and MySQL LIKE on
     // product.name alone misses "chanel bag" when the stored name is Chinese/CL.
     // Token AND fuzzy matching runs in-memory after fetch (see getProductList).
-    void searchKeyword;
-    if (!(0, _noBrandShelf.isNoBrandCategoryName)(context.matchedCategoryName) && !(0, _noBrandShelf.isNoBrandCategoryName)(context.rootCategoryName)) {
+    // Item numbers live on No Brand too. A code search must still find them.
+    // Plain title search keeps No Brand off the other shelves.
+    const codeLookup = (0, _productSearch.tokenizeProductSearch)(searchKeyword).some((token)=>token.length >= 8 && /[a-z]/.test(token) && /\d/.test(token));
+    if (!codeLookup && !(0, _noBrandShelf.isNoBrandCategoryName)(context.matchedCategoryName) && !(0, _noBrandShelf.isNoBrandCategoryName)(context.rootCategoryName)) {
         where.AND = [
             ...where.AND || [],
             (0, _noBrandShelf.excludeNoBrandShelfWhere)()
