@@ -114,7 +114,16 @@ const inboundSpuKey = (skuCode?: string | null) => {
   const cut = sku.indexOf('-')
   return (cut > 0 ? sku.slice(0, cut) : sku).toLowerCase()
 }
-const compareInboundRows = (a: { spu?: string | null; skuCode?: string | null }, b: { spu?: string | null; skuCode?: string | null }) => {
+const compareInboundRows = (
+  a: { spu?: string | null; skuCode?: string | null; supplierName?: string | null },
+  b: { spu?: string | null; skuCode?: string | null; supplierName?: string | null },
+) => {
+  const supplier = (row: { supplierName?: string | null }) => String(row.supplierName || '').trim()
+  const sa = supplier(a)
+  const sb = supplier(b)
+  if (!sa !== !sb) return sa ? -1 : 1
+  const bySupplier = sa.localeCompare(sb, 'zh-CN')
+  if (bySupplier) return bySupplier
   const manual = (row: { skuCode?: string | null }) => String(row.skuCode || '').startsWith('ADD-') ? 1 : 0
   const rank = manual(a) - manual(b)
   if (rank) return rank

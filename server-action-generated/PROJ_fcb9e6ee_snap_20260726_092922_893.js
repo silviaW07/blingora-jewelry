@@ -31983,7 +31983,15 @@ const getOrderDetail = (0, _action_utils.requireRole)([
         }, 0) * 100) / 100,
         internalNote: record.internalNote || null,
         ...(()=>{
-            const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record)).sort(compareInboundSpu);
+            const inboundLines = record.items.map((item)=>mapInboundLine(item, record.currencyCode, record)).sort((a, b)=>{
+                const supplier = (row)=>String(row.supplierName || '').trim();
+                const sa = supplier(a);
+                const sb = supplier(b);
+                if (!sa !== !sb) return sa ? -1 : 1;
+                const bySupplier = sa.localeCompare(sb, 'zh-CN');
+                if (bySupplier) return bySupplier;
+                return compareInboundSpu(a, b);
+            });
             const inbound = summarizeInbound(inboundLines);
             return {
                 inboundOrderedQty: inbound.orderedQty,
