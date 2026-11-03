@@ -26088,7 +26088,8 @@ const resolvePinduoduoMarkupMultiplier = (task)=>{
     const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
     const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
     const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
-    const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
+    const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, task.defaultCategoryId);
+    const targetCategoryId = lockedNoBrandId || pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
     // 系数仅作分类归属参考展示；拼多多售价按加价百分比计算
     const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
     const rawPriceMin = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : 0;
@@ -26478,7 +26479,8 @@ const collapseSameBaseColorSkus = (params)=>{
         ...matchedSecondaryCategories,
         backdropBrandCategory
     ].filter((category)=>Boolean(category)).map((category)=>category.name)));
-    const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
+    const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, task.defaultCategoryId);
+    const targetCategoryId = lockedNoBrandId || pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
     const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
     const strategyStock = (0, _resolveInitialStock.resolveInitialStock)((_task_stockStrategyJson = task.stockStrategyJson) === null || _task_stockStrategyJson === void 0 ? void 0 : _task_stockStrategyJson.stock);
     const inferredCost = (0, _albumTitlePrice.pickAlbumCostFromTitleAndFetched)(fetched.priceMin, productName, productDetail, fetched.name);
@@ -26640,7 +26642,8 @@ const collapseSameBaseColorSkus = (params)=>{
     const matchedSecondaryCategories = matchSecondaryCategoriesByTitle(productName, secondaryCategories, productDetail);
     const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category)=>category.id);
     const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category)=>category.name);
-    const targetCategoryId = pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
+    const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, task.defaultCategoryId);
+    const targetCategoryId = lockedNoBrandId || pickImportPricingTargetCategory(matchedSecondaryCategories, task.defaultCategoryId);
     const resolvedCoefficient = resolveImportCategoryCoefficient(categoryMap, targetCategoryId);
     const strategyStock = (0, _resolveInitialStock.resolveInitialStock)((_task_stockStrategyJson = task.stockStrategyJson) === null || _task_stockStrategyJson === void 0 ? void 0 : _task_stockStrategyJson.stock);
     const inferredCost = (0, _albumTitlePrice.pickAlbumCostFromTitleAndFetched)(fetched.priceMin, productName, productDetail, fetched.name);
@@ -26952,6 +26955,21 @@ const isNoBrandCatchAllCategoryName = (name)=>{
     const n = normalizeCategoryMatchText(name);
     if (!n) return false;
     return n === 'NOBRAND' || n === 'NOBRANDS' || n === 'UNBRANDED' || n === 'OTHER' || n === 'OTHERS' || n === 'OTHERBRAND' || n === 'OTHERBRANDS' || n === '无品牌' || n === '其他品牌' || n === '其它品牌';
+};
+/**
+ * 大小写不敏感；去空格后做包含匹配。
+ * 极短词（≤2）要求左右非字母数字邻居，避免 LV 误伤 SALVATION。
+ * 注意：该边界规则仅对「纯 ASCII 短词」(LV/CK 等) 生效；中文短词（如「耳钉/戒指」）
+ * 直接按包含匹配——否则「耳钉 high quality jewelry」去空格后变「耳钉HIGH…」，
+ * 「耳钉」右邻字母 H 会被误判为不匹配（中文品类词 + 英文后缀的标题全被漏掉）。
+ */ /** 上传时选定的 No Brand。解析/上架不得再用标题里的包、饰品把主类目换掉。 */ const noBrandCategoryIdFromMap = (categoryMap, ...candidates)=>{
+    for (const raw of candidates){
+        var _categoryMap_get;
+        const id = String(raw || '').trim();
+        if (!id) continue;
+        if (isNoBrandCatchAllCategoryName((_categoryMap_get = categoryMap.get(id)) === null || _categoryMap_get === void 0 ? void 0 : _categoryMap_get.name)) return id;
+    }
+    return null;
 };
 const containsCategoryMatchToken = (text, token)=>{
     const normalizedText = normalizeCategoryMatchText(text);
@@ -28216,7 +28234,14 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             normalizeText(row.detail)
         ].filter(Boolean).join('\n') || null);
         const tableTargetId = pathResolved.targetCategoryId || (exactCell === null || exactCell === void 0 ? void 0 : exactCell.id) || null;
-        const categoryId = pickFirstNonBrandCategoryId([
+        const tableCategoryMap = new Map(categories.map((item)=>[
+                item.id,
+                {
+                    name: item.name
+                }
+            ]));
+        const lockedNoBrandId = !normalizeText(row.categoryId) && !tableTargetId ? noBrandCategoryIdFromMap(tableCategoryMap, input.defaultCategoryId) : null;
+        const categoryId = lockedNoBrandId || pickFirstNonBrandCategoryId([
             normalizeText(row.categoryId),
             tableTargetId,
             pickImportPricingTargetCategory(autoMatchedSecondaryCategories, tableTargetId),
@@ -28241,7 +28266,9 @@ const createProductsFromTable = (0, _action_utils.requireRole)([
             tableTargetId,
             categoryId
         ].filter((id)=>Boolean(id))));
-        const matchedSecondaryCategoryIds = Array.from(new Set([
+        const matchedSecondaryCategoryIds = lockedNoBrandId ? [
+            lockedNoBrandId
+        ] : Array.from(new Set([
             ...tableResolvedCategoryIds,
             ...autoMatchedSecondaryCategories.map((category)=>category.id)
         ]));
@@ -28922,7 +28949,7 @@ const startParseTask = (0, _action_utils.requireRole)([
                         }
                     } else {
                         var _fetched_priceMin, _fetched_priceMax, _resolveFetchedOfferCost, _toNumberOrNull;
-                        var _taskSnapshot_stockStrategyJson, _skuTable_;
+                        var _taskSnapshot_stockStrategyJson, _categoryMap_get, _skuTable_;
                         successCount += 1;
                         consecutiveRisk = 0;
                         const rawPriceMin = (_fetched_priceMin = fetched.priceMin) !== null && _fetched_priceMin !== void 0 ? _fetched_priceMin : basePrice;
@@ -28939,7 +28966,8 @@ const startParseTask = (0, _action_utils.requireRole)([
                                 category.id,
                                 category
                             ]));
-                        const targetCategoryId = pickFirstNonBrandCategoryId([
+                        const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, taskSnapshot.defaultCategoryId);
+                        const targetCategoryId = lockedNoBrandId || pickFirstNonBrandCategoryId([
                             pickImportPricingTargetCategory(matchedSecondaryCategories, null),
                             taskSnapshot.defaultCategoryId,
                             ...matchedSecondaryCategoryIds
@@ -29081,8 +29109,12 @@ const startParseTask = (0, _action_utils.requireRole)([
                             name: productName,
                             // 采集/解析阶段不再翻译（移至上架时翻译+缓存），显著加快「传图」并让逐条切换不卡顿
                             categoryId: targetCategoryId || undefined,
-                            matchedCategoryIds: matchedSecondaryCategoryIds,
-                            matchedCategoryNames: matchedSecondaryCategoryNames,
+                            matchedCategoryIds: lockedNoBrandId ? [
+                                lockedNoBrandId
+                            ] : matchedSecondaryCategoryIds,
+                            matchedCategoryNames: lockedNoBrandId ? [
+                                ((_categoryMap_get = categoryMap.get(lockedNoBrandId)) === null || _categoryMap_get === void 0 ? void 0 : _categoryMap_get.name) || "No Brand"
+                            ] : matchedSecondaryCategoryNames,
                             price: resolvedFinalPriceMin,
                             mainImageUrl: mainImageUrl || undefined,
                             detailImages,
@@ -30210,7 +30242,7 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             try {
                 await _prisma.default.$transaction(async (tx)=>{
                     var _ref, _priceSummary_cnyMin, _priceSummary_cnyMin1;
-                    var _item_previewDataJson, _item_previewDataJson1, _item_previewDataJson2, _secondaryById_get, _item_previewDataJson3;
+                    var _item_previewDataJson, _item_previewDataJson1, _item_previewDataJson2, _item_previewDataJson3;
                     const item = await tx.importtaskitem.findUnique({
                         where: {
                             id: itemId
@@ -30276,8 +30308,12 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
                             category.id,
                             category
                         ]));
-                    const operatorChosenId = String(item.targetCategoryId || previewData.categoryId || item.importTask.defaultCategoryId || '').trim();
-                    const lockToNoBrandOnly = isNoBrandCatchAllCategoryName((_secondaryById_get = secondaryById.get(operatorChosenId)) === null || _secondaryById_get === void 0 ? void 0 : _secondaryById_get.name);
+                    let operatorChosenId = String(item.targetCategoryId || previewData.categoryId || item.importTask.defaultCategoryId || '').trim();
+                    const taskNoBrandId = noBrandCategoryIdFromMap(categoryMap, item.importTask.defaultCategoryId);
+                    const chosenNoBrandId = noBrandCategoryIdFromMap(categoryMap, item.targetCategoryId, previewData.categoryId);
+                    const operatorLeftNoBrand = previewData.categoryCalibrated === true && !chosenNoBrandId;
+                    const lockToNoBrandOnly = !operatorLeftNoBrand && Boolean(taskNoBrandId || chosenNoBrandId);
+                    if (lockToNoBrandOnly) operatorChosenId = chosenNoBrandId || taskNoBrandId || operatorChosenId;
                     // 已一键校准 / 待上传手改类目或系数：上架信任现有主类目与系数，不再按标题重扫覆盖
                     const operatorLockedCategory = previewData.categoryCalibrated === true;
                     const operatorLockedCoefficient = previewData.coefficientCalibrated === true;
@@ -30557,8 +30593,9 @@ const publishPendingImportItems = (0, _action_utils.requireRole)([
             category.id,
             category
         ]));
-    // 重新解析：主类目只用真实一/二级；Brand 命中不覆盖售价系数 / 主类目
-    const targetCategoryId = pickFirstNonBrandCategoryId([
+    // 重新解析：上传时选了 No Brand 就保持，不用标题里的手提包/化妆包覆盖。手改过类目的不再拉回。
+    const lockedNoBrandId = currentPreview.categoryCalibrated === true ? noBrandCategoryIdFromMap(categoryMap, item.targetCategoryId) : noBrandCategoryIdFromMap(categoryMap, item.importTask.defaultCategoryId, item.targetCategoryId);
+    const targetCategoryId = lockedNoBrandId || pickFirstNonBrandCategoryId([
         pickImportPricingTargetCategory(matchedSecondaryCategories, null),
         item.targetCategoryId,
         item.importTask.defaultCategoryId,
@@ -31367,6 +31404,9 @@ _export(exports, {
     get getOrderList () {
         return getOrderList;
     },
+    get getOrderSettlementPdf () {
+        return getOrderSettlementPdf;
+    },
     get importCustomerOrder () {
         return importCustomerOrder;
     },
@@ -31378,6 +31418,9 @@ _export(exports, {
     },
     get saveInboundShipment () {
         return saveInboundShipment;
+    },
+    get saveOrderSettlementPdf () {
+        return saveOrderSettlementPdf;
     },
     get shipOrder () {
         return shipOrder;
@@ -31987,7 +32030,7 @@ const getOrderDetail = (0, _action_utils.requireRole)([
                 mainImageUrl: ((_item_productSku = item.productSku) === null || _item_productSku === void 0 ? void 0 : _item_productSku.imageUrl) || ((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.mainImageUrl)
             };
         }),
-        logistics: record.logistics.map((log)=>{
+        logistics: record.logistics.filter((log)=>log.segmentType !== '结算PDF').map((log)=>{
             var _log_estimatedArrivalAt, _log_shippedAt;
             return {
                 id: log.id,
@@ -33980,6 +34023,68 @@ const updateInboundShipment = (0, _action_utils.requireRole)([
         });
     });
     return listInboundShipmentRows(order.id);
+}));
+const SETTLEMENT_PDF_SEGMENT = '结算PDF';
+const getOrderSettlementPdf = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (orderId)=>{
+    if (!orderId) return '';
+    const row = await _prisma.default.orderlogisticssegment.findFirst({
+        where: {
+            orderId,
+            segmentType: SETTLEMENT_PDF_SEGMENT
+        },
+        orderBy: {
+            createdAt: 'desc'
+        },
+        select: {
+            remark: true
+        }
+    });
+    return String((row === null || row === void 0 ? void 0 : row.remark) || '');
+}));
+const saveOrderSettlementPdf = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: input.orderId
+        },
+        select: {
+            id: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const url = String(input.url || '').trim();
+    if (!url.startsWith('/api/uploads/') || !url.toLowerCase().endsWith('.pdf')) {
+        throw new Error('请上传 PDF');
+    }
+    await _prisma.default.$transaction(async (tx)=>{
+        await tx.orderlogisticssegment.deleteMany({
+            where: {
+                orderId: order.id,
+                segmentType: SETTLEMENT_PDF_SEGMENT
+            }
+        });
+        await tx.orderlogisticssegment.create({
+            data: {
+                orderId: order.id,
+                segmentType: SETTLEMENT_PDF_SEGMENT,
+                statusLabel: '结算PDF',
+                remark: url.slice(0, 700)
+            }
+        });
+        await tx.orderoperationlog.create({
+            data: {
+                orderId: order.id,
+                actionType: '结算PDF',
+                actionNote: '上传结算 PDF',
+                operatorName: username
+            }
+        });
+    });
+    return url;
 }));
 const updateManualOrderLine = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN
@@ -36403,7 +36508,7 @@ async function syncCartItemsValidState(tx, productId) {
         }
     }
 }
-async function recalculateProductSkuPrices(tx, productId, coefficient) {
+async function recalculateProductSkuPrices(tx, productId, coefficient, previousCoefficient) {
     const product = await tx.product.findUnique({
         where: {
             id: productId
@@ -36416,6 +36521,36 @@ async function recalculateProductSkuPrices(tx, productId, coefficient) {
     const costPrice = toNumber(product.costPrice);
     if (costPrice === null || costPrice < 0) {
         throw new Error('商品缺少有效成本价，无法重算售价');
+    }
+    const stored = product.skus.map((sku)=>{
+        var _toNumber;
+        return (_toNumber = toNumber(sku.price)) !== null && _toNumber !== void 0 ? _toNumber : 0;
+    }).filter((price)=>price > 0);
+    const spread = stored.length > 1 && Math.max(...stored) - Math.min(...stored) > 0.02;
+    const previous = toNumber(previousCoefficient);
+    if (spread) {
+        if (previous != null && previous > 0 && Math.abs(previous - coefficient) > 0.0001) {
+            const factor = coefficient / previous;
+            for (const sku of product.skus){
+                var _toNumber;
+                const current = (_toNumber = toNumber(sku.price)) !== null && _toNumber !== void 0 ? _toNumber : 0;
+                if (!(current > 0)) continue;
+                const nextPrice = roundCurrency(current * factor);
+                await tx.productsku.update({
+                    where: {
+                        id: sku.id
+                    },
+                    data: {
+                        price: nextPrice,
+                        originalPrice: roundCurrency(nextPrice * 1.1)
+                    }
+                });
+            }
+        }
+        return {
+            nextPrice: null,
+            nextOriginalPrice: null
+        };
     }
     const nextPrice = calculateSkuRmbPrice(costPrice, coefficient);
     const nextOriginalPrice = roundCurrency(nextPrice * 1.1);
@@ -36434,6 +36569,7 @@ async function recalculateProductSkuPrices(tx, productId, coefficient) {
     };
 }
 async function applyProductCoefficient(tx, productId, coefficient) {
+    const previous = await resolveProductListCoefficient(tx, productId);
     await tx.product.update({
         where: {
             id: productId
@@ -36442,7 +36578,7 @@ async function applyProductCoefficient(tx, productId, coefficient) {
             priceCoefficient: coefficient
         }
     });
-    await recalculateProductSkuPrices(tx, productId, coefficient);
+    await recalculateProductSkuPrices(tx, productId, coefficient, previous);
 }
 async function applyCategoryCoefficient(tx, productId) {
     const product = await tx.product.findUnique({
@@ -36466,8 +36602,9 @@ async function applyCategoryCoefficient(tx, productId) {
         product.categoryId
     ]);
     const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId, product.category);
+    const previous = await resolveProductListCoefficient(tx, productId);
     const categoryCoefficient = (0, _priceCoefficient.resolveCategoryPriceCoefficient)(own, parent);
-    await recalculateProductSkuPrices(tx, productId, categoryCoefficient);
+    await recalculateProductSkuPrices(tx, productId, categoryCoefficient, previous);
 }
 /** 与列表「当前系数」同一套：商品系数优先，否则主类目继承。 */ async function resolveProductListCoefficient(tx, productId) {
     const product = await tx.product.findUnique({
@@ -37221,6 +37358,8 @@ const createProduct = (0, _action_utils.requireRole)([
         const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, input.category_id);
         const effectiveCoefficient = resolveEffectiveCoefficient(own, parent);
         const normalizedCostPrice = (_input_cost_price = input.cost_price) !== null && _input_cost_price !== void 0 ? _input_cost_price : 0;
+        const incomingSkuPrices = input.skus.map((s)=>Number(s.price)).filter((price)=>Number.isFinite(price) && price > 0);
+        const keepSkuPriceSpread = incomingSkuPrices.length > 1 && Math.max(...incomingSkuPrices) - Math.min(...incomingSkuPrices) > 0.02;
         const product = await tx.product.create({
             data: {
                 name: input.name,
@@ -37249,7 +37388,7 @@ const createProduct = (0, _action_utils.requireRole)([
                 },
                 skus: {
                     create: input.skus.map((s)=>{
-                        const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : s.price;
+                        const nextPrice = !keepSkuPriceSpread && normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : s.price;
                         const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : s.original_price || null;
                         const nextStock = (0, _resolveInitialStock.resolveInitialStock)(s.stock);
                         return {
@@ -37422,6 +37561,8 @@ const updateProduct = (0, _action_utils.requireRole)([
         const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, input.category_id);
         const effectiveCoefficient = resolveListDisplayCoefficient(input.price_coefficient, own, parent);
         const normalizedCostPrice = (_input_cost_price = input.cost_price) !== null && _input_cost_price !== void 0 ? _input_cost_price : 0;
+        const incomingSkuPrices = input.skus.map((sku)=>Number(sku.price)).filter((price)=>Number.isFinite(price) && price > 0);
+        const keepSkuPriceSpread = incomingSkuPrices.length > 1 && Math.max(...incomingSkuPrices) - Math.min(...incomingSkuPrices) > 0.02;
         await tx.product.update({
             where: {
                 id: input.product_id
@@ -37481,7 +37622,7 @@ const updateProduct = (0, _action_utils.requireRole)([
         }
         for (const sku of input.skus){
             var _sku_min_order_qty;
-            const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : sku.price;
+            const nextPrice = !keepSkuPriceSpread && normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : sku.price;
             const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : sku.original_price || null;
             // SPU 重量强制覆盖全部 SKU（忽略各 SKU 原值，避免保存后残留旧重量）
             const forcedWeightKg = input.weight_gram != null && Number(input.weight_gram) > 0 ? Number((Number(input.weight_gram) / 1000).toFixed(3)) : null;
@@ -48966,6 +49107,7 @@ const getCartData = (0, _action_utils.requireRole)([
                     },
                     skus: {
                         select: {
+                            price: true,
                             imageUrl: true,
                             attributeJson: true
                         }
@@ -49039,6 +49181,10 @@ const getCartData = (0, _action_utils.requireRole)([
         });
         const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: item.productSku.price.toNumber(),
+            skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)((item.product.skus || []).map((row)=>{
+                var _row_price;
+                return typeof ((_row_price = row.price) === null || _row_price === void 0 ? void 0 : _row_price.toNumber) === "function" ? row.price.toNumber() : Number(row.price);
+            })),
             costPrice: item.product.costPrice,
             productCoefficient: item.product.priceCoefficient,
             ...pricingCoeffs
@@ -49365,6 +49511,7 @@ const getRecommendedProducts = (0, _action_utils.requireRole)([
         const skuPricesUsd = (p.skus || []).map((s)=>{
             const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                 skuPriceRmb: s.price.toNumber(),
+                skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)((p.skus || []).map((row)=>row.price.toNumber())),
                 costPrice: p.costPrice,
                 productCoefficient: p.priceCoefficient,
                 ...pricingCoeffs
@@ -49835,6 +49982,11 @@ const placeCheckoutOrder = (0, _action_utils.requireRole)([
                     costPrice: true,
                     priceCoefficient: true,
                     translationsJson: true,
+                    skus: {
+                        select: {
+                            price: true
+                        }
+                    },
                     category: {
                         select: {
                             status: true,
@@ -49884,6 +50036,7 @@ const placeCheckoutOrder = (0, _action_utils.requireRole)([
         });
         const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)((sku.product.skus || []).map((row)=>row.price.toNumber())),
             costPrice: sku.product.costPrice,
             productCoefficient: sku.product.priceCoefficient,
             ...pricingCoeffs
@@ -50929,6 +51082,7 @@ async function loadPopularOrderFrequencyCards(input) {
         });
         const skuSellingRmbPrices = product.skus.map((sku)=>(0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                 skuPriceRmb: sku.price.toNumber(),
+                skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
                 costPrice: product.costPrice,
                 productCoefficient: product.priceCoefficient,
                 ...pricingCoeffs
@@ -50940,6 +51094,7 @@ async function loadPopularOrderFrequencyCards(input) {
         const skuOptions = sortedSkus.map((sku, index)=>{
             const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                 skuPriceRmb: sku.price.toNumber(),
+                skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
                 costPrice: product.costPrice,
                 productCoefficient: product.priceCoefficient,
                 ...pricingCoeffs
@@ -51382,6 +51537,7 @@ const getHomeRecommendZones = async (input)=>{
             });
             const skuSellingRmbPrices = product.skus.map((sku)=>(0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                     skuPriceRmb: sku.price.toNumber(),
+                    skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
                     costPrice: product.costPrice,
                     productCoefficient: product.priceCoefficient,
                     ...pricingCoeffs
@@ -51393,6 +51549,7 @@ const getHomeRecommendZones = async (input)=>{
             const skuOptions = sortedSkus.map((sku, index)=>{
                 const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                     skuPriceRmb: sku.price.toNumber(),
+                    skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
                     costPrice: product.costPrice,
                     productCoefficient: product.priceCoefficient,
                     ...pricingCoeffs
@@ -51496,6 +51653,7 @@ const getHomeRecommendZones = async (input)=>{
                 });
                 const skuSellingRmbPrices = product.skus.map((sku)=>(0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                         skuPriceRmb: sku.price.toNumber(),
+                        skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
                         costPrice: product.costPrice,
                         productCoefficient: product.priceCoefficient,
                         ...pricingCoeffs
@@ -51507,6 +51665,7 @@ const getHomeRecommendZones = async (input)=>{
                 const skuOptions = sortedSkus.map((sku, index)=>{
                     const skuPriceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
                         skuPriceRmb: sku.price.toNumber(),
+                        skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
                         costPrice: product.costPrice,
                         productCoefficient: product.priceCoefficient,
                         ...pricingCoeffs
@@ -51851,6 +52010,7 @@ const mapActiveProductToItem = (product, exchangeRate, lang, siteWideCoef = null
     });
     const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
         skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
+        skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
         costPrice: product.costPrice,
         productCoefficient: product.priceCoefficient,
         ...pricingCoeffs
@@ -51859,6 +52019,7 @@ const mapActiveProductToItem = (product, exchangeRate, lang, siteWideCoef = null
     const originalPriceNum = null;
     const usdPrices = skus.map((sku)=>toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
             costPrice: product.costPrice,
             productCoefficient: product.priceCoefficient,
             ...pricingCoeffs
@@ -53642,7 +53803,7 @@ function setCachedList(key, value) {
     return Number.isNaN(ms) ? 0 : ms;
 }
 function mapProductRecordToItem(p, lang, exchangeRate, opts) {
-    var _ref, _ref1, _ref2;
+    var _minPositiveSkuPrice, _ref, _ref1, _ref2;
     var _p_tradeInfoJson, _p_category, _p_category_parent, _p_category1, _translated_shortDescription, _translated_shortDescription1, _p_brandCategory;
     const skus = p.skus;
     const skuCount = skus.length;
@@ -53662,8 +53823,13 @@ function mapProductRecordToItem(p, lang, exchangeRate, opts) {
         primary: p.category,
         relations: (p.relationCategories || []).map((rel)=>rel.category)
     });
+    const skuPriceAnchorMin = (_minPositiveSkuPrice = (0, _priceCoefficient.minPositiveSkuPrice)((skus || []).map((row)=>{
+        var _row_price;
+        return typeof (row === null || row === void 0 ? void 0 : (_row_price = row.price) === null || _row_price === void 0 ? void 0 : _row_price.toNumber) === "function" ? row.price.toNumber() : Number(row === null || row === void 0 ? void 0 : row.price);
+    }))) !== null && _minPositiveSkuPrice !== void 0 ? _minPositiveSkuPrice : (opts === null || opts === void 0 ? void 0 : opts.skuPriceMinRmb) != null && opts.skuPriceMinRmb > 0 ? opts.skuPriceMinRmb : null;
     const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
         skuPriceRmb: (_ref = opts === null || opts === void 0 ? void 0 : opts.skuPriceMinRmb) !== null && _ref !== void 0 ? _ref : defaultSku ? defaultSku.price.toNumber() : 0,
+        skuPriceAnchorMin: skuPriceAnchorMin,
         costPrice: p.costPrice,
         productCoefficient: p.priceCoefficient,
         ...pricingCoeffs
@@ -53673,18 +53839,21 @@ function mapProductRecordToItem(p, lang, exchangeRate, opts) {
     const usdPrices = (opts === null || opts === void 0 ? void 0 : opts.skuPriceMinRmb) != null && (opts === null || opts === void 0 ? void 0 : opts.skuPriceMaxRmb) != null ? [
         toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: opts.skuPriceMinRmb,
+            skuPriceAnchorMin: skuPriceAnchorMin,
             costPrice: p.costPrice,
             productCoefficient: p.priceCoefficient,
             ...pricingCoeffs
         }), exchangeRate),
         toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: opts.skuPriceMaxRmb,
+            skuPriceAnchorMin: skuPriceAnchorMin,
             costPrice: p.costPrice,
             productCoefficient: p.priceCoefficient,
             ...pricingCoeffs
         }), exchangeRate)
     ] : skus.map((sku)=>toUsdPrice((0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: skuPriceAnchorMin,
             costPrice: p.costPrice,
             productCoefficient: p.priceCoefficient,
             ...pricingCoeffs
@@ -55115,6 +55284,7 @@ const getProductDetail = (0, _action_utils.withResult)(async (input)=>{
         const storedSizeLabel = String(sku.sizeLabel || '').trim();
         const priceRmb = (0, _priceCoefficient.resolveFrontRmbSellingPrice)({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: (0, _priceCoefficient.minPositiveSkuPrice)(product.skus.map((row)=>row.price.toNumber())),
             costPrice: product.costPrice,
             productCoefficient: product.priceCoefficient,
             ...pricingCoeffs
@@ -57412,7 +57582,8 @@ const MAX_VIDEO_UPLOAD_BYTES = 80 * 1024 * 1024;
     mp4: 'video/mp4',
     webm: 'video/webm',
     mov: 'video/quicktime',
-    m4v: 'video/mp4'
+    m4v: 'video/mp4',
+    pdf: 'application/pdf'
 };
 const EXT_BY_MIME = {
     'image/jpeg': 'jpg',
@@ -57427,7 +57598,8 @@ const EXT_BY_MIME = {
     'image/svg+xml': 'svg',
     'video/mp4': 'mp4',
     'video/webm': 'webm',
-    'video/quicktime': 'mov'
+    'video/quicktime': 'mov',
+    'application/pdf': 'pdf'
 };
 const VIDEO_EXTS = new Set([
     'mp4',
@@ -62054,6 +62226,9 @@ _export(exports, {
     get canEditCategoryPriceCoefficient () {
         return canEditCategoryPriceCoefficient;
     },
+    get minPositiveSkuPrice () {
+        return minPositiveSkuPrice;
+    },
     get pickFrontPricingCategoryCoeffs () {
         return pickFrontPricingCategoryCoeffs;
     },
@@ -62154,6 +62329,15 @@ function pickFrontPricingCategoryCoeffs(input) {
         parentCategoryName: (_ref = (_chosen_parent2 = chosen.parent) === null || _chosen_parent2 === void 0 ? void 0 : _chosen_parent2.name) !== null && _ref !== void 0 ? _ref : null
     };
 }
+function minPositiveSkuPrice(values) {
+    let min = null;
+    for (const value of values){
+        const n = typeof value === "number" ? value : Number(value);
+        if (!Number.isFinite(n) || n <= 0) continue;
+        if (min === null || n < min) min = n;
+    }
+    return min;
+}
 function resolveFrontRmbSellingPrice(options) {
     const ownBlocked = (0, _categoryPricing.isNonPricingCategory)({
         name: options.ownCategoryName,
@@ -62170,7 +62354,13 @@ function resolveFrontRmbSellingPrice(options) {
     const productCoeff = toDecimalNumber(options.productCoefficient);
     const coefficient = resolveCategoryPriceCoefficient(productCoeff != null && productCoeff > 0 ? productCoeff : ownBlocked ? null : toDecimalNumber(options.ownCoefficient), parentBlocked ? null : toDecimalNumber(options.parentCoefficient));
     if (cost !== null && cost > 0) {
-        return Number((cost * coefficient).toFixed(2));
+        const base = Number((cost * coefficient).toFixed(2));
+        const anchor = Number(options.skuPriceAnchorMin);
+        // A real SKU spread is already a selling price. Do not collapse it onto one product cost.
+        if (skuPrice > 0 && Number.isFinite(anchor) && anchor > 0 && Math.abs(skuPrice - anchor) > 0.02) {
+            return Number(skuPrice.toFixed(2));
+        }
+        return base;
     }
     if (skuPrice > 0) {
         return Number(skuPrice.toFixed(2));
