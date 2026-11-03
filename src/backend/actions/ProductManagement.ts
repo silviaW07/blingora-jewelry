@@ -1688,7 +1688,12 @@ async function syncCartItemsValidState(tx: any, productId: string) {
   }
 }
 
-async function recalculateProductSkuPrices(tx: any, productId: string, coefficient: number) {
+async function recalculateProductSkuPrices(
+  tx: any,
+  productId: string,
+  coefficient: number,
+  previousCoefficient?: number | null,
+) {
   const product = await tx.product.findUnique({
     where: { id: productId },
     include: { skus: true }
@@ -1697,6 +1702,27 @@ async function recalculateProductSkuPrices(tx: any, productId: string, coefficie
   const costPrice = toNumber(product.costPrice)
   if (costPrice === null || costPrice < 0) {
     throw new Error('商品缺少有效成本价，无法重算售价')
+  }
+
+  const stored = product.skus
+    .map((sku: { price: unknown }) => toNumber(sku.price) ?? 0)
+    .filter((price: number) => price > 0)
+  const spread = stored.length > 1 && Math.max(...stored) - Math.min(...stored) > 0.02
+  const previous = toNumber(previousCoefficient)
+  if (spread) {
+    if (previous != null && previous > 0 && Math.abs(previous - coefficient) > 0.0001) {
+      const factor = coefficient / previous
+      for (const sku of product.skus) {
+        const current = toNumber(sku.price) ?? 0
+        if (!(current > 0)) continue
+        const nextPrice = roundCurrency(current * factor)
+        await tx.productsku.update({
+          where: { id: sku.id },
+          data: { price: nextPrice, originalPrice: roundCurrency(nextPrice * 1.1) },
+        })
+      }
+    }
+    return { nextPrice: null, nextOriginalPrice: null }
   }
 
   const nextPrice = calculateSkuRmbPrice(costPrice, coefficient)
@@ -1714,11 +1740,12 @@ async function recalculateProductSkuPrices(tx: any, productId: string, coefficie
 }
 
 async function applyProductCoefficient(tx: any, productId: string, coefficient: number) {
+  const previous = await resolveProductListCoefficient(tx, productId)
   await tx.product.update({
     where: { id: productId },
     data: { priceCoefficient: coefficient }
   })
-  await recalculateProductSkuPrices(tx, productId, coefficient)
+  await recalculateProductSkuPrices(tx, productId, coefficient, previous)
 }
 
 async function applyCategoryCoefficient(tx: any, productId: string) {
@@ -1731,8 +1758,9 @@ async function applyCategoryCoefficient(tx: any, productId: string) {
   if (!product) throw new Error('商品不存在')
   const { categoryMap } = await getCategoryMetaMap(tx, [product.categoryId])
   const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, product.categoryId, product.category)
+  const previous = await resolveProductListCoefficient(tx, productId)
   const categoryCoefficient = resolveCategoryPriceCoefficient(own, parent)
-  await recalculateProductSkuPrices(tx, productId, categoryCoefficient)
+  await recalculateProductSkuPrices(tx, productId, categoryCoefficient, previous)
 }
 
 /** 与列表「当前系数」同一套：商品系数优先，否则主类目继承。 */
@@ -2355,6 +2383,12 @@ export const createProduct = requireRole([UserRole.ADMIN])(
       const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, input.category_id)
       const effectiveCoefficient = resolveEffectiveCoefficient(own, parent)
       const normalizedCostPrice = input.cost_price ?? 0
+      const incomingSkuPrices = input.skus
+        .map(s => Number(s.price))
+        .filter(price => Number.isFinite(price) && price > 0)
+      const keepSkuPriceSpread =
+        incomingSkuPrices.length > 1 &&
+        Math.max(...incomingSkuPrices) - Math.min(...incomingSkuPrices) > 0.02
 
       const product = await tx.product.create({
         data: {
@@ -2380,7 +2414,7 @@ export const createProduct = requireRole([UserRole.ADMIN])(
           category: { connect: { id: input.category_id } },
           skus: {
             create: input.skus.map(s => {
-              const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : s.price
+              const nextPrice = !keepSkuPriceSpread && normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : s.price
               const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : (s.original_price || null)
               const nextStock = resolveInitialStock(s.stock)
               return {
@@ -2536,6 +2570,12 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
       const { own, parent } = getCategoryHierarchyCoefficients(categoryMap, input.category_id)
       const effectiveCoefficient = resolveListDisplayCoefficient(input.price_coefficient, own, parent)
       const normalizedCostPrice = input.cost_price ?? 0
+      const incomingSkuPrices = input.skus
+        .map(sku => Number(sku.price))
+        .filter(price => Number.isFinite(price) && price > 0)
+      const keepSkuPriceSpread =
+        incomingSkuPrices.length > 1 &&
+        Math.max(...incomingSkuPrices) - Math.min(...incomingSkuPrices) > 0.02
 
       await tx.product.update({
         where: { id: input.product_id },
@@ -2572,7 +2612,7 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
       }
 
       for (const sku of input.skus) {
-        const nextPrice = normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : sku.price
+        const nextPrice = !keepSkuPriceSpread && normalizedCostPrice > 0 ? calculateSkuRmbPrice(normalizedCostPrice, effectiveCoefficient) : sku.price
         const nextOriginalPrice = normalizedCostPrice > 0 ? roundCurrency(nextPrice * 1.1) : (sku.original_price || null)
         // SPU 重量强制覆盖全部 SKU（忽略各 SKU 原值，避免保存后残留旧重量）
         const forcedWeightKg =

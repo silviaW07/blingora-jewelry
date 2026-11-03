@@ -211,8 +211,9 @@ export function resolveFrontRmbSellingPrice(options: {
   if (cost !== null && cost > 0) {
     const base = Number((cost * coefficient).toFixed(2))
     const anchor = Number(options.skuPriceAnchorMin)
+    // A real SKU spread is already a selling price. Do not collapse it onto one product cost.
     if (skuPrice > 0 && Number.isFinite(anchor) && anchor > 0 && Math.abs(skuPrice - anchor) > 0.02) {
-      return Number((base * (skuPrice / anchor)).toFixed(2))
+      return Number(skuPrice.toFixed(2))
     }
     return base
   }
