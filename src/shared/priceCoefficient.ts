@@ -152,11 +152,26 @@ export function pickFrontPricingCategoryCoeffs(input: {
 /**
  * Front selling RMB follows the same number admin shows:
  *   cost × current coefficient (product override → L2 → L1 → default)
- * Stored SKU.price is only used when cost is missing.
- * Category coefficient changes therefore show up immediately without rewriting SKUs.
+ * Stored SKU.price is the selling price written at publish.
+ * One product cost still follows the current coefficient.
+ * When SKU prices differ, keep that spread:
+ *   (cost x current coefficient) x (this SKU price / cheapest SKU price).
+ * skuPriceAnchorMin is the cheapest stored SKU price on the same product.
  */
+export function minPositiveSkuPrice(values: Array<number | null | undefined>): number | null {
+  let min: number | null = null
+  for (const value of values) {
+    const n = typeof value === "number" ? value : Number(value)
+    if (!Number.isFinite(n) || n <= 0) continue
+    if (min === null || n < min) min = n
+  }
+  return min
+}
+
 export function resolveFrontRmbSellingPrice(options: {
   skuPriceRmb: number
+  /** Cheapest stored SKU price on this product. Keeps a price range when SKUs differ. */
+  skuPriceAnchorMin?: number | null
   costPrice?: unknown
   productCoefficient?: unknown
   ownCoefficient?: unknown
@@ -194,7 +209,12 @@ export function resolveFrontRmbSellingPrice(options: {
     parentBlocked ? null : toDecimalNumber(options.parentCoefficient),
   )
   if (cost !== null && cost > 0) {
-    return Number((cost * coefficient).toFixed(2))
+    const base = Number((cost * coefficient).toFixed(2))
+    const anchor = Number(options.skuPriceAnchorMin)
+    if (skuPrice > 0 && Number.isFinite(anchor) && anchor > 0 && Math.abs(skuPrice - anchor) > 0.02) {
+      return Number((base * (skuPrice / anchor)).toFixed(2))
+    }
+    return base
   }
   if (skuPrice > 0) {
     return Number(skuPrice.toFixed(2))

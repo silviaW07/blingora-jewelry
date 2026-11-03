@@ -786,8 +786,8 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                   <div>
                     <StorePrice className="text-[22px] font-bold leading-none sm:text-[26px]">
                       {(() => {
-                        const specPrices = specListRows
-                          .map((row) => row.sku.price)
+                        const specPrices = (product.skus || [])
+                          .map((sku) => sku.price)
                           .filter((price) => typeof price === 'number' && price > 0)
                         const rangePrices =
                           specPrices.length > 0

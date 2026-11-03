@@ -28,6 +28,7 @@ import {
 import { normalizeProductLang, pickProductTranslation, resolveCategoryDisplayName, resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
 import {
   pickFrontPricingCategoryCoeffs,
+  minPositiveSkuPrice,
   resolveFrontRmbSellingPrice,
 } from '@/shared/priceCoefficient'
 import { CATEGORY_CARD_PLACEHOLDER_URL, optimizeCatalogImageUrl, resolveCategoryCardImageUrl } from '@/shared/imageUrl'
@@ -335,6 +336,7 @@ async function loadPopularOrderFrequencyCards(input: {
         .map((sku) =>
           resolveFrontRmbSellingPrice({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
             costPrice: product.costPrice,
             productCoefficient: product.priceCoefficient,
             ...pricingCoeffs,
@@ -352,6 +354,7 @@ async function loadPopularOrderFrequencyCards(input: {
         .map((sku, index) => {
           const priceRmb = resolveFrontRmbSellingPrice({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
             costPrice: product.costPrice,
             productCoefficient: product.priceCoefficient,
             ...pricingCoeffs,
@@ -792,6 +795,7 @@ export const getHomeRecommendZones = async (input?: {
         .map((sku) =>
           resolveFrontRmbSellingPrice({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
             costPrice: product.costPrice,
             productCoefficient: product.priceCoefficient,
             ...pricingCoeffs,
@@ -809,6 +813,7 @@ export const getHomeRecommendZones = async (input?: {
         .map((sku, index) => {
           const priceRmb = resolveFrontRmbSellingPrice({
             skuPriceRmb: sku.price.toNumber(),
+            skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
             costPrice: product.costPrice,
             productCoefficient: product.priceCoefficient,
             ...pricingCoeffs,
@@ -940,6 +945,7 @@ export const getHomeRecommendZones = async (input?: {
             .map((sku) =>
               resolveFrontRmbSellingPrice({
                 skuPriceRmb: sku.price.toNumber(),
+                skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
                 costPrice: product.costPrice,
                 productCoefficient: product.priceCoefficient,
                 ...pricingCoeffs,
@@ -957,6 +963,7 @@ export const getHomeRecommendZones = async (input?: {
             .map((sku, index) => {
               const skuPriceRmb = resolveFrontRmbSellingPrice({
                 skuPriceRmb: sku.price.toNumber(),
+                skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
                 costPrice: product.costPrice,
                 productCoefficient: product.priceCoefficient,
                 ...pricingCoeffs,
@@ -1444,6 +1451,7 @@ const mapActiveProductToItem = (
   })
   const priceRmb = resolveFrontRmbSellingPrice({
     skuPriceRmb: defaultSku ? defaultSku.price.toNumber() : 0,
+    skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
     costPrice: product.costPrice,
     productCoefficient: product.priceCoefficient,
     ...pricingCoeffs,
@@ -1455,6 +1463,7 @@ const mapActiveProductToItem = (
       toUsdPrice(
         resolveFrontRmbSellingPrice({
           skuPriceRmb: sku.price.toNumber(),
+          skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
           costPrice: product.costPrice,
           productCoefficient: product.priceCoefficient,
           ...pricingCoeffs,

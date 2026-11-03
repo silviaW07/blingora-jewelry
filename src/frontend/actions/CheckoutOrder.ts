@@ -15,6 +15,7 @@ import {
 } from '@/shared/shippingFeeCalc'
 import {
   pickFrontPricingCategoryCoeffs,
+  minPositiveSkuPrice,
   resolveFrontRmbSellingPrice,
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
@@ -565,6 +566,7 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
             costPrice: true,
             priceCoefficient: true,
             translationsJson: true,
+            skus: { select: { price: true } },
             category: {
               select: {
                 status: true,
@@ -629,6 +631,9 @@ export const placeCheckoutOrder = requireRole([UserRole.CUSTOMER])(
       })
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: sku.price.toNumber(),
+        skuPriceAnchorMin: minPositiveSkuPrice(
+          (sku.product.skus || []).map((row) => row.price.toNumber()),
+        ),
         costPrice: sku.product.costPrice,
         productCoefficient: sku.product.priceCoefficient,
         ...pricingCoeffs,

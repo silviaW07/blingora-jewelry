@@ -282,6 +282,7 @@ import {
 } from '@/frontend/i18n/productTranslation'
 import {
   pickFrontPricingCategoryCoeffs,
+  minPositiveSkuPrice,
   resolveFrontRmbSellingPrice,
 } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
@@ -1438,8 +1439,15 @@ function mapProductRecordToItem(
     primary: p.category,
     relations: (p.relationCategories || []).map((rel: any) => rel.category),
   })
+  const skuPriceAnchorMin =
+    minPositiveSkuPrice(
+      (skus || []).map((row: { price?: { toNumber?: () => number } }) =>
+        typeof row?.price?.toNumber === "function" ? row.price.toNumber() : Number(row?.price),
+      ),
+    ) ?? (opts?.skuPriceMinRmb != null && opts.skuPriceMinRmb > 0 ? opts.skuPriceMinRmb : null)
   const priceRmb = resolveFrontRmbSellingPrice({
     skuPriceRmb: opts?.skuPriceMinRmb ?? (defaultSku ? defaultSku.price.toNumber() : 0),
+    skuPriceAnchorMin: skuPriceAnchorMin,
     costPrice: p.costPrice,
     productCoefficient: p.priceCoefficient,
     ...pricingCoeffs,
@@ -1452,6 +1460,7 @@ function mapProductRecordToItem(
           toUsdPrice(
             resolveFrontRmbSellingPrice({
               skuPriceRmb: opts.skuPriceMinRmb,
+              skuPriceAnchorMin: skuPriceAnchorMin,
               costPrice: p.costPrice,
               productCoefficient: p.priceCoefficient,
               ...pricingCoeffs,
@@ -1461,6 +1470,7 @@ function mapProductRecordToItem(
           toUsdPrice(
             resolveFrontRmbSellingPrice({
               skuPriceRmb: opts.skuPriceMaxRmb,
+              skuPriceAnchorMin: skuPriceAnchorMin,
               costPrice: p.costPrice,
               productCoefficient: p.priceCoefficient,
               ...pricingCoeffs,
@@ -1473,6 +1483,7 @@ function mapProductRecordToItem(
             toUsdPrice(
               resolveFrontRmbSellingPrice({
                 skuPriceRmb: sku.price.toNumber(),
+                skuPriceAnchorMin: skuPriceAnchorMin,
                 costPrice: p.costPrice,
                 productCoefficient: p.priceCoefficient,
                 ...pricingCoeffs,

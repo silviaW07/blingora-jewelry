@@ -10,6 +10,7 @@ import {
 } from '@/frontend/action_utils'
 import {
   pickFrontPricingCategoryCoeffs,
+  minPositiveSkuPrice,
   resolveFrontRmbSellingPrice,
 } from '@/shared/priceCoefficient'
 import {
@@ -584,6 +585,7 @@ export const getProductDetail = withResult(
       const storedSizeLabel = String(sku.sizeLabel || '').trim()
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: sku.price.toNumber(),
+        skuPriceAnchorMin: minPositiveSkuPrice(product.skus.map((row) => row.price.toNumber())),
         costPrice: product.costPrice,
         productCoefficient: product.priceCoefficient,
         ...pricingCoeffs,

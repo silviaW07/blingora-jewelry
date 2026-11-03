@@ -97,7 +97,7 @@ import {
   UserRole
 } from '@/frontend/action_utils'
 import { normalizeProductLang, resolveProductDisplayName } from '@/frontend/i18n/productTranslation'
-import { pickFrontPricingCategoryCoeffs, resolveFrontRmbSellingPrice } from '@/shared/priceCoefficient'
+import { pickFrontPricingCategoryCoeffs, minPositiveSkuPrice, resolveFrontRmbSellingPrice } from '@/shared/priceCoefficient'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { loadPricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { computeDiscounts } from '@/shared/pricingPromotionCalc'
@@ -244,6 +244,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
             },
             skus: {
               select: {
+                price: true,
                 imageUrl: true,
                 attributeJson: true,
               },
@@ -327,6 +328,11 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       })
       const priceRmb = resolveFrontRmbSellingPrice({
         skuPriceRmb: item.productSku.price.toNumber(),
+        skuPriceAnchorMin: minPositiveSkuPrice(
+          (item.product.skus || []).map((row) =>
+            typeof row.price?.toNumber === "function" ? row.price.toNumber() : Number(row.price),
+          ),
+        ),
         costPrice: item.product.costPrice,
         productCoefficient: item.product.priceCoefficient,
         ...pricingCoeffs,
@@ -664,6 +670,7 @@ export const getRecommendedProducts = requireRole([UserRole.CUSTOMER])(
         .map((s) => {
           const priceRmb = resolveFrontRmbSellingPrice({
             skuPriceRmb: s.price.toNumber(),
+            skuPriceAnchorMin: minPositiveSkuPrice((p.skus || []).map((row) => row.price.toNumber())),
             costPrice: p.costPrice,
             productCoefficient: p.priceCoefficient,
             ...pricingCoeffs,
