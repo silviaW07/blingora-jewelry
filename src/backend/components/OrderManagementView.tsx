@@ -516,6 +516,7 @@ export const OrderManagementView = ({
   const [createOrderName, setCreateOrderName] = React.useState('');
   const [createOrderSaving, setCreateOrderSaving] = React.useState(false);
   const [contactEdit, setContactEdit] = React.useState<{ id: string; field: 'name' | 'phone' | 'email' } | null>(null);
+  const [carrierEditing, setCarrierEditing] = React.useState(false);
   const [contactDraft, setContactDraft] = React.useState('');
 
   const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; costPrice: string; supplierName: string }>>({});
@@ -1626,7 +1627,7 @@ export const OrderManagementView = ({
                           <div className="grid grid-cols-2 gap-3" data-api-unique-id="ordermanagementview-r2aa2702d922b55a6-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                             <div data-api-unique-id="ordermanagementview-r7fb388a817e78e8a-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                               <Label className="text-[10px] uppercase font-bold text-slate-400" data-api-unique-id="ordermanagementview-rd488ffcbfca2fc7c-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">物流渠道</Label>
-                              <Input className="h-9 text-sm mt-1" value={state.shipForm.trackingCarrier} onChange={e => handlers.handleShipFormChange('trackingCarrier', e.target.value)} data-api-unique-id="ordermanagementview-r393b4f1fe04cfdbe-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" />
+                              {carrierEditing ? <Input autoFocus className="mt-1 h-12 text-xl font-semibold" value={state.shipForm.trackingCarrier} onChange={e => handlers.handleShipFormChange('trackingCarrier', e.target.value)} onBlur={() => setCarrierEditing(false)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') setCarrierEditing(false); }} data-api-unique-id="ordermanagementview-r393b4f1fe04cfdbe-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView" /> : <button type="button" title="双击修改物流渠道" className="mt-1 flex h-12 w-full items-center rounded-md border border-input bg-background px-3 text-left text-xl font-semibold text-slate-900" onDoubleClick={() => setCarrierEditing(true)}>{state.shipForm.trackingCarrier}</button>}
                             </div>
                             <div data-api-unique-id="ordermanagementview-r1f919b22c6ce16fc-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                               <Label className="text-[10px] uppercase font-bold text-slate-400" data-api-unique-id="ordermanagementview-r5675e87b763899bb-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">物流单号</Label>
