@@ -2357,10 +2357,7 @@ export const OrderManagementView = ({
             onUpdate={(input) => handlers.updateInboundShipment(input)}
           >
           {(shipButton) => (
-          <DialogFooter className="sticky bottom-0 z-20 gap-2 border-t bg-white px-4 py-3 sm:justify-between sm:px-6">
-            <Button type="button" variant="outline" onClick={handlers.markInboundAllFull} disabled={state.inboundSaving}>
-              全部到齐
-            </Button>
+          <DialogFooter className="sticky bottom-0 z-20 gap-2 border-t bg-white px-4 py-3 sm:justify-end sm:px-6">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <div className="relative" ref={stageMenuRef}>
                 <Button type="button" variant="outline" onClick={openBatchStage} disabled={state.inboundSaving}>
