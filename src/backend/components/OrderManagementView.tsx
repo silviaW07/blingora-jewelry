@@ -2158,7 +2158,13 @@ export const OrderManagementView = ({
                           style={inboundStageFill(line.inboundStage)}
                           aria-label={`${line.productName} 商品状态`}
                           value={normalizedInboundStage(line.inboundStage)}
-                          onChange={(e) => handlers.persistInboundLine(line.id, { inboundStage: e.target.value })}
+                          onChange={(e) => {
+                            const inboundStage = e.target.value
+                            const patch: { inboundStage: string; inboundQty?: number } = { inboundStage }
+                            if (inboundStage === 'SHORTAGE') patch.inboundQty = 0
+                            if (inboundStage === 'ARRIVED') patch.inboundQty = line.quantity
+                            handlers.persistInboundLine(line.id, patch)
+                          }}
                         >
                           {normalizedInboundStage(line.inboundStage) === 'STOCK' ? <option value="STOCK" style={INBOUND_STAGE_FILL.STOCK}>备货</option> : null}
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => (
@@ -2255,7 +2261,13 @@ export const OrderManagementView = ({
                     ) : null}
                     {columnVisible('stage') ? (
                       <td className="overflow-hidden px-1 py-3 align-middle">
-                        <select aria-label="商品状态" className="h-10 w-full rounded-md border border-transparent px-2 text-sm font-medium" style={inboundStageFill(card.stage)} value={card.stage} onChange={(event) => patchAddonCard(card.key, { stage: event.target.value })}>
+                        <select aria-label="商品状态" className="h-10 w-full rounded-md border border-transparent px-2 text-sm font-medium" style={inboundStageFill(card.stage)} value={card.stage} onChange={(event) => {
+                            const stage = event.target.value
+                            const patch: { stage: string; inboundQty?: string } = { stage }
+                            if (stage === 'SHORTAGE') patch.inboundQty = '0'
+                            if (stage === 'ARRIVED') patch.inboundQty = card.quantity || '0'
+                            patchAddonCard(card.key, patch)
+                          }}>
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => <option key={value} value={value} style={INBOUND_STAGE_FILL[value]}>{label}</option>)}
                         </select>
                       </td>
