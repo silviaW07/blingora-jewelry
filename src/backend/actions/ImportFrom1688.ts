@@ -7292,7 +7292,8 @@ const persistPinduoduoParsedItem = async (params: {
   )
   const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
   const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
-  const targetCategoryId = pickImportPricingTargetCategory(
+  const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, task.defaultCategoryId)
+  const targetCategoryId = lockedNoBrandId || pickImportPricingTargetCategory(
     matchedSecondaryCategories,
     task.defaultCategoryId,
   )
@@ -7772,7 +7773,8 @@ const persistYupooParsedItem = async (params: {
         .map((category) => category.name),
     ),
   )
-  const targetCategoryId = pickImportPricingTargetCategory(
+  const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, task.defaultCategoryId)
+  const targetCategoryId = lockedNoBrandId || pickImportPricingTargetCategory(
     matchedSecondaryCategories,
     task.defaultCategoryId,
   )
@@ -7930,7 +7932,8 @@ const persistWeishangParsedItem = async (params: {
   )
   const matchedSecondaryCategoryIds = matchedSecondaryCategories.map((category) => category.id)
   const matchedSecondaryCategoryNames = matchedSecondaryCategories.map((category) => category.name)
-  const targetCategoryId = pickImportPricingTargetCategory(
+  const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, task.defaultCategoryId)
+  const targetCategoryId = lockedNoBrandId || pickImportPricingTargetCategory(
     matchedSecondaryCategories,
     task.defaultCategoryId,
   )
@@ -8287,6 +8290,20 @@ export const isNoBrandCatchAllCategoryName = (name?: string | null) => {
  * 直接按包含匹配——否则「耳钉 high quality jewelry」去空格后变「耳钉HIGH…」，
  * 「耳钉」右邻字母 H 会被误判为不匹配（中文品类词 + 英文后缀的标题全被漏掉）。
  */
+
+/** 上传时选定的 No Brand。解析/上架不得再用标题里的包、饰品把主类目换掉。 */
+const noBrandCategoryIdFromMap = (
+  categoryMap: Map<string, { name?: string | null }>,
+  ...candidates: Array<string | null | undefined>
+) => {
+  for (const raw of candidates) {
+    const id = String(raw || '').trim()
+    if (!id) continue
+    if (isNoBrandCatchAllCategoryName(categoryMap.get(id)?.name)) return id
+  }
+  return null
+}
+
 export const containsCategoryMatchToken = (text: string, token: string) => {
   const normalizedText = normalizeCategoryMatchText(text)
   const normalizedToken = normalizeCategoryMatchText(token)
@@ -9720,7 +9737,13 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
         [normalizeText(row.detail)].filter(Boolean).join('\n') || null,
       )
       const tableTargetId = pathResolved.targetCategoryId || exactCell?.id || null
-      const categoryId =
+      const tableCategoryMap = new Map(
+        categories.map(item => [item.id, { name: item.name }]),
+      )
+      const lockedNoBrandId = !normalizeText(row.categoryId) && !tableTargetId
+        ? noBrandCategoryIdFromMap(tableCategoryMap, input.defaultCategoryId)
+        : null
+      const categoryId = lockedNoBrandId ||
         pickFirstNonBrandCategoryId(
           [
             normalizeText(row.categoryId),
@@ -9751,7 +9774,9 @@ export const createProductsFromTable = requireRole([UserRole.ADMIN])(
           ),
         ),
       )
-      const matchedSecondaryCategoryIds = Array.from(
+      const matchedSecondaryCategoryIds = lockedNoBrandId
+        ? [lockedNoBrandId]
+        : Array.from(
         new Set([
           ...tableResolvedCategoryIds,
           ...autoMatchedSecondaryCategories.map(category => category.id),
@@ -10517,7 +10542,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
           const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
           // Pricing target = real L1/L2 only; Brand hits stay in matched* for shelf linking.
           const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
-          const targetCategoryId = pickFirstNonBrandCategoryId(
+          const lockedNoBrandId = noBrandCategoryIdFromMap(categoryMap, taskSnapshot.defaultCategoryId)
+          const targetCategoryId = lockedNoBrandId || pickFirstNonBrandCategoryId(
             [
               pickImportPricingTargetCategory(matchedSecondaryCategories, null),
               taskSnapshot.defaultCategoryId,
@@ -10670,8 +10696,8 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
             name: productName,
             // 采集/解析阶段不再翻译（移至上架时翻译+缓存），显著加快「传图」并让逐条切换不卡顿
             categoryId: targetCategoryId || undefined,
-            matchedCategoryIds: matchedSecondaryCategoryIds,
-            matchedCategoryNames: matchedSecondaryCategoryNames,
+            matchedCategoryIds: lockedNoBrandId ? [lockedNoBrandId] : matchedSecondaryCategoryIds,
+            matchedCategoryNames: lockedNoBrandId ? [categoryMap.get(lockedNoBrandId)?.name || "No Brand"] : matchedSecondaryCategoryNames,
             price: resolvedFinalPriceMin,
             mainImageUrl: mainImageUrl || undefined,
             detailImages,
@@ -11852,10 +11878,14 @@ export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
             new Set((previewData.matchedCategoryIds || []).filter(Boolean)),
           )
           const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
-          const operatorChosenId = String(
+          let operatorChosenId = String(
             item.targetCategoryId || previewData.categoryId || item.importTask.defaultCategoryId || '',
           ).trim()
-          const lockToNoBrandOnly = isNoBrandCatchAllCategoryName(secondaryById.get(operatorChosenId)?.name)
+          const taskNoBrandId = noBrandCategoryIdFromMap(categoryMap, item.importTask.defaultCategoryId)
+          const chosenNoBrandId = noBrandCategoryIdFromMap(categoryMap, item.targetCategoryId, previewData.categoryId)
+          const operatorLeftNoBrand = previewData.categoryCalibrated === true && !chosenNoBrandId
+          const lockToNoBrandOnly = !operatorLeftNoBrand && Boolean(taskNoBrandId || chosenNoBrandId)
+          if (lockToNoBrandOnly) operatorChosenId = chosenNoBrandId || taskNoBrandId || operatorChosenId
           // 已一键校准 / 待上传手改类目或系数：上架信任现有主类目与系数，不再按标题重扫覆盖
           const operatorLockedCategory = previewData.categoryCalibrated === true
           const operatorLockedCoefficient = previewData.coefficientCalibrated === true
@@ -12236,8 +12266,11 @@ const applyReparsed1688PreviewToItem = async (params: {
   const matchedSecondaryCategoryIds = matchedSecondaryCategories.map(category => category.id)
   const matchedSecondaryCategoryNames = matchedSecondaryCategories.map(category => category.name)
   const secondaryById = new Map(secondaryCategories.map(category => [category.id, category]))
-  // 重新解析：主类目只用真实一/二级；Brand 命中不覆盖售价系数 / 主类目
-  const targetCategoryId = pickFirstNonBrandCategoryId(
+  // 重新解析：上传时选了 No Brand 就保持，不用标题里的手提包/化妆包覆盖。手改过类目的不再拉回。
+  const lockedNoBrandId = currentPreview.categoryCalibrated === true
+    ? noBrandCategoryIdFromMap(categoryMap, item.targetCategoryId)
+    : noBrandCategoryIdFromMap(categoryMap, item.importTask.defaultCategoryId, item.targetCategoryId)
+  const targetCategoryId = lockedNoBrandId || pickFirstNonBrandCategoryId(
     [
       pickImportPricingTargetCategory(matchedSecondaryCategories, null),
       item.targetCategoryId,
