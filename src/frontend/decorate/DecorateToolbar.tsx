@@ -562,14 +562,14 @@ function ServiceTrustEditor({
           生成安心模板
         </button>
         <p className="text-[10px] leading-4 text-slate-400">
-          生成后可填公司地址、上传车间图片和视频。顾客点这张卡片就能看到。改完点顶部「发布并退出装修」。
+          生成后可填公司地址、上传图片和视频。顾客点卡片会进入完整页面。改完点顶部「发布并退出装修」。
         </p>
       </div>
     )
   }
   return (
     <div className="space-y-2 rounded-lg border border-[#BFDBFE] bg-[#F8FAFC] p-2">
-      <p className="text-[11px] font-semibold text-[#1D4ED8]">顾客点开后看到的内容</p>
+      <p className="text-[11px] font-semibold text-[#1D4ED8]">打开的完整页面</p>
       <label className="block space-y-1">
         <span className="text-[11px] text-slate-500">弹窗标题</span>
         <Input
