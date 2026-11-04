@@ -23,10 +23,10 @@ export function getServiceBenefitDecorateKeys(index: number): ServiceBenefitDeco
   }
 }
 
-/** 解析选中的服务卡片 block key；非服务卡片返回 null */
+/** 卡片、标题、说明、图标都算同一张服务卡；商品图返回 null */
 export function parseServiceBenefitCardIndex(propKey: string | null | undefined): number | null {
   if (!propKey) return null
-  const match = /^home_service_card_(\d+)$/.exec(propKey)
+  const match = /^home_service_(?:card_)?(\d+)(?:_(?:title|desc|icon|trust))?$/.exec(propKey)
   if (!match) return null
   const index = Number(match[1])
   if (!Number.isInteger(index) || index < 0 || index >= SERVICE_BENEFIT_CARD_COUNT) {
