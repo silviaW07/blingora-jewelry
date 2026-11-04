@@ -54,7 +54,9 @@ export default function PlaceOrderPageView() {
   if (isDecorateMode) {
     const editor = form || DEFAULT_SERVICE_TRUST_TEMPLATE
     const updateSection = (key: (typeof SECTION_KEYS)[number], patch: Partial<TrustSection>) => {
-      setForm({ ...editor, [key]: { ...editor[key], ...patch } })
+      const next = { ...editor, [key]: { ...editor[key], ...patch } }
+      setForm(next)
+      if (trustKey) updatePatch(trustKey, { text: serializeServiceTrustTemplate(next) })
     }
     const uploadTo = async (key: (typeof SECTION_KEYS)[number], file: File, kind: 'image' | 'video') => {
       setUploadingKey(`${key}-${kind}`)

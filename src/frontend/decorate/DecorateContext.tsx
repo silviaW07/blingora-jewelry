@@ -95,6 +95,9 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
   const [isSavingCustomerService, setIsSavingCustomerService] = useState(false)
   const customerServiceRef = React.useRef(customerService)
   customerServiceRef.current = customerService
+  const draftRef = React.useRef(draft)
+  draftRef.current = draft
+  const dirtyKeysRef = React.useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -109,8 +112,15 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
     getPageDecorateConfig()
       .then((res) => {
         if (!res.persisted) return
-        setDraft(res.store)
-        writeDecorateStore(res.store)
+        setDraft((prev) => {
+          const next = { ...res.store }
+          dirtyKeysRef.current.forEach((key) => {
+            if (prev[key]) next[key] = prev[key]
+          })
+          draftRef.current = next
+          writeDecorateStore(next)
+          return next
+        })
       })
       .catch(() => undefined)
 
@@ -133,8 +143,15 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
     getPageDecorateConfig()
       .then((res) => {
         if (!res.persisted) return
-        setDraft(res.store)
-        writeDecorateStore(res.store)
+        setDraft((prev) => {
+          const next = { ...res.store }
+          dirtyKeysRef.current.forEach((key) => {
+            if (prev[key]) next[key] = prev[key]
+          })
+          draftRef.current = next
+          writeDecorateStore(next)
+          return next
+        })
       })
       .catch(() => undefined)
     loadCustomerServiceConfigCached({ force: true })
@@ -162,10 +179,15 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
   )
 
   const updatePatch = useCallback((propKey: string, patch: Partial<DecoratePatch>) => {
-    setDraft((prev) => ({
-      ...prev,
-      [propKey]: { ...(prev[propKey] || {}), ...patch },
-    }))
+    dirtyKeysRef.current.add(propKey)
+    setDraft((prev) => {
+      const next = {
+        ...prev,
+        [propKey]: { ...(prev[propKey] || {}), ...patch },
+      }
+      draftRef.current = next
+      return next
+    })
   }, [])
 
   const deletePatch = useCallback((propKey: string) => {
@@ -234,15 +256,21 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
   }, [pathname, router])
 
   const publishAndExit = useCallback(async () => {
+    if (!hydrated) {
+      toast.error("装修配置还在加载，请稍后再发布")
+      return
+    }
     const normalized = normalizeCustomerServiceConfig(customerServiceRef.current)
-    writeDecorateStore(draft)
+    const currentDraft = draftRef.current
+    writeDecorateStore(currentDraft)
     writeCustomerServiceLocal(normalized)
     try {
       const [savedStore] = await Promise.all([
-        savePageDecorateConfig(draft),
+        savePageDecorateConfig(currentDraft),
         saveCustomerServiceConfig(normalized),
       ])
       writeDecorateStore(savedStore)
+      draftRef.current = savedStore
       setDraft(savedStore)
       toast.success('装修与客服配置已发布')
     } catch (err: any) {
@@ -251,7 +279,7 @@ export function DecorateModeProvider({ children }: { children: React.ReactNode }
     setSelectedKey(null)
     setIsFloatDragMode(false)
     clearDecorateQuery()
-  }, [clearDecorateQuery, draft])
+  }, [clearDecorateQuery, hydrated])
 
   const exitWithoutPublish = useCallback(() => {
     // 取消时重新对齐后台已发布配置；无后台记录则回退本地
