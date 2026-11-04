@@ -90,7 +90,7 @@ export function hardNavigate(href: string) {
           window.location.href = next
         }
       }
-    }, 320)
+    }, 2000)
     return
   }
   try {

@@ -228,19 +228,9 @@ export default function MobileCategoriesView({
   )
 
   useEffect(() => {
-    let index = 0
-    let timer: number | undefined
-    const tick = () => {
-      if (index >= categories.length) return
-      loadProducts(categories[index])
-      index += 1
-      timer = window.setTimeout(tick, 50)
-    }
-    tick()
-    return () => {
-      if (timer) window.clearTimeout(timer)
-    }
-  }, [categories, loadProducts])
+    const cat = categories.find((item) => item.category_id === activeId) || categories[0]
+    if (cat) loadProducts(cat)
+  }, [activeId, categories, loadProducts])
 
   useEffect(() => {
     const root = layoutRef.current

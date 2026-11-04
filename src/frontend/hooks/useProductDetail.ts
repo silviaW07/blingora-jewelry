@@ -234,6 +234,23 @@ export const useProductDetail = (seed?: {
 
     try {
       const lang = typeof window !== 'undefined' ? getClientPreferredLang() : 'en'
+      const visible = productRef.current
+      const alreadyOpen =
+        Boolean(visible?.id) &&
+        visible.status === 'ACTIVE' &&
+        ((productId && visible.id === productId) || (!productId && slug && visible.slug === slug))
+      if (alreadyOpen && visible) {
+        setLoading(false)
+        setError(null)
+        void getRelatedProducts({
+          categoryId: visible.categoryId,
+          excludeProductId: visible.id,
+          lang,
+        })
+          .then((relatedData) => setRelatedProducts(relatedData.list))
+          .catch(() => setRelatedProducts([]))
+        return
+      }
       const cached = readCachedProductDetail(productId, slug, lang)
       const pending = cached ? null : readInflightProductDetail(productId, slug, lang)
       const prefetched = cached || (pending ? await pending.catch(() => null) : null)
