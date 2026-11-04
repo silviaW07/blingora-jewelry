@@ -123,6 +123,26 @@ export function pickFirstOrderTier(
   return eligible[0] || null
 }
 
+
+/** 首单：距离下一档还差多少。没有更高档时返回 null。 */
+export function nextFirstOrderGap(
+  tiers: Array<{ thresholdUsd: number; value: number }> | null | undefined,
+  subtotalUsd: number,
+): { gapUsd: number; thresholdUsd: number; value: number } | null {
+  const subtotal = roundMoney(Math.max(0, Number(subtotalUsd) || 0))
+  const next = [...(tiers || [])]
+    .filter((tier) => Number(tier.thresholdUsd) > subtotal + 0.001 && Number(tier.value) > 0)
+    .sort((a, b) => Number(a.thresholdUsd) - Number(b.thresholdUsd))[0]
+  if (!next) return null
+  const gapUsd = roundMoney(Number(next.thresholdUsd) - subtotal)
+  if (gapUsd <= 0) return null
+  return {
+    gapUsd,
+    thresholdUsd: roundMoney(Number(next.thresholdUsd)),
+    value: Number(next.value),
+  }
+}
+
 export function pickFullReductionDiscount(tiers: FullReductionTier[], subtotalUsd: number): {
   tier: FullReductionTier | null
   amount: number
@@ -157,6 +177,7 @@ export function computeDiscounts(params: {
   }>
 }): {
   lineEffectiveUnitPrice: Record<string, number>
+  lineTierBaseUsd: Record<string, number>
   originalSubtotalUsd: number
   discountedSubtotalUsd: number
   discountLines: DiscountLine[]
@@ -287,6 +308,7 @@ export function computeDiscounts(params: {
 
   return {
     lineEffectiveUnitPrice: unitPriceByLine,
+    lineTierBaseUsd: wholesaleUnitByLine,
     originalSubtotalUsd: originalSubtotal,
     discountedSubtotalUsd: wholesaleSubtotal,
     discountLines,

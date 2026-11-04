@@ -445,6 +445,7 @@
     "orderCenterDesc": "查看全部历史订单及物流状态。",
     "originalPrice": "原价",
     "discount": "折扣",
+    "nextFirstOrder": "再加 {{amount}} 即可到下一档 {{value}}",
     "estimatedShipping": "预估运费",
     "orderAmountOverview": "订单金额概览",
     "calculatedAtCheckout": "结算时计算",

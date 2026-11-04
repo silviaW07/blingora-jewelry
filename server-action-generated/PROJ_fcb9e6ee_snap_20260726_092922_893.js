@@ -49234,7 +49234,8 @@ const getCartData = (0, _action_utils.requireRole)([
             status: expectedStatus,
             invalidReason,
             subtotal: unitPriceUsd * item.quantity,
-            originalSubtotal: unitPriceUsd * item.quantity
+            originalSubtotal: unitPriceUsd * item.quantity,
+            tierBasePrice: unitPriceUsd
         });
         discountLinesInput.push({
             lineId: item.id,
@@ -49275,8 +49276,9 @@ const getCartData = (0, _action_utils.requireRole)([
     });
     const promo = await (0, _loadCustomerPromoKind.loadCustomerPromo)(userId);
     const vipOn = (0, _customerPromoPolicy.parseVipDiscount)(promo.vipDiscount) > 0;
+    const promoConfig = (0, _customerPromoPolicy.withCustomerGoodsPolicy)(pricingConfig, promo.kind, promo.vipDiscount);
     const discountResult = (0, _pricingPromotionCalc.computeDiscounts)({
-        config: (0, _customerPromoPolicy.withCustomerGoodsPolicy)(pricingConfig, promo.kind, promo.vipDiscount),
+        config: promoConfig,
         isFirstOrderEligible,
         isLoyalCustomer: isLoyalCustomer || vipOn && promo.kind !== 'FIRST_ORDER',
         lines: discountLinesInput
@@ -49288,6 +49290,8 @@ const getCartData = (0, _action_utils.requireRole)([
         item.originalSubtotal = item.subtotal;
         item.price = effectiveUnit;
         item.subtotal = Math.round(effectiveUnit * item.quantity * 100) / 100;
+        const tierBase = discountResult.lineTierBaseUsd[item.cartItemId];
+        if (Number.isFinite(tierBase)) item.tierBasePrice = tierBase;
     }
     const discountAmount = discountResult.totalDiscountUsd;
     const finalAmount = Math.round((originalSubtotalUsd - discountAmount) * 100) / 100;
@@ -49297,7 +49301,9 @@ const getCartData = (0, _action_utils.requireRole)([
         shippingFee: 0,
         discount: discountAmount,
         totalWeightGram,
-        finalAmount
+        finalAmount,
+        firstOrderTiers: isFirstOrderEligible ? (promoConfig.firstOrder.tiers || []).filter((tier)=>tier.thresholdUsd > 0 && tier.value > 0) : [],
+        firstOrderMode: isFirstOrderEligible ? promoConfig.firstOrder.mode : null
     };
     return {
         items,
@@ -62527,6 +62533,9 @@ _export(exports, {
     get isPlaceholderCompareAt () {
         return isPlaceholderCompareAt;
     },
+    get nextFirstOrderGap () {
+        return nextFirstOrderGap;
+    },
     get pickFirstOrderTier () {
         return pickFirstOrderTier;
     },
@@ -62640,6 +62649,20 @@ function pickFirstOrderTier(tiers, fallbackValue, subtotalUsd) {
     ];
     const eligible = source.filter((tier)=>subtotal + 0.001 >= Number(tier.thresholdUsd)).sort((a, b)=>Number(b.thresholdUsd) - Number(a.thresholdUsd));
     return eligible[0] || null;
+}
+function nextFirstOrderGap(tiers, subtotalUsd) {
+    const subtotal = roundMoney(Math.max(0, Number(subtotalUsd) || 0));
+    const next = [
+        ...tiers || []
+    ].filter((tier)=>Number(tier.thresholdUsd) > subtotal + 0.001 && Number(tier.value) > 0).sort((a, b)=>Number(a.thresholdUsd) - Number(b.thresholdUsd))[0];
+    if (!next) return null;
+    const gapUsd = roundMoney(Number(next.thresholdUsd) - subtotal);
+    if (gapUsd <= 0) return null;
+    return {
+        gapUsd,
+        thresholdUsd: roundMoney(Number(next.thresholdUsd)),
+        value: Number(next.value)
+    };
 }
 function pickFullReductionDiscount(tiers, subtotalUsd) {
     const subtotal = roundMoney(Math.max(0, Number(subtotalUsd) || 0));
@@ -62796,6 +62819,7 @@ function computeDiscounts(params) {
     const totalDiscount = roundMoney(Math.max(0, originalSubtotal - subtotalAfterAll));
     return {
         lineEffectiveUnitPrice: unitPriceByLine,
+        lineTierBaseUsd: wholesaleUnitByLine,
         originalSubtotalUsd: originalSubtotal,
         discountedSubtotalUsd: wholesaleSubtotal,
         discountLines,

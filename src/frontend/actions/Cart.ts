@@ -40,6 +40,8 @@ export interface CartItemData {
   subtotal: number
   /** original line subtotal before discounts (USD) */
   originalSubtotal: number
+  /** unit price the first-order ladder is measured against (USD) */
+  tierBasePrice: number
 }
 
 export interface CartSummary {
@@ -48,6 +50,9 @@ export interface CartSummary {
   discount: number        // aggregated
   totalWeightGram: number // aggregated
   finalAmount: number     // aggregated
+  /** 新客首单阶梯。没有更高档时为空。 */
+  firstOrderTiers: Array<{ thresholdUsd: number; value: number }>
+  firstOrderMode: 'PERCENT' | 'AMOUNT' | null
 }
 
 export interface RecommendedProductData {
@@ -399,6 +404,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
         invalidReason,
         subtotal: unitPriceUsd * item.quantity,
         originalSubtotal: unitPriceUsd * item.quantity,
+        tierBasePrice: unitPriceUsd,
       })
 
       discountLinesInput.push({
@@ -434,8 +440,9 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
 
     const promo = await loadCustomerPromo(userId)
     const vipOn = parseVipDiscount(promo.vipDiscount) > 0
+    const promoConfig = withCustomerGoodsPolicy(pricingConfig, promo.kind, promo.vipDiscount)
     const discountResult = computeDiscounts({
-      config: withCustomerGoodsPolicy(pricingConfig, promo.kind, promo.vipDiscount),
+      config: promoConfig,
       isFirstOrderEligible,
       isLoyalCustomer: isLoyalCustomer || (vipOn && promo.kind !== 'FIRST_ORDER'),
       lines: discountLinesInput,
@@ -448,6 +455,8 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       item.originalSubtotal = item.subtotal
       item.price = effectiveUnit
       item.subtotal = Math.round(effectiveUnit * item.quantity * 100) / 100
+      const tierBase = discountResult.lineTierBaseUsd[item.cartItemId]
+      if (Number.isFinite(tierBase)) item.tierBasePrice = tierBase
     }
 
     const discountAmount = discountResult.totalDiscountUsd
@@ -459,7 +468,11 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       shippingFee: 0, // 暂无全局运费设定，给前端展示占位
       discount: discountAmount,
       totalWeightGram,
-      finalAmount
+      finalAmount,
+      firstOrderTiers: isFirstOrderEligible
+        ? (promoConfig.firstOrder.tiers || []).filter((tier) => tier.thresholdUsd > 0 && tier.value > 0)
+        : [],
+      firstOrderMode: isFirstOrderEligible ? promoConfig.firstOrder.mode : null,
     }
 
     return { items, summary }

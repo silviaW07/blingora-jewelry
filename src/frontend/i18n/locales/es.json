@@ -528,6 +528,7 @@
     "orderCenterDesc": "Consulta todos los pedidos históricos y el estado logístico.",
     "originalPrice": "Precio original",
     "discount": "Descuento",
+    "nextFirstOrder": "Agrega {{amount}} más para llegar a la tarifa {{value}}",
     "estimatedShipping": "Envío estimado",
     "orderAmountOverview": "Resumen del pedido",
     "calculatedAtCheckout": "Calculado al pagar",

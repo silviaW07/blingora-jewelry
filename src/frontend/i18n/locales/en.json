@@ -536,6 +536,7 @@
     "orderCenterDesc": "View all historical orders and logistics status.",
     "originalPrice": "Original Price",
     "discount": "Discount",
+    "nextFirstOrder": "Add {{amount}} more to reach the {{value}} rate",
     "estimatedShipping": "Estimated shipping",
     "orderAmountOverview": "Order amount overview",
     "calculatedAtCheckout": "Calculated at checkout",
