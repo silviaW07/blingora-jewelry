@@ -57,19 +57,23 @@ export function HomeServiceBenefitGrid({
 
         const trust = parseServiceTrustTemplate(getPatch(keys.trust)?.text)
         const hasTrust = trustHasContent(trust)
+        const cardTitle = String(getPatch(keys.title)?.text || item.title || '').trim()
+        const cardDesc = String(getPatch(keys.desc)?.text || item.description || '').trim()
+        const hasCardCopy = Boolean(cardTitle || cardDesc)
         const isClickable = item.slug === 'buyer-show' || item.slug === 'why-choose-us'
-        const href = hasTrust
+        const canView = hasTrust || (!isClickable && hasCardCopy)
+        const href = canView
           ? `/place-order/${index}/`
           : item.slug === 'why-choose-us'
             ? categoryHref(SEND_NOW_CATEGORY_SLUG)
             : `/${item.slug}/`
-        const Wrapper = !isDecorateMode && (hasTrust || isClickable) ? 'a' : 'div'
+        const Wrapper = !isDecorateMode && (canView || isClickable) ? 'a' : 'div'
         const wrapperNav = Wrapper === 'a' ? hardNavProps(href) : {}
 
         return (
           <Wrapper
             key={keys.card}
-            className={cn('home-service-card-cell', !isClickable && !hasTrust && 'is-static', (hasTrust || isClickable) && 'cursor-pointer')}
+            className={cn('home-service-card-cell', !isClickable && !canView && 'is-static', (canView || isClickable) && 'cursor-pointer')}
             data-controller-name="首页服务权益卡片"
             {...wrapperNav}
           >

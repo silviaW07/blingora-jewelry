@@ -118,17 +118,26 @@ export default function PlaceOrderPageView() {
     )
   }
 
+  const keys = getServiceBenefitDecorateKeys(index)
   const published = parseServiceTrustTemplate(draft[trustKey]?.text)
   const sections = published
     ? SECTION_KEYS.map((key) => published[key]).filter(sectionHasContent)
     : []
+  const cardTitle = String(draft[keys.title]?.text || '').trim()
+  const cardDesc = String(draft[keys.desc]?.text || '').trim()
 
   return (
     <Shell>
-      {sections.length === 0 ? (
+      {sections.length === 0 && !cardTitle && !cardDesc ? (
         <Empty title="This page is not ready yet" body="Company, shipping, and ordering details will appear here." />
       ) : (
         <div className="flex flex-col gap-6">
+          {cardTitle || cardDesc ? (
+            <section className="rounded-[20px] bg-white px-6 py-8 shadow-sm sm:px-10">
+              {cardTitle ? <h1 className="text-[clamp(28px,4vw,44px)] font-black leading-tight">{cardTitle}</h1> : null}
+              {cardDesc ? <p className="mt-4 whitespace-pre-line text-base leading-8 text-[#3f3a34]">{cardDesc}</p> : null}
+            </section>
+          ) : null}
           {sections.map((section) => (
             <SectionView key={section.title} section={section} />
           ))}
