@@ -7,13 +7,15 @@
  * Layout/sizing fully split in CSS: desktop `@media (min-width: 1024px)`, mobile `max-width: 1023px`.
  * Single DOM tree so decorate propKeys (title/desc/icon/card) stay unique.
  */
-import React from 'react'
+import React, { useState } from 'react'
 import EditableImg from '@/@base/EditableImg'
 import { DecorateFrame } from '@/frontend/decorate/DecorateFrame'
 import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
 import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages'
 import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefitKeys'
+import { parseServiceTrustTemplate } from '@/frontend/decorate/serviceTrustTemplate'
+import { ServiceTrustDialog } from '@/frontend/components/ServiceTrustDialog'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -41,6 +43,7 @@ export function HomeServiceBenefitGrid({
 }: Props) {
   const { getPatch, isDecorateMode } = useDecorateMode()
   const { t } = useTranslation()
+  const [openTrustIndex, setOpenTrustIndex] = useState<number | null>(null)
 
   return (
     <div
@@ -54,16 +57,23 @@ export function HomeServiceBenefitGrid({
           return null
         }
 
+        const trust = parseServiceTrustTemplate(getPatch(keys.trust)?.text)
+        const hasTrust = Boolean(trust && (trust.address || trust.note || trust.images.length || trust.videoUrl || trust.headline))
         const isClickable = item.slug === 'buyer-show' || item.slug === 'why-choose-us'
         const href =
           item.slug === 'why-choose-us' ? categoryHref(SEND_NOW_CATEGORY_SLUG) : `/${item.slug}/`
-        const Wrapper = !isDecorateMode && isClickable ? 'a' : 'div'
+        const Wrapper = !isDecorateMode && isClickable && !hasTrust ? 'a' : 'div'
         const wrapperNav = Wrapper === 'a' ? hardNavProps(href) : {}
 
         return (
           <Wrapper
             key={keys.card}
-            className={cn('home-service-card-cell', !isClickable && 'is-static')}
+            className={cn('home-service-card-cell', !isClickable && !hasTrust && 'is-static', hasTrust && 'cursor-pointer')}
+            onClick={
+              hasTrust && !isDecorateMode
+                ? () => setOpenTrustIndex(index)
+                : undefined
+            }
             data-controller-name="首页服务权益卡片"
             {...wrapperNav}
           >
@@ -109,6 +119,16 @@ export function HomeServiceBenefitGrid({
           </Wrapper>
         )
       })}
+      {openTrustIndex != null ? (
+        <ServiceTrustDialog
+          template={
+            parseServiceTrustTemplate(
+              getPatch(getServiceBenefitDecorateKeys(openTrustIndex).trust)?.text,
+            )!
+          }
+          onClose={() => setOpenTrustIndex(null)}
+        />
+      ) : null}
     </div>
   )
 }

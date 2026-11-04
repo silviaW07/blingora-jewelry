@@ -9,6 +9,8 @@ export type ServiceBenefitDecorateKeys = {
   title: string
   desc: string
   icon: string
+  /** JSON 安心页：地址、图片、视频 */
+  trust: string
 }
 
 export function getServiceBenefitDecorateKeys(index: number): ServiceBenefitDecorateKeys {
@@ -17,6 +19,7 @@ export function getServiceBenefitDecorateKeys(index: number): ServiceBenefitDeco
     title: `home_service_${index}_title`,
     desc: `home_service_${index}_desc`,
     icon: `home_service_${index}_icon`,
+    trust: `home_service_${index}_trust`,
   }
 }
 

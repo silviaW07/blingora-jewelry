@@ -11,6 +11,12 @@ import {
   getServiceBenefitDecorateKeys,
   parseServiceBenefitCardIndex,
 } from './serviceBenefitKeys'
+import {
+  DEFAULT_SERVICE_TRUST_TEMPLATE,
+  parseServiceTrustTemplate,
+  serializeServiceTrustTemplate,
+  type ServiceTrustTemplate,
+} from './serviceTrustTemplate'
 import type { DecorateKind } from './types'
 
 export function DecorateToolbar() {
@@ -134,7 +140,7 @@ export function DecorateToolbar() {
 
   return (
     <div
-      className="fixed z-[110] w-[320px] max-h-[min(86vh,640px)] overflow-y-auto rounded-2xl border border-[#93C5FD] bg-white p-3 shadow-[0_20px_50px_-24px_rgba(37,99,235,0.55)]"
+      className={`fixed z-[110] ${serviceKeys ? 'w-[360px]' : 'w-[320px]'} max-h-[min(86vh,640px)] overflow-y-auto rounded-2xl border border-[#93C5FD] bg-white p-3 shadow-[0_20px_50px_-24px_rgba(37,99,235,0.55)]`}
       style={{ top: anchor.top, left: anchor.left }}
       data-controller-name="可视化装修迷你配置条"
       onClick={(e) => e.stopPropagation()}
@@ -196,6 +202,38 @@ export function DecorateToolbar() {
               />
             </label>
           </div>
+          <ServiceTrustEditor
+            raw={draft[serviceKeys.trust]?.text}
+            uploading={uploading}
+            onChange={(next) => updatePatch(serviceKeys.trust, { text: serializeServiceTrustTemplate(next) })}
+            onClear={() => updatePatch(serviceKeys.trust, { text: '' })}
+            onUpload={async (file, kind) => {
+              setUploading(true)
+              try {
+                const url = await upload_image_file(file)
+                if (!url) throw new Error('上传失败')
+                const current =
+                  parseServiceTrustTemplate(draft[serviceKeys.trust]?.text) || {
+                    ...DEFAULT_SERVICE_TRUST_TEMPLATE,
+                    images: [],
+                  }
+                if (kind === 'video') {
+                  updatePatch(serviceKeys.trust, {
+                    text: serializeServiceTrustTemplate({ ...current, videoUrl: url }),
+                  })
+                } else if (current.images.length < 8) {
+                  updatePatch(serviceKeys.trust, {
+                    text: serializeServiceTrustTemplate({ ...current, images: [...current.images, url] }),
+                  })
+                }
+                toast.success(kind === 'video' ? '视频已上传' : '图片已上传')
+              } catch (err: any) {
+                toast.error(err?.message || '上传失败')
+              } finally {
+                setUploading(false)
+              }
+            }}
+          />
         </div>
       ) : null}
 
@@ -495,6 +533,128 @@ export function DecorateToolbar() {
           删除后区块会立即从预览中消失；点击顶部「发布并退出装修」后永久生效。
         </p>
       </div>
+    </div>
+  )
+}
+
+function ServiceTrustEditor({
+  raw,
+  uploading,
+  onChange,
+  onClear,
+  onUpload,
+}: {
+  raw?: string
+  uploading: boolean
+  onChange: (next: ServiceTrustTemplate) => void
+  onClear: () => void
+  onUpload: (file: File, kind: 'image' | 'video') => Promise<void>
+}) {
+  const template = parseServiceTrustTemplate(raw)
+  if (!template) {
+    return (
+      <div className="space-y-1">
+        <button
+          type="button"
+          className="inline-flex h-9 w-full items-center justify-center rounded-md bg-[#1D4ED8] px-3 text-xs font-medium text-white hover:bg-[#1E40AF]"
+          onClick={() => onChange({ ...DEFAULT_SERVICE_TRUST_TEMPLATE, images: [] })}
+        >
+          生成安心模板
+        </button>
+        <p className="text-[10px] leading-4 text-slate-400">
+          生成后可填公司地址、上传车间图片和视频。顾客点这张卡片就能看到。改完点顶部「发布并退出装修」。
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2 rounded-lg border border-[#BFDBFE] bg-[#F8FAFC] p-2">
+      <p className="text-[11px] font-semibold text-[#1D4ED8]">顾客点开后看到的内容</p>
+      <label className="block space-y-1">
+        <span className="text-[11px] text-slate-500">弹窗标题</span>
+        <Input
+          value={template.headline}
+          className="h-9"
+          onChange={(e) => onChange({ ...template, headline: e.target.value })}
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-[11px] text-slate-500">公司地址</span>
+        <textarea
+          value={template.address}
+          placeholder="公司名、街道、城市、联系电话"
+          className="min-h-[72px] w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm outline-none"
+          onChange={(e) => onChange({ ...template, address: e.target.value })}
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-[11px] text-slate-500">说明</span>
+        <textarea
+          value={template.note}
+          className="min-h-[72px] w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm outline-none"
+          onChange={(e) => onChange({ ...template, note: e.target.value })}
+        />
+      </label>
+      <div className="space-y-1">
+        <span className="text-[11px] text-slate-500">图片（最多 8 张）</span>
+        <div className="flex flex-wrap gap-1">
+          {template.images.map((src, index) => (
+            <button
+              key={`${src}-${index}`}
+              type="button"
+              className="relative"
+              title="移除"
+              onClick={() =>
+                onChange({ ...template, images: template.images.filter((_, i) => i !== index) })
+              }
+            >
+              <img src={src} alt="" className="h-12 w-12 rounded object-cover" />
+            </button>
+          ))}
+        </div>
+        <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-dashed border-[#93C5FD] bg-white px-2 text-[11px] text-[#1D4ED8]">
+          {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+          上传图片
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploading || template.images.length >= 8}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void onUpload(file, 'image')
+            }}
+          />
+        </label>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-[11px] text-slate-500">视频链接或上传</span>
+        <Input
+          value={template.videoUrl}
+          placeholder="https://...mp4 或 YouTube 链接"
+          className="h-9 bg-white"
+          onChange={(e) => onChange({ ...template, videoUrl: e.target.value })}
+        />
+        <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-dashed border-[#93C5FD] bg-white px-2 text-[11px] text-[#1D4ED8]">
+          <Upload className="size-3.5" />
+          上传视频
+          <input
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void onUpload(file, 'video')
+            }}
+          />
+        </label>
+      </label>
+      <button type="button" className="text-[11px] text-slate-500 underline" onClick={onClear}>
+        清空模板
+      </button>
     </div>
   )
 }
