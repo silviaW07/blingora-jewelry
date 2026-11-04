@@ -17,6 +17,7 @@ import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { CheckoutTopBar } from '@/frontend/components/CheckoutTopBar'
 import { CheckoutSmartPanel, type CheckoutAddressForm } from '@/frontend/components/CheckoutSmartPanel'
 import { OrderAmountOverview } from '@/frontend/components/OrderAmountOverview'
+import { FirstOrderLadder } from '@/frontend/components/FirstOrderLadder'
 import type { CartState, CartHandlers } from '@/frontend/hooks/useCart'
 import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder'
 import { translateStorefrontError } from '@/frontend/utils/storefrontErrors'
@@ -100,6 +101,13 @@ export default function CheckoutView({ state, handlers }: Props) {
       }),
     [selectedDiscountUsd, selectedItems.length, selectedOriginalUsd, selectedShippingFee],
   )
+
+  const firstOrderBaseUsd = useMemo(() => {
+    return selectedItems.reduce((sum, item) => {
+      if (item.status !== 'VALID') return sum
+      return sum + (Number(item.tierBasePrice) || 0) * (Number(item.quantity) || 0)
+    }, 0)
+  }, [selectedItems])
 
   const payableAmountValue = checkoutTotals.totalUsd
 
@@ -221,6 +229,21 @@ export default function CheckoutView({ state, handlers }: Props) {
               </div>
 
               <div className="space-y-3 px-4 pb-4">
+                {!addressConfirmed ? (
+                  <div className="relative py-1">
+                    <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#f3dfe6]" />
+                    <DecorateText propKey="checkout_confirm_price_guide" as="div" className="relative mx-auto w-fit rounded-full border border-[#f3dfe6] bg-[#fff5f8] px-4 py-2 text-center font-body text-[15px] font-bold text-[#0F172A]">
+                      Confirm quantity and price
+                    </DecorateText>
+                  </div>
+                ) : null}
+                {state.summary?.firstOrderTiers?.length ? (
+                  <FirstOrderLadder
+                    tiers={state.summary.firstOrderTiers}
+                    mode={state.summary.firstOrderMode}
+                    subtotalUsd={firstOrderBaseUsd}
+                  />
+                ) : null}
                 <OrderAmountOverview
                   originalPriceUsd={checkoutTotals.originalPriceUsd}
                   discountUsd={checkoutTotals.discountUsd}
