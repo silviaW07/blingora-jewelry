@@ -18,7 +18,7 @@ import { placeCheckoutOrder } from '@/frontend/actions/CheckoutOrder';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { computeCheckoutTotals, formatUsd, persistCartSelectedIds, pickSelectedCartItems, sumCartWeightGram, sumSelectedCartOriginalUsd, sumSelectedCartSubtotalUsd } from '@/shared/checkoutSummary';
-import { nextFirstOrderGap } from '@/shared/pricingPromotionCalc';
+import { FirstOrderLadder } from '@/frontend/components/FirstOrderLadder';
 import { getCustomerServiceConfig } from '@/frontend/actions/CustomerService';
 import { GuestAuthScreen } from '@/frontend/components/GuestAuthScreen';
 import { useIsStorefrontGuest } from '@/frontend/components/GuestPricePlaceholder';
@@ -209,15 +209,12 @@ export const CartView = ({
     [selectedDiscountUsd, selectedItems.length, selectedOriginalUsd, selectedShippingFee],
   );
 
-  const nextFirstOrder = useMemo(() => {
-    const tiers = state.summary?.firstOrderTiers
-    if (!tiers?.length) return null
-    const base = selectedItems.reduce((sum, item) => {
+  const firstOrderBaseUsd = useMemo(() => {
+    return selectedItems.reduce((sum, item) => {
       if (item.status !== 'VALID') return sum
       return sum + (Number(item.tierBasePrice) || 0) * (Number(item.quantity) || 0)
     }, 0)
-    return nextFirstOrderGap(tiers, base)
-  }, [selectedItems, state.summary]);
+  }, [selectedItems]);
 
   const payableAmountValue = checkoutTotals.totalUsd;
 
@@ -468,13 +465,12 @@ export const CartView = ({
                     </div>
 
                     <div className="space-y-3 px-4 pb-3" data-api-unique-id='cartview-rfb87408212300a22-s3843595280' data-api-unique-page-name='src/frontend/components/CartView'>
-                      {nextFirstOrder ? (
-                        <p className="rounded-[10px] bg-[#fff5f8] px-3 py-2 text-sm font-semibold text-[#be185d]">
-                          {t('checkout.nextFirstOrder', {
-                            amount: formatUsd(nextFirstOrder.gapUsd),
-                            value: state.summary?.firstOrderMode === 'AMOUNT' ? formatUsd(nextFirstOrder.value) : nextFirstOrder.value,
-                          })}
-                        </p>
+                      {state.summary?.firstOrderTiers?.length ? (
+                        <FirstOrderLadder
+                          tiers={state.summary.firstOrderTiers}
+                          mode={state.summary.firstOrderMode}
+                          subtotalUsd={firstOrderBaseUsd}
+                        />
                       ) : null}
                       <OrderAmountOverview
                         originalPriceUsd={checkoutTotals.originalPriceUsd}
@@ -815,6 +811,16 @@ export const CartView = ({
         </button>
       ) : null}
 
+
+      {state.summary?.firstOrderTiers?.length ? (
+        <div className="px-3 pb-28 xl:hidden">
+          <FirstOrderLadder
+            tiers={state.summary.firstOrderTiers}
+            mode={state.summary.firstOrderMode}
+            subtotalUsd={firstOrderBaseUsd}
+          />
+        </div>
+      ) : null}
       {!state.loading && !state.isEmpty ? (
         <div className="mobile-cart-checkout-cta xl:hidden" data-controller-name="移动端去结算">
           <div className="mobile-cart-checkout-cta__inner">
@@ -825,14 +831,6 @@ export const CartView = ({
               <p className="truncate font-header text-base font-bold text-[#0F172A]">
                 {formatUsd(checkoutTotals.originalPriceUsd)}
               </p>
-              {nextFirstOrder ? (
-                <p className="truncate text-xs font-semibold text-[#be185d]">
-                  {t('checkout.nextFirstOrder', {
-                    amount: formatUsd(nextFirstOrder.gapUsd),
-                    value: state.summary?.firstOrderMode === 'AMOUNT' ? formatUsd(nextFirstOrder.value) : nextFirstOrder.value,
-                  })}
-                </p>
-              ) : null}
             </div>
             <Button
               type="button"

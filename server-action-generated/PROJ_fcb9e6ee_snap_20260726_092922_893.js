@@ -49302,7 +49302,7 @@ const getCartData = (0, _action_utils.requireRole)([
         discount: discountAmount,
         totalWeightGram,
         finalAmount,
-        firstOrderTiers: isFirstOrderEligible ? (promoConfig.firstOrder.tiers || []).filter((tier)=>tier.thresholdUsd > 0 && tier.value > 0) : [],
+        firstOrderTiers: isFirstOrderEligible ? (promoConfig.firstOrder.tiers || []).filter((tier)=>tier.value > 0) : [],
         firstOrderMode: isFirstOrderEligible ? promoConfig.firstOrder.mode : null
     };
     return {

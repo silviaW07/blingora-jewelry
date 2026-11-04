@@ -470,7 +470,7 @@ export const getCartData = requireRole([UserRole.CUSTOMER])(
       totalWeightGram,
       finalAmount,
       firstOrderTiers: isFirstOrderEligible
-        ? (promoConfig.firstOrder.tiers || []).filter((tier) => tier.thresholdUsd > 0 && tier.value > 0)
+        ? (promoConfig.firstOrder.tiers || []).filter((tier) => tier.value > 0)
         : [],
       firstOrderMode: isFirstOrderEligible ? promoConfig.firstOrder.mode : null,
     }
