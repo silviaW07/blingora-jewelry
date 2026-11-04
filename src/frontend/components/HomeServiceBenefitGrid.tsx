@@ -61,7 +61,7 @@ export function HomeServiceBenefitGrid({
         const cardDesc = String(getPatch(keys.desc)?.text || item.description || '').trim()
         const hasCardCopy = Boolean(cardTitle || cardDesc)
         const isClickable = item.slug === 'buyer-show' || item.slug === 'why-choose-us'
-        const canView = hasTrust || (!isClickable && hasCardCopy)
+        const canView = item.slug === 'payment' && (hasTrust || hasCardCopy)
         const href = canView
           ? `/place-order/${index}/`
           : item.slug === 'why-choose-us'

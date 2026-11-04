@@ -25,7 +25,7 @@ export function DecorateToolbar() {
     serviceCardIndex == null ? null : getServiceBenefitDecorateKeys(serviceCardIndex)
 
   useEffect(() => {
-    if (serviceCardIndex != null) {
+    if (serviceCardIndex === 1) {
       const here = window.location.pathname.replace(/\/+$/, '')
       const target = `/place-order/${serviceCardIndex}`
       if (here !== target) {
@@ -92,7 +92,7 @@ export function DecorateToolbar() {
     }
   }
 
-  if (serviceCardIndex != null) return null
+  if (serviceCardIndex === 1) return null
   if (!selectedKey || !anchor) return null
 
   const fontSize = patch?.fontSize ?? 16
@@ -205,15 +205,6 @@ export function DecorateToolbar() {
               />
             </label>
           </div>
-          <a
-            href={`/place-order/${serviceCardIndex}/?decorate=1`}
-            className="inline-flex h-10 w-full items-center justify-center rounded-md bg-[#1D4ED8] text-sm font-medium text-white hover:bg-[#1E40AF]"
-          >
-            打开大页面编辑
-          </a>
-          <p className="text-[10px] leading-4 text-slate-400">
-            公司信息、发货流程、下单流程在完整页面里改。
-          </p>
         </div>
       ) : null}
 
