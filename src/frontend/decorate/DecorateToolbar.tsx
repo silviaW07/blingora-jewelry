@@ -25,6 +25,14 @@ export function DecorateToolbar() {
     serviceCardIndex == null ? null : getServiceBenefitDecorateKeys(serviceCardIndex)
 
   useEffect(() => {
+    if (serviceCardIndex != null) {
+      const here = window.location.pathname.replace(/\/+$/, '')
+      const target = `/place-order/${serviceCardIndex}`
+      if (here !== target) {
+        window.location.assign(`${target}/?decorate=1`)
+      }
+      return
+    }
     if (!selectedKey) {
       setAnchor(null)
       return
@@ -84,6 +92,7 @@ export function DecorateToolbar() {
     }
   }
 
+  if (serviceCardIndex != null) return null
   if (!selectedKey || !anchor) return null
 
   const fontSize = patch?.fontSize ?? 16
