@@ -19,6 +19,12 @@ export type FullReductionTier = {
   offUsd: number
 }
 
+/** 首单阶梯：货额满 thresholdUsd 时用这一档。PERCENT 的 value 是系数（0.95 = 95折），AMOUNT 是减免美元。 */
+export type FirstOrderTier = {
+  thresholdUsd: number
+  value: number
+}
+
 export type PromoScheduleFields = {
   /** ISO 开始时间；空 = 立即生效 */
   startAt: string | null
@@ -34,8 +40,10 @@ export type PricingPromotionConfig = {
   firstOrder: {
     enabled: boolean
     mode: DiscountMode
-    /** percent: 0.9 means 10% off; amount: 5 means $5 off */
+    /** 最低档的值，兼容旧配置。结算以 tiers 里匹配到的档为准。 */
     value: number
+    /** 按货额从低到高。结算取已达到的最高门槛。 */
+    tiers: FirstOrderTier[]
   } & PromoScheduleFields
   loyal: {
     enabled: boolean
@@ -71,7 +79,14 @@ export type PricingPromotionConfig = {
 
 export const DEFAULT_PRICING_PROMO_CONFIG: PricingPromotionConfig = {
   wholesale: { enabled: true, coefficient: 0.9 },
-  firstOrder: { enabled: false, mode: 'PERCENT', value: 0.9, startAt: null, endAt: null },
+  firstOrder: {
+    enabled: false,
+    mode: 'PERCENT',
+    value: 0.9,
+    tiers: [{ thresholdUsd: 0, value: 0.9 }],
+    startAt: null,
+    endAt: null,
+  },
   loyal: { enabled: false, coefficient: 0.95, startAt: null, endAt: null },
   fullReduction: { enabled: false, tiers: [], startAt: null, endAt: null },
   siteWide: { enabled: false, mode: 'PERCENT', value: 0.9, startAt: null, endAt: null },
@@ -163,6 +178,36 @@ function normalizeDiscountMode(raw: unknown): DiscountMode {
   return raw === 'AMOUNT' ? 'AMOUNT' : 'PERCENT'
 }
 
+function normalizeFirstOrder(
+  firstOrder: Record<string, any>,
+  schedule: PromoScheduleFields,
+): PricingPromotionConfig['firstOrder'] {
+  const mode = normalizeDiscountMode(firstOrder.mode)
+  const clampValue = (raw: unknown) =>
+    mode === 'AMOUNT'
+      ? roundMoney(clamp(Number(raw), 0, 1_000_000))
+      : roundMoney(clamp(Number(raw), 0, 1))
+  const fallbackValue = clampValue(firstOrder.value ?? DEFAULT_PRICING_PROMO_CONFIG.firstOrder.value)
+  const parsed: FirstOrderTier[] = Array.isArray(firstOrder.tiers)
+    ? firstOrder.tiers
+        .map((tier: any) => ({
+          thresholdUsd: roundMoney(clamp(Number(tier?.thresholdUsd), 0, 1_000_000)),
+          value: clampValue(tier?.value),
+        }))
+        .filter((tier) => tier.value > 0)
+    : []
+  const tiers = (parsed.length > 0 ? parsed : [{ thresholdUsd: 0, value: fallbackValue }])
+    .sort((a, b) => a.thresholdUsd - b.thresholdUsd)
+  const base = tiers.find((tier) => tier.thresholdUsd <= 0) || tiers[0]
+  return {
+    enabled: firstOrder.enabled === true,
+    mode,
+    value: base?.value ?? fallbackValue,
+    tiers,
+    ...schedule,
+  }
+}
+
 export function normalizePricingPromotionConfig(raw: unknown): PricingPromotionConfig {
   const input = (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}) as Record<string, any>
   const wholesale = input.wholesale && typeof input.wholesale === 'object' ? input.wholesale : {}
@@ -201,15 +246,7 @@ export function normalizePricingPromotionConfig(raw: unknown): PricingPromotionC
       enabled: wholesale.enabled !== false,
       coefficient: roundMoney(clamp(Number(wholesale.coefficient ?? DEFAULT_PRICING_PROMO_CONFIG.wholesale.coefficient), 0, 1)),
     },
-    firstOrder: {
-      enabled: firstOrder.enabled === true,
-      mode: normalizeDiscountMode(firstOrder.mode),
-      value:
-        normalizeDiscountMode(firstOrder.mode) === 'AMOUNT'
-          ? roundMoney(clamp(Number(firstOrder.value ?? DEFAULT_PRICING_PROMO_CONFIG.firstOrder.value), 0, 1_000_000))
-          : roundMoney(clamp(Number(firstOrder.value ?? DEFAULT_PRICING_PROMO_CONFIG.firstOrder.value), 0, 1)),
-      ...normalizeSchedule(firstOrder),
-    },
+    firstOrder: normalizeFirstOrder(firstOrder, normalizeSchedule(firstOrder)),
     loyal: {
       enabled: loyal.enabled === true,
       coefficient: roundMoney(clamp(Number(loyal.coefficient ?? DEFAULT_PRICING_PROMO_CONFIG.loyal.coefficient), 0, 1)),

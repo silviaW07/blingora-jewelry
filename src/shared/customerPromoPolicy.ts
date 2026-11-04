@@ -1,5 +1,23 @@
 import type { PricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 
+function firstOrderRuleActive(rule: {
+  enabled: boolean
+  startAt?: string | null
+  endAt?: string | null
+}): boolean {
+  if (!rule?.enabled) return false
+  const now = Date.now()
+  if (rule.startAt) {
+    const start = new Date(rule.startAt).getTime()
+    if (Number.isFinite(start) && now < start) return false
+  }
+  if (rule.endAt) {
+    const end = new Date(rule.endAt).getTime()
+    if (Number.isFinite(end) && now >= end) return false
+  }
+  return true
+}
+
 /** 首单：新客户/未转化且尚无已付款订单。老客：已有已付款订单。 */
 export type CustomerPromoKind = 'FIRST_ORDER' | 'LOYAL' | 'NONE'
 
@@ -133,13 +151,30 @@ export function withCustomerGoodsPolicy(
   const vip = parseVipDiscount(vipDiscount)
   const coef = vip > 0 ? vip / 100 : null
   if (kind === 'FIRST_ORDER') {
+    if (coef != null) {
+      return {
+        ...config,
+        firstOrder: {
+          ...config.firstOrder,
+          enabled: true,
+          mode: 'PERCENT',
+          value: coef,
+          tiers: [{ thresholdUsd: 0, value: coef }],
+          startAt: null,
+          endAt: null,
+        },
+      }
+    }
+    // 后台首单活动进行中时用阶梯；没开时仍给固定 95 折。
+    if (firstOrderRuleActive(config.firstOrder)) return config
     return {
       ...config,
       firstOrder: {
         ...config.firstOrder,
         enabled: true,
         mode: 'PERCENT',
-        value: coef ?? FIRST_ORDER_GOODS_COEF,
+        value: FIRST_ORDER_GOODS_COEF,
+        tiers: [{ thresholdUsd: 0, value: FIRST_ORDER_GOODS_COEF }],
         startAt: null,
         endAt: null,
       },

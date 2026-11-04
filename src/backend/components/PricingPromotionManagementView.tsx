@@ -619,7 +619,7 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                     endAt={config.firstOrder.endAt}
                   />
                   <p className="mt-1 w-full text-sm text-muted-foreground">
-                    仅客户类型为「新客户」或「未转化」可用；已标为首单 / 多单 / 高危 / 流失，或名下已有已付款订单，则不可用。到达开始时间后自动生效。
+                    仅客户类型为「新客户」或「未转化」可用；已标为首单 / 多单 / 高危 / 流失，或名下已有已付款订单，则不可用。按货额匹配已达到的最高一档。门槛填 0 表示任意金额都用这一档。
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -635,32 +635,72 @@ export function PricingPromotionManagementView({ state, handlers }: Props) {
                 onEndChange={handlers.setFirstOrderEndAt}
               />
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>折扣类型</Label>
-                  <Select
-                    value={config.firstOrder.mode}
-                    onValueChange={(val) => handlers.setFirstOrderMode(val as 'PERCENT' | 'AMOUNT')}
-                    disabled={!config.firstOrder.enabled}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择类型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PERCENT">按系数（例如 0.90 = 9折）</SelectItem>
-                      <SelectItem value="AMOUNT">减免金额（美元）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>{config.firstOrder.mode === 'AMOUNT' ? '减免金额（USD）' : '折扣系数'}</Label>
-                  <DecimalInput
-                    value={config.firstOrder.value}
-                    onCommit={handlers.setFirstOrderValue}
-                    placeholder={config.firstOrder.mode === 'AMOUNT' ? '例如 5' : '例如 0.90'}
-                    disabled={!config.firstOrder.enabled}
-                  />
-                </div>
+              <div className="max-w-sm space-y-2">
+                <Label>折扣类型</Label>
+                <Select
+                  value={config.firstOrder.mode}
+                  onValueChange={(val) => handlers.setFirstOrderMode(val as 'PERCENT' | 'AMOUNT')}
+                  disabled={!config.firstOrder.enabled}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PERCENT">按系数（例如 0.90 = 9折）</SelectItem>
+                    <SelectItem value="AMOUNT">减免金额（美元）</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-3">
+                {(config.firstOrder.tiers || []).length > 0 ? (
+                  <div className="space-y-2">
+                    {(config.firstOrder.tiers || []).map((tier, idx) => (
+                      <div key={idx} className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3">
+                        <div className="space-y-2">
+                          <Label>满（USD）</Label>
+                          <DecimalInput
+                            className="w-40"
+                            value={tier.thresholdUsd}
+                            onCommit={(n) => handlers.updateFirstOrderTier(idx, { thresholdUsd: n })}
+                            disabled={!config.firstOrder.enabled}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{config.firstOrder.mode === 'AMOUNT' ? '减（USD）' : '折扣系数'}</Label>
+                          <DecimalInput
+                            className="w-40"
+                            value={tier.value}
+                            onCommit={(n) => handlers.updateFirstOrderTier(idx, { value: n })}
+                            placeholder={config.firstOrder.mode === 'AMOUNT' ? '例如 5' : '例如 0.95'}
+                            disabled={!config.firstOrder.enabled}
+                          />
+                        </div>
+                        <div className="flex-1" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlers.removeFirstOrderTier(idx)}
+                          disabled={!config.firstOrder.enabled}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          删除
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">暂无档位。保存时会用原来的单一系数补一档。</p>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlers.addFirstOrderTier}
+                  disabled={!config.firstOrder.enabled}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增档位
+                </Button>
               </div>
             </CardContent>
           </Card>

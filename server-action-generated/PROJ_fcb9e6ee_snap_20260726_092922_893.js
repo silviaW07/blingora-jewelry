@@ -60524,6 +60524,19 @@ _export(exports, {
         return withCustomerGoodsPolicy;
     }
 });
+function firstOrderRuleActive(rule) {
+    if (!(rule === null || rule === void 0 ? void 0 : rule.enabled)) return false;
+    const now = Date.now();
+    if (rule.startAt) {
+        const start = new Date(rule.startAt).getTime();
+        if (Number.isFinite(start) && now < start) return false;
+    }
+    if (rule.endAt) {
+        const end = new Date(rule.endAt).getTime();
+        if (Number.isFinite(end) && now >= end) return false;
+    }
+    return true;
+}
 const FIRST_ORDER_GOODS_COEF = 0.95;
 const LOYAL_GOODS_COEF = 0.97;
 const FIRST_ORDER_SEA_TIERS = [
@@ -60651,13 +60664,40 @@ function withCustomerGoodsPolicy(config, kind, vipDiscount = 0) {
     const vip = parseVipDiscount(vipDiscount);
     const coef = vip > 0 ? vip / 100 : null;
     if (kind === 'FIRST_ORDER') {
+        if (coef != null) {
+            return {
+                ...config,
+                firstOrder: {
+                    ...config.firstOrder,
+                    enabled: true,
+                    mode: 'PERCENT',
+                    value: coef,
+                    tiers: [
+                        {
+                            thresholdUsd: 0,
+                            value: coef
+                        }
+                    ],
+                    startAt: null,
+                    endAt: null
+                }
+            };
+        }
+        // 后台首单活动进行中时用阶梯；没开时仍给固定 95 折。
+        if (firstOrderRuleActive(config.firstOrder)) return config;
         return {
             ...config,
             firstOrder: {
                 ...config.firstOrder,
                 enabled: true,
                 mode: 'PERCENT',
-                value: coef !== null && coef !== void 0 ? coef : FIRST_ORDER_GOODS_COEF,
+                value: FIRST_ORDER_GOODS_COEF,
+                tiers: [
+                    {
+                        thresholdUsd: 0,
+                        value: FIRST_ORDER_GOODS_COEF
+                    }
+                ],
                 startAt: null,
                 endAt: null
             }
@@ -62487,6 +62527,9 @@ _export(exports, {
     get isPlaceholderCompareAt () {
         return isPlaceholderCompareAt;
     },
+    get pickFirstOrderTier () {
+        return pickFirstOrderTier;
+    },
     get pickFullReductionDiscount () {
         return pickFullReductionDiscount;
     },
@@ -62585,6 +62628,18 @@ function pickWholesaleStep(minOrderQty, totalQty) {
     const qty = Math.max(0, Math.floor(Number(totalQty) || 0));
     const steps = buildWholesaleSteps(minOrderQty);
     return steps.find((s)=>qty >= s.minQty && (s.maxQty == null || qty <= s.maxQty)) || steps[0];
+}
+function pickFirstOrderTier(tiers, fallbackValue, subtotalUsd) {
+    const subtotal = roundMoney(Math.max(0, Number(subtotalUsd) || 0));
+    const list = (tiers || []).filter((tier)=>Number(tier.value) > 0 && Number.isFinite(Number(tier.thresholdUsd)));
+    const source = list.length > 0 ? list : [
+        {
+            thresholdUsd: 0,
+            value: Number(fallbackValue) || 0
+        }
+    ];
+    const eligible = source.filter((tier)=>subtotal + 0.001 >= Number(tier.thresholdUsd)).sort((a, b)=>Number(b.thresholdUsd) - Number(a.thresholdUsd));
+    return eligible[0] || null;
 }
 function pickFullReductionDiscount(tiers, subtotalUsd) {
     const subtotal = roundMoney(Math.max(0, Number(subtotalUsd) || 0));
@@ -62685,10 +62740,11 @@ function computeDiscounts(params) {
     const firstOrderActive = (0, _pricingPromotionConfig.isPromoRuleActive)(cfg.firstOrder);
     const loyalActive = (0, _pricingPromotionConfig.isPromoRuleActive)(cfg.loyal);
     if (params.isFirstOrderEligible && firstOrderActive) {
-        if (cfg.firstOrder.mode === 'AMOUNT') {
-            customerDiscount = roundMoney(clamp(Number(cfg.firstOrder.value), 0, subtotalAfterCustomer));
-        } else {
-            const coef = clamp(Number(cfg.firstOrder.value), 0, 1);
+        const tier = pickFirstOrderTier(cfg.firstOrder.tiers, cfg.firstOrder.value, subtotalAfterCustomer);
+        if (tier && cfg.firstOrder.mode === 'AMOUNT') {
+            customerDiscount = roundMoney(clamp(Number(tier.value), 0, subtotalAfterCustomer));
+        } else if (tier) {
+            const coef = clamp(Number(tier.value), 0, 1);
             customerPercentCoef = coef;
             customerDiscount = roundMoney(subtotalAfterCustomer - subtotalAfterCustomer * coef);
         }
@@ -62843,6 +62899,12 @@ const DEFAULT_PRICING_PROMO_CONFIG = {
         enabled: false,
         mode: 'PERCENT',
         value: 0.9,
+        tiers: [
+            {
+                thresholdUsd: 0,
+                value: 0.9
+            }
+        ],
         startAt: null,
         endAt: null
     },
@@ -62937,8 +62999,32 @@ function clamp(value, min, max) {
 function normalizeDiscountMode(raw) {
     return raw === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
 }
+function normalizeFirstOrder(firstOrder, schedule) {
+    var _firstOrder_value, _ref;
+    const mode = normalizeDiscountMode(firstOrder.mode);
+    const clampValue = (raw)=>mode === 'AMOUNT' ? roundMoney(clamp(Number(raw), 0, 1000000)) : roundMoney(clamp(Number(raw), 0, 1));
+    const fallbackValue = clampValue((_firstOrder_value = firstOrder.value) !== null && _firstOrder_value !== void 0 ? _firstOrder_value : DEFAULT_PRICING_PROMO_CONFIG.firstOrder.value);
+    const parsed = Array.isArray(firstOrder.tiers) ? firstOrder.tiers.map((tier)=>({
+            thresholdUsd: roundMoney(clamp(Number(tier === null || tier === void 0 ? void 0 : tier.thresholdUsd), 0, 1000000)),
+            value: clampValue(tier === null || tier === void 0 ? void 0 : tier.value)
+        })).filter((tier)=>tier.value > 0) : [];
+    const tiers = (parsed.length > 0 ? parsed : [
+        {
+            thresholdUsd: 0,
+            value: fallbackValue
+        }
+    ]).sort((a, b)=>a.thresholdUsd - b.thresholdUsd);
+    const base = tiers.find((tier)=>tier.thresholdUsd <= 0) || tiers[0];
+    return {
+        enabled: firstOrder.enabled === true,
+        mode,
+        value: (_ref = base === null || base === void 0 ? void 0 : base.value) !== null && _ref !== void 0 ? _ref : fallbackValue,
+        tiers,
+        ...schedule
+    };
+}
 function normalizePricingPromotionConfig(raw) {
-    var _wholesale_coefficient, _firstOrder_value, _firstOrder_value1, _loyal_coefficient, _siteWide_value, _siteWide_value1, _shipping_value, _shipping_value1, _shipping_minSubtotalUsd;
+    var _wholesale_coefficient, _loyal_coefficient, _siteWide_value, _siteWide_value1, _shipping_value, _shipping_value1, _shipping_minSubtotalUsd;
     const input = raw && typeof raw === 'object' ? raw : {};
     const wholesale = input.wholesale && typeof input.wholesale === 'object' ? input.wholesale : {};
     const firstOrder = input.firstOrder && typeof input.firstOrder === 'object' ? input.firstOrder : {};
@@ -62971,12 +63057,7 @@ function normalizePricingPromotionConfig(raw) {
             enabled: wholesale.enabled !== false,
             coefficient: roundMoney(clamp(Number((_wholesale_coefficient = wholesale.coefficient) !== null && _wholesale_coefficient !== void 0 ? _wholesale_coefficient : DEFAULT_PRICING_PROMO_CONFIG.wholesale.coefficient), 0, 1))
         },
-        firstOrder: {
-            enabled: firstOrder.enabled === true,
-            mode: normalizeDiscountMode(firstOrder.mode),
-            value: normalizeDiscountMode(firstOrder.mode) === 'AMOUNT' ? roundMoney(clamp(Number((_firstOrder_value = firstOrder.value) !== null && _firstOrder_value !== void 0 ? _firstOrder_value : DEFAULT_PRICING_PROMO_CONFIG.firstOrder.value), 0, 1000000)) : roundMoney(clamp(Number((_firstOrder_value1 = firstOrder.value) !== null && _firstOrder_value1 !== void 0 ? _firstOrder_value1 : DEFAULT_PRICING_PROMO_CONFIG.firstOrder.value), 0, 1)),
-            ...normalizeSchedule(firstOrder)
-        },
+        firstOrder: normalizeFirstOrder(firstOrder, normalizeSchedule(firstOrder)),
         loyal: {
             enabled: loyal.enabled === true,
             coefficient: roundMoney(clamp(Number((_loyal_coefficient = loyal.coefficient) !== null && _loyal_coefficient !== void 0 ? _loyal_coefficient : DEFAULT_PRICING_PROMO_CONFIG.loyal.coefficient), 0, 1)),

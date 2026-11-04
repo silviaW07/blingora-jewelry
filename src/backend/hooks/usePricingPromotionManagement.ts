@@ -36,6 +36,9 @@ export interface PricingPromotionManagementHandlers {
   setFirstOrderEnabled: (enabled: boolean) => void
   setFirstOrderMode: (mode: 'PERCENT' | 'AMOUNT') => void
   setFirstOrderValue: (value: number) => void
+  addFirstOrderTier: () => void
+  updateFirstOrderTier: (index: number, patch: { thresholdUsd?: number; value?: number }) => void
+  removeFirstOrderTier: (index: number) => void
   setFirstOrderStartAt: (value: string) => void
   setFirstOrderEndAt: (value: string) => void
   setLoyalEnabled: (enabled: boolean) => void
@@ -140,6 +143,30 @@ export function usePricingPromotionManagement(): {
         setConfig((prev) => ({ ...prev, firstOrder: { ...prev.firstOrder, mode } })),
       setFirstOrderValue: (value) =>
         setConfig((prev) => ({ ...prev, firstOrder: { ...prev.firstOrder, value } })),
+      addFirstOrderTier: () =>
+        setConfig((prev) => ({
+          ...prev,
+          firstOrder: {
+            ...prev.firstOrder,
+            tiers: [...(prev.firstOrder.tiers || []), { thresholdUsd: 100, value: prev.firstOrder.mode === 'AMOUNT' ? 5 : 0.9 }],
+          },
+        })),
+      updateFirstOrderTier: (index, patch) =>
+        setConfig((prev) => ({
+          ...prev,
+          firstOrder: {
+            ...prev.firstOrder,
+            tiers: (prev.firstOrder.tiers || []).map((tier, i) => (i === index ? { ...tier, ...patch } : tier)),
+          },
+        })),
+      removeFirstOrderTier: (index) =>
+        setConfig((prev) => ({
+          ...prev,
+          firstOrder: {
+            ...prev.firstOrder,
+            tiers: (prev.firstOrder.tiers || []).filter((_, i) => i !== index),
+          },
+        })),
       setFirstOrderStartAt: (value) =>
         setConfig((prev) => ({
           ...prev,

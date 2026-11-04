@@ -1,4 +1,4 @@
-import type { FullReductionTier, PricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import type { FirstOrderTier, FullReductionTier, PricingPromotionConfig } from '@/shared/pricingPromotionConfig'
 import { isPromoRuleActive } from '@/shared/pricingPromotionConfig'
 
 export type DiscountLine = {
@@ -106,6 +106,21 @@ export function pickWholesaleStep(minOrderQty: number, totalQty: number) {
   const qty = Math.max(0, Math.floor(Number(totalQty) || 0))
   const steps = buildWholesaleSteps(minOrderQty)
   return steps.find((s) => qty >= s.minQty && (s.maxQty == null || qty <= s.maxQty)) || steps[0]
+}
+
+/** 首单取货额已达到的最高门槛。没有档位时用旧的单一系数，门槛视为 0。 */
+export function pickFirstOrderTier(
+  tiers: FirstOrderTier[] | null | undefined,
+  fallbackValue: number,
+  subtotalUsd: number,
+): FirstOrderTier | null {
+  const subtotal = roundMoney(Math.max(0, Number(subtotalUsd) || 0))
+  const list = (tiers || []).filter((tier) => Number(tier.value) > 0 && Number.isFinite(Number(tier.thresholdUsd)))
+  const source = list.length > 0 ? list : [{ thresholdUsd: 0, value: Number(fallbackValue) || 0 }]
+  const eligible = source
+    .filter((tier) => subtotal + 0.001 >= Number(tier.thresholdUsd))
+    .sort((a, b) => Number(b.thresholdUsd) - Number(a.thresholdUsd))
+  return eligible[0] || null
 }
 
 export function pickFullReductionDiscount(tiers: FullReductionTier[], subtotalUsd: number): {
@@ -224,10 +239,11 @@ export function computeDiscounts(params: {
   const firstOrderActive = isPromoRuleActive(cfg.firstOrder)
   const loyalActive = isPromoRuleActive(cfg.loyal)
   if (params.isFirstOrderEligible && firstOrderActive) {
-    if (cfg.firstOrder.mode === 'AMOUNT') {
-      customerDiscount = roundMoney(clamp(Number(cfg.firstOrder.value), 0, subtotalAfterCustomer))
-    } else {
-      const coef = clamp(Number(cfg.firstOrder.value), 0, 1)
+    const tier = pickFirstOrderTier(cfg.firstOrder.tiers, cfg.firstOrder.value, subtotalAfterCustomer)
+    if (tier && cfg.firstOrder.mode === 'AMOUNT') {
+      customerDiscount = roundMoney(clamp(Number(tier.value), 0, subtotalAfterCustomer))
+    } else if (tier) {
+      const coef = clamp(Number(tier.value), 0, 1)
       customerPercentCoef = coef
       customerDiscount = roundMoney(subtotalAfterCustomer - subtotalAfterCustomer * coef)
     }
