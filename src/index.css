@@ -561,8 +561,9 @@
   /* 手机端标题最多 2 行，超出省略号截断，避免占满首屏 */
   .product-detail-page h1,
   .product-detail-page .product-detail-title {
-    font-size: 1.0625rem !important;
-    line-height: 1.3;
+    font-size: 0.9375rem !important;
+    font-weight: 500;
+    line-height: 1.25;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -2652,8 +2653,9 @@ html.is-narrow .customer-auth-dialog[data-state='open'] {
 
 html.is-narrow .product-detail-page h1,
 html.is-narrow .product-detail-page .product-detail-title {
-  font-size: 1.0625rem !important;
-  line-height: 1.3;
+  font-size: 0.9375rem !important;
+  font-weight: 500;
+  line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -5378,4 +5380,22 @@ html.is-narrow .home-zone-section__view-all {
   height: auto;
   min-height: 2.5rem;
   max-height: 4.5rem;
+}
+
+@media (max-width: 1023px) {
+  .product-detail-page .product-detail-meta {
+    font-size: 0.75rem;
+    line-height: 1.25;
+  }
+
+  .product-detail-page .product-detail-price,
+  .product-detail-page .product-detail-price p {
+    font-size: 1.125rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .product-detail-page .product-size-options-head {
+    min-height: 1.25rem;
+    font-size: 0.8125rem;
+  }
 }

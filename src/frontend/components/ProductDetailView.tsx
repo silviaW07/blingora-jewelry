@@ -769,22 +769,22 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
           </div>
 
           {/* ===== 购买区（小屏在图下，大屏右侧） ===== */}
-          <section className="product-detail-buy space-y-3" data-controller-name="详情右侧购买区">
-            <div className="rounded-[4px] bg-white p-4 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-5">
-              <h1 className="product-detail-title text-[1.25rem] font-semibold leading-snug text-[#111111] sm:text-[1.375rem]">
+          <section className="product-detail-buy space-y-2 sm:space-y-3" data-controller-name="详情右侧购买区">
+            <div className="rounded-[4px] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-5">
+              <h1 className="product-detail-title text-[0.9375rem] font-medium leading-tight text-[#111111] sm:text-[1.375rem] sm:font-semibold sm:leading-snug">
                 {displayName}
               </h1>
 
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666]">
+              <div className="product-detail-meta mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-4 text-[#8a8a8a] sm:mt-2 sm:gap-x-3 sm:text-xs sm:text-[#666]">
                 {renderMoqLabel(displayedMinOrderQty)}
                 <span>
                   {t('common.itemNo')} {product.productCode}
                 </span>
               </div>
 
-              <div className="mt-2 space-y-3">
+              <div className="mt-1.5 space-y-2 sm:mt-2 sm:space-y-3">
                   <div>
-                    <StorePrice className="text-[22px] font-bold leading-none sm:text-[26px]">
+                    <StorePrice className="product-detail-price text-lg font-bold leading-none sm:text-[26px]">
                       {(() => {
                         const specPrices = (product.skus || [])
                           .map((sku) => sku.price)
@@ -799,7 +799,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                         const saleMin = applySiteWideDisplay(listMin, siteWideCoef)
                         const saleMax = applySiteWideDisplay(listMax, siteWideCoef)
                         return (
-                          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[22px] font-bold leading-none text-[#111] sm:text-[26px]">
+                          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-lg font-bold leading-none text-[#111] sm:text-[26px]">
                             <span>
                               {showRange
                                 ? formatUsdRange(saleMin.sale, saleMax.sale)
@@ -826,7 +826,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           selectionHighlight.color && 'animate-shake-x border-2 border-red-500 ring-2 ring-red-200 p-1',
                         )}
                       >
-                        <div className="product-size-options-head mb-2 text-sm">
+                        <div className="product-size-options-head mb-1 text-[13px] leading-4 sm:mb-2 sm:text-sm">
                           <span className="font-semibold text-[#111]">
                             {manualColorValue
                               ? `${t('common.color')}: ${displayColorLabel(t, manualColorValue)}`
@@ -870,7 +870,7 @@ export const ProductDetailView = ({ state, handlers }: Props) => {
                           selectionHighlight.size && 'animate-shake-x border-2 border-red-500 ring-2 ring-red-200 p-1',
                         )}
                       >
-                        <div className="product-size-options-head mb-2 text-sm">
+                        <div className="product-size-options-head mb-1 text-[13px] leading-4 sm:mb-2 sm:text-sm">
                           <span className="font-semibold text-[#111]">{specListTitle}</span>
                           <span className="product-size-options-count">
                             {specListRows.length} {t('common.options')}
