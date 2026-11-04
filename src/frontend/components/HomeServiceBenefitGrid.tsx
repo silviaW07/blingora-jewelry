@@ -14,7 +14,7 @@ import { DecorateText } from '@/frontend/decorate/DecorateText'
 import { useDecorateMode } from '@/frontend/decorate/DecorateContext'
 import { SERVICE_PAGE_CONFIGS } from '@/frontend/content/servicePages'
 import { getServiceBenefitDecorateKeys } from '@/frontend/decorate/serviceBenefitKeys'
-import { parseServiceTrustTemplate } from '@/frontend/decorate/serviceTrustTemplate'
+import { parseServiceTrustTemplate, trustHasContent } from '@/frontend/decorate/serviceTrustTemplate'
 import { translateCatalogLabel } from '@/frontend/i18n/catalogLabels'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -56,7 +56,7 @@ export function HomeServiceBenefitGrid({
         }
 
         const trust = parseServiceTrustTemplate(getPatch(keys.trust)?.text)
-        const hasTrust = Boolean(trust && (trust.address || trust.note || trust.images.length || trust.videoUrl || trust.headline))
+        const hasTrust = trustHasContent(trust)
         const isClickable = item.slug === 'buyer-show' || item.slug === 'why-choose-us'
         const href = hasTrust
           ? `/place-order/${index}/`
