@@ -109,6 +109,7 @@ export default function PlaceOrderPageView() {
               section={editor[key]}
               uploading={uploadingKey}
               sectionKey={key}
+              split={key === 'company'}
               onChange={(patch) => updateSection(key, patch)}
               onUpload={(file, kind) => void uploadTo(key, file, kind)}
             />
@@ -138,9 +139,11 @@ export default function PlaceOrderPageView() {
               {cardDesc ? <p className="mt-4 whitespace-pre-line text-base leading-8 text-[#3f3a34]">{cardDesc}</p> : null}
             </section>
           ) : null}
-          {sections.map((section) => (
-            <SectionView key={section.title} section={section} />
-          ))}
+          {SECTION_KEYS.map((key) => {
+            const section = published?.[key]
+            if (!section || !sectionHasContent(section)) return null
+            return <SectionView key={key} section={section} split={key === 'company'} />
+          })}
         </div>
       )}
     </Shell>
@@ -176,17 +179,35 @@ function Empty({ title, body }: { title: string; body: string }) {
   )
 }
 
-function SectionView({ section }: { section: TrustSection }) {
+function SectionView({ section, split = false }: { section: TrustSection; split?: boolean }) {
   const embed = youtubeEmbedUrl(section.videoUrl)
+  const lead = split ? section.images[0] : ''
+  const rest = split ? section.images.slice(1) : section.images
   return (
     <section className="rounded-[20px] bg-white px-6 py-8 shadow-sm sm:px-10">
-      <h2 className="text-[clamp(24px,3vw,36px)] font-black leading-tight">{section.title}</h2>
-      {section.body ? (
-        <p className="mt-4 whitespace-pre-line text-base leading-8 text-[#3f3a34]">{section.body}</p>
-      ) : null}
-      {section.images.length > 0 ? (
+      {split ? (
+        <div className="grid items-stretch gap-6 lg:grid-cols-2">
+          <div className="min-h-[320px] overflow-hidden rounded-2xl bg-[#f3eee6]">
+            {lead ? <img src={lead} alt="" className="h-full min-h-[320px] w-full object-cover" /> : null}
+          </div>
+          <div className="flex flex-col justify-center">
+            <h2 className="text-[clamp(24px,3vw,36px)] font-black leading-tight">{section.title}</h2>
+            {section.body ? (
+              <p className="mt-4 whitespace-pre-line text-base leading-8 text-[#3f3a34]">{section.body}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <>
+          <h2 className="text-[clamp(24px,3vw,36px)] font-black leading-tight">{section.title}</h2>
+          {section.body ? (
+            <p className="mt-4 whitespace-pre-line text-base leading-8 text-[#3f3a34]">{section.body}</p>
+          ) : null}
+        </>
+      )}
+      {rest.length > 0 ? (
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {section.images.map((src) => (
+          {rest.map((src) => (
             <img key={src} src={src} alt="" className="h-72 w-full rounded-2xl object-cover" />
           ))}
         </div>
@@ -209,6 +230,7 @@ function SectionEditor({
   section,
   sectionKey,
   uploading,
+  split = false,
   onChange,
   onUpload,
 }: {
@@ -216,11 +238,44 @@ function SectionEditor({
   section: TrustSection
   sectionKey: string
   uploading: string | null
+  split?: boolean
   onChange: (patch: Partial<TrustSection>) => void
   onUpload: (file: File, kind: 'image' | 'video') => void
 }) {
   const busyImage = uploading === `${sectionKey}-image`
   const busyVideo = uploading === `${sectionKey}-video`
+  const imageTiles = (
+    <div className={split ? 'grid h-full gap-3' : 'mt-4 grid gap-3 sm:grid-cols-4'}>
+      {section.images.map((src, imageIndex) => (
+        <button
+          key={`${src}-${imageIndex}`}
+          type="button"
+          className="relative"
+          title="移除"
+          onClick={() => onChange({ images: section.images.filter((_, i) => i !== imageIndex) })}
+        >
+          <img
+            src={src}
+            alt=""
+            className={split && imageIndex === 0 ? 'h-full min-h-[320px] w-full rounded-2xl object-cover' : 'h-36 w-full rounded-xl object-cover'}
+          />
+        </button>
+      ))}
+      {split && section.images.length === 0 ? (
+        <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#d8d4ca] bg-[#faf8f4] text-sm text-[#8a8073]">
+          左边大图
+        </div>
+      ) : null}
+    </div>
+  )
+  const textArea = (
+    <textarea
+      value={section.body}
+      placeholder="在这里写这一板块的内容"
+      className={`w-full rounded-xl border border-[#e7e1d8] bg-[#faf8f4] px-4 py-3 text-base leading-7 outline-none ${split ? 'min-h-[320px]' : 'mt-4 min-h-40'}`}
+      onChange={(event) => onChange({ body: event.target.value })}
+    />
+  )
   return (
     <section className="rounded-[20px] bg-white px-6 py-8 shadow-sm sm:px-10">
       <p className="text-sm font-semibold text-[#8a8073]">第 {order} 板块</p>
@@ -229,26 +284,36 @@ function SectionEditor({
         className="mt-2 w-full border-0 bg-transparent text-3xl font-black outline-none"
         onChange={(event) => onChange({ title: event.target.value })}
       />
-      <textarea
-        value={section.body}
-        placeholder="在这里写这一板块的内容"
-        className="mt-4 min-h-40 w-full rounded-xl border border-[#e7e1d8] bg-[#faf8f4] px-4 py-3 text-base leading-7 outline-none"
-        onChange={(event) => onChange({ body: event.target.value })}
-      />
-      <div className="mt-4 grid gap-3 sm:grid-cols-4">
-        {section.images.map((src, imageIndex) => (
-          <button
-            key={`${src}-${imageIndex}`}
-            type="button"
-            className="relative"
-            title="移除"
-            onClick={() => onChange({ images: section.images.filter((_, i) => i !== imageIndex) })}
-          >
-            <img src={src} alt="" className="h-36 w-full rounded-xl object-cover" />
-          </button>
-        ))}
-      </div>
+      {split ? (
+        <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-2">
+          <div>
+            {imageTiles}
+            <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
+              {busyImage ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              上传左边大图
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={busyImage || section.images.length >= 8}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) onUpload(file, 'image')
+                }}
+              />
+            </label>
+          </div>
+          {textArea}
+        </div>
+      ) : (
+        <>
+          {textArea}
+          {imageTiles}
+        </>
+      )}
       <div className="mt-4 flex flex-wrap gap-3">
+        {split ? null : (
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
           {busyImage ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
           上传图片
@@ -264,6 +329,7 @@ function SectionEditor({
             }}
           />
         </label>
+        )}
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
           {busyVideo ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
           上传视频
