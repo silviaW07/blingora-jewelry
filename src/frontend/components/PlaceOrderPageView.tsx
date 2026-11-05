@@ -23,7 +23,7 @@ import {
 import { DECORATE_QUERY } from '@/frontend/decorate/types'
 import { hardNavProps } from '@/frontend/utils/hardNavigate'
 import { savePageDecorateConfig } from '@/frontend/actions/PageDecorate'
-import { upload_image_file } from '@/tools/tools'
+import { upload_image_file, upload_media_file } from '@/tools/tools'
 
 const SECTION_KEYS = ['company', 'shipping', 'ordering'] as const
 
@@ -61,7 +61,7 @@ export default function PlaceOrderPageView() {
     const uploadTo = async (key: (typeof SECTION_KEYS)[number], file: File, kind: 'image' | 'video') => {
       setUploadingKey(`${key}-${kind}`)
       try {
-        const url = await upload_image_file(file)
+        const url = kind === 'video' ? await upload_media_file(file) : await upload_image_file(file)
         if (!url) throw new Error('上传失败')
         const section = editor[key]
         if (kind === 'video') updateSection(key, { videoUrl: url })
@@ -190,7 +190,7 @@ function SectionView({ section, split = false }: { section: TrustSection; split?
       {split ? (
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
           <div className="min-h-[320px] overflow-hidden rounded-2xl bg-[#f3eee6]">
-            {lead ? <img src={lead} alt="" className="h-full min-h-[320px] w-full object-cover" /> : null}
+            {lead ? <img src={lead} alt="" className="h-auto max-h-[520px] w-full object-contain" /> : null}
           </div>
           <div className="flex flex-col justify-center">
             <h2 className="text-[clamp(24px,3vw,36px)] font-black leading-tight">{section.title}</h2>
@@ -244,93 +244,102 @@ function SectionEditor({
   onChange: (patch: Partial<TrustSection>) => void
   onUpload: (file: File, kind: 'image' | 'video') => void
 }) {
+  const [editingTitle, setEditingTitle] = useState(false)
   const busyImage = uploading === `${sectionKey}-image`
   const busyVideo = uploading === `${sectionKey}-video`
-  const imageTiles = (
-    <div className={split ? 'grid h-full gap-3' : 'mt-4 grid gap-3 sm:grid-cols-4'}>
-      {section.images.map((src, imageIndex) => (
-        <button
-          key={`${src}-${imageIndex}`}
-          type="button"
-          className="relative"
-          title="移除"
-          onClick={() => onChange({ images: section.images.filter((_, i) => i !== imageIndex) })}
-        >
-          <img
-            src={src}
-            alt=""
-            className={split && imageIndex === 0 ? 'h-full min-h-[320px] w-full rounded-2xl object-cover' : 'h-36 w-full rounded-xl object-cover'}
-          />
-        </button>
-      ))}
-      {split && section.images.length === 0 ? (
-        <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[#d8d4ca] bg-[#faf8f4] text-sm text-[#8a8073]">
-          左边大图
-        </div>
-      ) : null}
-    </div>
-  )
-  const textArea = (
-    <textarea
-      value={section.body}
-      placeholder="在这里写这一板块的内容"
-      className={`w-full rounded-xl border border-[#e7e1d8] bg-[#faf8f4] px-4 py-3 text-base leading-7 outline-none ${split ? 'min-h-[320px]' : 'mt-4 min-h-40'}`}
-      onChange={(event) => onChange({ body: event.target.value })}
-    />
-  )
+  const lead = split ? section.images[0] : ''
+  const extraImages = split ? section.images.slice(1) : section.images
+  const pickImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) onUpload(file, 'image')
+  }
   return (
-    <section className="rounded-[20px] bg-white px-6 py-8 shadow-sm sm:px-10">
+    <section className="rounded-[20px] bg-white px-6 py-8 shadow-sm sm:px-10" data-no-hard-nav="true">
       <p className="text-sm font-semibold text-[#8a8073]">第 {order} 板块</p>
-      <input
-        value={section.title}
-        className="mt-2 w-full border-0 bg-transparent text-3xl font-black outline-none"
-        onChange={(event) => onChange({ title: event.target.value })}
-      />
+      {editingTitle ? (
+        <input
+          autoFocus
+          value={section.title}
+          className="mt-2 w-full border-0 border-b border-[#111111] bg-transparent text-3xl font-black outline-none"
+          onChange={(event) => onChange({ title: event.target.value })}
+          onBlur={() => setEditingTitle(false)}
+          onKeyDown={(event) => {
+            event.stopPropagation()
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              setEditingTitle(false)
+            }
+          }}
+        />
+      ) : (
+        <h2
+          className="mt-2 cursor-text text-3xl font-black"
+          title="双击修改标题"
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setEditingTitle(true)
+          }}
+        >
+          {section.title || '双击填写标题'}
+        </h2>
+      )}
       {split ? (
-        <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-2">
-          <div>
-            {imageTiles}
+        <div className="mt-4 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          <div className="min-w-0">
+            <div className="overflow-hidden rounded-2xl border border-dashed border-[#d8d4ca] bg-[#faf8f4]">
+              {lead ? (
+                <img src={lead} alt="" className="h-auto max-h-[520px] w-full object-contain" />
+              ) : (
+                <div className="flex min-h-[320px] items-center justify-center text-sm text-[#8a8073]">左边大图</div>
+              )}
+            </div>
             <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
               {busyImage ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
               上传左边大图
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                disabled={busyImage || section.images.length >= 8}
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ''
-                  if (file) onUpload(file, 'image')
-                }}
-              />
+              <input type="file" accept="image/*" className="hidden" disabled={busyImage || section.images.length >= 8} onChange={pickImage} />
             </label>
           </div>
-          {textArea}
+          <textarea
+            value={section.body}
+            placeholder="在这里写这一板块的内容"
+            className="min-h-[320px] w-full min-w-0 resize-y rounded-xl border border-[#e7e1d8] bg-[#faf8f4] px-4 py-3 text-base leading-7 outline-none"
+            onChange={(event) => onChange({ body: event.target.value })}
+            onKeyDown={(event) => event.stopPropagation()}
+          />
         </div>
       ) : (
-        <>
-          {textArea}
-          {imageTiles}
-        </>
+        <textarea
+          value={section.body}
+          placeholder="在这里写这一板块的内容"
+          className="mt-4 min-h-40 w-full min-w-0 resize-y rounded-xl border border-[#e7e1d8] bg-[#faf8f4] px-4 py-3 text-base leading-7 outline-none"
+          onChange={(event) => onChange({ body: event.target.value })}
+          onKeyDown={(event) => event.stopPropagation()}
+        />
       )}
+      {extraImages.length > 0 ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          {extraImages.map((src, imageIndex) => (
+            <button
+              key={`${src}-${imageIndex}`}
+              type="button"
+              className="relative"
+              title="移除"
+              onClick={() => onChange({ images: section.images.filter((item) => item !== src) })}
+            >
+              <img src={src} alt="" className="h-36 w-full rounded-xl object-contain bg-[#faf8f4]" />
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-4 flex flex-wrap gap-3">
         {split ? null : (
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
-          {busyImage ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          上传图片
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={busyImage || section.images.length >= 8}
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (file) onUpload(file, 'image')
-            }}
-          />
-        </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
+            {busyImage ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            上传图片
+            <input type="file" accept="image/*" className="hidden" disabled={busyImage || section.images.length >= 8} onChange={pickImage} />
+          </label>
         )}
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold">
           {busyVideo ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
@@ -353,6 +362,7 @@ function SectionEditor({
         placeholder="或粘贴视频 / YouTube 链接"
         className="mt-3 h-11 w-full rounded-xl border border-[#e7e1d8] px-4 text-sm outline-none"
         onChange={(event) => onChange({ videoUrl: event.target.value })}
+        onKeyDown={(event) => event.stopPropagation()}
       />
     </section>
   )
