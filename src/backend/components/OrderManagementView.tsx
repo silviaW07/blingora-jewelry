@@ -449,13 +449,13 @@ function InboundShipBar({
         </div>
       ) : null}
       {shipments.length ? (
-        <div className="max-h-48 shrink-0 space-y-2 overflow-auto border-t bg-slate-50 px-4 py-3 sm:px-6">
+        <div className="shrink-0 space-y-2 border-t bg-slate-50 px-4 py-3 sm:px-6">
           {shipments.map((row) => (
-            <div key={row.id} className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center">
-              <div className="flex gap-1">
-                {(row.images || []).slice(0, 4).map((url) => (
-                  <button key={url} type="button" className="h-12 w-12 overflow-hidden rounded border" onClick={() => setZoomUrl(url)}>
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+            <div key={row.id} className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-start">
+              <div className="flex flex-wrap gap-2">
+                {(row.images || []).map((url) => (
+                  <button key={url} type="button" className="h-40 w-40 overflow-hidden rounded border bg-slate-50" onClick={() => setZoomUrl(url)}>
+                    <img src={url} alt="" className="h-full w-full object-contain" />
                   </button>
                 ))}
               </div>
