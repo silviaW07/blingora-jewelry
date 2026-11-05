@@ -174,7 +174,13 @@ const customerOrderInclude = {
       unitPrice: true,
       lineAmount: true,
       product: {
-        select: { weightGram: true, mainImageUrl: true },
+        select: {
+          weightGram: true,
+          mainImageUrl: true,
+          productCode: true,
+          supplierName: true,
+          importTaskItems: { select: { supplierName: true }, take: 8 },
+        },
       },
       productSku: {
         select: { imageUrl: true },
@@ -182,6 +188,39 @@ const customerOrderInclude = {
     },
     orderBy: { createdAt: 'asc' as const },
   },
+}
+
+
+const customerOrderSupplier = (item: any) => {
+  const product = item?.product
+  const sources = Array.isArray(product?.importTaskItems) ? product.importTaskItems : []
+  return String(
+    product?.supplierName
+    || sources.find((row: any) => String(row?.supplierName || '').trim())?.supplierName
+    || ''
+  ).trim()
+}
+
+const customerOrderSpu = (item: any) => {
+  const code = String(item?.product?.productCode || '').trim()
+  if (code) return code
+  const sku = String(item?.skuCode || '').trim()
+  const cut = sku.indexOf('-')
+  return cut > 0 ? sku.slice(0, cut) : sku
+}
+
+const compareCustomerOrderItems = (a: any, b: any) => {
+  const sa = customerOrderSupplier(a)
+  const sb = customerOrderSupplier(b)
+  if (!sa !== !sb) return sa ? -1 : 1
+  const bySupplier = sa.localeCompare(sb, 'zh-CN')
+  if (bySupplier) return bySupplier
+  const manual = (row: any) => String(row?.skuCode || '').startsWith('ADD-') ? 1 : 0
+  const rank = manual(a) - manual(b)
+  if (rank) return rank
+  const spu = customerOrderSpu(a).localeCompare(customerOrderSpu(b), 'en', { numeric: true, sensitivity: 'base' })
+  if (spu) return spu
+  return String(a?.skuCode || '').localeCompare(String(b?.skuCode || ''), 'en', { numeric: true, sensitivity: 'base' })
 }
 
 const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
@@ -207,7 +246,7 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
   createdAt: row.createdAt.toISOString(),
   itemCount: row.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
   shipments: [],
-  items: row.items.map((item: any) => ({
+  items: [...row.items].sort(compareCustomerOrderItems).map((item: any) => ({
     itemId: item.id,
     productId: item.productId,
     productSkuId: item.productSkuId,

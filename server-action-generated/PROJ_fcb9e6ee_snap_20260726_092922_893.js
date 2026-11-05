@@ -48225,7 +48225,15 @@ const customerOrderInclude = {
             product: {
                 select: {
                     weightGram: true,
-                    mainImageUrl: true
+                    mainImageUrl: true,
+                    productCode: true,
+                    supplierName: true,
+                    importTaskItems: {
+                        select: {
+                            supplierName: true
+                        },
+                        take: 8
+                    }
                 }
             },
             productSku: {
@@ -48238,6 +48246,39 @@ const customerOrderInclude = {
             createdAt: 'asc'
         }
     }
+};
+const customerOrderSupplier = (item)=>{
+    var _sources_find;
+    const product = item === null || item === void 0 ? void 0 : item.product;
+    const sources = Array.isArray(product === null || product === void 0 ? void 0 : product.importTaskItems) ? product.importTaskItems : [];
+    return String((product === null || product === void 0 ? void 0 : product.supplierName) || ((_sources_find = sources.find((row)=>String((row === null || row === void 0 ? void 0 : row.supplierName) || '').trim())) === null || _sources_find === void 0 ? void 0 : _sources_find.supplierName) || '').trim();
+};
+const customerOrderSpu = (item)=>{
+    var _item_product;
+    const code = String((item === null || item === void 0 ? void 0 : (_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.productCode) || '').trim();
+    if (code) return code;
+    const sku = String((item === null || item === void 0 ? void 0 : item.skuCode) || '').trim();
+    const cut = sku.indexOf('-');
+    return cut > 0 ? sku.slice(0, cut) : sku;
+};
+const compareCustomerOrderItems = (a, b)=>{
+    const sa = customerOrderSupplier(a);
+    const sb = customerOrderSupplier(b);
+    if (!sa !== !sb) return sa ? -1 : 1;
+    const bySupplier = sa.localeCompare(sb, 'zh-CN');
+    if (bySupplier) return bySupplier;
+    const manual = (row)=>String((row === null || row === void 0 ? void 0 : row.skuCode) || '').startsWith('ADD-') ? 1 : 0;
+    const rank = manual(a) - manual(b);
+    if (rank) return rank;
+    const spu = customerOrderSpu(a).localeCompare(customerOrderSpu(b), 'en', {
+        numeric: true,
+        sensitivity: 'base'
+    });
+    if (spu) return spu;
+    return String((a === null || a === void 0 ? void 0 : a.skuCode) || '').localeCompare(String((b === null || b === void 0 ? void 0 : b.skuCode) || ''), 'en', {
+        numeric: true,
+        sensitivity: 'base'
+    });
 };
 const mapCustomerOrder = (row)=>({
         orderId: row.id,
@@ -48261,7 +48302,9 @@ const mapCustomerOrder = (row)=>({
         createdAt: row.createdAt.toISOString(),
         itemCount: row.items.reduce((sum, item)=>sum + item.quantity, 0),
         shipments: [],
-        items: row.items.map((item)=>{
+        items: [
+            ...row.items
+        ].sort(compareCustomerOrderItems).map((item)=>{
             var _item_productSku, _item_product;
             return {
                 itemId: item.id,
