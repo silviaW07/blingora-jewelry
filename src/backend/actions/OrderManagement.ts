@@ -58,6 +58,8 @@ export interface OrderInboundLine {
   outOfStock: boolean
   /** Present when this line was pulled in from a linked order. */
   orderNo?: string
+  /** Owning order, so a linked line can be saved back to that order. */
+  orderId?: string
   /** Set in the check-in screen after the operator clicks 确认. */
   acknowledged?: boolean
   openedQty?: number

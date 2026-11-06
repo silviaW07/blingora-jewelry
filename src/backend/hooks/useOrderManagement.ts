@@ -306,6 +306,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [inboundShipments, setInboundShipments] = useState<Array<{ id: string; shippedAt: string; trackingNumber: string; channel: string; note: string }>>([])
   const [settlementPdfUrl, setSettlementPdfUrl] = useState('')
   const inboundBooted = useRef<string | null>(null)
+  const inboundLoadSeq = useRef(0)
   const inboundClosing = useRef(false)
   const inboundSaveChain = useRef(Promise.resolve())
   const inboundHistoryReady = useRef('')
@@ -610,24 +611,38 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       || orderLinks.find((item) => item.children.some((child) => child.id === orderId))
     const primaryId = group?.primaryId || orderId
     const ids = group ? [group.primaryId, ...group.children.map((child) => child.id)] : [orderId]
+    const linesFor = (id: string) => {
+      const row = list.find((item) => item.id === id)
+      const fromDetail = detailData && detailData.id === id && detailData.inboundLines?.length
+        ? detailData.inboundLines
+        : null
+      const lines = fromDetail || row?.inboundLines || []
+      const orderNo = row?.orderNo || (detailData && detailData.id === id ? detailData.orderNo : '') || group?.children.find((child) => child.id === id)?.orderNo || ''
+      return { lines, orderNo }
+    }
+    const stamp = (id: string, lines: OrderInboundLine[], orderNo: string) => (
+      lines.map((line) => ({
+        ...line,
+        orderId: id,
+        orderNo: group ? orderNo : line.orderNo,
+      }))
+    )
     const collect = async () => {
       const merged: OrderInboundLine[] = []
       for (const id of ids) {
-        const row = list.find((item) => item.id === id)
-        let lines = (detailData && detailData.id === id && detailData.inboundLines?.length
-          ? detailData.inboundLines
-          : row?.inboundLines) || []
-        let orderNo = row?.orderNo || group?.children.find((child) => child.id === id)?.orderNo || ''
-        if (group && !lines.length) {
+        const current = linesFor(id)
+        let lines = current.lines
+        let orderNo = current.orderNo
+        if (group) {
           try {
             const detail = await getOrderDetail(id)
-            lines = detail.inboundLines || []
+            if (detail.inboundLines?.length) lines = detail.inboundLines
             orderNo = detail.orderNo || orderNo
           } catch {
-            lines = []
+            // Keep the lines already on the order list.
           }
         }
-        merged.push(...lines.map((line) => ({ ...line, orderNo: group ? orderNo : line.orderNo })))
+        merged.push(...stamp(id, lines, orderNo))
       }
       return merged
     }
@@ -636,10 +651,17 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       ? detailData.inboundLines
       : row?.inboundLines) || []
     orderId = primaryId
+    const loadToken = ++inboundLoadSeq.current
+    const seed = ids.flatMap((id) => {
+      const current = linesFor(id)
+      return stamp(id, current.lines, current.orderNo)
+    })
     void collect().then((merged) => {
-      if (!merged.length) return
+      if (loadToken !== inboundLoadSeq.current) return
+      const sourceLines = merged.length ? merged : seed
+      if (!sourceLines.length) return
       const saved = readInboundDraftStore(primaryId)
-      const drafts = merged.map((line) => {
+      const drafts = sourceLines.map((line) => {
         const extra = saved?.lines?.[line.id]
         const ordered = Math.max(0, Number(line.quantity) || 0)
         const rawQty = extra && Number.isFinite(Number(extra.inboundQty))
@@ -672,7 +694,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       return
     }
     const saved = readInboundDraftStore(orderId)
-    const drafts = (group ? [] : source).map((line) => {
+    const drafts = (group ? seed : source).map((line) => {
       const extra = saved?.lines?.[line.id]
       const ordered = Math.max(0, Number(line.quantity) || 0)
       const rawQty = extra && Number.isFinite(Number(extra.inboundQty))
@@ -694,7 +716,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         openedImage: line.shipmentImageUrl || '',
       }
     })
-    if (!group) setInboundDrafts(drafts)
+    if (drafts.length) setInboundDrafts(drafts)
     setInboundOrderId(orderId)
     const dirty = !group && drafts.some((line) => (
       Number(line.inboundQty) !== Number(line.openedQty)
@@ -946,23 +968,44 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         }),
       }
     })
-    setInboundDrafts(result.lines.map((line) => {
-      const prev = drafts.find((item) => item.id === line.id)
-      return {
-        ...line,
-        unitPrice: prev?.unitPrice ?? line.unitPrice,
-        lineAmount: prev?.lineAmount ?? line.lineAmount,
-        costPrice: prev?.costPrice ?? line.costPrice,
-        supplierName: prev?.supplierName || line.supplierName,
-        supplierUrl: prev?.supplierUrl || line.supplierUrl,
-        shipmentImageUrl: line.shipmentImageUrl || prev?.shipmentImageUrl || null,
-        acknowledged: false,
-        openedQty: line.inboundQty,
-        openedNote: line.inboundNote || '',
-        openedStage: line.inboundStage || 'PENDING',
-        openedImage: line.shipmentImageUrl || '',
+    setInboundDrafts((current) => {
+      const returned = new Map(result.lines.map((line) => [line.id, line]))
+      const base = current.length ? current : drafts
+      const next = base.map((line) => {
+        const fresh = returned.get(line.id)
+        if (!fresh) return line
+        const prev = drafts.find((item) => item.id === line.id) || line
+        return {
+          ...fresh,
+          orderId: prev.orderId || line.orderId || orderId,
+          orderNo: prev.orderNo || line.orderNo,
+          unitPrice: prev.unitPrice ?? fresh.unitPrice,
+          lineAmount: prev.lineAmount ?? fresh.lineAmount,
+          costPrice: prev.costPrice ?? fresh.costPrice,
+          supplierName: prev.supplierName || fresh.supplierName,
+          supplierUrl: prev.supplierUrl || fresh.supplierUrl,
+          shipmentImageUrl: fresh.shipmentImageUrl || prev.shipmentImageUrl || null,
+          acknowledged: false,
+          openedQty: fresh.inboundQty,
+          openedNote: fresh.inboundNote || '',
+          openedStage: fresh.inboundStage || 'PENDING',
+          openedImage: fresh.shipmentImageUrl || '',
+        }
+      })
+      for (const line of result.lines) {
+        if (next.some((item) => item.id === line.id)) continue
+        next.push({
+          ...line,
+          orderId,
+          acknowledged: false,
+          openedQty: line.inboundQty,
+          openedNote: line.inboundNote || '',
+          openedStage: line.inboundStage || 'PENDING',
+          openedImage: line.shipmentImageUrl || '',
+        })
       }
-    }))
+      return next
+    })
   }
 
   const saveInboundDrafts = async (drafts: OrderInboundLine[], options?: { allowEmpty?: boolean; keepOpen?: boolean; quiet?: boolean }) => {
@@ -986,49 +1029,29 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
     try {
       setInboundSaving(true)
-      const result = await updateOrderInbound({
-        orderId,
-        lines: changed.map((line) => ({
-          orderItemId: line.id,
-          inboundQty: line.inboundQty,
-          inboundNote: line.inboundNote,
-          inboundStage: line.inboundStage || 'PENDING',
-          confirmed: Boolean(line.acknowledged) || line.inboundQty !== line.openedQty,
-          ...((line.shipmentImageUrl || '') !== (line.openedImage || '')
-            ? { shipmentImageUrl: line.shipmentImageUrl || '' }
-            : {}),
-        })),
-      })
-      rememberInboundResult(orderId, drafts, result)
-      setList((prev) => prev.map((row) => (
-        row.id === orderId
-          ? {
-              ...row,
-              inboundLines: result.lines,
-              inboundOrderedQty: result.orderedQty,
-              inboundReceivedQty: result.receivedQty,
-              inboundState: result.state,
-              ...(result.status ? { status: result.status } : {}),
-            }
-          : row
-      )))
-      setDetailData((prev) => {
-        if (!prev || prev.id !== orderId) return prev
-        const byId = new Map(result.lines.map((line) => [line.id, line]))
-        return {
-          ...prev,
-          inboundLines: result.lines,
-          inboundOrderedQty: result.orderedQty,
-          inboundReceivedQty: result.receivedQty,
-          inboundState: result.state,
-          items: prev.items.map((item) => {
-            const line = byId.get(item.id)
-            return line
-              ? { ...item, inboundQty: line.inboundQty, inboundNote: line.inboundNote || null }
-              : item
-          }),
-        }
-      })
+      const buckets = new Map<string, typeof changed>()
+      for (const line of changed) {
+        const key = line.orderId || orderId
+        const bucket = buckets.get(key) || []
+        bucket.push(line)
+        buckets.set(key, bucket)
+      }
+      for (const [targetId, bucket] of buckets) {
+        const result = await updateOrderInbound({
+          orderId: targetId,
+          lines: bucket.map((line) => ({
+            orderItemId: line.id,
+            inboundQty: line.inboundQty,
+            inboundNote: line.inboundNote,
+            inboundStage: line.inboundStage || 'PENDING',
+            confirmed: Boolean(line.acknowledged) || line.inboundQty !== line.openedQty,
+            ...((line.shipmentImageUrl || '') !== (line.openedImage || '')
+              ? { shipmentImageUrl: line.shipmentImageUrl || '' }
+              : {}),
+          })),
+        })
+        rememberInboundResult(targetId, drafts, result)
+      }
       toast.success('入库情况已保存')
       fetchStats()
       if (!options?.keepOpen) {
