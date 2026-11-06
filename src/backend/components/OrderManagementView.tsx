@@ -1431,6 +1431,7 @@ export const OrderManagementView = ({
                                   return inboundBadgeLabel(inboundState, received, ordered, lines)
                                 })()}
                               </Badge>
+                              <div className="flex items-center gap-2">
                               <Button
                                 type="button"
                                 size="sm"
@@ -1450,6 +1451,7 @@ export const OrderManagementView = ({
                                   setLinkChoices((res.list || []).filter((item) => item.id !== row.id))
                                 }).catch((err: Error) => toast.error(err.message || '订单加载失败')).finally(() => setLinkLoading(false))
                               }}>关联</Button>
+                              </div>
                             </div>}
                           </TableCell>
                           <TableCell className="pt-4 text-sm text-muted-foreground">
