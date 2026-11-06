@@ -502,9 +502,9 @@ function InboundShipBar({
         </div>
       ) : null}
       {zoomUrl && typeof document !== 'undefined' ? createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-6" role="dialog" aria-label="发货大图" onClick={() => setZoomUrl('')}>
-          <button type="button" className="absolute right-6 top-6 rounded-md bg-white px-3 py-1.5 text-sm text-slate-900" onClick={(event) => { event.stopPropagation(); setZoomUrl('') }}>关闭</button>
-          <img src={zoomUrl} alt="" className="max-h-[92vh] max-w-[94vw] object-contain" onClick={(event) => event.stopPropagation()} />
+        <div className="pointer-events-auto fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-6" role="dialog" aria-label="发货大图" onPointerDown={() => setZoomUrl('')}>
+          <button type="button" className="pointer-events-auto absolute right-6 top-6 z-10 rounded-md bg-white px-3 py-1.5 text-sm text-slate-900" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); setZoomUrl('') }}>关闭</button>
+          <img src={zoomUrl} alt="" className="pointer-events-auto max-h-[92vh] max-w-[94vw] object-contain" onPointerDown={(event) => event.stopPropagation()} />
         </div>,
         document.body,
       ) : null}
@@ -2590,10 +2590,10 @@ export const OrderManagementView = ({
       </Dialog>
       {state.inboundOrderId && inboundZoom ? (
         <div
-          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 p-16"
+          className="pointer-events-auto fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 p-16"
           role="dialog"
           aria-label="大图"
-          onClick={() => setInboundZoom(null)}
+          onPointerDown={() => setInboundZoom(null)}
         >
           <button
             type="button"
