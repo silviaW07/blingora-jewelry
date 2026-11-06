@@ -56,6 +56,8 @@ export interface OrderInboundLine {
   priceCoefficient: number | null
   /** Saved quantity 0 means this line was confirmed out of stock. Unsaved 0 is not. */
   outOfStock: boolean
+  /** Present when this line was pulled in from a linked order. */
+  orderNo?: string
   /** Set in the check-in screen after the operator clicks 确认. */
   acknowledged?: boolean
   openedQty?: number
@@ -3502,5 +3504,90 @@ export const exportOrdersExcel = requireRole([UserRole.ADMIN])(
         throw error
       }
     }
+  }),
+)
+
+export type OrderLinkChild = { id: string; orderNo: string }
+export type OrderLinkGroup = { primaryId: string; children: OrderLinkChild[] }
+
+const ORDER_LINK_TITLE = 'ORDER_GROUP_LINKS'
+
+function parseOrderLinks(raw: unknown): OrderLinkGroup[] {
+  if (!Array.isArray(raw)) return []
+  const groups: OrderLinkGroup[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const primaryId = String((item as { primaryId?: unknown }).primaryId || '').trim()
+    const childrenRaw = (item as { children?: unknown }).children
+    if (!primaryId || !Array.isArray(childrenRaw)) continue
+    const children = childrenRaw.flatMap((child) => {
+      if (!child || typeof child !== 'object') return []
+      const id = String((child as { id?: unknown }).id || '').trim()
+      const orderNo = String((child as { orderNo?: unknown }).orderNo || '').trim()
+      if (!id || id === primaryId) return []
+      return [{ id, orderNo }]
+    })
+    if (children.length) groups.push({ primaryId, children })
+  }
+  return groups
+}
+
+async function readOrderLinks(): Promise<OrderLinkGroup[]> {
+  const setting = await prisma.sitesetting.findFirst({
+    where: { settingType: 'STATIC_COPY', title: ORDER_LINK_TITLE },
+    orderBy: { updatedAt: 'desc' },
+  })
+  return parseOrderLinks(setting?.contentJson)
+}
+
+async function writeOrderLinks(groups: OrderLinkGroup[]) {
+  const existing = await prisma.sitesetting.findFirst({
+    where: { settingType: 'STATIC_COPY', title: ORDER_LINK_TITLE },
+    orderBy: { updatedAt: 'desc' },
+  })
+  if (existing) {
+    await prisma.sitesetting.update({
+      where: { id: existing.id },
+      data: { contentJson: groups, isActive: true },
+    })
+  } else {
+    await prisma.sitesetting.create({
+      data: {
+        settingType: 'STATIC_COPY',
+        title: ORDER_LINK_TITLE,
+        subtitle: 'order product links',
+        contentJson: groups,
+        isActive: true,
+        sortWeight: 0,
+      },
+    })
+  }
+}
+
+export const getOrderLinks = requireRole([UserRole.ADMIN])(
+  withResult(async (): Promise<OrderLinkGroup[]> => readOrderLinks()),
+)
+
+export const saveOrderLink = requireRole([UserRole.ADMIN])(
+  withResult(async (input: { primaryId: string; children: OrderLinkChild[] }): Promise<OrderLinkGroup[]> => {
+    const primaryId = String(input?.primaryId || '').trim()
+    if (!primaryId) throw new Error('缺少主订单')
+    const children = (input.children || []).flatMap((child) => {
+      const id = String(child?.id || '').trim()
+      const orderNo = String(child?.orderNo || '').trim()
+      if (!id || id === primaryId) return []
+      return [{ id, orderNo }]
+    })
+    const childIds = new Set(children.map((child) => child.id))
+    const groups = (await readOrderLinks())
+      .filter((group) => group.primaryId !== primaryId && !childIds.has(group.primaryId))
+      .map((group) => ({
+        ...group,
+        children: group.children.filter((child) => child.id !== primaryId && !childIds.has(child.id)),
+      }))
+      .filter((group) => group.children.length)
+    if (children.length) groups.push({ primaryId, children })
+    await writeOrderLinks(groups)
+    return groups
   }),
 )

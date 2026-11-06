@@ -15,6 +15,7 @@ import type {
   OrderListItem,
   OrderDetail,
   OrderInboundLine,
+  OrderLinkGroup,
   ShipOrderInput,
   AddLogisticsSegmentInput,
   UpdateOrderStatusInput
@@ -25,6 +26,8 @@ import {
   getOrderDashboardStats,
   getOrderList,
   getOrderDetail,
+  getOrderLinks,
+  saveOrderLink,
   shipOrder,
   addLogisticsSegment,
   updateOrderStatus,
@@ -82,6 +85,7 @@ export interface OrderManagementState {
   statsLoading: boolean
   /** 订单列表数据 */
   list: OrderListItem[]
+  orderLinks: OrderLinkGroup[]
   /** 列表总数 */
   total: number
   /** 列表加载状态 */
@@ -166,6 +170,7 @@ export interface OrderManagementHandlers {
   handleExportExcel: (orderIds?: string[]) => Promise<void>
   /** 打开入库登记 */
   openInboundDialog: (orderId: string) => void
+  saveOrderLink: (primaryId: string, children: { id: string; orderNo: string }[]) => Promise<void>
   /** 关闭入库登记 */
   closeInboundDialog: () => void
   /** 修改一行入库草稿 */
@@ -255,6 +260,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   const [stats, setStats] = useState<GetDashboardStatsOutput | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [list, setList] = useState<OrderListItem[]>([])
+  const [orderLinks, setOrderLinks] = useState<OrderLinkGroup[]>([])
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(true)
 
@@ -329,6 +335,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
       const res = await getOrderList(payload)
       setList(res.list)
+      getOrderLinks().then(setOrderLinks).catch(() => undefined)
       setTotal(res.total)
       setRemarkDrafts((prev) => {
         const next = { ...prev }
@@ -469,15 +476,26 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+  const memberIdsOf = (orderId: string) => {
+    const primary = orderLinks.find((group) => group.primaryId === orderId)
+    if (primary) return [orderId, ...primary.children.map((child) => child.id)]
+    const child = orderLinks.find((group) => group.children.some((item) => item.id === orderId))
+    if (child) return [child.primaryId, ...child.children.map((item) => item.id)]
+    return [orderId]
+  }
+
   const handleQuickStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    const ids = memberIdsOf(orderId)
     try {
-      await updateOrderStatus({
-        orderId,
-        newStatus,
-        actionNote: `列表快捷切换为 ${newStatus}`,
-      })
+      for (const id of ids) {
+        await updateOrderStatus({
+          orderId: id,
+          newStatus,
+          actionNote: `列表快捷切换为 ${newStatus}`,
+        })
+      }
       toast.success('订单状态已更新')
-      setList((prev) => prev.map((item) => (item.id === orderId ? { ...item, status: newStatus } : item)))
+      setList((prev) => prev.map((item) => (ids.includes(item.id) ? { ...item, status: newStatus } : item)))
       fetchStats()
     } catch (err: any) {
       toast.error(err.message)
@@ -588,11 +606,64 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
   const openInboundDialog = (orderId: string, options?: { skipUrl?: boolean }) => {
-    const row = list.find((item) => item.id === orderId)
-    const source = (detailData && detailData.id === orderId && detailData.inboundLines?.length
+    const group = orderLinks.find((item) => item.primaryId === orderId)
+      || orderLinks.find((item) => item.children.some((child) => child.id === orderId))
+    const primaryId = group?.primaryId || orderId
+    const ids = group ? [group.primaryId, ...group.children.map((child) => child.id)] : [orderId]
+    const collect = async () => {
+      const merged: OrderInboundLine[] = []
+      for (const id of ids) {
+        const row = list.find((item) => item.id === id)
+        let lines = (detailData && detailData.id === id && detailData.inboundLines?.length
+          ? detailData.inboundLines
+          : row?.inboundLines) || []
+        let orderNo = row?.orderNo || group?.children.find((child) => child.id === id)?.orderNo || ''
+        if (group && !lines.length) {
+          try {
+            const detail = await getOrderDetail(id)
+            lines = detail.inboundLines || []
+            orderNo = detail.orderNo || orderNo
+          } catch {
+            lines = []
+          }
+        }
+        merged.push(...lines.map((line) => ({ ...line, orderNo: group ? orderNo : line.orderNo })))
+      }
+      return merged
+    }
+    const row = list.find((item) => item.id === primaryId)
+    const source = (detailData && detailData.id === primaryId && detailData.inboundLines?.length
       ? detailData.inboundLines
       : row?.inboundLines) || []
-    if (!source.length) {
+    orderId = primaryId
+    void collect().then((merged) => {
+      if (!merged.length) return
+      const saved = readInboundDraftStore(primaryId)
+      const drafts = merged.map((line) => {
+        const extra = saved?.lines?.[line.id]
+        const ordered = Math.max(0, Number(line.quantity) || 0)
+        const rawQty = extra && Number.isFinite(Number(extra.inboundQty))
+          ? Math.floor(Number(extra.inboundQty))
+          : line.inboundQty
+        const inboundQty = ordered > 0 ? Math.min(ordered, Math.max(0, rawQty)) : Math.max(0, rawQty)
+        return {
+          ...line,
+          inboundQty,
+          inboundNote: extra ? String(extra.inboundNote || '') : (line.inboundNote || ''),
+          inboundStage: (line.inboundStage && line.inboundStage !== 'PENDING')
+            ? line.inboundStage
+            : (extra?.inboundStage || line.inboundStage || 'PENDING'),
+          shipmentImageUrl: extra ? (extra.shipmentImageUrl || null) : (line.shipmentImageUrl || null),
+          acknowledged: false,
+          openedQty: line.inboundQty,
+          openedNote: line.inboundNote || '',
+          openedStage: line.inboundStage || 'PENDING',
+          openedImage: line.shipmentImageUrl || '',
+        }
+      })
+      setInboundDrafts(drafts)
+    })
+    if (!group && !source.length) {
       setInboundDrafts([])
       setInboundOrderId(orderId)
       inboundBooted.current = orderId
@@ -601,7 +672,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       return
     }
     const saved = readInboundDraftStore(orderId)
-    const drafts = source.map((line) => {
+    const drafts = (group ? [] : source).map((line) => {
       const extra = saved?.lines?.[line.id]
       const ordered = Math.max(0, Number(line.quantity) || 0)
       const rawQty = extra && Number.isFinite(Number(extra.inboundQty))
@@ -623,9 +694,9 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
         openedImage: line.shipmentImageUrl || '',
       }
     })
-    setInboundDrafts(drafts)
+    if (!group) setInboundDrafts(drafts)
     setInboundOrderId(orderId)
-    const dirty = drafts.some((line) => (
+    const dirty = !group && drafts.some((line) => (
       Number(line.inboundQty) !== Number(line.openedQty)
       || (line.inboundNote || '') !== (line.openedNote || '')
       || (line.inboundStage || 'PENDING') !== (line.openedStage || 'PENDING')
@@ -1454,11 +1525,19 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     UserManagement.navigateToWithFilters(router, { account: '', email, role: 'CUSTOMER', status: '' })
   }
 
+
+  const saveLinkedOrders = async (primaryId: string, children: { id: string; orderNo: string }[]) => {
+    const next = await saveOrderLink({ primaryId, children })
+    setOrderLinks(next)
+    toast.success(children.length ? '订单商品已关联到主单' : '已取消关联')
+  }
+
   return {
     state: {
       stats,
       statsLoading,
       list,
+      orderLinks,
       total,
       listLoading,
       filterForm,
@@ -1504,6 +1583,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       submitOrderRemark,
       handleExportExcel,
       openInboundDialog,
+      saveOrderLink: saveLinkedOrders,
       closeInboundDialog,
       setInboundDraft,
       markInboundLineFull,

@@ -31401,6 +31401,9 @@ _export(exports, {
     get getOrderDetail () {
         return getOrderDetail;
     },
+    get getOrderLinks () {
+        return getOrderLinks;
+    },
     get getOrderList () {
         return getOrderList;
     },
@@ -31418,6 +31421,9 @@ _export(exports, {
     },
     get saveInboundShipment () {
         return saveInboundShipment;
+    },
+    get saveOrderLink () {
+        return saveOrderLink;
     },
     get saveOrderSettlementPdf () {
         return saveOrderSettlementPdf;
@@ -35264,6 +35270,110 @@ const exportOrdersExcel = (0, _action_utils.requireRole)([
             throw error;
         }
     }
+}));
+const ORDER_LINK_TITLE = 'ORDER_GROUP_LINKS';
+function parseOrderLinks(raw) {
+    if (!Array.isArray(raw)) return [];
+    const groups = [];
+    for (const item of raw){
+        if (!item || typeof item !== 'object') continue;
+        const primaryId = String(item.primaryId || '').trim();
+        const childrenRaw = item.children;
+        if (!primaryId || !Array.isArray(childrenRaw)) continue;
+        const children = childrenRaw.flatMap((child)=>{
+            if (!child || typeof child !== 'object') return [];
+            const id = String(child.id || '').trim();
+            const orderNo = String(child.orderNo || '').trim();
+            if (!id || id === primaryId) return [];
+            return [
+                {
+                    id,
+                    orderNo
+                }
+            ];
+        });
+        if (children.length) groups.push({
+            primaryId,
+            children
+        });
+    }
+    return groups;
+}
+async function readOrderLinks() {
+    const setting = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: ORDER_LINK_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    return parseOrderLinks(setting === null || setting === void 0 ? void 0 : setting.contentJson);
+}
+async function writeOrderLinks(groups) {
+    const existing = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: ORDER_LINK_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    if (existing) {
+        await _prisma.default.sitesetting.update({
+            where: {
+                id: existing.id
+            },
+            data: {
+                contentJson: groups,
+                isActive: true
+            }
+        });
+    } else {
+        await _prisma.default.sitesetting.create({
+            data: {
+                settingType: 'STATIC_COPY',
+                title: ORDER_LINK_TITLE,
+                subtitle: 'order product links',
+                contentJson: groups,
+                isActive: true,
+                sortWeight: 0
+            }
+        });
+    }
+}
+const getOrderLinks = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async ()=>readOrderLinks()));
+const saveOrderLink = (0, _action_utils.requireRole)([
+    _action_utils.UserRole.ADMIN
+])((0, _action_utils.withResult)(async (input)=>{
+    const primaryId = String((input === null || input === void 0 ? void 0 : input.primaryId) || '').trim();
+    if (!primaryId) throw new Error('缺少主订单');
+    const children = (input.children || []).flatMap((child)=>{
+        const id = String((child === null || child === void 0 ? void 0 : child.id) || '').trim();
+        const orderNo = String((child === null || child === void 0 ? void 0 : child.orderNo) || '').trim();
+        if (!id || id === primaryId) return [];
+        return [
+            {
+                id,
+                orderNo
+            }
+        ];
+    });
+    const childIds = new Set(children.map((child)=>child.id));
+    const groups = (await readOrderLinks()).filter((group)=>group.primaryId !== primaryId && !childIds.has(group.primaryId)).map((group)=>({
+            ...group,
+            children: group.children.filter((child)=>child.id !== primaryId && !childIds.has(child.id))
+        })).filter((group)=>group.children.length);
+    if (children.length) groups.push({
+        primaryId,
+        children
+    });
+    await writeOrderLinks(groups);
+    return groups;
 }));
 
 

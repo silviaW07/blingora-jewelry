@@ -3,7 +3,8 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { OrderManagement } from '@/backend/route-params';
-import type { OrderStatus, OrderShipMethod, PaymentMethodType } from '@/backend/actions/OrderManagement';
+import type { OrderStatus, OrderShipMethod, PaymentMethodType, OrderListItem, OrderLinkGroup } from '@/backend/actions/OrderManagement';
+import { getOrderList } from '@/backend/actions/OrderManagement';
 import type { OrderManagementState, OrderManagementHandlers } from '@/backend/hooks/useOrderManagement';
 import { readInboundSelection, writeInboundSelection } from '@/backend/hooks/useOrderManagement';
 import EditableImg from '@/@base/EditableImg';
@@ -228,6 +229,35 @@ const inboundGoodsStatus = (line: { inboundQty: number; acknowledged?: boolean; 
     className: key === 'ACTIVE' ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600',
   };
 };
+function groupLinkedOrders(list: OrderListItem[], links: OrderLinkGroup[] = []) {
+  const childIds = new Set(links.flatMap((group) => group.children.map((child) => child.id)))
+  const rows: OrderListItem[] = []
+  const seen = new Set<string>()
+  for (const row of list) {
+    if (childIds.has(row.id) || seen.has(row.id)) continue
+    rows.push(row)
+    seen.add(row.id)
+    const group = links.find((item) => item.primaryId === row.id)
+    for (const child of group?.children || []) {
+      const found = list.find((item) => item.id === child.id)
+      if (found && !seen.has(found.id)) {
+        rows.push(found)
+        seen.add(found.id)
+      }
+    }
+  }
+  for (const row of list) {
+    if (!seen.has(row.id)) rows.push(row)
+  }
+  return rows
+}
+
+function linkRole(links: OrderLinkGroup[] = [], rowId: string) {
+  if (links.some((group) => group.primaryId === rowId)) return 'primary' as const
+  if (links.some((group) => group.children.some((child) => child.id === rowId))) return 'child' as const
+  return 'single' as const
+}
+
 const getListStatusClassName = (status: OrderStatus) =>
   LIST_STATUS_OPTIONS.find((o) => o.value === status)?.className ||
   ORDER_STATUS_VARIANTS[status] ||
@@ -526,6 +556,10 @@ export const OrderManagementView = ({
   const [createOrderSaving, setCreateOrderSaving] = React.useState(false);
   const [contactEdit, setContactEdit] = React.useState<{ id: string; field: 'name' | 'phone' | 'email' } | null>(null);
   const [carrierEditing, setCarrierEditing] = React.useState(false);
+  const [linkOrder, setLinkOrder] = React.useState<OrderListItem | null>(null);
+  const [linkChoices, setLinkChoices] = React.useState<OrderListItem[]>([]);
+  const [linkPick, setLinkPick] = React.useState<string[]>([]);
+  const [linkLoading, setLinkLoading] = React.useState(false);
   const [contactDraft, setContactDraft] = React.useState('');
 
   const [manualDrafts, setManualDrafts] = React.useState<Record<string, { unitPrice: string; quantity: string; costPrice: string; supplierName: string }>>({});
@@ -575,10 +609,20 @@ export const OrderManagementView = ({
     setDiscountEditing(false);
     setInboundSelected(readInboundSelection(state.inboundOrderId));
   }, [state.inboundOrderId]);
-  const visibleInboundDrafts = (stageFilter === 'ALL'
+  const stageDrafts = stageFilter === 'ALL'
     ? state.inboundDrafts
     : state.inboundDrafts.filter((line) => normalizedInboundStage(line.inboundStage) === stageFilter)
-  ).slice().sort(compareInboundRows);
+  const orderBuckets: string[] = []
+  const linesByOrder = new Map<string, typeof stageDrafts>()
+  for (const line of stageDrafts) {
+    const key = line.orderNo || ''
+    if (!linesByOrder.has(key)) {
+      linesByOrder.set(key, [])
+      orderBuckets.push(key)
+    }
+    linesByOrder.get(key)!.push(line)
+  }
+  const visibleInboundDrafts = orderBuckets.flatMap((key) => linesByOrder.get(key)!.slice().sort(compareInboundRows))
   const allInboundSelected = visibleInboundDrafts.length > 0 && visibleInboundDrafts.every((line) => inboundSelected.includes(line.id));
   const setInboundSelectedPersist = (next: string[]) => {
     setInboundSelected(next);
@@ -1136,6 +1180,33 @@ export const OrderManagementView = ({
                 </TabsTrigger>)}
             </TabsList>
           </Tabs>
+
+      <Dialog open={Boolean(linkOrder)} onOpenChange={(open) => { if (!open) setLinkOrder(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>关联订单</DialogTitle>
+            <DialogDescription>当前订单是主单。勾选要并进来的订单，确认后这些订单的商品会出现在主单里，状态和入库跟主单一起。再打开这里取消勾选即可分开。</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 space-y-2 overflow-auto">
+            {linkLoading ? <p className="text-sm text-slate-500">正在加载订单…</p> : linkChoices.length === 0 ? <p className="text-sm text-slate-500">没有可关联的订单</p> : linkChoices.map((item) => (
+              <label key={item.id} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+                <input type="checkbox" className="h-4 w-4" checked={linkPick.includes(item.id)} onChange={(event) => setLinkPick((prev) => event.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id))} />
+                <span className="font-mono">{item.orderNo}</span>
+                <span className="truncate text-slate-500">{item.customerName || item.customerEmail}</span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setLinkOrder(null)}>取消</Button>
+            <Button type="button" disabled={!linkOrder || linkLoading} onClick={() => {
+              if (!linkOrder) return
+              const children = linkChoices.filter((item) => linkPick.includes(item.id)).map((item) => ({ id: item.id, orderNo: item.orderNo }))
+              void handlers.saveOrderLink(linkOrder.id, children).then(() => setLinkOrder(null)).catch((err: Error) => toast.error(err.message || '关联失败'))
+            }}>确认</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
           <Button type="button" variant="outline" className="h-10 shrink-0" onClick={() => setCreateOrderOpen(true)}>创建新单</Button>
           <Button type="button" className="h-10 shrink-0" onClick={() => setImportOrderOpen(true)}>导入订单</Button>
           <Dialog open={createOrderOpen} onOpenChange={setCreateOrderOpen}>
@@ -1271,8 +1342,8 @@ export const OrderManagementView = ({
                         <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
                       </TableRow>
                     ) : (
-                      state.list.map((row) => (
-                        <TableRow key={row.id} className="hover:bg-slate-50/50 transition-colors align-top">
+                      groupLinkedOrders(state.list, state.orderLinks).map((row) => (
+                        <TableRow key={row.id} className={cn('align-top transition-colors hover:bg-slate-50/50', linkRole(state.orderLinks, row.id) === 'primary' && 'border-x-2 border-t-2 border-slate-400', linkRole(state.orderLinks, row.id) === 'child' && 'border-x-2 border-b-2 border-slate-400 bg-slate-50/60')}>
                           <TableCell className="pl-6 pt-4 text-xs text-muted-foreground whitespace-nowrap">
                             {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
                           </TableCell>
@@ -1326,7 +1397,7 @@ export const OrderManagementView = ({
                             )}
                           </TableCell>
                           <TableCell className="pt-4">
-                            <Select
+                            {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <Select
                               value={LIST_STATUS_VALUES.has(row.status) ? row.status : row.status}
                               onValueChange={(val) => handlers.handleQuickStatusChange(row.id, val as OrderStatus)}
                             >
@@ -1345,12 +1416,20 @@ export const OrderManagementView = ({
                                   </SelectItem>
                                 ))}
                               </SelectContent>
-                            </Select>
+                            </Select>}
                           </TableCell>
                           <TableCell className="pt-4">
-                            <div className="flex flex-col items-start gap-2">
+                            {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <div className="flex flex-col items-start gap-2">
                               <Badge className={cn('border font-semibold hover:bg-inherit', INBOUND_BADGE[row.inboundState] || INBOUND_BADGE.NONE)}>
-                                {inboundBadgeLabel(row.inboundState, row.inboundReceivedQty, row.inboundOrderedQty, row.inboundLines)}
+                                {(() => {
+                                  const group = (state.orderLinks || []).find((item) => item.primaryId === row.id)
+                                  const members = group ? [row, ...group.children.map((child) => state.list.find((item) => item.id === child.id)).filter((item): item is NonNullable<typeof item> => Boolean(item))] : [row]
+                                  const lines = members.flatMap((item) => item.inboundLines || [])
+                                  const ordered = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)
+                                  const received = lines.reduce((sum, line) => sum + (Number(line.inboundQty) || 0), 0)
+                                  const inboundState = ordered > 0 && received >= ordered ? "DONE" : received > 0 ? "PARTIAL" : "NONE"
+                                  return inboundBadgeLabel(inboundState, received, ordered, lines)
+                                })()}
                               </Badge>
                               <Button
                                 type="button"
@@ -1361,7 +1440,17 @@ export const OrderManagementView = ({
                               >
                                 登记入库
                               </Button>
-                            </div>
+                              <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => {
+                                const existing = (state.orderLinks || []).find((group) => group.primaryId === row.id)
+                                setLinkOrder(row)
+                                setLinkPick(existing?.children.map((child) => child.id) || [])
+                                setLinkLoading(true)
+                                const keyword = visibleCustomerEmail(row.customerEmail) || row.orderNo
+                                void getOrderList({ keyword, page: 1, pageSize: 50 }).then((res) => {
+                                  setLinkChoices((res.list || []).filter((item) => item.id !== row.id))
+                                }).catch((err: Error) => toast.error(err.message || '订单加载失败')).finally(() => setLinkLoading(false))
+                              }}>关联</Button>
+                            </div>}
                           </TableCell>
                           <TableCell className="pt-4 text-sm text-muted-foreground">
                             {contactEdit?.id === row.id && contactEdit.field === 'phone' ? (
@@ -2068,7 +2157,17 @@ export const OrderManagementView = ({
                 ) : null}
                 {visibleInboundDrafts.map((line, lineIndex) => {
                   const imageUrl = line.mainImageUrl || line.shipmentImageUrl
+                  const previousOrderNo = lineIndex > 0 ? visibleInboundDrafts[lineIndex - 1].orderNo : line.orderNo
+                  const showOrderDivider = Boolean(line.orderNo) && line.orderNo !== previousOrderNo
                   return (
+                    <React.Fragment key={line.id}>
+                    {showOrderDivider ? (
+                      <tr>
+                        <td colSpan={visibleInboundColumns.length} className="border-t-2 border-slate-400 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                          订单 {line.orderNo}
+                        </td>
+                      </tr>
+                    ) : null}
                     <tr
                       key={line.id}
                       className="border-b align-top"
@@ -2205,6 +2304,7 @@ export const OrderManagementView = ({
                         </div>
                       </td>) : null}
                     </tr>
+                    </React.Fragment>
                   )
                 })}
 
