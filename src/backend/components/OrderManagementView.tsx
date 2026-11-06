@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { OrderManagement } from '@/backend/route-params';
 import type { OrderStatus, OrderShipMethod, PaymentMethodType, OrderListItem, OrderLinkGroup } from '@/backend/actions/OrderManagement';
@@ -484,8 +485,8 @@ function InboundShipBar({
             <div key={row.id} className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-start">
               <div className="flex flex-wrap gap-2">
                 {(row.images || []).map((url) => (
-                  <button key={url} type="button" className="h-40 w-40 overflow-hidden rounded border bg-slate-50" onClick={() => setZoomUrl(url)}>
-                    <img src={url} alt="" className="h-full w-full object-contain" />
+                  <button key={url} type="button" className="h-40 w-40 cursor-zoom-in overflow-hidden rounded border bg-slate-50" onClick={() => setZoomUrl(url)}>
+                    <img src={url} alt="" className="pointer-events-none h-full w-full object-contain" />
                   </button>
                 ))}
               </div>
@@ -500,11 +501,12 @@ function InboundShipBar({
           ))}
         </div>
       ) : null}
-      {zoomUrl ? (
-        <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-label="发货图片" onClick={() => setZoomUrl('')}>
-          <button type="button" className="absolute right-4 top-4 rounded-md bg-white px-3 py-1.5 text-sm text-slate-900" onClick={() => setZoomUrl('')}>关闭</button>
+      {zoomUrl && typeof document !== 'undefined' ? createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-6" role="dialog" aria-label="发货大图" onClick={() => setZoomUrl('')}>
+          <button type="button" className="absolute right-6 top-6 rounded-md bg-white px-3 py-1.5 text-sm text-slate-900" onClick={(event) => { event.stopPropagation(); setZoomUrl('') }}>关闭</button>
           <img src={zoomUrl} alt="" className="max-h-[92vh] max-w-[94vw] object-contain" onClick={(event) => event.stopPropagation()} />
-        </div>
+        </div>,
+        document.body,
       ) : null}
       {children(
         <Button type="button" variant="outline" onClick={() => openForm()}>
