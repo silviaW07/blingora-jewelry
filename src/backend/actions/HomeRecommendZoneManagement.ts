@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -317,7 +318,7 @@ async function assertSelectableEntities(zoneType: ZoneType, items: SaveRecommend
 /**
  * 获取首页推荐专区列表
  */
-export const getRecommendZoneList = requireRole([UserRole.ADMIN])(
+export const getRecommendZoneList = requireStaff('recommend')(
   withResult(async (input: GetRecommendZoneListInput): Promise<GetRecommendZoneListOutput> => {
     const page = input.page || 1
     const pageSize = input.pageSize || 20
@@ -369,7 +370,7 @@ export const getRecommendZoneList = requireRole([UserRole.ADMIN])(
 /**
  * 获取推荐专区详情 (用于编辑/复制展示)
  */
-export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
+export const getRecommendZoneDetail = requireStaff('recommend')(
   withResult(async (id: string): Promise<RecommendZoneDetail> => {
     const zone = await prisma.homeRecommendZone.findUnique({
       where: { id },
@@ -502,7 +503,7 @@ export const getRecommendZoneDetail = requireRole([UserRole.ADMIN])(
 /**
  * 新增推荐专区
  */
-export const createRecommendZone = requireRole([UserRole.ADMIN])(
+export const createRecommendZone = requireStaff('recommend')(
   withResult(async (input: CreateRecommendZoneInput): Promise<void> => {
     const payload = sanitizeZoneConfig(input)
     await assertSelectableEntities(payload.zoneType, payload.items)
@@ -559,7 +560,7 @@ export const createRecommendZone = requireRole([UserRole.ADMIN])(
 /**
  * 编辑推荐专区
  */
-export const updateRecommendZone = requireRole([UserRole.ADMIN])(
+export const updateRecommendZone = requireStaff('recommend')(
   withResult(async (input: UpdateRecommendZoneInput): Promise<void> => {
     if (!input.id) throw new Error('缺少专区ID')
     const payload = sanitizeZoneConfig(input)
@@ -650,7 +651,7 @@ export const updateRecommendZone = requireRole([UserRole.ADMIN])(
 /**
  * 复制推荐专区（克隆基础配置与全部明细）
  */
-export const duplicateRecommendZone = requireRole([UserRole.ADMIN])(
+export const duplicateRecommendZone = requireStaff('recommend')(
   withResult(async (input: DuplicateRecommendZoneInput): Promise<void> => {
     const zone = await prisma.homeRecommendZone.findUnique({
       where: { id: input.id },
@@ -726,7 +727,7 @@ export const duplicateRecommendZone = requireRole([UserRole.ADMIN])(
 /**
  * 删除推荐专区 (联动删除专区下的明细映射，不删除独立商品或永久集合)
  */
-export const deleteRecommendZone = requireRole([UserRole.ADMIN])(
+export const deleteRecommendZone = requireStaff('recommend')(
   withResult(async (id: string): Promise<void> => {
     await prisma.$transaction(async (tx) => {
       // 若有绑定的集合，解除关系，以免外键冲突（看业务需要，一般保留集合孤立存在，或直接清空关联）
@@ -753,7 +754,7 @@ export const deleteRecommendZone = requireRole([UserRole.ADMIN])(
 /**
  * 快捷更新专区状态
  */
-export const updateRecommendZoneStatus = requireRole([UserRole.ADMIN])(
+export const updateRecommendZoneStatus = requireStaff('recommend')(
   withResult(async (id: string, isActive: boolean): Promise<void> => {
     await prisma.homeRecommendZone.update({
       where: { id },
@@ -767,7 +768,7 @@ export const updateRecommendZoneStatus = requireRole([UserRole.ADMIN])(
 /**
  * 批量更新专区排序权重 (用于行拖拽)
  */
-export const batchUpdateZoneSortWeight = requireRole([UserRole.ADMIN])(
+export const batchUpdateZoneSortWeight = requireStaff('recommend')(
   withResult(async (input: BatchUpdateZoneSortWeightInput): Promise<void> => {
     if (!input.updates || input.updates.length === 0) return
 
@@ -785,7 +786,7 @@ export const batchUpdateZoneSortWeight = requireRole([UserRole.ADMIN])(
 )
 
 /** 批量更新专区明细排序（用于编辑抽屉内拖拽，字段独立于 category.sortWeight） */
-export const batchUpdateZoneItemSortWeight = requireRole([UserRole.ADMIN])(
+export const batchUpdateZoneItemSortWeight = requireStaff('recommend')(
   withResult(async (input: BatchUpdateZoneItemSortWeightInput): Promise<void> => {
     const zoneId = input.zoneId?.trim()
     const updates = (input.updates ?? []).filter(
@@ -835,7 +836,7 @@ export const batchUpdateZoneItemSortWeight = requireRole([UserRole.ADMIN])(
  * 供配置面板弹窗使用的：获取可用商品列表
  * 必须满足全局约束：商品 ACTIVE 且所属分类 ACTIVE
  */
-export const getSelectableProducts = requireRole([UserRole.ADMIN])(
+export const getSelectableProducts = requireStaff('recommend')(
   withResult(async (input: GetSelectableProductsInput): Promise<GetSelectableProductsOutput> => {
     const page = input.page || 1
     const pageSize = input.pageSize || 10
@@ -895,7 +896,7 @@ export const getSelectableProducts = requireRole([UserRole.ADMIN])(
  * 供配置面板弹窗使用的：获取可用类目列表
  * 必须满足全局约束：分类 ACTIVE
  */
-export const getSelectableCategories = requireRole([UserRole.ADMIN])(
+export const getSelectableCategories = requireStaff('recommend')(
   withResult(async (input: GetSelectableCategoriesInput): Promise<GetSelectableCategoriesOutput> => {
     const page = input.page || 1
     const pageSize = input.pageSize || 10
@@ -973,7 +974,7 @@ const makeDisplayProductIdentifiers = () => {
  * 快速发图：按本地上传图片批量创建 DRAFT 展示商品（无价格/规格/库存），
  * 若传入 zoneId 则立即绑定到该商品专区并保存。
  */
-export const createDraftDisplayProducts = requireRole([UserRole.ADMIN])(
+export const createDraftDisplayProducts = requireStaff('recommend')(
   withResult(async (input: CreateDraftDisplayProductsInput): Promise<CreateDraftDisplayProductsOutput> => {
     const images = (input.images || [])
       .map((item) => ({
@@ -1077,7 +1078,7 @@ export const createDraftDisplayProducts = requireRole([UserRole.ADMIN])(
 /**
  * 批量删除草稿展示商品（并从专区明细中移除）
  */
-export const deleteDraftDisplayProducts = requireRole([UserRole.ADMIN])(
+export const deleteDraftDisplayProducts = requireStaff('recommend')(
   withResult(async (input: DeleteDraftDisplayProductsInput): Promise<DeleteDraftDisplayProductsOutput> => {
     const productIds = Array.from(new Set((input.productIds || []).map((id) => String(id || '').trim()).filter(Boolean)))
     if (productIds.length === 0) {

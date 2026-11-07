@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 export type BuyerShowMediaType = 'IMAGE' | 'VIDEO'
@@ -67,7 +68,7 @@ function toMedia(row: {
   }
 }
 
-export const listBuyerShowMediaAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const listBuyerShowMediaAdmin = requireStaff('buyershow')(
   withResult(async (): Promise<{ list: BuyerShowMediaItem[] }> => {
     try {
       const records = await (prisma as any).buyershowmedia.findMany({
@@ -80,7 +81,7 @@ export const listBuyerShowMediaAdmin = requireRole([UserRole.ADMIN, UserRole.SUB
   }),
 )
 
-export const createBuyerShowMedia = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const createBuyerShowMedia = requireStaff('buyershow')(
   withResult(async (input: CreateBuyerShowMediaInput): Promise<{ success: boolean; id: string }> => {
     const mediaUrl = String(input.mediaUrl || '').trim()
     if (!mediaUrl) throw new Error('请先上传图片或视频')
@@ -99,7 +100,7 @@ export const createBuyerShowMedia = requireRole([UserRole.ADMIN, UserRole.SUB_AD
   }),
 )
 
-export const updateBuyerShowMedia = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const updateBuyerShowMedia = requireStaff('buyershow')(
   withResult(async (input: UpdateBuyerShowMediaInput): Promise<{ success: boolean }> => {
     const title =
       input.title === undefined ? undefined : String(input.title || '').trim().slice(0, 160) || null
@@ -115,14 +116,14 @@ export const updateBuyerShowMedia = requireRole([UserRole.ADMIN, UserRole.SUB_AD
   }),
 )
 
-export const deleteBuyerShowMedia = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const deleteBuyerShowMedia = requireStaff('buyershow')(
   withResult(async (input: { id: string }): Promise<{ success: boolean }> => {
     await (prisma as any).buyershowmedia.delete({ where: { id: input.id } })
     return { success: true }
   }),
 )
 
-export const listBuyerShowCommentsAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const listBuyerShowCommentsAdmin = requireStaff('buyershow')(
   withResult(async (input?: { status?: BuyerShowCommentStatus | 'ALL' }): Promise<{ list: BuyerShowCommentItem[] }> => {
     try {
       const status = input?.status && input.status !== 'ALL' ? input.status : undefined
@@ -147,7 +148,7 @@ export const listBuyerShowCommentsAdmin = requireRole([UserRole.ADMIN, UserRole.
   }),
 )
 
-export const reviewBuyerShowComment = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const reviewBuyerShowComment = requireStaff('buyershow')(
   withResult(async (input: { id: string; status: 'APPROVED' | 'REJECTED' }): Promise<{ success: boolean }> => {
     await prisma.buyershowcomment.update({
       where: { id: input.id },
@@ -157,7 +158,7 @@ export const reviewBuyerShowComment = requireRole([UserRole.ADMIN, UserRole.SUB_
   }),
 )
 
-export const deleteBuyerShowComment = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const deleteBuyerShowComment = requireStaff('buyershow')(
   withResult(async (input: { id: string }): Promise<{ success: boolean }> => {
     await prisma.buyershowcomment.delete({ where: { id: input.id } })
     return { success: true }
@@ -166,7 +167,7 @@ export const deleteBuyerShowComment = requireRole([UserRole.ADMIN, UserRole.SUB_
 
 export type BuyerShowProofItem = BuyerShowProofRecord
 
-export const listBuyerShowProofsAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const listBuyerShowProofsAdmin = requireStaff('buyershow')(
   withResult(async (): Promise<{ list: BuyerShowProofItem[] }> => {
     try {
       return { list: await listBuyerShowProofs(false) }
@@ -177,14 +178,14 @@ export const listBuyerShowProofsAdmin = requireRole([UserRole.ADMIN, UserRole.SU
   }),
 )
 
-export const createBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const createBuyerShowProofAdmin = requireStaff('buyershow')(
   withResult(async (input: { imageUrl: string; title: string; body: string }): Promise<{ success: boolean; id: string }> => {
     const created = await createBuyerShowProof(input)
     return { success: true, id: created.id }
   }),
 )
 
-export const updateBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const updateBuyerShowProofAdmin = requireStaff('buyershow')(
   withResult(async (input: {
     id: string
     title?: string
@@ -197,7 +198,7 @@ export const updateBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.S
   }),
 )
 
-export const deleteBuyerShowProofAdmin = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const deleteBuyerShowProofAdmin = requireStaff('buyershow')(
   withResult(async (input: { id: string }): Promise<{ success: boolean }> => {
     await deleteBuyerShowProof(input.id)
     return { success: true }

@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -39,7 +40,7 @@ const toItem = (row: {
 })
 
 /** GET：获取所有后缀（按权重倒序、创建时间正序）。 */
-export const listSuffixConfigs = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const listSuffixConfigs = requireStaff('products')(
   withResult(async (): Promise<SuffixConfigItem[]> => {
     const rows = await prisma.suffixconfig.findMany({
       orderBy: [{ sortWeight: 'desc' }, { createdAt: 'asc' }],
@@ -50,7 +51,7 @@ export const listSuffixConfigs = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN
 )
 
 /** POST：新增后缀。 */
-export const createSuffixConfig = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const createSuffixConfig = requireStaff('products')(
   withResult(async (input: CreateSuffixConfigInput): Promise<SuffixConfigItem> => {
     const suffixName = normalizeSuffixName(input?.suffix_name)
     if (!suffixName) throw new Error('后缀内容不能为空')
@@ -68,7 +69,7 @@ export const createSuffixConfig = requireRole([UserRole.ADMIN, UserRole.SUB_ADMI
 )
 
 /** PUT：修改后缀。 */
-export const updateSuffixConfig = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const updateSuffixConfig = requireStaff('products')(
   withResult(async (input: UpdateSuffixConfigInput): Promise<SuffixConfigItem> => {
     const id = String(input?.id || '').trim()
     if (!id) throw new Error('缺少后缀 ID')
@@ -92,7 +93,7 @@ export const updateSuffixConfig = requireRole([UserRole.ADMIN, UserRole.SUB_ADMI
 )
 
 /** DELETE：删除后缀。 */
-export const deleteSuffixConfig = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const deleteSuffixConfig = requireStaff('products')(
   withResult(async (input: DeleteSuffixConfigInput): Promise<SuffixConfigMutationOutput> => {
     const id = String(input?.id || '').trim()
     if (!id) throw new Error('缺少后缀 ID')

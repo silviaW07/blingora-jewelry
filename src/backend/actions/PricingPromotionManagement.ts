@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -36,7 +37,7 @@ export interface SavePricingPromotionConfigOutput {
   topBanner: TopPromotionBannerConfig
 }
 
-export const getPricingPromotionConfig = requireRole([UserRole.ADMIN])(
+export const getPricingPromotionConfig = requireStaff('pricing')(
   withResult(async (): Promise<GetPricingPromotionConfigOutput> => {
     const [exchangeRate, config, topBanner] = await Promise.all([
       getUsdExchangeRate(prisma, { ttlMs: 0 }),
@@ -47,7 +48,7 @@ export const getPricingPromotionConfig = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const savePricingPromotionConfigAdmin = requireRole([UserRole.ADMIN])(
+export const savePricingPromotionConfigAdmin = requireStaff('pricing')(
   withResult(async (input: SavePricingPromotionConfigInput): Promise<SavePricingPromotionConfigOutput> => {
     const nextRate = Number(input.exchangeRate)
     const exchangeRate =

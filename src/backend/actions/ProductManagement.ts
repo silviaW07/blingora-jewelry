@@ -1909,7 +1909,7 @@ function buildDraftSkus(row: BatchImportDraftRow, spuCode?: string): SkuItem[] {
   })
 }
 
-export const getProductBindingMeta = requireRole([UserRole.ADMIN])(
+export const getProductBindingMeta = requireStaff('products')(
   withResult(async (): Promise<ProductBindingMetaOutput> => {
     return buildProductBindingMeta()
   })
@@ -1919,7 +1919,7 @@ export interface ListProductSupplierNamesOutput {
   list: string[]
 }
 
-export const listProductSupplierNames = requireRole([UserRole.ADMIN])(
+export const listProductSupplierNames = requireStaff('products')(
   withResult(async (input?: { keyword?: string }): Promise<ListProductSupplierNamesOutput> => {
     const tokens = tokenizeProductSearch(input?.keyword)
     const rows = await prisma.product.groupBy({
@@ -1942,7 +1942,7 @@ export const listProductSupplierNames = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const getCategoryOptions = requireRole([UserRole.ADMIN])(
+export const getCategoryOptions = requireStaff('products')(
   withResult(async (): Promise<CategoryOption[]> => {
     const categories = await prisma.category.findMany({
       orderBy: [{ level: 'asc' }, { sortWeight: 'desc' }, { name: 'asc' }],
@@ -2255,7 +2255,7 @@ export const getProductList = requireStaff('products')(
 )
 
 
-export const getProductListSkus = requireRole([UserRole.ADMIN])(
+export const getProductListSkus = requireStaff('products')(
   withResult(async (productId: string): Promise<ProductListSkuItem[]> => {
     const id = String(productId || '').trim()
     if (!id) return []
@@ -2296,7 +2296,7 @@ export const getProductListSkus = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const getProductDetail = requireRole([UserRole.ADMIN])(
+export const getProductDetail = requireStaff('products')(
   withResult(async (product_id: string): Promise<ProductDetail> => {
     const p = await prisma.product.findUnique({
       where: { id: product_id },
@@ -2373,7 +2373,7 @@ export const getProductDetail = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const createProduct = requireRole([UserRole.ADMIN])(
+export const createProduct = requireStaff('products')(
   withResult(async (input: CreateProductInput): Promise<CreateProductOutput> => {
     if (input.submit_action === 'ACTIVE') {
       validateActivePreconditions(input)
@@ -2463,7 +2463,7 @@ export const createProduct = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchImportProducts = requireRole([UserRole.ADMIN])(
+export const batchImportProducts = requireStaff('products')(
   withResult(async (input: BatchImportProductsInput): Promise<BatchImportProductsOutput> => {
     let success = 0
     let fail = 0
@@ -2549,7 +2549,7 @@ export const batchImportProducts = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateProduct = requireRole([UserRole.ADMIN])(
+export const updateProduct = requireStaff('products')(
   withResult(async (input: UpdateProductInput): Promise<UpdateProductOutput> => {
     if (input.submit_action === 'ACTIVE') {
       validateActivePreconditions(input)
@@ -2676,7 +2676,7 @@ export const updateProduct = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateProductStatus = requireRole([UserRole.ADMIN])(
+export const updateProductStatus = requireStaff('products')(
   withResult(async (input: UpdateProductStatusInput): Promise<UpdateProductStatusOutput> => {
     const { product_id, target_status } = input
 
@@ -2748,7 +2748,7 @@ export const updateProductStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdateProductStatus = requireRole([UserRole.ADMIN])(
+export const batchUpdateProductStatus = requireStaff('products')(
   withResult(async (product_ids: string[], target_status: ProductStatus): Promise<BatchOperateOutput> => {
     let success = 0
     let fail = 0
@@ -2765,7 +2765,7 @@ export const batchUpdateProductStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdatePriceCoefficient = requireRole([UserRole.ADMIN])(
+export const batchUpdatePriceCoefficient = requireStaff('products')(
   withResult(async (input: BatchUpdatePriceCoefficientInput): Promise<BatchOperateOutput> => {
     if (!Array.isArray(input.product_ids) || input.product_ids.length === 0) {
       throw new Error('请先选择商品')
@@ -2801,7 +2801,7 @@ export const batchUpdatePriceCoefficient = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
+export const inlineUpdateProductField = requireStaff('products')(
   withResult(async (input: InlineUpdateProductFieldInput): Promise<UpdateProductOutput> => {
     const product = await prisma.product.findUnique({ where: { id: input.product_id } })
     if (!product) throw new Error('商品不存在')
@@ -2944,7 +2944,7 @@ export const inlineUpdateProductField = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
+export const inlineUpdateProductSkuField = requireStaff('products')(
   withResult(async (input: InlineUpdateProductSkuFieldInput): Promise<UpdateProductOutput> => {
     const sku = await prisma.productsku.findFirst({
       where: { id: input.sku_id, productId: input.product_id }
@@ -3044,7 +3044,7 @@ export const inlineUpdateProductSkuField = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdateProductCategory = requireRole([UserRole.ADMIN])(
+export const batchUpdateProductCategory = requireStaff('products')(
   withResult(async (input: BatchUpdateProductCategoryInput): Promise<BatchOperateOutput> => {
     if (!input.product_ids.length) throw new Error('请先选择商品')
     if (!input.category_id) throw new Error('请选择目标分类')
@@ -3071,7 +3071,7 @@ export const batchUpdateProductCategory = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchBindProductCategories = requireRole([UserRole.ADMIN])(
+export const batchBindProductCategories = requireStaff('products')(
   withResult(async (input: BatchBindProductCategoriesInput): Promise<BatchOperateOutput> => {
     if (!input.product_ids.length) throw new Error('请先选择商品')
     if (!input.linked_category_ids.length) throw new Error('请至少选择一个关联类目')
@@ -3113,7 +3113,7 @@ async function expandCategoryIdsIncludingDescendants(categoryIds: string[]): Pro
  * - 若目标含主类目 categoryId：改挂到剩余「非品牌」二级优先（再一级）；都没有则「未分类」
  *   （不再保护主类目导致“移除失败/没变化”，也不再错误优先落到 Brand）
  */
-export const batchUnbindProductCategories = requireRole([UserRole.ADMIN])(
+export const batchUnbindProductCategories = requireStaff('products')(
   withResult(async (input: BatchUnbindProductCategoriesInput): Promise<BatchOperateOutput> => {
     if (!input.product_ids.length) throw new Error('请先选择商品')
     if (!input.linked_category_ids.length) throw new Error('请至少选择一个要移除的类目')
@@ -3207,7 +3207,7 @@ export const batchUnbindProductCategories = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const getCategoryProductPreview = requireRole([UserRole.ADMIN])(
+export const getCategoryProductPreview = requireStaff('products')(
   withResult(async (input: GetCategoryProductPreviewInput): Promise<GetCategoryProductPreviewOutput> => {
     const categoryId = String(input.category_id || '').trim()
     if (!categoryId) throw new Error('请选择类目')
@@ -3256,7 +3256,7 @@ export const getCategoryProductPreview = requireRole([UserRole.ADMIN])(
  * - 若解绑 brandCategory，清空 brandCategoryId
  * - 若解绑主类目 categoryId，优先改挂到剩余绑定类目；无剩余则落到「未分类」
  */
-export const unbindProductCategory = requireRole([UserRole.ADMIN])(
+export const unbindProductCategory = requireStaff('products')(
   withResult(async (input: UnbindProductCategoryInput): Promise<UpdateProductOutput> => {
     const productId = String(input.product_id || '').trim()
     const categoryId = String(input.category_id || '').trim()
@@ -3338,7 +3338,7 @@ export const unbindProductCategory = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchBindProductKeywords = requireRole([UserRole.ADMIN])(
+export const batchBindProductKeywords = requireStaff('products')(
   withResult(async (input: BatchBindProductKeywordsInput): Promise<BatchOperateOutput> => {
     if (!input.product_ids.length) throw new Error('请先选择商品')
     if (!input.linked_keyword_ids.length) throw new Error('请至少选择一个关联关键词')
@@ -3364,7 +3364,7 @@ export const batchBindProductKeywords = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdateManagementStatus = requireRole([UserRole.ADMIN])(
+export const batchUpdateManagementStatus = requireStaff('products')(
   withResult(async (input: BatchUpdateProductStatusInput): Promise<BatchOperateOutput> => {
     if (!input.product_ids.length) throw new Error('请先选择商品')
 
@@ -3376,7 +3376,7 @@ export const batchUpdateManagementStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdateProductWeightPrice = requireRole([UserRole.ADMIN])(
+export const batchUpdateProductWeightPrice = requireStaff('products')(
   withResult(async (input: BatchUpdateProductWeightPriceInput): Promise<BatchOperateOutput> => {
     if (!input.product_ids?.length) throw new Error('请先选择商品')
     const nextValue = Number(input.value)
@@ -3424,7 +3424,7 @@ export const batchUpdateProductWeightPrice = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdateMinOrderQty = requireRole([UserRole.ADMIN])(
+export const batchUpdateMinOrderQty = requireStaff('products')(
   withResult(async (input: BatchUpdateMinOrderQtyInput): Promise<BatchOperateOutput> => {
     const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)))
     const skuIds = Array.from(new Set((input.sku_ids || []).filter(Boolean)))
@@ -3477,25 +3477,25 @@ export const batchUpdateMinOrderQty = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const createPendingImportTaskForProductManagement = requireRole([UserRole.ADMIN])(
+export const createPendingImportTaskForProductManagement = requireStaff('products')(
   withResult(async (input: CreatePendingImportTaskInput): Promise<CreatePendingImportTaskOutput> => {
     return createPendingImportTask(input)
   })
 )
 
-export const startPendingImportTaskForProductManagement = requireRole([UserRole.ADMIN])(
+export const startPendingImportTaskForProductManagement = requireStaff('products')(
   withResult(async (input: StartPendingImportTaskInput): Promise<void> => {
     await startPendingImportParseTask(input)
   })
 )
 
-export const retryPendingImportTaskForProductManagement = requireRole([UserRole.ADMIN])(
+export const retryPendingImportTaskForProductManagement = requireStaff('products')(
   withResult(async (input: RetryPendingImportTaskInput): Promise<void> => {
     await retryPendingImportTask(input)
   })
 )
 
-export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
+export const getPendingImportQueue = requireStaff('products')(
   withResult(async (input?: {
     page?: number
     page_size?: number
@@ -3509,7 +3509,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const setPendingImportWeightReview = requireRole([UserRole.ADMIN])(
+export const setPendingImportWeightReview = requireStaff('products')(
   withResult(async (input: {
     item_ids: string[]
     weight_review: boolean
@@ -3521,7 +3521,7 @@ export const setPendingImportWeightReview = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
+export const setPendingImportReviewMark = requireStaff('products')(
   withResult(async (input: {
     item_ids: string[]
     reviewed: boolean
@@ -3533,7 +3533,7 @@ export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
+export const inlineUpdatePendingImportItemField = requireStaff('products')(
   withResult(async (input: InlineUpdatePendingImportItemFieldInput): Promise<InlineUpdatePendingImportItemFieldOutput> => {
     await updateImportFrom1688PendingImportItemField({
       itemId: input.item_id,
@@ -3544,7 +3544,7 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
+export const batchUpdatePendingImportItemField = requireStaff('products')(
   withResult(async (input: {
     item_ids: string[]
     field: Extract<
@@ -3561,7 +3561,7 @@ export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
+export const inlineUpdatePendingImportSkuField = requireStaff('products')(
   withResult(async (input: {
     item_id: string
     sku_key: string
@@ -3587,7 +3587,7 @@ export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
+export const duplicatePendingImportSku = requireStaff('products')(
   withResult(async (input: {
     item_id: string
     sku_key: string
@@ -3599,7 +3599,7 @@ export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
+export const deletePendingImportSku = requireStaff('products')(
   withResult(async (input: {
     item_id: string
     sku_key: string
@@ -3611,7 +3611,7 @@ export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+export const duplicatePendingImportSkuColorGroup = requireStaff('products')(
   withResult(async (input: {
     item_id: string
     color: string
@@ -3623,7 +3623,7 @@ export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])
   }),
 )
 
-export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+export const deletePendingImportSkuColorGroup = requireStaff('products')(
   withResult(async (input: {
     item_id: string
     color: string
@@ -3635,7 +3635,7 @@ export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const updatePendingImportGallery = requireRole([UserRole.ADMIN])(
+export const updatePendingImportGallery = requireStaff('products')(
   withResult(async (input: UpdatePendingImportGalleryInput): Promise<{ success: boolean }> => {
     await updateImportFrom1688PendingImportGallery(input)
     return { success: true }
@@ -3655,7 +3655,7 @@ export interface BatchMosaicGalleryWatermarksOutput {
   images_skipped: number
 }
 
-export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
+export const batchMosaicGalleryWatermarks = requireStaff('products')(
   withResult(async (input: BatchMosaicGalleryWatermarksInput): Promise<BatchMosaicGalleryWatermarksOutput> => {
     const scope = input.scope === 'pending' ? 'pending' : 'product'
     const ids = Array.from(new Set((input.ids || []).map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 30)
@@ -3858,25 +3858,25 @@ export const batchMosaicGalleryWatermarks = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
+export const publishPendingImportItems = requireStaff('products')(
   withResult(async (input: PublishPendingImportItemsInput): Promise<PublishPendingImportItemsOutput> => {
     return publishImportFrom1688PendingImportItems({ itemIds: input.item_ids })
   })
 )
 
-export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
+export const reparsePendingImportItems = requireStaff('products')(
   withResult(async (input: ReparsePendingImportItemsInput): Promise<ReparsePendingImportItemsOutput> => {
     return reparseImportFrom1688PendingImportItems({ itemIds: input.item_ids })
   })
 )
 
-export const cancelPendingImportParseJob = requireRole([UserRole.ADMIN])(
+export const cancelPendingImportParseJob = requireStaff('products')(
   withResult(async (): Promise<CancelPendingImportParseJobOutput> => {
     return cancelImportFrom1688PendingImportParseJob()
   })
 )
 
-export const batchDeletePendingImportItems = requireRole([UserRole.ADMIN])(
+export const batchDeletePendingImportItems = requireStaff('products')(
   withResult(async (item_ids: string[]): Promise<BatchOperateOutput> => {
     if (!item_ids.length) {
       return { success_count: 0, fail_count: 0 }
@@ -4228,7 +4228,7 @@ async function returnOneProductToPendingUpload(
  * 将已发布商品退回待上传区：优先重开原 importtaskitem，否则按当前商品+SKU 新建 pending 行，
  * 再软删除商品（与列表删除一致），以便从商品列表消失、出现在待上传区。
  */
-export const returnProductsToPendingUpload = requireRole([UserRole.ADMIN])(
+export const returnProductsToPendingUpload = requireStaff('products')(
   withResult(async (input: ReturnProductsToPendingUploadInput): Promise<ReturnProductsToPendingUploadOutput> => {
     const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)))
     if (productIds.length === 0) {
@@ -4265,7 +4265,7 @@ export const returnProductsToPendingUpload = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const deleteProduct = requireRole([UserRole.ADMIN])(
+export const deleteProduct = requireStaff('products')(
   withResult(async (product_id: string): Promise<UpdateProductStatusOutput> => {
     await prisma.$transaction(async tx => {
       await tx.product.update({
@@ -4282,7 +4282,7 @@ export const deleteProduct = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchDeleteProduct = requireRole([UserRole.ADMIN])(
+export const batchDeleteProduct = requireStaff('products')(
   withResult(async (product_ids: string[]): Promise<BatchOperateOutput> => {
     let success = 0
     let fail = 0
@@ -4298,7 +4298,7 @@ export const batchDeleteProduct = requireRole([UserRole.ADMIN])(
     return { success_count: success, fail_count: fail }
   })
 )
-export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
+export const sync1688ProductStatus = requireStaff('products')(
   withResult(async (input: Sync1688ProductStatusInput): Promise<Sync1688ProductStatusOutput> => {
     const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)))
     if (productIds.length === 0) {
@@ -4383,7 +4383,7 @@ export const sync1688ProductStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchAppendProductAdminNotes = requireRole([UserRole.ADMIN])(
+export const batchAppendProductAdminNotes = requireStaff('products')(
   withResult(async (input: BatchAppendProductAdminNotesInput): Promise<BatchOperateOutput> => {
     const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)))
     const note = String(input.note || '').trim()
@@ -4450,7 +4450,7 @@ function removeLiteralSuffixesFromCachedTitle(title: string, suffixes: string[])
  * 商品列表：批量在标题末尾加后缀（已有相同后缀则跳过）。
  * 仅改 name / translationsJson 标题，不改类目。
  */
-export const batchAppendProductTitleSuffix = requireRole([UserRole.ADMIN])(
+export const batchAppendProductTitleSuffix = requireStaff('products')(
   withResult(async (input: BatchAppendTitleSuffixInput): Promise<BatchAppendTitleSuffixOutput> => {
     const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
     const suffix = normalizeTitleSuffix(input.suffix)
@@ -4507,7 +4507,7 @@ export const batchAppendProductTitleSuffix = requireRole([UserRole.ADMIN])(
  * 待上传区：批量在 parsedName 末尾加后缀（已有相同后缀则跳过）。
  * 同步预览 JSON 名称，不改类目。
  */
-export const batchAppendPendingImportTitleSuffix = requireRole([UserRole.ADMIN])(
+export const batchAppendPendingImportTitleSuffix = requireStaff('products')(
   withResult(async (input: BatchAppendTitleSuffixInput): Promise<BatchAppendTitleSuffixOutput> => {
     const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
     const suffix = normalizeTitleSuffix(input.suffix)
@@ -4554,7 +4554,7 @@ export const batchAppendPendingImportTitleSuffix = requireRole([UserRole.ADMIN])
 /**
  * 商品列表：批量从标题末尾移除所选后缀（不含则跳过）。不改类目。
  */
-export const batchRemoveProductTitleSuffix = requireRole([UserRole.ADMIN])(
+export const batchRemoveProductTitleSuffix = requireStaff('products')(
   withResult(async (input: BatchRemoveTitleSuffixInput): Promise<BatchRemoveTitleSuffixOutput> => {
     const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
     const suffixes = Array.from(
@@ -4612,7 +4612,7 @@ export const batchRemoveProductTitleSuffix = requireRole([UserRole.ADMIN])(
 /**
  * 待上传区：批量从 parsedName 末尾移除所选后缀（不含则跳过）。不改类目。
  */
-export const batchRemovePendingImportTitleSuffix = requireRole([UserRole.ADMIN])(
+export const batchRemovePendingImportTitleSuffix = requireStaff('products')(
   withResult(async (input: BatchRemoveTitleSuffixInput): Promise<BatchRemoveTitleSuffixOutput> => {
     const ids = Array.from(new Set((input.ids || []).filter(Boolean)))
     const suffixes = Array.from(
@@ -4661,7 +4661,7 @@ export const batchRemovePendingImportTitleSuffix = requireRole([UserRole.ADMIN])
 /**
  * 商品列表：统一设置某商品下全部 SKU 的可用库存（后台专用，不改类目）。
  */
-export const updateProductStock = requireRole([UserRole.ADMIN])(
+export const updateProductStock = requireStaff('products')(
   withResult(async (input: {
     product_id: string
     stock: number
@@ -4693,7 +4693,7 @@ export const updateProductStock = requireRole([UserRole.ADMIN])(
  * 一键校准选中（已上架/草稿商品）：品牌别名归一 + 保底重量 + 二级类目/品牌货架/价格阈值关联。
  * 返回每条商品绑定的全部类目，供前端弹窗直接修改。
  */
-export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole.ADMIN])(
+export const reclassifyPublishedProductsBySecondaryMatch = requireStaff('products')(
   withResult(async (
     input: ReclassifyPublishedProductsInput = {},
   ): Promise<ReclassifyPublishedProductsOutput> => {
@@ -5115,7 +5115,7 @@ export const reclassifyPublishedProductsBySecondaryMatch = requireRole([UserRole
  * 一键校准选中（待上传区）：品牌别名 + 保底重量 + 类目命中写入 preview/targetCategoryId。
  * 不上架、不翻译——只为后续人工核对与发布做准备。
  */
-export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
+export const calibratePendingImportItems = requireStaff('products')(
   withResult(async (
     input: CalibratePendingImportItemsInput,
   ): Promise<CalibratePendingImportItemsOutput> => {
@@ -5519,7 +5519,7 @@ export const calibratePendingImportItems = requireRole([UserRole.ADMIN])(
 /**
  * 校准结果弹窗保存：覆盖写关联类目（商品）或 matchedCategoryIds/targetCategoryId（待上传）。
  */
-export const applyCalibrateCategoryEdits = requireRole([UserRole.ADMIN])(
+export const applyCalibrateCategoryEdits = requireStaff('products')(
   withResult(async (
     input: ApplyCalibrateCategoryEditsInput,
   ): Promise<ApplyCalibrateCategoryEditsOutput> => {
@@ -5596,7 +5596,7 @@ export const applyCalibrateCategoryEdits = requireRole([UserRole.ADMIN])(
  * - 归属一级「包/Bags」且最高售价 ≤ 13 USD → 关联 below13 标签类目
  * - 归属一级「饰品/Jewelry」且最高售价 ≤ 3 USD → 关联 below3 标签类目
  */
-export const autoClassifyPriceThresholdProducts = requireRole([UserRole.ADMIN])(
+export const autoClassifyPriceThresholdProducts = requireStaff('products')(
   withResult(async (): Promise<AutoClassifyPriceThresholdSummary> => {
     const summary = await autoClassifyAllProductsByPriceThreshold(prisma)
     invalidateStorefrontAfterCategoryBind()
@@ -5605,7 +5605,7 @@ export const autoClassifyPriceThresholdProducts = requireRole([UserRole.ADMIN])(
 )
 
 /** 全库按标题后缀补挂 high quality / stainless steel / below13usd 等关联标签（不改主类目） */
-export const backfillAllTitleFilterCategories = requireRole([UserRole.ADMIN])(
+export const backfillAllTitleFilterCategories = requireStaff('products')(
   withResult(async (): Promise<BulkTitleFilterBackfillSummary> => {
     return runBulkTitleFilterCategoryBackfill()
   }),
@@ -5627,7 +5627,7 @@ export interface BatchTranslateProductTitlesToSpanishOutput {
   failed: number
 }
 
-export const batchTranslateProductTitlesToSpanish = requireRole([UserRole.ADMIN])(
+export const batchTranslateProductTitlesToSpanish = requireStaff('products')(
   withResult(async (
     input: BatchTranslateProductTitlesToSpanishInput = {},
   ): Promise<BatchTranslateProductTitlesToSpanishOutput> => {
@@ -5697,7 +5697,7 @@ export const batchTranslateProductTitlesToSpanish = requireRole([UserRole.ADMIN]
   }),
 )
 
-export const getHomeFeaturedKeywords = requireRole([UserRole.ADMIN])(
+export const getHomeFeaturedKeywords = requireStaff('products')(
   withResult(async (): Promise<HomeFeaturedKeywordsSetting> => {
     const setting = await prisma.sitesetting.findFirst({
       where: { settingType: HOME_FEATURED_KEYWORDS_SETTING_TYPE as any },
@@ -5711,7 +5711,7 @@ export const getHomeFeaturedKeywords = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const saveHomeFeaturedKeywords = requireRole([UserRole.ADMIN])(
+export const saveHomeFeaturedKeywords = requireStaff('products')(
   withResult(async (input: HomeFeaturedKeywordsSetting): Promise<HomeFeaturedKeywordsSetting> => {
     const keywords = normalizeFeaturedKeywords(input)
 

@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 // ===== Enums =====
@@ -8910,7 +8911,7 @@ export function resolveTableImportCategoryPath(
 
 // ===== Actions =====
 
-export const getCategoryOptions = requireRole([UserRole.ADMIN])(
+export const getCategoryOptions = requireStaff('products')(
   withResult(async (): Promise<CategoryOption[]> => {
     const categories = await prisma.category.findMany({
       where: { status: 'ACTIVE' },
@@ -8930,7 +8931,7 @@ export const getCategoryOptions = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const getImportTaskList = requireRole([UserRole.ADMIN])(
+export const getImportTaskList = requireStaff('products')(
   withResult(async (input: GetImportTaskListInput): Promise<GetImportTaskListOutput> => {
     const page = input.page && input.page > 0 ? input.page : 1
     const pageSize = input.pageSize && input.pageSize > 0 ? input.pageSize : 20
@@ -8957,7 +8958,7 @@ export const getImportTaskList = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const getImportTaskDetail = requireRole([UserRole.ADMIN])(
+export const getImportTaskDetail = requireStaff('products')(
   withResult(async (input: GetImportTaskDetailInput): Promise<GetImportTaskDetailOutput> => {
     const task = await prisma.importtask.findUnique({
       where: { id: input.taskId },
@@ -9062,7 +9063,7 @@ export interface CancelPendingImportParseJobOutput {
 }
 
 /** Stop collect/reparse: mark RUNNING rows retryable and signal in-process loops to exit. */
-export const cancelPendingImportParseJob = requireRole([UserRole.ADMIN])(
+export const cancelPendingImportParseJob = requireStaff('products')(
   withResult(async (): Promise<CancelPendingImportParseJobOutput> => {
     requestCancelParseJob()
 
@@ -9097,7 +9098,7 @@ export const cancelPendingImportParseJob = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
+export const getPendingImportQueue = requireStaff('products')(
   withResult(async (input?: GetPendingImportQueueInput): Promise<GetPendingImportQueueOutput> => {
     const startedAt = Date.now()
     const page = Math.max(1, Number(input?.page) || 1)
@@ -9397,7 +9398,7 @@ export const getPendingImportQueue = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const parseTableImportContent = requireRole([UserRole.ADMIN])(
+export const parseTableImportContent = requireStaff('products')(
   withResult(async (input: ParseTableImportInput): Promise<ParseTableImportOutput> => {
     const content = normalizeText(input.content)
     if (!content) {
@@ -9522,7 +9523,7 @@ export const parseTableImportContent = requireRole([UserRole.ADMIN])(
 /**
  * 表格导入确认：写入待上传队列（Excel「图片」列会写入主图/图集；无图时仍可稍后在待上传区补传）
  */
-export const createProductsFromTable = requireRole([UserRole.ADMIN])(
+export const createProductsFromTable = requireStaff('products')(
   withResult(async (input: CreateProductsFromTableInput): Promise<CreateProductsFromTableOutput> => {
     const { userId } = getAuthContext()
     const rows = (input.rows || []).filter(row => normalizeText(row.productName))
@@ -9990,7 +9991,7 @@ const splitCommaList = (raw?: string | null) =>
     .map(value => value.trim())
     .filter(Boolean)
 
-export const createImportTask = requireRole([UserRole.ADMIN])(
+export const createImportTask = requireStaff('products')(
   withResult(async (input: CreateImportTaskInput): Promise<CreateImportTaskOutput> => {
     const { userId } = getAuthContext()
     const rawUrls = splitPastedImportUrls(input.urls)
@@ -10115,7 +10116,7 @@ export const createImportTask = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
+export const createPinduoduoImportTask = requireStaff('products')(
   withResult(async (input: CreatePinduoduoImportTaskInput): Promise<CreateImportTaskOutput> => {
     const { userId } = getAuthContext()
     const rawUrls = input.urls.split('\n').map(u => u.trim()).filter(Boolean)
@@ -10210,7 +10211,7 @@ export const createPinduoduoImportTask = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const startParseTask = requireRole([UserRole.ADMIN])(
+export const startParseTask = requireStaff('products')(
   withResult(async (input: StartParseTaskInput): Promise<void> => {
     try {
       await prisma.$executeRawUnsafe('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
@@ -10845,7 +10846,7 @@ export const startParseTask = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateTaskItemPreview = requireRole([UserRole.ADMIN])(
+export const updateTaskItemPreview = requireStaff('products')(
   withResult(async (input: UpdateTaskItemPreviewInput): Promise<void> => {
     const item = await prisma.importtaskitem.findUnique({
       where: { id: input.itemId },
@@ -10871,7 +10872,7 @@ export const updateTaskItemPreview = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updatePendingImportGallery = requireRole([UserRole.ADMIN])(
+export const updatePendingImportGallery = requireStaff('products')(
   withResult(async (input: UpdatePendingImportGalleryInput): Promise<void> => {
     const galleryUrls = Array.from(new Set((input.galleryUrls || []).map(url => String(url || '').trim()).filter(Boolean)))
     const mainImageUrl = (input.mainImageUrl || galleryUrls[0] || '').trim()
@@ -10908,7 +10909,7 @@ export const updatePendingImportGallery = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
+export const inlineUpdatePendingImportItemField = requireStaff('products')(
   withResult(async (input: InlineUpdatePendingImportItemFieldInput): Promise<void> => {
     if (input.field === 'product_name') {
       const nextName = String(input.value || '').trim()
@@ -11144,7 +11145,7 @@ export const inlineUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
 )
 
 /** 待上传爱心审核标：只改 previewDataJson.reviewed，不改货物状态、不发布。 */
-export const setPendingImportWeightReview = requireRole([UserRole.ADMIN])(
+export const setPendingImportWeightReview = requireStaff('products')(
   withResult(async (input: {
     itemIds: string[]
     weightReview: boolean
@@ -11179,7 +11180,7 @@ export const setPendingImportWeightReview = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
+export const setPendingImportReviewMark = requireStaff('products')(
   withResult(async (input: {
     itemIds: string[]
     reviewed: boolean
@@ -11224,7 +11225,7 @@ export const setPendingImportReviewMark = requireRole([UserRole.ADMIN])(
  * Batch update pending fields in one client round-trip.
  * weight/MOQ/stock use updateMany; coefficient recalculates SKU prices per item.
  */
-export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
+export const batchUpdatePendingImportItemField = requireStaff('products')(
   withResult(async (input: {
     itemIds: string[]
     field: Extract<
@@ -11345,7 +11346,7 @@ export const batchUpdatePendingImportItemField = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const inlineUpdatePendingImportSkuField = requireRole([UserRole.ADMIN])(
+export const inlineUpdatePendingImportSkuField = requireStaff('products')(
   withResult(async (input: InlineUpdatePendingImportSkuFieldInput): Promise<MutatePendingImportSkusOutput> => {
     const clientSkus = Array.isArray(input.skus)
       ? input.skus
@@ -11654,7 +11655,7 @@ const loadPendingItemForSkuMutation = async (itemId: string) => {
   return item
 }
 
-export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
+export const duplicatePendingImportSku = requireStaff('products')(
   withResult(async (input: DuplicatePendingImportSkuInput): Promise<MutatePendingImportSkusOutput> => {
     const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
@@ -11674,7 +11675,7 @@ export const duplicatePendingImportSku = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
+export const deletePendingImportSku = requireStaff('products')(
   withResult(async (input: DeletePendingImportSkuInput): Promise<MutatePendingImportSkusOutput> => {
     const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
@@ -11690,7 +11691,7 @@ export const deletePendingImportSku = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+export const duplicatePendingImportSkuColorGroup = requireStaff('products')(
   withResult(async (input: DuplicatePendingImportSkuColorGroupInput): Promise<MutatePendingImportSkusOutput> => {
     const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
@@ -11716,7 +11717,7 @@ export const duplicatePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])
   }),
 )
 
-export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
+export const deletePendingImportSkuColorGroup = requireStaff('products')(
   withResult(async (input: DeletePendingImportSkuColorGroupInput): Promise<MutatePendingImportSkusOutput> => {
     const item = await loadPendingItemForSkuMutation(input.itemId)
     if (!item) throw new Error('未找到待上传明细')
@@ -11733,7 +11734,7 @@ export const deletePendingImportSkuColorGroup = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const publishPendingImportItems = requireRole([UserRole.ADMIN])(
+export const publishPendingImportItems = requireStaff('products')(
   withResult(async (input: PublishPendingImportItemsInput): Promise<PublishPendingImportItemsOutput> => {
     if (!input.itemIds.length) {
       throw new Error('请至少选择一条待上传商品')
@@ -12523,7 +12524,7 @@ const resolveFetchFailureReason = (fetchResult: Fetch1688OfferPreviewResult): st
   return fetchResult.failureReason || FAILURE_REASON_RISK_CONTROL
 }
 
-export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
+export const reparsePendingImportItems = requireStaff('products')(
   withResult(async (input: ReparsePendingImportItemsInput): Promise<ReparsePendingImportItemsOutput> => {
     if (!input.itemIds.length) {
       throw new Error('请至少选择一条待重新解析的商品')
@@ -12945,7 +12946,7 @@ export const reparsePendingImportItems = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const confirmImportProducts = requireRole([UserRole.ADMIN])(
+export const confirmImportProducts = requireStaff('products')(
   withResult(async (input: ConfirmImportProductsInput): Promise<void> => {
     const result = await publishPendingImportItems({ itemIds: input.itemIds })
     if (result.fail_count > 0) {
@@ -12960,7 +12961,7 @@ export const confirmImportProducts = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const retryImportTask = requireRole([UserRole.ADMIN])(
+export const retryImportTask = requireStaff('products')(
   withResult(async (input: RetryImportTaskInput): Promise<void> => {
     const task = await prisma.importtask.findUnique({
       where: { id: input.taskId },
@@ -13025,7 +13026,7 @@ export const retryImportTask = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const deleteImportTask = requireRole([UserRole.ADMIN])(
+export const deleteImportTask = requireStaff('products')(
   withResult(async (input: DeleteImportTaskInput): Promise<void> => {
     const task = await prisma.importtask.findUnique({
       where: { id: input.taskId }

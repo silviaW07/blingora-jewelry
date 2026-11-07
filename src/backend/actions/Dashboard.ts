@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -80,7 +81,7 @@ async function registrationPeriodMetrics(start: Date, end: Date) {
   return { registerCount, firstOrderCount, repeatOrderCount }
 }
 
-export const getAdminProfile = requireRole(UserRole.ADMIN)(
+export const getAdminProfile = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
   withResult(async (): Promise<AdminProfile_Output> => {
     const { userId } = getAuthContext()
     const user = await prisma.sysuser.findUnique({
@@ -104,7 +105,7 @@ export const getAdminProfile = requireRole(UserRole.ADMIN)(
 /**
  * 更新管理员个人资料（姓名、头像）
  */
-export const updateAdminProfile = requireRole(UserRole.ADMIN)(
+export const updateAdminProfile = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
   withResult(async (input: UpdateAdminProfile_Input): Promise<AdminProfile_Output> => {
     const { userId } = getAuthContext()
     const username = (input.username || '').trim()
@@ -128,7 +129,7 @@ export const updateAdminProfile = requireRole(UserRole.ADMIN)(
   }),
 )
 
-export const getKpiStats = requireRole(UserRole.ADMIN)(
+export const getKpiStats = requireStaff('dashboard')(
   withResult(async (): Promise<KpiStats_Output> => {
     const now = new Date()
     const weekStart = startOfWeekMonday(now)
@@ -205,7 +206,7 @@ export const getKpiStats = requireRole(UserRole.ADMIN)(
   })
 )
 
-export const getListingStatsDetail = requireRole(UserRole.ADMIN)(
+export const getListingStatsDetail = requireStaff('dashboard')(
   withResult(async (): Promise<ListingStatsDetail_Output> => {
     const weekStart = startOfWeekMonday()
     const monthStart = startOfMonth()
@@ -227,7 +228,7 @@ export const getListingStatsDetail = requireRole(UserRole.ADMIN)(
   }),
 )
 
-export const getRegistrationStatsDetail = requireRole(UserRole.ADMIN)(
+export const getRegistrationStatsDetail = requireStaff('dashboard')(
   withResult(async (): Promise<RegistrationStatsDetail_Output> => {
     const now = new Date()
     const weekStart = startOfWeekMonday(now)
@@ -250,7 +251,7 @@ export const getRegistrationStatsDetail = requireRole(UserRole.ADMIN)(
   }),
 )
 
-export const getImportTasksOverview = requireRole(UserRole.ADMIN)(
+export const getImportTasksOverview = requireStaff('dashboard')(
   withResult(async (): Promise<ImportTaskOverview_Output[]> => {
     const list = await prisma.importtask.findMany({
       orderBy: { createdAt: 'desc' },
@@ -274,7 +275,7 @@ export const getImportTasksOverview = requireRole(UserRole.ADMIN)(
   })
 )
 
-export const retryImportTask = requireRole(UserRole.ADMIN)(
+export const retryImportTask = requireStaff('dashboard')(
   withResult(async (input: RetryTask_Input): Promise<void> => {
     await prisma.$transaction(async (tx) => {
       const task = await tx.importtask.findUnique({
@@ -311,7 +312,7 @@ export const retryImportTask = requireRole(UserRole.ADMIN)(
   })
 )
 
-export const getStockAlerts = requireRole(UserRole.ADMIN)(
+export const getStockAlerts = requireStaff('dashboard')(
   withResult(async (): Promise<StockAlert_Output[]> => {
     const list = await prisma.productsku.findMany({
       where: {
@@ -342,7 +343,7 @@ export const getStockAlerts = requireRole(UserRole.ADMIN)(
   })
 )
 
-export const getRecentProducts = requireRole(UserRole.ADMIN)(
+export const getRecentProducts = requireStaff('dashboard')(
   withResult(async (): Promise<RecentProduct_Output[]> => {
     const list = await prisma.product.findMany({
       orderBy: { createdAt: 'desc' },
@@ -391,7 +392,7 @@ const isLevel1 = (cat: { level?: number | null; parentId?: string | null }) =>
 
 const BRAND_SHELF_NAME_RE = /^(brand|brands|品牌)$/i
 
-export const getCategoryBrandShelfTree = requireRole(UserRole.ADMIN)(
+export const getCategoryBrandShelfTree = requireStaff('dashboard')(
   withResult(async (): Promise<CategoryBrandShelfTree_Output> => {
     const categories = await prisma.category.findMany({
       where: { status: 'ACTIVE' as any },
@@ -611,7 +612,7 @@ export const getCategoryBrandShelfTree = requireRole(UserRole.ADMIN)(
   }),
 )
 
-export const getRecentUsers = requireRole(UserRole.ADMIN)(
+export const getRecentUsers = requireStaff('dashboard')(
   withResult(async (): Promise<RecentUser_Output[]> => {
     const list = await prisma.sysuser.findMany({
       where: {

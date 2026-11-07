@@ -506,7 +506,7 @@ export const getUserList = requireStaff('customers')(
 /**
  * 获取客户详情（含未付款订单与商品快照）
  */
-export const getUserDetail = requireRole([UserRole.ADMIN])(
+export const getUserDetail = requireStaff('customers')(
   withResult(async (input: GetUserDetailInput): Promise<GetUserDetailOutput> => {
     await ensureCustomerTags()
 
@@ -691,7 +691,7 @@ async function loadVipDiscountMap(ids: string[]): Promise<Map<string, number>> {
   return map
 }
 
-export const updateUserVipDiscount = requireRole([UserRole.ADMIN])(
+export const updateUserVipDiscount = requireStaff('customers')(
   withResult(async (input: UpdateUserVipDiscountInput): Promise<{ success: boolean; vipDiscount: number }> => {
     const vipDiscount = parseVipDiscount(input.vipDiscount)
     const user = await prisma.sysuser.findUnique({ where: { id: input.id }, select: { id: true } })
@@ -701,7 +701,7 @@ export const updateUserVipDiscount = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const updateUserAdminNote = requireRole([UserRole.ADMIN])(
+export const updateUserAdminNote = requireStaff('customers')(
   withResult(async (input: UpdateUserAdminNoteInput): Promise<{ success: boolean }> => {
     const user = await prisma.sysuser.findUnique({ where: { id: input.id }, select: { id: true } })
     if (!user) throw new Error('客户不存在')
@@ -713,7 +713,7 @@ export const updateUserAdminNote = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateUserCustomerType = requireRole([UserRole.ADMIN])(
+export const updateUserCustomerType = requireStaff('customers')(
   withResult(async (input: UpdateUserCustomerTypeInput): Promise<{ success: boolean; customerType: string }> => {
     const value = (input.customerType || '').trim()
     if (!isValidCustomerType(value)) throw new Error('无效的客户类型')
@@ -727,7 +727,7 @@ export const updateUserCustomerType = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateUserCustomerTag = requireRole([UserRole.ADMIN])(
+export const updateUserCustomerTag = requireStaff('customers')(
   withResult(async (input: UpdateUserCustomerTagInput): Promise<{ success: boolean; tagCode: CustomerTagCode; tagName: string | null }> => {
     await ensureCustomerTags()
 
@@ -763,7 +763,7 @@ export const updateUserCustomerTag = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const impersonateCustomer = requireRole([UserRole.ADMIN])(
+export const impersonateCustomer = requireStaff('customers')(
   withResult(async (input: ImpersonateCustomerInput): Promise<ImpersonateCustomerOutput> => {
     const user = await prisma.sysuser.findUnique({ where: { id: input.userId } })
     if (!user) throw new Error('客户不存在')
@@ -782,7 +782,7 @@ export const impersonateCustomer = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateUserStatus = requireRole([UserRole.ADMIN])(
+export const updateUserStatus = requireStaff('customers')(
   withResult(async (input: UpdateUserStatusInput): Promise<void> => {
     const { id, status } = input
     const targetStatus = status.toUpperCase() as SysUserStatus
@@ -806,7 +806,7 @@ export const updateUserStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const deleteUser = requireRole([UserRole.ADMIN])(
+export const deleteUser = requireStaff('customers')(
   withResult(async (input: DeleteUserInput): Promise<void> => {
     const { userId: currentUserId } = getAuthContext()
     const targetId = input.id

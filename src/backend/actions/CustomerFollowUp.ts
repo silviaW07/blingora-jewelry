@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 
 'use server'
 
@@ -112,7 +113,7 @@ function intervalFromType(customerType: string, tagByCode: Map<string, { followI
   return clampDays(tagByCode.get(code)?.followIntervalDays || DEFAULT_TAG_INTERVALS[code] || DEFAULT_INTERVAL_DAYS)
 }
 
-export const getFollowUpBoard = requireRole([UserRole.ADMIN])(
+export const getFollowUpBoard = requireStaff('followup')(
   withResult(async (): Promise<{ tags: FollowTagInterval[]; due: RegisteredFollowCustomer[]; all: RegisteredFollowCustomer[] }> => {
     await ensureTagIntervals()
     const [users, tags, manuals, cartRows] = await Promise.all([
@@ -213,7 +214,7 @@ export const getFollowUpBoard = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const updateTagFollowIntervals = requireRole([UserRole.ADMIN])(
+export const updateTagFollowIntervals = requireStaff('followup')(
   withResult(async (input: Array<{ code: string; intervalDays: number }>): Promise<FollowTagInterval[]> => {
     await ensureTagIntervals()
     for (const item of input) {
@@ -302,14 +303,14 @@ async function applyStatus(input: { id: string; kind: FollowKind; status: Follow
   return { followedAt: now.toISOString(), nextFollowAt: nextFollowAt.toISOString(), followStatus: 'FOLLOWED' as FollowStatus }
 }
 
-export const setFollowStatus = requireRole([UserRole.ADMIN])(
+export const setFollowStatus = requireStaff('followup')(
   withResult(async (input: { id: string; kind: FollowKind; status: FollowStatus }) => {
     if (!['FOLLOWED', 'DUE', 'SKIP'].includes(input.status)) throw new Error('无效的跟进状态')
     return applyStatus(input)
   }),
 )
 
-export const markCustomerFollowed = requireRole([UserRole.ADMIN])(
+export const markCustomerFollowed = requireStaff('followup')(
   withResult(async (input: { id: string; kind?: FollowKind }) => {
     const result = await applyStatus({ id: input.id, kind: input.kind || 'user', status: 'FOLLOWED' })
     const logs = input.kind === 'manual'
@@ -319,7 +320,7 @@ export const markCustomerFollowed = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const getCustomerFollowLogs = requireRole([UserRole.ADMIN])(
+export const getCustomerFollowLogs = requireStaff('followup')(
   withResult(async (input: { id: string; kind?: FollowKind }): Promise<FollowLog[]> => {
     const logs = input.kind === 'manual'
       ? await prisma.customerfollowlog.findMany({ where: { customerId: input.id }, orderBy: { followedAt: 'desc' }, take: 8 })
@@ -328,7 +329,7 @@ export const getCustomerFollowLogs = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const addFollowPhones = requireRole([UserRole.ADMIN])(
+export const addFollowPhones = requireStaff('followup')(
   withResult(async (raw: string): Promise<{ added: number; skipped: number }> => {
     const parts = String(raw || '').split(/[\s,，;；]+/).map((item) => item.trim()).filter(Boolean)
     const digitsList = Array.from(new Set(parts.map(phoneDigits).filter((item) => item.length >= 6 && item.length <= 20)))
@@ -370,7 +371,7 @@ export const addFollowPhones = requireRole([UserRole.ADMIN])(
 )
 
 
-export const updateFollowPhone = requireRole([UserRole.ADMIN])(
+export const updateFollowPhone = requireStaff('followup')(
   withResult(async (input: { id: string; kind: FollowKind; phone: string }): Promise<{ phone: string | null }> => {
     const phone = String(input.phone || '').trim().slice(0, 30) || null
     if (input.kind === 'manual') {
@@ -505,7 +506,7 @@ async function buildWeeklyHotPicks(): Promise<HotPick[]> {
     .map((item) => item.pick)
 }
 
-export const getWeeklyHotWhatsappMessage = requireRole([UserRole.ADMIN])(
+export const getWeeklyHotWhatsappMessage = requireStaff('followup')(
   withResult(async (): Promise<{ text: string; count: number; weekKey: string }> => {
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS weeklycategorypick (

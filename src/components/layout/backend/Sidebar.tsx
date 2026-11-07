@@ -21,7 +21,8 @@ const MENU_ITEMS = [{
   label: '管理概览',
   href: '/dashboard',
   icon: LayoutDashboard,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'dashboard'
 }, {
   id: 'B18',
   label: '个人设置',
@@ -40,7 +41,8 @@ const MENU_ITEMS = [{
   label: '分类管理',
   href: '/categorymanagement',
   icon: Layers,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'categories'
 }, {
   id: 'B07',
   label: '客户管理',
@@ -53,7 +55,8 @@ const MENU_ITEMS = [{
   label: '客户跟进',
   href: '/customerfollowup',
   icon: UserRound,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'followup'
 }, {
   id: 'B08',
   label: '订单管理',
@@ -66,31 +69,36 @@ const MENU_ITEMS = [{
   label: 'Banner轮播图管理',
   href: '/bannermanagement',
   icon: Images,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'banners'
 }, {
   id: 'B21',
   label: '买家秀管理',
   href: '/buyershowmanagement',
   icon: Camera,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'buyershow'
 }, {
   id: 'B15',
   label: '首页推荐专区管理',
   href: '/homerecommendzonemanagement',
   icon: LayoutGrid,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'recommend'
 }, {
   id: 'B16',
   label: '物流渠道配置',
   href: '/shippingchannelconfig',
   icon: Truck,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'shipping'
 }, {
   id: 'B17',
   label: '促销活动管理',
   href: '/pricingpromotionmanagement',
   icon: BadgePercent,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'pricing'
 }, {
   id: 'B19',
   label: '管理员账号',
@@ -102,7 +110,8 @@ const MENU_ITEMS = [{
   label: '品牌别名管理',
   href: '/brandaliasmanagement',
   icon: Tag,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'brandalias'
 }];
 
 /** 前台可视化装修可编辑页面入口（新开标签页并带 ?decorate=1） */

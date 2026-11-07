@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 // ===== Enums =====
@@ -101,7 +102,7 @@ import {
 /**
  * 获取 Banner 列表
  */
-export const getBannerList = requireRole([UserRole.ADMIN])(
+export const getBannerList = requireStaff('banners')(
   withResult(async (input: GetBannerListInput): Promise<GetBannerListOutput> => {
     const {
       search_keyword = '',
@@ -150,7 +151,7 @@ export const getBannerList = requireRole([UserRole.ADMIN])(
 /**
  * 新增 Banner
  */
-export const createBanner = requireRole([UserRole.ADMIN])(
+export const createBanner = requireStaff('banners')(
   withResult(async (input: CreateBannerInput): Promise<CreateBannerOutput> => {
     if (!input.banner_imageUrl) {
       throw new Error('请上传封面图')
@@ -173,7 +174,7 @@ export const createBanner = requireRole([UserRole.ADMIN])(
 /**
  * 编辑 Banner
  */
-export const updateBanner = requireRole([UserRole.ADMIN])(
+export const updateBanner = requireStaff('banners')(
   withResult(async (input: UpdateBannerInput): Promise<UpdateBannerOutput> => {
     if (!input.banner_id) throw new Error('Banner ID 不能为空')
     if (!input.banner_imageUrl) throw new Error('请上传封面图')
@@ -196,7 +197,7 @@ export const updateBanner = requireRole([UserRole.ADMIN])(
 /**
  * 删除单个 Banner
  */
-export const deleteBanner = requireRole([UserRole.ADMIN])(
+export const deleteBanner = requireStaff('banners')(
   withResult(async (input: DeleteBannerInput): Promise<DeleteBannerOutput> => {
     if (!input.banner_id) throw new Error('Banner ID 不能为空')
 
@@ -211,7 +212,7 @@ export const deleteBanner = requireRole([UserRole.ADMIN])(
 /**
  * 批量删除 Banner
  */
-export const batchDeleteBanners = requireRole([UserRole.ADMIN])(
+export const batchDeleteBanners = requireStaff('banners')(
   withResult(async (input: BatchDeleteBannersInput): Promise<BatchDeleteBannersOutput> => {
     if (!input.banner_ids || input.banner_ids.length === 0) {
       throw new Error('请选择要删除的 Banner')
@@ -228,7 +229,7 @@ export const batchDeleteBanners = requireRole([UserRole.ADMIN])(
 /**
  * 批量更新 Banner 启用状态
  */
-export const batchUpdateBannerStatus = requireRole([UserRole.ADMIN])(
+export const batchUpdateBannerStatus = requireStaff('banners')(
   withResult(async (input: BatchUpdateBannerStatusInput): Promise<BatchUpdateBannerStatusOutput> => {
     if (!input.banner_ids || input.banner_ids.length === 0) {
       throw new Error('请选择要更新的 Banner')
@@ -246,7 +247,7 @@ export const batchUpdateBannerStatus = requireRole([UserRole.ADMIN])(
 /**
  * 快捷修改排序权重
  */
-export const updateBannerSortWeight = requireRole([UserRole.ADMIN])(
+export const updateBannerSortWeight = requireStaff('banners')(
   withResult(async (input: UpdateBannerSortWeightInput): Promise<UpdateBannerSortWeightOutput> => {
     if (!input.banner_id) throw new Error('Banner ID 不能为空')
 
@@ -262,7 +263,7 @@ export const updateBannerSortWeight = requireRole([UserRole.ADMIN])(
 /**
  * 快捷修改启用状态
  */
-export const updateBannerStatus = requireRole([UserRole.ADMIN])(
+export const updateBannerStatus = requireStaff('banners')(
   withResult(async (input: UpdateBannerStatusInput): Promise<UpdateBannerStatusOutput> => {
     if (!input.banner_id) throw new Error('Banner ID 不能为空')
 

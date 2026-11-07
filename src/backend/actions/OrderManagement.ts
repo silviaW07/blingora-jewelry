@@ -502,7 +502,7 @@ export interface ExportOrdersExcelFileOutput {
 /**
  * 获取订单管理顶部关键指标
  */
-export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
+export const getOrderDashboardStats = requireStaff('orders')(
   withResult(async (): Promise<GetDashboardStatsOutput> => {
     // 待发货 (PROCESSING 或 PENDING_PAYMENT等视具体业务而定，按需求一般把 PAID/PROCESSING 当作待发货)
     const todayStart = new Date()
@@ -872,7 +872,7 @@ export const getOrderDetail = requireStaff('orders')(
  * 处理发货（履约工作台）
  * 更新订单的主物流信息、状态，并同步写入操作日志和主段物流记录
  */
-export const shipOrder = requireRole([UserRole.ADMIN])(
+export const shipOrder = requireStaff('orders')(
   withResult(async (input: ShipOrderInput): Promise<void> => {
     const { userId, username } = getAuthContext()
     
@@ -929,7 +929,7 @@ export const shipOrder = requireRole([UserRole.ADMIN])(
 /**
  * 录入/追加多段国际物流追踪信息
  */
-export const addLogisticsSegment = requireRole([UserRole.ADMIN])(
+export const addLogisticsSegment = requireStaff('orders')(
   withResult(async (input: AddLogisticsSegmentInput): Promise<void> => {
     const { username } = getAuthContext()
 
@@ -974,7 +974,7 @@ export const addLogisticsSegment = requireRole([UserRole.ADMIN])(
 /**
  * 更新订单状态（退款处理、取消等强干预流转）
  */
-export const updateOrderStatus = requireRole([UserRole.ADMIN])(
+export const updateOrderStatus = requireStaff('orders')(
   withResult(async (input: UpdateOrderStatusInput): Promise<void> => {
     const { username } = getAuthContext()
     const { orderId, newStatus } = input
@@ -1051,7 +1051,7 @@ export const updateOrderStatus = requireRole([UserRole.ADMIN])(
 /**
  * 登记订单商品入库数量。数量不能超过下单件数。保存 0 表示这行缺货。
  */
-export const updateOrderInbound = requireRole([UserRole.ADMIN])(
+export const updateOrderInbound = requireStaff('orders')(
   withResult(async (input: UpdateOrderInboundInput): Promise<UpdateOrderInboundOutput> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({
@@ -1187,7 +1187,7 @@ export interface AppendOrderGoodsOutput extends UpdateOrderInboundOutput {
 /**
  * 给已有订单加货。SKU 已在订单里则增加数量；否则按商品库 SKU 新增一行。
  */
-export const appendOrderGoods = requireRole([UserRole.ADMIN])(
+export const appendOrderGoods = requireStaff('orders')(
   withResult(async (input: AppendOrderGoodsInput): Promise<AppendOrderGoodsOutput> => {
     const { username } = getAuthContext()
     const grouped = new Map<string, AppendOrderGoodsLineInput & { skuCode: string; quantity: number }>()
@@ -1496,7 +1496,7 @@ async function inboundLinesAfterGoods(orderId: string, currencyCode: string | nu
 /**
  * 不填 SKU，按售价、数量、总价在订单末尾加行。缺的金额可以先空着。
  */
-export const appendManualOrderLine = requireRole([UserRole.ADMIN])(
+export const appendManualOrderLine = requireStaff('orders')(
   withResult(async (input: AppendManualOrderLineInput): Promise<UpdateOrderDiscountOutput> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
@@ -1752,7 +1752,7 @@ async function embeddedCellImages(raw: Buffer): Promise<{ byRow: Map<number, She
 /**
  * 导入表格。SKU 可以不填，表头对上售价、数量、总价即可先存入。
  */
-export const importInboundSheet = requireRole([UserRole.ADMIN])(
+export const importInboundSheet = requireStaff('orders')(
   withResult(async (input: ImportInboundSheetInput): Promise<ImportInboundSheetOutput> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({
@@ -2101,7 +2101,7 @@ const IMPORT_ORDER_STATUSES: OrderStatus[] = ['PENDING_PAYMENT', 'PAID', 'PROCES
  * 按客户邮箱导入一张订单。表格不要求 SKU，表头对上售价、数量、总价即可。
  * 订单号按 BJ + 当天日期 + 全局递增序号生成。客户登录该邮箱后能在我的订单里看到。
  */
-export const importCustomerOrder = requireRole([UserRole.ADMIN])(
+export const importCustomerOrder = requireStaff('orders')(
   withResult(async (input: ImportCustomerOrderInput): Promise<ImportCustomerOrderOutput> => {
     const { username } = getAuthContext()
     const customerName = String(input.customerName || '').trim().slice(0, 100)
@@ -2241,7 +2241,7 @@ function isPlaceholderCustomerEmail(email: string): boolean {
 }
 
 /** 按客户姓名建一张空订单。没有邮箱时先挂一个占位账号，之后在列表里双击补邮箱。 */
-export const createCustomerOrder = requireRole([UserRole.ADMIN])(
+export const createCustomerOrder = requireStaff('orders')(
   withResult(async (input: CreateCustomerOrderInput): Promise<ImportCustomerOrderOutput> => {
     const { username } = getAuthContext()
     const customerName = String(input.customerName || '').trim().slice(0, 100)
@@ -2304,7 +2304,7 @@ export interface UpdateOrderCustomerProfileInput {
 }
 
 /** 订单列表里双击改客户姓名、手机号或邮箱。 */
-export const updateOrderCustomerProfile = requireRole([UserRole.ADMIN])(
+export const updateOrderCustomerProfile = requireStaff('orders')(
   withResult(async (input: UpdateOrderCustomerProfileInput): Promise<{ customerName: string; customerWhatsapp: string | null; customerEmail: string }> => {
     const orderId = String(input.orderId || '').trim()
     if (!orderId) throw new Error('缺少订单')
@@ -2412,7 +2412,7 @@ async function listInboundShipmentRows(orderId: string): Promise<InboundShipment
   })
 }
 
-export const listInboundShipments = requireRole([UserRole.ADMIN])(
+export const listInboundShipments = requireStaff('orders')(
   withResult(async (orderId: string): Promise<InboundShipmentRow[]> => {
     if (!orderId) return []
     return listInboundShipmentRows(orderId)
@@ -2422,7 +2422,7 @@ export const listInboundShipments = requireRole([UserRole.ADMIN])(
 /**
  * 登记一次发货。发货时间必填。同一时间可以有多组物流号、渠道、备注。
  */
-export const saveInboundShipment = requireRole([UserRole.ADMIN])(
+export const saveInboundShipment = requireStaff('orders')(
   withResult(async (input: SaveInboundShipmentInput): Promise<InboundShipmentRow[]> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId }, select: { id: true } })
@@ -2480,7 +2480,7 @@ export interface UpdateInboundShipmentInput {
 }
 
 /** 改一条已经保存的发货记录。 */
-export const updateInboundShipment = requireRole([UserRole.ADMIN])(
+export const updateInboundShipment = requireStaff('orders')(
   withResult(async (input: UpdateInboundShipmentInput): Promise<InboundShipmentRow[]> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId }, select: { id: true } })
@@ -2518,7 +2518,7 @@ export const updateInboundShipment = requireRole([UserRole.ADMIN])(
 
 const SETTLEMENT_PDF_SEGMENT = '结算PDF'
 
-export const getOrderSettlementPdf = requireRole([UserRole.ADMIN])(
+export const getOrderSettlementPdf = requireStaff('orders')(
   withResult(async (orderId: string): Promise<string> => {
     if (!orderId) return ''
     const row = await prisma.orderlogisticssegment.findFirst({
@@ -2530,7 +2530,7 @@ export const getOrderSettlementPdf = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const saveOrderSettlementPdf = requireRole([UserRole.ADMIN])(
+export const saveOrderSettlementPdf = requireStaff('orders')(
   withResult(async (input: { orderId: string; url: string }): Promise<string> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId }, select: { id: true } })
@@ -2580,7 +2580,7 @@ export interface UpdateManualOrderLineInput {
 /**
  * 补手动加货行的售价、数量、总价、成本价，并重算订单金额。
  */
-export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
+export const updateManualOrderLine = requireStaff('orders')(
   withResult(async (input: UpdateManualOrderLineInput): Promise<UpdateOrderDiscountOutput> => {
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
     if (!order) throw new Error('订单不存在')
@@ -2641,7 +2641,7 @@ export const updateManualOrderLine = requireRole([UserRole.ADMIN])(
 )
 
 
-export const deleteInboundLines = requireRole([UserRole.ADMIN])(
+export const deleteInboundLines = requireStaff('orders')(
   withResult(async (input: { orderId: string; lineIds: string[] }): Promise<UpdateOrderDiscountOutput> => {
     const order = await prisma.orderrecord.findUnique({
       where: { id: input.orderId },
@@ -2682,7 +2682,7 @@ export interface UpdateOrderDiscountOutput extends UpdateOrderInboundOutput {
 /**
  * 修改整单折扣百分比。折扣价按新的优惠比例重算。
  */
-export const updateOrderDiscount = requireRole([UserRole.ADMIN])(
+export const updateOrderDiscount = requireStaff('orders')(
   withResult(async (input: UpdateOrderDiscountInput): Promise<UpdateOrderDiscountOutput> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
@@ -2737,7 +2737,7 @@ export const updateOrderDiscount = requireRole([UserRole.ADMIN])(
 /**
  * 更新订单内部备注（列表行内编辑）
  */
-export const updateOrderRemark = requireRole([UserRole.ADMIN])(
+export const updateOrderRemark = requireStaff('orders')(
   withResult(async (input: UpdateOrderRemarkInput): Promise<void> => {
     const { username } = getAuthContext()
     const order = await prisma.orderrecord.findUnique({ where: { id: input.orderId } })
@@ -3545,7 +3545,7 @@ async function buildInboundSheetFile(input: ExportInboundSheetInput): Promise<Ex
  * 登记入库表格 / 发货图片。行顺序与勾选顺序无关，按入库表当前顺序导出。
  * 图片沿用订单 Excel：240 内等比缩放，单元格约正方形，避免拉变形。
  */
-export const exportInboundSheet = requireRole([UserRole.ADMIN])(
+export const exportInboundSheet = requireStaff('orders')(
   withResult(async (input: ExportInboundSheetInput): Promise<ExportOrdersExcelFileOutput> => {
     return buildInboundSheetFile(input)
   }),
@@ -3554,7 +3554,7 @@ export const exportInboundSheet = requireRole([UserRole.ADMIN])(
 /**
  * 导出订单明细 Excel（服务端生成；“图片”列优先内嵌 SKU 大图）
  */
-export const exportOrdersExcel = requireRole([UserRole.ADMIN])(
+export const exportOrdersExcel = requireStaff('orders')(
   withResult(async (input: ExportOrdersExcelInput): Promise<ExportOrdersExcelFileOutput> => {
     try {
       return await buildOrderExcelFile(input.orderIds || [])
@@ -3626,7 +3626,7 @@ async function writeOrderLinks(groups: OrderLinkGroup[]) {
   }
 }
 
-export const getLinkedInboundLines = requireRole([UserRole.ADMIN])(
+export const getLinkedInboundLines = requireStaff('orders')(
   withResult(async (orderId: string): Promise<OrderInboundLine[]> => {
     const requestedId = String(orderId || '').trim()
     if (!requestedId) return []
@@ -3661,11 +3661,11 @@ export const getLinkedInboundLines = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const getOrderLinks = requireRole([UserRole.ADMIN])(
+export const getOrderLinks = requireStaff('orders')(
   withResult(async (): Promise<OrderLinkGroup[]> => readOrderLinks()),
 )
 
-export const saveOrderLink = requireRole([UserRole.ADMIN])(
+export const saveOrderLink = requireStaff('orders')(
   withResult(async (input: { primaryId: string; children: OrderLinkChild[] }): Promise<OrderLinkGroup[]> => {
     const primaryId = String(input?.primaryId || '').trim()
     if (!primaryId) throw new Error('缺少主订单')

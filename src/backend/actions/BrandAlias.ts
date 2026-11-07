@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -53,7 +54,7 @@ const toItem = (row: {
 })
 
 /** GET：获取所有品牌别名（按权重倒序、创建时间正序）。 */
-export const listBrandAliases = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const listBrandAliases = requireStaff('brandalias')(
   withResult(async (): Promise<BrandAliasItem[]> => {
     const count = await prisma.brandalias.count()
     if (count === 0) {
@@ -93,7 +94,7 @@ export const listBrandAliases = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN]
 )
 
 /** POST：新增品牌别名。 */
-export const createBrandAlias = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const createBrandAlias = requireStaff('brandalias')(
   withResult(async (input: CreateBrandAliasInput): Promise<BrandAliasItem> => {
     const alias = normalizeAliasText(input?.alias)
     const standardName = normalizeAliasText(input?.standard_name)
@@ -116,7 +117,7 @@ export const createBrandAlias = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN]
 )
 
 /** PUT：修改品牌别名。 */
-export const updateBrandAlias = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const updateBrandAlias = requireStaff('brandalias')(
   withResult(async (input: UpdateBrandAliasInput): Promise<BrandAliasItem> => {
     const id = String(input?.id || '').trim()
     if (!id) throw new Error('缺少别名 ID')
@@ -145,7 +146,7 @@ export const updateBrandAlias = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN]
 )
 
 /** DELETE：删除品牌别名。 */
-export const deleteBrandAlias = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+export const deleteBrandAlias = requireStaff('brandalias')(
   withResult(async (input: DeleteBrandAliasInput): Promise<BrandAliasMutationOutput> => {
     const id = String(input?.id || '').trim()
     if (!id) throw new Error('缺少别名 ID')

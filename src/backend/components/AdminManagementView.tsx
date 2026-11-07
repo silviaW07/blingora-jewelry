@@ -6,6 +6,7 @@ import type {
   AdminManagementHandlers,
 } from '@/backend/hooks/useAdminManagement'
 import type { AdminRole, StaffPermission } from '@/backend/actions/AdminManagement'
+import { STAFF_PERMISSION_OPTIONS } from '@/backend/staffAccess'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -154,13 +155,8 @@ export default function AdminManagementView({ state, handlers }: Props) {
                                 </SelectContent>
                               </Select>
                               {item.role === 'SUB_ADMIN' ? (
-                                <div className="mt-2 grid gap-1">
-                                  {([
-                                    ['orders', '订单'],
-                                    ['products', '商品'],
-                                    ['cost', '成本价和供应商'],
-                                    ['customers', '客户资料'],
-                                  ] as Array<[StaffPermission, string]>).map(([key, label]) => (
+                                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
+                                  {STAFF_PERMISSION_OPTIONS.map(({ key, label }) => (
                                     <label key={key} className="flex items-center gap-1.5 text-xs text-slate-600">
                                       <input
                                         type="checkbox"
@@ -300,12 +296,7 @@ export default function AdminManagementView({ state, handlers }: Props) {
               </Select>
               {createForm.role === 'SUB_ADMIN' ? (
                 <div className="grid gap-1 pt-1">
-                  {([
-                    ['orders', '订单'],
-                    ['products', '商品'],
-                    ['cost', '成本价和供应商'],
-                    ['customers', '客户资料'],
-                  ] as Array<[StaffPermission, string]>).map(([key, label]) => (
+                  {STAFF_PERMISSION_OPTIONS.map(({ key, label }) => (
                     <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
                       <input
                         type="checkbox"
@@ -321,7 +312,7 @@ export default function AdminManagementView({ state, handlers }: Props) {
                       {label}
                     </label>
                   ))}
-                  <p className="text-xs text-slate-500">未勾选的数据，子账号在后台看不到。</p>
+                  <p className="text-xs text-slate-500">勾选后，左侧出现同名菜单。个人设置始终可见，管理员账号只有主管理员能进。成本价和供应商只控制商品里的成本和供应商。</p>
                 </div>
               ) : null}
             </div>

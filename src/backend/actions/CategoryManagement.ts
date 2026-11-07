@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -1256,14 +1257,14 @@ const buildCategoryKeywordLinks = (params: {
   return categoryMap
 }
 
-export const getKeywordGroups = requireRole([UserRole.ADMIN])(
+export const getKeywordGroups = requireStaff('categories')(
   withResult(async (input: GetKeywordGroupsInput = {}): Promise<KeywordGroupSummary[]> => {
     const result = await getKeywordOperationData(input)
     return result.group_summaries
   })
 )
 
-export const searchKeywordGroupProducts = requireRole([UserRole.ADMIN])(
+export const searchKeywordGroupProducts = requireStaff('categories')(
   withResult(async (input: SearchKeywordGroupProductsInput = {}): Promise<SearchKeywordGroupProductsResult> => {
     const keywordGroupId = input.keyword_group_id?.trim() ?? ''
     if (!keywordGroupId) {
@@ -1412,7 +1413,7 @@ export interface RemoveKeywordGroupProductLinkInput {
   product_id: string
 }
 
-export const removeKeywordGroupProductLink = requireRole([UserRole.ADMIN])(
+export const removeKeywordGroupProductLink = requireStaff('categories')(
   withResult(async (input: RemoveKeywordGroupProductLinkInput): Promise<void> => {
     const keywordGroupId = input.keyword_group_id?.trim()
     const productId = input.product_id?.trim()
@@ -1432,7 +1433,7 @@ export interface BatchRemoveKeywordGroupProductLinksInput {
   product_ids: string[]
 }
 
-export const batchRemoveKeywordGroupProductLinks = requireRole([UserRole.ADMIN])(
+export const batchRemoveKeywordGroupProductLinks = requireStaff('categories')(
   withResult(async (input: BatchRemoveKeywordGroupProductLinksInput): Promise<{ removed_count: number }> => {
     const keywordGroupId = input.keyword_group_id?.trim()
     const productIds = Array.from(new Set((input.product_ids ?? []).map(item => item.trim()).filter(Boolean)))
@@ -1545,7 +1546,7 @@ async function loadCategoryProductStats(categoryIds: string[]) {
   return { countByCategoryId, previewByCategoryId }
 }
 
-export const getCategoryList = requireRole([UserRole.ADMIN])(
+export const getCategoryList = requireStaff('categories')(
   withResult(async (input: GetCategoryListInput): Promise<GetCategoryListOutput> => {
     const { keyword, status, level, page = 1, page_size = 20 } = input
     const skip = (page - 1) * page_size
@@ -1719,7 +1720,7 @@ export const getCategoryList = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const createCategory = requireRole([UserRole.ADMIN])(
+export const createCategory = requireStaff('categories')(
   withResult(async (input: CreateCategoryInput): Promise<void> => {
     const { category_name, category_slug, parent_id, level, image_url, banner_image_url, description, sort_weight, status, category_kind, brand_keywords, price_coefficient, category_display_config } = input
 
@@ -1757,7 +1758,7 @@ export const createCategory = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchCreateSubcategories = requireRole([UserRole.ADMIN])(
+export const batchCreateSubcategories = requireStaff('categories')(
   withResult(async (input: BatchCreateSubcategoriesInput): Promise<{ created_count: number }> => {
     const { parent_id, category_names, status = 'ACTIVE' } = input
 
@@ -1823,7 +1824,7 @@ export const batchCreateSubcategories = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateCategory = requireRole([UserRole.ADMIN])(
+export const updateCategory = requireStaff('categories')(
   withResult(async (input: UpdateCategoryInput): Promise<void> => {
     const { category_id, category_name, category_slug, parent_id, level, image_url, banner_image_url, description, sort_weight, status, category_kind, brand_keywords, price_coefficient, category_display_config } = input
 
@@ -1896,7 +1897,7 @@ export const updateCategory = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateCategoryStatus = requireRole([UserRole.ADMIN])(
+export const updateCategoryStatus = requireStaff('categories')(
   withResult(async (input: UpdateCategoryStatusInput): Promise<void> => {
     const { category_id, status } = input
 
@@ -1911,7 +1912,7 @@ export const updateCategoryStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateCategorySortWeight = requireRole([UserRole.ADMIN])(
+export const updateCategorySortWeight = requireStaff('categories')(
   withResult(async (input: UpdateCategorySortWeightInput): Promise<void> => {
     const { category_id, sort_weight } = input
 
@@ -2039,7 +2040,7 @@ async function rescaleSkuPricesByCoefficientRatio(productIds: string[], ratio: n
   }
 }
 
-export const updateCategoryPriceCoefficient = requireRole([UserRole.ADMIN])(
+export const updateCategoryPriceCoefficient = requireStaff('categories')(
   withResult(async (input: UpdateCategoryPriceCoefficientInput): Promise<void> => {
     const { category_id, price_coefficient } = input
 
@@ -2090,7 +2091,7 @@ export const updateCategoryPriceCoefficient = requireRole([UserRole.ADMIN])(
 )
 
 /** 批量更新一级分类排序权重（拖拽排序专用，仅写入 category.sortWeight） */
-export const batchUpdateCategorySortWeight = requireRole([UserRole.ADMIN])(
+export const batchUpdateCategorySortWeight = requireStaff('categories')(
   withResult(async (input: BatchUpdateCategorySortWeightInput): Promise<void> => {
     const updates = Array.from(
       new Map(
@@ -2125,7 +2126,7 @@ export const batchUpdateCategorySortWeight = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const saveHomepagePosterConfig = requireRole([UserRole.ADMIN])(
+export const saveHomepagePosterConfig = requireStaff('categories')(
   withResult(async (input: SaveHomepagePosterConfigInput): Promise<void> => {
 
     const { category_id, items } = input
@@ -2186,7 +2187,7 @@ export const saveHomepagePosterConfig = requireRole([UserRole.ADMIN])(
     })
   })
 )
-export const saveCategoryRecommendedKeywords = requireRole([UserRole.ADMIN])(
+export const saveCategoryRecommendedKeywords = requireStaff('categories')(
   withResult(async (input: SaveCategoryRecommendedKeywordsInput): Promise<void> => {
     const items = Array.from(
       new Map(
@@ -2262,7 +2263,7 @@ export const saveCategoryRecommendedKeywords = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const saveCategoryTopPromotionConfig = requireRole([UserRole.ADMIN])(
+export const saveCategoryTopPromotionConfig = requireStaff('categories')(
   withResult(async (input: SaveCategoryTopPromotionConfigInput): Promise<void> => {
     const { saveTopPromotionBannerConfig, normalizeTopPromotionBannerConfig } = await import(
       '@/shared/topPromotionBannerConfig'
@@ -2372,7 +2373,7 @@ async function unlinkCategoryBindings(
   await tx.categorynavconfig.deleteMany({ where: { categoryId } })
 }
 
-export const deleteCategory = requireRole([UserRole.ADMIN])(
+export const deleteCategory = requireStaff('categories')(
   withResult(async (input: DeleteCategoryInput): Promise<void> => {
     const { category_id } = input
 
@@ -2403,7 +2404,7 @@ export const deleteCategory = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const createKeywordGroup = requireRole([UserRole.ADMIN])(
+export const createKeywordGroup = requireStaff('categories')(
   withResult(async (input: CreateKeywordGroupInput): Promise<void> => {
     const normalizedName = input.name.trim()
     if (!normalizedName) throw new Error('关键词分组名称不能为空')
@@ -2435,7 +2436,7 @@ export const createKeywordGroup = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateKeywordGroup = requireRole([UserRole.ADMIN])(
+export const updateKeywordGroup = requireStaff('categories')(
   withResult(async (input: UpdateKeywordGroupInput): Promise<void> => {
     const normalizedName = input.name.trim()
     if (!normalizedName) throw new Error('关键词分组名称不能为空')
@@ -2476,7 +2477,7 @@ export const updateKeywordGroup = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const deleteKeywordGroup = requireRole([UserRole.ADMIN])(
+export const deleteKeywordGroup = requireStaff('categories')(
   withResult(async (input: DeleteKeywordGroupInput): Promise<void> => {
     const group = await prisma.keywordgroup.findUnique({ where: { id: input.keyword_group_id } })
     if (!group) throw new Error('关键词分组不存在')
@@ -2497,7 +2498,7 @@ export const deleteKeywordGroup = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const createKeywordItem = requireRole([UserRole.ADMIN])(
+export const createKeywordItem = requireStaff('categories')(
   withResult(async (input: CreateKeywordItemInput): Promise<void> => {
     const keyword = normalizeKeyword(input.keyword)
     if (!keyword) throw new Error('关键词不能为空')
@@ -2535,7 +2536,7 @@ export const createKeywordItem = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const updateKeywordItem = requireRole([UserRole.ADMIN])(
+export const updateKeywordItem = requireStaff('categories')(
   withResult(async (input: UpdateKeywordItemInput): Promise<void> => {
     const keyword = normalizeKeyword(input.keyword)
     if (!keyword) throw new Error('关键词不能为空')
@@ -2583,7 +2584,7 @@ export interface DeleteKeywordItemInput {
   keyword_item_id: string
 }
 
-export const deleteKeywordItem = requireRole([UserRole.ADMIN])(
+export const deleteKeywordItem = requireStaff('categories')(
   withResult(async (input: DeleteKeywordItemInput): Promise<void> => {
     const item = await prisma.keyworditem.findUnique({ where: { id: input.keyword_item_id } })
     if (!item) throw new Error('关键词不存在')
@@ -2601,7 +2602,7 @@ export const deleteKeywordItem = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpsertKeywordItems = requireRole([UserRole.ADMIN])(
+export const batchUpsertKeywordItems = requireStaff('categories')(
   withResult(async (input: BatchUpsertKeywordItemsInput): Promise<void> => {
     const group = await prisma.keywordgroup.findUnique({ where: { id: input.keyword_group_id } })
     if (!group) throw new Error('关键词分组不存在')
@@ -2698,7 +2699,7 @@ export const batchUpsertKeywordItems = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchApplyKeywordsToCategories = requireRole([UserRole.ADMIN])(
+export const batchApplyKeywordsToCategories = requireStaff('categories')(
   withResult(async (input: BatchApplyKeywordsInput): Promise<BatchOperationResult> => {
     const categoryIds = Array.from(new Set((input.category_ids ?? []).filter(Boolean)))
     if (categoryIds.length === 0) throw new Error('请至少选择一个分类')
@@ -2778,7 +2779,7 @@ export const batchApplyKeywordsToCategories = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchDeleteCategories = requireRole([UserRole.ADMIN])(
+export const batchDeleteCategories = requireStaff('categories')(
   withResult(async (input: BatchDeleteCategoriesInput): Promise<BatchOperationResult> => {
     const categoryIds = Array.from(new Set((input.category_ids ?? []).filter(Boolean)))
     if (categoryIds.length === 0) throw new Error('请至少选择一个分类')
@@ -2825,7 +2826,7 @@ export const batchDeleteCategories = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchUpdateCategoryStatus = requireRole([UserRole.ADMIN])(
+export const batchUpdateCategoryStatus = requireStaff('categories')(
   withResult(async (input: BatchUpdateCategoryStatusInput): Promise<BatchOperationResult> => {
     const categoryIds = Array.from(new Set((input.category_ids ?? []).filter(Boolean)))
     if (categoryIds.length === 0) throw new Error('请至少选择一个分类')
@@ -2845,7 +2846,7 @@ export const batchUpdateCategoryStatus = requireRole([UserRole.ADMIN])(
   })
 )
 
-export const batchMoveCategoryParent = requireRole([UserRole.ADMIN])(
+export const batchMoveCategoryParent = requireStaff('categories')(
   withResult(async (input: BatchMoveCategoryParentInput): Promise<BatchOperationResult> => {
     const categoryIds = Array.from(new Set((input.category_ids ?? []).filter(Boolean)))
     if (categoryIds.length === 0) throw new Error('请至少选择一个分类')
@@ -2921,7 +2922,7 @@ function mapPinProductRow(
 }
 
 /** 类目内商品：已置顶 + 其余候选（未置顶仍按创建时间，供拖入优先区） */
-export const listCategoryPinProducts = requireRole([UserRole.ADMIN])(
+export const listCategoryPinProducts = requireStaff('categories')(
   withResult(async (input: ListCategoryPinProductsInput): Promise<ListCategoryPinProductsOutput> => {
     const categoryId = String(input.category_id || '').trim()
     if (!categoryId) throw new Error('缺少分类')
@@ -2981,7 +2982,7 @@ export const listCategoryPinProducts = requireRole([UserRole.ADMIN])(
 )
 
 /** 保存该类目优先展示顺序；未出现在列表中的商品 sortWeight 归零，前台继续走原规则 */
-export const saveCategoryProductPinOrder = requireRole([UserRole.ADMIN])(
+export const saveCategoryProductPinOrder = requireStaff('categories')(
   withResult(async (input: SaveCategoryProductPinOrderInput): Promise<void> => {
     const categoryId = String(input.category_id || '').trim()
     if (!categoryId) throw new Error('缺少分类')
@@ -3013,6 +3014,6 @@ export const saveCategoryProductPinOrder = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const getKeywordGroupTypeLabels = requireRole([UserRole.ADMIN])(
+export const getKeywordGroupTypeLabels = requireStaff('categories')(
   withResult(async (): Promise<Record<KeywordGroupType, string>> => KEYWORD_GROUP_TYPE_LABELS)
 )

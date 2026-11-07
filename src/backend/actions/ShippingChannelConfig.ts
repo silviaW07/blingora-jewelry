@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -155,7 +156,7 @@ async function ensureDefaultChannels() {
   })
 }
 
-export const getShippingChannelList = requireRole([UserRole.ADMIN])(
+export const getShippingChannelList = requireStaff('shipping')(
   withResult(async (input: GetShippingChannelListInput = {}): Promise<GetShippingChannelListOutput> => {
     await ensureDefaultChannels()
 
@@ -192,7 +193,7 @@ export const getShippingChannelList = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const saveShippingChannel = requireRole([UserRole.ADMIN])(
+export const saveShippingChannel = requireStaff('shipping')(
   withResult(async (input: SaveShippingChannelInput): Promise<SaveShippingChannelOutput> => {
     const name = (input.channel_name || '').trim()
     const estimatedTime = (input.channel_estimatedTime || '').trim()
@@ -278,14 +279,14 @@ export const saveShippingChannel = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const deleteShippingChannel = requireRole([UserRole.ADMIN])(
+export const deleteShippingChannel = requireStaff('shipping')(
   withResult(async (input: DeleteShippingChannelInput): Promise<DeleteShippingChannelOutput> => {
     await prisma.shippingchannel.delete({ where: { id: input.channel_id } })
     return { success: true }
   }),
 )
 
-export const updateShippingChannelStatus = requireRole([UserRole.ADMIN])(
+export const updateShippingChannelStatus = requireStaff('shipping')(
   withResult(async (input: UpdateShippingChannelStatusInput): Promise<UpdateShippingChannelStatusOutput> => {
     await prisma.shippingchannel.update({
       where: { id: input.channel_id },
@@ -295,7 +296,7 @@ export const updateShippingChannelStatus = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const updateShippingChannelAdminNote = requireRole([UserRole.ADMIN])(
+export const updateShippingChannelAdminNote = requireStaff('shipping')(
   withResult(async (input: UpdateShippingChannelAdminNoteInput): Promise<UpdateShippingChannelAdminNoteOutput> => {
     const channelId = String(input.channel_id || '').trim()
     if (!channelId) throw new Error('渠道不存在')
@@ -308,7 +309,7 @@ export const updateShippingChannelAdminNote = requireRole([UserRole.ADMIN])(
   }),
 )
 
-export const reorderShippingChannels = requireRole([UserRole.ADMIN])(
+export const reorderShippingChannels = requireStaff('shipping')(
   withResult(async (input: ReorderShippingChannelsInput): Promise<ReorderShippingChannelsOutput> => {
     const ids = (input.channel_ids || []).map((id) => String(id || '').trim()).filter(Boolean)
     if (ids.length === 0) throw new Error('请选择要排序的渠道')

@@ -1,3 +1,4 @@
+import { requireStaff } from '@/backend/staffAccess'
 'use server'
 
 import prisma from '@/tools/prisma'
@@ -54,7 +55,7 @@ async function syncCartItemsValidState(tx: any, productId: string) {
   }
 }
 
-export const batchUpdateMinOrderQty = requireRole([UserRole.ADMIN])(
+export const batchUpdateMinOrderQty = requireStaff('products')(
   withResult(async (input: BatchUpdateMinOrderQtyInput): Promise<BatchOperateOutput> => {
     const productIds = Array.from(new Set((input.product_ids || []).filter(Boolean)))
     const skuIds = Array.from(new Set((input.sku_ids || []).filter(Boolean)))
