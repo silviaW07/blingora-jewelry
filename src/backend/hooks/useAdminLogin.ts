@@ -73,7 +73,7 @@ export const useAdminLogin = (): { state: AdminLoginState, handlers: AdminLoginH
 
       toast.success('登录成功');
       if (data.sysuser_role === 'SUB_ADMIN') {
-        ProductManagement.navigateTo(router)
+        ProductManagement.navigateToAll(router)
       } else {
         Dashboard.navigateTo(router)
       }
