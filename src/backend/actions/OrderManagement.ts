@@ -3566,6 +3566,41 @@ async function writeOrderLinks(groups: OrderLinkGroup[]) {
   }
 }
 
+export const getLinkedInboundLines = requireRole([UserRole.ADMIN])(
+  withResult(async (orderId: string): Promise<OrderInboundLine[]> => {
+    const requestedId = String(orderId || '').trim()
+    if (!requestedId) return []
+    const groups = await readOrderLinks()
+    const group = groups.find((item) => item.primaryId === requestedId)
+      || groups.find((item) => item.children.some((child) => child.id === requestedId))
+    const ids = group ? [group.primaryId, ...group.children.map((child) => child.id)] : [requestedId]
+    const orders = await prisma.orderrecord.findMany({
+      where: { id: { in: ids } },
+      include: {
+        items: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            product: { select: inboundProductSelect },
+            productSku: { select: { imageUrl: true, attributeJson: true, materialLabel: true, sizeLabel: true } },
+          },
+        },
+      },
+    })
+    const byId = new Map(orders.map((order) => [order.id, order]))
+    const lines: OrderInboundLine[] = []
+    for (const id of ids) {
+      const order = byId.get(id)
+      if (!order) continue
+      lines.push(...order.items.map((item) => ({
+        ...mapInboundLine(item, order.currencyCode, order),
+        orderNo: order.orderNo,
+        orderId: order.id,
+      })))
+    }
+    return lines
+  }),
+)
+
 export const getOrderLinks = requireRole([UserRole.ADMIN])(
   withResult(async (): Promise<OrderLinkGroup[]> => readOrderLinks()),
 )

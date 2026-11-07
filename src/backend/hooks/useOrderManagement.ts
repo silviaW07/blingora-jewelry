@@ -27,6 +27,7 @@ import {
   getOrderList,
   getOrderDetail,
   getOrderLinks,
+  getLinkedInboundLines,
   saveOrderLink,
   shipOrder,
   addLogisticsSegment,
@@ -628,7 +629,16 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       }))
     )
     const collect = async () => {
+      if (ids.length > 1) {
+        try {
+          const linked = await getLinkedInboundLines(primaryId)
+          if (linked?.length) return linked
+        } catch {
+          // Fall back to the orders already loaded in the list.
+        }
+      }
       const merged: OrderInboundLine[] = []
+      const seen = new Set<string>()
       for (const id of ids) {
         const current = linesFor(id)
         let lines = current.lines
@@ -642,7 +652,11 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
             // Keep the lines already on the order list.
           }
         }
-        merged.push(...stamp(id, lines, orderNo))
+        for (const line of stamp(id, lines, orderNo)) {
+          if (seen.has(line.id)) continue
+          seen.add(line.id)
+          merged.push(line)
+        }
       }
       return merged
     }
@@ -867,6 +881,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   useEffect(() => {
     if (searchParams.get('inbound') !== '1' || !queryOrderId) {
+      if (inboundOrderId && inboundBooted.current === inboundOrderId) return
       if (inboundOrderId) {
         inboundClosing.current = true
         setInboundOrderId(null)
