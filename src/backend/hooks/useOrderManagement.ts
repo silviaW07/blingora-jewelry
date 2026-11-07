@@ -607,6 +607,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     router.replace(next ? `${OrderManagement.path}?${next}` : OrderManagement.path, { scroll: false })
   }
 
+  const withLinkedLines = (lines: OrderInboundLine[]) => {
+    const ids = new Set(lines.map((line) => line.id))
+    const extras = inboundDrafts.filter((line) => !ids.has(line.id) && line.orderId && line.orderId !== inboundOrderId)
+    return [...lines, ...extras]
+  }
+
   const openInboundDialog = (orderId: string, options?: { skipUrl?: boolean }) => {
     const group = orderLinks.find((item) => item.primaryId === orderId)
       || orderLinks.find((item) => item.children.some((child) => child.id === orderId))
@@ -629,13 +635,11 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       }))
     )
     const collect = async () => {
-      if (ids.length > 1) {
-        try {
-          const linked = await getLinkedInboundLines(primaryId)
-          if (linked?.length) return linked
-        } catch {
-          // Fall back to the orders already loaded in the list.
-        }
+      try {
+        const linked = await getLinkedInboundLines(primaryId)
+        if (linked?.length) return linked
+      } catch {
+        // Fall back to the orders already loaded in the list.
       }
       const merged: OrderInboundLine[] = []
       const seen = new Set<string>()
@@ -1161,7 +1165,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           inboundLines: result.lines,
         }
       })
-      setInboundDrafts(result.lines.map((line) => {
+      setInboundDrafts(withLinkedLines(result.lines).map((line) => {
         const prev = drafts.find((item) => item.id === line.id)
         if (!prev) {
           return {
@@ -1230,7 +1234,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           inboundLines: result.lines,
         }
       })
-      setInboundDrafts(result.lines.map((line) => {
+      setInboundDrafts(withLinkedLines(result.lines).map((line) => {
         const prev = drafts.find((item) => item.id === line.id)
         if (!prev) {
           return {
@@ -1300,7 +1304,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           inboundLines: result.lines,
         }
       })
-      setInboundDrafts(result.lines.map((line) => {
+      setInboundDrafts(withLinkedLines(result.lines).map((line) => {
         const prev = drafts.find((item) => item.id === line.id)
         if (!prev) {
           return {
@@ -1370,7 +1374,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           inboundLines: result.lines,
         }
       })
-      setInboundDrafts(result.lines.map((line) => {
+      setInboundDrafts(withLinkedLines(result.lines).map((line) => {
         const prev = drafts.find((item) => item.id === line.id)
         if (!prev) {
           return {
@@ -1445,7 +1449,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           inboundLines: result.lines,
         }
       })
-      setInboundDrafts(result.lines.map((line) => {
+      setInboundDrafts(withLinkedLines(result.lines).map((line) => {
         const prev = drafts.find((item) => item.id === line.id)
         if (!prev) {
           return {

@@ -503,6 +503,7 @@ exports.Prisma.OrderrecordScalarFieldEnum = {
   localeCode: 'localeCode',
   subtotalAmount: 'subtotalAmount',
   discountAmount: 'discountAmount',
+  manualDiscountPercent: 'manualDiscountPercent',
   shippingAmount: 'shippingAmount',
   giftWrapAmount: 'giftWrapAmount',
   totalAmount: 'totalAmount',

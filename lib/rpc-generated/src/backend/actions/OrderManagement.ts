@@ -50,6 +50,8 @@ export const exportInboundSheet = (...args: Parameters<Actions["exportInboundShe
   rpcCall<Awaited<ReturnType<Actions["exportInboundSheet"]>>>("src.backend.actions.OrderManagement.exportInboundSheet", ...args);
 export const exportOrdersExcel = (...args: Parameters<Actions["exportOrdersExcel"]>) => 
   rpcCall<Awaited<ReturnType<Actions["exportOrdersExcel"]>>>("src.backend.actions.OrderManagement.exportOrdersExcel", ...args);
+export const getLinkedInboundLines = (...args: Parameters<Actions["getLinkedInboundLines"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["getLinkedInboundLines"]>>>("src.backend.actions.OrderManagement.getLinkedInboundLines", ...args);
 export const getOrderLinks = (...args: Parameters<Actions["getOrderLinks"]>) => 
   rpcCall<Awaited<ReturnType<Actions["getOrderLinks"]>>>("src.backend.actions.OrderManagement.getOrderLinks", ...args);
 export const saveOrderLink = (...args: Parameters<Actions["saveOrderLink"]>) => 

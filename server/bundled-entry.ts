@@ -1,6 +1,8 @@
 import express from 'express';
 import serializer from '../src/utils/serializer';
 import { registry } from './registry';
+import { getLinkedInboundLines as keepLinkedInboundLines } from '../src/backend/actions/OrderManagement';
+void keepLinkedInboundLines;
 import { setupThirdPartyAuth } from './thirdparty/auth';
 import { authContext } from './thirdparty/context';
 import { THIRD_PARTY_SESSION_SECRET } from './thirdparty/common';

@@ -29020,6 +29020,7 @@ export namespace Prisma {
   export type OrderrecordAvgAggregateOutputType = {
     subtotalAmount: Decimal | null
     discountAmount: Decimal | null
+    manualDiscountPercent: Decimal | null
     shippingAmount: Decimal | null
     giftWrapAmount: Decimal | null
     totalAmount: Decimal | null
@@ -29028,6 +29029,7 @@ export namespace Prisma {
   export type OrderrecordSumAggregateOutputType = {
     subtotalAmount: Decimal | null
     discountAmount: Decimal | null
+    manualDiscountPercent: Decimal | null
     shippingAmount: Decimal | null
     giftWrapAmount: Decimal | null
     totalAmount: Decimal | null
@@ -29043,6 +29045,7 @@ export namespace Prisma {
     localeCode: string | null
     subtotalAmount: Decimal | null
     discountAmount: Decimal | null
+    manualDiscountPercent: Decimal | null
     shippingAmount: Decimal | null
     giftWrapAmount: Decimal | null
     totalAmount: Decimal | null
@@ -29072,6 +29075,7 @@ export namespace Prisma {
     localeCode: string | null
     subtotalAmount: Decimal | null
     discountAmount: Decimal | null
+    manualDiscountPercent: Decimal | null
     shippingAmount: Decimal | null
     giftWrapAmount: Decimal | null
     totalAmount: Decimal | null
@@ -29101,6 +29105,7 @@ export namespace Prisma {
     localeCode: number
     subtotalAmount: number
     discountAmount: number
+    manualDiscountPercent: number
     shippingAmount: number
     giftWrapAmount: number
     totalAmount: number
@@ -29125,6 +29130,7 @@ export namespace Prisma {
   export type OrderrecordAvgAggregateInputType = {
     subtotalAmount?: true
     discountAmount?: true
+    manualDiscountPercent?: true
     shippingAmount?: true
     giftWrapAmount?: true
     totalAmount?: true
@@ -29133,6 +29139,7 @@ export namespace Prisma {
   export type OrderrecordSumAggregateInputType = {
     subtotalAmount?: true
     discountAmount?: true
+    manualDiscountPercent?: true
     shippingAmount?: true
     giftWrapAmount?: true
     totalAmount?: true
@@ -29148,6 +29155,7 @@ export namespace Prisma {
     localeCode?: true
     subtotalAmount?: true
     discountAmount?: true
+    manualDiscountPercent?: true
     shippingAmount?: true
     giftWrapAmount?: true
     totalAmount?: true
@@ -29177,6 +29185,7 @@ export namespace Prisma {
     localeCode?: true
     subtotalAmount?: true
     discountAmount?: true
+    manualDiscountPercent?: true
     shippingAmount?: true
     giftWrapAmount?: true
     totalAmount?: true
@@ -29206,6 +29215,7 @@ export namespace Prisma {
     localeCode?: true
     subtotalAmount?: true
     discountAmount?: true
+    manualDiscountPercent?: true
     shippingAmount?: true
     giftWrapAmount?: true
     totalAmount?: true
@@ -29322,6 +29332,7 @@ export namespace Prisma {
     localeCode: string | null
     subtotalAmount: Decimal
     discountAmount: Decimal
+    manualDiscountPercent: Decimal | null
     shippingAmount: Decimal
     giftWrapAmount: Decimal
     totalAmount: Decimal
@@ -29370,6 +29381,7 @@ export namespace Prisma {
     localeCode?: boolean
     subtotalAmount?: boolean
     discountAmount?: boolean
+    manualDiscountPercent?: boolean
     shippingAmount?: boolean
     giftWrapAmount?: boolean
     totalAmount?: boolean
@@ -29409,6 +29421,7 @@ export namespace Prisma {
     localeCode?: boolean
     subtotalAmount?: boolean
     discountAmount?: boolean
+    manualDiscountPercent?: boolean
     shippingAmount?: boolean
     giftWrapAmount?: boolean
     totalAmount?: boolean
@@ -29428,7 +29441,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type orderrecordOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNo" | "userId" | "addressId" | "status" | "currencyCode" | "localeCode" | "subtotalAmount" | "discountAmount" | "shippingAmount" | "giftWrapAmount" | "totalAmount" | "paymentMethod" | "paymentStatus" | "installmentInfo" | "couponId" | "shipMethod" | "trackingCarrier" | "trackingNumber" | "estimatedArrivalAt" | "shippedAt" | "internalNote" | "giftMessage" | "note" | "createdAt" | "updatedAt", ExtArgs["result"]["orderrecord"]>
+  export type orderrecordOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNo" | "userId" | "addressId" | "status" | "currencyCode" | "localeCode" | "subtotalAmount" | "discountAmount" | "manualDiscountPercent" | "shippingAmount" | "giftWrapAmount" | "totalAmount" | "paymentMethod" | "paymentStatus" | "installmentInfo" | "couponId" | "shipMethod" | "trackingCarrier" | "trackingNumber" | "estimatedArrivalAt" | "shippedAt" | "internalNote" | "giftMessage" | "note" | "createdAt" | "updatedAt", ExtArgs["result"]["orderrecord"]>
   export type orderrecordInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | sysuserDefaultArgs<ExtArgs>
     address?: boolean | orderrecord$addressArgs<ExtArgs>
@@ -29461,6 +29474,7 @@ export namespace Prisma {
       localeCode: string | null
       subtotalAmount: Prisma.Decimal
       discountAmount: Prisma.Decimal
+      manualDiscountPercent: Prisma.Decimal | null
       shippingAmount: Prisma.Decimal
       giftWrapAmount: Prisma.Decimal
       totalAmount: Prisma.Decimal
@@ -29863,6 +29877,7 @@ export namespace Prisma {
     readonly localeCode: FieldRef<"orderrecord", 'String'>
     readonly subtotalAmount: FieldRef<"orderrecord", 'Decimal'>
     readonly discountAmount: FieldRef<"orderrecord", 'Decimal'>
+    readonly manualDiscountPercent: FieldRef<"orderrecord", 'Decimal'>
     readonly shippingAmount: FieldRef<"orderrecord", 'Decimal'>
     readonly giftWrapAmount: FieldRef<"orderrecord", 'Decimal'>
     readonly totalAmount: FieldRef<"orderrecord", 'Decimal'>
@@ -67301,6 +67316,7 @@ export namespace Prisma {
     localeCode: 'localeCode',
     subtotalAmount: 'subtotalAmount',
     discountAmount: 'discountAmount',
+    manualDiscountPercent: 'manualDiscountPercent',
     shippingAmount: 'shippingAmount',
     giftWrapAmount: 'giftWrapAmount',
     totalAmount: 'totalAmount',
@@ -71188,6 +71204,7 @@ export namespace Prisma {
     localeCode?: StringNullableFilter<"orderrecord"> | string | null
     subtotalAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: DecimalNullableFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
@@ -71224,6 +71241,7 @@ export namespace Prisma {
     localeCode?: SortOrderInput | SortOrder
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrderInput | SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -71264,6 +71282,7 @@ export namespace Prisma {
     localeCode?: StringNullableFilter<"orderrecord"> | string | null
     subtotalAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: DecimalNullableFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
@@ -71300,6 +71319,7 @@ export namespace Prisma {
     localeCode?: SortOrderInput | SortOrder
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrderInput | SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -71337,6 +71357,7 @@ export namespace Prisma {
     localeCode?: StringNullableWithAggregatesFilter<"orderrecord"> | string | null
     subtotalAmount?: DecimalWithAggregatesFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalWithAggregatesFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: DecimalNullableWithAggregatesFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalWithAggregatesFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalWithAggregatesFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalWithAggregatesFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
@@ -76928,6 +76949,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -76963,6 +76985,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -76994,6 +77017,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -77029,6 +77053,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -77062,6 +77087,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -77089,6 +77115,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -77117,6 +77144,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -82547,6 +82575,7 @@ export namespace Prisma {
     localeCode?: SortOrder
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -82569,6 +82598,7 @@ export namespace Prisma {
   export type orderrecordAvgOrderByAggregateInput = {
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -82584,6 +82614,7 @@ export namespace Prisma {
     localeCode?: SortOrder
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -82613,6 +82644,7 @@ export namespace Prisma {
     localeCode?: SortOrder
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -82635,6 +82667,7 @@ export namespace Prisma {
   export type orderrecordSumOrderByAggregateInput = {
     subtotalAmount?: SortOrder
     discountAmount?: SortOrder
+    manualDiscountPercent?: SortOrder
     shippingAmount?: SortOrder
     giftWrapAmount?: SortOrder
     totalAmount?: SortOrder
@@ -89513,6 +89546,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -89546,6 +89580,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -90021,6 +90056,7 @@ export namespace Prisma {
     localeCode?: StringNullableFilter<"orderrecord"> | string | null
     subtotalAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: DecimalNullableFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFilter<"orderrecord"> | Decimal | DecimalJsLike | number | string
@@ -94895,6 +94931,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -94928,6 +94965,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -97205,6 +97243,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -97239,6 +97278,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -97971,6 +98011,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -98005,6 +98046,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -98263,6 +98305,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -98297,6 +98340,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -98785,6 +98829,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -98819,6 +98864,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -99111,6 +99157,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -99145,6 +99192,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -101555,6 +101603,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -101589,6 +101638,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -101635,6 +101685,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -101669,6 +101720,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -101699,6 +101751,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -101733,6 +101786,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -101779,6 +101833,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -101813,6 +101868,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -104844,6 +104900,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -105253,6 +105310,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -105286,6 +105344,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -105318,6 +105377,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -107614,6 +107674,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -107641,6 +107702,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -107674,6 +107736,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -107706,6 +107769,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -107887,6 +107951,7 @@ export namespace Prisma {
     localeCode?: string | null
     subtotalAmount: Decimal | DecimalJsLike | number | string
     discountAmount?: Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: Decimal | DecimalJsLike | number | string | null
     shippingAmount?: Decimal | DecimalJsLike | number | string
     giftWrapAmount?: Decimal | DecimalJsLike | number | string
     totalAmount: Decimal | DecimalJsLike | number | string
@@ -107930,6 +107995,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -107964,6 +108030,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
@@ -107996,6 +108063,7 @@ export namespace Prisma {
     localeCode?: NullableStringFieldUpdateOperationsInput | string | null
     subtotalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     discountAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    manualDiscountPercent?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     shippingAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     giftWrapAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
