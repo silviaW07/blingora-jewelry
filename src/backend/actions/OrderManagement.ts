@@ -365,6 +365,8 @@ export interface OrderListItem {
   customerVipDiscount: number
   /** First-order ladder or loyal rate, as percent off. Excludes product discounts. */
   ladderOffPercent: number
+  /** Hand-set order discount, percent off. Null until someone edits the big number. */
+  manualDiscountPercent: number | null
 }
 
 export interface OrderExcelExportRow {
@@ -691,6 +693,7 @@ export const getOrderList = requireStaff('orders')(
           subtotal: record.subtotalAmount.toNumber(),
           config: promoConfig,
         }),
+        manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
         countryName: record.address?.countryName || null,
         itemSummary,
         itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
@@ -785,6 +788,7 @@ export const getOrderDetail = requireStaff('orders')(
         subtotal: record.subtotalAmount.toNumber(),
         config: await loadPricingPromotionConfig(prisma),
       }),
+      manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
       countryName: record.address?.countryName || null,
       itemSummary,
       itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
@@ -2697,7 +2701,7 @@ export const updateOrderDiscount = requireStaff('orders')(
     await prisma.$transaction(async (tx) => {
       await tx.orderrecord.update({
         where: { id: order.id },
-        data: { discountAmount: discount, totalAmount: total },
+        data: { discountAmount: discount, totalAmount: total, manualDiscountPercent: percent },
       })
       await tx.orderoperationlog.create({
         data: {

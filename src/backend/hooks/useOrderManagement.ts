@@ -1156,6 +1156,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
           ...prev,
           subtotalAmount: result.subtotalAmount,
           discountAmount: result.discountAmount,
+          manualDiscountPercent: result.discountPercent,
           totalAmount: result.totalAmount,
           inboundLines: result.lines,
         }
@@ -1210,6 +1211,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
               ...row,
               subtotalAmount: result.subtotalAmount,
               discountAmount: result.discountAmount,
+              manualDiscountPercent: result.discountPercent,
               totalAmount: result.totalAmount,
               inboundLines: result.lines,
               inboundOrderedQty: result.orderedQty,

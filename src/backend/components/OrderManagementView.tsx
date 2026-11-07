@@ -1096,12 +1096,13 @@ export const OrderManagementView = ({
   const vipOff = customerVip > 0 && customerVip < 100 ? Math.round((100 - customerVip) * 100) / 100 : 0;
   const ladderOff = Math.max(0, Math.round((Number(inboundOrder?.ladderOffPercent) || 0) * 100) / 100);
   const formatOff = (value: number) => (Number.isInteger(value) ? String(value) : String(value));
-  const discountPercentLabel = vipOff <= 0 && ladderOff <= 0
+  const manualOff = Math.max(0, Math.round((Number(inboundOrder?.manualDiscountPercent) || 0) * 100) / 100);
+  const orderLevelOff = Math.max(vipOff, ladderOff, manualOff);
+  const discountPercentLabel = orderLevelOff <= 0
     ? '0'
-    : vipOff >= ladderOff
+    : vipOff >= ladderOff && vipOff >= manualOff
       ? `${customerVip}vip`
-      : `order discount ${formatOff(ladderOff)}%`;
-  const orderLevelOff = Math.max(vipOff, ladderOff);
+      : `order discount ${formatOff(orderLevelOff)}%`;
   const orderKeepRate = Math.max(0, Math.min(1, 1 - orderLevelOff / 100));
   const discountFromSale = (unitText: string) => {
     if (!unitText.trim()) return null;
@@ -2008,7 +2009,7 @@ export const OrderManagementView = ({
                 <span
                   className="inline-flex min-w-16 cursor-text items-center justify-center whitespace-nowrap rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
                   title="VIP 显示 95vip，阶梯折扣显示 order discount 10%。取更大的一个，不含商品折扣"
-                  onDoubleClick={() => { setDiscountDraft(vipOff >= ladderOff && vipOff > 0 ? String(customerVip) : formatOff(ladderOff)); setDiscountEditing(true); }}
+                  onDoubleClick={() => { setDiscountDraft(vipOff >= ladderOff && vipOff >= manualOff && vipOff > 0 ? String(customerVip) : formatOff(orderLevelOff)); setDiscountEditing(true); }}
                 >
                   {discountPercentLabel}
                 </span>
