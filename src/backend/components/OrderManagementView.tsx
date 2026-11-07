@@ -1092,10 +1092,17 @@ export const OrderManagementView = ({
   const orderDiscount = inboundOrder && Number.isFinite(Number(inboundOrder.discountAmount))
     ? Number(inboundOrder.discountAmount)
     : Math.max(0, originalTotal - discountTotal);
-  const discountPercent = orderSubtotal > 0 ? Math.round((orderDiscount / orderSubtotal) * 10000) / 100 : 0;
-  const vipKeep = Math.round((100 - discountPercent) * 100) / 100;
-  const discountPercentLabel = discountPercent > 0 && vipKeep > 0 && vipKeep < 100 ? `${Number.isInteger(vipKeep) ? vipKeep : vipKeep}vip` : '0';
-  const orderKeepRate = Math.max(0, Math.min(1, 1 - discountPercent / 100));
+  const customerVip = Math.round(Number(inboundOrder?.customerVipDiscount) || 0);
+  const vipOff = customerVip > 0 && customerVip < 100 ? Math.round((100 - customerVip) * 100) / 100 : 0;
+  const ladderOff = Math.max(0, Math.round((Number(inboundOrder?.ladderOffPercent) || 0) * 100) / 100);
+  const formatOff = (value: number) => (Number.isInteger(value) ? String(value) : String(value));
+  const discountPercentLabel = vipOff <= 0 && ladderOff <= 0
+    ? '0'
+    : vipOff >= ladderOff
+      ? `${customerVip}vip`
+      : `order discount ${formatOff(ladderOff)}%`;
+  const orderLevelOff = Math.max(vipOff, ladderOff);
+  const orderKeepRate = Math.max(0, Math.min(1, 1 - orderLevelOff / 100));
   const discountFromSale = (unitText: string) => {
     if (!unitText.trim()) return null;
     const unit = Number(unitText);
@@ -1999,9 +2006,9 @@ export const OrderManagementView = ({
                 />
               ) : (
                 <span
-                  className="inline-flex min-w-16 cursor-text items-center justify-center rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
-                  title="按 VIP 显示，例如 95vip。双击后改整单"
-                  onDoubleClick={() => { setDiscountDraft(discountPercent > 0 ? String(vipKeep) : '0'); setDiscountEditing(true); }}
+                  className="inline-flex min-w-16 cursor-text items-center justify-center whitespace-nowrap rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
+                  title="VIP 显示 95vip，阶梯折扣显示 order discount 10%。取更大的一个，不含商品折扣"
+                  onDoubleClick={() => { setDiscountDraft(vipOff >= ladderOff && vipOff > 0 ? String(customerVip) : formatOff(ladderOff)); setDiscountEditing(true); }}
                 >
                   {discountPercentLabel}
                 </span>

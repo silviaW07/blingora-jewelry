@@ -12,7 +12,9 @@ import {
 } from '@/backend/action_utils'
 import { getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { normalizeSupplierSourceUrl, tradeImportSourceUrl } from '@/shared/supplierSourceUrl'
-import { isPlaceholderCompareAt, resolveListedCompareAt } from '@/shared/pricingPromotionCalc'
+import { isPlaceholderCompareAt, resolveListedCompareAt, pickFirstOrderTier } from '@/shared/pricingPromotionCalc'
+import { isPromoRuleActive, loadPricingPromotionConfig, type PricingPromotionConfig } from '@/shared/pricingPromotionConfig'
+import { isFirstOrderDiscountCustomerType } from '@/shared/customerType'
 import { toDecimalNumber } from '@/shared/priceCoefficient'
 
 // ===== Enums =====
@@ -359,6 +361,10 @@ export interface OrderListItem {
   inboundReceivedQty: number
   inboundState: InboundState
   inboundLines: OrderInboundLine[]
+  /** Customer VIP keep rate, 95 means 95vip. 0 means none. */
+  customerVipDiscount: number
+  /** First-order ladder or loyal rate, as percent off. Excludes product discounts. */
+  ladderOffPercent: number
 }
 
 export interface OrderExcelExportRow {
@@ -536,6 +542,34 @@ export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
 /**
  * 获取订单列表（支持复合检索）
  */
+
+function orderLevelDiscounts(input: {
+  vipDiscount: number
+  customerType: string | null | undefined
+  subtotal: number
+  config: PricingPromotionConfig
+}) {
+  const vip = Math.round(Number(input.vipDiscount) || 0)
+  const vipOff = vip > 0 && vip < 100 ? Math.round((100 - vip) * 100) / 100 : 0
+  let ladderOff = 0
+  const subtotal = Math.max(0, Number(input.subtotal) || 0)
+  if (isFirstOrderDiscountCustomerType(input.customerType) && isPromoRuleActive(input.config.firstOrder)) {
+    const tier = pickFirstOrderTier(input.config.firstOrder.tiers, input.config.firstOrder.value, subtotal)
+    if (tier) {
+      if (input.config.firstOrder.mode === 'AMOUNT') {
+        ladderOff = subtotal > 0 ? Math.round((Number(tier.value) / subtotal) * 10000) / 100 : 0
+      } else {
+        const coef = Math.max(0, Math.min(1, Number(tier.value) || 0))
+        ladderOff = Math.round((1 - coef) * 10000) / 100
+      }
+    }
+  } else if (isPromoRuleActive(input.config.loyal)) {
+    const coef = Math.max(0, Math.min(1, Number(input.config.loyal.coefficient) || 0))
+    ladderOff = Math.round((1 - coef) * 10000) / 100
+  }
+  return { customerVipDiscount: vip > 0 && vip < 100 ? vip : 0, ladderOffPercent: Math.max(0, ladderOff) }
+}
+
 export const getOrderList = requireStaff('orders')(
   withResult(async (input: GetOrderListInput): Promise<GetOrderListOutput> => {
     const {
@@ -585,7 +619,7 @@ export const getOrderList = requireStaff('orders')(
       ]
     }
 
-    const [total, records] = await Promise.all([
+    const [total, records, promoConfig] = await Promise.all([
       prisma.orderrecord.count({ where: whereCondition }),
       prisma.orderrecord.findMany({
         where: whereCondition,
@@ -593,7 +627,7 @@ export const getOrderList = requireStaff('orders')(
         take: safePageSize,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { username: true, email: true, phone: true } },
+          user: { select: { username: true, email: true, phone: true, vipDiscount: true, customerType: true } },
           address: { select: { countryName: true } },
           items: {
             orderBy: { createdAt: 'asc' },
@@ -615,7 +649,8 @@ export const getOrderList = requireStaff('orders')(
             },
           }
         }
-      })
+      }),
+      loadPricingPromotionConfig(prisma),
     ])
 
     const list: OrderListItem[] = records.map(record => {
@@ -650,6 +685,12 @@ export const getOrderList = requireStaff('orders')(
         customerName: record.user.username,
         customerEmail: record.user.email,
         customerWhatsapp: record.user.phone || null,
+        ...orderLevelDiscounts({
+          vipDiscount: Number(record.user.vipDiscount) || 0,
+          customerType: record.user.customerType,
+          subtotal: record.subtotalAmount.toNumber(),
+          config: promoConfig,
+        }),
         countryName: record.address?.countryName || null,
         itemSummary,
         itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
@@ -738,6 +779,12 @@ export const getOrderDetail = requireStaff('orders')(
       customerName: record.user.username,
       customerEmail: record.user.email,
       customerWhatsapp: record.user.phone || null,
+      ...orderLevelDiscounts({
+        vipDiscount: Number(record.user.vipDiscount) || 0,
+        customerType: record.user.customerType,
+        subtotal: record.subtotalAmount.toNumber(),
+        config: await loadPricingPromotionConfig(prisma),
+      }),
       countryName: record.address?.countryName || null,
       itemSummary,
       itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
