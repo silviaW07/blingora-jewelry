@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import { Dashboard, AdminRegister, ProductManagement } from '@/backend/route-params';
+import { Dashboard, AdminRegister, AdminProfile } from '@/backend/route-params';
 import type { AdminLoginInput } from '@/backend/actions/AdminLogin';
 import { adminLogin } from '@/backend/actions/AdminLogin';
 import { useAdminSession } from '@/tools/BackendSession';
@@ -73,7 +73,7 @@ export const useAdminLogin = (): { state: AdminLoginState, handlers: AdminLoginH
 
       toast.success('登录成功');
       if (data.sysuser_role === 'SUB_ADMIN') {
-        ProductManagement.navigateToAll(router)
+        AdminProfile.navigateTo(router)
       } else {
         Dashboard.navigateTo(router)
       }
