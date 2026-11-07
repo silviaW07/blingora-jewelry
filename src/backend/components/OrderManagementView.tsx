@@ -1104,6 +1104,8 @@ export const OrderManagementView = ({
   const roundMoney = (amount: number) => Math.round(amount * 100) / 100;
   const costDiscountTotal = roundMoney(originalTotal * orderKeepRate);
   const costInStockDiscountTotal = roundMoney(inStockTotal * orderKeepRate);
+  const shortageTotal = roundMoney(Math.max(0, originalTotal - inStockTotal));
+  const shortageDiscountTotal = roundMoney(Math.max(0, costDiscountTotal - costInStockDiscountTotal));
   const saveDiscountPercent = async () => {
     const percent = Number(discountDraft.replace('%', '').trim());
     if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
@@ -2402,7 +2404,7 @@ export const OrderManagementView = ({
             </table>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
+              <div className="grid grid-cols-3 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
                 <div>
                   <div className="text-xs font-medium text-slate-500">Original total</div>
                   <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(originalTotal, inboundCurrency)}</div>
@@ -2411,8 +2413,12 @@ export const OrderManagementView = ({
                   <div className="text-xs font-medium text-slate-500">In stock total</div>
                   <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(inStockTotal, inboundCurrency)}</div>
                 </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">原价缺货金额</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(shortageTotal, inboundCurrency)}</div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
+              <div className="grid grid-cols-3 gap-3 rounded-md border border-slate-200 bg-white px-3 py-3">
                 <div>
                   <div className="text-xs font-medium text-slate-500">Discount total</div>
                   <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(costDiscountTotal, inboundCurrency)}</div>
@@ -2420,6 +2426,10 @@ export const OrderManagementView = ({
                 <div>
                   <div className="text-xs font-medium text-slate-500">In stock discount total</div>
                   <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(costInStockDiscountTotal, inboundCurrency)}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-slate-500">折扣价缺货金额</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatInboundMoney(shortageDiscountTotal, inboundCurrency)}</div>
                 </div>
               </div>
               <div className="rounded-md border border-slate-200 bg-white px-3 py-3">
