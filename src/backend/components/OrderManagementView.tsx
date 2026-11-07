@@ -1093,7 +1093,8 @@ export const OrderManagementView = ({
     ? Number(inboundOrder.discountAmount)
     : Math.max(0, originalTotal - discountTotal);
   const discountPercent = orderSubtotal > 0 ? Math.round((orderDiscount / orderSubtotal) * 10000) / 100 : 0;
-  const discountPercentLabel = `${Number(discountPercent.toFixed(2))}%`;
+  const vipKeep = Math.round((100 - discountPercent) * 100) / 100;
+  const discountPercentLabel = discountPercent > 0 && vipKeep > 0 && vipKeep < 100 ? `${Number.isInteger(vipKeep) ? vipKeep : vipKeep}vip` : '0';
   const orderKeepRate = Math.max(0, Math.min(1, 1 - discountPercent / 100));
   const discountFromSale = (unitText: string) => {
     if (!unitText.trim()) return null;
@@ -1107,11 +1108,14 @@ export const OrderManagementView = ({
   const shortageTotal = roundMoney(Math.max(0, originalTotal - inStockTotal));
   const shortageDiscountTotal = roundMoney(Math.max(0, costDiscountTotal - costInStockDiscountTotal));
   const saveDiscountPercent = async () => {
-    const percent = Number(discountDraft.replace('%', '').trim());
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      toast.error('请输入 0 到 100 的折扣');
+    const raw = discountDraft.trim().toLowerCase();
+    const asVip = raw.includes('vip');
+    const entered = Number(raw.replace(/%/g, '').replace(/vip/g, '').trim());
+    if (!Number.isFinite(entered) || entered < 0 || entered > 100) {
+      toast.error('请输入折扣，例如 95vip');
       return;
     }
+    const percent = asVip || entered >= 50 ? Math.max(0, Math.round((100 - entered) * 100) / 100) : entered;
     setDiscountEditing(false);
     await handlers.updateInboundDiscount(percent);
   };
@@ -1996,8 +2000,8 @@ export const OrderManagementView = ({
               ) : (
                 <span
                   className="inline-flex min-w-16 cursor-text items-center justify-center rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
-                  title="订单折扣，双击后改整单"
-                  onDoubleClick={() => { setDiscountDraft(String(discountPercent)); setDiscountEditing(true); }}
+                  title="按 VIP 显示，例如 95vip。双击后改整单"
+                  onDoubleClick={() => { setDiscountDraft(discountPercent > 0 ? String(vipKeep) : '0'); setDiscountEditing(true); }}
                 >
                   {discountPercentLabel}
                 </span>
