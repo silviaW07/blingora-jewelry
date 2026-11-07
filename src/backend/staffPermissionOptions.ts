@@ -1,0 +1,15 @@
+export const STAFF_PERMISSION_OPTIONS = [
+  { key: 'dashboard', label: '管理概览' },
+  { key: 'products', label: '商品管理' },
+  { key: 'cost', label: '成本价和供应商' },
+  { key: 'categories', label: '分类管理' },
+  { key: 'customers', label: '客户管理' },
+  { key: 'followup', label: '客户跟进' },
+  { key: 'orders', label: '订单管理' },
+  { key: 'banners', label: 'Banner轮播图管理' },
+  { key: 'buyershow', label: '买家秀管理' },
+  { key: 'recommend', label: '首页推荐专区管理' },
+  { key: 'shipping', label: '物流渠道配置' },
+  { key: 'pricing', label: '促销活动管理' },
+  { key: 'brandalias', label: '品牌别名管理' },
+] as const

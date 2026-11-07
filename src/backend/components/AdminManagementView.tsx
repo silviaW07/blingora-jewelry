@@ -6,7 +6,7 @@ import type {
   AdminManagementHandlers,
 } from '@/backend/hooks/useAdminManagement'
 import type { AdminRole, StaffPermission } from '@/backend/actions/AdminManagement'
-import { STAFF_PERMISSION_OPTIONS } from '@/backend/staffAccess'
+import { STAFF_PERMISSION_OPTIONS } from '@/backend/staffPermissionOptions'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
