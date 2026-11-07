@@ -625,6 +625,7 @@ export interface ProductBindingMetaOutput {
 }
 
 import prisma from '@/tools/prisma'
+import { requireStaff, staffMustHide } from '@/backend/staffAccess'
 import { DEFAULT_USD_EXCHANGE_RATE, getUsdExchangeRate, toUsdFromCny } from '@/shared/exchangeRate'
 import { mosaicImageUrlToUpload, mapPool } from '@/lib/mosaicRemoteImage'
 import { withResult, UserRole, requireRole, getAuthContext } from '@/backend/action_utils'
@@ -2030,7 +2031,7 @@ const repairCharsetCorruptedProducts = async () => {
 let lastProductCharsetRepairAt = 0
 const PRODUCT_CHARSET_REPAIR_INTERVAL_MS = 10 * 60 * 1000
 
-export const getProductList = requireRole([UserRole.ADMIN])(
+export const getProductList = requireStaff('products')(
   withResult(async (input: GetProductListInput): Promise<GetProductListOutput> => {
     // Side-effect repair must not block first paint (was awaited on every interval hit).
     if (Date.now() - lastProductCharsetRepairAt >= PRODUCT_CHARSET_REPAIR_INTERVAL_MS) {
@@ -2237,6 +2238,18 @@ export const getProductList = requireRole([UserRole.ADMIN])(
       list.unshift(published_import_match)
     }
 
+    if (await staffMustHide('cost')) {
+      for (const item of list) {
+        item.cost_price = null
+        item.supplier_name = null
+        item.source_url = null
+      }
+      if (published_import_match) {
+        published_import_match.cost_price = null
+        published_import_match.supplier_name = null
+        published_import_match.source_url = null
+      }
+    }
     return { list, total, published_import_match, usd_exchange_rate: usdExchangeRate }
   })
 )

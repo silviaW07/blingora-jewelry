@@ -179,6 +179,7 @@ export interface ImpersonateCustomerOutput {
 }
 
 import prisma from '@/tools/prisma'
+import { requireStaff } from '@/backend/staffAccess'
 import {
   requireRole,
   getAuthContext,
@@ -331,7 +332,7 @@ function pickPrimaryTag(links?: Array<{ tag?: { code?: string | null; name?: str
 /**
  * 获取客户/用户列表（支持分页、搜索、筛选、排序、购物车美金合计）
  */
-export const getUserList = requireRole([UserRole.ADMIN])(
+export const getUserList = requireStaff('customers')(
   withResult(async (input: GetUserListInput): Promise<GetUserListOutput> => {
     await ensureCustomerTags()
 

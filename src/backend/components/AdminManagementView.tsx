@@ -5,7 +5,7 @@ import type {
   AdminManagementState,
   AdminManagementHandlers,
 } from '@/backend/hooks/useAdminManagement'
-import type { AdminRole } from '@/backend/actions/AdminManagement'
+import type { AdminRole, StaffPermission } from '@/backend/actions/AdminManagement'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -106,7 +106,8 @@ export default function AdminManagementView({ state, handlers }: Props) {
                       <TableHead className="pl-6 font-header font-bold text-slate-700">账号</TableHead>
                       <TableHead className="font-header font-bold text-slate-700">用户名</TableHead>
                       <TableHead className="font-header font-bold text-slate-700">邮箱</TableHead>
-                      <TableHead className="font-header font-bold text-slate-700 w-[150px]">角色 / 权限</TableHead>
+                      <TableHead className="font-header font-bold text-slate-700">密码</TableHead>
+                      <TableHead className="font-header font-bold text-slate-700 w-[220px]">角色 / 权限</TableHead>
                       <TableHead className="font-header font-bold text-slate-700 text-center">状态</TableHead>
                       <TableHead className="font-header font-bold text-slate-700">最后登录</TableHead>
                       <TableHead className="font-header font-bold text-slate-700">创建时间</TableHead>
@@ -116,13 +117,13 @@ export default function AdminManagementView({ state, handlers }: Props) {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="py-16 text-center text-slate-400">
+                        <TableCell colSpan={9} className="py-16 text-center text-slate-400">
                           <Loader2 className="w-5 h-5 animate-spin inline mr-2" />加载中…
                         </TableCell>
                       </TableRow>
                     ) : list.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="py-16 text-center text-slate-400">
+                        <TableCell colSpan={9} className="py-16 text-center text-slate-400">
                           暂无管理员账号，点击右上角「新增管理员」创建。
                         </TableCell>
                       </TableRow>
@@ -137,6 +138,7 @@ export default function AdminManagementView({ state, handlers }: Props) {
                             </TableCell>
                             <TableCell className="text-slate-700">{item.username}</TableCell>
                             <TableCell className="text-slate-600">{item.email}</TableCell>
+                            <TableCell className="font-mono text-sm text-slate-800">{item.password || '未记录'}</TableCell>
                             <TableCell>
                               <Select
                                 value={item.role}
@@ -151,6 +153,32 @@ export default function AdminManagementView({ state, handlers }: Props) {
                                   <SelectItem value="SUB_ADMIN">{ADMIN_ROLE_LABELS.SUB_ADMIN}</SelectItem>
                                 </SelectContent>
                               </Select>
+                              {item.role === 'SUB_ADMIN' ? (
+                                <div className="mt-2 grid gap-1">
+                                  {([
+                                    ['orders', '订单'],
+                                    ['products', '商品'],
+                                    ['cost', '成本价和供应商'],
+                                    ['customers', '客户资料'],
+                                  ] as Array<[StaffPermission, string]>).map(([key, label]) => (
+                                    <label key={key} className="flex items-center gap-1.5 text-xs text-slate-600">
+                                      <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5"
+                                        checked={item.permissions.includes(key)}
+                                        disabled={busy}
+                                        onChange={(event) => {
+                                          const next = event.target.checked
+                                            ? [...item.permissions, key]
+                                            : item.permissions.filter((itemKey) => itemKey !== key)
+                                          void handlers.changePermissions(item, next)
+                                        }}
+                                      />
+                                      {label}
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : <div className="mt-1 text-xs text-slate-400">可查看全部数据</div>}
                             </TableCell>
                             <TableCell className="text-center">
                               {item.status === 'ACTIVE' ? (
@@ -270,6 +298,32 @@ export default function AdminManagementView({ state, handlers }: Props) {
                   <SelectItem value="ADMIN">{ADMIN_ROLE_LABELS.ADMIN}</SelectItem>
                 </SelectContent>
               </Select>
+              {createForm.role === 'SUB_ADMIN' ? (
+                <div className="grid gap-1 pt-1">
+                  {([
+                    ['orders', '订单'],
+                    ['products', '商品'],
+                    ['cost', '成本价和供应商'],
+                    ['customers', '客户资料'],
+                  ] as Array<[StaffPermission, string]>).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={createForm.permissions.includes(key)}
+                        onChange={(event) => {
+                          const next = event.target.checked
+                            ? [...createForm.permissions, key]
+                            : createForm.permissions.filter((itemKey) => itemKey !== key)
+                          handlers.setCreateField('permissions', next)
+                        }}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <p className="text-xs text-slate-500">未勾选的数据，子账号在后台看不到。</p>
+                </div>
+              ) : null}
             </div>
           </div>
           <DialogFooter>

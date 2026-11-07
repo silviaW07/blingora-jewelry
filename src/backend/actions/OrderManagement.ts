@@ -1,6 +1,7 @@
 'use server'
 
 import prisma from '@/tools/prisma'
+import { requireStaff, staffMustHide } from '@/backend/staffAccess'
 import { createHash, randomUUID } from 'crypto'
 import { saveUploadedImage } from '@/lib/uploadStorage'
 import {
@@ -535,7 +536,7 @@ export const getOrderDashboardStats = requireRole([UserRole.ADMIN])(
 /**
  * 获取订单列表（支持复合检索）
  */
-export const getOrderList = requireRole([UserRole.ADMIN])(
+export const getOrderList = requireStaff('orders')(
   withResult(async (input: GetOrderListInput): Promise<GetOrderListOutput> => {
     const {
       keyword, status, paymentStatus, startDate, endDate, countryName,
@@ -661,6 +662,18 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
       }
     })
 
+    if (await staffMustHide('cost')) {
+      for (const row of list) {
+        row.inboundLines = row.inboundLines.map((line) => ({ ...line, costPrice: null, supplierName: '', supplierUrl: '' }))
+      }
+    }
+    if (await staffMustHide('customers')) {
+      for (const row of list) {
+        row.customerEmail = ''
+        row.customerWhatsapp = null
+        row.customerName = ''
+      }
+    }
     return { list, total }
   })
 )
@@ -668,7 +681,7 @@ export const getOrderList = requireRole([UserRole.ADMIN])(
 /**
  * 获取订单详情（抽屉用全量数据）
  */
-export const getOrderDetail = requireRole([UserRole.ADMIN])(
+export const getOrderDetail = requireStaff('orders')(
   withResult(async (orderId: string): Promise<OrderDetail> => {
     const record = await prisma.orderrecord.findUnique({
       where: { id: orderId },

@@ -9,10 +9,12 @@ import {
   updateAdminStatus,
   resetAdminPassword,
   deleteAdminAccount,
+  updateAdminPermissions,
 } from '@/backend/actions/AdminManagement'
 import type {
   AdminAccountItem,
   AdminRole,
+  StaffPermission,
 } from '@/backend/actions/AdminManagement'
 
 export const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
@@ -31,6 +33,7 @@ interface CreateForm {
   email: string
   password: string
   role: AdminRole
+  permissions: StaffPermission[]
 }
 
 const EMPTY_CREATE_FORM: CreateForm = {
@@ -39,6 +42,7 @@ const EMPTY_CREATE_FORM: CreateForm = {
   email: '',
   password: '',
   role: 'SUB_ADMIN',
+  permissions: ['orders', 'products'],
 }
 
 export interface AdminManagementState {
@@ -64,6 +68,7 @@ export interface AdminManagementHandlers {
   submitCreate: () => Promise<void>
   toggleStatus: (item: AdminAccountItem) => Promise<void>
   changeRole: (item: AdminAccountItem, role: AdminRole) => Promise<void>
+  changePermissions: (item: AdminAccountItem, permissions: StaffPermission[]) => Promise<void>
   openReset: (item: AdminAccountItem) => void
   closeReset: () => void
   setResetPasswordValue: (value: string) => void
@@ -136,6 +141,7 @@ export function useAdminManagement(): {
         email: createForm.email.trim(),
         password: createForm.password,
         role: createForm.role,
+        permissions: createForm.role === 'SUB_ADMIN' ? createForm.permissions : undefined,
       })
       setList(prev => [...prev, created])
       toast.success('管理员账号已创建')
@@ -176,6 +182,18 @@ export function useAdminManagement(): {
     }
   }, [])
 
+  const changePermissions = useCallback(async (item: AdminAccountItem, permissions: StaffPermission[]) => {
+    setActionLoadingId(item.id)
+    try {
+      const updated = await updateAdminPermissions({ id: item.id, permissions })
+      setList(prev => prev.map(row => (row.id === updated.id ? updated : row)))
+    } catch (error: any) {
+      toast.error(error?.message || '权限更新失败')
+    } finally {
+      setActionLoadingId(null)
+    }
+  }, [])
+
   const openReset = useCallback((item: AdminAccountItem) => {
     setResetTarget(item)
     setResetPasswordValue('')
@@ -195,6 +213,7 @@ export function useAdminManagement(): {
     setResetSubmitting(true)
     try {
       await resetAdminPassword({ id: resetTarget.id, password: resetPasswordValue })
+      setList(prev => prev.map(row => row.id === resetTarget.id ? { ...row, password: resetPasswordValue } : row))
       toast.success('密码已重置')
       setResetTarget(null)
       setResetPasswordValue('')
@@ -251,6 +270,7 @@ export function useAdminManagement(): {
       submitCreate,
       toggleStatus,
       changeRole,
+      changePermissions,
       openReset,
       closeReset,
       setResetPasswordValue,

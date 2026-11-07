@@ -15,6 +15,10 @@ export interface AdminAccountItem {
   phone: string | null
   lastLoginAt: string | null
   createdAt: string
+  /** 明文密码。旧账号在重置前没有记录。 */
+  password: string
+  /** 子账号可查看的数据。主管理员忽略此列表。 */
+  permissions: StaffPermission[]
   /** 是否为当前登录管理员本人（前端据此禁用「禁用 / 删除」按钮，避免自锁） */
   isSelf: boolean
 }
@@ -26,6 +30,12 @@ export interface CreateAdminInput {
   email: string
   password: string
   role?: AdminRole
+  permissions?: StaffPermission[]
+}
+
+export interface UpdateAdminPermissionsInput {
+  id: string
+  permissions: StaffPermission[]
 }
 
 export interface UpdateAdminRoleInput {
@@ -60,6 +70,16 @@ import {
   withResult,
 } from '@/backend/action_utils'
 import { hashSecurePassword, validateAdminPassword } from '@/backend/password-security'
+import {
+  DEFAULT_SUB_PERMISSIONS,
+  normalizeStaffPermissions,
+  permissionsFromPreferences,
+  readStaffPermissions,
+  writeStaffPermissions,
+  type StaffPermission,
+} from '@/backend/staffAccess'
+
+export type { StaffPermission }
 
 // ===== Helpers =====
 const STAFF_ROLES: AdminRole[] = ['ADMIN', 'SUB_ADMIN']
@@ -77,6 +97,8 @@ const toItem = (
     role: string
     status: string
     phone: string | null
+    passwordPlain?: string | null
+    savedPreferencesJson?: unknown
     lastLoginAt: Date | null
     createdAt: Date
   },
@@ -89,6 +111,10 @@ const toItem = (
   role: row.role as AdminRole,
   status: row.status as AdminStatus,
   phone: row.phone ?? null,
+  password: row.passwordPlain || '',
+  permissions: row.role === 'ADMIN'
+    ? ['orders', 'products', 'cost', 'customers']
+    : permissionsFromPreferences(row.savedPreferencesJson),
   lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
   createdAt: row.createdAt.toISOString(),
   isSelf: row.id === currentUserId,
@@ -102,6 +128,8 @@ const ADMIN_SELECT = {
   role: true,
   status: true,
   phone: true,
+  passwordPlain: true,
+  savedPreferencesJson: true,
   lastLoginAt: true,
   createdAt: true,
 } as const
@@ -164,8 +192,12 @@ export const createAdminAccount = requireRole([UserRole.ADMIN])(
         username,
         email,
         password: hashSecurePassword(password),
+        passwordPlain: password,
         role,
         status: 'ACTIVE',
+        savedPreferencesJson: role === 'SUB_ADMIN'
+          ? { staffPermissions: normalizeStaffPermissions(input?.permissions ?? DEFAULT_SUB_PERMISSIONS) }
+          : undefined,
       },
       select: ADMIN_SELECT,
     })
@@ -259,9 +291,41 @@ export const resetAdminPassword = requireRole([UserRole.ADMIN])(
 
     await prisma.sysuser.update({
       where: { id },
-      data: { password: hashSecurePassword(password) },
+      data: { password: hashSecurePassword(password), passwordPlain: password },
     })
     return { success: true }
+  }),
+)
+
+/** PUT：保存子账号可查看的数据范围。 */
+export const updateAdminPermissions = requireRole([UserRole.ADMIN])(
+  withResult(async (input: UpdateAdminPermissionsInput): Promise<AdminAccountItem> => {
+    const id = normalize(input?.id)
+    if (!id) throw new Error('缺少账号 ID')
+    const target = await prisma.sysuser.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    })
+    if (!target || !STAFF_ROLES.includes(target.role as AdminRole)) {
+      throw new Error('账号不存在或不是管理员账号')
+    }
+    if (target.role !== 'SUB_ADMIN') throw new Error('主管理员默认可查看全部数据')
+    await writeStaffPermissions(id, normalizeStaffPermissions(input?.permissions))
+    const updated = await prisma.sysuser.findUnique({ where: { id }, select: ADMIN_SELECT })
+    if (!updated) throw new Error('账号不存在')
+    return toItem(updated, getAuthContext().userId)
+  }),
+)
+
+/** 当前登录人的数据权限。子账号用来决定菜单。 */
+export const getMyStaffAccess = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
+  withResult(async (): Promise<{ role: AdminRole; permissions: StaffPermission[] }> => {
+    const ctx = getAuthContext()
+    const role: AdminRole = ctx.role === 'SUB_ADMIN' ? 'SUB_ADMIN' : 'ADMIN'
+    const permissions = role === 'ADMIN'
+      ? ['orders', 'products', 'cost', 'customers']
+      : await readStaffPermissions(ctx.userId)
+    return { role, permissions }
   }),
 )
 

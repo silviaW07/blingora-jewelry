@@ -7,6 +7,7 @@ import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, 
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
 import { formatBadgeCount, useAdminNavBadges } from '@/backend/hooks/useAdminNavBadges';
+import { getMyStaffAccess } from '@/backend/actions/AdminManagement';
 
 // 扁平化的导航配置
 const MENU_ITEMS = [{
@@ -32,7 +33,8 @@ const MENU_ITEMS = [{
   label: '商品管理',
   href: '/productmanagement',
   icon: Package,
-  roles: ['ADMIN', 'SUB_ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'products'
 }, {
   id: 'B06',
   label: '分类管理',
@@ -44,7 +46,8 @@ const MENU_ITEMS = [{
   label: '客户管理',
   href: '/usermanagement',
   icon: Users,
-  roles: ['ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'customers'
 }, {
   id: 'B22',
   label: '客户跟进',
@@ -56,7 +59,8 @@ const MENU_ITEMS = [{
   label: '订单管理',
   href: '/ordermanagement',
   icon: ShoppingCart,
-  roles: ['ADMIN', 'SUB_ADMIN']
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'orders'
 }, {
   id: 'B14',
   label: 'Banner轮播图管理',
@@ -68,7 +72,7 @@ const MENU_ITEMS = [{
   label: '买家秀管理',
   href: '/buyershowmanagement',
   icon: Camera,
-  roles: ['ADMIN', 'SUB_ADMIN']
+  roles: ['ADMIN']
 }, {
   id: 'B15',
   label: '首页推荐专区管理',
@@ -98,7 +102,7 @@ const MENU_ITEMS = [{
   label: '品牌别名管理',
   href: '/brandaliasmanagement',
   icon: Tag,
-  roles: ['ADMIN', 'SUB_ADMIN']
+  roles: ['ADMIN']
 }];
 
 /** 前台可视化装修可编辑页面入口（新开标签页并带 ?decorate=1） */
@@ -155,11 +159,29 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
   } = useAdminSession();
   const isLogin = !!user_id;
   const currentRole = isLogin ? (role || 'ADMIN') : 'GUEST';
+  const [staffPermissions, setStaffPermissions] = React.useState<string[] | null>(null);
+  React.useEffect(() => {
+    if (!isLogin || currentRole !== 'SUB_ADMIN') {
+      setStaffPermissions(null);
+      return;
+    }
+    let cancelled = false;
+    getMyStaffAccess().then((access) => {
+      if (!cancelled) setStaffPermissions(access.permissions || []);
+    }).catch(() => {
+      if (!cancelled) setStaffPermissions([]);
+    });
+    return () => { cancelled = true; };
+  }, [isLogin, currentRole]);
   const avatarLetter = (username || 'A').slice(0, 1).toUpperCase();
   const { newCustomers, newOrders } = useAdminNavBadges(isLogin, user_id);
 
   // 过滤当前角色可见的菜单
-  const displayMenus = MENU_ITEMS.filter(item => item.roles.includes(currentRole));
+  const displayMenus = MENU_ITEMS.filter(item => {
+    if (!item.roles.includes(currentRole)) return false;
+    if (currentRole !== 'SUB_ADMIN' || !item.permission) return true;
+    return (staffPermissions || []).includes(item.permission);
+  });
 
   // 处理退出登录
   const handleLogout = () => {
