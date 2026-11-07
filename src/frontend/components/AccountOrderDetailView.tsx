@@ -112,19 +112,30 @@ export default function AccountOrderDetailView() {
                 {new Date(order.createdAt).toLocaleString(locale)}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className="h-7 px-2 text-[11px]">{t(`accountOrders.statuses.${order.status}`)}</Badge>
+            <div className="flex w-full flex-wrap items-center justify-end gap-1.5 sm:w-auto">
+              {order.settlementPdfUrl ? (
+                <a
+                  href={order.settlementPdfUrl}
+                  target="_blank"
+                  rel="noopener"
+                  download
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-[#d9d3c7] bg-white px-3 text-xs font-medium text-[#1f1a14] hover:bg-[#fbfaf7] sm:h-7"
+                >
+                  {t('accountOrders.downloadPdf')}
+                </a>
+              ) : null}
+              <Badge variant="outline" className="h-9 px-3 text-xs sm:h-7 sm:px-2 sm:text-[11px]">{t(`accountOrders.statuses.${order.status}`)}</Badge>
               {order.status === 'PENDING_PAYMENT' ? (
                 <a
                   {...hardNavProps(orderPayHref(order.orderId))}
-                  className="inline-flex h-7 items-center rounded-full bg-[#f254a6] px-3 text-xs font-medium text-white hover:bg-[#df3f91]"
+                  className="inline-flex h-9 items-center rounded-full bg-[#f254a6] px-3 text-xs font-medium text-white hover:bg-[#df3f91] sm:h-7"
                 >
                   {t('accountOrders.payNow')}
                 </a>
               ) : null}
               <Button
                 type="button"
-                className="h-7 rounded-full bg-[#f254a6] px-3 text-xs text-white hover:bg-[#df3f91]"
+                className="h-9 rounded-full bg-[#f254a6] px-3 text-xs text-white hover:bg-[#df3f91] sm:h-7"
                 disabled={reordering}
                 onClick={() => void handleReorder()}
               >

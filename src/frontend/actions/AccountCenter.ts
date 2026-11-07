@@ -88,6 +88,8 @@ export interface CustomerOrderSummary {
   itemCount: number
   items: CustomerOrderItem[]
   shipments: CustomerShipment[]
+  /** Admin settlement PDF. Empty until one is uploaded. */
+  settlementPdfUrl: string
 }
 
 export interface CustomerShipment {
@@ -246,6 +248,7 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
   createdAt: row.createdAt.toISOString(),
   itemCount: row.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
   shipments: [],
+  settlementPdfUrl: '',
   items: [...row.items].sort(compareCustomerOrderItems).map((item: any) => ({
     itemId: item.id,
     productId: item.productId,
@@ -514,6 +517,28 @@ export const deleteCustomerAddress = requireRole([UserRole.CUSTOMER])(
 /**
  * 列出当前客户的历史订单
  */
+
+const settlementPdfUrl = (remark: string | null | undefined) => {
+  const url = String(remark || '').trim()
+  return url.startsWith('/api/uploads/') && url.toLowerCase().endsWith('.pdf') ? url : ''
+}
+
+const latestSettlementPdfs = async (orderIds: string[]) => {
+  const urls = new Map<string, string>()
+  if (!orderIds.length) return urls
+  const rows = await prisma.orderlogisticssegment.findMany({
+    where: { orderId: { in: orderIds }, segmentType: '结算PDF' },
+    orderBy: { createdAt: 'desc' },
+    select: { orderId: true, remark: true },
+  })
+  for (const row of rows) {
+    if (urls.has(row.orderId)) continue
+    const url = settlementPdfUrl(row.remark)
+    if (url) urls.set(row.orderId, url)
+  }
+  return urls
+}
+
 export const listCustomerOrders = requireRole([UserRole.CUSTOMER])(
   withResult(async (): Promise<{ list: CustomerOrderSummary[] }> => {
     const { userId } = getAuthContext()
@@ -523,7 +548,8 @@ export const listCustomerOrders = requireRole([UserRole.CUSTOMER])(
       orderBy: { createdAt: 'desc' },
     })
 
-    return { list: rows.map(mapCustomerOrder) }
+    const pdfs = await latestSettlementPdfs(rows.map((row) => row.id))
+    return { list: rows.map((row) => ({ ...mapCustomerOrder(row), settlementPdfUrl: pdfs.get(row.id) || '' })) }
   }),
 )
 
@@ -539,6 +565,8 @@ export const getCustomerOrderDetail = requireRole([UserRole.CUSTOMER])(
     })
     if (!row) throw new Error('订单不存在或无权访问')
     const mapped = mapCustomerOrder(row)
+    const pdfs = await latestSettlementPdfs([row.id])
+    mapped.settlementPdfUrl = pdfs.get(row.id) || ''
     const segments = await prisma.orderlogisticssegment.findMany({
       where: { orderId: row.id, segmentType: '入库发货' },
       orderBy: [{ shippedAt: 'asc' }, { createdAt: 'asc' }],

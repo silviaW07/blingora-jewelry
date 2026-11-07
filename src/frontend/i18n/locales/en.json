@@ -676,6 +676,7 @@
     "operations": "Operations",
     "viewOrder": "View Order",
     "reorder": "reOrder",
+    "downloadPdf": "Download PDF",
     "reorderAdded": "{{count}} items added to your cart",
     "reorderSkipped": "{{count}} unavailable lines were skipped",
     "moreSkipped": "{{count}} more",

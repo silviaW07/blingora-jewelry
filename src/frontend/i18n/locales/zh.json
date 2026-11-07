@@ -554,6 +554,7 @@
     "operations": "操作",
     "viewOrder": "查看订单",
     "reorder": "再次购买",
+    "downloadPdf": "下载 PDF",
     "reorderAdded": "已将 {{count}} 件商品加入购物车",
     "reorderSkipped": "已跳过 {{count}} 个不可购买的规格",
     "moreSkipped": "另有 {{count}} 项",

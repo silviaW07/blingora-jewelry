@@ -668,6 +668,7 @@
     "operations": "Operaciones",
     "viewOrder": "Ver pedido",
     "reorder": "reOrder",
+    "downloadPdf": "Descargar PDF",
     "reorderAdded": "{{count}} artículos añadidos al carrito",
     "reorderSkipped": "Se omitieron {{count}} variantes no disponibles",
     "moreSkipped": "{{count}} más",

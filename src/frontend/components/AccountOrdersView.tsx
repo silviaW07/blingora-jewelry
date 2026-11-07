@@ -209,12 +209,23 @@ export default function AccountOrdersView() {
                     <TableCell className={`${CELL} whitespace-nowrap text-[#6f6558]`}>
                       {weightText}
                     </TableCell>
-                    <TableCell className={`${CELL} account-orders-actions w-[8.5rem] bg-white text-right`}>
-                      <div className="ml-auto grid w-[7.6rem] grid-cols-1 gap-1.5">
+                    <TableCell className={`${CELL} account-orders-actions min-w-[8.5rem] bg-white text-right`}>
+                      <div className="ml-auto flex w-full max-w-[16rem] flex-col items-stretch gap-1.5 sm:w-auto sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-end">
+                        {order.settlementPdfUrl ? (
+                          <a
+                            href={order.settlementPdfUrl}
+                            target="_blank"
+                            rel="noopener"
+                            download
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-[#d9d3c7] bg-white px-3 text-[11px] font-medium text-[#1f1a14] hover:bg-[#fbfaf7] sm:h-7"
+                          >
+                            {t('accountOrders.downloadPdf')}
+                          </a>
+                        ) : null}
                         {canPay ? (
                           <a
                             {...hardNavProps(payHref)}
-                            className="inline-flex h-7 items-center justify-center rounded-full bg-[#f254a6] px-2 text-[11px] font-medium leading-none text-white hover:bg-[#df3f91]"
+                            className="inline-flex h-9 items-center justify-center rounded-full bg-[#f254a6] px-3 text-[11px] font-medium leading-none text-white hover:bg-[#df3f91] sm:h-7"
                           >
                             {t('accountOrders.payNow')}
                           </a>
@@ -222,7 +233,7 @@ export default function AccountOrdersView() {
                         <Button
                           type="button"
                           size="sm"
-                          className="h-7 w-full rounded-full bg-[#f254a6] px-2 text-[11px] text-white hover:bg-[#df3f91]"
+                          className="h-9 w-full rounded-full bg-[#f254a6] px-3 text-[11px] text-white hover:bg-[#df3f91] sm:h-7 sm:w-auto"
                           disabled={reorderingId !== null}
                           onClick={() => void handleReorder(order)}
                         >
