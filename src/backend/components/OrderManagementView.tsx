@@ -578,6 +578,7 @@ export const OrderManagementView = ({
   const [addonDrag, setAddonDrag] = React.useState<'product' | 'sheet' | null>(null);
   const [sheetProgress, setSheetProgress] = React.useState<number | null>(null);
   const sheetJobRef = React.useRef(0);
+  const inboundDropLockRef = React.useRef(0);
   const [discountEditing, setDiscountEditing] = React.useState(false);
   const [discountDraft, setDiscountDraft] = React.useState('');
   const [cellEdit, setCellEdit] = React.useState<{ id: string; field: 'unit' | 'discount' | 'title' | 'coeff' } | null>(null);
@@ -943,27 +944,22 @@ export const OrderManagementView = ({
   const collectDroppedImageFiles = async (dataTransfer: DataTransfer | null | undefined) => {
     if (!dataTransfer) return [] as File[]
     const files: File[] = []
+    const seen = new Set<string>()
     const pushImage = (file: File | null | undefined) => {
       if (!file) return
-      if (file.type.startsWith('image/') || (!file.type && /\.(png|jpe?g|gif|webp|bmp|heic|avif)$/i.test(file.name || ''))) {
-        files.push(file)
-      }
+      if (!(file.type.startsWith('image/') || (!file.type && /\.(png|jpe?g|gif|webp|bmp|heic|avif)$/i.test(file.name || '')))) return
+      const key = `${file.name}|${file.size}|${file.type}`
+      if (seen.has(key)) return
+      seen.add(key)
+      files.push(file)
     }
     for (const file of [...dataTransfer.files]) pushImage(file)
-    if (dataTransfer.items) {
+    if (!files.length && dataTransfer.items) {
       for (const item of [...dataTransfer.items]) {
         if (item.kind === 'file') pushImage(item.getAsFile())
       }
     }
-    if (files.length) {
-      const seen = new Set<string>()
-      return files.filter((file) => {
-        const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-    }
+    if (files.length) return files
 
     const urls: string[] = []
     const pushUrl = (value: string) => {
@@ -997,6 +993,10 @@ export const OrderManagementView = ({
   }
 
   const receiveAddonProductsFromDataTransfer = async (dataTransfer: DataTransfer | null | undefined) => {
+    const now = Date.now()
+    // 对话框 + 落点区会各触发一次 onDrop，这里锁住避免同一次拖拽加两行
+    if (now - inboundDropLockRef.current < 1000) return
+    inboundDropLockRef.current = now
     const images = await collectDroppedImageFiles(dataTransfer)
     if (images.length) {
       await receiveAddonProducts(images)
@@ -1007,12 +1007,19 @@ export const OrderManagementView = ({
       await receiveAddonProducts(files)
       return
     }
+    inboundDropLockRef.current = 0
     toast.error('WhatsApp 等网页图片请先下载/另存后再拖入，或点击「传入商品」选择文件')
   }
 
   const receiveAddonProducts = async (files: FileList | File[]) => {
     const list = [...files];
     if (!list.length) return;
+    // 最终兜底：同一次拖拽即使进两次也只加一套图
+    const fingerprint = list.map((file) => `${file.name}|${file.size}|${file.type}`).join(';')
+    const stamp = Date.now()
+    const prev = (receiveAddonProducts as any)._dedupe as { fingerprint: string; at: number } | undefined
+    if (prev && prev.fingerprint === fingerprint && stamp - prev.at < 1000) return
+    ;(receiveAddonProducts as any)._dedupe = { fingerprint, at: stamp }
     const images = list.filter((file) => file.type.startsWith('image/'));
     const sheets = list.filter((file) => !file.type.startsWith('image/') && /\.(xlsx|xls|csv)$/i.test(file.name));
     try {
@@ -2436,6 +2443,9 @@ export const OrderManagementView = ({
               return
             }
             void (async () => {
+              const now = Date.now()
+              if (now - inboundDropLockRef.current < 1000) return
+              inboundDropLockRef.current = now
               const images = await collectDroppedImageFiles(event.dataTransfer)
               const sheets = [...(event.dataTransfer.files || [])].filter((file) => !file.type.startsWith('image/') && /\.(xlsx|xls|csv)$/i.test(file.name))
               if (images.length && !sheets.length) {
@@ -2957,7 +2967,14 @@ export const OrderManagementView = ({
                     if (next && event.currentTarget.contains(next)) return
                     setAddonDrag((current) => current === 'product' ? null : current)
                   }}
-                  onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProductsFromDataTransfer(event.dataTransfer); }}
+                  onDrop={(event) => {
+                    // 只标记由外层 Dialog 统一处理，避免同一拖拽加两行
+                    event.preventDefault()
+                    event.stopPropagation()
+                    setAddonDrag('product')
+                    void receiveAddonProductsFromDataTransfer(event.dataTransfer)
+                    setAddonDrag(null)
+                  }}
                 >
                   <div className="pointer-events-none text-base font-semibold">传入商品（允许拖拽）</div>
                   <div className="pointer-events-none mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
