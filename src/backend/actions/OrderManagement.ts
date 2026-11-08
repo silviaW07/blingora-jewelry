@@ -645,9 +645,9 @@ function readRegisterInfo(raw: unknown) {
 function withRegisterFallback(record: { registerInfoJson: unknown; shippingAmount?: unknown }) {
   const info = readRegisterInfo(record.registerInfoJson)
   if (info.usdShipping == null) {
-    const raw = record.shippingAmount as { toNumber?: () => number } | number | string | null | undefined
-    const shipping = raw && typeof raw === object && typeof raw.toNumber === function
-      ? raw.toNumber()
+    const raw: any = record.shippingAmount
+    const shipping = raw && typeof raw === "object" && typeof raw.toNumber === "function"
+      ? Number(raw.toNumber())
       : Number(raw)
     if (Number.isFinite(shipping) && shipping !== 0) {
       info.usdShipping = Math.round(shipping * 100) / 100
@@ -655,6 +655,7 @@ function withRegisterFallback(record: { registerInfoJson: unknown; shippingAmoun
   }
   return info
 }
+
 
 export const getOrderList = requireStaff('orders')(
   withResult(async (input: GetOrderListInput): Promise<GetOrderListOutput> => {

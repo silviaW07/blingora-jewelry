@@ -31324,6 +31324,9 @@ _export(exports, {
     get updateOrderInbound () {
         return updateOrderInbound;
     },
+    get updateOrderMoneyFields () {
+        return updateOrderMoneyFields;
+    },
     get updateOrderParcelInfo () {
         return updateOrderParcelInfo;
     },
@@ -31660,9 +31663,21 @@ function sumPackageFreight(lines) {
     }
     return has ? Math.round(total * 100) / 100 : null;
 }
+function readUsdShipping(info) {
+    if (info.usdShipping == null || info.usdShipping === '') return null;
+    const amount = Number(info.usdShipping);
+    return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
+}
+function readDepositText(info) {
+    if (info.depositText != null) return String(info.depositText).trim().slice(0, 80);
+    if (info.deposit != null) return String(info.deposit).trim().slice(0, 80);
+    return '';
+}
 function readRegisterInfo(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
         return {
+            usdShipping: null,
+            depositText: '',
             freightTotal: null,
             packageLines: [
                 emptyPackageLine()
@@ -31689,9 +31704,22 @@ function readRegisterInfo(raw) {
         emptyPackageLine()
     ];
     return {
+        usdShipping: readUsdShipping(info),
+        depositText: readDepositText(info),
         freightTotal: sumPackageFreight(filled),
         packageLines: filled
     };
+}
+function withRegisterFallback(record) {
+    const info = readRegisterInfo(record.registerInfoJson);
+    if (info.usdShipping == null) {
+        const raw = record.shippingAmount;
+        const shipping = raw && typeof raw === "object" && typeof raw.toNumber === "function" ? Number(raw.toNumber()) : Number(raw);
+        if (Number.isFinite(shipping) && shipping !== 0) {
+            info.usdShipping = Math.round(shipping * 100) / 100;
+        }
+    }
+    return info;
 }
 const getOrderList = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
     const { keyword, status, paymentStatus, startDate, endDate, countryName, page = 1, pageSize = 50 } = input;
@@ -31859,7 +31887,7 @@ const getOrderList = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.
                 config: promoConfig
             }),
             manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
-            ...readRegisterInfo(record.registerInfoJson),
+            ...withRegisterFallback(record),
             countryName: ((_record_address = record.address) === null || _record_address === void 0 ? void 0 : _record_address.countryName) || null,
             itemSummary,
             itemImageUrl: ((_record_items_ = record.items[0]) === null || _record_items_ === void 0 ? void 0 : (_record_items__product = _record_items_.product) === null || _record_items__product === void 0 ? void 0 : _record_items__product.mainImageUrl) || null,
@@ -31970,7 +31998,7 @@ const getOrderDetail = (0, _staffAccess.requireStaff)('orders')((0, _action_util
             config: await (0, _pricingPromotionConfig.loadPricingPromotionConfig)(_prisma.default)
         }),
         manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
-        ...readRegisterInfo(record.registerInfoJson),
+        ...withRegisterFallback(record),
         countryName: ((_record_address = record.address) === null || _record_address === void 0 ? void 0 : _record_address.countryName) || null,
         itemSummary,
         itemImageUrl: ((_record_items_ = record.items[0]) === null || _record_items_ === void 0 ? void 0 : (_record_items__product = _record_items_.product) === null || _record_items__product === void 0 ? void 0 : _record_items__product.mainImageUrl) || null,
@@ -34378,6 +34406,73 @@ const updateOrderParcelInfo = (0, _staffAccess.requireStaff)('orders')((0, _acti
     return {
         freightTotal,
         packageLines
+    };
+}));
+const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const orderId = String(input.orderId || '').trim();
+    if (!orderId) throw new Error('缺少订单');
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: orderId
+        },
+        select: {
+            id: true,
+            registerInfoJson: true,
+            shippingAmount: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson) ? {
+        ...order.registerInfoJson
+    } : {};
+    const current = withRegisterFallback(order);
+    let usdShipping = current.usdShipping;
+    let depositText = current.depositText;
+    const patchNote = [];
+    if (input.usdShipping !== undefined) {
+        if (input.usdShipping == null || String(input.usdShipping).trim() === '') usdShipping = null;
+        else {
+            const amount = Number(input.usdShipping);
+            if (!Number.isFinite(amount)) throw new Error('运费USD请填写数字');
+            usdShipping = Math.round(amount * 100) / 100;
+        }
+        patchNote.push(`运费USD ${usdShipping !== null && usdShipping !== void 0 ? usdShipping : ''}`);
+    }
+    if (input.depositText !== undefined) {
+        depositText = String(input.depositText || '').trim().slice(0, 80);
+        patchNote.push(`定金 ${depositText}`);
+    }
+    const next = {
+        ...base,
+        usdShipping: usdShipping !== null && usdShipping !== void 0 ? usdShipping : 0,
+        depositText,
+        deposit: depositText
+    };
+    await _prisma.default.$transaction(async (tx)=>{
+        await tx.orderrecord.update({
+            where: {
+                id: orderId
+            },
+            data: {
+                registerInfoJson: next,
+                ...input.usdShipping !== undefined ? {
+                    shippingAmount: usdShipping !== null && usdShipping !== void 0 ? usdShipping : 0
+                } : {}
+            }
+        });
+        await tx.orderoperationlog.create({
+            data: {
+                orderId,
+                actionType: '更新金额字段',
+                actionNote: patchNote.join(' · ').slice(0, 4000) || '更新运费/定金',
+                operatorName: username
+            }
+        });
+    });
+    return {
+        usdShipping,
+        depositText
     };
 }));
 const updateOrderRemark = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
