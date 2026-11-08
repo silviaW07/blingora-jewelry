@@ -555,6 +555,16 @@ export const OrderManagementView = ({
   const [importOrderSaving, setImportOrderSaving] = React.useState(false);
   const [createOrderOpen, setCreateOrderOpen] = React.useState(false);
   const [createOrderName, setCreateOrderName] = React.useState('');
+  const [createPhone, setCreatePhone] = React.useState('');
+  const [createAddress, setCreateAddress] = React.useState('');
+  const [createDate, setCreateDate] = React.useState('');
+  const [createOrderAmount, setCreateOrderAmount] = React.useState('');
+  const [createGoodsAmount, setCreateGoodsAmount] = React.useState('');
+  const [createUsdShipping, setCreateUsdShipping] = React.useState('');
+  const [createShipMethod, setCreateShipMethod] = React.useState('');
+  const [createCost, setCreateCost] = React.useState('');
+  const [createActualFreight, setCreateActualFreight] = React.useState('');
+  const [createFreightLines, setCreateFreightLines] = React.useState([{ freightCost: '', chargeWeight: '', remark: '' }]);
   const [createOrderSaving, setCreateOrderSaving] = React.useState(false);
   const [contactEdit, setContactEdit] = React.useState<{ id: string; field: 'name' | 'phone' | 'email' } | null>(null);
   const [carrierEditing, setCarrierEditing] = React.useState(false);
@@ -1033,6 +1043,25 @@ export const OrderManagementView = ({
     }
   };
 
+  const resetCreateOrder = () => {
+    setCreateOrderName('');
+    setCreatePhone('');
+    setCreateAddress('');
+    setCreateDate('');
+    setCreateOrderAmount('');
+    setCreateGoodsAmount('');
+    setCreateUsdShipping('');
+    setCreateShipMethod('');
+    setCreateCost('');
+    setCreateActualFreight('');
+    setCreateFreightLines([{ freightCost: '', chargeWeight: '', remark: '' }]);
+  };
+  const optionalAmount = (value: string) => {
+    const text = value.trim();
+    if (!text) return null;
+    const amount = Number(text);
+    return Number.isFinite(amount) ? amount : null;
+  };
   const submitCreateOrder = async () => {
     const customerName = createOrderName.trim();
     if (!customerName) {
@@ -1041,10 +1070,23 @@ export const OrderManagementView = ({
     }
     try {
       setCreateOrderSaving(true);
-      const created = await handlers.createCustomerOrder({ customerName, status: 'PROCESSING' });
+      const created = await handlers.createCustomerOrder({
+        customerName,
+        status: 'PROCESSING',
+        phone: createPhone.trim(),
+        address: createAddress.trim(),
+        registerDate: createDate,
+        orderAmount: optionalAmount(createOrderAmount),
+        goodsAmount: optionalAmount(createGoodsAmount),
+        usdShipping: optionalAmount(createUsdShipping),
+        shipMethodText: createShipMethod.trim(),
+        costAmount: optionalAmount(createCost),
+        actualFreightTotal: optionalAmount(createActualFreight),
+        freightLines: createFreightLines,
+      });
       if (!created) return;
       setCreateOrderOpen(false);
-      setCreateOrderName('');
+      resetCreateOrder();
     } finally {
       setCreateOrderSaving(false);
     }
@@ -1226,14 +1268,56 @@ export const OrderManagementView = ({
           <Button type="button" variant="outline" className="h-10 shrink-0" onClick={() => setCreateOrderOpen(true)}>创建新单</Button>
           <Button type="button" className="h-10 shrink-0" onClick={() => setImportOrderOpen(true)}>导入订单</Button>
           <Dialog open={createOrderOpen} onOpenChange={setCreateOrderOpen}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>创建新单</DialogTitle>
-                <DialogDescription>填写客户姓名后确认，会按现有订单号规则生成一条新订单。邮箱可以在列表里双击添加，姓名和手机号也可以双击修改。</DialogDescription>
+                <DialogDescription>按登记表填写。金额可以先空着，邮箱之后在列表里双击补上。</DialogDescription>
               </DialogHeader>
-              <label className="grid gap-1 text-sm font-medium text-slate-700">客户姓名
-                <Input value={createOrderName} onChange={(event) => setCreateOrderName(event.target.value)} placeholder="客户姓名" autoComplete="off" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void submitCreateOrder(); } }} />
-              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm font-medium text-slate-700">日期
+                  <Input type="date" value={createDate} onChange={(event) => setCreateDate(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">姓名
+                  <Input value={createOrderName} onChange={(event) => setCreateOrderName(event.target.value)} placeholder="客户姓名" autoComplete="off" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">电话
+                  <Input value={createPhone} onChange={(event) => setCreatePhone(event.target.value)} placeholder="电话" autoComplete="off" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700 sm:col-span-2">地址
+                  <Textarea rows={2} value={createAddress} onChange={(event) => setCreateAddress(event.target.value)} placeholder="地址" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">订单金额
+                  <Input inputMode="decimal" value={createOrderAmount} onChange={(event) => setCreateOrderAmount(event.target.value)} placeholder="例如 2300" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">商品金额
+                  <Input inputMode="decimal" value={createGoodsAmount} onChange={(event) => setCreateGoodsAmount(event.target.value)} placeholder="例如 655" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">USD运费
+                  <Input inputMode="decimal" value={createUsdShipping} onChange={(event) => setCreateUsdShipping(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">运输方式
+                  <Input value={createShipMethod} onChange={(event) => setCreateShipMethod(event.target.value)} placeholder="例如 定金2000" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">成本
+                  <Input inputMode="decimal" value={createCost} onChange={(event) => setCreateCost(event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">实际运费总额
+                  <Input inputMode="decimal" value={createActualFreight} onChange={(event) => setCreateActualFreight(event.target.value)} placeholder="例如 3837" />
+                </label>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-700">运费成本 / 计费重量 / 订单备注</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setCreateFreightLines((rows) => [...rows, { freightCost: '', chargeWeight: '', remark: '' }])}>加一行</Button>
+                </div>
+                {createFreightLines.map((line, index) => (
+                  <div key={index} className="grid gap-2 sm:grid-cols-3">
+                    <Input inputMode="decimal" value={line.freightCost} placeholder="运费成本" onChange={(event) => setCreateFreightLines((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, freightCost: event.target.value } : row))} />
+                    <Input inputMode="decimal" value={line.chargeWeight} placeholder="计费重量" onChange={(event) => setCreateFreightLines((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, chargeWeight: event.target.value } : row))} />
+                    <Input value={line.remark} placeholder="订单备注" onChange={(event) => setCreateFreightLines((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, remark: event.target.value } : row))} />
+                  </div>
+                ))}
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setCreateOrderOpen(false)} disabled={createOrderSaving}>取消</Button>
                 <Button type="button" onClick={() => void submitCreateOrder()} disabled={createOrderSaving}>{createOrderSaving ? '正在创建…' : '确认'}</Button>
@@ -1344,7 +1428,7 @@ export const OrderManagementView = ({
                       <TableHead className="font-bold min-w-[120px]">WhatsApp</TableHead>
                       <TableHead className="font-bold min-w-[100px]">金额</TableHead>
                       <TableHead className="font-bold min-w-[90px]">总重量(g)</TableHead>
-                      <TableHead className="font-bold min-w-[220px]">订单备注</TableHead>
+                      <TableHead className="font-bold min-w-[120px]">订单备注</TableHead>
                       <TableHead className="text-right font-bold pr-6 min-w-[140px]">操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1499,25 +1583,25 @@ export const OrderManagementView = ({
                             {Number(row.totalWeightGrams || 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="pt-3 pb-3">
-                            <div className="flex items-start gap-2 min-w-[200px]">
-                              <Textarea
-                                className="min-h-[64px] text-sm resize-none"
-                                rows={2}
-                                placeholder="内部备注…"
-                                value={state.remarkDrafts[row.id] ?? row.internalNote ?? ''}
-                                onChange={(e) => handlers.handleRemarkDraftChange(row.id, e.target.value)}
-                              />
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
-                                className="shrink-0 h-9"
-                                disabled={state.remarkSavingId === row.id}
-                                onClick={() => handlers.submitOrderRemark(row.id)}
-                              >
-                                {state.remarkSavingId === row.id ? '…' : '更新备注'}
-                              </Button>
-                            </div>
+                            <Input
+                              className="h-9 w-[7.5rem] text-sm"
+                              placeholder="备注"
+                              value={state.remarkDrafts[row.id] ?? row.internalNote ?? ''}
+                              disabled={state.remarkSavingId === row.id}
+                              onChange={(e) => handlers.handleRemarkDraftChange(row.id, e.target.value)}
+                              onBlur={() => {
+                                const draft = state.remarkDrafts[row.id]
+                                if (draft === undefined) return
+                                if ((draft || '') === (row.internalNote || '')) return
+                                void handlers.submitOrderRemark(row.id)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  ;(e.target as HTMLInputElement).blur()
+                                }
+                              }}
+                            />
                           </TableCell>
                           <TableCell className="text-right pr-6 pt-4">
                             <div className="flex flex-col items-end gap-2">
