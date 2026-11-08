@@ -31333,6 +31333,9 @@ _export(exports, {
     get updateOrderRemark () {
         return updateOrderRemark;
     },
+    get updateOrderSettled () {
+        return updateOrderSettled;
+    },
     get updateOrderShippingAddress () {
         return updateOrderShippingAddress;
     },
@@ -31681,6 +31684,7 @@ function readRegisterInfo(raw) {
         return {
             usdShipping: null,
             depositText: '',
+            isSettled: false,
             freightTotal: null,
             packageLines: [
                 emptyPackageLine()
@@ -31709,6 +31713,7 @@ function readRegisterInfo(raw) {
     return {
         usdShipping: readUsdShipping(info),
         depositText: readDepositText(info),
+        isSettled: Boolean(info.isSettled === true || info.settled === true || info.cleared === true),
         freightTotal: sumPackageFreight(filled),
         packageLines: filled
     };
@@ -34623,6 +34628,51 @@ const updateOrderShippingAddress = (0, _staffAccess.requireStaff)('orders')((0, 
         addressText: shouldUpdateAddress ? addressText : String((saved.registerInfoJson && typeof saved.registerInfoJson === 'object' && !Array.isArray(saved.registerInfoJson) ? saved.registerInfoJson.address : '') || addressText || ''),
         trackingCarrier,
         address: formatAddressInfo(saved.address)
+    };
+}));
+const updateOrderSettled = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
+    const { username } = (0, _action_utils.getAuthContext)();
+    const orderId = String(input.orderId || '').trim();
+    if (!orderId) throw new Error('缺少订单');
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: orderId
+        },
+        select: {
+            id: true,
+            registerInfoJson: true
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson) ? {
+        ...order.registerInfoJson
+    } : {};
+    const isSettled = Boolean(input.isSettled);
+    const next = {
+        ...base,
+        isSettled,
+        settled: isSettled
+    };
+    await _prisma.default.$transaction(async (tx)=>{
+        await tx.orderrecord.update({
+            where: {
+                id: orderId
+            },
+            data: {
+                registerInfoJson: next
+            }
+        });
+        await tx.orderoperationlog.create({
+            data: {
+                orderId,
+                actionType: isSettled ? '标记已清账' : '取消已清账',
+                actionNote: isSettled ? '已清账完结' : '取消完结',
+                operatorName: username
+            }
+        });
+    });
+    return {
+        isSettled
     };
 }));
 const updateOrderRemark = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{

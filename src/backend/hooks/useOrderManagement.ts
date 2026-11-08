@@ -35,6 +35,7 @@ import {
   updateOrderRemark,
   updateOrderParcelInfo,
   updateOrderMoneyFields,
+  updateOrderSettled,
   updateOrderInbound,
   appendOrderGoods,
   updateOrderDiscount,
@@ -172,6 +173,7 @@ export interface OrderManagementHandlers {
   submitOrderRemark: (orderId: string) => Promise<void>
   saveOrderParcelInfo: (orderId: string, packageLines: Array<{ shipDate?: string; freightCost?: string; chargeWeight?: string; remark?: string }>) => Promise<void>
   saveOrderMoneyFields: (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => Promise<void>
+  toggleOrderSettled: (orderId: string, isSettled: boolean) => Promise<void>
   /** 导出 Excel（全部当前页或指定订单） */
   handleExportExcel: (orderIds?: string[]) => Promise<void>
   /** 打开入库登记 */
@@ -529,6 +531,19 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
+
+  const toggleOrderSettled = async (orderId: string, isSettled: boolean) => {
+    try {
+      const saved = await updateOrderSettled({ orderId, isSettled })
+      setList((prev) => prev.map((item) => item.id === orderId ? {
+        ...item,
+        isSettled: saved.isSettled,
+      } : item))
+    } catch (err: any) {
+      toast.error(err.message || '更新清账状态失败')
+      throw err
+    }
+  }
 
   const saveOrderMoneyFields = async (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => {
     try {
@@ -1694,6 +1709,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       submitOrderRemark,
       saveOrderParcelInfo,
       saveOrderMoneyFields,
+      toggleOrderSettled,
       handleExportExcel,
       openInboundDialog,
       saveOrderLink: saveLinkedOrders,

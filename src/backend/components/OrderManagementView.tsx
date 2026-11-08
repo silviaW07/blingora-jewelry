@@ -11,7 +11,7 @@ import { readInboundSelection, writeInboundSelection } from '@/backend/hooks/use
 import EditableImg from '@/@base/EditableImg';
 
 // Lucide Icons
-import { Package, Truck, CreditCard, Calendar, Search, Filter, RefreshCcw, ChevronRight, ChevronUp, ChevronDown, User, Globe, Plus, History, Info, ExternalLink, ChevronLeft, ShoppingBag, Download, FileSpreadsheet, X } from 'lucide-react';
+import { Package, Truck, CreditCard, Calendar, Search, Filter, RefreshCcw, ChevronRight, ChevronUp, ChevronDown, User, Globe, Plus, History, Info, ExternalLink, ChevronLeft, ShoppingBag, Download, FileSpreadsheet, X, Heart } from 'lucide-react';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -1597,8 +1597,20 @@ export const OrderManagementView = ({
                       </TableRow>
                     ) : (
                       groupLinkedOrders(state.list, state.orderLinks).map((row) => (
-                        <TableRow key={row.id} className={cn('align-top transition-colors hover:bg-slate-50/50', linkRole(state.orderLinks, row.id) === 'primary' && 'border-x-2 border-t-2 border-slate-400', linkRole(state.orderLinks, row.id) === 'child' && 'border-x-2 border-b-2 border-slate-400 bg-slate-50/60')}>
-                          <TableCell className="whitespace-nowrap pl-6 pt-4 text-center text-xs text-muted-foreground">
+                        <TableRow key={row.id} className={cn('align-top transition-colors', row.isSettled ? 'bg-[#F6E8C8] hover:bg-[#F1DEB5]' : 'hover:bg-slate-50/50', linkRole(state.orderLinks, row.id) === 'primary' && 'border-x-2 border-t-2 border-slate-400', linkRole(state.orderLinks, row.id) === 'child' && !row.isSettled && 'border-x-2 border-b-2 border-slate-400 bg-slate-50/60', linkRole(state.orderLinks, row.id) === 'child' && row.isSettled && 'border-x-2 border-b-2 border-slate-400')}>
+                          <TableCell className="whitespace-nowrap pl-6 pt-3 text-center text-xs text-muted-foreground">
+                            <div className="mb-1.5 flex items-center justify-center gap-1.5">
+                              <span className={cn('text-[11px] font-semibold tracking-wide', row.isSettled ? 'text-amber-900' : 'text-slate-500')}>已清账</span>
+                              <button
+                                type="button"
+                                aria-label={row.isSettled ? '取消已清账' : '标记已清账'}
+                                title={row.isSettled ? '取消已清账' : '点击标记已清账完结'}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-amber-100/80"
+                                onClick={() => { void handlers.toggleOrderSettled(row.id, !row.isSettled); }}
+                              >
+                                <Heart className={cn('h-4 w-4', row.isSettled ? 'fill-rose-500 text-rose-500' : 'text-slate-400')} />
+                              </button>
+                            </div>
                             {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
                           </TableCell>
                           <TableCell className="pt-4 text-center font-mono text-sm" scrollX scrollXClassName="max-w-[220px]">
