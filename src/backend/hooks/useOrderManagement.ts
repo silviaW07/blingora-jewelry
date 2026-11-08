@@ -168,7 +168,7 @@ export interface OrderManagementHandlers {
   handleRemarkDraftChange: (orderId: string, value: string) => void
   /** 提交备注 */
   submitOrderRemark: (orderId: string) => Promise<void>
-  saveOrderParcelInfo: (orderId: string, patch: { freightTotal?: number | null; packageFreights?: string; packageWeights?: string; packageTrackings?: string }) => Promise<void>
+  saveOrderParcelInfo: (orderId: string, packageLines: Array<{ shipDate?: string; freightCost?: string; chargeWeight?: string; remark?: string }>) => Promise<void>
   /** 导出 Excel（全部当前页或指定订单） */
   handleExportExcel: (orderIds?: string[]) => Promise<void>
   /** 打开入库登记 */
@@ -526,15 +526,13 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
 
-  const saveOrderParcelInfo = async (orderId: string, patch: { freightTotal?: number | null; packageFreights?: string; packageWeights?: string; packageTrackings?: string }) => {
+  const saveOrderParcelInfo = async (orderId: string, packageLines: Array<{ shipDate?: string; freightCost?: string; chargeWeight?: string; remark?: string }>) => {
     try {
-      const saved = await updateOrderParcelInfo({ orderId, ...patch })
+      const saved = await updateOrderParcelInfo({ orderId, packageLines })
       setList((prev) => prev.map((item) => item.id === orderId ? {
         ...item,
         freightTotal: saved.freightTotal,
-        packageFreights: saved.packageFreights,
-        packageWeights: saved.packageWeights,
-        packageTrackings: saved.packageTrackings,
+        packageLines: saved.packageLines,
       } : item))
       toast.success('包裹信息已保存')
     } catch (err: any) {

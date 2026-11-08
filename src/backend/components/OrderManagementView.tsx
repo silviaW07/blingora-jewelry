@@ -587,8 +587,7 @@ export const OrderManagementView = ({
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
-  const [parcelEdit, setParcelEdit] = React.useState<{ id: string; field: 'freightTotal' | 'packageFreights' | 'packageWeights' | 'packageTrackings' } | null>(null);
-  const [parcelDraft, setParcelDraft] = React.useState('');
+  const [packageDrafts, setPackageDrafts] = React.useState<Record<string, Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>>>({});
   const settlementPdfRef = React.useRef<HTMLInputElement>(null);
   const settlementClickTimer = React.useRef<number | null>(null);
   const shipImageRef = React.useRef<HTMLInputElement>(null);
@@ -1095,60 +1094,83 @@ export const OrderManagementView = ({
   };
 
 
-  const parcelText = (row: OrderListItem, field: 'packageFreights' | 'packageWeights' | 'packageTrackings') => (
-    field === 'packageFreights' ? (row.packageFreights || '') : field === 'packageWeights' ? (row.packageWeights || '') : (row.packageTrackings || '')
-  );
+  const emptyPackageLine = () => ({ shipDate: '', freightCost: '', chargeWeight: '', remark: '' });
 
-  const parseParcelPaste = (text: string) => {
-    const rows = text.replace(/\r\n/g, '\n').trim().split('\n').map((line) => line.trim()).filter(Boolean);
-    if (!rows.length) return null;
-    if (rows.some((line) => /\t/.test(line))) {
-      const freights: string[] = [];
-      const weights: string[] = [];
-      const trackings: string[] = [];
-      for (const line of rows) {
-        const parts = line.split('\t').map((part) => part.trim());
-        freights.push(parts[0] || '');
-        weights.push(parts[1] || '');
-        trackings.push(parts[2] || '');
-      }
-      return { packageFreights: freights.join('\n'), packageWeights: weights.join('\n'), packageTrackings: trackings.join('\n') };
-    }
-    return { lines: rows.join('\n') };
+  const packageLinesOf = (row: OrderListItem) => {
+    const draft = packageDrafts[row.id];
+    if (draft) return draft;
+    const lines = row.packageLines?.length ? row.packageLines : [emptyPackageLine()];
+    return lines.map((line) => ({
+      shipDate: line.shipDate || '',
+      freightCost: line.freightCost || '',
+      chargeWeight: line.chargeWeight || '',
+      remark: line.remark || '',
+    }));
   };
 
-  const saveParcelField = async (row: OrderListItem, field: 'freightTotal' | 'packageFreights' | 'packageWeights' | 'packageTrackings', value: string) => {
-    setParcelEdit(null);
-    try {
-      if (field === 'freightTotal') {
-        const text = value.trim();
-        const next = text === '' ? null : Number(text);
-        if (text && !Number.isFinite(next)) {
-          toast.error('请填写数字运费');
-          return;
-        }
-        if ((row.freightTotal ?? null) === (next ?? null)) return;
-        await handlers.saveOrderParcelInfo(row.id, { freightTotal: next });
-        return;
-      }
-      const current = parcelText(row, field);
-      if ((value || '') === (current || '')) return;
-      await handlers.saveOrderParcelInfo(row.id, { [field]: value });
-    } catch {
-      // toast already shown
+  const sumFreightDraft = (lines: Array<{ freightCost: string }>) => {
+    let total = 0;
+    let has = false;
+    for (const line of lines) {
+      const amount = Number(String(line.freightCost || '').trim());
+      if (!Number.isFinite(amount)) continue;
+      has = true;
+      total += amount;
     }
+    return has ? Math.round(total * 100) / 100 : null;
   };
 
-  const applyParcelPaste = async (row: OrderListItem, field: 'packageFreights' | 'packageWeights' | 'packageTrackings', text: string) => {
-    const parsed = parseParcelPaste(text);
-    if (!parsed) return;
-    if ('lines' in parsed) {
-      await saveParcelField(row, field, parsed.lines);
-      return;
-    }
-    setParcelEdit(null);
+  const setPackageLineField = (orderId: string, index: number, field: 'shipDate' | 'freightCost' | 'chargeWeight' | 'remark', value: string, source: OrderListItem) => {
+    setPackageDrafts((prev) => {
+      const base = prev[orderId] || packageLinesOf(source);
+      const next = base.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: value } : line);
+      return { ...prev, [orderId]: next };
+    });
+  };
+
+  const addPackageLine = (row: OrderListItem, index?: number) => {
+    setPackageDrafts((prev) => {
+      const base = prev[row.id] || packageLinesOf(row);
+      const insertAt = typeof index === 'number' ? index + 1 : base.length;
+      const source = typeof index === 'number' ? base[index] : null;
+      const added = source
+        ? { shipDate: source.shipDate || '', freightCost: '', chargeWeight: '', remark: '' }
+        : emptyPackageLine();
+      const next = [...base.slice(0, insertAt), added, ...base.slice(insertAt)];
+      return { ...prev, [row.id]: next };
+    });
+  };
+
+  const removePackageLine = (row: OrderListItem, index: number) => {
+    setPackageDrafts((prev) => {
+      const base = prev[row.id] || packageLinesOf(row);
+      const next = base.filter((_, lineIndex) => lineIndex !== index);
+      return { ...prev, [row.id]: next.length ? next : [emptyPackageLine()] };
+    });
+  };
+
+  const savePackageLines = async (row: OrderListItem, override?: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>) => {
+    const lines = override || packageDrafts[row.id] || packageLinesOf(row);
+    const normalized = lines.map((line) => ({
+      shipDate: line.shipDate.trim(),
+      freightCost: line.freightCost.trim(),
+      chargeWeight: line.chargeWeight.trim(),
+      remark: line.remark.trim(),
+    }));
+    const same = JSON.stringify(normalized) === JSON.stringify((row.packageLines || []).map((line) => ({
+      shipDate: line.shipDate || '',
+      freightCost: line.freightCost || '',
+      chargeWeight: line.chargeWeight || '',
+      remark: line.remark || '',
+    })));
+    if (same && packageDrafts[row.id] == null) return;
     try {
-      await handlers.saveOrderParcelInfo(row.id, parsed);
+      await handlers.saveOrderParcelInfo(row.id, normalized);
+      setPackageDrafts((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
     } catch {
       // toast already shown
     }
@@ -1492,19 +1514,25 @@ export const OrderManagementView = ({
                       <TableHead className="whitespace-normal break-words font-bold">金额</TableHead>
                       <TableHead className="whitespace-normal break-words font-bold">订单备注</TableHead>
                       <TableHead className="whitespace-normal break-words font-bold">总运费</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold" title="可粘贴多行，或粘贴 运费+计费重+物流号 三列">本单运费</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold" title="可粘贴多行，或粘贴 运费+计费重+物流号 三列">计费重</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold pr-6" title="可粘贴多行，或粘贴 运费+计费重+物流号 三列">物流号</TableHead>
+                      <TableHead className="whitespace-normal break-words pr-6 font-bold">
+                        <div className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] gap-1.5 text-left">
+                          <span>发货日期</span>
+                          <span>本单运费</span>
+                          <span>计费重</span>
+                          <span>物流号</span>
+                          <span>复制</span>
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody data-api-unique-id="ordermanagementview-r64976b895e3cee0a-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     {state.listLoading ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
+                        <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
                       </TableRow>
                     ) : state.list.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
+                        <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
                       </TableRow>
                     ) : (
                       groupLinkedOrders(state.list, state.orderLinks).map((row) => (
@@ -1661,71 +1689,64 @@ export const OrderManagementView = ({
                             />
                           </TableCell>
                           <TableCell className="pt-3 pb-3 align-top">
-                            {parcelEdit?.id === row.id && parcelEdit.field === 'freightTotal' ? (
-                              <input
-                                autoFocus
-                                inputMode="decimal"
-                                aria-label="总运费"
-                                className="h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-sm tabular-nums"
-                                value={parcelDraft}
-                                onChange={(e) => setParcelDraft(e.target.value)}
-                                onBlur={() => { void saveParcelField(row, 'freightTotal', parcelDraft); }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
-                                  if (e.key === 'Escape') setParcelEdit(null);
-                                }}
-                              />
-                            ) : (
-                              <button type="button" className="block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-left text-sm tabular-nums hover:bg-slate-100" title="双击编辑总运费" onDoubleClick={() => { setParcelDraft(row.freightTotal == null ? '' : String(row.freightTotal)); setParcelEdit({ id: row.id, field: 'freightTotal' }); }}>
-                                {row.freightTotal == null ? '—' : row.freightTotal}
-                              </button>
-                            )}
+                            <div className="min-w-[4.5rem] px-1 py-1 text-sm font-semibold tabular-nums text-slate-800">
+                              {sumFreightDraft(packageLinesOf(row)) == null ? '—' : sumFreightDraft(packageLinesOf(row))}
+                            </div>
                           </TableCell>
-                          {(['packageFreights', 'packageWeights', 'packageTrackings'] as const).map((field) => {
-                            const label = field === 'packageFreights' ? '本单运费' : field === 'packageWeights' ? '计费重' : '物流号'
-                            const value = parcelText(row, field)
-                            const editing = parcelEdit?.id === row.id && parcelEdit.field === field
-                            return (
-                              <TableCell key={field} className={`pt-3 pb-3 align-top ${field === 'packageTrackings' ? 'pr-6' : ''}`}>
-                                {editing ? (
-                                  <Textarea
-                                    autoFocus
-                                    aria-label={label}
-                                    className="min-h-[64px] w-full min-w-[5.5rem] resize-y whitespace-pre-wrap break-words text-sm leading-5"
-                                    rows={3}
-                                    placeholder={`${label}，可粘贴多行或三列包裹信息`}
-                                    value={parcelDraft}
-                                    onChange={(e) => setParcelDraft(e.target.value)}
-                                    onPaste={(e) => {
-                                      const text = e.clipboardData.getData('text')
-                                      if (!text.trim() || !/\t/.test(text)) return
-                                      e.preventDefault()
-                                      void applyParcelPaste(row, field, text)
-                                    }}
-                                    onBlur={() => { void saveParcelField(row, field, parcelDraft); }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Escape') setParcelEdit(null);
-                                    }}
+                          <TableCell className="pt-3 pb-3 align-top" colSpan={5}>
+                            <div className="space-y-1.5">
+                              {packageLinesOf(row).map((line, index) => (
+                                <div key={`${row.id}-pkg-${index}`} className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] items-start gap-1.5">
+                                  <input
+                                    type="date"
+                                    aria-label={`发货日期 ${index + 1}`}
+                                    className="h-9 w-full rounded-md border border-slate-200 px-1 text-xs"
+                                    value={line.shipDate}
+                                    onChange={(e) => setPackageLineField(row.id, index, 'shipDate', e.target.value, row)}
+                                    onBlur={() => { void savePackageLines(row); }}
                                   />
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="block w-full min-w-[5.5rem] whitespace-pre-wrap break-words rounded-md px-1 py-1 text-left text-sm leading-5 hover:bg-slate-100"
-                                    title={`双击编辑${label}；可粘贴多行，或一次粘贴三列包裹信息`}
-                                    onDoubleClick={() => { setParcelDraft(value); setParcelEdit({ id: row.id, field }); }}
-                                    onPaste={(e) => {
-                                      const text = e.clipboardData.getData('text')
-                                      if (!text.trim()) return
-                                      e.preventDefault()
-                                      void applyParcelPaste(row, field, text)
-                                    }}
-                                  >
-                                    {value.trim() ? value : '—'}
-                                  </button>
-                                )}
-                              </TableCell>
-                            )
-                          })}
+                                  <input
+                                    inputMode="decimal"
+                                    aria-label={`本单运费 ${index + 1}`}
+                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm tabular-nums"
+                                    placeholder="运费"
+                                    value={line.freightCost}
+                                    onChange={(e) => setPackageLineField(row.id, index, 'freightCost', e.target.value, row)}
+                                    onBlur={() => { void savePackageLines(row); }}
+                                  />
+                                  <input
+                                    inputMode="decimal"
+                                    aria-label={`计费重 ${index + 1}`}
+                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm tabular-nums"
+                                    placeholder="计费重"
+                                    value={line.chargeWeight}
+                                    onChange={(e) => setPackageLineField(row.id, index, 'chargeWeight', e.target.value, row)}
+                                    onBlur={() => { void savePackageLines(row); }}
+                                  />
+                                  <input
+                                    aria-label={`物流号 ${index + 1}`}
+                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                                    placeholder="物流号"
+                                    value={line.remark}
+                                    onChange={(e) => setPackageLineField(row.id, index, 'remark', e.target.value, row)}
+                                    onBlur={() => { void savePackageLines(row); }}
+                                  />
+                                  <div className="flex items-center gap-1">
+                                    <Button type="button" size="sm" variant="outline" className="h-8 px-2 text-xs" title="复制新增一行四个输入框" onClick={() => addPackageLine(row, index)}>复制</Button>
+                                    {packageLinesOf(row).length > 1 ? (
+                                      <button type="button" className="h-8 px-1 text-xs text-slate-400 hover:text-slate-700" title="删除这行" onClick={() => {
+                                        const base = packageLinesOf(row);
+                                        const next = base.filter((_, lineIndex) => lineIndex !== index);
+                                        const normalized = next.length ? next : [emptyPackageLine()];
+                                        setPackageDrafts((prev) => ({ ...prev, [row.id]: normalized }));
+                                        void savePackageLines(row, normalized);
+                                      }}>删</button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}

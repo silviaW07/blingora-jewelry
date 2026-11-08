@@ -367,14 +367,10 @@ export interface OrderListItem {
   ladderOffPercent: number
   /** Hand-set order discount, percent off. Null until someone edits the big number. */
   manualDiscountPercent: number | null
-  /** 总运费 from registerInfoJson.actualFreightTotal */
+  /** 总运费 = sum of package freight costs */
   freightTotal: number | null
-  /** 本单运费 lines, one package per line */
-  packageFreights: string
-  /** 计费重 lines, one package per line */
-  packageWeights: string
-  /** 物流号 lines, one package per line */
-  packageTrackings: string
+  /** Package rows: ship date / freight / weight / tracking */
+  packageLines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>
 }
 
 export interface OrderExcelExportRow {
@@ -581,31 +577,44 @@ function orderLevelDiscounts(input: {
 }
 
 
+function emptyPackageLine() {
+  return { shipDate: '', freightCost: '', chargeWeight: '', remark: '' }
+}
+
+function sumPackageFreight(lines: Array<{ freightCost: string }>) {
+  let total = 0
+  let has = false
+  for (const line of lines) {
+    const amount = Number(String(line.freightCost || '').trim())
+    if (!Number.isFinite(amount)) continue
+    has = true
+    total += amount
+  }
+  return has ? Math.round(total * 100) / 100 : null
+}
+
 function readRegisterInfo(raw: unknown) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { freightTotal: null as number | null, packageFreights: '', packageWeights: '', packageTrackings: '' }
+    return { freightTotal: null as number | null, packageLines: [emptyPackageLine()] }
   }
   const info = raw as Record<string, unknown>
   const lines = Array.isArray(info.freightLines) ? info.freightLines : []
-  const freights: string[] = []
-  const weights: string[] = []
-  const trackings: string[] = []
-  for (const line of lines) {
-    if (!line || typeof line !== 'object' || Array.isArray(line)) continue
+  const packageLines = lines.flatMap((line) => {
+    if (!line || typeof line !== 'object' || Array.isArray(line)) return []
     const row = line as Record<string, unknown>
-    freights.push(String(row.freightCost || '').trim())
-    weights.push(String(row.chargeWeight || '').trim())
-    trackings.push(String(row.remark || '').trim())
-  }
-  while (freights.length && !freights[freights.length - 1] && !weights[weights.length - 1] && !trackings[trackings.length - 1]) {
-    freights.pop(); weights.pop(); trackings.pop()
-  }
-  const total = Number(info.actualFreightTotal)
+    const next = {
+      shipDate: String(row.shipDate || '').trim(),
+      freightCost: String(row.freightCost || '').trim(),
+      chargeWeight: String(row.chargeWeight || '').trim(),
+      remark: String(row.remark || '').trim(),
+    }
+    if (!next.shipDate && !next.freightCost && !next.chargeWeight && !next.remark) return []
+    return [next]
+  })
+  const filled = packageLines.length ? packageLines : [emptyPackageLine()]
   return {
-    freightTotal: Number.isFinite(total) ? Math.round(total * 100) / 100 : null,
-    packageFreights: freights.join('\n'),
-    packageWeights: weights.join('\n'),
-    packageTrackings: trackings.join('\n'),
+    freightTotal: sumPackageFreight(filled),
+    packageLines: filled,
   }
 }
 
@@ -2819,22 +2828,24 @@ export const updateOrderDiscount = requireStaff('orders')(
  * 更新订单内部备注（列表行内编辑）
  */
 
+export interface OrderPackageLineInput {
+  shipDate?: string
+  freightCost?: string
+  chargeWeight?: string
+  remark?: string
+}
+
 export interface UpdateOrderParcelInfoInput {
   orderId: string
-  freightTotal?: number | null
-  packageFreights?: string
-  packageWeights?: string
-  packageTrackings?: string
+  packageLines: OrderPackageLineInput[]
 }
 
 export interface UpdateOrderParcelInfoOutput {
   freightTotal: number | null
-  packageFreights: string
-  packageWeights: string
-  packageTrackings: string
+  packageLines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>
 }
 
-/** 列表里改总运费 / 本单运费 / 计费重 / 物流号。多行对应多个包裹。 */
+/** 列表里改发货日期 / 本单运费 / 计费重 / 物流号。总运费按本单运费自动合计。 */
 export const updateOrderParcelInfo = requireStaff('orders')(
   withResult(async (input: UpdateOrderParcelInfoInput): Promise<UpdateOrderParcelInfoOutput> => {
     const { username } = getAuthContext()
@@ -2848,32 +2859,18 @@ export const updateOrderParcelInfo = requireStaff('orders')(
     const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson)
       ? { ...(order.registerInfoJson as Record<string, unknown>) }
       : {}
-    const current = readRegisterInfo(base)
-    const freightsText = input.packageFreights !== undefined ? String(input.packageFreights || '') : current.packageFreights
-    const weightsText = input.packageWeights !== undefined ? String(input.packageWeights || '') : current.packageWeights
-    const trackingsText = input.packageTrackings !== undefined ? String(input.packageTrackings || '') : current.packageTrackings
-    const split = (text: string) => text.replace(/\r\n/g, '\n').split('\n').map((line) => line.trim())
-    const freights = split(freightsText)
-    const weights = split(weightsText)
-    const trackings = split(trackingsText)
-    const size = Math.max(freights.length, weights.length, trackings.length, 0)
-    const freightLines = Array.from({ length: size }, (_, index) => ({
-      freightCost: freights[index] || '',
-      chargeWeight: weights[index] || '',
-      remark: trackings[index] || '',
-    })).filter((line) => line.freightCost || line.chargeWeight || line.remark)
-    let freightTotal = current.freightTotal
-    if (input.freightTotal !== undefined) {
-      if (input.freightTotal == null || String(input.freightTotal).trim() === '') freightTotal = null
-      else {
-        const amount = Number(input.freightTotal)
-        freightTotal = Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null
-      }
-    }
+    const freightLines = (input.packageLines || []).map((line) => ({
+      shipDate: String(line?.shipDate || '').trim().slice(0, 20),
+      freightCost: String(line?.freightCost || '').trim().slice(0, 40),
+      chargeWeight: String(line?.chargeWeight || '').trim().slice(0, 40),
+      remark: String(line?.remark || '').trim().slice(0, 200),
+    })).filter((line) => line.shipDate || line.freightCost || line.chargeWeight || line.remark)
+    const packageLines = freightLines.length ? freightLines : [emptyPackageLine()]
+    const freightTotal = sumPackageFreight(packageLines)
     const next = {
       ...base,
       actualFreightTotal: freightTotal ?? 0,
-      freightLines,
+      freightLines: packageLines,
     }
     await prisma.$transaction(async (tx) => {
       await tx.orderrecord.update({
@@ -2884,17 +2881,12 @@ export const updateOrderParcelInfo = requireStaff('orders')(
         data: {
           orderId,
           actionType: '更新包裹信息',
-          actionNote: `总运费 ${freightTotal ?? ''} · ${freightLines.length} 个包裹`.slice(0, 4000),
+          actionNote: `总运费 ${freightTotal ?? ''} · ${packageLines.length} 个包裹`.slice(0, 4000),
           operatorName: username,
         },
       })
     })
-    return {
-      freightTotal,
-      packageFreights: freightsText.replace(/\r\n/g, '\n'),
-      packageWeights: weightsText.replace(/\r\n/g, '\n'),
-      packageTrackings: trackingsText.replace(/\r\n/g, '\n'),
-    }
+    return { freightTotal, packageLines }
   }),
 )
 

@@ -12190,6 +12190,19 @@ Object.defineProperty(exports, "registry", ({
         return registry;
     }
 }));
+const _ProductDetail = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(1920));
+const _ProductCategory = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6481));
+const _PageDecorate = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9580));
+const _Home = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9123));
+const _CustomerService = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9573));
+const _CustomerRegister = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4449));
+const _CustomerPromo = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4801));
+const _CustomerLogin = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(7579));
+const _CheckoutShipping = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4546));
+const _CheckoutOrder = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(2582));
+const _Cart = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6994));
+const _BuyerShow = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5348));
+const _AccountCenter = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(840));
 const _homeRecommendZoneCache = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4561));
 const _UserManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5936));
 const _SuffixConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(8275));
@@ -12209,19 +12222,6 @@ const _BannerManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_requ
 const _AdminRegister = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4676));
 const _AdminManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5366));
 const _AdminLogin = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(528));
-const _ProductDetail = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(1920));
-const _ProductCategory = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6481));
-const _PageDecorate = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9580));
-const _Home = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9123));
-const _CustomerService = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9573));
-const _CustomerRegister = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4449));
-const _CustomerPromo = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4801));
-const _CustomerLogin = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(7579));
-const _CheckoutShipping = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4546));
-const _CheckoutOrder = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(2582));
-const _Cart = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(6994));
-const _BuyerShow = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5348));
-const _AccountCenter = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(840));
 function _getRequireWildcardCache(nodeInterop) {
     if (typeof WeakMap !== "function") return null;
     var cacheBabelInterop = new WeakMap();
@@ -12253,6 +12253,19 @@ function _interop_require_wildcard(obj, nodeInterop) {
     return newObj;
 }
 const registry = {
+    'src.frontend.actions.ProductDetail': _ProductDetail,
+    'src.frontend.actions.ProductCategory': _ProductCategory,
+    'src.frontend.actions.PageDecorate': _PageDecorate,
+    'src.frontend.actions.Home': _Home,
+    'src.frontend.actions.CustomerService': _CustomerService,
+    'src.frontend.actions.CustomerRegister': _CustomerRegister,
+    'src.frontend.actions.CustomerPromo': _CustomerPromo,
+    'src.frontend.actions.CustomerLogin': _CustomerLogin,
+    'src.frontend.actions.CheckoutShipping': _CheckoutShipping,
+    'src.frontend.actions.CheckoutOrder': _CheckoutOrder,
+    'src.frontend.actions.Cart': _Cart,
+    'src.frontend.actions.BuyerShow': _BuyerShow,
+    'src.frontend.actions.AccountCenter': _AccountCenter,
     'src.backend.actions.homeRecommendZoneCache': _homeRecommendZoneCache,
     'src.backend.actions.UserManagement': _UserManagement,
     'src.backend.actions.SuffixConfig': _SuffixConfig,
@@ -12271,20 +12284,7 @@ const registry = {
     'src.backend.actions.BannerManagement': _BannerManagement,
     'src.backend.actions.AdminRegister': _AdminRegister,
     'src.backend.actions.AdminManagement': _AdminManagement,
-    'src.backend.actions.AdminLogin': _AdminLogin,
-    'src.frontend.actions.ProductDetail': _ProductDetail,
-    'src.frontend.actions.ProductCategory': _ProductCategory,
-    'src.frontend.actions.PageDecorate': _PageDecorate,
-    'src.frontend.actions.Home': _Home,
-    'src.frontend.actions.CustomerService': _CustomerService,
-    'src.frontend.actions.CustomerRegister': _CustomerRegister,
-    'src.frontend.actions.CustomerPromo': _CustomerPromo,
-    'src.frontend.actions.CustomerLogin': _CustomerLogin,
-    'src.frontend.actions.CheckoutShipping': _CheckoutShipping,
-    'src.frontend.actions.CheckoutOrder': _CheckoutOrder,
-    'src.frontend.actions.Cart': _Cart,
-    'src.frontend.actions.BuyerShow': _BuyerShow,
-    'src.frontend.actions.AccountCenter': _AccountCenter
+    'src.backend.actions.AdminLogin': _AdminLogin
 };
 
 
@@ -31641,38 +31641,56 @@ const getOrderDashboardStats = (0, _staffAccess.requireStaff)('orders')((0, _act
         ladderOffPercent: Math.max(0, ladderOff)
     };
 }
+function emptyPackageLine() {
+    return {
+        shipDate: '',
+        freightCost: '',
+        chargeWeight: '',
+        remark: ''
+    };
+}
+function sumPackageFreight(lines) {
+    let total = 0;
+    let has = false;
+    for (const line of lines){
+        const amount = Number(String(line.freightCost || '').trim());
+        if (!Number.isFinite(amount)) continue;
+        has = true;
+        total += amount;
+    }
+    return has ? Math.round(total * 100) / 100 : null;
+}
 function readRegisterInfo(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
         return {
             freightTotal: null,
-            packageFreights: '',
-            packageWeights: '',
-            packageTrackings: ''
+            packageLines: [
+                emptyPackageLine()
+            ]
         };
     }
     const info = raw;
     const lines = Array.isArray(info.freightLines) ? info.freightLines : [];
-    const freights = [];
-    const weights = [];
-    const trackings = [];
-    for (const line of lines){
-        if (!line || typeof line !== 'object' || Array.isArray(line)) continue;
+    const packageLines = lines.flatMap((line)=>{
+        if (!line || typeof line !== 'object' || Array.isArray(line)) return [];
         const row = line;
-        freights.push(String(row.freightCost || '').trim());
-        weights.push(String(row.chargeWeight || '').trim());
-        trackings.push(String(row.remark || '').trim());
-    }
-    while(freights.length && !freights[freights.length - 1] && !weights[weights.length - 1] && !trackings[trackings.length - 1]){
-        freights.pop();
-        weights.pop();
-        trackings.pop();
-    }
-    const total = Number(info.actualFreightTotal);
+        const next = {
+            shipDate: String(row.shipDate || '').trim(),
+            freightCost: String(row.freightCost || '').trim(),
+            chargeWeight: String(row.chargeWeight || '').trim(),
+            remark: String(row.remark || '').trim()
+        };
+        if (!next.shipDate && !next.freightCost && !next.chargeWeight && !next.remark) return [];
+        return [
+            next
+        ];
+    });
+    const filled = packageLines.length ? packageLines : [
+        emptyPackageLine()
+    ];
     return {
-        freightTotal: Number.isFinite(total) ? Math.round(total * 100) / 100 : null,
-        packageFreights: freights.join('\n'),
-        packageWeights: weights.join('\n'),
-        packageTrackings: trackings.join('\n')
+        freightTotal: sumPackageFreight(filled),
+        packageLines: filled
     };
 }
 const getOrderList = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
@@ -34324,34 +34342,20 @@ const updateOrderParcelInfo = (0, _staffAccess.requireStaff)('orders')((0, _acti
     const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson) ? {
         ...order.registerInfoJson
     } : {};
-    const current = readRegisterInfo(base);
-    const freightsText = input.packageFreights !== undefined ? String(input.packageFreights || '') : current.packageFreights;
-    const weightsText = input.packageWeights !== undefined ? String(input.packageWeights || '') : current.packageWeights;
-    const trackingsText = input.packageTrackings !== undefined ? String(input.packageTrackings || '') : current.packageTrackings;
-    const split = (text)=>text.replace(/\r\n/g, '\n').split('\n').map((line)=>line.trim());
-    const freights = split(freightsText);
-    const weights = split(weightsText);
-    const trackings = split(trackingsText);
-    const size = Math.max(freights.length, weights.length, trackings.length, 0);
-    const freightLines = Array.from({
-        length: size
-    }, (_, index)=>({
-            freightCost: freights[index] || '',
-            chargeWeight: weights[index] || '',
-            remark: trackings[index] || ''
-        })).filter((line)=>line.freightCost || line.chargeWeight || line.remark);
-    let freightTotal = current.freightTotal;
-    if (input.freightTotal !== undefined) {
-        if (input.freightTotal == null || String(input.freightTotal).trim() === '') freightTotal = null;
-        else {
-            const amount = Number(input.freightTotal);
-            freightTotal = Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
-        }
-    }
+    const freightLines = (input.packageLines || []).map((line)=>({
+            shipDate: String((line === null || line === void 0 ? void 0 : line.shipDate) || '').trim().slice(0, 20),
+            freightCost: String((line === null || line === void 0 ? void 0 : line.freightCost) || '').trim().slice(0, 40),
+            chargeWeight: String((line === null || line === void 0 ? void 0 : line.chargeWeight) || '').trim().slice(0, 40),
+            remark: String((line === null || line === void 0 ? void 0 : line.remark) || '').trim().slice(0, 200)
+        })).filter((line)=>line.shipDate || line.freightCost || line.chargeWeight || line.remark);
+    const packageLines = freightLines.length ? freightLines : [
+        emptyPackageLine()
+    ];
+    const freightTotal = sumPackageFreight(packageLines);
     const next = {
         ...base,
         actualFreightTotal: freightTotal !== null && freightTotal !== void 0 ? freightTotal : 0,
-        freightLines
+        freightLines: packageLines
     };
     await _prisma.default.$transaction(async (tx)=>{
         await tx.orderrecord.update({
@@ -34366,16 +34370,14 @@ const updateOrderParcelInfo = (0, _staffAccess.requireStaff)('orders')((0, _acti
             data: {
                 orderId,
                 actionType: '更新包裹信息',
-                actionNote: `总运费 ${freightTotal !== null && freightTotal !== void 0 ? freightTotal : ''} · ${freightLines.length} 个包裹`.slice(0, 4000),
+                actionNote: `总运费 ${freightTotal !== null && freightTotal !== void 0 ? freightTotal : ''} · ${packageLines.length} 个包裹`.slice(0, 4000),
                 operatorName: username
             }
         });
     });
     return {
         freightTotal,
-        packageFreights: freightsText.replace(/\r\n/g, '\n'),
-        packageWeights: weightsText.replace(/\r\n/g, '\n'),
-        packageTrackings: trackingsText.replace(/\r\n/g, '\n')
+        packageLines
     };
 }));
 const updateOrderRemark = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
