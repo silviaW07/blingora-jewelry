@@ -48,6 +48,8 @@ export const updateOrderParcelInfo = (...args: Parameters<Actions["updateOrderPa
   rpcCall<Awaited<ReturnType<Actions["updateOrderParcelInfo"]>>>("src.backend.actions.OrderManagement.updateOrderParcelInfo", ...args);
 export const updateOrderMoneyFields = (...args: Parameters<Actions["updateOrderMoneyFields"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderMoneyFields"]>>>("src.backend.actions.OrderManagement.updateOrderMoneyFields", ...args);
+export const updateOrderShippingAddress = (...args: Parameters<Actions["updateOrderShippingAddress"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateOrderShippingAddress"]>>>("src.backend.actions.OrderManagement.updateOrderShippingAddress", ...args);
 export const updateOrderRemark = (...args: Parameters<Actions["updateOrderRemark"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderRemark"]>>>("src.backend.actions.OrderManagement.updateOrderRemark", ...args);
 export const exportInboundSheet = (...args: Parameters<Actions["exportInboundSheet"]>) => 

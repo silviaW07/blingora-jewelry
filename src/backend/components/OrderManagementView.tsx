@@ -589,6 +589,10 @@ export const OrderManagementView = ({
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const [packageDrafts, setPackageDrafts] = React.useState<Record<string, Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>>>({});
   const [moneyEdit, setMoneyEdit] = React.useState<{ id: string; field: 'totalAmount' | 'usdShipping' | 'depositText' } | null>(null);
+  const [inboundAddressEdit, setInboundAddressEdit] = React.useState(false);
+  const [inboundAddressDraft, setInboundAddressDraft] = React.useState('');
+  const [inboundCarrierEdit, setInboundCarrierEdit] = React.useState(false);
+  const [inboundCarrierDraft, setInboundCarrierDraft] = React.useState('');
   const [moneyDraft, setMoneyDraft] = React.useState('');
   const settlementPdfRef = React.useRef<HTMLInputElement>(null);
   const settlementClickTimer = React.useRef<number | null>(null);
@@ -1249,6 +1253,20 @@ export const OrderManagementView = ({
   const inboundOrder = state.detailData?.id === state.inboundOrderId
     ? state.detailData
     : state.list.find((row) => row.id === state.inboundOrderId);
+  const inboundAddressInfo = state.detailData?.id === state.inboundOrderId ? state.detailData.address : null;
+  const inboundAddressText = (() => {
+    if (!inboundAddressInfo) return '';
+    return [
+      inboundAddressInfo.recipientName,
+      inboundAddressInfo.phone,
+      inboundAddressInfo.addressLine1,
+      inboundAddressInfo.addressLine2,
+      [inboundAddressInfo.cityName, inboundAddressInfo.stateName, inboundAddressInfo.postalCode].filter(Boolean).join(', '),
+      inboundAddressInfo.countryName,
+    ].filter(Boolean).join('\n');
+  })();
+  const inboundCarrierText = String((inboundOrder && 'trackingCarrier' in inboundOrder && inboundOrder.trackingCarrier) || state.detailData?.trackingCarrier || '');
+  const inboundShipMethod = state.detailData?.id === state.inboundOrderId ? String(state.detailData.shipMethod || '') : '';
   const orderSubtotal = inboundOrder && Number.isFinite(Number(inboundOrder.subtotalAmount)) ? Number(inboundOrder.subtotalAmount) : originalTotal;
   const orderDiscount = inboundOrder && Number.isFinite(Number(inboundOrder.discountAmount))
     ? Number(inboundOrder.discountAmount)
@@ -2771,37 +2789,121 @@ export const OrderManagementView = ({
                 <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{arrivedPieces}</div>
               </div>
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div
-                className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${addonDrag === 'product' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
-                onClick={() => addonProductRef.current?.click()}
-                onDragOver={(event) => { event.preventDefault(); setAddonDrag('product'); }}
-                onDragLeave={() => setAddonDrag((current) => current === 'product' ? null : current)}
-                onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProducts(event.dataTransfer.files); }}
-              >
-                <div className="text-base font-semibold">传入商品（允许拖拽）</div>
-                <div className="mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div
+                  className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${addonDrag === 'product' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
+                  onClick={() => addonProductRef.current?.click()}
+                  onDragOver={(event) => { event.preventDefault(); setAddonDrag('product'); }}
+                  onDragLeave={() => setAddonDrag((current) => current === 'product' ? null : current)}
+                  onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProducts(event.dataTransfer.files); }}
+                >
+                  <div className="text-base font-semibold">传入商品（允许拖拽）</div>
+                  <div className="mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
+                </div>
+                <div
+                  className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${sheetProgress != null || addonDrag === 'sheet' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
+                  onClick={() => { if (sheetProgress == null) addonSheetRef.current?.click(); }}
+                  onDragOver={(event) => { event.preventDefault(); setAddonDrag('sheet'); }}
+                  onDragLeave={() => setAddonDrag((current) => current === 'sheet' ? null : current)}
+                  onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonSheet(event.dataTransfer.files); }}
+                >
+                  {sheetProgress != null ? (
+                    <>
+                      <div className="text-base font-semibold">正在传入 {sheetProgress}%</div>
+                      <div className="mt-3 h-2 w-full max-w-xs overflow-hidden rounded-full bg-white">
+                        <div className="h-full rounded-full bg-sky-600 transition-[width] duration-300" style={{ width: `${sheetProgress}%` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-base font-semibold">传入表格</div>
+                      <div className="mt-1 text-sm text-slate-500">SKU 可以不填。表头对上售价、数量、总价就先存入</div>
+                    </>
+                  )}
+                </div>
               </div>
-              <div
-                className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${sheetProgress != null || addonDrag === 'sheet' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
-                onClick={() => { if (sheetProgress == null) addonSheetRef.current?.click(); }}
-                onDragOver={(event) => { event.preventDefault(); setAddonDrag('sheet'); }}
-                onDragLeave={() => setAddonDrag((current) => current === 'sheet' ? null : current)}
-                onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonSheet(event.dataTransfer.files); }}
-              >
-                {sheetProgress != null ? (
-                  <>
-                    <div className="text-base font-semibold">正在传入 {sheetProgress}%</div>
-                    <div className="mt-3 h-2 w-full max-w-xs overflow-hidden rounded-full bg-white">
-                      <div className="h-full rounded-full bg-sky-600 transition-[width] duration-300" style={{ width: `${sheetProgress}%` }} />
-                    </div>
-                  </>
+              <div className="min-h-28 rounded-md border border-dashed border-slate-300 bg-white px-4 py-3 text-left">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">客户地址</div>
+                {inboundAddressEdit ? (
+                  <Textarea
+                    autoFocus
+                    rows={5}
+                    className="mt-2 min-h-[7rem] resize-y text-sm leading-5"
+                    value={inboundAddressDraft}
+                    onChange={(event) => setInboundAddressDraft(event.target.value)}
+                    onBlur={() => {
+                      setInboundAddressEdit(false);
+                      if (!state.inboundOrderId) return;
+                      if ((inboundAddressDraft || '') === (inboundAddressText || '')) return;
+                      void handlers.updateOrderShippingAddress({ orderId: state.inboundOrderId, addressText: inboundAddressDraft });
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setInboundAddressEdit(false);
+                    }}
+                  />
                 ) : (
-                  <>
-                    <div className="text-base font-semibold">传入表格</div>
-                    <div className="mt-1 text-sm text-slate-500">SKU 可以不填。表头对上售价、数量、总价就先存入</div>
-                  </>
+                  <button
+                    type="button"
+                    className="mt-2 block w-full whitespace-pre-wrap break-words rounded-md px-1 py-1 text-left text-sm leading-6 text-slate-800 hover:bg-slate-50"
+                    title="双击修改客户地址"
+                    onDoubleClick={() => {
+                      setInboundAddressDraft(inboundAddressText || '');
+                      setInboundAddressEdit(true);
+                    }}
+                  >
+                    {inboundAddressText.trim() ? inboundAddressText : '— 双击填写客户地址'}
+                  </button>
                 )}
+              </div>
+              <div className="min-h-28 rounded-md border border-dashed border-slate-300 bg-white px-4 py-3 text-left">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">订单信息</div>
+                <div className="mt-2 grid gap-2 text-sm">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-slate-500">原订单价值</span>
+                    <span className="font-semibold tabular-nums text-slate-900">{formatInboundMoney(Number(inboundOrder?.totalAmount) || orderSubtotal, inboundCurrency)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-slate-500">折扣</span>
+                    <span className="font-semibold text-slate-900">{discountPercentLabel}{orderDiscount > 0 ? ` · -${formatInboundMoney(orderDiscount, inboundCurrency)}` : ''}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-slate-500">物流渠道</span>
+                    {inboundCarrierEdit ? (
+                      <input
+                        autoFocus
+                        className="h-8 min-w-[8rem] rounded-md border border-slate-300 px-2 text-right text-sm font-semibold"
+                        value={inboundCarrierDraft}
+                        onChange={(event) => setInboundCarrierDraft(event.target.value)}
+                        onBlur={() => {
+                          setInboundCarrierEdit(false);
+                          if (!state.inboundOrderId) return;
+                          if ((inboundCarrierDraft || '') === (inboundCarrierText || '')) return;
+                          void handlers.updateOrderShippingAddress({
+                            orderId: state.inboundOrderId,
+                            trackingCarrier: inboundCarrierDraft,
+                          });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
+                          if (event.key === 'Escape') setInboundCarrierEdit(false);
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="rounded-md px-1 py-0.5 text-right font-semibold text-slate-900 hover:bg-slate-50"
+                        title="双击修改物流渠道"
+                        onDoubleClick={() => {
+                          setInboundCarrierDraft(inboundCarrierText || inboundShipMethod || '');
+                          setInboundCarrierEdit(true);
+                        }}
+                      >
+                        {inboundCarrierText || inboundShipMethod || '—'}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
             <input ref={addonProductRef} type="file" className="hidden" multiple accept="image/*,.xlsx,.xls,.csv" onChange={(event) => { const files = event.target.files; if (files?.length) void receiveAddonProducts(files); event.target.value = ''; }} />

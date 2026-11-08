@@ -31333,6 +31333,9 @@ _export(exports, {
     get updateOrderRemark () {
         return updateOrderRemark;
     },
+    get updateOrderShippingAddress () {
+        return updateOrderShippingAddress;
+    },
     get updateOrderStatus () {
         return updateOrderStatus;
     }
@@ -34492,6 +34495,134 @@ const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _act
         totalAmount,
         usdShipping,
         depositText
+    };
+}));
+function formatAddressInfo(address) {
+    if (!address) return null;
+    return {
+        recipientName: address.recipientName,
+        phone: address.phone,
+        countryCode: address.countryCode,
+        countryName: address.countryName,
+        stateName: address.stateName,
+        cityName: address.cityName,
+        addressLine1: address.addressLine1,
+        addressLine2: address.addressLine2,
+        postalCode: address.postalCode
+    };
+}
+const updateOrderShippingAddress = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
+    var _order_address, _order_address1;
+    const { username } = (0, _action_utils.getAuthContext)();
+    const orderId = String(input.orderId || '').trim();
+    if (!orderId) throw new Error('缺少订单');
+    const order = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: orderId
+        },
+        select: {
+            id: true,
+            userId: true,
+            addressId: true,
+            trackingCarrier: true,
+            registerInfoJson: true,
+            address: true,
+            user: {
+                select: {
+                    username: true,
+                    phone: true
+                }
+            }
+        }
+    });
+    if (!order) throw new Error('订单不存在');
+    const shouldUpdateAddress = input.addressText !== undefined;
+    const addressText = shouldUpdateAddress ? String(input.addressText || '').trim().slice(0, 1000) : String((order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson) ? order.registerInfoJson.address : '') || '').trim();
+    const lines = addressText.split(/\n+/).map((line)=>line.trim()).filter(Boolean);
+    const recipientName = (((_order_address = order.address) === null || _order_address === void 0 ? void 0 : _order_address.recipientName) || order.user.username || 'Customer').slice(0, 100);
+    const phone = (((_order_address1 = order.address) === null || _order_address1 === void 0 ? void 0 : _order_address1.phone) || order.user.phone || '').slice(0, 30) || null;
+    const line1 = (lines[0] || addressText || '—').slice(0, 255);
+    const line2 = (lines.length > 1 ? lines.slice(1).join(', ') : '').slice(0, 255) || null;
+    const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson) ? {
+        ...order.registerInfoJson
+    } : {};
+    let trackingCarrier = order.trackingCarrier || null;
+    if (input.trackingCarrier !== undefined) {
+        trackingCarrier = String(input.trackingCarrier || '').trim().slice(0, 80) || null;
+    }
+    const nextRegister = shouldUpdateAddress ? {
+        ...base,
+        address: addressText
+    } : base;
+    const saved = await _prisma.default.$transaction(async (tx)=>{
+        let addressId = order.addressId;
+        if (shouldUpdateAddress) {
+            if (addressId) {
+                await tx.useraddress.update({
+                    where: {
+                        id: addressId
+                    },
+                    data: {
+                        addressLine1: line1,
+                        addressLine2: line2,
+                        recipientName,
+                        phone
+                    }
+                });
+            } else if (addressText) {
+                var _order_address, _order_address1, _order_address2, _order_address3, _order_address4;
+                const created = await tx.useraddress.create({
+                    data: {
+                        userId: order.userId,
+                        recipientName,
+                        phone,
+                        countryCode: ((_order_address = order.address) === null || _order_address === void 0 ? void 0 : _order_address.countryCode) || 'US',
+                        countryName: ((_order_address1 = order.address) === null || _order_address1 === void 0 ? void 0 : _order_address1.countryName) || 'United States',
+                        stateName: ((_order_address2 = order.address) === null || _order_address2 === void 0 ? void 0 : _order_address2.stateName) || null,
+                        cityName: ((_order_address3 = order.address) === null || _order_address3 === void 0 ? void 0 : _order_address3.cityName) || null,
+                        addressLine1: line1,
+                        addressLine2: line2,
+                        postalCode: ((_order_address4 = order.address) === null || _order_address4 === void 0 ? void 0 : _order_address4.postalCode) || null,
+                        isDefault: true
+                    },
+                    select: {
+                        id: true
+                    }
+                });
+                addressId = created.id;
+            }
+        }
+        const updated = await tx.orderrecord.update({
+            where: {
+                id: orderId
+            },
+            data: {
+                ...shouldUpdateAddress ? {
+                    addressId,
+                    registerInfoJson: nextRegister
+                } : {},
+                ...input.trackingCarrier !== undefined ? {
+                    trackingCarrier
+                } : {}
+            },
+            include: {
+                address: true
+            }
+        });
+        await tx.orderoperationlog.create({
+            data: {
+                orderId,
+                actionType: shouldUpdateAddress ? '更新收货地址' : '更新物流渠道',
+                actionNote: (shouldUpdateAddress ? addressText : trackingCarrier || '').slice(0, 4000) || '更新',
+                operatorName: username
+            }
+        });
+        return updated;
+    });
+    return {
+        addressText: shouldUpdateAddress ? addressText : String((saved.registerInfoJson && typeof saved.registerInfoJson === 'object' && !Array.isArray(saved.registerInfoJson) ? saved.registerInfoJson.address : '') || addressText || ''),
+        trackingCarrier,
+        address: formatAddressInfo(saved.address)
     };
 }));
 const updateOrderRemark = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{

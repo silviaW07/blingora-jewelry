@@ -45,6 +45,7 @@ import {
   importCustomerOrder,
   createCustomerOrder,
   updateOrderCustomerProfile,
+  updateOrderShippingAddress,
   listInboundShipments,
   saveInboundShipment,
   updateInboundShipment,
@@ -203,6 +204,7 @@ export interface OrderManagementHandlers {
   importCustomerOrder: (input: { customerName: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   createCustomerOrder: (input: { customerName: string; status?: OrderStatus; phone?: string; address?: string; registerDate?: string; orderAmount?: number | null; goodsAmount?: number | null; usdShipping?: number | null; shipMethodText?: string; costAmount?: number | null; actualFreightTotal?: number | null; freightLines?: Array<{ freightCost?: string; chargeWeight?: string; remark?: string }> }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   updateOrderCustomerProfile: (input: { orderId: string; customerName?: string; phone?: string | null; customerEmail?: string }) => Promise<{ customerName: string; customerWhatsapp: string | null; customerEmail: string } | null>
+  updateOrderShippingAddress: (input: { orderId: string; addressText?: string; trackingCarrier?: string | null }) => Promise<{ addressText: string; trackingCarrier: string | null; address: any } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
 
@@ -801,6 +803,11 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }).catch(() => {
       if (!cancelled) setSettlementPdfUrl('')
     })
+    getOrderDetail(inboundOrderId).then((detail) => {
+      if (!cancelled) setDetailData(detail)
+    }).catch(() => {
+      // keep list row summary if detail fails
+    })
     return () => { cancelled = true }
   }, [inboundOrderId])
 
@@ -828,6 +835,30 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       setInboundSaving(false)
     }
   }
+
+  const saveOrderShippingAddress = async (input: { orderId: string; addressText?: string; trackingCarrier?: string | null }) => {
+    try {
+      const saved = await updateOrderShippingAddress(input)
+      setDetailData((prev) => {
+        if (!prev || prev.id !== input.orderId) return prev
+        return {
+          ...prev,
+          trackingCarrier: saved.trackingCarrier,
+          address: saved.address || prev.address,
+        }
+      })
+      setList((prev) => prev.map((item) => item.id === input.orderId ? {
+        ...item,
+        trackingCarrier: saved.trackingCarrier,
+      } : item))
+      toast.success('地址已保存')
+      return saved
+    } catch (err: any) {
+      toast.error(err.message || '保存地址失败')
+      return null
+    }
+  }
+
 
   const saveInboundShipmentRows = async (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => {
     if (!inboundOrderId) return false
@@ -1687,6 +1718,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       saveInboundShipment: saveInboundShipmentRows,
       updateInboundShipment: updateInboundShipmentRow,
       uploadSettlementPdf,
+      updateOrderShippingAddress: saveOrderShippingAddress,
       exportInboundSheet,
     },
   }
