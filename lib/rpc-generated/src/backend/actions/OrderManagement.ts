@@ -44,6 +44,8 @@ export const deleteInboundLines = (...args: Parameters<Actions["deleteInboundLin
   rpcCall<Awaited<ReturnType<Actions["deleteInboundLines"]>>>("src.backend.actions.OrderManagement.deleteInboundLines", ...args);
 export const updateOrderDiscount = (...args: Parameters<Actions["updateOrderDiscount"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderDiscount"]>>>("src.backend.actions.OrderManagement.updateOrderDiscount", ...args);
+export const updateOrderParcelInfo = (...args: Parameters<Actions["updateOrderParcelInfo"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["updateOrderParcelInfo"]>>>("src.backend.actions.OrderManagement.updateOrderParcelInfo", ...args);
 export const updateOrderRemark = (...args: Parameters<Actions["updateOrderRemark"]>) => 
   rpcCall<Awaited<ReturnType<Actions["updateOrderRemark"]>>>("src.backend.actions.OrderManagement.updateOrderRemark", ...args);
 export const exportInboundSheet = (...args: Parameters<Actions["exportInboundSheet"]>) => 

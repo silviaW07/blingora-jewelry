@@ -33,6 +33,7 @@ import {
   addLogisticsSegment,
   updateOrderStatus,
   updateOrderRemark,
+  updateOrderParcelInfo,
   updateOrderInbound,
   appendOrderGoods,
   updateOrderDiscount,
@@ -167,6 +168,7 @@ export interface OrderManagementHandlers {
   handleRemarkDraftChange: (orderId: string, value: string) => void
   /** 提交备注 */
   submitOrderRemark: (orderId: string) => Promise<void>
+  saveOrderParcelInfo: (orderId: string, patch: { freightTotal?: number | null; packageFreights?: string; packageWeights?: string; packageTrackings?: string }) => Promise<void>
   /** 导出 Excel（全部当前页或指定订单） */
   handleExportExcel: (orderIds?: string[]) => Promise<void>
   /** 打开入库登记 */
@@ -520,6 +522,24 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       toast.error(err.message)
     } finally {
       setRemarkSavingId(null)
+    }
+  }
+
+
+  const saveOrderParcelInfo = async (orderId: string, patch: { freightTotal?: number | null; packageFreights?: string; packageWeights?: string; packageTrackings?: string }) => {
+    try {
+      const saved = await updateOrderParcelInfo({ orderId, ...patch })
+      setList((prev) => prev.map((item) => item.id === orderId ? {
+        ...item,
+        freightTotal: saved.freightTotal,
+        packageFreights: saved.packageFreights,
+        packageWeights: saved.packageWeights,
+        packageTrackings: saved.packageTrackings,
+      } : item))
+      toast.success('包裹信息已保存')
+    } catch (err: any) {
+      toast.error(err.message || '保存包裹信息失败')
+      throw err
     }
   }
 
@@ -1625,6 +1645,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       handleQuickStatusChange,
       handleRemarkDraftChange,
       submitOrderRemark,
+      saveOrderParcelInfo,
       handleExportExcel,
       openInboundDialog,
       saveOrderLink: saveLinkedOrders,
