@@ -1138,11 +1138,12 @@ export const OrderManagementView = ({
   const vipOff = customerVip > 0 && customerVip < 100 ? Math.round((100 - customerVip) * 100) / 100 : 0;
   const ladderOff = Math.max(0, Math.round((Number(inboundOrder?.ladderOffPercent) || 0) * 100) / 100);
   const formatOff = (value: number) => (Number.isInteger(value) ? String(value) : String(value));
-  const manualOff = Math.max(0, Math.round((Number(inboundOrder?.manualDiscountPercent) || 0) * 100) / 100);
-  const orderLevelOff = Math.max(vipOff, ladderOff, manualOff);
+  const hasManualDiscount = inboundOrder?.manualDiscountPercent != null && Number.isFinite(Number(inboundOrder.manualDiscountPercent));
+  const manualOff = hasManualDiscount ? Math.max(0, Math.round(Number(inboundOrder?.manualDiscountPercent) * 100) / 100) : 0;
+  const orderLevelOff = hasManualDiscount ? manualOff : Math.max(vipOff, ladderOff);
   const discountPercentLabel = orderLevelOff <= 0
     ? '0'
-    : vipOff >= ladderOff && vipOff >= manualOff
+    : (!hasManualDiscount && vipOff >= ladderOff)
       ? `${customerVip}vip`
       : `order discount ${formatOff(orderLevelOff)}%`;
   const orderKeepRate = Math.max(0, Math.min(1, 1 - orderLevelOff / 100));
@@ -1428,7 +1429,7 @@ export const OrderManagementView = ({
                       <TableHead className="font-bold min-w-[120px]">WhatsApp</TableHead>
                       <TableHead className="font-bold min-w-[100px]">金额</TableHead>
                       <TableHead className="font-bold min-w-[90px]">总重量(g)</TableHead>
-                      <TableHead className="font-bold min-w-[120px]">订单备注</TableHead>
+                      <TableHead className="font-bold min-w-[180px]">订单备注</TableHead>
                       <TableHead className="text-right font-bold pr-6 min-w-[140px]">操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1583,8 +1584,9 @@ export const OrderManagementView = ({
                             {Number(row.totalWeightGrams || 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="pt-3 pb-3">
-                            <Input
-                              className="h-9 w-[7.5rem] text-sm"
+                            <Textarea
+                              className="min-h-[52px] w-[11rem] resize-y whitespace-pre-wrap break-words text-sm leading-5"
+                              rows={2}
                               placeholder="备注"
                               value={state.remarkDrafts[row.id] ?? row.internalNote ?? ''}
                               disabled={state.remarkSavingId === row.id}
@@ -1594,12 +1596,6 @@ export const OrderManagementView = ({
                                 if (draft === undefined) return
                                 if ((draft || '') === (row.internalNote || '')) return
                                 void handlers.submitOrderRemark(row.id)
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  ;(e.target as HTMLInputElement).blur()
-                                }
                               }}
                             />
                           </TableCell>
@@ -2093,7 +2089,7 @@ export const OrderManagementView = ({
                 <span
                   className="inline-flex min-w-16 cursor-text items-center justify-center whitespace-nowrap rounded-md px-2 py-1 text-base font-semibold text-slate-900 hover:bg-slate-100"
                   title="VIP 显示 95vip，阶梯折扣显示 order discount 10%。取更大的一个，不含商品折扣"
-                  onDoubleClick={() => { setDiscountDraft(vipOff >= ladderOff && vipOff >= manualOff && vipOff > 0 ? String(customerVip) : formatOff(orderLevelOff)); setDiscountEditing(true); }}
+                  onDoubleClick={() => { setDiscountDraft(!hasManualDiscount && vipOff >= ladderOff && vipOff > 0 ? String(customerVip) : formatOff(orderLevelOff)); setDiscountEditing(true); }}
                 >
                   {discountPercentLabel}
                 </span>
@@ -2358,8 +2354,8 @@ export const OrderManagementView = ({
                       </td>) : null}
                       {columnVisible('note') ? (<td className="overflow-hidden px-2 py-3 align-middle">
                         <textarea
-                          rows={2}
-                          className="note-box box-border w-full resize-none whitespace-pre-wrap break-words rounded-md border border-slate-200 px-1 py-1 text-xs leading-4"
+                          rows={3}
+                          className="note-box box-border min-h-[4.5rem] w-full min-w-[10rem] resize-y whitespace-pre-wrap break-words rounded-md border border-slate-200 px-2 py-1.5 text-xs leading-4"
                           placeholder="货位或缺货说明，可不填"
                           aria-label={`${line.productName} 备注`}
                           value={String(line.inboundNote || '').replace(/(?:^|\n)\s*发货时间\s*\d{4}[-/]\d{2}[-/]\d{2}(?:\s+\d{2}:\d{2})?\s*/g, '\n').replace(/^\n+|\n+$/g, '')}

@@ -197,7 +197,7 @@ export interface OrderManagementHandlers {
   saveInboundShipment: (input: { blocks: Array<{ shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }> }) => Promise<boolean>
   updateInboundShipment: (input: { id: string; shippedAt: string; trackingNumber?: string; channel?: string; note?: string; images?: string[] }) => Promise<boolean>
   importCustomerOrder: (input: { customerName: string; fileBase64: string; fileName?: string; shippingMethod?: string; weightGrams?: number | null; orderNote?: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
-  createCustomerOrder: (input: { customerName: string; status?: OrderStatus }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
+  createCustomerOrder: (input: { customerName: string; status?: OrderStatus; phone?: string; address?: string; registerDate?: string; orderAmount?: number | null; goodsAmount?: number | null; usdShipping?: number | null; shipMethodText?: string; costAmount?: number | null; actualFreightTotal?: number | null; freightLines?: Array<{ freightCost?: string; chargeWeight?: string; remark?: string }> }) => Promise<{ orderId: string; orderNo: string; itemCount: number; totalAmount: number } | null>
   updateOrderCustomerProfile: (input: { orderId: string; customerName?: string; phone?: string | null; customerEmail?: string }) => Promise<{ customerName: string; customerWhatsapp: string | null; customerEmail: string } | null>
   exportInboundSheet: (input: ExportInboundSheetInput) => Promise<void>
 }
@@ -1146,6 +1146,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
               ...row,
               subtotalAmount: result.subtotalAmount,
               discountAmount: result.discountAmount,
+              manualDiscountPercent: result.discountPercent,
               totalAmount: result.totalAmount,
               inboundLines: result.lines,
               inboundOrderedQty: result.orderedQty,
@@ -1215,7 +1216,6 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
               ...row,
               subtotalAmount: result.subtotalAmount,
               discountAmount: result.discountAmount,
-              manualDiscountPercent: result.discountPercent,
               totalAmount: result.totalAmount,
               inboundLines: result.lines,
               inboundOrderedQty: result.orderedQty,
@@ -1495,7 +1495,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
 
-  const createCustomerOrderBlank = async (input: { customerName: string; status?: OrderStatus }) => {
+  const createCustomerOrderBlank = async (input: { customerName: string; status?: OrderStatus; phone?: string; address?: string; registerDate?: string; orderAmount?: number | null; goodsAmount?: number | null; usdShipping?: number | null; shipMethodText?: string; costAmount?: number | null; actualFreightTotal?: number | null; freightLines?: Array<{ freightCost?: string; chargeWeight?: string; remark?: string }> }) => {
     try {
       const result = await createCustomerOrder(input)
       toast.success(`已创建订单 ${result.orderNo}`)
