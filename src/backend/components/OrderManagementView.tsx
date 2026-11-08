@@ -780,6 +780,11 @@ export const OrderManagementView = ({
     const picked = state.inboundDrafts.filter((line) => selected.has(line.id));
     const targets = picked.length ? picked : state.inboundDrafts;
     try {
+      if (!targets.length) {
+        // 没有可挂发货图的商品行时，改为传入商品（加到最后）
+        void receiveAddonProducts(images);
+        return;
+      }
       const count = Math.min(images.length, targets.length);
       for (let index = 0; index < count; index += 1) {
         const imageUrl = await uploadInboundImage(images[index]);
@@ -2294,13 +2299,35 @@ export const OrderManagementView = ({
           onDragOver={(event) => {
             if (![...event.dataTransfer.types].includes('Files')) return
             event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
             setInboundDragOver(true)
           }}
           onDragLeave={() => setInboundDragOver(false)}
           onDrop={(event) => {
             if (![...event.dataTransfer.types].includes('Files')) return
             event.preventDefault()
+            event.stopPropagation()
             setInboundDragOver(false)
+            const target = event.target as HTMLElement
+            // 传入商品 / 传入表格区域优先：不要当成发货大图
+            if (target.closest('[data-inbound-addon="product"]')) {
+              void receiveAddonProducts(event.dataTransfer.files)
+              return
+            }
+            if (target.closest('[data-inbound-addon="sheet"]')) {
+              void receiveAddonSheet(event.dataTransfer.files)
+              return
+            }
+            if (addonDrag === 'product') {
+              void receiveAddonProducts(event.dataTransfer.files)
+              setAddonDrag(null)
+              return
+            }
+            if (addonDrag === 'sheet') {
+              void receiveAddonSheet(event.dataTransfer.files)
+              setAddonDrag(null)
+              return
+            }
             const dropped = [...event.dataTransfer.files];
             const images = dropped.filter((file) => file.type.startsWith('image/'));
             const sheets = dropped.filter((file) => !file.type.startsWith('image/'));
@@ -2804,20 +2831,32 @@ export const OrderManagementView = ({
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div
+                  data-inbound-addon="product"
                   className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${addonDrag === 'product' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
                   onClick={() => addonProductRef.current?.click()}
-                  onDragOver={(event) => { event.preventDefault(); setAddonDrag('product'); }}
-                  onDragLeave={() => setAddonDrag((current) => current === 'product' ? null : current)}
+                  onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setAddonDrag('product'); }}
+                  onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setAddonDrag('product'); }}
+                  onDragLeave={(event) => {
+                    const next = event.relatedTarget as Node | null
+                    if (next && event.currentTarget.contains(next)) return
+                    setAddonDrag((current) => current === 'product' ? null : current)
+                  }}
                   onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProducts(event.dataTransfer.files); }}
                 >
-                  <div className="text-base font-semibold">传入商品（允许拖拽）</div>
-                  <div className="mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
+                  <div className="pointer-events-none text-base font-semibold">传入商品（允许拖拽）</div>
+                  <div className="pointer-events-none mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
                 </div>
                 <div
+                  data-inbound-addon="sheet"
                   className={`flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-6 text-center ${sheetProgress != null || addonDrag === 'sheet' ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-slate-300 bg-white text-slate-700'}`}
                   onClick={() => { if (sheetProgress == null) addonSheetRef.current?.click(); }}
-                  onDragOver={(event) => { event.preventDefault(); setAddonDrag('sheet'); }}
-                  onDragLeave={() => setAddonDrag((current) => current === 'sheet' ? null : current)}
+                  onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setAddonDrag('sheet'); }}
+                  onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setAddonDrag('sheet'); }}
+                  onDragLeave={(event) => {
+                    const next = event.relatedTarget as Node | null
+                    if (next && event.currentTarget.contains(next)) return
+                    setAddonDrag((current) => current === 'sheet' ? null : current)
+                  }}
                   onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonSheet(event.dataTransfer.files); }}
                 >
                   {sheetProgress != null ? (
