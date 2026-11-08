@@ -142,7 +142,7 @@ const INBOUND_STAGE_OPTIONS: Array<[string, string]> = [
   ['PREPARING', '备货中'],
   ['TRANSIT', '工厂发货'],
   ['ARRIVED', '到达仓库'],
-  ['PARCEL', '包裹发货'],
+  ['PARCEL', '仓库发货'],
 ];
 const INBOUND_STAGE_LABEL: Record<string, string> = {
   ...Object.fromEntries(INBOUND_STAGE_OPTIONS),
@@ -2835,9 +2835,13 @@ export const OrderManagementView = ({
                           value={normalizedInboundStage(line.inboundStage)}
                           onChange={(e) => {
                             const inboundStage = e.target.value
-                            const patch: { inboundStage: string; inboundQty?: number } = { inboundStage }
+                            const patch: { inboundStage: string; inboundQty?: number; acknowledged?: boolean } = { inboundStage }
                             if (inboundStage === 'SHORTAGE') patch.inboundQty = 0
-                            if (inboundStage === 'ARRIVED') patch.inboundQty = line.quantity
+                            // 到达仓库 / 包裹发货：默认到齐并自动确认本行
+                            if (inboundStage === 'ARRIVED' || inboundStage === 'PARCEL') {
+                              patch.inboundQty = line.quantity
+                              patch.acknowledged = true
+                            }
                             handlers.persistInboundLine(line.id, patch)
                           }}
                         >
@@ -2941,7 +2945,7 @@ export const OrderManagementView = ({
                             const stage = event.target.value
                             const patch: { stage: string; inboundQty?: string } = { stage }
                             if (stage === 'SHORTAGE') patch.inboundQty = '0'
-                            if (stage === 'ARRIVED') patch.inboundQty = card.quantity || '0'
+                            if (stage === 'ARRIVED' || stage === 'PARCEL') patch.inboundQty = String(card.quantity || card.inboundQty || '0')
                             patchAddonCard(card.key, patch)
                           }}>
                           {INBOUND_STAGE_OPTIONS.map(([value, label]) => <option key={value} value={value} style={INBOUND_STAGE_FILL[value]}>{label}</option>)}

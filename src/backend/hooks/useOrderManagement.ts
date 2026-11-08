@@ -1044,7 +1044,17 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const persistInboundStages = (lineIds: string[], stage: string) => {
     const ids = new Set(lineIds)
-    const next = inboundDrafts.map((line) => ids.has(line.id) ? { ...line, inboundStage: stage } : line)
+    const autoFull = stage === 'ARRIVED' || stage === 'PARCEL'
+    const next = inboundDrafts.map((line) => {
+      if (!ids.has(line.id)) return line
+      if (!autoFull) return { ...line, inboundStage: stage }
+      return {
+        ...line,
+        inboundStage: stage,
+        inboundQty: line.quantity,
+        acknowledged: true,
+      }
+    })
     setInboundDrafts(next)
     void saveInboundDrafts(next, { keepOpen: true })
   }
