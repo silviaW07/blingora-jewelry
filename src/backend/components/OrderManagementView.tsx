@@ -588,7 +588,7 @@ export const OrderManagementView = ({
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const [packageDrafts, setPackageDrafts] = React.useState<Record<string, Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>>>({});
-  const [moneyEdit, setMoneyEdit] = React.useState<{ id: string; field: 'usdShipping' | 'depositText' } | null>(null);
+  const [moneyEdit, setMoneyEdit] = React.useState<{ id: string; field: 'totalAmount' | 'usdShipping' | 'depositText' } | null>(null);
   const [moneyDraft, setMoneyDraft] = React.useState('');
   const settlementPdfRef = React.useRef<HTMLInputElement>(null);
   const settlementClickTimer = React.useRef<number | null>(null);
@@ -1151,9 +1151,20 @@ export const OrderManagementView = ({
     });
   };
 
-  const saveMoneyField = async (row: OrderListItem, field: 'usdShipping' | 'depositText', value: string) => {
+  const saveMoneyField = async (row: OrderListItem, field: 'totalAmount' | 'usdShipping' | 'depositText', value: string) => {
     setMoneyEdit(null);
     try {
+      if (field === 'totalAmount') {
+        const text = value.trim();
+        const next = Number(text);
+        if (!text || !Number.isFinite(next)) {
+          toast.error('金额请填写数字');
+          return;
+        }
+        if (Number(row.totalAmount) === next) return;
+        await handlers.saveOrderMoneyFields(row.id, { totalAmount: next });
+        return;
+      }
       if (field === 'usdShipping') {
         const text = value.trim();
         const next = text === '' ? null : Number(text);
@@ -1534,20 +1545,20 @@ export const OrderManagementView = ({
                 <Table className="min-w-[960px]" data-api-unique-id="ordermanagementview-r90a9eeedb50f830d-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                   <TableHeader className="bg-slate-50/80" data-api-unique-id="ordermanagementview-rb0510531d2e123f5-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     <TableRow data-api-unique-id="ordermanagementview-r2829fce95c941439-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-                      <TableHead className="whitespace-normal break-words font-bold py-4 pl-6">下单时间</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">订单编号</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">客户Email</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">客户名称</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">订单状态</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">入库</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">WhatsApp</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">金额</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">运费USD</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">定金</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">订单备注</TableHead>
-                      <TableHead className="whitespace-normal break-words font-bold">总运费</TableHead>
-                      <TableHead className="whitespace-normal break-words pr-6 font-bold">
-                        <div className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] gap-1.5 text-left">
+                      <TableHead className="whitespace-normal break-words py-4 pl-6 text-center font-bold">下单时间</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">订单编号</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">客户Email</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">客户名称</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">订单状态</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">入库</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">WhatsApp</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">金额</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">运费USD</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">定金</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">订单备注</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">总运费</TableHead>
+                      <TableHead className="whitespace-normal break-words pr-6 text-center font-bold">
+                        <div className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] gap-1.5 text-center">
                           <span>发货日期</span>
                           <span>本单运费</span>
                           <span>计费重</span>
@@ -1569,18 +1580,18 @@ export const OrderManagementView = ({
                     ) : (
                       groupLinkedOrders(state.list, state.orderLinks).map((row) => (
                         <TableRow key={row.id} className={cn('align-top transition-colors hover:bg-slate-50/50', linkRole(state.orderLinks, row.id) === 'primary' && 'border-x-2 border-t-2 border-slate-400', linkRole(state.orderLinks, row.id) === 'child' && 'border-x-2 border-b-2 border-slate-400 bg-slate-50/60')}>
-                          <TableCell className="pl-6 pt-4 text-xs text-muted-foreground whitespace-nowrap">
+                          <TableCell className="whitespace-nowrap pl-6 pt-4 text-center text-xs text-muted-foreground">
                             {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
                           </TableCell>
-                          <TableCell className="font-mono text-sm pt-4" scrollX scrollXClassName="max-w-[220px]">
+                          <TableCell className="pt-4 text-center font-mono text-sm" scrollX scrollXClassName="max-w-[220px]">
                             {row.orderNo}
                           </TableCell>
-                          <TableCell className="pt-4" scrollX scrollXClassName="max-w-[260px]">
+                          <TableCell className="pt-4 text-center" scrollX scrollXClassName="max-w-[260px]">
                             {contactEdit?.id === row.id && contactEdit.field === 'email' ? (
                               <input
                                 autoFocus
                                 aria-label="客户邮箱"
-                                className="h-9 w-full min-w-[160px] rounded-md border border-slate-200 px-2 text-sm"
+                                className="mx-auto h-9 w-full min-w-[160px] rounded-md border border-slate-200 px-2 text-center text-sm"
                                 value={contactDraft}
                                 onChange={(event) => setContactDraft(event.target.value)}
                                 onBlur={() => { void saveCustomerContact(row, 'email'); }}
@@ -1592,7 +1603,7 @@ export const OrderManagementView = ({
                             ) : (
                               <button
                                 type="button"
-                                className="text-left text-sm text-primary hover:underline break-all"
+                                className="mx-auto block w-full break-all text-center text-sm text-primary hover:underline"
                                 title="双击添加邮箱"
                                 onClick={() => { if (visibleCustomerEmail(row.customerEmail)) handlers.jumpToCustomer(row.customerEmail); }}
                                 onDoubleClick={() => { setContactDraft(visibleCustomerEmail(row.customerEmail)); setContactEdit({ id: row.id, field: 'email' }); }}
@@ -1601,12 +1612,12 @@ export const OrderManagementView = ({
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="pt-4 text-sm font-medium">
+                          <TableCell className="pt-4 text-center text-sm font-medium">
                             {contactEdit?.id === row.id && contactEdit.field === 'name' ? (
                               <input
                                 autoFocus
                                 aria-label="客户名称"
-                                className="h-9 w-full min-w-[96px] rounded-md border border-slate-200 px-2 text-sm font-medium"
+                                className="mx-auto h-9 w-full min-w-[96px] rounded-md border border-slate-200 px-2 text-center text-sm font-medium"
                                 value={contactDraft}
                                 onChange={(event) => setContactDraft(event.target.value)}
                                 onBlur={() => { void saveCustomerContact(row, 'name'); }}
@@ -1616,17 +1627,17 @@ export const OrderManagementView = ({
                                 }}
                               />
                             ) : (
-                              <button type="button" className="text-left text-sm font-medium" title="双击修改姓名" onDoubleClick={() => { setContactDraft(row.customerName || ''); setContactEdit({ id: row.id, field: 'name' }); }}>
+                              <button type="button" className="mx-auto block w-full text-center text-sm font-medium" title="双击修改姓名" onDoubleClick={() => { setContactDraft(row.customerName || ''); setContactEdit({ id: row.id, field: 'name' }); }}>
                                 {row.customerName || '—'}
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="pt-4">
+                          <TableCell className="pt-4 text-center">
                             {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <Select
                               value={LIST_STATUS_VALUES.has(row.status) ? row.status : row.status}
                               onValueChange={(val) => handlers.handleQuickStatusChange(row.id, val as OrderStatus)}
                             >
-                              <SelectTrigger className={cn('h-9 w-[118px] border text-sm font-semibold', getListStatusClassName(row.status))}>
+                              <SelectTrigger className={cn('mx-auto h-9 w-[118px] border text-sm font-semibold', getListStatusClassName(row.status))}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1643,8 +1654,8 @@ export const OrderManagementView = ({
                               </SelectContent>
                             </Select>}
                           </TableCell>
-                          <TableCell className="pt-4">
-                            {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <div className="flex flex-col items-start gap-2">
+                          <TableCell className="pt-4 text-center">
+                            {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <div className="flex flex-col items-center gap-2">
                               <Badge className={cn('border font-semibold hover:bg-inherit', INBOUND_BADGE[row.inboundState] || INBOUND_BADGE.NONE)}>
                                 {(() => {
                                   const group = (state.orderLinks || []).find((item) => item.primaryId === row.id)
@@ -1656,7 +1667,7 @@ export const OrderManagementView = ({
                                   return inboundBadgeLabel(inboundState, received, ordered, lines)
                                 })()}
                               </Badge>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-center gap-2">
                               <Button
                                 type="button"
                                 size="sm"
@@ -1679,12 +1690,12 @@ export const OrderManagementView = ({
                               </div>
                             </div>}
                           </TableCell>
-                          <TableCell className="pt-4 text-sm text-muted-foreground">
+                          <TableCell className="pt-4 text-center text-sm text-muted-foreground">
                             {contactEdit?.id === row.id && contactEdit.field === 'phone' ? (
                               <input
                                 autoFocus
                                 aria-label="手机号"
-                                className="h-9 w-full min-w-[108px] rounded-md border border-slate-200 px-2 text-sm"
+                                className="mx-auto h-9 w-full min-w-[108px] rounded-md border border-slate-200 px-2 text-center text-sm"
                                 value={contactDraft}
                                 onChange={(event) => setContactDraft(event.target.value)}
                                 onBlur={() => { void saveCustomerContact(row, 'phone'); }}
@@ -1694,23 +1705,44 @@ export const OrderManagementView = ({
                                 }}
                               />
                             ) : (
-                              <button type="button" className="text-left text-sm text-muted-foreground" title="双击修改手机号" onDoubleClick={() => { setContactDraft(row.customerWhatsapp || ''); setContactEdit({ id: row.id, field: 'phone' }); }}>
+                              <button type="button" className="mx-auto block w-full text-center text-sm text-muted-foreground" title="双击修改手机号" onDoubleClick={() => { setContactDraft(row.customerWhatsapp || ''); setContactEdit({ id: row.id, field: 'phone' }); }}>
                                 {row.customerWhatsapp || '—'}
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="pt-4">
-                            <div className="text-sm font-bold whitespace-nowrap">
-                              {row.currencyCode} {Number(row.totalAmount).toLocaleString()}
-                            </div>
+                          <TableCell className="pt-3 pb-3 text-center align-middle">
+                            {moneyEdit?.id === row.id && moneyEdit.field === 'totalAmount' ? (
+                              <input
+                                autoFocus
+                                inputMode="decimal"
+                                aria-label="金额"
+                                className="mx-auto h-9 w-full min-w-[5.5rem] rounded-md border border-slate-300 px-2 text-center text-sm font-bold tabular-nums"
+                                value={moneyDraft}
+                                onChange={(e) => setMoneyDraft(e.target.value)}
+                                onBlur={() => { void saveMoneyField(row, 'totalAmount', moneyDraft); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                                  if (e.key === 'Escape') setMoneyEdit(null);
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="mx-auto block w-full whitespace-nowrap rounded-md px-1 py-1 text-center text-sm font-bold hover:bg-slate-100"
+                                title="双击修改金额"
+                                onDoubleClick={() => { setMoneyDraft(String(row.totalAmount ?? '')); setMoneyEdit({ id: row.id, field: 'totalAmount' }); }}
+                              >
+                                {row.currencyCode} {Number(row.totalAmount).toLocaleString()}
+                              </button>
+                            )}
                           </TableCell>
-                          <TableCell className="pt-3 pb-3 align-top">
+                          <TableCell className="pt-3 pb-3 text-center align-middle">
                             {moneyEdit?.id === row.id && moneyEdit.field === 'usdShipping' ? (
                               <input
                                 autoFocus
                                 inputMode="decimal"
                                 aria-label="运费USD"
-                                className="h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-sm tabular-nums"
+                                className="mx-auto h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-center text-sm font-bold tabular-nums"
                                 value={moneyDraft}
                                 onChange={(e) => setMoneyDraft(e.target.value)}
                                 onBlur={() => { void saveMoneyField(row, 'usdShipping', moneyDraft); }}
@@ -1722,7 +1754,7 @@ export const OrderManagementView = ({
                             ) : (
                               <button
                                 type="button"
-                                className="block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-left text-sm tabular-nums hover:bg-slate-100"
+                                className="mx-auto block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-center text-sm font-bold tabular-nums hover:bg-slate-100"
                                 title="双击编辑运费USD"
                                 onDoubleClick={() => { setMoneyDraft(row.usdShipping == null ? '' : String(row.usdShipping)); setMoneyEdit({ id: row.id, field: 'usdShipping' }); }}
                               >
@@ -1730,12 +1762,12 @@ export const OrderManagementView = ({
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="pt-3 pb-3 align-top">
+                          <TableCell className="pt-3 pb-3 text-center align-middle">
                             {moneyEdit?.id === row.id && moneyEdit.field === 'depositText' ? (
                               <input
                                 autoFocus
                                 aria-label="定金"
-                                className="h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-sm font-bold text-red-600"
+                                className="mx-auto h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-center text-sm font-bold text-red-600"
                                 value={moneyDraft}
                                 onChange={(e) => setMoneyDraft(e.target.value)}
                                 onBlur={() => { void saveMoneyField(row, 'depositText', moneyDraft); }}
@@ -1747,7 +1779,7 @@ export const OrderManagementView = ({
                             ) : (
                               <button
                                 type="button"
-                                className="block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-left text-sm font-bold text-red-600 hover:bg-slate-100"
+                                className="mx-auto block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-center text-sm font-bold text-red-600 hover:bg-slate-100"
                                 title="双击编辑定金，可填文字或数字"
                                 onDoubleClick={() => { setMoneyDraft(row.depositText || ''); setMoneyEdit({ id: row.id, field: 'depositText' }); }}
                               >
@@ -1755,9 +1787,9 @@ export const OrderManagementView = ({
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="pt-3 pb-3">
+                          <TableCell className="pt-3 pb-3 text-center align-middle">
                             <Textarea
-                              className="min-h-[52px] w-[10rem] max-w-[12rem] resize-y whitespace-pre-wrap break-words text-sm leading-5"
+                              className="mx-auto min-h-[52px] w-[10rem] max-w-[12rem] resize-y whitespace-pre-wrap break-words text-center text-sm leading-5"
                               rows={2}
                               placeholder="备注"
                               value={state.remarkDrafts[row.id] ?? row.internalNote ?? ''}
@@ -1771,19 +1803,19 @@ export const OrderManagementView = ({
                               }}
                             />
                           </TableCell>
-                          <TableCell className="pt-3 pb-3 align-top">
-                            <div className="min-w-[4.5rem] px-1 py-1 text-sm font-semibold tabular-nums text-slate-800">
+                          <TableCell className="pt-3 pb-3 text-center align-middle">
+                            <div className="mx-auto min-w-[4.5rem] px-1 py-1 text-center text-sm font-semibold tabular-nums text-slate-800">
                               {sumFreightDraft(packageLinesOf(row)) == null ? '—' : sumFreightDraft(packageLinesOf(row))}
                             </div>
                           </TableCell>
-                          <TableCell className="pt-3 pb-3 align-top" colSpan={5}>
+                          <TableCell className="pt-3 pb-3 text-center align-middle" colSpan={5}>
                             <div className="space-y-1.5">
                               {packageLinesOf(row).map((line, index) => (
-                                <div key={`${row.id}-pkg-${index}`} className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] items-start gap-1.5">
+                                <div key={`${row.id}-pkg-${index}`} className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] items-center justify-items-center gap-1.5">
                                   <input
                                     type="date"
                                     aria-label={`发货日期 ${index + 1}`}
-                                    className="h-9 w-full rounded-md border border-slate-200 px-1 text-xs"
+                                    className="h-9 w-full rounded-md border border-slate-200 px-1 text-center text-xs"
                                     value={line.shipDate}
                                     onChange={(e) => setPackageLineField(row.id, index, 'shipDate', e.target.value, row)}
                                     onBlur={() => { void savePackageLines(row); }}
@@ -1791,7 +1823,7 @@ export const OrderManagementView = ({
                                   <input
                                     inputMode="decimal"
                                     aria-label={`本单运费 ${index + 1}`}
-                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm tabular-nums"
+                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm tabular-nums"
                                     placeholder="运费"
                                     value={line.freightCost}
                                     onChange={(e) => setPackageLineField(row.id, index, 'freightCost', e.target.value, row)}
@@ -1800,7 +1832,7 @@ export const OrderManagementView = ({
                                   <input
                                     inputMode="decimal"
                                     aria-label={`计费重 ${index + 1}`}
-                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm tabular-nums"
+                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm tabular-nums"
                                     placeholder="计费重"
                                     value={line.chargeWeight}
                                     onChange={(e) => setPackageLineField(row.id, index, 'chargeWeight', e.target.value, row)}
@@ -1808,13 +1840,13 @@ export const OrderManagementView = ({
                                   />
                                   <input
                                     aria-label={`物流号 ${index + 1}`}
-                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm"
                                     placeholder="物流号"
                                     value={line.remark}
                                     onChange={(e) => setPackageLineField(row.id, index, 'remark', e.target.value, row)}
                                     onBlur={() => { void savePackageLines(row); }}
                                   />
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center justify-center gap-1">
                                     <Button type="button" size="sm" variant="outline" className="h-8 px-2 text-xs" title="复制新增一行四个输入框" onClick={() => addPackageLine(row, index)}>复制</Button>
                                     {packageLinesOf(row).length > 1 ? (
                                       <button type="button" className="h-8 px-1 text-xs text-slate-400 hover:text-slate-700" title="删除这行" onClick={() => {

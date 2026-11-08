@@ -170,7 +170,7 @@ export interface OrderManagementHandlers {
   /** 提交备注 */
   submitOrderRemark: (orderId: string) => Promise<void>
   saveOrderParcelInfo: (orderId: string, packageLines: Array<{ shipDate?: string; freightCost?: string; chargeWeight?: string; remark?: string }>) => Promise<void>
-  saveOrderMoneyFields: (orderId: string, patch: { usdShipping?: number | null; depositText?: string }) => Promise<void>
+  saveOrderMoneyFields: (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => Promise<void>
   /** 导出 Excel（全部当前页或指定订单） */
   handleExportExcel: (orderIds?: string[]) => Promise<void>
   /** 打开入库登记 */
@@ -528,11 +528,12 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
   }
 
 
-  const saveOrderMoneyFields = async (orderId: string, patch: { usdShipping?: number | null; depositText?: string }) => {
+  const saveOrderMoneyFields = async (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => {
     try {
       const saved = await updateOrderMoneyFields({ orderId, ...patch })
       setList((prev) => prev.map((item) => item.id === orderId ? {
         ...item,
+        ...(saved.totalAmount != null ? { totalAmount: saved.totalAmount } : {}),
         usdShipping: saved.usdShipping,
         depositText: saved.depositText,
       } : item))

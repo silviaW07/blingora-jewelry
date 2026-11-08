@@ -34424,7 +34424,8 @@ const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _act
         select: {
             id: true,
             registerInfoJson: true,
-            shippingAmount: true
+            shippingAmount: true,
+            totalAmount: true
         }
     });
     if (!order) throw new Error('订单不存在');
@@ -34434,7 +34435,20 @@ const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _act
     const current = withRegisterFallback(order);
     let usdShipping = current.usdShipping;
     let depositText = current.depositText;
+    const rawTotal = order.totalAmount;
+    let totalAmount = rawTotal == null ? null : typeof rawTotal === "object" && typeof rawTotal.toNumber === "function" ? Number(rawTotal.toNumber()) : Number(rawTotal);
+    if (totalAmount != null && !Number.isFinite(totalAmount)) totalAmount = null;
     const patchNote = [];
+    const orderPatch = {};
+    if (input.totalAmount !== undefined) {
+        if (input.totalAmount == null || String(input.totalAmount).trim() === '') throw new Error('金额不能为空');
+        const amount = Number(input.totalAmount);
+        if (!Number.isFinite(amount)) throw new Error('金额请填写数字');
+        totalAmount = Math.round(amount * 100) / 100;
+        orderPatch.totalAmount = totalAmount;
+        base.orderAmount = totalAmount;
+        patchNote.push(`金额 ${totalAmount}`);
+    }
     if (input.usdShipping !== undefined) {
         if (input.usdShipping == null || String(input.usdShipping).trim() === '') usdShipping = null;
         else {
@@ -34442,6 +34456,7 @@ const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _act
             if (!Number.isFinite(amount)) throw new Error('运费USD请填写数字');
             usdShipping = Math.round(amount * 100) / 100;
         }
+        orderPatch.shippingAmount = usdShipping !== null && usdShipping !== void 0 ? usdShipping : 0;
         patchNote.push(`运费USD ${usdShipping !== null && usdShipping !== void 0 ? usdShipping : ''}`);
     }
     if (input.depositText !== undefined) {
@@ -34461,21 +34476,20 @@ const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _act
             },
             data: {
                 registerInfoJson: next,
-                ...input.usdShipping !== undefined ? {
-                    shippingAmount: usdShipping !== null && usdShipping !== void 0 ? usdShipping : 0
-                } : {}
+                ...orderPatch
             }
         });
         await tx.orderoperationlog.create({
             data: {
                 orderId,
                 actionType: '更新金额字段',
-                actionNote: patchNote.join(' · ').slice(0, 4000) || '更新运费/定金',
+                actionNote: patchNote.join(' · ').slice(0, 4000) || '更新金额/运费/定金',
                 operatorName: username
             }
         });
     });
     return {
+        totalAmount,
         usdShipping,
         depositText
     };

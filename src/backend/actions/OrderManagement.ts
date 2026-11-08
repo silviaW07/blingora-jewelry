@@ -2934,16 +2934,18 @@ export const updateOrderParcelInfo = requireStaff('orders')(
 
 export interface UpdateOrderMoneyFieldsInput {
   orderId: string
+  totalAmount?: number | null
   usdShipping?: number | null
   depositText?: string
 }
 
 export interface UpdateOrderMoneyFieldsOutput {
+  totalAmount: number | null
   usdShipping: number | null
   depositText: string
 }
 
-/** 列表双击改运费USD / 定金。定金允许文字或数字。 */
+/** 列表双击改金额 / 运费USD / 定金。定金允许文字或数字。 */
 export const updateOrderMoneyFields = requireStaff('orders')(
   withResult(async (input: UpdateOrderMoneyFieldsInput): Promise<UpdateOrderMoneyFieldsOutput> => {
     const { username } = getAuthContext()
@@ -2951,7 +2953,7 @@ export const updateOrderMoneyFields = requireStaff('orders')(
     if (!orderId) throw new Error('缺少订单')
     const order = await prisma.orderrecord.findUnique({
       where: { id: orderId },
-      select: { id: true, registerInfoJson: true, shippingAmount: true },
+      select: { id: true, registerInfoJson: true, shippingAmount: true, totalAmount: true },
     })
     if (!order) throw new Error('订单不存在')
     const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson)
@@ -2960,7 +2962,20 @@ export const updateOrderMoneyFields = requireStaff('orders')(
     const current = withRegisterFallback(order)
     let usdShipping = current.usdShipping
     let depositText = current.depositText
+    const rawTotal: any = order.totalAmount
+    let totalAmount = rawTotal == null ? null : (typeof rawTotal === "object" && typeof rawTotal.toNumber === "function" ? Number(rawTotal.toNumber()) : Number(rawTotal))
+    if (totalAmount != null && !Number.isFinite(totalAmount)) totalAmount = null
     const patchNote: string[] = []
+    const orderPatch: Record<string, unknown> = {}
+    if (input.totalAmount !== undefined) {
+      if (input.totalAmount == null || String(input.totalAmount).trim() === '') throw new Error('金额不能为空')
+      const amount = Number(input.totalAmount)
+      if (!Number.isFinite(amount)) throw new Error('金额请填写数字')
+      totalAmount = Math.round(amount * 100) / 100
+      orderPatch.totalAmount = totalAmount
+      base.orderAmount = totalAmount
+      patchNote.push(`金额 ${totalAmount}`)
+    }
     if (input.usdShipping !== undefined) {
       if (input.usdShipping == null || String(input.usdShipping).trim() === '') usdShipping = null
       else {
@@ -2968,6 +2983,7 @@ export const updateOrderMoneyFields = requireStaff('orders')(
         if (!Number.isFinite(amount)) throw new Error('运费USD请填写数字')
         usdShipping = Math.round(amount * 100) / 100
       }
+      orderPatch.shippingAmount = usdShipping ?? 0
       patchNote.push(`运费USD ${usdShipping ?? ''}`)
     }
     if (input.depositText !== undefined) {
@@ -2985,19 +3001,19 @@ export const updateOrderMoneyFields = requireStaff('orders')(
         where: { id: orderId },
         data: {
           registerInfoJson: next,
-          ...(input.usdShipping !== undefined ? { shippingAmount: usdShipping ?? 0 } : {}),
+          ...orderPatch,
         },
       })
       await tx.orderoperationlog.create({
         data: {
           orderId,
           actionType: '更新金额字段',
-          actionNote: patchNote.join(' · ').slice(0, 4000) || '更新运费/定金',
+          actionNote: patchNote.join(' · ').slice(0, 4000) || '更新金额/运费/定金',
           operatorName: username,
         },
       })
     })
-    return { usdShipping, depositText }
+    return { totalAmount, usdShipping, depositText }
   }),
 )
 
