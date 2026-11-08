@@ -424,7 +424,7 @@ export interface GetDashboardStatsOutput {
 
 export interface GetOrderListInput {
   keyword?: string             // 订单号 / 客户名 / 邮箱
-  status?: OrderStatus | 'TODAY_PURCHASE'
+  status?: OrderStatus | 'TODAY_PURCHASE' | 'VALID_ORDERS'
   paymentStatus?: string       // 对应订单的 paymentStatus
   startDate?: string           // ISO String
   endDate?: string             // ISO String
@@ -678,6 +678,9 @@ export const getOrderList = requireStaff('orders')(
         { inboundStage: null },
         { inboundStage: '' },
       ] } }
+    } else if (status === 'VALID_ORDERS') {
+      // 有效订单：除待付款外全部
+      whereCondition.status = { not: 'PENDING_PAYMENT' }
     } else if (status === 'PAID') {
       whereCondition.status = { in: PAID_TAB_STATUSES }
     } else if (status) {

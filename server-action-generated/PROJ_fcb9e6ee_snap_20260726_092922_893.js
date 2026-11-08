@@ -31745,6 +31745,11 @@ const getOrderList = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.
                 ]
             }
         };
+    } else if (status === 'VALID_ORDERS') {
+        // 有效订单：除待付款外全部
+        whereCondition.status = {
+            not: 'PENDING_PAYMENT'
+        };
     } else if (status === 'PAID') {
         whereCondition.status = {
             in: PAID_TAB_STATUSES

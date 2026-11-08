@@ -1338,13 +1338,19 @@ export const OrderManagementView = ({
         <div className="w-full max-w-none px-3 py-4 sm:px-4 sm:py-8 xl:px-6" data-api-unique-id="ordermanagementview-r1d9fb3b1858894fa-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
           <div className="mb-6 flex flex-wrap items-center gap-3">
           <Tabs value={state.filterForm.status || 'ALL'} onValueChange={handlers.handleTabChange} className="w-full max-w-full overflow-x-auto sm:w-auto" data-api-unique-id="ordermanagementview-r69fb7214eefc2d40-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
-            <TabsList className="h-10 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
+            <TabsList className="h-11 w-max flex-nowrap bg-slate-100/50 p-1" data-api-unique-id="ordermanagementview-r86281deace4bb13e-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
               <TabsTrigger value="ALL" className="shrink-0 px-3 sm:px-6" data-api-unique-id="ordermanagementview-r0cb2cb2fc92a2309-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">全部订单</TabsTrigger>
               <TabsTrigger value="TODAY_PURCHASE" className="shrink-0 gap-1.5 px-3 sm:px-6">待采购{Number(state.stats?.todayPurchaseCount || 0) > 0 ? <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{Number(state.stats.todayPurchaseCount) > 99 ? '99+' : state.stats.todayPurchaseCount}</span> : null}</TabsTrigger>
-              {LIST_STATUS_OPTIONS.map((opt) => <TabsTrigger key={opt.value} value={opt.value} className="shrink-0 gap-1.5 px-3 sm:px-6">
+              {LIST_STATUS_OPTIONS.map((opt) => opt.value === 'CANCELLED' ? (
+                <TabsTrigger key="VALID_ORDERS" value="VALID_ORDERS" className="shrink-0 gap-1.5 px-3 text-base font-extrabold sm:px-6 sm:text-lg">
+                  有效订单
+                </TabsTrigger>
+              ) : (
+                <TabsTrigger key={opt.value} value={opt.value} className="shrink-0 gap-1.5 px-3 sm:px-6">
                   {opt.label}
                   {opt.value === 'REFUNDED' && Number(state.stats?.refundingCount || 0) > 0 ? <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{Number(state.stats.refundingCount) > 99 ? '99+' : state.stats.refundingCount}</span> : null}
-                </TabsTrigger>)}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
 
