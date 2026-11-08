@@ -1915,6 +1915,30 @@ export const useProductManagement = (): { state: ProductManagementState, handler
     void ensureFeaturedKeywords()
   }, [loading, ensureBindingMeta, ensureFeaturedKeywords])
 
+  // Show tab counts even on 商品列表: light fetch totals only (page_size=1).
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const result = await getPendingImportQueue(
+          {
+            page: 1,
+            page_size: 1,
+            skip_maintenance: true,
+            queue_area: 'upload',
+          } as any,
+          { __rpcTimeoutMs: 15_000 },
+        )
+        if (cancelled) return
+        if (typeof result.upload_total === 'number') setPendingUploadQueueTotal(result.upload_total)
+        if (typeof result.weight_total === 'number') setPendingWeightQueueTotal(result.weight_total)
+      } catch {
+        // Keep zeros; opening a tab will retry the full queue load.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   // Defer heavy getPendingImportQueue until the pending tab is opened (not every products visit).
   // Revisit within 45s: keep existing rows visible and refresh silently (no blank spinner).
   useEffect(() => {
