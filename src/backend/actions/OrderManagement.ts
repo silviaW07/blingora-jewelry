@@ -617,6 +617,8 @@ function readRegisterInfo(raw: unknown) {
       usdShipping: null as number | null,
       depositText: '',
       isSettled: false,
+      registerCustomerName: '',
+      registerPhone: '',
       freightTotal: null as number | null,
       packageLines: [emptyPackageLine()],
     }
@@ -640,6 +642,8 @@ function readRegisterInfo(raw: unknown) {
     usdShipping: readUsdShipping(info),
     depositText: readDepositText(info),
     isSettled: Boolean(info.isSettled === true || info.settled === true || info.cleared === true),
+    registerCustomerName: String(info.customerName || '').trim().slice(0, 100),
+    registerPhone: String(info.phone || '').trim().slice(0, 30),
     freightTotal: sumPackageFreight(filled),
     packageLines: filled,
   }
@@ -776,17 +780,22 @@ export const getOrderList = requireStaff('orders')(
         trackingCarrier: record.trackingCarrier,
         trackingNumber: record.trackingNumber,
         createdAt: record.createdAt.toISOString(),
-        customerName: record.user.username,
-        customerEmail: record.user.email,
-        customerWhatsapp: record.user.phone || null,
-        ...orderLevelDiscounts({
-          vipDiscount: Number(record.user.vipDiscount) || 0,
-          customerType: record.user.customerType,
-          subtotal: record.subtotalAmount.toNumber(),
-          config: promoConfig,
-        }),
-        manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
-        ...withRegisterFallback(record),
+        ...(() => {
+          const register = withRegisterFallback(record)
+          return {
+            customerName: register.registerCustomerName || record.user.username,
+            customerEmail: record.user.email,
+            customerWhatsapp: register.registerPhone || record.user.phone || null,
+            ...orderLevelDiscounts({
+              vipDiscount: Number(record.user.vipDiscount) || 0,
+              customerType: record.user.customerType,
+              subtotal: record.subtotalAmount.toNumber(),
+              config: promoConfig,
+            }),
+            manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
+            ...register,
+          }
+        })(),
         countryName: record.address?.countryName || null,
         itemSummary,
         itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
@@ -872,9 +881,15 @@ export const getOrderDetail = requireStaff('orders')(
       note: record.note,
       createdAt: record.createdAt.toISOString(),
       
-      customerName: record.user.username,
-      customerEmail: record.user.email,
-      customerWhatsapp: record.user.phone || null,
+      ...(() => {
+        const register = withRegisterFallback(record)
+        return {
+          customerName: register.registerCustomerName || record.user.username,
+          customerEmail: record.user.email,
+          customerWhatsapp: register.registerPhone || record.user.phone || null,
+          ...register,
+        }
+      })(),
       ...orderLevelDiscounts({
         vipDiscount: Number(record.user.vipDiscount) || 0,
         customerType: record.user.customerType,
@@ -2348,36 +2363,68 @@ function isPlaceholderCustomerEmail(email: string): boolean {
   return String(email || '').trim().toLowerCase().endsWith(PLACEHOLDER_EMAIL_DOMAIN)
 }
 
-/** 按客户姓名建一张空订单。没有邮箱时先挂一个占位账号，之后在列表里双击补邮箱。 */
+const MANUAL_ORDER_WALKIN_EMAIL = 'manual-order@walkin.local'
+
+/** 自主建单挂到已有客户，或共享 walk-in 账号；不再每次新建客户注册。 */
+async function resolveManualOrderUserId(
+  tx: any,
+  input: { customerName: string; phone: string },
+): Promise<string> {
+  const phone = input.phone
+  if (phone) {
+    const byPhone = await tx.sysuser.findFirst({
+      where: { role: 'CUSTOMER', phone },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (byPhone) return byPhone.id
+  }
+  const byName = await tx.sysuser.findFirst({
+    where: {
+      role: 'CUSTOMER',
+      username: input.customerName,
+      NOT: { email: { endsWith: PLACEHOLDER_EMAIL_DOMAIN } },
+      email: { not: MANUAL_ORDER_WALKIN_EMAIL },
+    },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (byName) return byName.id
+
+  const walkIn = await tx.sysuser.findFirst({
+    where: { email: MANUAL_ORDER_WALKIN_EMAIL },
+    select: { id: true },
+  })
+  if (walkIn) return walkIn.id
+
+  const created = await tx.sysuser.create({
+    data: {
+      account: 'manual_order_walkin',
+      email: MANUAL_ORDER_WALKIN_EMAIL,
+      password: createHash('sha256').update('manual-order-walkin').digest('hex'),
+      role: 'CUSTOMER',
+      status: 'ACTIVE',
+      username: '自主建单',
+      customerType: 'NEW',
+    },
+    select: { id: true },
+  })
+  return created.id
+}
+
+/** 按客户姓名建一张空订单。复用已有客户或共享 walk-in，不新建客户注册。 */
 export const createCustomerOrder = requireStaff('orders')(
   withResult(async (input: CreateCustomerOrderInput): Promise<ImportCustomerOrderOutput> => {
     const { username } = getAuthContext()
     const customerName = String(input.customerName || '').trim().slice(0, 100)
     if (!customerName) throw new Error('请填写客户姓名')
     const status = IMPORT_ORDER_STATUSES.includes(input.status as OrderStatus) ? input.status as OrderStatus : 'PROCESSING'
-    const email = `${randomUUID()}${PLACEHOLDER_EMAIL_DOMAIN}`
-    const account = `m_${createHash('sha256').update(email).digest('hex').slice(0, 40)}`
-    const password = createHash('sha256').update(randomUUID()).digest('hex')
+    const phone = String(input.phone || '').trim().slice(0, 30)
     const created = await prisma.$transaction(async (tx) => {
-      const user = await tx.sysuser.create({
-        data: {
-          account,
-          email,
-          password,
-          role: 'CUSTOMER',
-          status: 'ACTIVE',
-          username: customerName,
-          customerType: 'NEW',
-        },
-        select: { id: true },
-      })
+      const userId = await resolveManualOrderUserId(tx, { customerName, phone })
       const money = (value: unknown) => {
         const amount = Number(value)
         return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0
-      }
-      const phone = String(input.phone || '').trim().slice(0, 30)
-      if (phone) {
-        await tx.sysuser.update({ where: { id: user.id }, data: { phone } })
       }
       const freightLines = (input.freightLines || []).map((line) => ({
         freightCost: String(line?.freightCost || '').trim().slice(0, 40),
@@ -2386,6 +2433,7 @@ export const createCustomerOrder = requireStaff('orders')(
       })).filter((line) => line.freightCost || line.chargeWeight || line.remark)
       const registerInfo = {
         registerDate: String(input.registerDate || '').trim().slice(0, 20),
+        customerName,
         phone,
         address: String(input.address || '').trim().slice(0, 500),
         orderAmount: money(input.orderAmount),
@@ -2401,7 +2449,7 @@ export const createCustomerOrder = requireStaff('orders')(
         const order = await tx.orderrecord.create({
           data: {
             orderNo,
-            userId: user.id,
+            userId,
             status,
             currencyCode: 'USD',
             localeCode: 'en',
@@ -2421,11 +2469,11 @@ export const createCustomerOrder = requireStaff('orders')(
           data: {
             orderId: order.id,
             actionType: '创建订单',
-            actionNote: `姓名 ${customerName}`.slice(0, 4000),
+            actionNote: `姓名 ${customerName}（未新建客户）`.slice(0, 4000),
             operatorName: username,
           },
         })
-        return { orderId: order.id, orderNo, itemCount: 0, totalAmount: 0 }
+        return { orderId: order.id, orderNo, itemCount: 0, totalAmount: registerInfo.orderAmount }
       })
     })
     return created
@@ -2478,7 +2526,33 @@ export const updateOrderCustomerProfile = requireStaff('orders')(
         data.account = email.length <= 50 ? email : `e_${createHash('sha256').update(email).digest('hex').slice(0, 40)}`
       }
     }
+    const orderFull = await prisma.orderrecord.findUnique({
+      where: { id: orderId },
+      select: { registerInfoJson: true, user: { select: { email: true } } },
+    })
+    const isWalkIn = String(orderFull?.user?.email || '').toLowerCase() === MANUAL_ORDER_WALKIN_EMAIL
+      || isPlaceholderCustomerEmail(String(orderFull?.user?.email || ''))
+    const base = orderFull?.registerInfoJson && typeof orderFull.registerInfoJson === 'object' && !Array.isArray(orderFull.registerInfoJson)
+      ? { ...(orderFull.registerInfoJson as Record<string, unknown>) }
+      : {}
+    if (input.customerName !== undefined) base.customerName = String(input.customerName || '').trim().slice(0, 100)
+    if (input.phone !== undefined) base.phone = String(input.phone || '').trim().slice(0, 30)
+
+    // 自主建单 / 占位客户：只改订单上的姓名电话，不改共享账号注册资料
+    if (isWalkIn) {
+      await prisma.orderrecord.update({
+        where: { id: orderId },
+        data: { registerInfoJson: base },
+      })
+      return {
+        customerName: String(base.customerName || user.username),
+        customerWhatsapp: (base.phone != null ? String(base.phone) : user.phone) || null,
+        customerEmail: user.email,
+      }
+    }
+
     if (!Object.keys(data).length) {
+      await prisma.orderrecord.update({ where: { id: orderId }, data: { registerInfoJson: base } })
       return { customerName: user.username, customerWhatsapp: user.phone || null, customerEmail: user.email }
     }
     const saved = await prisma.sysuser.update({
@@ -2486,7 +2560,12 @@ export const updateOrderCustomerProfile = requireStaff('orders')(
       data,
       select: { username: true, phone: true, email: true },
     })
-    return { customerName: saved.username, customerWhatsapp: saved.phone || null, customerEmail: saved.email }
+    await prisma.orderrecord.update({ where: { id: orderId }, data: { registerInfoJson: base } })
+    return {
+      customerName: String(base.customerName || saved.username),
+      customerWhatsapp: (base.phone != null && String(base.phone) ? String(base.phone) : saved.phone) || null,
+      customerEmail: saved.email,
+    }
   }),
 )
 
