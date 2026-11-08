@@ -588,6 +588,8 @@ export const OrderManagementView = ({
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const [packageDrafts, setPackageDrafts] = React.useState<Record<string, Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>>>({});
+  const [moneyEdit, setMoneyEdit] = React.useState<{ id: string; field: 'usdShipping' | 'depositText' } | null>(null);
+  const [moneyDraft, setMoneyDraft] = React.useState('');
   const settlementPdfRef = React.useRef<HTMLInputElement>(null);
   const settlementClickTimer = React.useRef<number | null>(null);
   const shipImageRef = React.useRef<HTMLInputElement>(null);
@@ -1149,6 +1151,28 @@ export const OrderManagementView = ({
     });
   };
 
+  const saveMoneyField = async (row: OrderListItem, field: 'usdShipping' | 'depositText', value: string) => {
+    setMoneyEdit(null);
+    try {
+      if (field === 'usdShipping') {
+        const text = value.trim();
+        const next = text === '' ? null : Number(text);
+        if (text && !Number.isFinite(next as number)) {
+          toast.error('运费USD请填写数字');
+          return;
+        }
+        if ((row.usdShipping ?? null) === (next ?? null)) return;
+        await handlers.saveOrderMoneyFields(row.id, { usdShipping: next });
+        return;
+      }
+      const next = value.trim();
+      if ((row.depositText || '') === next) return;
+      await handlers.saveOrderMoneyFields(row.id, { depositText: next });
+    } catch {
+      // toast already shown
+    }
+  };
+
   const savePackageLines = async (row: OrderListItem, override?: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>) => {
     const lines = override || packageDrafts[row.id] || packageLinesOf(row);
     const normalized = lines.map((line) => ({
@@ -1512,6 +1536,8 @@ export const OrderManagementView = ({
                       <TableHead className="whitespace-normal break-words font-bold">入库</TableHead>
                       <TableHead className="whitespace-normal break-words font-bold">WhatsApp</TableHead>
                       <TableHead className="whitespace-normal break-words font-bold">金额</TableHead>
+                      <TableHead className="whitespace-normal break-words font-bold">运费USD</TableHead>
+                      <TableHead className="whitespace-normal break-words font-bold">定金</TableHead>
                       <TableHead className="whitespace-normal break-words font-bold">订单备注</TableHead>
                       <TableHead className="whitespace-normal break-words font-bold">总运费</TableHead>
                       <TableHead className="whitespace-normal break-words pr-6 font-bold">
@@ -1528,11 +1554,11 @@ export const OrderManagementView = ({
                   <TableBody data-api-unique-id="ordermanagementview-r64976b895e3cee0a-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     {state.listLoading ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
+                        <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
                       </TableRow>
                     ) : state.list.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
+                        <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
                       </TableRow>
                     ) : (
                       groupLinkedOrders(state.list, state.orderLinks).map((row) => (
@@ -1671,6 +1697,57 @@ export const OrderManagementView = ({
                             <div className="text-sm font-bold whitespace-nowrap">
                               {row.currencyCode} {Number(row.totalAmount).toLocaleString()}
                             </div>
+                          </TableCell>
+                          <TableCell className="pt-3 pb-3 align-top">
+                            {moneyEdit?.id === row.id && moneyEdit.field === 'usdShipping' ? (
+                              <input
+                                autoFocus
+                                inputMode="decimal"
+                                aria-label="运费USD"
+                                className="h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-sm tabular-nums"
+                                value={moneyDraft}
+                                onChange={(e) => setMoneyDraft(e.target.value)}
+                                onBlur={() => { void saveMoneyField(row, 'usdShipping', moneyDraft); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                                  if (e.key === 'Escape') setMoneyEdit(null);
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-left text-sm tabular-nums hover:bg-slate-100"
+                                title="双击编辑运费USD"
+                                onDoubleClick={() => { setMoneyDraft(row.usdShipping == null ? '' : String(row.usdShipping)); setMoneyEdit({ id: row.id, field: 'usdShipping' }); }}
+                              >
+                                {row.usdShipping == null ? '—' : row.usdShipping}
+                              </button>
+                            )}
+                          </TableCell>
+                          <TableCell className="pt-3 pb-3 align-top">
+                            {moneyEdit?.id === row.id && moneyEdit.field === 'depositText' ? (
+                              <input
+                                autoFocus
+                                aria-label="定金"
+                                className="h-9 w-full min-w-[4.5rem] rounded-md border border-slate-300 px-2 text-sm font-bold text-red-600"
+                                value={moneyDraft}
+                                onChange={(e) => setMoneyDraft(e.target.value)}
+                                onBlur={() => { void saveMoneyField(row, 'depositText', moneyDraft); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                                  if (e.key === 'Escape') setMoneyEdit(null);
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="block w-full min-w-[4.5rem] rounded-md px-1 py-1 text-left text-sm font-bold text-red-600 hover:bg-slate-100"
+                                title="双击编辑定金，可填文字或数字"
+                                onDoubleClick={() => { setMoneyDraft(row.depositText || ''); setMoneyEdit({ id: row.id, field: 'depositText' }); }}
+                              >
+                                {row.depositText?.trim() ? row.depositText : '—'}
+                              </button>
+                            )}
                           </TableCell>
                           <TableCell className="pt-3 pb-3">
                             <Textarea

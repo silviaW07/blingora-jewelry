@@ -367,6 +367,10 @@ export interface OrderListItem {
   ladderOffPercent: number
   /** Hand-set order discount, percent off. Null until someone edits the big number. */
   manualDiscountPercent: number | null
+  /** 运费 USD from registerInfoJson.usdShipping / order shippingAmount */
+  usdShipping: number | null
+  /** 定金，允许文字或数字 */
+  depositText: string
   /** 总运费 = sum of package freight costs */
   freightTotal: number | null
   /** Package rows: ship date / freight / weight / tracking */
@@ -593,9 +597,26 @@ function sumPackageFreight(lines: Array<{ freightCost: string }>) {
   return has ? Math.round(total * 100) / 100 : null
 }
 
+function readUsdShipping(info: Record<string, unknown>) {
+  if (info.usdShipping == null || info.usdShipping === '') return null
+  const amount = Number(info.usdShipping)
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null
+}
+
+function readDepositText(info: Record<string, unknown>) {
+  if (info.depositText != null) return String(info.depositText).trim().slice(0, 80)
+  if (info.deposit != null) return String(info.deposit).trim().slice(0, 80)
+  return ''
+}
+
 function readRegisterInfo(raw: unknown) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { freightTotal: null as number | null, packageLines: [emptyPackageLine()] }
+    return {
+      usdShipping: null as number | null,
+      depositText: '',
+      freightTotal: null as number | null,
+      packageLines: [emptyPackageLine()],
+    }
   }
   const info = raw as Record<string, unknown>
   const lines = Array.isArray(info.freightLines) ? info.freightLines : []
@@ -613,9 +634,26 @@ function readRegisterInfo(raw: unknown) {
   })
   const filled = packageLines.length ? packageLines : [emptyPackageLine()]
   return {
+    usdShipping: readUsdShipping(info),
+    depositText: readDepositText(info),
     freightTotal: sumPackageFreight(filled),
     packageLines: filled,
   }
+}
+
+
+function withRegisterFallback(record: { registerInfoJson: unknown; shippingAmount?: unknown }) {
+  const info = readRegisterInfo(record.registerInfoJson)
+  if (info.usdShipping == null) {
+    const raw = record.shippingAmount as { toNumber?: () => number } | number | string | null | undefined
+    const shipping = raw && typeof raw === object && typeof raw.toNumber === function
+      ? raw.toNumber()
+      : Number(raw)
+    if (Number.isFinite(shipping) && shipping !== 0) {
+      info.usdShipping = Math.round(shipping * 100) / 100
+    }
+  }
+  return info
 }
 
 export const getOrderList = requireStaff('orders')(
@@ -740,7 +778,7 @@ export const getOrderList = requireStaff('orders')(
           config: promoConfig,
         }),
         manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
-        ...readRegisterInfo(record.registerInfoJson),
+        ...withRegisterFallback(record),
         countryName: record.address?.countryName || null,
         itemSummary,
         itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
@@ -836,7 +874,7 @@ export const getOrderDetail = requireStaff('orders')(
         config: await loadPricingPromotionConfig(prisma),
       }),
       manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
-      ...readRegisterInfo(record.registerInfoJson),
+      ...withRegisterFallback(record),
       countryName: record.address?.countryName || null,
       itemSummary,
       itemImageUrl: record.items[0]?.product?.mainImageUrl || null,
@@ -2887,6 +2925,75 @@ export const updateOrderParcelInfo = requireStaff('orders')(
       })
     })
     return { freightTotal, packageLines }
+  }),
+)
+
+export interface UpdateOrderMoneyFieldsInput {
+  orderId: string
+  usdShipping?: number | null
+  depositText?: string
+}
+
+export interface UpdateOrderMoneyFieldsOutput {
+  usdShipping: number | null
+  depositText: string
+}
+
+/** 列表双击改运费USD / 定金。定金允许文字或数字。 */
+export const updateOrderMoneyFields = requireStaff('orders')(
+  withResult(async (input: UpdateOrderMoneyFieldsInput): Promise<UpdateOrderMoneyFieldsOutput> => {
+    const { username } = getAuthContext()
+    const orderId = String(input.orderId || '').trim()
+    if (!orderId) throw new Error('缺少订单')
+    const order = await prisma.orderrecord.findUnique({
+      where: { id: orderId },
+      select: { id: true, registerInfoJson: true, shippingAmount: true },
+    })
+    if (!order) throw new Error('订单不存在')
+    const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson)
+      ? { ...(order.registerInfoJson as Record<string, unknown>) }
+      : {}
+    const current = withRegisterFallback(order)
+    let usdShipping = current.usdShipping
+    let depositText = current.depositText
+    const patchNote: string[] = []
+    if (input.usdShipping !== undefined) {
+      if (input.usdShipping == null || String(input.usdShipping).trim() === '') usdShipping = null
+      else {
+        const amount = Number(input.usdShipping)
+        if (!Number.isFinite(amount)) throw new Error('运费USD请填写数字')
+        usdShipping = Math.round(amount * 100) / 100
+      }
+      patchNote.push(`运费USD ${usdShipping ?? ''}`)
+    }
+    if (input.depositText !== undefined) {
+      depositText = String(input.depositText || '').trim().slice(0, 80)
+      patchNote.push(`定金 ${depositText}`)
+    }
+    const next = {
+      ...base,
+      usdShipping: usdShipping ?? 0,
+      depositText,
+      deposit: depositText,
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.orderrecord.update({
+        where: { id: orderId },
+        data: {
+          registerInfoJson: next,
+          ...(input.usdShipping !== undefined ? { shippingAmount: usdShipping ?? 0 } : {}),
+        },
+      })
+      await tx.orderoperationlog.create({
+        data: {
+          orderId,
+          actionType: '更新金额字段',
+          actionNote: patchNote.join(' · ').slice(0, 4000) || '更新运费/定金',
+          operatorName: username,
+        },
+      })
+    })
+    return { usdShipping, depositText }
   }),
 )
 
