@@ -73,7 +73,8 @@ const COOKIE_1688 = readEnvKey('COOKIE_1688') || readEnvKey('ALIBABA_COOKIE') ||
 const COOKIE_PDD = readEnvKey('COOKIE_PDD') || readEnvKey('PDD_COOKIE') || ''
 const COOKIE_SZWEGO = readEnvKey('COOKIE_SZWEGO') || readEnvKey('COOKIE_WEISHANG') || ''
 const ONEBOUND_1688_KEY = readEnvKey('ONEBOUND_1688_KEY') || readEnvKey('ONEBOUND_KEY') || ''
-const ONEBOUND_1688_SECRET = readEnvKey('ONEBOUND_1688_SECRET') || readEnvKey('ONEBOUND_SECRET') || ''
+const ONEBOUND_1688_SECRET = readEnvKey('ONEBOUND_1688_SECRET')
+const TRACK17_TOKEN = readEnvKey('TRACK17_TOKEN') || readEnvKey('SEVENTEENTRACK_TOKEN') || readEnvKey('TRACK17_API_KEY')
 
 module.exports = {
   apps: [
@@ -126,6 +127,7 @@ module.exports = {
         ...(COOKIE_SZWEGO ? { COOKIE_SZWEGO } : {}),
         ...(ONEBOUND_1688_KEY ? { ONEBOUND_1688_KEY } : {}),
         ...(ONEBOUND_1688_SECRET ? { ONEBOUND_1688_SECRET } : {}),
+        ...(TRACK17_TOKEN ? { TRACK17_TOKEN } : {}),
         TS_NODE_PROJECT: path.join(ROOT, 'tsconfig.server.json'),
       },
     },

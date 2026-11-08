@@ -3,6 +3,14 @@
 import prisma from '@/tools/prisma'
 import { requireStaff, staffMustHide } from '@/backend/staffAccess'
 import { createHash, randomUUID } from 'crypto'
+
+import {
+  fetchTrack17Statuses,
+  mergeTrackCache,
+  readTrackCache,
+  track17PublicUrl,
+  type Track17StatusSnapshot,
+} from '@/backend/lib/track17'
 import { saveUploadedImage } from '@/lib/uploadStorage'
 import {
   requireRole,
@@ -376,7 +384,7 @@ export interface OrderListItem {
   /** 总运费 = sum of package freight costs */
   freightTotal: number | null
   /** Package rows: ship date / freight / weight / tracking */
-  packageLines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>
+  packageLines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string; trackStatus?: string; trackStatusLabel?: string; trackEvent?: string; trackTime?: string; trackUrl?: string }>
 }
 
 export interface OrderExcelExportRow {
@@ -584,7 +592,25 @@ function orderLevelDiscounts(input: {
 
 
 function emptyPackageLine() {
-  return { shipDate: '', freightCost: '', chargeWeight: '', remark: '' }
+  return { shipDate: '', freightCost: '', chargeWeight: '', remark: '', trackStatus: '', trackStatusLabel: '', trackEvent: '', trackTime: '', trackUrl: '' }
+}
+
+function attachTrackToPackageLines(
+  lines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>,
+  cache: Record<string, Track17StatusSnapshot>,
+) {
+  return lines.map((line) => {
+    const number = String(line.remark || '').trim()
+    const hit = number ? cache[number.toUpperCase()] : undefined
+    return {
+      ...line,
+      trackStatus: hit?.status || '',
+      trackStatusLabel: hit?.statusLabel || '',
+      trackEvent: hit?.latestEvent || '',
+      trackTime: hit?.latestTime || '',
+      trackUrl: hit?.publicUrl || (number.length >= 6 ? track17PublicUrl(number) : ''),
+    }
+  })
 }
 
 function sumPackageFreight(lines: Array<{ freightCost: string }>) {
@@ -638,6 +664,7 @@ function readRegisterInfo(raw: unknown) {
     return [next]
   })
   const filled = packageLines.length ? packageLines : [emptyPackageLine()]
+  const cache = readTrackCache(info)
   return {
     usdShipping: readUsdShipping(info),
     depositText: readDepositText(info),
@@ -645,7 +672,7 @@ function readRegisterInfo(raw: unknown) {
     registerCustomerName: String(info.customerName || '').trim().slice(0, 100),
     registerPhone: String(info.phone || '').trim().slice(0, 30),
     freightTotal: sumPackageFreight(filled),
-    packageLines: filled,
+    packageLines: attachTrackToPackageLines(filled, cache),
   }
 }
 
@@ -2967,7 +2994,7 @@ export interface UpdateOrderParcelInfoInput {
 
 export interface UpdateOrderParcelInfoOutput {
   freightTotal: number | null
-  packageLines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>
+  packageLines: Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string; trackStatus?: string; trackStatusLabel?: string; trackEvent?: string; trackTime?: string; trackUrl?: string }>
 }
 
 /** 列表里改发货日期 / 本单运费 / 计费重 / 物流号。总运费按本单运费自动合计。 */
@@ -3011,7 +3038,82 @@ export const updateOrderParcelInfo = requireStaff('orders')(
         },
       })
     })
-    return { freightTotal, packageLines }
+    const numbers = packageLines.map((line) => line.remark).filter(Boolean)
+    let tracked = packageLines
+    if (numbers.length) {
+      try {
+        const result = await fetchTrack17Statuses(numbers)
+        const cache = mergeTrackCache(readTrackCache(next), result.items)
+        const withTrack = { ...next, trackByNumber: cache }
+        await prisma.orderrecord.update({ where: { id: orderId }, data: { registerInfoJson: withTrack } })
+        tracked = attachTrackToPackageLines(packageLines, cache)
+      } catch {
+        tracked = attachTrackToPackageLines(packageLines, readTrackCache(next))
+      }
+    }
+    return { freightTotal, packageLines: tracked }
+  }),
+)
+
+export interface RefreshPackageTrackStatusesInput {
+  orderIds?: string[]
+  numbers?: string[]
+}
+
+export interface RefreshPackageTrackStatusesOutput {
+  configured: boolean
+  message?: string
+  items: Track17StatusSnapshot[]
+  updatedOrderIds: string[]
+}
+
+/** 按物流号拉取 17TRACK 最新轨迹，写回订单缓存并返回状态。 */
+export const refreshPackageTrackStatuses = requireStaff('orders')(
+  withResult(async (input: RefreshPackageTrackStatusesInput): Promise<RefreshPackageTrackStatusesOutput> => {
+    const orderIds = Array.from(new Set((input.orderIds || []).map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 80)
+    const directNumbers = Array.from(new Set((input.numbers || []).map((n) => String(n || '').trim()).filter(Boolean)))
+    const orders = orderIds.length
+      ? await prisma.orderrecord.findMany({
+          where: { id: { in: orderIds } },
+          select: { id: true, registerInfoJson: true },
+        })
+      : []
+    const numbers: string[] = [...directNumbers]
+    for (const order of orders) {
+      const info = readRegisterInfo(order.registerInfoJson)
+      for (const line of info.packageLines) {
+        if (line.remark) numbers.push(line.remark)
+      }
+    }
+    const unique = Array.from(new Set(numbers.map((n) => n.trim()).filter((n) => n.length >= 6))).slice(0, 40)
+    const result = await fetchTrack17Statuses(unique)
+    const byNumber = new Map(result.items.map((item) => [item.number.toUpperCase(), item]))
+    const updatedOrderIds: string[] = []
+    for (const order of orders) {
+      const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson)
+        ? { ...(order.registerInfoJson as Record<string, unknown>) }
+        : {}
+      const info = readRegisterInfo(order.registerInfoJson)
+      const related = info.packageLines.map((line) => line.remark).filter(Boolean)
+      if (!related.length) continue
+      const existing = readTrackCache(base)
+      const patchItems = related
+        .map((number) => byNumber.get(number.toUpperCase()))
+        .filter((item): item is Track17StatusSnapshot => Boolean(item))
+      if (!patchItems.length) continue
+      const cache = mergeTrackCache(existing, patchItems)
+      await prisma.orderrecord.update({
+        where: { id: order.id },
+        data: { registerInfoJson: { ...base, trackByNumber: cache } },
+      })
+      updatedOrderIds.push(order.id)
+    }
+    return {
+      configured: result.configured,
+      message: result.message,
+      items: result.items,
+      updatedOrderIds,
+    }
   }),
 )
 

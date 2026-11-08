@@ -613,6 +613,14 @@ export const OrderManagementView = ({
   }, [state.inboundOrderId]) // inbound-doc-drop-guard
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const [packageDrafts, setPackageDrafts] = React.useState<Record<string, Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>>>({});
+  React.useEffect(() => {
+    if (!state.list.length || state.listLoading) return;
+    const ids = state.list.map((row) => row.id);
+    const timer = window.setTimeout(() => { void handlers.refreshVisiblePackageTracks?.(ids); }, 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.list.map((row) => row.id).join(','), state.listLoading]);
+
   const [moneyEdit, setMoneyEdit] = React.useState<{ id: string; field: 'totalAmount' | 'usdShipping' | 'depositText' } | null>(null);
   const [inboundAddressEdit, setInboundAddressEdit] = React.useState(false);
   const [inboundAddressDraft, setInboundAddressDraft] = React.useState('');
@@ -1216,17 +1224,34 @@ export const OrderManagementView = ({
   };
 
 
-  const emptyPackageLine = () => ({ shipDate: '', freightCost: '', chargeWeight: '', remark: '' });
+  const emptyPackageLine = () => ({ shipDate: '', freightCost: '', chargeWeight: '', remark: '', trackStatus: '', trackStatusLabel: '', trackEvent: '', trackTime: '', trackUrl: '' });
 
   const packageLinesOf = (row: OrderListItem) => {
     const draft = packageDrafts[row.id];
-    if (draft) return draft;
+    if (draft) {
+      return draft.map((line, index) => {
+        const source = row.packageLines?.[index];
+        return {
+          ...line,
+          trackStatus: (line as any).trackStatus ?? source?.trackStatus ?? '',
+          trackStatusLabel: (line as any).trackStatusLabel ?? source?.trackStatusLabel ?? '',
+          trackEvent: (line as any).trackEvent ?? source?.trackEvent ?? '',
+          trackTime: (line as any).trackTime ?? source?.trackTime ?? '',
+          trackUrl: (line as any).trackUrl ?? source?.trackUrl ?? '',
+        };
+      });
+    }
     const lines = row.packageLines?.length ? row.packageLines : [emptyPackageLine()];
     return lines.map((line) => ({
       shipDate: line.shipDate || '',
       freightCost: line.freightCost || '',
       chargeWeight: line.chargeWeight || '',
       remark: line.remark || '',
+      trackStatus: line.trackStatus || '',
+      trackStatusLabel: line.trackStatusLabel || '',
+      trackEvent: line.trackEvent || '',
+      trackTime: line.trackTime || '',
+      trackUrl: line.trackUrl || '',
     }));
   };
 
@@ -1681,18 +1706,17 @@ export const OrderManagementView = ({
                     <TableRow data-api-unique-id="ordermanagementview-r2829fce95c941439-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                       <TableHead className="whitespace-normal break-words py-4 pl-6 text-center font-bold">下单时间</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">订单编号</TableHead>
-                      <TableHead className="whitespace-normal break-words text-center font-bold">客户Email</TableHead>
+                      <TableHead className="whitespace-normal break-words text-center font-bold">Email/Whatsapp</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">客户名称</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">订单状态</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">入库</TableHead>
-                      <TableHead className="whitespace-normal break-words text-center font-bold">WhatsApp</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">金额</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">运费USD</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">定金</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">订单备注</TableHead>
                       <TableHead className="whitespace-normal break-words text-center font-bold">总运费</TableHead>
                       <TableHead className="whitespace-normal break-words pr-6 text-center font-bold">
-                        <div className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] gap-1.5 text-center">
+                        <div className="grid grid-cols-[7rem_5rem_4.5rem_minmax(8rem,1.2fr)_auto] gap-1.5 text-center">
                           <span>发货日期</span>
                           <span>本单运费</span>
                           <span>计费重</span>
@@ -1705,11 +1729,11 @@ export const OrderManagementView = ({
                   <TableBody data-api-unique-id="ordermanagementview-r64976b895e3cee0a-s993201067" data-api-unique-page-name="src/backend/components/OrderManagementView">
                     {state.listLoading ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
+                        <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">数据同步中...</TableCell>
                       </TableRow>
                     ) : state.list.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
+                        <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
                       </TableRow>
                     ) : (
                       groupLinkedOrders(state.list, state.orderLinks).map((row) => (
@@ -1733,30 +1757,55 @@ export const OrderManagementView = ({
                             {row.orderNo}
                           </TableCell>
                           <TableCell className="pt-4 text-center" scrollX scrollXClassName="max-w-[260px]">
-                            {contactEdit?.id === row.id && contactEdit.field === 'email' ? (
-                              <input
-                                autoFocus
-                                aria-label="客户邮箱"
-                                className="mx-auto h-9 w-full min-w-[160px] rounded-md border border-slate-200 px-2 text-center text-sm"
-                                value={contactDraft}
-                                onChange={(event) => setContactDraft(event.target.value)}
-                                onBlur={() => { void saveCustomerContact(row, 'email'); }}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
-                                  if (event.key === 'Escape') setContactEdit(null);
-                                }}
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                className="mx-auto block w-full break-all text-center text-sm text-primary hover:underline"
-                                title="双击添加邮箱"
-                                onClick={() => { if (visibleCustomerEmail(row.customerEmail)) handlers.jumpToCustomer(row.customerEmail); }}
-                                onDoubleClick={() => { setContactDraft(visibleCustomerEmail(row.customerEmail)); setContactEdit({ id: row.id, field: 'email' }); }}
-                              >
-                                {visibleCustomerEmail(row.customerEmail) || '—'}
-                              </button>
-                            )}
+                            <div className="mx-auto flex min-w-[140px] flex-col items-center gap-1">
+                              {contactEdit?.id === row.id && contactEdit.field === 'email' ? (
+                                <input
+                                  autoFocus
+                                  aria-label="客户邮箱"
+                                  className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm"
+                                  value={contactDraft}
+                                  onChange={(event) => setContactDraft(event.target.value)}
+                                  onBlur={() => { void saveCustomerContact(row, 'email'); }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
+                                    if (event.key === 'Escape') setContactEdit(null);
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="block w-full break-all text-center text-sm text-primary hover:underline"
+                                  title="双击添加邮箱"
+                                  onClick={() => { if (visibleCustomerEmail(row.customerEmail)) handlers.jumpToCustomer(row.customerEmail); }}
+                                  onDoubleClick={() => { setContactDraft(visibleCustomerEmail(row.customerEmail)); setContactEdit({ id: row.id, field: 'email' }); }}
+                                >
+                                  {visibleCustomerEmail(row.customerEmail) || '—'}
+                                </button>
+                              )}
+                              {contactEdit?.id === row.id && contactEdit.field === 'phone' ? (
+                                <input
+                                  autoFocus
+                                  aria-label="WhatsApp"
+                                  className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm"
+                                  value={contactDraft}
+                                  onChange={(event) => setContactDraft(event.target.value)}
+                                  onBlur={() => { void saveCustomerContact(row, 'phone'); }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
+                                    if (event.key === 'Escape') setContactEdit(null);
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="block w-full break-all text-center text-xs text-muted-foreground"
+                                  title="双击修改 WhatsApp"
+                                  onDoubleClick={() => { setContactDraft(row.customerWhatsapp || ''); setContactEdit({ id: row.id, field: 'phone' }); }}
+                                >
+                                  {row.customerWhatsapp || '—'}
+                                </button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="pt-4 text-center text-sm font-medium">
                             {contactEdit?.id === row.id && contactEdit.field === 'name' ? (
@@ -1835,26 +1884,6 @@ export const OrderManagementView = ({
                               }}>关联</Button>
                               </div>
                             </div>}
-                          </TableCell>
-                          <TableCell className="pt-4 text-center text-sm text-muted-foreground">
-                            {contactEdit?.id === row.id && contactEdit.field === 'phone' ? (
-                              <input
-                                autoFocus
-                                aria-label="手机号"
-                                className="mx-auto h-9 w-full min-w-[108px] rounded-md border border-slate-200 px-2 text-center text-sm"
-                                value={contactDraft}
-                                onChange={(event) => setContactDraft(event.target.value)}
-                                onBlur={() => { void saveCustomerContact(row, 'phone'); }}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') { event.preventDefault(); (event.target as HTMLInputElement).blur(); }
-                                  if (event.key === 'Escape') setContactEdit(null);
-                                }}
-                              />
-                            ) : (
-                              <button type="button" className="mx-auto block w-full text-center text-sm text-muted-foreground" title="双击修改手机号" onDoubleClick={() => { setContactDraft(row.customerWhatsapp || ''); setContactEdit({ id: row.id, field: 'phone' }); }}>
-                                {row.customerWhatsapp || '—'}
-                              </button>
-                            )}
                           </TableCell>
                           <TableCell className="pt-3 pb-3 text-center align-middle">
                             {moneyEdit?.id === row.id && moneyEdit.field === 'totalAmount' ? (
@@ -1957,7 +1986,7 @@ export const OrderManagementView = ({
                           <TableCell className="pt-3 pb-3 text-center align-middle" colSpan={5}>
                             <div className="space-y-1.5">
                               {packageLinesOf(row).map((line, index) => (
-                                <div key={`${row.id}-pkg-${index}`} className="grid grid-cols-[7rem_5.5rem_5rem_minmax(6rem,1fr)_auto] items-center justify-items-center gap-1.5">
+                                <div key={`${row.id}-pkg-${index}`} className="grid grid-cols-[7rem_5rem_4.5rem_minmax(8rem,1.2fr)_auto] items-center justify-items-center gap-1.5">
                                   <input
                                     type="date"
                                     aria-label={`发货日期 ${index + 1}`}
@@ -1984,10 +2013,10 @@ export const OrderManagementView = ({
                                     onChange={(e) => setPackageLineField(row.id, index, 'chargeWeight', e.target.value, row)}
                                     onBlur={() => { void savePackageLines(row); }}
                                   />
-                                  <div className="relative w-full min-w-0">
+                                  <div className="flex w-full min-w-0 flex-col gap-1">
                                     <input
                                       aria-label={`物流号 ${index + 1}`}
-                                      className="h-9 w-full rounded-md border border-slate-200 px-2 pr-8 text-center text-sm"
+                                      className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm"
                                       placeholder="物流号"
                                       value={line.remark}
                                       onChange={(e) => setPackageLineField(row.id, index, 'remark', e.target.value, row)}
@@ -1995,14 +2024,15 @@ export const OrderManagementView = ({
                                     />
                                     {String(line.remark || '').trim().length >= 6 ? (
                                       <a
-                                        href={`https://www.17track.net/zh-cn/track?nums=${encodeURIComponent(String(line.remark).trim())}`}
+                                        href={(line as any).trackUrl || `https://www.17track.net/zh-cn/track?nums=${encodeURIComponent(String(line.remark).trim())}`}
                                         target="_blank"
                                         rel="noreferrer"
-                                        title="在 17TRACK 查看"
-                                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-[10px] font-semibold text-sky-700 hover:underline"
-                                        onMouseDown={(e) => e.preventDefault()}
+                                        title="在 17TRACK 查看最新轨迹"
+                                        className="block max-w-full whitespace-normal break-words text-left text-[11px] leading-snug text-sky-700 underline-offset-2 hover:underline"
                                       >
-                                        17
+                                        {((line as any).trackStatusLabel || (line as any).trackEvent)
+                                          ? `${(line as any).trackStatusLabel || ''}${(line as any).trackStatusLabel && (line as any).trackEvent ? ' · ' : ''}${(line as any).trackEvent || ''}`.trim()
+                                          : '查看17TRACK轨迹'}
                                       </a>
                                     ) : null}
                                   </div>

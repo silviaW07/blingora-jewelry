@@ -34,6 +34,7 @@ import {
   updateOrderStatus,
   updateOrderRemark,
   updateOrderParcelInfo,
+  refreshPackageTrackStatuses,
   updateOrderMoneyFields,
   updateOrderSettled,
   updateOrderInbound,
@@ -172,6 +173,7 @@ export interface OrderManagementHandlers {
   /** 提交备注 */
   submitOrderRemark: (orderId: string) => Promise<void>
   saveOrderParcelInfo: (orderId: string, packageLines: Array<{ shipDate?: string; freightCost?: string; chargeWeight?: string; remark?: string }>) => Promise<void>
+  refreshVisiblePackageTracks: (orderIds?: string[]) => Promise<void>
   saveOrderMoneyFields: (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => Promise<void>
   toggleOrderSettled: (orderId: string, isSettled: boolean) => Promise<void>
   /** 导出 Excel（全部当前页或指定订单） */
@@ -545,7 +547,36 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
     }
   }
 
-  const saveOrderMoneyFields = async (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => {
+  const refreshVisiblePackageTracks = async (orderIds?: string[]) => {
+    const ids = (orderIds && orderIds.length ? orderIds : list.map((row) => row.id)).slice(0, 80)
+    if (!ids.length) return
+    try {
+      const result = await refreshPackageTrackStatuses({ orderIds: ids })
+      if (!result.items.length) return
+      const byNumber = new Map(result.items.map((item) => [item.number.toUpperCase(), item]))
+      setList((prev) => prev.map((row) => {
+        if (!ids.includes(row.id)) return row
+        const packageLines = (row.packageLines || []).map((line) => {
+          const number = String(line.remark || '').trim()
+          const hit = number ? byNumber.get(number.toUpperCase()) : undefined
+          if (!hit) return line
+          return {
+            ...line,
+            trackStatus: hit.status,
+            trackStatusLabel: hit.statusLabel,
+            trackEvent: hit.latestEvent,
+            trackTime: hit.latestTime,
+            trackUrl: hit.publicUrl,
+          }
+        })
+        return { ...row, packageLines }
+      }))
+    } catch {
+      // silent — list still usable without live track text
+    }
+  }
+
+    const saveOrderMoneyFields = async (orderId: string, patch: { totalAmount?: number | null; usdShipping?: number | null; depositText?: string }) => {
     try {
       const saved = await updateOrderMoneyFields({ orderId, ...patch })
       setList((prev) => prev.map((item) => item.id === orderId ? {
@@ -1708,6 +1739,7 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       handleRemarkDraftChange,
       submitOrderRemark,
       saveOrderParcelInfo,
+      refreshVisiblePackageTracks,
       saveOrderMoneyFields,
       toggleOrderSettled,
       handleExportExcel,
