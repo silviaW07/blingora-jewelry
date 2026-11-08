@@ -586,6 +586,30 @@ export const OrderManagementView = ({
   const [importOpen, setImportOpen] = React.useState(false);
   const [importRows, setImportRows] = React.useState<InboundImportRow[]>([]);
   const [inboundDragOver, setInboundDragOver] = React.useState(false);
+  // 登记入库打开时拦截整页拖放，避免 WhatsApp 图片把当前页导航成 blob 大图
+  React.useEffect(() => {
+    if (!state.inboundOrderId) return
+    const block = (event: DragEvent) => {
+      if (!event.dataTransfer) return
+      const types = [...event.dataTransfer.types]
+      const media = types.includes('Files') || types.includes('text/uri-list') || types.includes('text/html') || types.includes('text/plain')
+      if (!media) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onDrop = (event: DragEvent) => {
+      // 让 React 对话框里的 onDrop 处理；这里只挡住默认打开大图
+      block(event)
+    }
+    document.addEventListener('dragenter', block, true)
+    document.addEventListener('dragover', block, true)
+    document.addEventListener('drop', onDrop, true)
+    return () => {
+      document.removeEventListener('dragenter', block, true)
+      document.removeEventListener('dragover', block, true)
+      document.removeEventListener('drop', onDrop, true)
+    }
+  }, [state.inboundOrderId]) // inbound-doc-drop-guard
   const importFileRef = React.useRef<HTMLInputElement>(null);
   const [packageDrafts, setPackageDrafts] = React.useState<Record<string, Array<{ shipDate: string; freightCost: string; chargeWeight: string; remark: string }>>>({});
   const [moneyEdit, setMoneyEdit] = React.useState<{ id: string; field: 'totalAmount' | 'usdShipping' | 'depositText' } | null>(null);
@@ -906,6 +930,86 @@ export const OrderManagementView = ({
       }, 700);
     }
   };
+  const dragLooksLikeMedia = (dataTransfer: DataTransfer | null | undefined) => {
+    if (!dataTransfer) return false
+    const types = [...dataTransfer.types]
+    return types.includes('Files')
+      || types.includes('text/uri-list')
+      || types.includes('text/html')
+      || types.includes('text/plain')
+      || types.some((type) => /file|image|url/i.test(type))
+  }
+
+  const collectDroppedImageFiles = async (dataTransfer: DataTransfer | null | undefined) => {
+    if (!dataTransfer) return [] as File[]
+    const files: File[] = []
+    const pushImage = (file: File | null | undefined) => {
+      if (!file) return
+      if (file.type.startsWith('image/') || (!file.type && /\.(png|jpe?g|gif|webp|bmp|heic|avif)$/i.test(file.name || ''))) {
+        files.push(file)
+      }
+    }
+    for (const file of [...dataTransfer.files]) pushImage(file)
+    if (dataTransfer.items) {
+      for (const item of [...dataTransfer.items]) {
+        if (item.kind === 'file') pushImage(item.getAsFile())
+      }
+    }
+    if (files.length) {
+      const seen = new Set<string>()
+      return files.filter((file) => {
+        const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    }
+
+    const urls: string[] = []
+    const pushUrl = (value: string) => {
+      const text = String(value || '').trim()
+      if (!text) return
+      if (/^(blob:|https?:|data:image)/i.test(text)) urls.push(text)
+    }
+    for (const line of String(dataTransfer.getData('text/uri-list') || '').split(/\n+/)) {
+      if (line.trim().startsWith('#')) continue
+      pushUrl(line)
+    }
+    const html = String(dataTransfer.getData('text/html') || '')
+    for (const match of html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)) pushUrl(match[1] || '')
+    pushUrl(String(dataTransfer.getData('text/plain') || ''))
+
+    const uniqueUrls = [...new Set(urls)]
+    const fromUrls: File[] = []
+    for (const url of uniqueUrls) {
+      try {
+        const response = await fetch(url)
+        const blob = await response.blob()
+        const type = blob.type || 'image/jpeg'
+        if (!type.startsWith('image/') && !type.includes('octet-stream')) continue
+        const ext = (type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+        fromUrls.push(new File([blob], `drag-${Date.now()}-${fromUrls.length}.${ext}`, { type: type.startsWith('image/') ? type : 'image/jpeg' }))
+      } catch {
+        // WhatsApp blob: URL 跨页不可读，会走下面的提示
+      }
+    }
+    return fromUrls
+  }
+
+  const receiveAddonProductsFromDataTransfer = async (dataTransfer: DataTransfer | null | undefined) => {
+    const images = await collectDroppedImageFiles(dataTransfer)
+    if (images.length) {
+      await receiveAddonProducts(images)
+      return
+    }
+    const files = dataTransfer ? [...dataTransfer.files] : []
+    if (files.length) {
+      await receiveAddonProducts(files)
+      return
+    }
+    toast.error('WhatsApp 等网页图片请先下载/另存后再拖入，或点击「传入商品」选择文件')
+  }
+
   const receiveAddonProducts = async (files: FileList | File[]) => {
     const list = [...files];
     if (!list.length) return;
@@ -2296,43 +2400,55 @@ export const OrderManagementView = ({
       <Dialog open={!!state.inboundOrderId} onOpenChange={(open) => { if (!open) { setInboundZoom(null); setImportOpen(false); handlers.closeInboundDialog() } }}>
         <DialogContent
           className="inset-0 top-0 left-0 block h-[100dvh] max-h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-scroll overscroll-contain rounded-none border-0 p-0 shadow-none data-[state=open]:animate-none data-[state=closed]:animate-none"
-          onDragOver={(event) => {
-            if (![...event.dataTransfer.types].includes('Files')) return
+          onDragEnter={(event) => {
+            if (!dragLooksLikeMedia(event.dataTransfer)) return
             event.preventDefault()
+            event.stopPropagation()
+            event.dataTransfer.dropEffect = 'copy'
+            setInboundDragOver(true)
+          }}
+          onDragOver={(event) => {
+            // WhatsApp 拖图常只有 uri-list/html，没有 Files；必须 preventDefault，否则会整页打开大图
+            if (!dragLooksLikeMedia(event.dataTransfer)) return
+            event.preventDefault()
+            event.stopPropagation()
             event.dataTransfer.dropEffect = 'copy'
             setInboundDragOver(true)
           }}
           onDragLeave={() => setInboundDragOver(false)}
           onDrop={(event) => {
-            if (![...event.dataTransfer.types].includes('Files')) return
+            if (!dragLooksLikeMedia(event.dataTransfer)) return
             event.preventDefault()
             event.stopPropagation()
             setInboundDragOver(false)
             const target = event.target as HTMLElement
             // 传入商品 / 传入表格区域优先：不要当成发货大图
-            if (target.closest('[data-inbound-addon="product"]')) {
-              void receiveAddonProducts(event.dataTransfer.files)
-              return
-            }
-            if (target.closest('[data-inbound-addon="sheet"]')) {
-              void receiveAddonSheet(event.dataTransfer.files)
-              return
-            }
-            if (addonDrag === 'product') {
-              void receiveAddonProducts(event.dataTransfer.files)
+            if (target.closest('[data-inbound-addon="product"]') || addonDrag === 'product') {
               setAddonDrag(null)
+              void receiveAddonProductsFromDataTransfer(event.dataTransfer)
               return
             }
-            if (addonDrag === 'sheet') {
-              void receiveAddonSheet(event.dataTransfer.files)
+            if (target.closest('[data-inbound-addon="sheet"]') || addonDrag === 'sheet') {
               setAddonDrag(null)
+              const sheets = [...(event.dataTransfer.files || [])].filter((file) => !file.type.startsWith('image/'))
+              if (sheets.length) void receiveAddonSheet(sheets)
+              else void receiveAddonProductsFromDataTransfer(event.dataTransfer)
               return
             }
-            const dropped = [...event.dataTransfer.files];
-            const images = dropped.filter((file) => file.type.startsWith('image/'));
-            const sheets = dropped.filter((file) => !file.type.startsWith('image/'));
-            if (images.length && !sheets.length) void uploadShippingImages(images);
-            else void receiveImportFiles(dropped);
+            void (async () => {
+              const images = await collectDroppedImageFiles(event.dataTransfer)
+              const sheets = [...(event.dataTransfer.files || [])].filter((file) => !file.type.startsWith('image/') && /\.(xlsx|xls|csv)$/i.test(file.name))
+              if (images.length && !sheets.length) {
+                // 空白处拖图：直接当传入商品，避免只挂发货图/打开大图
+                await receiveAddonProducts(images)
+                return
+              }
+              if (sheets.length || event.dataTransfer.files?.length) {
+                void receiveImportFiles(event.dataTransfer.files)
+                return
+              }
+              toast.error('WhatsApp 等网页图片请先下载/另存后再拖入，或点击「传入商品」选择文件')
+            })()
           }}
         >
           <DialogHeader ref={inboundTitleRef} className="sticky top-0 z-20 cursor-pointer border-b bg-white px-4 py-4 pr-16 text-left sm:px-6 sm:pr-16" title="点这里回到顶部" onClick={(event) => {
@@ -2841,7 +2957,7 @@ export const OrderManagementView = ({
                     if (next && event.currentTarget.contains(next)) return
                     setAddonDrag((current) => current === 'product' ? null : current)
                   }}
-                  onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProducts(event.dataTransfer.files); }}
+                  onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setAddonDrag(null); void receiveAddonProductsFromDataTransfer(event.dataTransfer); }}
                 >
                   <div className="pointer-events-none text-base font-semibold">传入商品（允许拖拽）</div>
                   <div className="pointer-events-none mt-1 text-sm text-slate-500">拖入图片后加到最后一行，填写售价、数量、成本价</div>
