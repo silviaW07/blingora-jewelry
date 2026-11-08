@@ -163,12 +163,7 @@ export default function AccountOrdersView() {
                 const canPay = order.status === 'PENDING_PAYMENT'
                 const detailHref = orderDetailHref(order.orderId)
                 const payHref = orderPayHref(order.orderId)
-                const weightText =
-                  order.totalWeightGrams > 0
-                    ? t('accountOrders.weightValue', {
-                        weight: order.totalWeightGrams.toLocaleString(locale),
-                      })
-                    : '—'
+                const trackingNumbers = (order.trackingNumbers || []).filter(Boolean)
 
                 return (
                   <TableRow key={order.orderId} className="hover:bg-[#fffafa]">
@@ -206,8 +201,24 @@ export default function AccountOrdersView() {
                           t(`accountOrders.shipMethods.${order.shipMethod}`)}
                       </span>
                     </TableCell>
-                    <TableCell className={`${CELL} whitespace-nowrap text-[#6f6558]`}>
-                      {weightText}
+                    <TableCell className={`${CELL} max-w-[14rem] whitespace-normal break-all text-[#6f6558]`}>
+                      {trackingNumbers.length ? (
+                        <div className="flex flex-col items-start gap-1">
+                          {trackingNumbers.map((number) => (
+                            <a
+                              key={number}
+                              href={`https://www.17track.net/en/track?nums=${encodeURIComponent(number)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-[#0055FF] underline-offset-2 hover:underline"
+                            >
+                              {number}
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                     <TableCell className={`${CELL} account-orders-actions min-w-[8.5rem] bg-white text-right`}>
                       <div className="ml-auto flex w-full max-w-[16rem] flex-col items-stretch gap-1.5 sm:w-auto sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-end">

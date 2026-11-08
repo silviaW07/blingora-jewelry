@@ -1984,14 +1984,28 @@ export const OrderManagementView = ({
                                     onChange={(e) => setPackageLineField(row.id, index, 'chargeWeight', e.target.value, row)}
                                     onBlur={() => { void savePackageLines(row); }}
                                   />
-                                  <input
-                                    aria-label={`物流号 ${index + 1}`}
-                                    className="h-9 w-full rounded-md border border-slate-200 px-2 text-center text-sm"
-                                    placeholder="物流号"
-                                    value={line.remark}
-                                    onChange={(e) => setPackageLineField(row.id, index, 'remark', e.target.value, row)}
-                                    onBlur={() => { void savePackageLines(row); }}
-                                  />
+                                  <div className="relative w-full min-w-0">
+                                    <input
+                                      aria-label={`物流号 ${index + 1}`}
+                                      className="h-9 w-full rounded-md border border-slate-200 px-2 pr-8 text-center text-sm"
+                                      placeholder="物流号"
+                                      value={line.remark}
+                                      onChange={(e) => setPackageLineField(row.id, index, 'remark', e.target.value, row)}
+                                      onBlur={() => { void savePackageLines(row); }}
+                                    />
+                                    {String(line.remark || '').trim().length >= 6 ? (
+                                      <a
+                                        href={`https://www.17track.net/zh-cn/track?nums=${encodeURIComponent(String(line.remark).trim())}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title="在 17TRACK 查看"
+                                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-[10px] font-semibold text-sky-700 hover:underline"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                      >
+                                        17
+                                      </a>
+                                    ) : null}
+                                  </div>
                                   <div className="flex items-center justify-center gap-1">
                                     <Button type="button" size="sm" variant="outline" className="h-8 px-2 text-xs" title="复制新增一行四个输入框" onClick={() => addPackageLine(row, index)}>复制</Button>
                                     {packageLinesOf(row).length > 1 ? (

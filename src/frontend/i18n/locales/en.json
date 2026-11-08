@@ -669,7 +669,7 @@
     "status": "Status",
     "total": "Total",
     "shippingMethod": "Shipping Method",
-    "weight": "Weight",
+    "weight": "Tracking",
     "weightValue": "{{weight}} g",
     "comment": "Comment",
     "orderNote": "Order Note",

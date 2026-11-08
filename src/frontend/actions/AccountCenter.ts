@@ -82,6 +82,8 @@ export interface CustomerOrderSummary {
   shipMethod: CustomerOrderShipMethod
   trackingCarrier: string
   trackingNumber: string
+  /** 与后台包裹「物流号」对应；My Orders 的 Weight 列展示这些单号 */
+  trackingNumbers: string[]
   totalWeightGrams: number
   internalNote: string
   createdAt: string
@@ -225,6 +227,33 @@ const compareCustomerOrderItems = (a: any, b: any) => {
   return String(a?.skuCode || '').localeCompare(String(b?.skuCode || ''), 'en', { numeric: true, sensitivity: 'base' })
 }
 
+
+const track17Url = (number: string) =>
+  `https://www.17track.net/en/track?nums=${encodeURIComponent(number)}`
+
+/** 后台订单列表「物流号」写在 registerInfoJson.freightLines[].remark */
+const packageTrackingNumbers = (raw: unknown, fallback = ''): string[] => {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const push = (value: unknown) => {
+    const number = String(value || '').trim().replace(/\s+/g, '')
+    if (number.length < 6) return
+    const key = number.toUpperCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(number)
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const lines = Array.isArray((raw as any).freightLines) ? (raw as any).freightLines : []
+    for (const line of lines) {
+      if (!line || typeof line !== 'object' || Array.isArray(line)) continue
+      push((line as any).remark)
+    }
+  }
+  push(fallback)
+  return out
+}
+
 const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
   orderId: row.id,
   orderNo: row.orderNo,
@@ -238,6 +267,7 @@ const mapCustomerOrder = (row: any): CustomerOrderSummary => ({
   shipMethod: row.shipMethod as CustomerOrderShipMethod,
   trackingCarrier: row.trackingCarrier || '',
   trackingNumber: row.trackingNumber || '',
+  trackingNumbers: packageTrackingNumbers(row.registerInfoJson, row.trackingNumber || ''),
   totalWeightGrams: Math.round(
     row.items.reduce((sum: number, item: any) => (
       sum + toNum(item.product?.weightGram) * item.quantity

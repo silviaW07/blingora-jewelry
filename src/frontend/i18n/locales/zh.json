@@ -547,7 +547,7 @@
     "status": "状态",
     "total": "合计",
     "shippingMethod": "物流方式",
-    "weight": "重量",
+    "weight": "物流号",
     "weightValue": "{{weight}} 克",
     "comment": "备注",
     "orderNote": "订单备注",

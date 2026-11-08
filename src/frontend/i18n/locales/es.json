@@ -661,7 +661,7 @@
     "status": "Estado",
     "total": "Total",
     "shippingMethod": "Método de envío",
-    "weight": "Peso",
+    "weight": "Seguimiento",
     "weightValue": "{{weight}} g",
     "comment": "Comentario",
     "orderNote": "Nota del pedido",
