@@ -204,7 +204,7 @@ export default function SalesStatsView({
             { label: '订单金额合计', value: summary?.orderAmountTotal, money: true },
             { label: '商品金额合计', value: summary?.goodsAmountTotal, money: true },
             { label: 'USD运费合计', value: summary?.usdShippingTotal, money: true },
-            { label: '定金合计', value: summary?.depositTotal, money: true },
+            { label: '运费合计', value: summary?.freightCostTotal, money: true },
           ].map((card) => (
             <div key={card.label} className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
               <div className="text-sm text-[#64748B]">{card.label}</div>

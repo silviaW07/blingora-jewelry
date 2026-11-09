@@ -207,14 +207,85 @@ function detailFrom(orders: SalesLedgerOrder[], meta: SalesStatsMeta, updatedAt:
   }
 }
 
+function normHeader(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[（(][^）)]*[）)]/g, '')
+    .replace(/[\s_\-：:·•/\\]+/g, '')
+    .toLowerCase()
+}
+
 function headerIndex(headers: string[], aliases: string[]): number {
-  const normalized = headers.map((item) => item.replace(/\s+/g, '').toLowerCase())
+  const normalized = headers.map((item) => normHeader(item))
   for (const alias of aliases) {
-    const key = alias.replace(/\s+/g, '').toLowerCase()
-    const exact = normalized.findIndex((item) => item === key || item.includes(key))
+    const key = normHeader(alias)
+    if (!key) continue
+    const exact = normalized.findIndex((item) => item === key)
     if (exact >= 0) return exact
   }
+  for (const alias of aliases) {
+    const key = normHeader(alias)
+    if (!key || key.length < 2) continue
+    const soft = normalized.findIndex((item) => item.length >= 2 && item.includes(key))
+    if (soft >= 0) return soft
+  }
   return -1
+}
+
+function resolveColumnIndexes(headers: string[]) {
+  const idx = {
+    date: headerIndex(headers, ['日期', 'date']),
+    namePhone: headerIndex(headers, ['姓名@电话', '姓名电话', '姓名', '客户姓名', '客户', '收件人', 'name']),
+    address: headerIndex(headers, ['地址', '收货地址', '详细地址', 'address']),
+    orderAmount: headerIndex(headers, ['订单金额', '订单总额', '总金额', 'orderamount', '总额']),
+    goodsAmount: headerIndex(headers, ['商品金额', '货款', '货值', '产品金额', '商品总额', 'goodsamount', 'goods']),
+    usdShipping: headerIndex(headers, ['usd运费', '运费usd', '美金运费', '客户运费', 'usdshipping', 'shippingusd']),
+    deposit: headerIndex(headers, ['定金', 'deposit', 'downpayment', '预付款']),
+    freightCost: headerIndex(headers, ['运费成本', '成本运费', '快递成本', '物流成本', 'freightcost']),
+    chargeWeight: headerIndex(headers, ['计费重量', '计费重', '收费重量', '重量', 'weight']),
+    remark: headerIndex(headers, ['订单备注', '物流号', '快递单号', '跟踪号', '运单号', 'tracking', '备注']),
+  }
+
+  // 业务表固定布局兜底：A日期 B姓名 C地址 D订单金额 E商品金额 F USD运费 … J运费成本 K计费重量 L订单备注
+  if (idx.date < 0 && headers.length >= 1) idx.date = 0
+  if (idx.namePhone < 0 && headers.length >= 2) idx.namePhone = 1
+  if (idx.address < 0 && headers.length >= 3) idx.address = 2
+  if (idx.orderAmount < 0 && headers.length >= 4) idx.orderAmount = 3
+  if (idx.goodsAmount < 0) {
+    if (idx.orderAmount >= 0) idx.goodsAmount = idx.orderAmount + 1
+    else if (headers.length >= 5) idx.goodsAmount = 4
+  }
+  if (idx.usdShipping < 0) {
+    if (idx.goodsAmount >= 0) idx.usdShipping = idx.goodsAmount + 1
+    else if (idx.orderAmount >= 0) idx.usdShipping = idx.orderAmount + 2
+    else if (headers.length >= 6) idx.usdShipping = 5
+  }
+  if (idx.chargeWeight < 0 && headers.length >= 11) idx.chargeWeight = 10
+  if (idx.remark < 0 && headers.length >= 12) idx.remark = 11
+  if (idx.freightCost < 0) {
+    if (idx.chargeWeight >= 1) idx.freightCost = idx.chargeWeight - 1
+    else if (headers.length >= 10) idx.freightCost = 9
+  }
+  return idx
+}
+
+function deriveAmounts(orderAmount: number | null, goodsAmount: number | null, usdShipping: number | null) {
+  let goods = goodsAmount
+  let shipping = usdShipping
+  if (goods == null && orderAmount != null && shipping != null) {
+    goods = Math.round((orderAmount - shipping) * 100) / 100
+  }
+  if (shipping == null && orderAmount != null && goods != null) {
+    shipping = Math.round((orderAmount - goods) * 100) / 100
+  }
+  // 只要读到订单金额、商品/运费却落在错误列时，用订单金额回填商品金额，避免只显示运费
+  if (goods == null && shipping == null && orderAmount != null) {
+    goods = orderAmount
+  }
+  return {
+    goodsAmount: goods,
+    usdShipping: shipping,
+    orderAmount: computedOrderAmount(goods, shipping),
+  }
 }
 
 function cell(row: unknown[], index: number): string {
@@ -256,24 +327,13 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
   let headerRow = 0
   for (let i = 0; i < Math.min(8, aoa.length); i += 1) {
     const joined = (aoa[i] || []).map((item) => String(item || '')).join(' ')
-    if (/日期|姓名|地址|订单金额|运费/.test(joined)) {
+    if (/日期|姓名|地址|订单金额|商品金额|运费成本|usd运费/i.test(joined)) {
       headerRow = i
       break
     }
   }
   const headers = (aoa[headerRow] || []).map((item) => String(item || ''))
-  const idx = {
-    date: headerIndex(headers, ['日期', 'date']),
-    namePhone: headerIndex(headers, ['姓名@电话', '姓名电话', '姓名', '客户', 'name']),
-    address: headerIndex(headers, ['地址', 'address']),
-    orderAmount: headerIndex(headers, ['订单金额', 'orderamount', '总额']),
-    goodsAmount: headerIndex(headers, ['商品金额', '货值', 'goodsamount']),
-    usdShipping: headerIndex(headers, ['usd运费', '运费usd', 'usdshipping']),
-    deposit: headerIndex(headers, ['定金', 'deposit', 'downpayment']),
-    freightCost: headerIndex(headers, ['运费成本', '成本运费']),
-    chargeWeight: headerIndex(headers, ['计费重量', '计费重', '重量', 'weight']),
-    remark: headerIndex(headers, ['订单备注', '物流号', 'tracking', '备注']),
-  }
+  const idx = resolveColumnIndexes(headers)
 
   const orders: SalesLedgerOrder[] = []
   let current: SalesLedgerOrder | null = null
@@ -283,8 +343,10 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
     const dateText = cell(row, idx.date)
     const namePhone = cell(row, idx.namePhone)
     const address = cell(row, idx.address)
-    const goodsAmount = money(cell(row, idx.goodsAmount))
-    const usdShipping = money(cell(row, idx.usdShipping))
+    const rawOrderAmount = money(cell(row, idx.orderAmount))
+    const rawGoodsAmount = money(cell(row, idx.goodsAmount))
+    const rawUsdShipping = money(cell(row, idx.usdShipping))
+    const amounts = deriveAmounts(rawOrderAmount, rawGoodsAmount, rawUsdShipping)
     const deposit = money(cell(row, idx.deposit))
     const lines = buildShipmentLines(
       rawCell(row, idx.freightCost),
@@ -294,10 +356,10 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
     const startsNew = Boolean(
       namePhone ||
         address ||
-        goodsAmount != null ||
-        usdShipping != null ||
+        amounts.goodsAmount != null ||
+        amounts.usdShipping != null ||
         deposit != null ||
-        money(cell(row, idx.orderAmount)) != null ||
+        rawOrderAmount != null ||
         (dateText && !current),
     )
     if (startsNew || !current) {
@@ -308,10 +370,10 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
         customerName,
         phone,
         address,
-        goodsAmount,
-        usdShipping,
+        goodsAmount: amounts.goodsAmount,
+        usdShipping: amounts.usdShipping,
         deposit,
-        orderAmount: computedOrderAmount(goodsAmount, usdShipping),
+        orderAmount: amounts.orderAmount,
         lines,
       }
       orders.push(current)
@@ -323,15 +385,38 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
   return normalizeOrders(orders)
 }
 
+function fillMergedCells(sheet: Record<string, any>, XLSX: { utils: { encode_cell: Function } }) {
+  const merges = Array.isArray(sheet['!merges']) ? sheet['!merges'] : []
+  for (const merge of merges) {
+    if (!merge?.s || !merge?.e) continue
+    const startRef = XLSX.utils.encode_cell(merge.s)
+    const source = sheet[startRef]
+    if (!source || (source.v == null && source.w == null)) continue
+    for (let r = merge.s.r; r <= merge.e.r; r += 1) {
+      for (let c = merge.s.c; c <= merge.e.c; c += 1) {
+        if (r === merge.s.r && c === merge.s.c) continue
+        const ref = XLSX.utils.encode_cell({ r, c })
+        const existing = sheet[ref]
+        if (existing && existing.v != null && String(existing.v).trim() !== '') continue
+        sheet[ref] = { ...source }
+      }
+    }
+  }
+}
+
 async function parseSpreadsheet(fileBase64: string, fileName = ''): Promise<SalesLedgerOrder[]> {
   const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64')
   if (!raw.length) throw new Error('表格内容为空')
   const lower = String(fileName || '').toLowerCase()
   try {
-    const XLSX = require('xlsx') as { read: Function; utils: { sheet_to_json: Function } }
-    const workbook = XLSX.read(raw, { type: 'buffer', cellDates: true })
+    const XLSX = require('xlsx') as {
+      read: Function
+      utils: { sheet_to_json: Function; encode_cell: Function }
+    }
+    const workbook = XLSX.read(raw, { type: 'buffer', cellDates: true, cellNF: false, cellText: false })
     const first = workbook.Sheets[workbook.SheetNames[0]]
-    const aoa = XLSX.utils.sheet_to_json(first, { header: 1, defval: '', raw: false }) as unknown[][]
+    fillMergedCells(first, XLSX)
+    const aoa = XLSX.utils.sheet_to_json(first, { header: 1, defval: '', raw: false, blankrows: false }) as unknown[][]
     return parseAoa(aoa)
   } catch (error) {
     if (lower.endsWith('.csv')) {
@@ -372,7 +457,7 @@ async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder
         {
           role: 'system',
           content:
-            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","goodsAmount":0,"usdShipping":0,"deposit":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . orderAmount is always goodsAmount + usdShipping. One order may span multiple shipment lines via vertically merged cells OR multiple values stacked inside 运费成本/计费重量/订单备注 cells. Always expand those into separate lines[]. remark is tracking number. Use null for missing numbers.',
+            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"deposit":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . Critical columns: 商品金额=goodsAmount, USD运费=usdShipping, 运费成本=lines.freightCost (internal cost, often RMB and may be multiline), 计费重量=chargeWeight, 订单备注/物流号=remark. orderAmount should equal goodsAmount + usdShipping when both exist. Never put 订单金额 into usdShipping. Never leave goodsAmount empty if 商品金额 is visible. Never leave freightCost empty if 运费成本 is visible. Expand stacked/multiline shipment values into separate lines[]. Use null for missing numbers.',
         },
         {
           role: 'user',

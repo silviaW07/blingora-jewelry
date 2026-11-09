@@ -175,15 +175,24 @@ export function useSalesStats() {
       })
       return next
     })
+    const freightCostTotal = Math.round(
+      orders.reduce((sum, item) => {
+        const lineSum = item.lines.reduce((lineTotal, line) => {
+          const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
+          return lineTotal + (Number.isFinite(amount) ? amount : 0)
+        }, 0)
+        return sum + lineSum
+      }, 0) * 100,
+    ) / 100
     const summary = {
       ...current.summary,
       orderAmountTotal: Math.round(orders.reduce((sum, item) => sum + (item.orderAmount || 0), 0) * 100) / 100,
       goodsAmountTotal: Math.round(orders.reduce((sum, item) => sum + (item.goodsAmount || 0), 0) * 100) / 100,
       usdShippingTotal: Math.round(orders.reduce((sum, item) => sum + (item.usdShipping || 0), 0) * 100) / 100,
       depositTotal: Math.round(orders.reduce((sum, item) => sum + (item.deposit || 0), 0) * 100) / 100,
+      freightCostTotal,
       orderCount: orders.length,
       shipmentCount: orders.reduce((sum, item) => sum + Math.max(1, item.lines.length), 0),
-      freightCostTotal: current.summary.freightCostTotal,
     }
     persist({ ...current, orders, summary })
   }
@@ -200,7 +209,24 @@ export function useSalesStats() {
       const lines = order.lines.map((line, index) => (index === lineIndex ? { ...line, ...patch } : line))
       return { ...order, lines }
     })
-    persist({ ...current, orders })
+    const freightCostTotal = Math.round(
+      orders.reduce((sum, item) => {
+        const lineSum = item.lines.reduce((lineTotal, line) => {
+          const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
+          return lineTotal + (Number.isFinite(amount) ? amount : 0)
+        }, 0)
+        return sum + lineSum
+      }, 0) * 100,
+    ) / 100
+    persist({
+      ...current,
+      orders,
+      summary: {
+        ...current.summary,
+        freightCostTotal,
+        shipmentCount: orders.reduce((sum, item) => sum + Math.max(1, item.lines.length), 0),
+      },
+    })
   }
 
   return {
