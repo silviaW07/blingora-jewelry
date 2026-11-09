@@ -8,5 +8,7 @@ export const importSalesStatsSheet = (...args: Parameters<Actions["importSalesSt
   rpcCall<Awaited<ReturnType<Actions["importSalesStatsSheet"]>>>("src.backend.actions.SalesStats.importSalesStatsSheet", ...args);
 export const importSalesStatsImage = (...args: Parameters<Actions["importSalesStatsImage"]>) => 
   rpcCall<Awaited<ReturnType<Actions["importSalesStatsImage"]>>>("src.backend.actions.SalesStats.importSalesStatsImage", ...args);
+export const saveSalesStatsLedger = (...args: Parameters<Actions["saveSalesStatsLedger"]>) => 
+  rpcCall<Awaited<ReturnType<Actions["saveSalesStatsLedger"]>>>("src.backend.actions.SalesStats.saveSalesStatsLedger", ...args);
 export const clearSalesStatsLedger = (...args: Parameters<Actions["clearSalesStatsLedger"]>) => 
   rpcCall<Awaited<ReturnType<Actions["clearSalesStatsLedger"]>>>("src.backend.actions.SalesStats.clearSalesStatsLedger", ...args);

@@ -41525,6 +41525,9 @@ function _export(target, all) {
     });
 }
 _export(exports, {
+    get DEFAULT_SALES_META () {
+        return _salesStatsShared.DEFAULT_SALES_META;
+    },
     get clearSalesStatsLedger () {
         return clearSalesStatsLedger;
     },
@@ -41536,6 +41539,9 @@ _export(exports, {
     },
     get importSalesStatsSheet () {
         return importSalesStatsSheet;
+    },
+    get saveSalesStatsLedger () {
+        return saveSalesStatsLedger;
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
@@ -41543,6 +41549,7 @@ const _staffAccess = __webpack_require__(2370);
 const _action_utils = __webpack_require__(9360);
 const _secretresolver = __webpack_require__(937);
 const _sharp = /*#__PURE__*/ _interop_require_default(__webpack_require__(9288));
+const _salesStatsShared = __webpack_require__(6010);
 function _interop_require_default(obj) {
     return obj && obj.__esModule ? obj : {
         default: obj
@@ -41551,9 +41558,9 @@ function _interop_require_default(obj) {
 const LEDGER_TITLE = 'SALES_LEDGER_V1';
 function money(value) {
     if (value == null || value === '') return null;
-    const text = String(value).replace(/[$,￥¥USD\s,]/gi, '').trim();
-    if (!text) return null;
-    const amount = Number(text);
+    const textValue = String(value).replace(/[$,￥¥USD\s,]/gi, '').trim();
+    if (!textValue) return null;
+    const amount = Number(textValue);
     return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
 }
 function text(value, max = 500) {
@@ -41591,12 +41598,14 @@ function summarize(orders) {
     let orderAmountTotal = 0;
     let goodsAmountTotal = 0;
     let usdShippingTotal = 0;
+    let depositTotal = 0;
     let freightCostTotal = 0;
     for (const order of orders){
         shipmentCount += Math.max(1, order.lines.length);
         if (order.orderAmount != null) orderAmountTotal += order.orderAmount;
         if (order.goodsAmount != null) goodsAmountTotal += order.goodsAmount;
         if (order.usdShipping != null) usdShippingTotal += order.usdShipping;
+        if (order.deposit != null) depositTotal += order.deposit;
         for (const line of order.lines){
             const cost = money(line.freightCost);
             if (cost != null) freightCostTotal += cost;
@@ -41608,7 +41617,24 @@ function summarize(orders) {
         orderAmountTotal: Math.round(orderAmountTotal * 100) / 100,
         goodsAmountTotal: Math.round(goodsAmountTotal * 100) / 100,
         usdShippingTotal: Math.round(usdShippingTotal * 100) / 100,
+        depositTotal: Math.round(depositTotal * 100) / 100,
         freightCostTotal: Math.round(freightCostTotal * 100) / 100
+    };
+}
+function normalizeMeta(raw) {
+    const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const columnsRaw = source.columns && typeof source.columns === 'object' && !Array.isArray(source.columns) ? source.columns : {};
+    const columns = {
+        ..._salesStatsShared.DEFAULT_SALES_META.columns
+    };
+    Object.keys(columns).forEach((key)=>{
+        const next = text(columnsRaw[key], 40);
+        if (next) columns[key] = next;
+    });
+    return {
+        pageTitle: text(source.pageTitle, 80) || _salesStatsShared.DEFAULT_SALES_META.pageTitle,
+        pageHint: text(source.pageHint, 300) || _salesStatsShared.DEFAULT_SALES_META.pageHint,
+        columns
     };
 }
 function normalizeOrders(raw) {
@@ -41628,15 +41654,18 @@ function normalizeOrders(raw) {
                 }
             ];
         });
+        const goodsAmount = money(row.goodsAmount);
+        const usdShipping = money(row.usdShipping);
         const order = {
             id: text(row.id, 80) || `sales-${index + 1}`,
             dateText: text(row.dateText, 40),
             customerName: text(row.customerName, 100),
             phone: text(row.phone, 40),
             address: text(row.address, 500),
-            orderAmount: money(row.orderAmount),
-            goodsAmount: money(row.goodsAmount),
-            usdShipping: money(row.usdShipping),
+            goodsAmount,
+            usdShipping,
+            deposit: money(row.deposit),
+            orderAmount: (0, _salesStatsShared.computedOrderAmount)(goodsAmount, usdShipping),
             lines: lines.length ? lines : [
                 {
                     freightCost: '',
@@ -41645,7 +41674,7 @@ function normalizeOrders(raw) {
                 }
             ]
         };
-        if (!order.customerName && !order.phone && !order.address && order.orderAmount == null && !order.lines.some((line)=>line.freightCost || line.chargeWeight || line.remark)) {
+        if (!order.customerName && !order.phone && !order.address && order.goodsAmount == null && order.usdShipping == null && order.deposit == null && !order.lines.some((line)=>line.freightCost || line.chargeWeight || line.remark)) {
             return [];
         }
         return [
@@ -41665,15 +41694,26 @@ async function readLedger() {
         }
     });
     const content = setting === null || setting === void 0 ? void 0 : setting.contentJson;
-    const orders = content && typeof content === 'object' && !Array.isArray(content) ? normalizeOrders(content.orders) : Array.isArray(content) ? normalizeOrders(content) : [];
+    let orders = [];
+    let meta = _salesStatsShared.DEFAULT_SALES_META;
+    if (content && typeof content === 'object' && !Array.isArray(content)) {
+        const payload = content;
+        orders = normalizeOrders(payload.orders);
+        meta = normalizeMeta(payload.meta);
+    } else if (Array.isArray(content)) {
+        orders = normalizeOrders(content);
+    }
     return {
         orders,
+        meta,
         updatedAt: (setting === null || setting === void 0 ? void 0 : (_setting_updatedAt = setting.updatedAt) === null || _setting_updatedAt === void 0 ? void 0 : (_setting_updatedAt_toISOString = _setting_updatedAt.toISOString) === null || _setting_updatedAt_toISOString === void 0 ? void 0 : _setting_updatedAt_toISOString.call(_setting_updatedAt)) || new Date().toISOString()
     };
 }
-async function writeLedger(orders) {
+async function writeLedger(orders, meta) {
+    const current = await readLedger();
     const payload = {
-        orders: normalizeOrders(orders)
+        orders: normalizeOrders(orders),
+        meta: normalizeMeta(meta || current.meta)
     };
     const existing = await _prisma.default.sitesetting.findFirst({
         where: {
@@ -41706,6 +41746,14 @@ async function writeLedger(orders) {
             }
         });
     }
+}
+function detailFrom(orders, meta, updatedAt) {
+    return {
+        updatedAt,
+        orders,
+        meta,
+        summary: summarize(orders)
+    };
 }
 function headerIndex(headers, aliases) {
     const normalized = headers.map((item)=>item.replace(/\s+/g, '').toLowerCase());
@@ -41788,6 +41836,11 @@ function parseAoa(aoa) {
             '运费usd',
             'usdshipping'
         ]),
+        deposit: headerIndex(headers, [
+            '定金',
+            'deposit',
+            'downpayment'
+        ]),
         freightCost: headerIndex(headers, [
             '运费成本',
             '成本运费'
@@ -41813,11 +41866,11 @@ function parseAoa(aoa) {
         const dateText = cell(row, idx.date);
         const namePhone = cell(row, idx.namePhone);
         const address = cell(row, idx.address);
-        const orderAmount = money(cell(row, idx.orderAmount));
         const goodsAmount = money(cell(row, idx.goodsAmount));
         const usdShipping = money(cell(row, idx.usdShipping));
+        const deposit = money(cell(row, idx.deposit));
         const lines = buildShipmentLines(rawCell(row, idx.freightCost), rawCell(row, idx.chargeWeight), rawCell(row, idx.remark));
-        const startsNew = Boolean(namePhone || address || orderAmount != null || goodsAmount != null || usdShipping != null || dateText && !current);
+        const startsNew = Boolean(namePhone || address || goodsAmount != null || usdShipping != null || deposit != null || money(cell(row, idx.orderAmount)) != null || dateText && !current);
         if (startsNew || !current) {
             const { customerName, phone } = splitNamePhone(namePhone);
             current = {
@@ -41826,9 +41879,10 @@ function parseAoa(aoa) {
                 customerName,
                 phone,
                 address,
-                orderAmount,
                 goodsAmount,
                 usdShipping,
+                deposit,
+                orderAmount: (0, _salesStatsShared.computedOrderAmount)(goodsAmount, usdShipping),
                 lines
             };
             orders.push(current);
@@ -41899,7 +41953,7 @@ async function recognizeSalesImage(fileBase64) {
             messages: [
                 {
                     role: 'system',
-                    content: 'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . One order may span multiple shipment lines via vertically merged cells OR multiple values stacked inside 运费成本/计费重量/订单备注 cells. Always expand those into separate lines[]. remark is tracking number. Use null for missing numbers.'
+                    content: 'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","goodsAmount":0,"usdShipping":0,"deposit":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . orderAmount is always goodsAmount + usdShipping. One order may span multiple shipment lines via vertically merged cells OR multiple values stacked inside 运费成本/计费重量/订单备注 cells. Always expand those into separate lines[]. remark is tracking number. Use null for missing numbers.'
                 },
                 {
                     role: 'user',
@@ -41938,61 +41992,56 @@ async function recognizeSalesImage(fileBase64) {
     return orders;
 }
 const getSalesStatsDetail = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
-    const { orders, updatedAt } = await readLedger();
-    return {
-        updatedAt,
-        orders,
-        summary: summarize(orders)
-    };
+    const { orders, meta, updatedAt } = await readLedger();
+    return detailFrom(orders, meta, updatedAt);
 }));
 const importSalesStatsSheet = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async (input)=>{
     (0, _action_utils.getAuthContext)();
     const imported = await parseSpreadsheet(String(input.fileBase64 || ''), String(input.fileName || ''));
     if (!imported.length) throw new Error('表格里没有读到销售数据');
     const mode = input.mode === 'append' ? 'append' : 'replace';
-    const current = mode === 'append' ? (await readLedger()).orders : [];
+    const current = await readLedger();
     const next = normalizeOrders([
-        ...current,
+        ...mode === 'append' ? current.orders : [],
         ...imported
     ]).map((order, index)=>({
             ...order,
             id: order.id || `sales-${Date.now()}-${index + 1}`
         }));
-    await writeLedger(next);
+    await writeLedger(next, current.meta);
     const saved = await readLedger();
-    return {
-        updatedAt: saved.updatedAt,
-        orders: saved.orders,
-        summary: summarize(saved.orders)
-    };
+    return detailFrom(saved.orders, saved.meta, saved.updatedAt);
 }));
 const importSalesStatsImage = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async (input)=>{
     (0, _action_utils.getAuthContext)();
     const imported = await recognizeSalesImage(String(input.fileBase64 || ''));
     const mode = input.mode === 'append' ? 'append' : 'replace';
-    const current = mode === 'append' ? (await readLedger()).orders : [];
+    const current = await readLedger();
     const next = normalizeOrders([
-        ...current,
+        ...mode === 'append' ? current.orders : [],
         ...imported
     ]).map((order, index)=>({
             ...order,
             id: order.id || `sales-img-${Date.now()}-${index + 1}`
         }));
-    await writeLedger(next);
+    await writeLedger(next, current.meta);
     const saved = await readLedger();
-    return {
-        updatedAt: saved.updatedAt,
-        orders: saved.orders,
-        summary: summarize(saved.orders)
-    };
+    return detailFrom(saved.orders, saved.meta, saved.updatedAt);
+}));
+const saveSalesStatsLedger = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async (input)=>{
+    (0, _action_utils.getAuthContext)();
+    const current = await readLedger();
+    const meta = normalizeMeta(input.meta || current.meta);
+    const orders = normalizeOrders(input.orders);
+    await writeLedger(orders, meta);
+    const saved = await readLedger();
+    return detailFrom(saved.orders, saved.meta, saved.updatedAt);
 }));
 const clearSalesStatsLedger = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
-    await writeLedger([]);
-    return {
-        updatedAt: new Date().toISOString(),
-        orders: [],
-        summary: summarize([])
-    };
+    const current = await readLedger();
+    await writeLedger([], current.meta);
+    const saved = await readLedger();
+    return detailFrom([], saved.meta, saved.updatedAt);
 }));
 
 
@@ -49081,6 +49130,52 @@ const STAFF_ROLES = [
     _action_utilstype.UserRole.SUB_ADMIN
 ];
 const isBackendStaffRole = (role)=>STAFF_ROLES.some((candidate)=>candidate === String(role));
+
+
+/***/ },
+
+/***/ 6010
+(__unused_webpack_module, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get DEFAULT_SALES_META () {
+        return DEFAULT_SALES_META;
+    },
+    get computedOrderAmount () {
+        return computedOrderAmount;
+    }
+});
+const DEFAULT_SALES_META = {
+    pageTitle: '销售额统计',
+    pageHint: '格式对齐业务表：日期 / 姓名@电话 / 地址 / 订单金额 / 商品金额 / USD运费 / 定金 / 运费成本 / 计费重量 / 物流号',
+    columns: {
+        date: '日期',
+        namePhone: '姓名@电话',
+        address: '地址',
+        orderAmount: '订单金额',
+        goodsAmount: '商品金额',
+        usdShipping: 'USD运费',
+        deposit: '定金',
+        freightCost: '运费成本',
+        chargeWeight: '计费重量',
+        remark: '订单备注'
+    }
+};
+function computedOrderAmount(goodsAmount, usdShipping) {
+    if (goodsAmount == null && usdShipping == null) return null;
+    return Math.round(((goodsAmount || 0) + (usdShipping || 0)) * 100) / 100;
+}
 
 
 /***/ },

@@ -17,7 +17,7 @@ import { AuthExpiredDialog } from '@/backend/auth/rpc-auth'
 
 
 // 不需要侧边栏的路径白名单（模板，后续可修改）
-const FULLSCREEN_PATHS = ['/adminlogin', '/adminregister']
+const FULLSCREEN_PATHS = ['/adminlogin', '/adminregister', '/dashboard/sales']
 
 interface RootLayoutProps {
   children: React.ReactNode

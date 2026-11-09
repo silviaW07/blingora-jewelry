@@ -5,47 +5,34 @@ import { requireStaff } from '@/backend/staffAccess'
 import { withResult, getAuthContext } from '@/backend/action_utils'
 import { resolveAiSecrets } from '@/thirdparty/secret-resolver'
 import sharp from 'sharp'
+import {
+  DEFAULT_SALES_META,
+  computedOrderAmount,
+  type SalesColumnKey,
+  type SalesLedgerOrder,
+  type SalesShipmentLine,
+  type SalesStatsDetail,
+  type SalesStatsMeta,
+  type SalesStatsSummary,
+} from '@/backend/salesStatsShared'
 
-export type SalesShipmentLine = {
-  freightCost: string
-  chargeWeight: string
-  remark: string
-}
-
-export type SalesLedgerOrder = {
-  id: string
-  dateText: string
-  customerName: string
-  phone: string
-  address: string
-  orderAmount: number | null
-  goodsAmount: number | null
-  usdShipping: number | null
-  lines: SalesShipmentLine[]
-}
-
-export type SalesStatsSummary = {
-  orderCount: number
-  shipmentCount: number
-  orderAmountTotal: number
-  goodsAmountTotal: number
-  usdShippingTotal: number
-  freightCostTotal: number
-}
-
-export type SalesStatsDetail = {
-  updatedAt: string
-  orders: SalesLedgerOrder[]
-  summary: SalesStatsSummary
-}
+export type {
+  SalesColumnKey,
+  SalesLedgerOrder,
+  SalesShipmentLine,
+  SalesStatsDetail,
+  SalesStatsMeta,
+  SalesStatsSummary,
+} from '@/backend/salesStatsShared'
+export { DEFAULT_SALES_META } from '@/backend/salesStatsShared'
 
 const LEDGER_TITLE = 'SALES_LEDGER_V1'
 
 function money(value: unknown): number | null {
   if (value == null || value === '') return null
-  const text = String(value).replace(/[$,￥¥USD\s,]/gi, '').trim()
-  if (!text) return null
-  const amount = Number(text)
+  const textValue = String(value).replace(/[$,￥¥USD\s,]/gi, '').trim()
+  if (!textValue) return null
+  const amount = Number(textValue)
   return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null
 }
 
@@ -74,12 +61,14 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
   let orderAmountTotal = 0
   let goodsAmountTotal = 0
   let usdShippingTotal = 0
+  let depositTotal = 0
   let freightCostTotal = 0
   for (const order of orders) {
     shipmentCount += Math.max(1, order.lines.length)
     if (order.orderAmount != null) orderAmountTotal += order.orderAmount
     if (order.goodsAmount != null) goodsAmountTotal += order.goodsAmount
     if (order.usdShipping != null) usdShippingTotal += order.usdShipping
+    if (order.deposit != null) depositTotal += order.deposit
     for (const line of order.lines) {
       const cost = money(line.freightCost)
       if (cost != null) freightCostTotal += cost
@@ -91,7 +80,26 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
     orderAmountTotal: Math.round(orderAmountTotal * 100) / 100,
     goodsAmountTotal: Math.round(goodsAmountTotal * 100) / 100,
     usdShippingTotal: Math.round(usdShippingTotal * 100) / 100,
+    depositTotal: Math.round(depositTotal * 100) / 100,
     freightCostTotal: Math.round(freightCostTotal * 100) / 100,
+  }
+}
+
+function normalizeMeta(raw: unknown): SalesStatsMeta {
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const columnsRaw =
+    source.columns && typeof source.columns === 'object' && !Array.isArray(source.columns)
+      ? (source.columns as Record<string, unknown>)
+      : {}
+  const columns = { ...DEFAULT_SALES_META.columns }
+  ;(Object.keys(columns) as SalesColumnKey[]).forEach((key) => {
+    const next = text(columnsRaw[key], 40)
+    if (next) columns[key] = next
+  })
+  return {
+    pageTitle: text(source.pageTitle, 80) || DEFAULT_SALES_META.pageTitle,
+    pageHint: text(source.pageHint, 300) || DEFAULT_SALES_META.pageHint,
+    columns,
   }
 }
 
@@ -110,43 +118,63 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
         remark: text(itemLine.remark, 200),
       }]
     })
+    const goodsAmount = money(row.goodsAmount)
+    const usdShipping = money(row.usdShipping)
     const order: SalesLedgerOrder = {
       id: text(row.id, 80) || `sales-${index + 1}`,
       dateText: text(row.dateText, 40),
       customerName: text(row.customerName, 100),
       phone: text(row.phone, 40),
       address: text(row.address, 500),
-      orderAmount: money(row.orderAmount),
-      goodsAmount: money(row.goodsAmount),
-      usdShipping: money(row.usdShipping),
+      goodsAmount,
+      usdShipping,
+      deposit: money(row.deposit),
+      orderAmount: computedOrderAmount(goodsAmount, usdShipping),
       lines: lines.length ? lines : [{ freightCost: '', chargeWeight: '', remark: '' }],
     }
-    if (!order.customerName && !order.phone && !order.address && order.orderAmount == null && !order.lines.some((line) => line.freightCost || line.chargeWeight || line.remark)) {
+    if (
+      !order.customerName &&
+      !order.phone &&
+      !order.address &&
+      order.goodsAmount == null &&
+      order.usdShipping == null &&
+      order.deposit == null &&
+      !order.lines.some((line) => line.freightCost || line.chargeWeight || line.remark)
+    ) {
       return []
     }
     return [order]
   })
 }
 
-async function readLedger(): Promise<{ orders: SalesLedgerOrder[]; updatedAt: string }> {
+async function readLedger(): Promise<{ orders: SalesLedgerOrder[]; meta: SalesStatsMeta; updatedAt: string }> {
   const setting = await prisma.sitesetting.findFirst({
     where: { settingType: 'STATIC_COPY', title: LEDGER_TITLE },
     orderBy: { updatedAt: 'desc' },
   })
   const content = setting?.contentJson
-  const orders = content && typeof content === 'object' && !Array.isArray(content)
-    ? normalizeOrders((content as { orders?: unknown }).orders)
-    : Array.isArray(content)
-      ? normalizeOrders(content)
-      : []
+  let orders: SalesLedgerOrder[] = []
+  let meta = DEFAULT_SALES_META
+  if (content && typeof content === 'object' && !Array.isArray(content)) {
+    const payload = content as { orders?: unknown; meta?: unknown }
+    orders = normalizeOrders(payload.orders)
+    meta = normalizeMeta(payload.meta)
+  } else if (Array.isArray(content)) {
+    orders = normalizeOrders(content)
+  }
   return {
     orders,
+    meta,
     updatedAt: setting?.updatedAt?.toISOString?.() || new Date().toISOString(),
   }
 }
 
-async function writeLedger(orders: SalesLedgerOrder[]) {
-  const payload = { orders: normalizeOrders(orders) }
+async function writeLedger(orders: SalesLedgerOrder[], meta?: SalesStatsMeta) {
+  const current = await readLedger()
+  const payload = {
+    orders: normalizeOrders(orders),
+    meta: normalizeMeta(meta || current.meta),
+  }
   const existing = await prisma.sitesetting.findFirst({
     where: { settingType: 'STATIC_COPY', title: LEDGER_TITLE },
     orderBy: { updatedAt: 'desc' },
@@ -167,6 +195,15 @@ async function writeLedger(orders: SalesLedgerOrder[]) {
         sortWeight: 0,
       },
     })
+  }
+}
+
+function detailFrom(orders: SalesLedgerOrder[], meta: SalesStatsMeta, updatedAt: string): SalesStatsDetail {
+  return {
+    updatedAt,
+    orders,
+    meta,
+    summary: summarize(orders),
   }
 }
 
@@ -232,6 +269,7 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
     orderAmount: headerIndex(headers, ['订单金额', 'orderamount', '总额']),
     goodsAmount: headerIndex(headers, ['商品金额', '货值', 'goodsamount']),
     usdShipping: headerIndex(headers, ['usd运费', '运费usd', 'usdshipping']),
+    deposit: headerIndex(headers, ['定金', 'deposit', 'downpayment']),
     freightCost: headerIndex(headers, ['运费成本', '成本运费']),
     chargeWeight: headerIndex(headers, ['计费重量', '计费重', '重量', 'weight']),
     remark: headerIndex(headers, ['订单备注', '物流号', 'tracking', '备注']),
@@ -245,15 +283,23 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
     const dateText = cell(row, idx.date)
     const namePhone = cell(row, idx.namePhone)
     const address = cell(row, idx.address)
-    const orderAmount = money(cell(row, idx.orderAmount))
     const goodsAmount = money(cell(row, idx.goodsAmount))
     const usdShipping = money(cell(row, idx.usdShipping))
+    const deposit = money(cell(row, idx.deposit))
     const lines = buildShipmentLines(
       rawCell(row, idx.freightCost),
       rawCell(row, idx.chargeWeight),
       rawCell(row, idx.remark),
     )
-    const startsNew = Boolean(namePhone || address || orderAmount != null || goodsAmount != null || usdShipping != null || (dateText && !current))
+    const startsNew = Boolean(
+      namePhone ||
+        address ||
+        goodsAmount != null ||
+        usdShipping != null ||
+        deposit != null ||
+        money(cell(row, idx.orderAmount)) != null ||
+        (dateText && !current),
+    )
     if (startsNew || !current) {
       const { customerName, phone } = splitNamePhone(namePhone)
       current = {
@@ -262,9 +308,10 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
         customerName,
         phone,
         address,
-        orderAmount,
         goodsAmount,
         usdShipping,
+        deposit,
+        orderAmount: computedOrderAmount(goodsAmount, usdShipping),
         lines,
       }
       orders.push(current)
@@ -325,7 +372,7 @@ async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder
         {
           role: 'system',
           content:
-            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . One order may span multiple shipment lines via vertically merged cells OR multiple values stacked inside 运费成本/计费重量/订单备注 cells. Always expand those into separate lines[]. remark is tracking number. Use null for missing numbers.',
+            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","goodsAmount":0,"usdShipping":0,"deposit":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . orderAmount is always goodsAmount + usdShipping. One order may span multiple shipment lines via vertically merged cells OR multiple values stacked inside 运费成本/计费重量/订单备注 cells. Always expand those into separate lines[]. remark is tracking number. Use null for missing numbers.',
         },
         {
           role: 'user',
@@ -358,8 +405,8 @@ async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder
 
 export const getSalesStatsDetail = requireStaff('dashboard')(
   withResult(async (): Promise<SalesStatsDetail> => {
-    const { orders, updatedAt } = await readLedger()
-    return { updatedAt, orders, summary: summarize(orders) }
+    const { orders, meta, updatedAt } = await readLedger()
+    return detailFrom(orders, meta, updatedAt)
   }),
 )
 
@@ -369,14 +416,14 @@ export const importSalesStatsSheet = requireStaff('dashboard')(
     const imported = await parseSpreadsheet(String(input.fileBase64 || ''), String(input.fileName || ''))
     if (!imported.length) throw new Error('表格里没有读到销售数据')
     const mode = input.mode === 'append' ? 'append' : 'replace'
-    const current = mode === 'append' ? (await readLedger()).orders : []
-    const next = normalizeOrders([...current, ...imported]).map((order, index) => ({
+    const current = await readLedger()
+    const next = normalizeOrders([...((mode === 'append' ? current.orders : [])), ...imported]).map((order, index) => ({
       ...order,
       id: order.id || `sales-${Date.now()}-${index + 1}`,
     }))
-    await writeLedger(next)
+    await writeLedger(next, current.meta)
     const saved = await readLedger()
-    return { updatedAt: saved.updatedAt, orders: saved.orders, summary: summarize(saved.orders) }
+    return detailFrom(saved.orders, saved.meta, saved.updatedAt)
   }),
 )
 
@@ -385,20 +432,34 @@ export const importSalesStatsImage = requireStaff('dashboard')(
     getAuthContext()
     const imported = await recognizeSalesImage(String(input.fileBase64 || ''))
     const mode = input.mode === 'append' ? 'append' : 'replace'
-    const current = mode === 'append' ? (await readLedger()).orders : []
-    const next = normalizeOrders([...current, ...imported]).map((order, index) => ({
+    const current = await readLedger()
+    const next = normalizeOrders([...((mode === 'append' ? current.orders : [])), ...imported]).map((order, index) => ({
       ...order,
       id: order.id || `sales-img-${Date.now()}-${index + 1}`,
     }))
-    await writeLedger(next)
+    await writeLedger(next, current.meta)
     const saved = await readLedger()
-    return { updatedAt: saved.updatedAt, orders: saved.orders, summary: summarize(saved.orders) }
+    return detailFrom(saved.orders, saved.meta, saved.updatedAt)
+  }),
+)
+
+export const saveSalesStatsLedger = requireStaff('dashboard')(
+  withResult(async (input: { orders: SalesLedgerOrder[]; meta?: SalesStatsMeta }): Promise<SalesStatsDetail> => {
+    getAuthContext()
+    const current = await readLedger()
+    const meta = normalizeMeta(input.meta || current.meta)
+    const orders = normalizeOrders(input.orders)
+    await writeLedger(orders, meta)
+    const saved = await readLedger()
+    return detailFrom(saved.orders, saved.meta, saved.updatedAt)
   }),
 )
 
 export const clearSalesStatsLedger = requireStaff('dashboard')(
   withResult(async (): Promise<SalesStatsDetail> => {
-    await writeLedger([])
-    return { updatedAt: new Date().toISOString(), orders: [], summary: summarize([]) }
+    const current = await readLedger()
+    await writeLedger([], current.meta)
+    const saved = await readLedger()
+    return detailFrom([], saved.meta, saved.updatedAt)
   }),
 )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -8,8 +8,15 @@ import {
   getSalesStatsDetail,
   importSalesStatsImage,
   importSalesStatsSheet,
-  type SalesStatsDetail,
+  saveSalesStatsLedger,
 } from '@/backend/actions/SalesStats'
+import {
+  DEFAULT_SALES_META,
+  computedOrderAmount,
+  type SalesLedgerOrder,
+  type SalesStatsDetail,
+  type SalesStatsMeta,
+} from '@/backend/salesStatsShared'
 import { Dashboard } from '@/backend/route-params'
 
 async function fileToBase64(file: File): Promise<string> {
@@ -20,11 +27,25 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary)
 }
 
+function withRecalc(order: SalesLedgerOrder): SalesLedgerOrder {
+  return {
+    ...order,
+    orderAmount: computedOrderAmount(order.goodsAmount, order.usdShipping),
+  }
+}
+
 export function useSalesStats() {
   const router = useRouter()
   const [detail, setDetail] = useState<SalesStatsDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const detailRef = useRef<SalesStatsDetail | null>(null)
+
+  useEffect(() => {
+    detailRef.current = detail
+  }, [detail])
 
   const reload = async () => {
     setLoading(true)
@@ -40,7 +61,32 @@ export function useSalesStats() {
 
   useEffect(() => {
     void reload()
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
   }, [])
+
+  const persist = (next: SalesStatsDetail, immediate = false) => {
+    setDetail(next)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    const run = async () => {
+      setSaving(true)
+      try {
+        const saved = await saveSalesStatsLedger({
+          orders: next.orders,
+          meta: next.meta || DEFAULT_SALES_META,
+        })
+        setDetail(saved)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '保存失败')
+        await reload()
+      } finally {
+        setSaving(false)
+      }
+    }
+    if (immediate) void run()
+    else saveTimer.current = setTimeout(() => void run(), 400)
+  }
 
   const importSheet = async (file: File) => {
     setImporting(true)
@@ -84,14 +130,90 @@ export function useSalesStats() {
     }
   }
 
+  const updateMeta = (patch: Partial<SalesStatsMeta>) => {
+    const current = detailRef.current
+    if (!current) return
+    persist({
+      ...current,
+      meta: {
+        ...current.meta,
+        ...patch,
+        columns: {
+          ...current.meta.columns,
+          ...(patch.columns || {}),
+        },
+      },
+    })
+  }
+
+  const updateOrder = (orderId: string, patch: Partial<SalesLedgerOrder>) => {
+    const current = detailRef.current
+    if (!current) return
+    const orders = current.orders.map((order) => {
+      if (order.id !== orderId) return order
+      const next = withRecalc({
+        ...order,
+        ...patch,
+        goodsAmount:
+          patch.goodsAmount === undefined
+            ? order.goodsAmount
+            : patch.goodsAmount == null || Number.isNaN(Number(patch.goodsAmount))
+              ? null
+              : Number(patch.goodsAmount),
+        usdShipping:
+          patch.usdShipping === undefined
+            ? order.usdShipping
+            : patch.usdShipping == null || Number.isNaN(Number(patch.usdShipping))
+              ? null
+              : Number(patch.usdShipping),
+        deposit:
+          patch.deposit === undefined
+            ? order.deposit
+            : patch.deposit == null || Number.isNaN(Number(patch.deposit))
+              ? null
+              : Number(patch.deposit),
+      })
+      return next
+    })
+    const summary = {
+      ...current.summary,
+      orderAmountTotal: Math.round(orders.reduce((sum, item) => sum + (item.orderAmount || 0), 0) * 100) / 100,
+      goodsAmountTotal: Math.round(orders.reduce((sum, item) => sum + (item.goodsAmount || 0), 0) * 100) / 100,
+      usdShippingTotal: Math.round(orders.reduce((sum, item) => sum + (item.usdShipping || 0), 0) * 100) / 100,
+      depositTotal: Math.round(orders.reduce((sum, item) => sum + (item.deposit || 0), 0) * 100) / 100,
+      orderCount: orders.length,
+      shipmentCount: orders.reduce((sum, item) => sum + Math.max(1, item.lines.length), 0),
+      freightCostTotal: current.summary.freightCostTotal,
+    }
+    persist({ ...current, orders, summary })
+  }
+
+  const updateLine = (
+    orderId: string,
+    lineIndex: number,
+    patch: Partial<SalesLedgerOrder['lines'][number]>,
+  ) => {
+    const current = detailRef.current
+    if (!current) return
+    const orders = current.orders.map((order) => {
+      if (order.id !== orderId) return order
+      const lines = order.lines.map((line, index) => (index === lineIndex ? { ...line, ...patch } : line))
+      return { ...order, lines }
+    })
+    persist({ ...current, orders })
+  }
+
   return {
-    state: { detail, loading, importing },
+    state: { detail, loading, importing, saving },
     handlers: {
       handleBack: () => Dashboard.navigateTo(router),
       importSheet,
       importImage,
       clearLedger,
       reload,
+      updateMeta,
+      updateOrder,
+      updateLine,
     },
   }
 }
