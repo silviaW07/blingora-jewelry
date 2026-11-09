@@ -12,12 +12,83 @@ import {
 } from '@/backend/actions/SalesStats'
 import {
   DEFAULT_SALES_META,
+  compareSalesOrders,
   computedOrderAmount,
+  parsePeriodInfo,
   type SalesLedgerOrder,
+  type SalesPeriodStat,
   type SalesStatsDetail,
   type SalesStatsMeta,
+  type SalesStatsSummary,
 } from '@/backend/salesStatsShared'
 import { Dashboard } from '@/backend/route-params'
+
+function buildSummary(orders: SalesLedgerOrder[]): SalesStatsSummary {
+  const periodMap = new Map<string, SalesPeriodStat>()
+  let shipmentCount = 0
+  let orderAmountTotal = 0
+  let goodsAmountTotal = 0
+  let usdShippingTotal = 0
+  let depositTotal = 0
+  let freightCostTotal = 0
+
+  for (const order of orders) {
+    shipmentCount += Math.max(1, order.lines.length)
+    orderAmountTotal += order.orderAmount || 0
+    goodsAmountTotal += order.goodsAmount || 0
+    usdShippingTotal += order.usdShipping || 0
+    depositTotal += order.deposit || 0
+    let orderFreight = 0
+    for (const line of order.lines) {
+      const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
+      if (Number.isFinite(amount)) {
+        freightCostTotal += amount
+        orderFreight += amount
+      }
+    }
+    const label = order.periodLabel || '未标注月份'
+    const sortKey = Number(order.periodSortKey || 0)
+    const key = `${sortKey}::${label}`
+    const bucket =
+      periodMap.get(key) ||
+      ({
+        label,
+        sortKey,
+        orderCount: 0,
+        shipmentCount: 0,
+        orderAmountTotal: 0,
+        goodsAmountTotal: 0,
+        usdShippingTotal: 0,
+        freightCostTotal: 0,
+      } satisfies SalesPeriodStat)
+    bucket.orderCount += 1
+    bucket.shipmentCount += Math.max(1, order.lines.length)
+    bucket.orderAmountTotal += order.orderAmount || 0
+    bucket.goodsAmountTotal += order.goodsAmount || 0
+    bucket.usdShippingTotal += order.usdShipping || 0
+    bucket.freightCostTotal += orderFreight
+    periodMap.set(key, bucket)
+  }
+
+  return {
+    orderCount: orders.length,
+    shipmentCount,
+    orderAmountTotal: Math.round(orderAmountTotal * 100) / 100,
+    goodsAmountTotal: Math.round(goodsAmountTotal * 100) / 100,
+    usdShippingTotal: Math.round(usdShippingTotal * 100) / 100,
+    depositTotal: Math.round(depositTotal * 100) / 100,
+    freightCostTotal: Math.round(freightCostTotal * 100) / 100,
+    periods: Array.from(periodMap.values())
+      .map((item) => ({
+        ...item,
+        orderAmountTotal: Math.round(item.orderAmountTotal * 100) / 100,
+        goodsAmountTotal: Math.round(item.goodsAmountTotal * 100) / 100,
+        usdShippingTotal: Math.round(item.usdShippingTotal * 100) / 100,
+        freightCostTotal: Math.round(item.freightCostTotal * 100) / 100,
+      }))
+      .sort((a, b) => a.sortKey - b.sortKey || a.label.localeCompare(b.label)),
+  }
+}
 
 async function fileToBase64(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
@@ -149,52 +220,65 @@ export function useSalesStats() {
   const updateOrder = (orderId: string, patch: Partial<SalesLedgerOrder>) => {
     const current = detailRef.current
     if (!current) return
-    const orders = current.orders.map((order) => {
-      if (order.id !== orderId) return order
-      const next = withRecalc({
-        ...order,
-        ...patch,
-        goodsAmount:
-          patch.goodsAmount === undefined
-            ? order.goodsAmount
-            : patch.goodsAmount == null || Number.isNaN(Number(patch.goodsAmount))
-              ? null
-              : Number(patch.goodsAmount),
-        usdShipping:
-          patch.usdShipping === undefined
-            ? order.usdShipping
-            : patch.usdShipping == null || Number.isNaN(Number(patch.usdShipping))
-              ? null
-              : Number(patch.usdShipping),
-        deposit:
-          patch.deposit === undefined
-            ? order.deposit
-            : patch.deposit == null || Number.isNaN(Number(patch.deposit))
-              ? null
-              : Number(patch.deposit),
+    const target = current.orders.find((order) => order.id === orderId)
+    if (!target) return
+
+    const periodPatch =
+      patch.periodLabel !== undefined
+        ? (() => {
+            const parsed = parsePeriodInfo(String(patch.periodLabel || ''), new Date().getFullYear())
+            return {
+              periodLabel: String(patch.periodLabel || '').trim() || '未标注月份',
+              periodSortKey: parsed?.sortKey || target.periodSortKey || 0,
+            }
+          })()
+        : null
+
+    const orders = current.orders
+      .map((order) => {
+        const shouldSyncPeriod =
+          periodPatch &&
+          order.periodLabel === target.periodLabel &&
+          order.periodSortKey === target.periodSortKey
+        if (order.id !== orderId && !shouldSyncPeriod) return order
+        if (order.id !== orderId && shouldSyncPeriod) {
+          return { ...order, ...periodPatch }
+        }
+        const next = withRecalc({
+          ...order,
+          ...patch,
+          ...(periodPatch || {}),
+          goodsAmount:
+            patch.goodsAmount === undefined
+              ? order.goodsAmount
+              : patch.goodsAmount == null || Number.isNaN(Number(patch.goodsAmount))
+                ? null
+                : Number(patch.goodsAmount),
+          usdShipping:
+            patch.usdShipping === undefined
+              ? order.usdShipping
+              : patch.usdShipping == null || Number.isNaN(Number(patch.usdShipping))
+                ? null
+                : Number(patch.usdShipping),
+          deposit:
+            patch.deposit === undefined
+              ? order.deposit
+              : patch.deposit == null || Number.isNaN(Number(patch.deposit))
+                ? null
+                : Number(patch.deposit),
+        })
+        if (patch.dateText !== undefined && patch.periodLabel === undefined) {
+          const inferred = parsePeriodInfo(String(patch.dateText || ''), new Date().getFullYear())
+          if (inferred && (!order.periodLabel || order.periodLabel === '未标注月份' || order.periodLabel === inferred.label)) {
+            next.periodLabel = inferred.label
+            next.periodSortKey = inferred.sortKey
+          }
+        }
+        return next
       })
-      return next
-    })
-    const freightCostTotal = Math.round(
-      orders.reduce((sum, item) => {
-        const lineSum = item.lines.reduce((lineTotal, line) => {
-          const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
-          return lineTotal + (Number.isFinite(amount) ? amount : 0)
-        }, 0)
-        return sum + lineSum
-      }, 0) * 100,
-    ) / 100
-    const summary = {
-      ...current.summary,
-      orderAmountTotal: Math.round(orders.reduce((sum, item) => sum + (item.orderAmount || 0), 0) * 100) / 100,
-      goodsAmountTotal: Math.round(orders.reduce((sum, item) => sum + (item.goodsAmount || 0), 0) * 100) / 100,
-      usdShippingTotal: Math.round(orders.reduce((sum, item) => sum + (item.usdShipping || 0), 0) * 100) / 100,
-      depositTotal: Math.round(orders.reduce((sum, item) => sum + (item.deposit || 0), 0) * 100) / 100,
-      freightCostTotal,
-      orderCount: orders.length,
-      shipmentCount: orders.reduce((sum, item) => sum + Math.max(1, item.lines.length), 0),
-    }
-    persist({ ...current, orders, summary })
+      .sort(compareSalesOrders)
+
+    persist({ ...current, orders, summary: buildSummary(orders) })
   }
 
   const updateLine = (
@@ -209,23 +293,10 @@ export function useSalesStats() {
       const lines = order.lines.map((line, index) => (index === lineIndex ? { ...line, ...patch } : line))
       return { ...order, lines }
     })
-    const freightCostTotal = Math.round(
-      orders.reduce((sum, item) => {
-        const lineSum = item.lines.reduce((lineTotal, line) => {
-          const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
-          return lineTotal + (Number.isFinite(amount) ? amount : 0)
-        }, 0)
-        return sum + lineSum
-      }, 0) * 100,
-    ) / 100
     persist({
       ...current,
       orders,
-      summary: {
-        ...current.summary,
-        freightCostTotal,
-        shipmentCount: orders.reduce((sum, item) => sum + Math.max(1, item.lines.length), 0),
-      },
+      summary: buildSummary(orders),
     })
   }
 

@@ -7,9 +7,13 @@ import { resolveAiSecrets } from '@/thirdparty/secret-resolver'
 import sharp from 'sharp'
 import {
   DEFAULT_SALES_META,
+  compareSalesOrders,
   computedOrderAmount,
+  isPeriodTitleText,
+  parsePeriodInfo,
   type SalesColumnKey,
   type SalesLedgerOrder,
+  type SalesPeriodStat,
   type SalesShipmentLine,
   type SalesStatsDetail,
   type SalesStatsMeta,
@@ -19,6 +23,7 @@ import {
 export type {
   SalesColumnKey,
   SalesLedgerOrder,
+  SalesPeriodStat,
   SalesShipmentLine,
   SalesStatsDetail,
   SalesStatsMeta,
@@ -56,6 +61,19 @@ function splitNamePhone(raw: string): { customerName: string; phone: string } {
   return { customerName: value.slice(0, 100), phone: '' }
 }
 
+function emptyPeriodStat(label: string, sortKey: number): SalesPeriodStat {
+  return {
+    label,
+    sortKey,
+    orderCount: 0,
+    shipmentCount: 0,
+    orderAmountTotal: 0,
+    goodsAmountTotal: 0,
+    usdShippingTotal: 0,
+    freightCostTotal: 0,
+  }
+}
+
 function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
   let shipmentCount = 0
   let orderAmountTotal = 0
@@ -63,17 +81,46 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
   let usdShippingTotal = 0
   let depositTotal = 0
   let freightCostTotal = 0
+  const periodMap = new Map<string, SalesPeriodStat>()
+
   for (const order of orders) {
     shipmentCount += Math.max(1, order.lines.length)
     if (order.orderAmount != null) orderAmountTotal += order.orderAmount
     if (order.goodsAmount != null) goodsAmountTotal += order.goodsAmount
     if (order.usdShipping != null) usdShippingTotal += order.usdShipping
     if (order.deposit != null) depositTotal += order.deposit
+    let orderFreight = 0
     for (const line of order.lines) {
       const cost = money(line.freightCost)
-      if (cost != null) freightCostTotal += cost
+      if (cost != null) {
+        freightCostTotal += cost
+        orderFreight += cost
+      }
     }
+
+    const label = order.periodLabel || '未标注月份'
+    const sortKey = Number(order.periodSortKey || 0)
+    const key = `${sortKey}::${label}`
+    const bucket = periodMap.get(key) || emptyPeriodStat(label, sortKey)
+    bucket.orderCount += 1
+    bucket.shipmentCount += Math.max(1, order.lines.length)
+    bucket.orderAmountTotal += order.orderAmount || 0
+    bucket.goodsAmountTotal += order.goodsAmount || 0
+    bucket.usdShippingTotal += order.usdShipping || 0
+    bucket.freightCostTotal += orderFreight
+    periodMap.set(key, bucket)
   }
+
+  const periods = Array.from(periodMap.values())
+    .map((item) => ({
+      ...item,
+      orderAmountTotal: Math.round(item.orderAmountTotal * 100) / 100,
+      goodsAmountTotal: Math.round(item.goodsAmountTotal * 100) / 100,
+      usdShippingTotal: Math.round(item.usdShippingTotal * 100) / 100,
+      freightCostTotal: Math.round(item.freightCostTotal * 100) / 100,
+    }))
+    .sort((a, b) => a.sortKey - b.sortKey || a.label.localeCompare(b.label))
+
   return {
     orderCount: orders.length,
     shipmentCount,
@@ -82,7 +129,22 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
     usdShippingTotal: Math.round(usdShippingTotal * 100) / 100,
     depositTotal: Math.round(depositTotal * 100) / 100,
     freightCostTotal: Math.round(freightCostTotal * 100) / 100,
+    periods,
   }
+}
+
+function resolveOrderPeriod(
+  order: Pick<SalesLedgerOrder, 'dateText' | 'periodLabel' | 'periodSortKey'>,
+  fallbackYear = new Date().getFullYear(),
+): { periodLabel: string; periodSortKey: number } {
+  const fromLabel = parsePeriodInfo(order.periodLabel || '', fallbackYear)
+  if (fromLabel) return { periodLabel: order.periodLabel || fromLabel.label, periodSortKey: fromLabel.sortKey }
+  const fromDate = parsePeriodInfo(order.dateText || '', fallbackYear)
+  if (fromDate) return { periodLabel: fromDate.label, periodSortKey: fromDate.sortKey }
+  if (order.periodLabel) {
+    return { periodLabel: text(order.periodLabel, 40), periodSortKey: Number(order.periodSortKey) || fallbackYear * 100 }
+  }
+  return { periodLabel: '未标注月份', periodSortKey: fallbackYear * 100 + 99 }
 }
 
 function normalizeMeta(raw: unknown): SalesStatsMeta {
@@ -105,7 +167,8 @@ function normalizeMeta(raw: unknown): SalesStatsMeta {
 
 function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
   if (!Array.isArray(raw)) return []
-  return raw.flatMap((item, index) => {
+  const fallbackYear = new Date().getFullYear()
+  const orders = raw.flatMap((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return []
     const row = item as Record<string, unknown>
     const linesRaw = Array.isArray(row.lines) ? row.lines : []
@@ -120,6 +183,14 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     })
     const goodsAmount = money(row.goodsAmount)
     const usdShipping = money(row.usdShipping)
+    const period = resolveOrderPeriod(
+      {
+        dateText: text(row.dateText, 40),
+        periodLabel: text(row.periodLabel, 40),
+        periodSortKey: Number(row.periodSortKey) || 0,
+      },
+      fallbackYear,
+    )
     const order: SalesLedgerOrder = {
       id: text(row.id, 80) || `sales-${index + 1}`,
       dateText: text(row.dateText, 40),
@@ -130,6 +201,8 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       usdShipping,
       deposit: money(row.deposit),
       orderAmount: computedOrderAmount(goodsAmount, usdShipping),
+      periodLabel: period.periodLabel,
+      periodSortKey: period.periodSortKey,
       lines: lines.length ? lines : [{ freightCost: '', chargeWeight: '', remark: '' }],
     }
     if (
@@ -145,6 +218,7 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     }
     return [order]
   })
+  return orders.sort(compareSalesOrders)
 }
 
 async function readLedger(): Promise<{ orders: SalesLedgerOrder[]; meta: SalesStatsMeta; updatedAt: string }> {
@@ -322,6 +396,41 @@ function buildShipmentLines(freightRaw: string, weightRaw: string, remarkRaw: st
   return lines
 }
 
+function firstNonEmptyCell(row: unknown[]): string {
+  for (const item of row) {
+    const value = text(item, 80)
+    if (value) return value
+  }
+  return ''
+}
+
+function isSectionTitleRow(row: unknown[], idx: ReturnType<typeof resolveColumnIndexes>): string | null {
+  const dateText = cell(row, idx.date)
+  const namePhone = cell(row, idx.namePhone)
+  const address = cell(row, idx.address)
+  const hasAmounts =
+    money(cell(row, idx.orderAmount)) != null ||
+    money(cell(row, idx.goodsAmount)) != null ||
+    money(cell(row, idx.usdShipping)) != null ||
+    money(cell(row, idx.deposit)) != null
+  const hasLines = Boolean(
+    rawCell(row, idx.freightCost) || rawCell(row, idx.chargeWeight) || rawCell(row, idx.remark),
+  )
+  if (hasAmounts || hasLines || address) return null
+
+  const candidates = [dateText, namePhone, firstNonEmptyCell(row)].filter(Boolean)
+  for (const candidate of candidates) {
+    if (!isPeriodTitleText(candidate)) continue
+    // 标题行通常没有完整客户电话，或整行几乎只有这一个文本
+    const filled = row.filter((item) => String(item || '').trim()).length
+    if (namePhone && /@|\d{6,}/.test(namePhone) && !isPeriodTitleText(namePhone)) continue
+    if (filled <= 3 || isPeriodTitleText(dateText) || isPeriodTitleText(firstNonEmptyCell(row))) {
+      return candidate
+    }
+  }
+  return null
+}
+
 function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
   if (!aoa.length) return []
   let headerRow = 0
@@ -334,12 +443,37 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
   }
   const headers = (aoa[headerRow] || []).map((item) => String(item || ''))
   const idx = resolveColumnIndexes(headers)
+  const fallbackYear = new Date().getFullYear()
 
   const orders: SalesLedgerOrder[] = []
   let current: SalesLedgerOrder | null = null
+  let activePeriodLabel = ''
+  let activePeriodSortKey = fallbackYear * 100 + 99
+
+  // 表头前的月份标题行也保留，例如整表顶部的「2026.8-9月」
+  for (let i = 0; i < headerRow; i += 1) {
+    const row = Array.isArray(aoa[i]) ? aoa[i] : []
+    const title = firstNonEmptyCell(row)
+    const parsed = parsePeriodInfo(title, fallbackYear)
+    if (parsed) {
+      activePeriodLabel = title
+      activePeriodSortKey = parsed.sortKey
+    }
+  }
+
   for (let r = headerRow + 1; r < aoa.length; r += 1) {
     const row = Array.isArray(aoa[r]) ? aoa[r] : []
     if (!row.some((item) => String(item || '').trim())) continue
+
+    const sectionTitle = isSectionTitleRow(row, idx)
+    if (sectionTitle) {
+      const parsed = parsePeriodInfo(sectionTitle, fallbackYear)
+      activePeriodLabel = sectionTitle
+      activePeriodSortKey = parsed?.sortKey || activePeriodSortKey
+      current = null
+      continue
+    }
+
     const dateText = cell(row, idx.date)
     const namePhone = cell(row, idx.namePhone)
     const address = cell(row, idx.address)
@@ -364,6 +498,11 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
     )
     if (startsNew || !current) {
       const { customerName, phone } = splitNamePhone(namePhone)
+      const inferred = parsePeriodInfo(dateText, fallbackYear)
+      const periodLabel = activePeriodLabel || inferred?.label || '未标注月份'
+      const periodSortKey = activePeriodLabel
+        ? activePeriodSortKey
+        : inferred?.sortKey || activePeriodSortKey
       current = {
         id: `sales-${Date.now()}-${orders.length + 1}`,
         dateText,
@@ -374,6 +513,8 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
         usdShipping: amounts.usdShipping,
         deposit,
         orderAmount: amounts.orderAmount,
+        periodLabel,
+        periodSortKey,
         lines,
       }
       orders.push(current)
@@ -457,7 +598,7 @@ async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder
         {
           role: 'system',
           content:
-            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"deposit":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . Critical columns: 商品金额=goodsAmount, USD运费=usdShipping, 运费成本=lines.freightCost (internal cost, often RMB and may be multiline), 计费重量=chargeWeight, 订单备注/物流号=remark. orderAmount should equal goodsAmount + usdShipping when both exist. Never put 订单金额 into usdShipping. Never leave goodsAmount empty if 商品金额 is visible. Never leave freightCost empty if 运费成本 is visible. Expand stacked/multiline shipment values into separate lines[]. Use null for missing numbers.',
+            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"deposit":0,"periodLabel":"2026.8-9月","lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . Preserve month section titles like 2026.8-9月 / 8月 into periodLabel for following rows. Critical columns: 商品金额=goodsAmount, USD运费=usdShipping, 运费成本=lines.freightCost, 计费重量=chargeWeight, 订单备注/物流号=remark. orderAmount = goodsAmount + usdShipping. Never put 订单金额 into usdShipping. Expand stacked shipment values into separate lines[]. Use null for missing numbers.',
         },
         {
           role: 'user',

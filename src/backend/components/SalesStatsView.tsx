@@ -4,7 +4,7 @@ import React from 'react'
 import { ArrowLeft, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react'
 import type { useSalesStats } from '@/backend/hooks/useSalesStats'
 import type { SalesColumnKey, SalesLedgerOrder } from '@/backend/salesStatsShared'
-import { DEFAULT_SALES_META } from '@/backend/salesStatsShared'
+import { DEFAULT_SALES_META, periodSalesLabel } from '@/backend/salesStatsShared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -215,6 +215,28 @@ export default function SalesStatsView({
           ))}
         </div>
 
+        {!state.loading && (summary?.periods?.length || 0) > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {summary?.periods.map((period) => (
+              <div
+                key={`${period.sortKey}-${period.label}`}
+                className="rounded-xl border border-[#BFDBFE] bg-gradient-to-br from-[#EFF6FF] to-white p-4 shadow-sm"
+              >
+                <div className="text-sm font-semibold text-[#1D4ED8]">{periodSalesLabel(period.label)}</div>
+                <div className="mt-2 text-2xl font-bold tabular-nums text-[#1E293B]">
+                  {moneyText(period.orderAmountTotal)}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#64748B]">
+                  <span>订单 {period.orderCount}</span>
+                  <span>包裹 {period.shipmentCount}</span>
+                  <span>商品 {moneyText(period.goodsAmountTotal)}</span>
+                  <span>USD运费 {moneyText(period.usdShippingTotal)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="overflow-auto rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
           <table className="min-w-[1280px] w-full border-collapse text-base">
             <thead>
@@ -251,9 +273,14 @@ export default function SalesStatsView({
                   </td>
                 </tr>
               ) : (
-                orders.flatMap((order) => {
+                orders.flatMap((order, orderIndex) => {
                   const span = Math.max(1, order.lines.length)
-                  return order.lines.map((line, index) => (
+                  const prev = orderIndex > 0 ? orders[orderIndex - 1] : null
+                  const showPeriodHeader =
+                    !prev ||
+                    prev.periodLabel !== order.periodLabel ||
+                    prev.periodSortKey !== order.periodSortKey
+                  const rows = order.lines.map((line, index) => (
                     <tr key={`${order.id}-${index}`} className={cn(index === 0 ? 'border-t-2 border-t-[#94A3B8]' : '')}>
                       {index === 0 ? (
                         <>
@@ -330,6 +357,29 @@ export default function SalesStatsView({
                       </td>
                     </tr>
                   ))
+                  if (!showPeriodHeader) return rows
+                  return [
+                    <tr key={`period-${order.periodSortKey}-${order.periodLabel}-${order.id}`}>
+                      <td
+                        colSpan={10}
+                        className="border border-[#BFDBFE] bg-[#DBEAFE] px-4 py-3 text-left font-semibold text-[#1E3A8A]"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <EditableText
+                            value={order.periodLabel || '未标注月份'}
+                            className="text-left font-semibold text-[#1E3A8A]"
+                            onCommit={(next) =>
+                              updateOrder(order.id, {
+                                periodLabel: next || '未标注月份',
+                              })
+                            }
+                          />
+                          <span className="text-sm font-medium text-[#1D4ED8]">{meta.columns.namePhone}</span>
+                        </div>
+                      </td>
+                    </tr>,
+                    ...rows,
+                  ]
                 })
               )}
             </tbody>
