@@ -12,6 +12,7 @@ import {
 } from '@/backend/actions/SalesStats'
 import {
   DEFAULT_SALES_META,
+  canonicalPeriodKey,
   compareSalesOrders,
   computedOrderAmount,
   parsePeriodInfo,
@@ -46,9 +47,9 @@ function buildSummary(orders: SalesLedgerOrder[]): SalesStatsSummary {
         orderFreight += amount
       }
     }
-    const label = order.periodLabel || '未标注月份'
+    const label = order.periodLabel || '未标注表标题'
     const sortKey = Number(order.periodSortKey || 0)
-    const key = `${sortKey}::${label}`
+    const key = canonicalPeriodKey(label, sortKey)
     const bucket =
       periodMap.get(key) ||
       ({
@@ -162,10 +163,12 @@ export function useSalesStats() {
   const importSheet = async (file: File) => {
     setImporting(true)
     try {
+      const before = detailRef.current?.orders.length || 0
       const fileBase64 = await fileToBase64(file)
-      const next = await importSalesStatsSheet({ fileBase64, fileName: file.name, mode: 'replace' })
+      const next = await importSalesStatsSheet({ fileBase64, fileName: file.name, mode: 'append' })
       setDetail(next)
-      toast.success(`已导入 ${next.orders.length} 笔销售记录`)
+      const added = Math.max(0, next.orders.length - before)
+      toast.success(`已追加 ${added} 笔，保留原有表格；同标题月份会合并`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '表格导入失败')
     } finally {
@@ -176,10 +179,12 @@ export function useSalesStats() {
   const importImage = async (file: File) => {
     setImporting(true)
     try {
+      const before = detailRef.current?.orders.length || 0
       const fileBase64 = await fileToBase64(file)
-      const next = await importSalesStatsImage({ fileBase64, fileName: file.name, mode: 'replace' })
+      const next = await importSalesStatsImage({ fileBase64, fileName: file.name, mode: 'append' })
       setDetail(next)
-      toast.success(`已识别 ${next.orders.length} 笔销售记录`)
+      const added = Math.max(0, next.orders.length - before)
+      toast.success(`已追加识别 ${added} 笔，保留原有表格`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '图片识别失败')
     } finally {
@@ -226,9 +231,10 @@ export function useSalesStats() {
     const periodPatch =
       patch.periodLabel !== undefined
         ? (() => {
-            const parsed = parsePeriodInfo(String(patch.periodLabel || ''), new Date().getFullYear())
+            const nextLabel = String(patch.periodLabel || '').trim() || '未标注表标题'
+            const parsed = parsePeriodInfo(nextLabel, new Date().getFullYear())
             return {
-              periodLabel: String(patch.periodLabel || '').trim() || '未标注月份',
+              periodLabel: nextLabel,
               periodSortKey: parsed?.sortKey || target.periodSortKey || 0,
             }
           })()
@@ -238,13 +244,13 @@ export function useSalesStats() {
       .map((order) => {
         const shouldSyncPeriod =
           periodPatch &&
-          order.periodLabel === target.periodLabel &&
-          order.periodSortKey === target.periodSortKey
+          canonicalPeriodKey(order.periodLabel, order.periodSortKey) ===
+            canonicalPeriodKey(target.periodLabel, target.periodSortKey)
         if (order.id !== orderId && !shouldSyncPeriod) return order
         if (order.id !== orderId && shouldSyncPeriod) {
           return { ...order, ...periodPatch }
         }
-        const next = withRecalc({
+        return withRecalc({
           ...order,
           ...patch,
           ...(periodPatch || {}),
@@ -267,14 +273,6 @@ export function useSalesStats() {
                 ? null
                 : Number(patch.deposit),
         })
-        if (patch.dateText !== undefined && patch.periodLabel === undefined) {
-          const inferred = parsePeriodInfo(String(patch.dateText || ''), new Date().getFullYear())
-          if (inferred && (!order.periodLabel || order.periodLabel === '未标注月份' || order.periodLabel === inferred.label)) {
-            next.periodLabel = inferred.label
-            next.periodSortKey = inferred.sortKey
-          }
-        }
-        return next
       })
       .sort(compareSalesOrders)
 

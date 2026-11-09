@@ -7,6 +7,7 @@ import { resolveAiSecrets } from '@/thirdparty/secret-resolver'
 import sharp from 'sharp'
 import {
   DEFAULT_SALES_META,
+  canonicalPeriodKey,
   compareSalesOrders,
   computedOrderAmount,
   isPeriodTitleText,
@@ -98,9 +99,9 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
       }
     }
 
-    const label = order.periodLabel || '未标注月份'
+    const label = order.periodLabel || '未标注表标题'
     const sortKey = Number(order.periodSortKey || 0)
-    const key = `${sortKey}::${label}`
+    const key = canonicalPeriodKey(label, sortKey)
     const bucket = periodMap.get(key) || emptyPeriodStat(label, sortKey)
     bucket.orderCount += 1
     bucket.shipmentCount += Math.max(1, order.lines.length)
@@ -134,17 +135,48 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
 }
 
 function resolveOrderPeriod(
-  order: Pick<SalesLedgerOrder, 'dateText' | 'periodLabel' | 'periodSortKey'>,
+  order: Pick<SalesLedgerOrder, 'periodLabel' | 'periodSortKey'>,
   fallbackYear = new Date().getFullYear(),
 ): { periodLabel: string; periodSortKey: number } {
-  const fromLabel = parsePeriodInfo(order.periodLabel || '', fallbackYear)
-  if (fromLabel) return { periodLabel: order.periodLabel || fromLabel.label, periodSortKey: fromLabel.sortKey }
-  const fromDate = parsePeriodInfo(order.dateText || '', fallbackYear)
-  if (fromDate) return { periodLabel: fromDate.label, periodSortKey: fromDate.sortKey }
-  if (order.periodLabel) {
-    return { periodLabel: text(order.periodLabel, 40), periodSortKey: Number(order.periodSortKey) || fallbackYear * 100 }
+  // 只认表标题（如 2026年7月 / 2026年8-9月），绝不看订单日期列
+  const rawLabel = text(order.periodLabel, 40)
+  const fromLabel = parsePeriodInfo(rawLabel, fallbackYear)
+  if (fromLabel) {
+    return {
+      periodLabel: rawLabel || fromLabel.label,
+      periodSortKey: fromLabel.sortKey,
+    }
   }
-  return { periodLabel: '未标注月份', periodSortKey: fallbackYear * 100 + 99 }
+  if (rawLabel) {
+    return {
+      periodLabel: rawLabel,
+      periodSortKey: Number(order.periodSortKey) || fallbackYear * 100 + 99,
+    }
+  }
+  return {
+    periodLabel: '未标注表标题',
+    periodSortKey: Number(order.periodSortKey) || fallbackYear * 100 + 99,
+  }
+}
+
+function alignIncomingPeriods(existing: SalesLedgerOrder[], incoming: SalesLedgerOrder[]): SalesLedgerOrder[] {
+  const map = new Map<string, { label: string; sortKey: number }>()
+  for (const order of existing) {
+    const key = canonicalPeriodKey(order.periodLabel, order.periodSortKey)
+    if (!map.has(key)) {
+      map.set(key, { label: order.periodLabel || '未标注表标题', sortKey: Number(order.periodSortKey) || 0 })
+    }
+  }
+  return incoming.map((order) => {
+    const key = canonicalPeriodKey(order.periodLabel, order.periodSortKey)
+    const hit = map.get(key)
+    if (!hit) return order
+    return {
+      ...order,
+      periodLabel: hit.label,
+      periodSortKey: hit.sortKey,
+    }
+  })
 }
 
 function normalizeMeta(raw: unknown): SalesStatsMeta {
@@ -185,7 +217,6 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     const usdShipping = money(row.usdShipping)
     const period = resolveOrderPeriod(
       {
-        dateText: text(row.dateText, 40),
         periodLabel: text(row.periodLabel, 40),
         periodSortKey: Number(row.periodSortKey) || 0,
       },
@@ -431,7 +462,7 @@ function isSectionTitleRow(row: unknown[], idx: ReturnType<typeof resolveColumnI
   return null
 }
 
-function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
+function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
   if (!aoa.length) return []
   let headerRow = 0
   for (let i = 0; i < Math.min(8, aoa.length); i += 1) {
@@ -450,15 +481,27 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
   let activePeriodLabel = ''
   let activePeriodSortKey = fallbackYear * 100 + 99
 
-  // 表头前的月份标题行也保留，例如整表顶部的「2026.8-9月」
+  // 只认表标题行（如 2026年7月 / 2026年8-9月），不看订单日期
   for (let i = 0; i < headerRow; i += 1) {
     const row = Array.isArray(aoa[i]) ? aoa[i] : []
     const title = firstNonEmptyCell(row)
+    if (!isPeriodTitleText(title)) continue
     const parsed = parsePeriodInfo(title, fallbackYear)
     if (parsed) {
       activePeriodLabel = title
       activePeriodSortKey = parsed.sortKey
     }
+  }
+  if (!activePeriodLabel && sheetTitleHint && isPeriodTitleText(sheetTitleHint)) {
+    const parsed = parsePeriodInfo(sheetTitleHint, fallbackYear)
+    if (parsed) {
+      activePeriodLabel = sheetTitleHint
+      activePeriodSortKey = parsed.sortKey
+    }
+  }
+  if (!activePeriodLabel) {
+    activePeriodLabel = '未标注表标题'
+    activePeriodSortKey = fallbackYear * 100 + 99
   }
 
   for (let r = headerRow + 1; r < aoa.length; r += 1) {
@@ -498,11 +541,6 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
     )
     if (startsNew || !current) {
       const { customerName, phone } = splitNamePhone(namePhone)
-      const inferred = parsePeriodInfo(dateText, fallbackYear)
-      const periodLabel = activePeriodLabel || inferred?.label || '未标注月份'
-      const periodSortKey = activePeriodLabel
-        ? activePeriodSortKey
-        : inferred?.sortKey || activePeriodSortKey
       current = {
         id: `sales-${Date.now()}-${orders.length + 1}`,
         dateText,
@@ -513,8 +551,8 @@ function parseAoa(aoa: unknown[][]): SalesLedgerOrder[] {
         usdShipping: amounts.usdShipping,
         deposit,
         orderAmount: amounts.orderAmount,
-        periodLabel,
-        periodSortKey,
+        periodLabel: activePeriodLabel,
+        periodSortKey: activePeriodSortKey,
         lines,
       }
       orders.push(current)
@@ -558,12 +596,12 @@ async function parseSpreadsheet(fileBase64: string, fileName = ''): Promise<Sale
     const first = workbook.Sheets[workbook.SheetNames[0]]
     fillMergedCells(first, XLSX)
     const aoa = XLSX.utils.sheet_to_json(first, { header: 1, defval: '', raw: false, blankrows: false }) as unknown[][]
-    return parseAoa(aoa)
+    return parseAoa(aoa, fileName)
   } catch (error) {
     if (lower.endsWith('.csv')) {
       const textBody = raw.toString('utf8')
       const rows = textBody.split(/\r?\n/).map((line) => line.split(','))
-      return parseAoa(rows)
+      return parseAoa(rows, fileName)
     }
     throw error instanceof Error ? error : new Error('表格解析失败')
   }
@@ -598,7 +636,7 @@ async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder
         {
           role: 'system',
           content:
-            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"deposit":0,"periodLabel":"2026.8-9月","lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . Preserve month section titles like 2026.8-9月 / 8月 into periodLabel for following rows. Critical columns: 商品金额=goodsAmount, USD运费=usdShipping, 运费成本=lines.freightCost, 计费重量=chargeWeight, 订单备注/物流号=remark. orderAmount = goodsAmount + usdShipping. Never put 订单金额 into usdShipping. Expand stacked shipment values into separate lines[]. Use null for missing numbers.',
+            'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"deposit":0,"periodLabel":"2026年8-9月","lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . periodLabel MUST come only from sheet title rows like 2026年7月 / 2026年8-9月, NEVER from order date cells such as 7.1 or notes like 买短袖. All rows under one title share that periodLabel. Critical columns: goodsAmount, usdShipping, freightCost, chargeWeight, remark. orderAmount = goodsAmount + usdShipping. Expand stacked shipment values into separate lines[]. Use null for missing numbers.',
         },
         {
           role: 'user',
@@ -641,9 +679,11 @@ export const importSalesStatsSheet = requireStaff('dashboard')(
     getAuthContext()
     const imported = await parseSpreadsheet(String(input.fileBase64 || ''), String(input.fileName || ''))
     if (!imported.length) throw new Error('表格里没有读到销售数据')
-    const mode = input.mode === 'append' ? 'append' : 'replace'
+    // 默认追加拼接：新表不影响上一张；同标题（如 2026年7月）才合并到同一分组
+    const mode = input.mode === 'replace' ? 'replace' : 'append'
     const current = await readLedger()
-    const next = normalizeOrders([...((mode === 'append' ? current.orders : [])), ...imported]).map((order, index) => ({
+    const aligned = mode === 'append' ? alignIncomingPeriods(current.orders, imported) : imported
+    const next = normalizeOrders([...((mode === 'append' ? current.orders : [])), ...aligned]).map((order, index) => ({
       ...order,
       id: order.id || `sales-${Date.now()}-${index + 1}`,
     }))
@@ -657,9 +697,10 @@ export const importSalesStatsImage = requireStaff('dashboard')(
   withResult(async (input: { fileBase64: string; fileName?: string; mode?: 'replace' | 'append' }): Promise<SalesStatsDetail> => {
     getAuthContext()
     const imported = await recognizeSalesImage(String(input.fileBase64 || ''))
-    const mode = input.mode === 'append' ? 'append' : 'replace'
+    const mode = input.mode === 'replace' ? 'replace' : 'append'
     const current = await readLedger()
-    const next = normalizeOrders([...((mode === 'append' ? current.orders : [])), ...imported]).map((order, index) => ({
+    const aligned = mode === 'append' ? alignIncomingPeriods(current.orders, imported) : imported
+    const next = normalizeOrders([...((mode === 'append' ? current.orders : [])), ...aligned]).map((order, index) => ({
       ...order,
       id: order.id || `sales-img-${Date.now()}-${index + 1}`,
     }))

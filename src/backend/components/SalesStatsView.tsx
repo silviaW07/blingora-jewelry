@@ -147,7 +147,8 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。
+              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为追加拼接，按表标题（如
+              2026年7月 / 2026年8-9月）分组，不按订单日期拆分。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -366,11 +367,11 @@ export default function SalesStatsView({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <EditableText
-                            value={order.periodLabel || '未标注月份'}
+                            value={order.periodLabel || '未标注表标题'}
                             className="text-left font-semibold text-[#1E3A8A]"
                             onCommit={(next) =>
                               updateOrder(order.id, {
-                                periodLabel: next || '未标注月份',
+                                periodLabel: next || '未标注表标题',
                               })
                             }
                           />
