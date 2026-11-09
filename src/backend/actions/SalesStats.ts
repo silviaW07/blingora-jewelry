@@ -7,13 +7,16 @@ import { resolveAiSecrets } from '@/thirdparty/secret-resolver'
 import sharp from 'sharp'
 import {
   DEFAULT_SALES_META,
+  DEFAULT_COLUMN_LABELS,
   canonicalPeriodKey,
   compactPeriodText,
   compareSalesOrders,
   computedOrderAmount,
   isPeriodTitleText,
+  normalizeHeaderLabels,
   parsePeriodInfo,
   type SalesColumnKey,
+  type SalesColumnLabels,
   type SalesLedgerOrder,
   type SalesPeriodStat,
   type SalesShipmentLine,
@@ -161,21 +164,32 @@ function resolveOrderPeriod(
 }
 
 function alignIncomingPeriods(existing: SalesLedgerOrder[], incoming: SalesLedgerOrder[]): SalesLedgerOrder[] {
-  const map = new Map<string, { label: string; sortKey: number }>()
+  const map = new Map<string, { label: string; sortKey: number; headerLabels: SalesColumnLabels }>()
   for (const order of existing) {
     const key = canonicalPeriodKey(order.periodLabel, order.periodSortKey)
     if (!map.has(key)) {
-      map.set(key, { label: order.periodLabel || '未标注表标题', sortKey: Number(order.periodSortKey) || 0 })
+      map.set(key, {
+        label: order.periodLabel,
+        sortKey: Number(order.periodSortKey) || 0,
+        headerLabels: normalizeHeaderLabels(order.headerLabels, order.periodLabel),
+      })
     }
   }
   return incoming.map((order) => {
     const key = canonicalPeriodKey(order.periodLabel, order.periodSortKey)
     const hit = map.get(key)
-    if (!hit) return order
+    // 同月才并入已有分组；不同月（7月 vs 8-9月）绝不改对方标题
+    if (!hit) {
+      return {
+        ...order,
+        headerLabels: normalizeHeaderLabels(order.headerLabels, order.periodLabel),
+      }
+    }
     return {
       ...order,
       periodLabel: hit.label,
       periodSortKey: hit.sortKey,
+      headerLabels: hit.headerLabels,
     }
   })
 }
@@ -186,16 +200,39 @@ function normalizeMeta(raw: unknown): SalesStatsMeta {
     source.columns && typeof source.columns === 'object' && !Array.isArray(source.columns)
       ? (source.columns as Record<string, unknown>)
       : {}
-  const columns = { ...DEFAULT_SALES_META.columns }
-  ;(Object.keys(columns) as SalesColumnKey[]).forEach((key) => {
-    const next = text(columnsRaw[key], 40)
-    if (next) columns[key] = next
-  })
+  const columns = normalizeHeaderLabels(columnsRaw)
+  // 全局列名里的「日期」若被改成某个月份，一律复位，月份只跟每张表走
+  columns.date = DEFAULT_COLUMN_LABELS.date
   return {
     pageTitle: text(source.pageTitle, 80) || DEFAULT_SALES_META.pageTitle,
     pageHint: text(source.pageHint, 300) || DEFAULT_SALES_META.pageHint,
     columns,
   }
+}
+
+function buildSheetHeaderLabels(headers: string[], idx: ReturnType<typeof resolveColumnIndexes>, periodLabel: string): SalesColumnLabels {
+  const pick = (index: number, fallback: string) => {
+    const value = String(headers[index] ?? '').replace(/\s+/g, ' ').trim()
+    if (!value) return fallback
+    // 第一列若是月份标题，表头展示用 periodLabel；其余列保留原表头文字
+    if (parsePeriodInfo(value)) return fallback
+    return value.slice(0, 40)
+  }
+  return normalizeHeaderLabels(
+    {
+      date: periodLabel,
+      namePhone: pick(idx.namePhone, DEFAULT_COLUMN_LABELS.namePhone),
+      address: pick(idx.address, DEFAULT_COLUMN_LABELS.address),
+      orderAmount: pick(idx.orderAmount, DEFAULT_COLUMN_LABELS.orderAmount),
+      goodsAmount: pick(idx.goodsAmount, DEFAULT_COLUMN_LABELS.goodsAmount),
+      usdShipping: pick(idx.usdShipping, DEFAULT_COLUMN_LABELS.usdShipping),
+      deposit: pick(idx.deposit, DEFAULT_COLUMN_LABELS.deposit),
+      freightCost: pick(idx.freightCost, DEFAULT_COLUMN_LABELS.freightCost),
+      chargeWeight: pick(idx.chargeWeight, DEFAULT_COLUMN_LABELS.chargeWeight),
+      remark: pick(idx.remark, DEFAULT_COLUMN_LABELS.remark),
+    },
+    periodLabel,
+  )
 }
 
 function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
@@ -235,6 +272,7 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       orderAmount: computedOrderAmount(goodsAmount, usdShipping),
       periodLabel: period.periodLabel,
       periodSortKey: period.periodSortKey,
+      headerLabels: normalizeHeaderLabels(row.headerLabels, period.periodLabel),
       lines: lines.length ? lines : [{ freightCost: '', chargeWeight: '', remark: '' }],
     }
     if (
@@ -441,25 +479,23 @@ function extractSheetPeriodTitle(
   headerRow: number,
   headers: string[],
   fallbackYear: number,
-): { label: string; sortKey: number } | null {
-  // 1) 表头之前的标题行
+): { label: string; sortKey: number; raw: string } | null {
+  // 优先：表头行第一格（图二 A1 = 2026. 7月）——整张表严格跟这一格
+  if (headers[0]) {
+    const parsed = parsePeriodInfo(headers[0], fallbackYear)
+    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey, raw: String(headers[0]) }
+  }
+  // 其次：表头之前的标题行
   for (let i = 0; i < headerRow; i += 1) {
     const row = Array.isArray(aoa[i]) ? aoa[i] : []
     const title = firstNonEmptyCell(row)
     const parsed = parsePeriodInfo(title, fallbackYear)
-    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey }
+    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey, raw: title }
   }
-  // 2) 表头第一格就是「2026. 7 月」这类日期标题（常见于你们业务表）
-  for (const header of headers.slice(0, 3)) {
+  // 再扫表头行其它格（极少见）
+  for (const header of headers.slice(1, 3)) {
     const parsed = parsePeriodInfo(header, fallbackYear)
-    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey }
-  }
-  // 3) 再扫前几行首格，兼容标题与表头同一行/紧邻
-  for (let i = 0; i < Math.min(aoa.length, headerRow + 2); i += 1) {
-    const row = Array.isArray(aoa[i]) ? aoa[i] : []
-    const title = firstNonEmptyCell(row)
-    const parsed = parsePeriodInfo(title, fallbackYear)
-    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey }
+    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey, raw: String(header) }
   }
   return null
 }
@@ -513,6 +549,7 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
 
   const sheetPeriod = extractSheetPeriodTitle(aoa, headerRow, headers, fallbackYear)
   if (sheetPeriod) {
+    // 严格按表格第一格日期：图二写 2026.7月 就是 7 月
     activePeriodLabel = sheetPeriod.label
     activePeriodSortKey = sheetPeriod.sortKey
   } else if (sheetTitleHint) {
@@ -522,12 +559,12 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
       activePeriodSortKey = parsed.sortKey
     }
   }
-  // 没有表日期标题时也不再制造「未标注表标题」空白分组名；用文件名兜底
   if (!activePeriodLabel) {
-    const hint = compactPeriodText(sheetTitleHint).slice(0, 40)
-    activePeriodLabel = hint || `导入表${orders.length + 1}`
+    const hint = String(sheetTitleHint || '').replace(/\s+/g, ' ').trim().slice(0, 40)
+    activePeriodLabel = hint || `导入表`
     activePeriodSortKey = fallbackYear * 100 + 99
   }
+  let activeHeaderLabels = buildSheetHeaderLabels(headers, idx, activePeriodLabel)
 
   for (let r = headerRow + 1; r < aoa.length; r += 1) {
     const row = Array.isArray(aoa[r]) ? aoa[r] : []
@@ -536,9 +573,9 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
     const sectionTitle = isSectionTitleRow(row, idx)
     if (sectionTitle) {
       const parsed = parsePeriodInfo(sectionTitle, fallbackYear)
-      // 表内分段标题保留原文字，优先规范成 2026年x月
       activePeriodLabel = parsed?.label || sectionTitle
       activePeriodSortKey = parsed?.sortKey || activePeriodSortKey
+      activeHeaderLabels = buildSheetHeaderLabels(headers, idx, activePeriodLabel)
       current = null
       continue
     }
@@ -579,6 +616,7 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
         orderAmount: amounts.orderAmount,
         periodLabel: activePeriodLabel,
         periodSortKey: activePeriodSortKey,
+        headerLabels: activeHeaderLabels,
         lines,
       }
       orders.push(current)

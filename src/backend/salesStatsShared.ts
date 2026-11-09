@@ -14,8 +14,11 @@ export type SalesLedgerOrder = {
   goodsAmount: number | null
   usdShipping: number | null
   deposit: number | null
+  /** 本张表 A1/表日期原文，如图二「2026. 7月」 */
   periodLabel: string
   periodSortKey: number
+  /** 本张表表头行（姓名@电话等），拼接时原样保留 */
+  headerLabels: SalesColumnLabels
   lines: SalesShipmentLine[]
 }
 
@@ -68,21 +71,23 @@ export type SalesStatsDetail = {
   meta: SalesStatsMeta
 }
 
+export const DEFAULT_COLUMN_LABELS: SalesColumnLabels = {
+  date: '日期',
+  namePhone: '姓名@电话',
+  address: '地址',
+  orderAmount: '订单金额',
+  goodsAmount: '商品金额',
+  usdShipping: 'USD运费',
+  deposit: '定金',
+  freightCost: '运费成本',
+  chargeWeight: '计费重量',
+  remark: '订单备注',
+}
+
 export const DEFAULT_SALES_META: SalesStatsMeta = {
   pageTitle: '销售额统计',
   pageHint: '格式对齐业务表：日期 / 姓名@电话 / 地址 / 订单金额 / 商品金额 / USD运费 / 定金 / 运费成本 / 计费重量 / 物流号',
-  columns: {
-    date: '日期',
-    namePhone: '姓名@电话',
-    address: '地址',
-    orderAmount: '订单金额',
-    goodsAmount: '商品金额',
-    usdShipping: 'USD运费',
-    deposit: '定金',
-    freightCost: '运费成本',
-    chargeWeight: '计费重量',
-    remark: '订单备注',
-  },
+  columns: { ...DEFAULT_COLUMN_LABELS },
 }
 
 export function computedOrderAmount(goodsAmount: number | null, usdShipping: number | null): number | null {
@@ -177,6 +182,20 @@ export function canonicalPeriodKey(label: string, sortKey = 0, fallbackYear = ne
   const cleaned = String(label || '').trim()
   if (cleaned) return `custom:${cleaned}`
   return `sort:${Number(sortKey) || 0}`
+}
+
+export function normalizeHeaderLabels(raw: unknown, periodLabel = ''): SalesColumnLabels {
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const next = { ...DEFAULT_COLUMN_LABELS }
+  ;(Object.keys(next) as SalesColumnKey[]).forEach((key) => {
+    const value = String(source[key] ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)
+    if (!value) return
+    // 防止全局列名被改成「2026.8-9月」后污染其他月份表
+    if (key === 'date' && parsePeriodInfo(value)) return
+    next[key] = value
+  })
+  if (periodLabel) next.date = periodLabel
+  return next
 }
 
 export function periodSalesLabel(label: string): string {

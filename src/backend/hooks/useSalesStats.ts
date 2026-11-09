@@ -11,10 +11,12 @@ import {
   saveSalesStatsLedger,
 } from '@/backend/actions/SalesStats'
 import {
+  DEFAULT_COLUMN_LABELS,
   DEFAULT_SALES_META,
   canonicalPeriodKey,
   compareSalesOrders,
   computedOrderAmount,
+  normalizeHeaderLabels,
   parsePeriodInfo,
   type SalesLedgerOrder,
   type SalesPeriodStat,
@@ -231,29 +233,65 @@ export function useSalesStats() {
     const periodPatch =
       patch.periodLabel !== undefined
         ? (() => {
-            const nextLabel = String(patch.periodLabel || '').trim() || '未标注表标题'
+            const nextLabel = String(patch.periodLabel || '').trim() || target.periodLabel || '导入表'
             const parsed = parsePeriodInfo(nextLabel, new Date().getFullYear())
             return {
               periodLabel: nextLabel,
               periodSortKey: parsed?.sortKey || target.periodSortKey || 0,
+              headerLabels: normalizeHeaderLabels(
+                {
+                  ...(target.headerLabels || DEFAULT_COLUMN_LABELS),
+                  ...(patch.headerLabels || {}),
+                  date: nextLabel,
+                },
+                nextLabel,
+              ),
             }
           })()
         : null
 
     const orders = current.orders
       .map((order) => {
-        const shouldSyncPeriod =
-          periodPatch &&
+        const samePeriod =
           canonicalPeriodKey(order.periodLabel, order.periodSortKey) ===
-            canonicalPeriodKey(target.periodLabel, target.periodSortKey)
-        if (order.id !== orderId && !shouldSyncPeriod) return order
+          canonicalPeriodKey(target.periodLabel, target.periodSortKey)
+        const shouldSyncPeriod = Boolean(periodPatch && samePeriod)
+        if (order.id !== orderId && !shouldSyncPeriod) {
+          // 改某月表头时绝不改其它月份
+          if (patch.headerLabels && !samePeriod) return order
+          if (patch.headerLabels && samePeriod && !periodPatch) {
+            return {
+              ...order,
+              headerLabels: normalizeHeaderLabels(
+                { ...(order.headerLabels || DEFAULT_COLUMN_LABELS), ...patch.headerLabels, date: order.periodLabel },
+                order.periodLabel,
+              ),
+            }
+          }
+          return order
+        }
         if (order.id !== orderId && shouldSyncPeriod) {
-          return { ...order, ...periodPatch }
+          return {
+            ...order,
+            ...periodPatch,
+            headerLabels: normalizeHeaderLabels(
+              { ...(order.headerLabels || DEFAULT_COLUMN_LABELS), ...(periodPatch?.headerLabels || {}), date: periodPatch?.periodLabel },
+              periodPatch?.periodLabel,
+            ),
+          }
         }
         return withRecalc({
           ...order,
           ...patch,
           ...(periodPatch || {}),
+          headerLabels: normalizeHeaderLabels(
+            {
+              ...(order.headerLabels || DEFAULT_COLUMN_LABELS),
+              ...(patch.headerLabels || {}),
+              date: periodPatch?.periodLabel || patch.periodLabel || order.periodLabel,
+            },
+            periodPatch?.periodLabel || patch.periodLabel || order.periodLabel,
+          ),
           goodsAmount:
             patch.goodsAmount === undefined
               ? order.goodsAmount

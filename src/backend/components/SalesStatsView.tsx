@@ -4,7 +4,7 @@ import React from 'react'
 import { ArrowLeft, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react'
 import type { useSalesStats } from '@/backend/hooks/useSalesStats'
 import type { SalesColumnKey, SalesLedgerOrder } from '@/backend/salesStatsShared'
-import { DEFAULT_SALES_META, periodSalesLabel } from '@/backend/salesStatsShared'
+import { DEFAULT_COLUMN_LABELS, DEFAULT_SALES_META, periodSalesLabel } from '@/backend/salesStatsShared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -261,6 +261,12 @@ export default function SalesStatsView({
                     !prev ||
                     prev.periodLabel !== order.periodLabel ||
                     prev.periodSortKey !== order.periodSortKey
+                  // 严格按本张表自己的表头：A1 写几月就几月，绝不串用其它表的月份
+                  const sheetHeaders = {
+                    ...DEFAULT_COLUMN_LABELS,
+                    ...(order.headerLabels || {}),
+                    date: order.periodLabel || order.headerLabels?.date || DEFAULT_COLUMN_LABELS.date,
+                  }
                   const headerRow = (
                     <tr key={`thead-${order.periodSortKey}-${order.periodLabel}-${order.id}`} className="text-center text-[#1E293B]">
                       {COLUMN_ORDER.map((column) => (
@@ -268,30 +274,28 @@ export default function SalesStatsView({
                           key={`${order.id}-h-${column.key}`}
                           className={cn('border border-[#CBD5E1] px-2 py-3 font-semibold', column.tone)}
                         >
-                          {column.key === 'date' ? (
-                            <EditableText
-                              value={order.periodLabel || meta.columns.date}
-                              className="font-semibold"
-                              onCommit={(next) =>
+                          <EditableText
+                            value={sheetHeaders[column.key]}
+                            className="font-semibold"
+                            onCommit={(next) => {
+                              if (column.key === 'date') {
                                 updateOrder(order.id, {
                                   periodLabel: next || order.periodLabel,
-                                })
-                              }
-                            />
-                          ) : (
-                            <EditableText
-                              value={meta.columns[column.key]}
-                              className="font-semibold"
-                              onCommit={(next) =>
-                                void handlers.updateMeta({
-                                  columns: {
-                                    ...meta.columns,
-                                    [column.key]: next || DEFAULT_SALES_META.columns[column.key],
+                                  headerLabels: {
+                                    ...sheetHeaders,
+                                    date: next || order.periodLabel,
                                   },
                                 })
+                                return
                               }
-                            />
-                          )}
+                              updateOrder(order.id, {
+                                headerLabels: {
+                                  ...sheetHeaders,
+                                  [column.key]: next || DEFAULT_COLUMN_LABELS[column.key],
+                                },
+                              })
+                            }}
+                          />
                         </th>
                       ))}
                     </tr>
