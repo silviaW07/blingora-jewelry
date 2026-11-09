@@ -70,6 +70,16 @@ export const RegistrationStats = {
   navigateTo: (router: AppRouterInstance) => router.push(RegistrationStats.path),
 };
 
+
+export const SalesStats = {
+  id: 'B03V',
+  path: '/dashboard/sales',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(SalesStats.path),
+};
+
+
 // ================================================================
 // B18 管理员个人设置 — 无入参
 // ================================================================
@@ -418,6 +428,7 @@ export const BackendRoutes = {
   Dashboard,
   ListingStats,
   RegistrationStats,
+  SalesStats,
   ProductManagement,
   ImportFrom1688,
   CategoryManagement,

@@ -83,16 +83,21 @@ export default function DashboardView({
               </div>
             </button>
 
-            <div className={cardCls}>
+            <button
+              type="button"
+              onClick={() => handlers.handleNavigateToSalesStats()}
+              className={`${cardCls} cursor-pointer`}
+            >
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF6A00]" />
               <div className="flex justify-between items-start">
-                <span className="text-xs font-medium text-[#64748B]">总订单数</span>
+                <span className="text-xs font-medium text-[#64748B]">销售额统计</span>
+                <span className="text-[10px] font-semibold text-[#FF6A00]">详情 →</span>
               </div>
               <div className="space-y-1">
                 <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.totalOrderCount ?? 0)}</p>
-                <p className="text-[11px] text-[#94A3B8]">全部订单记录</p>
+                <p className="text-[11px] text-[#94A3B8]">表格导入 / 图片识别 · 点击查看</p>
               </div>
-            </div>
+            </button>
               </>;
             })()}
           </div>

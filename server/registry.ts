@@ -16,21 +16,22 @@ import * as mod_13 from '../src/backend/actions/homeRecommendZoneCache';
 import * as mod_14 from '../src/backend/actions/UserManagement';
 import * as mod_15 from '../src/backend/actions/SuffixConfig';
 import * as mod_16 from '../src/backend/actions/ShippingChannelConfig';
-import * as mod_17 from '../src/backend/actions/ProductMinOrder';
-import * as mod_18 from '../src/backend/actions/ProductManagement';
-import * as mod_19 from '../src/backend/actions/PricingPromotionManagement';
-import * as mod_20 from '../src/backend/actions/OrderManagement';
-import * as mod_21 from '../src/backend/actions/ImportFrom1688';
-import * as mod_22 from '../src/backend/actions/HomeRecommendZoneManagement';
-import * as mod_23 from '../src/backend/actions/Dashboard';
-import * as mod_24 from '../src/backend/actions/CustomerFollowUp';
-import * as mod_25 from '../src/backend/actions/CategoryManagement';
-import * as mod_26 from '../src/backend/actions/BuyerShowManagement';
-import * as mod_27 from '../src/backend/actions/BrandAlias';
-import * as mod_28 from '../src/backend/actions/BannerManagement';
-import * as mod_29 from '../src/backend/actions/AdminRegister';
-import * as mod_30 from '../src/backend/actions/AdminManagement';
-import * as mod_31 from '../src/backend/actions/AdminLogin';
+import * as mod_17 from '../src/backend/actions/SalesStats';
+import * as mod_18 from '../src/backend/actions/ProductMinOrder';
+import * as mod_19 from '../src/backend/actions/ProductManagement';
+import * as mod_20 from '../src/backend/actions/PricingPromotionManagement';
+import * as mod_21 from '../src/backend/actions/OrderManagement';
+import * as mod_22 from '../src/backend/actions/ImportFrom1688';
+import * as mod_23 from '../src/backend/actions/HomeRecommendZoneManagement';
+import * as mod_24 from '../src/backend/actions/Dashboard';
+import * as mod_25 from '../src/backend/actions/CustomerFollowUp';
+import * as mod_26 from '../src/backend/actions/CategoryManagement';
+import * as mod_27 from '../src/backend/actions/BuyerShowManagement';
+import * as mod_28 from '../src/backend/actions/BrandAlias';
+import * as mod_29 from '../src/backend/actions/BannerManagement';
+import * as mod_30 from '../src/backend/actions/AdminRegister';
+import * as mod_31 from '../src/backend/actions/AdminManagement';
+import * as mod_32 from '../src/backend/actions/AdminLogin';
 
 export const registry: Record<string, any> = {
   'src.frontend.actions.ProductDetail': mod_0,
@@ -50,19 +51,20 @@ export const registry: Record<string, any> = {
   'src.backend.actions.UserManagement': mod_14,
   'src.backend.actions.SuffixConfig': mod_15,
   'src.backend.actions.ShippingChannelConfig': mod_16,
-  'src.backend.actions.ProductMinOrder': mod_17,
-  'src.backend.actions.ProductManagement': mod_18,
-  'src.backend.actions.PricingPromotionManagement': mod_19,
-  'src.backend.actions.OrderManagement': mod_20,
-  'src.backend.actions.ImportFrom1688': mod_21,
-  'src.backend.actions.HomeRecommendZoneManagement': mod_22,
-  'src.backend.actions.Dashboard': mod_23,
-  'src.backend.actions.CustomerFollowUp': mod_24,
-  'src.backend.actions.CategoryManagement': mod_25,
-  'src.backend.actions.BuyerShowManagement': mod_26,
-  'src.backend.actions.BrandAlias': mod_27,
-  'src.backend.actions.BannerManagement': mod_28,
-  'src.backend.actions.AdminRegister': mod_29,
-  'src.backend.actions.AdminManagement': mod_30,
-  'src.backend.actions.AdminLogin': mod_31,
+  'src.backend.actions.SalesStats': mod_17,
+  'src.backend.actions.ProductMinOrder': mod_18,
+  'src.backend.actions.ProductManagement': mod_19,
+  'src.backend.actions.PricingPromotionManagement': mod_20,
+  'src.backend.actions.OrderManagement': mod_21,
+  'src.backend.actions.ImportFrom1688': mod_22,
+  'src.backend.actions.HomeRecommendZoneManagement': mod_23,
+  'src.backend.actions.Dashboard': mod_24,
+  'src.backend.actions.CustomerFollowUp': mod_25,
+  'src.backend.actions.CategoryManagement': mod_26,
+  'src.backend.actions.BuyerShowManagement': mod_27,
+  'src.backend.actions.BrandAlias': mod_28,
+  'src.backend.actions.BannerManagement': mod_29,
+  'src.backend.actions.AdminRegister': mod_30,
+  'src.backend.actions.AdminManagement': mod_31,
+  'src.backend.actions.AdminLogin': mod_32,
 };

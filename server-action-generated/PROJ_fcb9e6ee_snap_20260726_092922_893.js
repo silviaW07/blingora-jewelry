@@ -12207,6 +12207,7 @@ const _homeRecommendZoneCache = /*#__PURE__*/ _interop_require_wildcard(__webpac
 const _UserManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5936));
 const _SuffixConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(8275));
 const _ShippingChannelConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(2597));
+const _SalesStats = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(883));
 const _ProductMinOrder = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(3337));
 const _ProductManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9582));
 const _PricingPromotionManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4624));
@@ -12270,6 +12271,7 @@ const registry = {
     'src.backend.actions.UserManagement': _UserManagement,
     'src.backend.actions.SuffixConfig': _SuffixConfig,
     'src.backend.actions.ShippingChannelConfig': _ShippingChannelConfig,
+    'src.backend.actions.SalesStats': _SalesStats,
     'src.backend.actions.ProductMinOrder': _ProductMinOrder,
     'src.backend.actions.ProductManagement': _ProductManagement,
     'src.backend.actions.PricingPromotionManagement': _PricingPromotionManagement,
@@ -18234,6 +18236,56 @@ async function registrationPeriodMetrics(start, end) {
         repeatOrderCount
     };
 }
+async function registrationMonthRows(monthCount = 12) {
+    const now = new Date();
+    const rows = [];
+    for(let offset = 0; offset < monthCount; offset += 1){
+        const start = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+        const y = start.getFullYear();
+        const m = String(start.getMonth() + 1).padStart(2, '0');
+        const registered = await _prisma.default.sysuser.findMany({
+            where: {
+                role: 'CUSTOMER',
+                createdAt: {
+                    gte: start,
+                    lt: end
+                }
+            },
+            select: {
+                id: true
+            }
+        });
+        const registerCount = registered.length;
+        let convertedCount = 0;
+        if (registerCount) {
+            const ids = registered.map((row)=>row.id);
+            const ordered = await _prisma.default.orderrecord.findMany({
+                where: {
+                    userId: {
+                        in: ids
+                    }
+                },
+                select: {
+                    userId: true
+                },
+                distinct: [
+                    'userId'
+                ]
+            });
+            convertedCount = ordered.length;
+        }
+        const conversionRate = registerCount > 0 ? Math.round(convertedCount / registerCount * 1000) / 10 : 0;
+        rows.push({
+            month: `${y}-${m}`,
+            monthLabel: `${y}年${Number(m)}月`,
+            registerCount,
+            convertedCount,
+            conversionRate
+        });
+    }
+    return rows;
+}
 const getAdminProfile = (0, _action_utils.requireRole)([
     _action_utils.UserRole.ADMIN,
     _action_utils.UserRole.SUB_ADMIN
@@ -18376,7 +18428,7 @@ const getRegistrationStatsDetail = (0, _staffAccess.requireStaff)('dashboard')((
     const monthStart = (0, _listingStats.startOfMonth)(now);
     const yearStart = startOfYear(now);
     const next = (0, _listingStats.addDays)(now, 1);
-    const [totalCustomerCount, week, month, year] = await Promise.all([
+    const [totalCustomerCount, week, month, year, months] = await Promise.all([
         _prisma.default.sysuser.count({
             where: {
                 role: 'CUSTOMER'
@@ -18384,14 +18436,16 @@ const getRegistrationStatsDetail = (0, _staffAccess.requireStaff)('dashboard')((
         }),
         registrationPeriodMetrics(weekStart, (0, _listingStats.addDays)(weekStart, 7)),
         registrationPeriodMetrics(monthStart, new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)),
-        registrationPeriodMetrics(yearStart, next)
+        registrationPeriodMetrics(yearStart, next),
+        registrationMonthRows(12)
     ]);
     return {
         generatedAt: now.toISOString(),
         totalCustomerCount,
         week,
         month,
-        year
+        year,
+        months
     };
 }));
 const getImportTasksOverview = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
@@ -31297,6 +31351,9 @@ _export(exports, {
     get listInboundShipments () {
         return listInboundShipments;
     },
+    get refreshPackageTrackStatuses () {
+        return refreshPackageTrackStatuses;
+    },
     get saveInboundShipment () {
         return saveInboundShipment;
     },
@@ -31346,6 +31403,7 @@ _export(exports, {
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
 const _staffAccess = __webpack_require__(2370);
 const _crypto = __webpack_require__(6982);
+const _track17 = __webpack_require__(9641);
 const _uploadStorage = __webpack_require__(5791);
 const _action_utils = __webpack_require__(9360);
 const _exchangeRate = __webpack_require__(3928);
@@ -31655,8 +31713,27 @@ function emptyPackageLine() {
         shipDate: '',
         freightCost: '',
         chargeWeight: '',
-        remark: ''
+        remark: '',
+        trackStatus: '',
+        trackStatusLabel: '',
+        trackEvent: '',
+        trackTime: '',
+        trackUrl: ''
     };
+}
+function attachTrackToPackageLines(lines, cache) {
+    return lines.map((line)=>{
+        const number = String(line.remark || '').trim();
+        const hit = number ? cache[number.toUpperCase()] : undefined;
+        return {
+            ...line,
+            trackStatus: (hit === null || hit === void 0 ? void 0 : hit.status) || '',
+            trackStatusLabel: (hit === null || hit === void 0 ? void 0 : hit.statusLabel) || '',
+            trackEvent: (hit === null || hit === void 0 ? void 0 : hit.latestEvent) || '',
+            trackTime: (hit === null || hit === void 0 ? void 0 : hit.latestTime) || '',
+            trackUrl: (hit === null || hit === void 0 ? void 0 : hit.publicUrl) || (number.length >= 6 ? (0, _track17.track17PublicUrl)(number) : '')
+        };
+    });
 }
 function sumPackageFreight(lines) {
     let total = 0;
@@ -31685,6 +31762,8 @@ function readRegisterInfo(raw) {
             usdShipping: null,
             depositText: '',
             isSettled: false,
+            registerCustomerName: '',
+            registerPhone: '',
             freightTotal: null,
             packageLines: [
                 emptyPackageLine()
@@ -31710,12 +31789,15 @@ function readRegisterInfo(raw) {
     const filled = packageLines.length ? packageLines : [
         emptyPackageLine()
     ];
+    const cache = (0, _track17.readTrackCache)(info);
     return {
         usdShipping: readUsdShipping(info),
         depositText: readDepositText(info),
         isSettled: Boolean(info.isSettled === true || info.settled === true || info.cleared === true),
+        registerCustomerName: String(info.customerName || '').trim().slice(0, 100),
+        registerPhone: String(info.phone || '').trim().slice(0, 30),
         freightTotal: sumPackageFreight(filled),
-        packageLines: filled
+        packageLines: attachTrackToPackageLines(filled, cache)
     };
 }
 function withRegisterFallback(record) {
@@ -31890,17 +31972,22 @@ const getOrderList = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.
             trackingCarrier: record.trackingCarrier,
             trackingNumber: record.trackingNumber,
             createdAt: record.createdAt.toISOString(),
-            customerName: record.user.username,
-            customerEmail: record.user.email,
-            customerWhatsapp: record.user.phone || null,
-            ...orderLevelDiscounts({
-                vipDiscount: Number(record.user.vipDiscount) || 0,
-                customerType: record.user.customerType,
-                subtotal: record.subtotalAmount.toNumber(),
-                config: promoConfig
-            }),
-            manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
-            ...withRegisterFallback(record),
+            ...(()=>{
+                const register = withRegisterFallback(record);
+                return {
+                    customerName: register.registerCustomerName || record.user.username,
+                    customerEmail: record.user.email,
+                    customerWhatsapp: register.registerPhone || record.user.phone || null,
+                    ...orderLevelDiscounts({
+                        vipDiscount: Number(record.user.vipDiscount) || 0,
+                        customerType: record.user.customerType,
+                        subtotal: record.subtotalAmount.toNumber(),
+                        config: promoConfig
+                    }),
+                    manualDiscountPercent: record.manualDiscountPercent == null ? null : Number(record.manualDiscountPercent),
+                    ...register
+                };
+            })(),
             countryName: ((_record_address = record.address) === null || _record_address === void 0 ? void 0 : _record_address.countryName) || null,
             itemSummary,
             itemImageUrl: ((_record_items_ = record.items[0]) === null || _record_items_ === void 0 ? void 0 : (_record_items__product = _record_items_.product) === null || _record_items__product === void 0 ? void 0 : _record_items__product.mainImageUrl) || null,
@@ -32001,9 +32088,15 @@ const getOrderDetail = (0, _staffAccess.requireStaff)('orders')((0, _action_util
         shippedAt: ((_record_shippedAt = record.shippedAt) === null || _record_shippedAt === void 0 ? void 0 : _record_shippedAt.toISOString()) || null,
         note: record.note,
         createdAt: record.createdAt.toISOString(),
-        customerName: record.user.username,
-        customerEmail: record.user.email,
-        customerWhatsapp: record.user.phone || null,
+        ...(()=>{
+            const register = withRegisterFallback(record);
+            return {
+                customerName: register.registerCustomerName || record.user.username,
+                customerEmail: record.user.email,
+                customerWhatsapp: register.registerPhone || record.user.phone || null,
+                ...register
+            };
+        })(),
         ...orderLevelDiscounts({
             vipDiscount: Number(record.user.vipDiscount) || 0,
             customerType: record.user.customerType,
@@ -33752,44 +33845,85 @@ const PLACEHOLDER_EMAIL_DOMAIN = '@guest.local';
 function isPlaceholderCustomerEmail(email) {
     return String(email || '').trim().toLowerCase().endsWith(PLACEHOLDER_EMAIL_DOMAIN);
 }
+const MANUAL_ORDER_WALKIN_EMAIL = 'manual-order@walkin.local';
+/** 自主建单挂到已有客户，或共享 walk-in 账号；不再每次新建客户注册。 */ async function resolveManualOrderUserId(tx, input) {
+    const phone = input.phone;
+    if (phone) {
+        const byPhone = await tx.sysuser.findFirst({
+            where: {
+                role: 'CUSTOMER',
+                phone
+            },
+            select: {
+                id: true
+            },
+            orderBy: {
+                createdAt: 'asc'
+            }
+        });
+        if (byPhone) return byPhone.id;
+    }
+    const byName = await tx.sysuser.findFirst({
+        where: {
+            role: 'CUSTOMER',
+            username: input.customerName,
+            NOT: {
+                email: {
+                    endsWith: PLACEHOLDER_EMAIL_DOMAIN
+                }
+            },
+            email: {
+                not: MANUAL_ORDER_WALKIN_EMAIL
+            }
+        },
+        select: {
+            id: true
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    });
+    if (byName) return byName.id;
+    const walkIn = await tx.sysuser.findFirst({
+        where: {
+            email: MANUAL_ORDER_WALKIN_EMAIL
+        },
+        select: {
+            id: true
+        }
+    });
+    if (walkIn) return walkIn.id;
+    const created = await tx.sysuser.create({
+        data: {
+            account: 'manual_order_walkin',
+            email: MANUAL_ORDER_WALKIN_EMAIL,
+            password: (0, _crypto.createHash)('sha256').update('manual-order-walkin').digest('hex'),
+            role: 'CUSTOMER',
+            status: 'ACTIVE',
+            username: '自主建单',
+            customerType: 'NEW'
+        },
+        select: {
+            id: true
+        }
+    });
+    return created.id;
+}
 const createCustomerOrder = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
     const { username } = (0, _action_utils.getAuthContext)();
     const customerName = String(input.customerName || '').trim().slice(0, 100);
     if (!customerName) throw new Error('请填写客户姓名');
     const status = IMPORT_ORDER_STATUSES.includes(input.status) ? input.status : 'PROCESSING';
-    const email = `${(0, _crypto.randomUUID)()}${PLACEHOLDER_EMAIL_DOMAIN}`;
-    const account = `m_${(0, _crypto.createHash)('sha256').update(email).digest('hex').slice(0, 40)}`;
-    const password = (0, _crypto.createHash)('sha256').update((0, _crypto.randomUUID)()).digest('hex');
+    const phone = String(input.phone || '').trim().slice(0, 30);
     const created = await _prisma.default.$transaction(async (tx)=>{
-        const user = await tx.sysuser.create({
-            data: {
-                account,
-                email,
-                password,
-                role: 'CUSTOMER',
-                status: 'ACTIVE',
-                username: customerName,
-                customerType: 'NEW'
-            },
-            select: {
-                id: true
-            }
+        const userId = await resolveManualOrderUserId(tx, {
+            customerName,
+            phone
         });
         const money = (value)=>{
             const amount = Number(value);
             return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
         };
-        const phone = String(input.phone || '').trim().slice(0, 30);
-        if (phone) {
-            await tx.sysuser.update({
-                where: {
-                    id: user.id
-                },
-                data: {
-                    phone
-                }
-            });
-        }
         const freightLines = (input.freightLines || []).map((line)=>({
                 freightCost: String((line === null || line === void 0 ? void 0 : line.freightCost) || '').trim().slice(0, 40),
                 chargeWeight: String((line === null || line === void 0 ? void 0 : line.chargeWeight) || '').trim().slice(0, 40),
@@ -33797,6 +33931,7 @@ const createCustomerOrder = (0, _staffAccess.requireStaff)('orders')((0, _action
             })).filter((line)=>line.freightCost || line.chargeWeight || line.remark);
         const registerInfo = {
             registerDate: String(input.registerDate || '').trim().slice(0, 20),
+            customerName,
             phone,
             address: String(input.address || '').trim().slice(0, 500),
             orderAmount: money(input.orderAmount),
@@ -33812,7 +33947,7 @@ const createCustomerOrder = (0, _staffAccess.requireStaff)('orders')((0, _action
             const order = await tx.orderrecord.create({
                 data: {
                     orderNo,
-                    userId: user.id,
+                    userId,
                     status,
                     currencyCode: 'USD',
                     localeCode: 'en',
@@ -33832,7 +33967,7 @@ const createCustomerOrder = (0, _staffAccess.requireStaff)('orders')((0, _action
                 data: {
                     orderId: order.id,
                     actionType: '创建订单',
-                    actionNote: `姓名 ${customerName}`.slice(0, 4000),
+                    actionNote: `姓名 ${customerName}（未新建客户）`.slice(0, 4000),
                     operatorName: username
                 }
             });
@@ -33840,13 +33975,14 @@ const createCustomerOrder = (0, _staffAccess.requireStaff)('orders')((0, _action
                 orderId: order.id,
                 orderNo,
                 itemCount: 0,
-                totalAmount: 0
+                totalAmount: registerInfo.orderAmount
             };
         });
     });
     return created;
 }));
 const updateOrderCustomerProfile = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
+    var _orderFull_user, _orderFull_user1;
     const orderId = String(input.orderId || '').trim();
     if (!orderId) throw new Error('缺少订单');
     const order = await _prisma.default.orderrecord.findUnique({
@@ -33902,7 +34038,50 @@ const updateOrderCustomerProfile = (0, _staffAccess.requireStaff)('orders')((0, 
             data.account = email.length <= 50 ? email : `e_${(0, _crypto.createHash)('sha256').update(email).digest('hex').slice(0, 40)}`;
         }
     }
+    const orderFull = await _prisma.default.orderrecord.findUnique({
+        where: {
+            id: orderId
+        },
+        select: {
+            registerInfoJson: true,
+            user: {
+                select: {
+                    email: true
+                }
+            }
+        }
+    });
+    const isWalkIn = String((orderFull === null || orderFull === void 0 ? void 0 : (_orderFull_user = orderFull.user) === null || _orderFull_user === void 0 ? void 0 : _orderFull_user.email) || '').toLowerCase() === MANUAL_ORDER_WALKIN_EMAIL || isPlaceholderCustomerEmail(String((orderFull === null || orderFull === void 0 ? void 0 : (_orderFull_user1 = orderFull.user) === null || _orderFull_user1 === void 0 ? void 0 : _orderFull_user1.email) || ''));
+    const base = (orderFull === null || orderFull === void 0 ? void 0 : orderFull.registerInfoJson) && typeof orderFull.registerInfoJson === 'object' && !Array.isArray(orderFull.registerInfoJson) ? {
+        ...orderFull.registerInfoJson
+    } : {};
+    if (input.customerName !== undefined) base.customerName = String(input.customerName || '').trim().slice(0, 100);
+    if (input.phone !== undefined) base.phone = String(input.phone || '').trim().slice(0, 30);
+    // 自主建单 / 占位客户：只改订单上的姓名电话，不改共享账号注册资料
+    if (isWalkIn) {
+        await _prisma.default.orderrecord.update({
+            where: {
+                id: orderId
+            },
+            data: {
+                registerInfoJson: base
+            }
+        });
+        return {
+            customerName: String(base.customerName || user.username),
+            customerWhatsapp: (base.phone != null ? String(base.phone) : user.phone) || null,
+            customerEmail: user.email
+        };
+    }
     if (!Object.keys(data).length) {
+        await _prisma.default.orderrecord.update({
+            where: {
+                id: orderId
+            },
+            data: {
+                registerInfoJson: base
+            }
+        });
         return {
             customerName: user.username,
             customerWhatsapp: user.phone || null,
@@ -33920,9 +34099,17 @@ const updateOrderCustomerProfile = (0, _staffAccess.requireStaff)('orders')((0, 
             email: true
         }
     });
+    await _prisma.default.orderrecord.update({
+        where: {
+            id: orderId
+        },
+        data: {
+            registerInfoJson: base
+        }
+    });
     return {
-        customerName: saved.username,
-        customerWhatsapp: saved.phone || null,
+        customerName: String(base.customerName || saved.username),
+        customerWhatsapp: (base.phone != null && String(base.phone) ? String(base.phone) : saved.phone) || null,
         customerEmail: saved.email
     };
 }));
@@ -34416,9 +34603,93 @@ const updateOrderParcelInfo = (0, _staffAccess.requireStaff)('orders')((0, _acti
             }
         });
     });
+    const numbers = packageLines.map((line)=>line.remark).filter(Boolean);
+    let tracked = packageLines;
+    if (numbers.length) {
+        try {
+            const result = await (0, _track17.fetchTrack17Statuses)(numbers);
+            const cache = (0, _track17.mergeTrackCache)((0, _track17.readTrackCache)(next), result.items);
+            const withTrack = {
+                ...next,
+                trackByNumber: cache
+            };
+            await _prisma.default.orderrecord.update({
+                where: {
+                    id: orderId
+                },
+                data: {
+                    registerInfoJson: withTrack
+                }
+            });
+            tracked = attachTrackToPackageLines(packageLines, cache);
+        } catch  {
+            tracked = attachTrackToPackageLines(packageLines, (0, _track17.readTrackCache)(next));
+        }
+    }
     return {
         freightTotal,
-        packageLines
+        packageLines: tracked
+    };
+}));
+const refreshPackageTrackStatuses = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
+    const orderIds = Array.from(new Set((input.orderIds || []).map((id)=>String(id || '').trim()).filter(Boolean))).slice(0, 80);
+    const directNumbers = Array.from(new Set((input.numbers || []).map((n)=>String(n || '').trim()).filter(Boolean)));
+    const orders = orderIds.length ? await _prisma.default.orderrecord.findMany({
+        where: {
+            id: {
+                in: orderIds
+            }
+        },
+        select: {
+            id: true,
+            registerInfoJson: true
+        }
+    }) : [];
+    const numbers = [
+        ...directNumbers
+    ];
+    for (const order of orders){
+        const info = readRegisterInfo(order.registerInfoJson);
+        for (const line of info.packageLines){
+            if (line.remark) numbers.push(line.remark);
+        }
+    }
+    const unique = Array.from(new Set(numbers.map((n)=>n.trim()).filter((n)=>n.length >= 6))).slice(0, 40);
+    const result = await (0, _track17.fetchTrack17Statuses)(unique);
+    const byNumber = new Map(result.items.map((item)=>[
+            item.number.toUpperCase(),
+            item
+        ]));
+    const updatedOrderIds = [];
+    for (const order of orders){
+        const base = order.registerInfoJson && typeof order.registerInfoJson === 'object' && !Array.isArray(order.registerInfoJson) ? {
+            ...order.registerInfoJson
+        } : {};
+        const info = readRegisterInfo(order.registerInfoJson);
+        const related = info.packageLines.map((line)=>line.remark).filter(Boolean);
+        if (!related.length) continue;
+        const existing = (0, _track17.readTrackCache)(base);
+        const patchItems = related.map((number)=>byNumber.get(number.toUpperCase())).filter((item)=>Boolean(item));
+        if (!patchItems.length) continue;
+        const cache = (0, _track17.mergeTrackCache)(existing, patchItems);
+        await _prisma.default.orderrecord.update({
+            where: {
+                id: order.id
+            },
+            data: {
+                registerInfoJson: {
+                    ...base,
+                    trackByNumber: cache
+                }
+            }
+        });
+        updatedOrderIds.push(order.id);
+    }
+    return {
+        configured: result.configured,
+        message: result.message,
+        items: result.items,
+        updatedOrderIds
     };
 }));
 const updateOrderMoneyFields = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
@@ -41239,6 +41510,476 @@ const batchUpdateMinOrderQty = (0, _staffAccess.requireStaff)('products')((0, _a
 
 /***/ },
 
+/***/ 883
+(__unused_webpack_module, exports, __webpack_require__) {
+
+'use server';
+"use strict";
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get clearSalesStatsLedger () {
+        return clearSalesStatsLedger;
+    },
+    get getSalesStatsDetail () {
+        return getSalesStatsDetail;
+    },
+    get importSalesStatsImage () {
+        return importSalesStatsImage;
+    },
+    get importSalesStatsSheet () {
+        return importSalesStatsSheet;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
+const _staffAccess = __webpack_require__(2370);
+const _action_utils = __webpack_require__(9360);
+const _secretresolver = __webpack_require__(937);
+const _sharp = /*#__PURE__*/ _interop_require_default(__webpack_require__(9288));
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+const LEDGER_TITLE = 'SALES_LEDGER_V1';
+function money(value) {
+    if (value == null || value === '') return null;
+    const text = String(value).replace(/[$,￥¥USD\s,]/gi, '').trim();
+    if (!text) return null;
+    const amount = Number(text);
+    return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
+}
+function text(value, max = 500) {
+    return String(value !== null && value !== void 0 ? value : '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+function splitNamePhone(raw) {
+    const value = text(raw, 200);
+    if (!value) return {
+        customerName: '',
+        phone: ''
+    };
+    const at = value.split('@');
+    if (at.length >= 2) {
+        return {
+            customerName: text(at[0], 100),
+            phone: text(at.slice(1).join('@'), 40)
+        };
+    }
+    const phoneMatch = value.match(/(\+?\d[\d\s\-()]{5,}\d)/);
+    if (phoneMatch) {
+        const phone = text(phoneMatch[1], 40);
+        const customerName = text(value.replace(phoneMatch[1], ''), 100);
+        return {
+            customerName,
+            phone
+        };
+    }
+    return {
+        customerName: value.slice(0, 100),
+        phone: ''
+    };
+}
+function summarize(orders) {
+    let shipmentCount = 0;
+    let orderAmountTotal = 0;
+    let goodsAmountTotal = 0;
+    let usdShippingTotal = 0;
+    let freightCostTotal = 0;
+    for (const order of orders){
+        shipmentCount += Math.max(1, order.lines.length);
+        if (order.orderAmount != null) orderAmountTotal += order.orderAmount;
+        if (order.goodsAmount != null) goodsAmountTotal += order.goodsAmount;
+        if (order.usdShipping != null) usdShippingTotal += order.usdShipping;
+        for (const line of order.lines){
+            const cost = money(line.freightCost);
+            if (cost != null) freightCostTotal += cost;
+        }
+    }
+    return {
+        orderCount: orders.length,
+        shipmentCount,
+        orderAmountTotal: Math.round(orderAmountTotal * 100) / 100,
+        goodsAmountTotal: Math.round(goodsAmountTotal * 100) / 100,
+        usdShippingTotal: Math.round(usdShippingTotal * 100) / 100,
+        freightCostTotal: Math.round(freightCostTotal * 100) / 100
+    };
+}
+function normalizeOrders(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((item, index)=>{
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const row = item;
+        const linesRaw = Array.isArray(row.lines) ? row.lines : [];
+        const lines = linesRaw.flatMap((line)=>{
+            if (!line || typeof line !== 'object' || Array.isArray(line)) return [];
+            const itemLine = line;
+            return [
+                {
+                    freightCost: text(itemLine.freightCost, 40),
+                    chargeWeight: text(itemLine.chargeWeight, 40),
+                    remark: text(itemLine.remark, 200)
+                }
+            ];
+        });
+        const order = {
+            id: text(row.id, 80) || `sales-${index + 1}`,
+            dateText: text(row.dateText, 40),
+            customerName: text(row.customerName, 100),
+            phone: text(row.phone, 40),
+            address: text(row.address, 500),
+            orderAmount: money(row.orderAmount),
+            goodsAmount: money(row.goodsAmount),
+            usdShipping: money(row.usdShipping),
+            lines: lines.length ? lines : [
+                {
+                    freightCost: '',
+                    chargeWeight: '',
+                    remark: ''
+                }
+            ]
+        };
+        if (!order.customerName && !order.phone && !order.address && order.orderAmount == null && !order.lines.some((line)=>line.freightCost || line.chargeWeight || line.remark)) {
+            return [];
+        }
+        return [
+            order
+        ];
+    });
+}
+async function readLedger() {
+    var _setting_updatedAt_toISOString, _setting_updatedAt;
+    const setting = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: LEDGER_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    const content = setting === null || setting === void 0 ? void 0 : setting.contentJson;
+    const orders = content && typeof content === 'object' && !Array.isArray(content) ? normalizeOrders(content.orders) : Array.isArray(content) ? normalizeOrders(content) : [];
+    return {
+        orders,
+        updatedAt: (setting === null || setting === void 0 ? void 0 : (_setting_updatedAt = setting.updatedAt) === null || _setting_updatedAt === void 0 ? void 0 : (_setting_updatedAt_toISOString = _setting_updatedAt.toISOString) === null || _setting_updatedAt_toISOString === void 0 ? void 0 : _setting_updatedAt_toISOString.call(_setting_updatedAt)) || new Date().toISOString()
+    };
+}
+async function writeLedger(orders) {
+    const payload = {
+        orders: normalizeOrders(orders)
+    };
+    const existing = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: LEDGER_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    if (existing) {
+        await _prisma.default.sitesetting.update({
+            where: {
+                id: existing.id
+            },
+            data: {
+                contentJson: payload,
+                isActive: true
+            }
+        });
+    } else {
+        await _prisma.default.sitesetting.create({
+            data: {
+                settingType: 'STATIC_COPY',
+                title: LEDGER_TITLE,
+                subtitle: 'sales ledger',
+                contentJson: payload,
+                isActive: true,
+                sortWeight: 0
+            }
+        });
+    }
+}
+function headerIndex(headers, aliases) {
+    const normalized = headers.map((item)=>item.replace(/\s+/g, '').toLowerCase());
+    for (const alias of aliases){
+        const key = alias.replace(/\s+/g, '').toLowerCase();
+        const exact = normalized.findIndex((item)=>item === key || item.includes(key));
+        if (exact >= 0) return exact;
+    }
+    return -1;
+}
+function cell(row, index) {
+    if (index < 0 || index >= row.length) return '';
+    return text(row[index], 500);
+}
+function parseAoa(aoa) {
+    if (!aoa.length) return [];
+    let headerRow = 0;
+    for(let i = 0; i < Math.min(8, aoa.length); i += 1){
+        const joined = (aoa[i] || []).map((item)=>String(item || '')).join(' ');
+        if (/日期|姓名|地址|订单金额|运费/.test(joined)) {
+            headerRow = i;
+            break;
+        }
+    }
+    const headers = (aoa[headerRow] || []).map((item)=>String(item || ''));
+    const idx = {
+        date: headerIndex(headers, [
+            '日期',
+            'date'
+        ]),
+        namePhone: headerIndex(headers, [
+            '姓名@电话',
+            '姓名电话',
+            '姓名',
+            '客户',
+            'name'
+        ]),
+        address: headerIndex(headers, [
+            '地址',
+            'address'
+        ]),
+        orderAmount: headerIndex(headers, [
+            '订单金额',
+            'orderamount',
+            '总额'
+        ]),
+        goodsAmount: headerIndex(headers, [
+            '商品金额',
+            '货值',
+            'goodsamount'
+        ]),
+        usdShipping: headerIndex(headers, [
+            'usd运费',
+            '运费usd',
+            'usdshipping',
+            '运费'
+        ]),
+        freightCost: headerIndex(headers, [
+            '运费成本',
+            'freight',
+            '成本运费'
+        ]),
+        chargeWeight: headerIndex(headers, [
+            '计费重量',
+            '计费重',
+            '重量',
+            'weight'
+        ]),
+        remark: headerIndex(headers, [
+            '订单备注',
+            '物流号',
+            'tracking',
+            '备注'
+        ])
+    };
+    const orders = [];
+    let current = null;
+    for(let r = headerRow + 1; r < aoa.length; r += 1){
+        const row = Array.isArray(aoa[r]) ? aoa[r] : [];
+        if (!row.some((item)=>String(item || '').trim())) continue;
+        const dateText = cell(row, idx.date);
+        const namePhone = cell(row, idx.namePhone);
+        const address = cell(row, idx.address);
+        const orderAmount = money(cell(row, idx.orderAmount));
+        const goodsAmount = money(cell(row, idx.goodsAmount));
+        const usdShipping = money(cell(row, idx.usdShipping));
+        const line = {
+            freightCost: cell(row, idx.freightCost),
+            chargeWeight: cell(row, idx.chargeWeight),
+            remark: cell(row, idx.remark)
+        };
+        const startsNew = Boolean(namePhone || address || orderAmount != null || goodsAmount != null || usdShipping != null || dateText && !current);
+        if (startsNew || !current) {
+            const { customerName, phone } = splitNamePhone(namePhone);
+            current = {
+                id: `sales-${Date.now()}-${orders.length + 1}`,
+                dateText,
+                customerName,
+                phone,
+                address,
+                orderAmount,
+                goodsAmount,
+                usdShipping,
+                lines: [
+                    line
+                ]
+            };
+            orders.push(current);
+        } else {
+            if (dateText && !current.dateText) current.dateText = dateText;
+            current.lines.push(line);
+        }
+    }
+    return normalizeOrders(orders);
+}
+async function parseSpreadsheet(fileBase64, fileName = '') {
+    const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64');
+    if (!raw.length) throw new Error('表格内容为空');
+    const lower = String(fileName || '').toLowerCase();
+    try {
+        const XLSX = __webpack_require__(9964);
+        const workbook = XLSX.read(raw, {
+            type: 'buffer',
+            cellDates: true
+        });
+        const first = workbook.Sheets[workbook.SheetNames[0]];
+        const aoa = XLSX.utils.sheet_to_json(first, {
+            header: 1,
+            defval: '',
+            raw: false
+        });
+        return parseAoa(aoa);
+    } catch (error) {
+        if (lower.endsWith('.csv')) {
+            const textBody = raw.toString('utf8');
+            const rows = textBody.split(/\r?\n/).map((line)=>line.split(','));
+            return parseAoa(rows);
+        }
+        throw error instanceof Error ? error : new Error('表格解析失败');
+    }
+}
+async function recognizeSalesImage(fileBase64) {
+    var _data_choices__message, _data_choices_, _data_choices;
+    let secrets = null;
+    try {
+        secrets = (0, _secretresolver.resolveAiSecrets)();
+    } catch  {
+        secrets = null;
+    }
+    const apiKey = String((secrets === null || secrets === void 0 ? void 0 : secrets.apiKey) || process.env.OPENAI_API_KEY || '').trim();
+    if (!apiKey) throw new Error('未配置图片识别密钥，请先导入表格，或配置 AI 密钥后再识别图片');
+    const baseUrl = String((secrets === null || secrets === void 0 ? void 0 : secrets.baseUrl) || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const model = String((secrets === null || secrets === void 0 ? void 0 : secrets.defaultModel) || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
+    const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64');
+    if (!raw.length) throw new Error('图片内容为空');
+    const jpeg = await (0, _sharp.default)(raw).rotate().resize(1600, 1600, {
+        fit: 'inside',
+        withoutEnlargement: true
+    }).jpeg({
+        quality: 80
+    }).toBuffer();
+    const dataUrl = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model,
+            temperature: 0,
+            max_tokens: 4000,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . Merge vertically merged order cells into one order with multiple lines. remark is tracking number. Use null for missing numbers.'
+                },
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Parse this sales sheet image into JSON orders.'
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: dataUrl
+                            }
+                        }
+                    ]
+                }
+            ]
+        })
+    });
+    if (!response.ok) throw new Error(`图片识别失败 HTTP ${response.status}`);
+    const data = await response.json();
+    const content = String(((_data_choices = data.choices) === null || _data_choices === void 0 ? void 0 : (_data_choices_ = _data_choices[0]) === null || _data_choices_ === void 0 ? void 0 : (_data_choices__message = _data_choices_.message) === null || _data_choices__message === void 0 ? void 0 : _data_choices__message.content) || '');
+    const matched = content.match(/\{[\s\S]*\}/);
+    if (!matched) throw new Error('图片识别未返回可用数据');
+    let parsed;
+    try {
+        parsed = JSON.parse(matched[0]);
+    } catch  {
+        throw new Error('图片识别结果不是合法 JSON');
+    }
+    const orders = normalizeOrders(parsed === null || parsed === void 0 ? void 0 : parsed.orders).map((order, index)=>({
+            ...order,
+            id: order.id || `sales-img-${Date.now()}-${index + 1}`
+        }));
+    if (!orders.length) throw new Error('图片里没有识别到销售行');
+    return orders;
+}
+const getSalesStatsDetail = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
+    const { orders, updatedAt } = await readLedger();
+    return {
+        updatedAt,
+        orders,
+        summary: summarize(orders)
+    };
+}));
+const importSalesStatsSheet = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async (input)=>{
+    (0, _action_utils.getAuthContext)();
+    const imported = await parseSpreadsheet(String(input.fileBase64 || ''), String(input.fileName || ''));
+    if (!imported.length) throw new Error('表格里没有读到销售数据');
+    const mode = input.mode === 'append' ? 'append' : 'replace';
+    const current = mode === 'append' ? (await readLedger()).orders : [];
+    const next = normalizeOrders([
+        ...current,
+        ...imported
+    ]).map((order, index)=>({
+            ...order,
+            id: order.id || `sales-${Date.now()}-${index + 1}`
+        }));
+    await writeLedger(next);
+    const saved = await readLedger();
+    return {
+        updatedAt: saved.updatedAt,
+        orders: saved.orders,
+        summary: summarize(saved.orders)
+    };
+}));
+const importSalesStatsImage = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async (input)=>{
+    (0, _action_utils.getAuthContext)();
+    const imported = await recognizeSalesImage(String(input.fileBase64 || ''));
+    const mode = input.mode === 'append' ? 'append' : 'replace';
+    const current = mode === 'append' ? (await readLedger()).orders : [];
+    const next = normalizeOrders([
+        ...current,
+        ...imported
+    ]).map((order, index)=>({
+            ...order,
+            id: order.id || `sales-img-${Date.now()}-${index + 1}`
+        }));
+    await writeLedger(next);
+    const saved = await readLedger();
+    return {
+        updatedAt: saved.updatedAt,
+        orders: saved.orders,
+        summary: summarize(saved.orders)
+    };
+}));
+const clearSalesStatsLedger = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
+    await writeLedger([]);
+    return {
+        updatedAt: new Date().toISOString(),
+        orders: [],
+        summary: summarize([])
+    };
+}));
+
+
+/***/ },
+
 /***/ 2597
 (__unused_webpack_module, exports, __webpack_require__) {
 
@@ -44986,6 +45727,245 @@ function mergeProductTitleTranslations(existing, patch) {
         nameEs: nameEs || null,
         shortDescriptionZh: (base === null || base === void 0 ? void 0 : (_base_zh1 = base.zh) === null || _base_zh1 === void 0 ? void 0 : _base_zh1.shortDescription) || null
     });
+}
+
+
+/***/ },
+
+/***/ 9641
+(__unused_webpack_module, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get fetchTrack17Statuses () {
+        return fetchTrack17Statuses;
+    },
+    get mergeTrackCache () {
+        return mergeTrackCache;
+    },
+    get readTrack17Token () {
+        return readTrack17Token;
+    },
+    get readTrackCache () {
+        return readTrackCache;
+    },
+    get track17PublicUrl () {
+        return track17PublicUrl;
+    },
+    get track17StatusLabel () {
+        return track17StatusLabel;
+    }
+});
+/**
+ * 17TRACK API v2.4 helpers.
+ * Token from TRACK17_TOKEN (or SEVENTEENTRACK_TOKEN / TRACK17_API_KEY).
+ */ const TRACK17_BASE = 'https://api.17track.net/track/v2.4';
+const STATUS_LABELS = {
+    NotFound: '查询无结果',
+    InfoReceived: '运输商已收信息',
+    InTransit: '运输中',
+    Expired: '运输过久未更新',
+    AvailableForPickup: '到达待取',
+    OutForDelivery: '派送中',
+    DeliveryFailure: '投递失败',
+    Delivered: '已签收',
+    Exception: '可能异常'
+};
+function track17PublicUrl(number) {
+    return `https://t.17track.net/zh-cn#nums=${encodeURIComponent(number)}`;
+}
+function track17StatusLabel(status) {
+    return STATUS_LABELS[status] || status || '未知';
+}
+function readTrack17Token() {
+    return String(process.env.TRACK17_TOKEN || process.env.SEVENTEENTRACK_TOKEN || process.env.TRACK17_API_KEY || '').trim();
+}
+function normalizeTrackingNumber(raw) {
+    return String(raw || '').trim().replace(/\s+/g, '').slice(0, 80);
+}
+async function track17Post(path, body, token) {
+    const res = await fetch(`${TRACK17_BASE}${path}`, {
+        method: 'POST',
+        headers: {
+            '17token': token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    let json = null;
+    try {
+        json = text ? JSON.parse(text) : null;
+    } catch  {
+        throw new Error(`17TRACK 返回异常 HTTP ${res.status}`);
+    }
+    if (!res.ok) {
+        throw new Error(`17TRACK HTTP ${res.status}: ${String((json === null || json === void 0 ? void 0 : json.message) || text).slice(0, 200)}`);
+    }
+    return json;
+}
+function parseAcceptedRow(row, number) {
+    var _track_latest_status, _event_description_translation, _track_latest_status1, _event_time_raw;
+    const track = (row === null || row === void 0 ? void 0 : row.track_info) || {};
+    const latestStatus = String((track === null || track === void 0 ? void 0 : (_track_latest_status = track.latest_status) === null || _track_latest_status === void 0 ? void 0 : _track_latest_status.status) || '').trim();
+    const event = (track === null || track === void 0 ? void 0 : track.latest_event) || {};
+    const description = String((event === null || event === void 0 ? void 0 : (_event_description_translation = event.description_translation) === null || _event_description_translation === void 0 ? void 0 : _event_description_translation.description) || (event === null || event === void 0 ? void 0 : event.description) || '').trim() || String((track === null || track === void 0 ? void 0 : (_track_latest_status1 = track.latest_status) === null || _track_latest_status1 === void 0 ? void 0 : _track_latest_status1.sub_status_descr) || '').trim();
+    const latestTime = String((event === null || event === void 0 ? void 0 : event.time_iso) || (event === null || event === void 0 ? void 0 : event.time_utc) || (event === null || event === void 0 ? void 0 : (_event_time_raw = event.time_raw) === null || _event_time_raw === void 0 ? void 0 : _event_time_raw.date) || '').trim();
+    const carrierRaw = row === null || row === void 0 ? void 0 : row.carrier;
+    const carrier = Number.isFinite(Number(carrierRaw)) ? Number(carrierRaw) : null;
+    return {
+        number,
+        status: latestStatus || 'NotFound',
+        statusLabel: track17StatusLabel(latestStatus || 'NotFound'),
+        latestEvent: description.slice(0, 300),
+        latestTime: latestTime.slice(0, 40),
+        carrier,
+        fetchedAt: new Date().toISOString(),
+        publicUrl: track17PublicUrl(number)
+    };
+}
+async function fetchTrack17Statuses(rawNumbers) {
+    var _info_data, _info_data1;
+    const numbers = Array.from(new Set(rawNumbers.map(normalizeTrackingNumber).filter((n)=>n.length >= 6))).slice(0, 40);
+    if (!numbers.length) {
+        return {
+            configured: Boolean(readTrack17Token()),
+            items: []
+        };
+    }
+    const token = readTrack17Token();
+    if (!token) {
+        return {
+            configured: false,
+            items: numbers.map((number)=>({
+                    number,
+                    status: '',
+                    statusLabel: '未配置密钥',
+                    latestEvent: '请在服务器 .env 配置 TRACK17_TOKEN',
+                    latestTime: '',
+                    carrier: null,
+                    fetchedAt: new Date().toISOString(),
+                    publicUrl: track17PublicUrl(number),
+                    error: 'missing_token'
+                })),
+            message: '未配置 TRACK17_TOKEN，已提供 17TRACK 公开查询链接'
+        };
+    }
+    const payload = numbers.map((number)=>({
+            number,
+            auto_detection: true
+        }));
+    try {
+        await track17Post('/register', payload, token);
+    } catch  {
+    // Already registered / partial accept is fine; gettrackinfo is the source of truth.
+    }
+    let info;
+    try {
+        info = await track17Post('/gettrackinfo', numbers.map((number)=>({
+                number
+            })), token);
+    } catch (error) {
+        return {
+            configured: true,
+            items: numbers.map((number)=>({
+                    number,
+                    status: '',
+                    statusLabel: '查询失败',
+                    latestEvent: String((error === null || error === void 0 ? void 0 : error.message) || '17TRACK 查询失败').slice(0, 200),
+                    latestTime: '',
+                    carrier: null,
+                    fetchedAt: new Date().toISOString(),
+                    publicUrl: track17PublicUrl(number),
+                    error: 'request_failed'
+                })),
+            message: String((error === null || error === void 0 ? void 0 : error.message) || '17TRACK 查询失败')
+        };
+    }
+    const byNumber = new Map();
+    for (const row of (info === null || info === void 0 ? void 0 : (_info_data = info.data) === null || _info_data === void 0 ? void 0 : _info_data.accepted) || []){
+        const number = normalizeTrackingNumber(String((row === null || row === void 0 ? void 0 : row.number) || ''));
+        if (!number) continue;
+        byNumber.set(number.toUpperCase(), parseAcceptedRow(row, number));
+    }
+    for (const row of (info === null || info === void 0 ? void 0 : (_info_data1 = info.data) === null || _info_data1 === void 0 ? void 0 : _info_data1.rejected) || []){
+        var _row_error;
+        const number = normalizeTrackingNumber(String((row === null || row === void 0 ? void 0 : row.number) || ''));
+        if (!number) continue;
+        byNumber.set(number.toUpperCase(), {
+            number,
+            status: '',
+            statusLabel: '查询失败',
+            latestEvent: String((row === null || row === void 0 ? void 0 : (_row_error = row.error) === null || _row_error === void 0 ? void 0 : _row_error.message) || (row === null || row === void 0 ? void 0 : row.message) || '被拒绝').slice(0, 200),
+            latestTime: '',
+            carrier: null,
+            fetchedAt: new Date().toISOString(),
+            publicUrl: track17PublicUrl(number),
+            error: 'rejected'
+        });
+    }
+    const items = numbers.map((number)=>{
+        const hit = byNumber.get(number.toUpperCase());
+        if (hit) return hit;
+        return {
+            number,
+            status: 'NotFound',
+            statusLabel: track17StatusLabel('NotFound'),
+            latestEvent: '暂无轨迹',
+            latestTime: '',
+            carrier: null,
+            fetchedAt: new Date().toISOString(),
+            publicUrl: track17PublicUrl(number)
+        };
+    });
+    return {
+        configured: true,
+        items
+    };
+}
+function readTrackCache(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const info = raw;
+    const cache = info.trackByNumber;
+    if (!cache || typeof cache !== 'object' || Array.isArray(cache)) return {};
+    const out = {};
+    for (const [key, value] of Object.entries(cache)){
+        if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+        const row = value;
+        const number = normalizeTrackingNumber(String(row.number || key));
+        if (!number) continue;
+        out[number.toUpperCase()] = {
+            number,
+            status: String(row.status || ''),
+            statusLabel: String(row.statusLabel || track17StatusLabel(String(row.status || ''))),
+            latestEvent: String(row.latestEvent || '').slice(0, 300),
+            latestTime: String(row.latestTime || '').slice(0, 40),
+            carrier: row.carrier == null || !Number.isFinite(Number(row.carrier)) ? null : Number(row.carrier),
+            fetchedAt: String(row.fetchedAt || ''),
+            publicUrl: String(row.publicUrl || track17PublicUrl(number)),
+            error: row.error ? String(row.error) : undefined
+        };
+    }
+    return out;
+}
+function mergeTrackCache(existing, items) {
+    const next = {
+        ...existing
+    };
+    for (const item of items){
+        next[item.number.toUpperCase()] = item;
+    }
+    return next;
 }
 
 
@@ -48833,6 +49813,28 @@ const compareCustomerOrderItems = (a, b)=>{
         sensitivity: 'base'
     });
 };
+const track17Url = (number)=>`https://www.17track.net/en/track?nums=${encodeURIComponent(number)}`;
+/** 后台订单列表「物流号」写在 registerInfoJson.freightLines[].remark */ const packageTrackingNumbers = (raw, fallback = '')=>{
+    const out = [];
+    const seen = new Set();
+    const push = (value)=>{
+        const number = String(value || '').trim().replace(/\s+/g, '');
+        if (number.length < 6) return;
+        const key = number.toUpperCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(number);
+    };
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const lines = Array.isArray(raw.freightLines) ? raw.freightLines : [];
+        for (const line of lines){
+            if (!line || typeof line !== 'object' || Array.isArray(line)) continue;
+            push(line.remark);
+        }
+    }
+    push(fallback);
+    return out;
+};
 const mapCustomerOrder = (row)=>({
         orderId: row.id,
         orderNo: row.orderNo,
@@ -48846,6 +49848,7 @@ const mapCustomerOrder = (row)=>({
         shipMethod: row.shipMethod,
         trackingCarrier: row.trackingCarrier || '',
         trackingNumber: row.trackingNumber || '',
+        trackingNumbers: packageTrackingNumbers(row.registerInfoJson, row.trackingNumber || ''),
         totalWeightGrams: Math.round(row.items.reduce((sum, item)=>{
             var _item_product;
             return sum + toNum((_item_product = item.product) === null || _item_product === void 0 ? void 0 : _item_product.weightGram) * item.quantity;
