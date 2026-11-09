@@ -227,6 +227,7 @@ function buildSheetHeaderLabels(headers: string[], idx: ReturnType<typeof resolv
       goodsAmount: pick(idx.goodsAmount, DEFAULT_COLUMN_LABELS.goodsAmount),
       usdShipping: pick(idx.usdShipping, DEFAULT_COLUMN_LABELS.usdShipping),
       deposit: pick(idx.deposit, DEFAULT_COLUMN_LABELS.deposit),
+      costFreight: DEFAULT_COLUMN_LABELS.costFreight,
       freightCost: pick(idx.freightCost, DEFAULT_COLUMN_LABELS.freightCost),
       chargeWeight: pick(idx.chargeWeight, DEFAULT_COLUMN_LABELS.chargeWeight),
       remark: pick(idx.remark, DEFAULT_COLUMN_LABELS.remark),
@@ -384,12 +385,12 @@ function resolveColumnIndexes(headers: string[]) {
     goodsAmount: headerIndex(headers, ['商品金额', '货款', '货值', '产品金额', '商品总额', 'goodsamount', 'goods']),
     usdShipping: headerIndex(headers, ['usd运费', '运费usd', '美金运费', '客户运费', 'usdshipping', 'shippingusd']),
     deposit: headerIndex(headers, ['定金', 'deposit', 'downpayment', '预付款']),
-    freightCost: headerIndex(headers, ['运费成本', '成本运费', '快递成本', '物流成本', 'freightcost']),
+    freightCost: headerIndex(headers, ['运费成本', '快递成本', '物流成本', '实际运费', 'freightcost']),
     chargeWeight: headerIndex(headers, ['计费重量', '计费重', '收费重量', '重量', 'weight']),
     remark: headerIndex(headers, ['订单备注', '物流号', '快递单号', '跟踪号', '运单号', 'tracking', '备注']),
   }
 
-  // 业务表固定布局兜底：A日期 B姓名 C地址 D订单金额 E商品金额 F USD运费 … J运费成本 K计费重量 L订单备注
+  // 业务表固定布局兜底：A日期 B姓名 C地址 D订单金额 E商品金额 F USD运费 … J运费 K计费重量 L订单备注
   if (idx.date < 0 && headers.length >= 1) idx.date = 0
   if (idx.namePhone < 0 && headers.length >= 2) idx.namePhone = 1
   if (idx.address < 0 && headers.length >= 3) idx.address = 2
@@ -406,7 +407,13 @@ function resolveColumnIndexes(headers: string[]) {
   if (idx.chargeWeight < 0 && headers.length >= 11) idx.chargeWeight = 10
   if (idx.remark < 0 && headers.length >= 12) idx.remark = 11
   if (idx.freightCost < 0) {
-    if (idx.chargeWeight >= 1) idx.freightCost = idx.chargeWeight - 1
+    // 精确匹配「运费」，避开 USD运费列
+    const exactFreight = headers.findIndex((item, index) => {
+      const key = normHeader(item)
+      return key === '运费' && index !== idx.usdShipping
+    })
+    if (exactFreight >= 0) idx.freightCost = exactFreight
+    else if (idx.chargeWeight >= 1) idx.freightCost = idx.chargeWeight - 1
     else if (headers.length >= 10) idx.freightCost = 9
   }
   return idx

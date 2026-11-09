@@ -30,6 +30,7 @@ export type SalesColumnKey =
   | 'goodsAmount'
   | 'usdShipping'
   | 'deposit'
+  | 'costFreight'
   | 'freightCost'
   | 'chargeWeight'
   | 'remark'
@@ -79,20 +80,35 @@ export const DEFAULT_COLUMN_LABELS: SalesColumnLabels = {
   goodsAmount: '商品金额',
   usdShipping: 'USD运费',
   deposit: '定金',
-  freightCost: '运费成本',
+  costFreight: '成本运费',
+  freightCost: '运费',
   chargeWeight: '计费重量',
   remark: '订单备注',
 }
 
 export const DEFAULT_SALES_META: SalesStatsMeta = {
   pageTitle: '销售额统计',
-  pageHint: '格式对齐业务表：日期 / 姓名@电话 / 地址 / 订单金额 / 商品金额 / USD运费 / 定金 / 运费成本 / 计费重量 / 物流号',
+  pageHint: '格式对齐业务表：日期 / 姓名@电话 / 地址 / 订单金额 / 商品金额 / USD运费 / 定金 / 成本运费 / 运费 / 计费重量 / 物流号',
   columns: { ...DEFAULT_COLUMN_LABELS },
 }
 
 export function computedOrderAmount(goodsAmount: number | null, usdShipping: number | null): number | null {
   if (goodsAmount == null && usdShipping == null) return null
   return Math.round(((goodsAmount || 0) + (usdShipping || 0)) * 100) / 100
+}
+
+/** 每个订单的成本运费 = 各包裹运费之和 */
+export function sumOrderFreightCost(order: Pick<SalesLedgerOrder, 'lines'>): number | null {
+  let total = 0
+  let hit = false
+  for (const line of order.lines || []) {
+    const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
+    if (!Number.isFinite(amount) || String(line.freightCost || '').trim() === '') continue
+    total += amount
+    hit = true
+  }
+  if (!hit) return null
+  return Math.round(total * 100) / 100
 }
 
 /** 压缩单元格里的换行/空格，兼容「2026. 7 月」「2026.\n7\n月」 */

@@ -5,7 +5,7 @@ import { ArrowLeft, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react'
 import { canonicalPeriodKey } from '@/backend/salesStatsShared'
 import type { useSalesStats } from '@/backend/hooks/useSalesStats'
 import type { SalesColumnKey, SalesLedgerOrder } from '@/backend/salesStatsShared'
-import { DEFAULT_COLUMN_LABELS, DEFAULT_SALES_META, periodSalesLabel } from '@/backend/salesStatsShared'
+import { DEFAULT_COLUMN_LABELS, DEFAULT_SALES_META, periodSalesLabel, sumOrderFreightCost } from '@/backend/salesStatsShared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -99,6 +99,7 @@ const COLUMN_ORDER: Array<{ key: SalesColumnKey; tone: string }> = [
   { key: 'goodsAmount', tone: 'bg-[#C6F6D5]' },
   { key: 'usdShipping', tone: 'bg-[#C6F6D5]' },
   { key: 'deposit', tone: 'bg-[#C6F6D5]' },
+  { key: 'costFreight', tone: 'bg-[#BFDBFE]' },
   { key: 'freightCost', tone: 'bg-[#BFDBFE]' },
   { key: 'chargeWeight', tone: 'bg-[#BFDBFE]' },
   { key: 'remark', tone: 'bg-[#BFDBFE]' },
@@ -260,7 +261,7 @@ export default function SalesStatsView({
               { label: '订单金额合计', value: displaySummary?.orderAmountTotal, money: true },
               { label: '商品金额合计', value: displaySummary?.goodsAmountTotal, money: true },
               { label: 'USD运费合计', value: displaySummary?.usdShippingTotal, money: true },
-              { label: '运费合计', value: displaySummary?.freightCostTotal, money: true },
+              { label: '成本运费合计', value: displaySummary?.freightCostTotal, money: true },
             ].map((card) => (
               <div
                 key={card.label}
@@ -287,13 +288,13 @@ export default function SalesStatsView({
             <tbody>
               {state.loading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
+                  <td colSpan={12} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
                     加载中…
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
+                  <td colSpan={12} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
                     还没有数据。请导入表格，或上传业务表截图识别。可删除整张表或单行，不影响其它已导入的表。
                   </td>
                 </tr>
@@ -316,7 +317,7 @@ export default function SalesStatsView({
                   const tableToolbar = (
                     <tr key={`toolbar-${order.periodSortKey}-${order.periodLabel}-${order.id}`}>
                       <td
-                        colSpan={11}
+                        colSpan={12}
                         className={cn(
                           'border px-3 py-2',
                           isSelectedPeriod
@@ -364,7 +365,7 @@ export default function SalesStatsView({
                           className={cn('border border-[#CBD5E1] px-2 py-3 font-semibold', column.tone)}
                         >
                           <EditableText
-                            value={sheetHeaders[column.key]}
+                            value={sheetHeaders[column.key] || DEFAULT_COLUMN_LABELS[column.key]}
                             className="font-semibold"
                             onCommit={(next) => {
                               if (column.key === 'date') {
@@ -392,6 +393,7 @@ export default function SalesStatsView({
                       </th>
                     </tr>
                   )
+                  const orderCostFreight = sumOrderFreightCost(order)
                   const rows = order.lines.map((line, index) => (
                     <tr key={`${order.id}-${index}`} className={cn(index === 0 ? 'border-t border-t-[#CBD5E1]' : '')}>
                       {index === 0 ? (
@@ -443,6 +445,13 @@ export default function SalesStatsView({
                               display={moneyText(order.deposit)}
                               onCommit={(next) => updateOrder(order.id, { deposit: next.trim() === '' ? null : Number(next) })}
                             />
+                          </td>
+                          <td
+                            rowSpan={span}
+                            className="border border-[#E2E8F0] px-2 py-2 text-center align-middle font-bold tabular-nums text-[#1D4ED8]"
+                            title="成本运费 = 本单各包裹运费之和"
+                          >
+                            {moneyText(orderCostFreight)}
                           </td>
                         </>
                       ) : null}
