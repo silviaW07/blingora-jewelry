@@ -116,6 +116,7 @@ export default function SalesStatsView({
   const summary = state.detail?.summary
   const orders = state.detail?.orders || []
   const meta = state.detail?.meta || DEFAULT_SALES_META
+  const [selectedPeriodKey, setSelectedPeriodKey] = React.useState<string | null>(null)
 
   const updateOrder = (orderId: string, patch: Partial<SalesLedgerOrder>) => {
     void handlers.updateOrder(orderId, patch)
@@ -129,6 +130,38 @@ export default function SalesStatsView({
     orders.filter(
       (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) === canonicalPeriodKey(periodLabel, periodSortKey),
     ).length
+
+  const selectedPeriod = React.useMemo(() => {
+    if (!selectedPeriodKey || !summary?.periods?.length) return null
+    return (
+      summary.periods.find(
+        (period) => canonicalPeriodKey(period.label, period.sortKey) === selectedPeriodKey,
+      ) || null
+    )
+  }, [selectedPeriodKey, summary?.periods])
+
+  React.useEffect(() => {
+    if (!selectedPeriodKey) return
+    const stillExists = summary?.periods?.some(
+      (period) => canonicalPeriodKey(period.label, period.sortKey) === selectedPeriodKey,
+    )
+    if (!stillExists) setSelectedPeriodKey(null)
+  }, [selectedPeriodKey, summary?.periods])
+
+  const displaySummary = selectedPeriod
+    ? {
+        orderCount: selectedPeriod.orderCount,
+        shipmentCount: selectedPeriod.shipmentCount,
+        orderAmountTotal: selectedPeriod.orderAmountTotal,
+        goodsAmountTotal: selectedPeriod.goodsAmountTotal,
+        usdShippingTotal: selectedPeriod.usdShippingTotal,
+        freightCostTotal: selectedPeriod.freightCostTotal,
+      }
+    : summary
+
+  const summaryScopeLabel = selectedPeriod
+    ? periodSalesLabel(selectedPeriod.label)
+    : '全部合计'
 
   return (
     <section className="min-h-screen w-full bg-[#F8FAFC] p-4 md:p-6">
@@ -153,7 +186,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为追加拼接；可删除整张表或单行，不影响其它已导入的表。
+              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为追加拼接；点击下方表标题可切换顶部汇总到对应月份，不再单独展示分月卡片。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -203,45 +236,51 @@ export default function SalesStatsView({
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {[
-            { label: '订单数', value: summary?.orderCount },
-            { label: '包裹数', value: summary?.shipmentCount },
-            { label: '订单金额合计', value: summary?.orderAmountTotal, money: true },
-            { label: '商品金额合计', value: summary?.goodsAmountTotal, money: true },
-            { label: 'USD运费合计', value: summary?.usdShippingTotal, money: true },
-            { label: '运费合计', value: summary?.freightCostTotal, money: true },
-          ].map((card) => (
-            <div key={card.label} className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-              <div className="text-sm text-[#64748B]">{card.label}</div>
-              <div className="mt-2 text-2xl font-bold tabular-nums text-[#1E293B]">
-                {state.loading ? '—' : card.money ? moneyText(card.value ?? null) : Number(card.value || 0).toLocaleString()}
-              </div>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-[#1E3A8A]">
+              当前汇总：{summaryScopeLabel}
             </div>
-          ))}
-        </div>
-
-        {!state.loading && (summary?.periods?.length || 0) > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {summary?.periods.map((period) => (
-              <div
-                key={`${period.sortKey}-${period.label}`}
-                className="rounded-xl border border-[#BFDBFE] bg-gradient-to-br from-[#EFF6FF] to-white p-4 shadow-sm"
+            {selectedPeriod ? (
+              <button
+                type="button"
+                className="text-sm font-medium text-[#0052D9] hover:underline"
+                onClick={() => setSelectedPeriodKey(null)}
               >
-                <div className="text-sm font-semibold text-[#1D4ED8]">{periodSalesLabel(period.label)}</div>
+                查看全部合计
+              </button>
+            ) : (
+              <div className="text-xs text-[#94A3B8]">点击下方表标题查看该月销售额</div>
+            )}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {[
+              { label: '订单数', value: displaySummary?.orderCount },
+              { label: '包裹数', value: displaySummary?.shipmentCount },
+              { label: '订单金额合计', value: displaySummary?.orderAmountTotal, money: true },
+              { label: '商品金额合计', value: displaySummary?.goodsAmountTotal, money: true },
+              { label: 'USD运费合计', value: displaySummary?.usdShippingTotal, money: true },
+              { label: '运费合计', value: displaySummary?.freightCostTotal, money: true },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className={cn(
+                  'rounded-xl border bg-white p-4 shadow-sm',
+                  selectedPeriod ? 'border-[#93C5FD]' : 'border-[#E2E8F0]',
+                )}
+              >
+                <div className="text-sm text-[#64748B]">{card.label}</div>
                 <div className="mt-2 text-2xl font-bold tabular-nums text-[#1E293B]">
-                  {moneyText(period.orderAmountTotal)}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#64748B]">
-                  <span>订单 {period.orderCount}</span>
-                  <span>包裹 {period.shipmentCount}</span>
-                  <span>商品 {moneyText(period.goodsAmountTotal)}</span>
-                  <span>USD运费 {moneyText(period.usdShippingTotal)}</span>
+                  {state.loading
+                    ? '—'
+                    : card.money
+                      ? moneyText(card.value ?? null)
+                      : Number(card.value || 0).toLocaleString()}
                 </div>
               </div>
             ))}
           </div>
-        ) : null}
+        </div>
 
         <div className="overflow-auto rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
           <table className="min-w-[1280px] w-full border-collapse text-base">
@@ -272,16 +311,36 @@ export default function SalesStatsView({
                     ...(order.headerLabels || {}),
                     date: order.periodLabel || order.headerLabels?.date || DEFAULT_COLUMN_LABELS.date,
                   }
+                  const periodKey = canonicalPeriodKey(order.periodLabel, order.periodSortKey)
+                  const isSelectedPeriod = selectedPeriodKey === periodKey
                   const tableToolbar = (
                     <tr key={`toolbar-${order.periodSortKey}-${order.periodLabel}-${order.id}`}>
-                      <td colSpan={11} className="border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2">
+                      <td
+                        colSpan={11}
+                        className={cn(
+                          'border px-3 py-2',
+                          isSelectedPeriod
+                            ? 'border-[#60A5FA] bg-[#DBEAFE]'
+                            : 'border-[#BFDBFE] bg-[#EFF6FF]',
+                        )}
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-[#1E3A8A]">
+                          <button
+                            type="button"
+                            className="text-left text-sm font-semibold text-[#1E3A8A] hover:text-[#0052D9]"
+                            title="点击后在顶部展示该月销售额"
+                            onClick={() =>
+                              setSelectedPeriodKey((prev) => (prev === periodKey ? null : periodKey))
+                            }
+                          >
                             {order.periodLabel}
                             <span className="ml-2 font-normal text-[#64748B]">
                               {periodOrderCount(order.periodLabel, order.periodSortKey)} 笔
                             </span>
-                          </div>
+                            <span className="ml-2 font-normal text-[#0052D9]">
+                              {isSelectedPeriod ? '· 正在顶部展示' : '· 点击查看销售额'}
+                            </span>
+                          </button>
                           <Button
                             type="button"
                             variant="outline"
