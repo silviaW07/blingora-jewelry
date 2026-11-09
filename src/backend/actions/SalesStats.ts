@@ -650,61 +650,183 @@ function fillMergedCells(sheet: Record<string, any> | null | undefined, XLSX: { 
 
 function sheetHasCells(sheet: Record<string, any> | null | undefined) {
   if (!sheet || typeof sheet !== 'object') return false
+  if (typeof sheet['!ref'] === 'string' && sheet['!ref'].trim()) return true
   return Object.keys(sheet).some((key) => key && !key.startsWith('!'))
+}
+
+function cellToPlainText(value: unknown): string {
+  if (value == null || value === '') return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value instanceof Date) {
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  if (typeof value === 'object') {
+    const row = value as Record<string, unknown>
+    if (row.result != null) return cellToPlainText(row.result)
+    if (row.text != null) return String(row.text)
+    if (Array.isArray(row.richText)) {
+      return row.richText.map((part) => String((part as { text?: string })?.text || '')).join('')
+    }
+    if (row.hyperlink != null && row.text != null) return String(row.text)
+    if (row.formula != null && row.result != null) return cellToPlainText(row.result)
+  }
+  return String(value)
+}
+
+function fillAoaMerges(aoa: string[][], mergeRefs: string[]) {
+  for (const ref of mergeRefs) {
+    const matched = String(ref || '').trim().match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i)
+    if (!matched) continue
+    const colToIndex = (label: string) => {
+      let n = 0
+      const up = label.toUpperCase()
+      for (let i = 0; i < up.length; i += 1) n = n * 26 + (up.charCodeAt(i) - 64)
+      return n - 1
+    }
+    const c1 = colToIndex(matched[1])
+    const r1 = Number(matched[2]) - 1
+    const c2 = colToIndex(matched[3])
+    const r2 = Number(matched[4]) - 1
+    if (![c1, r1, c2, r2].every((n) => Number.isFinite(n) && n >= 0)) continue
+    const master = String(aoa[r1]?.[c1] || '')
+    if (!master.trim()) continue
+    for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r += 1) {
+      if (!aoa[r]) aoa[r] = []
+      for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c += 1) {
+        if (!String(aoa[r][c] || '').trim()) aoa[r][c] = master
+      }
+    }
+  }
+}
+
+function loadExcelJS(): any | null {
+  try {
+    const loaded = require('exceljs') as { default?: unknown } | undefined
+    return (loaded as any)?.default || loaded
+  } catch {
+    return null
+  }
+}
+
+async function parseWithExcelJS(raw: Buffer, fileName: string): Promise<SalesLedgerOrder[]> {
+  const ExcelJS = loadExcelJS()
+  if (!ExcelJS?.Workbook) throw new Error('ExcelJS unavailable')
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(raw)
+  const sheets = Array.isArray(workbook.worksheets) ? workbook.worksheets : []
+  if (!sheets.length) throw new Error('exceljs-empty')
+  const allOrders: SalesLedgerOrder[] = []
+  for (const sheet of sheets) {
+    if (!sheet || sheet.state === 'hidden' || sheet.state === 'veryHidden') continue
+    const rowCount = Math.max(0, Number(sheet.rowCount) || 0)
+    const colCount = Math.max(0, Number(sheet.columnCount) || 0)
+    if (!rowCount || !colCount) continue
+    const aoa: string[][] = []
+    for (let r = 1; r <= rowCount; r += 1) {
+      const row = sheet.getRow(r)
+      const line: string[] = []
+      for (let c = 1; c <= colCount; c += 1) {
+        const cell = row.getCell(c)
+        const text = cellToPlainText(cell?.value)
+        line.push(text || cellToPlainText(cell?.text) || '')
+      }
+      if (line.some((cell) => String(cell || '').trim())) aoa.push(line)
+      else aoa.push(line)
+    }
+    const mergeRefs: string[] = Array.isArray((sheet as any)?.model?.merges)
+      ? ((sheet as any).model.merges as string[])
+      : []
+    fillAoaMerges(aoa, mergeRefs)
+    const trimmed = aoa.filter((line) => line.some((cell) => String(cell || '').trim()))
+    if (!trimmed.length) continue
+    allOrders.push(...parseAoa(trimmed, fileName || String(sheet.name || '')))
+  }
+  if (!allOrders.length) throw new Error('exceljs-no-orders')
+  return allOrders
+}
+
+async function parseWithXlsx(raw: Buffer, fileName: string): Promise<SalesLedgerOrder[]> {
+  const XLSX = require('xlsx') as {
+    read: Function
+    utils: { sheet_to_json: Function; encode_cell: Function }
+  }
+  const workbook = XLSX.read(raw, {
+    type: 'buffer',
+    cellDates: true,
+    cellNF: false,
+    cellText: false,
+    dense: false,
+  })
+  const sheetNames: string[] = Array.isArray(workbook?.SheetNames) ? workbook.SheetNames : []
+  const sheets = workbook?.Sheets && typeof workbook.Sheets === 'object' ? workbook.Sheets : {}
+  const usableNames = sheetNames.filter((name) => sheetHasCells(sheets[name]))
+  const targetNames = usableNames.length ? usableNames : sheetNames.filter((name) => sheets[name])
+  if (!targetNames.length) throw new Error('xlsx-empty-sheets')
+  const allOrders: SalesLedgerOrder[] = []
+  for (const name of targetNames) {
+    const sheet = sheets[name]
+    if (!sheet) continue
+    fillMergedCells(sheet, XLSX)
+    const aoa = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: '',
+      raw: false,
+      blankrows: false,
+    }) as unknown[][]
+    if (!Array.isArray(aoa) || !aoa.length) continue
+    allOrders.push(...parseAoa(aoa, fileName || name))
+  }
+  if (!allOrders.length) throw new Error('xlsx-no-orders')
+  return allOrders
 }
 
 async function parseSpreadsheet(fileBase64: string, fileName = ''): Promise<SalesLedgerOrder[]> {
   const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64')
   if (!raw.length) throw new Error('表格内容为空')
   const lower = String(fileName || '').toLowerCase()
-  try {
-    const XLSX = require('xlsx') as {
-      read: Function
-      utils: { sheet_to_json: Function; encode_cell: Function }
-    }
-    const workbook = XLSX.read(raw, {
-      type: 'buffer',
-      cellDates: true,
-      cellNF: false,
-      cellText: false,
-      dense: false,
-    })
-    const sheetNames: string[] = Array.isArray(workbook?.SheetNames) ? workbook.SheetNames : []
-    const sheets = workbook?.Sheets && typeof workbook.Sheets === 'object' ? workbook.Sheets : {}
-    const usableNames = sheetNames.filter((name) => sheetHasCells(sheets[name]))
-    const targetNames = usableNames.length ? usableNames : sheetNames.filter((name) => sheets[name])
-    if (!targetNames.length) {
-      throw new Error('表格里没有可用的工作表，请另存为 .xlsx 后再导入')
-    }
-    const allOrders: SalesLedgerOrder[] = []
-    for (const name of targetNames) {
-      const sheet = sheets[name]
-      if (!sheet) continue
-      fillMergedCells(sheet, XLSX)
-      const aoa = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        defval: '',
-        raw: false,
-        blankrows: false,
-      }) as unknown[][]
-      if (!Array.isArray(aoa) || !aoa.length) continue
-      allOrders.push(...parseAoa(aoa, fileName || name))
-    }
-    if (!allOrders.length) throw new Error('没有识别到有效订单行，请确认表头与业务表一致')
-    return allOrders
-  } catch (error) {
-    if (lower.endsWith('.csv') || lower.endsWith('.txt')) {
-      const textBody = raw.toString('utf8')
-      const rows = textBody.split(/\r?\n/).map((line) => line.split(','))
-      return parseAoa(rows, fileName)
-    }
-    // 有些导出其实是 HTML/制表符文本，xlsx 读不到 sheet
-    const asText = raw.toString('utf8')
-    if (/<\/?(?:table|html|body)\b/i.test(asText)) {
-      throw new Error('当前文件像是网页另存，请用 Excel/WPS 另存为 .xlsx 后再导入')
-    }
-    throw error instanceof Error ? error : new Error('表格解析失败')
+  const magic = raw.subarray(0, 4).toString('hex')
+  const looksZip = magic === '504b0304' || magic === '504b0506' || magic === '504b0708'
+  const looksOle = magic === 'd0cf11e0'
+  const asTextHead = raw.subarray(0, Math.min(raw.length, 200)).toString('utf8')
+
+  if (lower.endsWith('.csv') || lower.endsWith('.txt')) {
+    const textBody = raw.toString('utf8')
+    return parseAoa(textBody.split(/\r?\n/).map((line) => line.split(',')), fileName)
   }
+  if (/<\/?(?:table|html|body)\b/i.test(asTextHead)) {
+    throw new Error('当前文件像是网页另存，请用 Excel/WPS 另存为 .xlsx 后再导入')
+  }
+
+  const errors: string[] = []
+  // 与入库导入一致：xlsx 优先走 ExcelJS，兼容 WPS/合并单元格
+  if (looksZip || lower.endsWith('.xlsx') || lower.endsWith('.xlsm') || !looksOle) {
+    try {
+      return await parseWithExcelJS(raw, fileName)
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  try {
+    return await parseWithXlsx(raw, fileName)
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error))
+  }
+
+  if (looksOle || lower.endsWith('.xls')) {
+    try {
+      return await parseWithXlsx(raw, fileName)
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const detail = errors.filter(Boolean).slice(0, 3).join(' / ')
+  throw new Error(
+    `无法读取「${fileName || '表格'}」（${Math.round(raw.length / 1024)}KB, ${magic || '00000000'}）${detail ? `：${detail}` : ''}。请用 Excel/WPS 另存为 .xlsx 后再试`,
+  )
 }
 
 async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder[]> {

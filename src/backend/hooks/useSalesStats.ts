@@ -96,8 +96,12 @@ function buildSummary(orders: SalesLedgerOrder[]): SalesStatsSummary {
 async function fileToBase64(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
   const bytes = new Uint8Array(buffer)
+  const chunkSize = 0x8000
   let binary = ''
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i])
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
   return btoa(binary)
 }
 
