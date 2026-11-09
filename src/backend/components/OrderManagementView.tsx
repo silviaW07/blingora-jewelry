@@ -396,17 +396,20 @@ function InboundShipBar({
   return (
     <>
       {open ? (
-        <div className="shrink-0 space-y-3 border-t bg-white px-4 py-3 sm:px-6">
+        <div className="shrink-0 space-y-3 border-t bg-white px-4 py-3 sm:px-6" data-inbound-ship-dialog="1" onDragEnter={(event) => { event.preventDefault(); event.stopPropagation() }} onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "copy" }} onDrop={(event) => { event.preventDefault(); event.stopPropagation() }}>
           {blocks.map((block, index) => {
             const slots = Math.max(4, block.images.length)
             return (
               <div key={block.key} className="rounded-md border border-slate-200 p-3">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
                   <div
+                    data-inbound-ship="images"
                     className="grid w-[17.5rem] shrink-0 grid-cols-4 gap-2"
-                    onDragOver={(event) => event.preventDefault()}
+                    onDragEnter={(event) => { event.preventDefault(); event.stopPropagation() }}
+                    onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy' }}
                     onDrop={(event) => {
                       event.preventDefault()
+                      event.stopPropagation()
                       void uploadFiles(block.key, [...event.dataTransfer.files])
                     }}
                   >
@@ -794,14 +797,8 @@ export const OrderManagementView = ({
       void receiveImportFiles(files);
       return;
     }
-    try {
-      const imageUrl = await uploadInboundImage(image);
-      const line = state.inboundDrafts.find((item) => item.id === lineId);
-      handlers.setInboundDraft(lineId, { shipmentImageUrl: imageUrl });
-      toast.success('发货图片已上传');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '图片上传失败');
-    }
+    // 拖到商品行也不替换商品照片；发货图请走「发货图片」
+    toast.error('不会替换商品照片。发货图请点底部「发货图片」上传');
   };
   const uploadShippingImages = async (files: FileList | File[]) => {
     const images = [...files].filter((file) => file.type.startsWith('image/'));
@@ -809,25 +806,8 @@ export const OrderManagementView = ({
       toast.error('请选择图片');
       return;
     }
-    const selected = new Set(inboundSelected);
-    const picked = state.inboundDrafts.filter((line) => selected.has(line.id));
-    const targets = picked.length ? picked : state.inboundDrafts;
-    try {
-      if (!targets.length) {
-        // 没有可挂发货图的商品行时，改为传入商品（加到最后）
-        void receiveAddonProducts(images);
-        return;
-      }
-      const count = Math.min(images.length, targets.length);
-      for (let index = 0; index < count; index += 1) {
-        const imageUrl = await uploadInboundImage(images[index]);
-        const line = targets[index];
-        handlers.setInboundDraft(line.id, { shipmentImageUrl: imageUrl });
-      }
-      toast.success(count > 1 ? `已上传 ${count} 张发货图片` : '发货图片已上传');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '图片上传失败');
-    }
+    // 发货图只进发货记录，绝不新增商品、不改商品照片
+    toast.error('请点「发货图片」在发货区上传，不会新增商品');
   };
   const saveImportRows = async () => {
     const selected = new Set(inboundSelected);
@@ -2473,6 +2453,10 @@ export const OrderManagementView = ({
             event.stopPropagation()
             setInboundDragOver(false)
             const target = event.target as HTMLElement
+            // 发货图区域已自行处理，禁止冒泡后再加商品
+            if (target.closest('[data-inbound-ship], [data-inbound-ship-dialog]')) {
+              return
+            }
             // 传入商品 / 传入表格区域优先：不要当成发货大图
             if (target.closest('[data-inbound-addon="product"]') || addonDrag === 'product') {
               setAddonDrag(null)
@@ -2719,7 +2703,7 @@ export const OrderManagementView = ({
                   </tr>
                 ) : null}
                 {visibleInboundDrafts.map((line, lineIndex) => {
-                  const imageUrl = line.mainImageUrl || line.shipmentImageUrl
+                  const imageUrl = line.mainImageUrl || ''
                   const previousOrderNo = lineIndex > 0 ? visibleInboundDrafts[lineIndex - 1].orderNo : line.orderNo
                   const showOrderDivider = Boolean(line.orderNo) && line.orderNo !== previousOrderNo
                   return (
