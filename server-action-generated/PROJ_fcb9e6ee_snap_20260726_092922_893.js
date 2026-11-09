@@ -41720,6 +41720,32 @@ function cell(row, index) {
     if (index < 0 || index >= row.length) return '';
     return text(row[index], 500);
 }
+function rawCell(row, index) {
+    var _row_index;
+    if (index < 0 || index >= row.length) return '';
+    return String((_row_index = row[index]) !== null && _row_index !== void 0 ? _row_index : '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
+function splitParts(value) {
+    const parts = String(value || '').split(/[\n\r;|]+/).map((item)=>item.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    return parts.length ? parts : [
+        ''
+    ];
+}
+function buildShipmentLines(freightRaw, weightRaw, remarkRaw) {
+    const freights = splitParts(freightRaw);
+    const weights = splitParts(weightRaw);
+    const remarks = splitParts(remarkRaw);
+    const count = Math.max(freights.length, weights.length, remarks.length, 1);
+    const lines = [];
+    for(let i = 0; i < count; i += 1){
+        lines.push({
+            freightCost: text(freights[i] || '', 40),
+            chargeWeight: text(weights[i] || '', 40),
+            remark: text(remarks[i] || '', 200)
+        });
+    }
+    return lines;
+}
 function parseAoa(aoa) {
     if (!aoa.length) return [];
     let headerRow = 0;
@@ -41760,12 +41786,10 @@ function parseAoa(aoa) {
         usdShipping: headerIndex(headers, [
             'usd运费',
             '运费usd',
-            'usdshipping',
-            '运费'
+            'usdshipping'
         ]),
         freightCost: headerIndex(headers, [
             '运费成本',
-            'freight',
             '成本运费'
         ]),
         chargeWeight: headerIndex(headers, [
@@ -41792,11 +41816,7 @@ function parseAoa(aoa) {
         const orderAmount = money(cell(row, idx.orderAmount));
         const goodsAmount = money(cell(row, idx.goodsAmount));
         const usdShipping = money(cell(row, idx.usdShipping));
-        const line = {
-            freightCost: cell(row, idx.freightCost),
-            chargeWeight: cell(row, idx.chargeWeight),
-            remark: cell(row, idx.remark)
-        };
+        const lines = buildShipmentLines(rawCell(row, idx.freightCost), rawCell(row, idx.chargeWeight), rawCell(row, idx.remark));
         const startsNew = Boolean(namePhone || address || orderAmount != null || goodsAmount != null || usdShipping != null || dateText && !current);
         if (startsNew || !current) {
             const { customerName, phone } = splitNamePhone(namePhone);
@@ -41809,14 +41829,12 @@ function parseAoa(aoa) {
                 orderAmount,
                 goodsAmount,
                 usdShipping,
-                lines: [
-                    line
-                ]
+                lines
             };
             orders.push(current);
         } else {
             if (dateText && !current.dateText) current.dateText = dateText;
-            current.lines.push(line);
+            current.lines.push(...lines);
         }
     }
     return normalizeOrders(orders);
@@ -41881,7 +41899,7 @@ async function recognizeSalesImage(fileBase64) {
             messages: [
                 {
                     role: 'system',
-                    content: 'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . Merge vertically merged order cells into one order with multiple lines. remark is tracking number. Use null for missing numbers.'
+                    content: 'Extract sales ledger rows from a spreadsheet screenshot. Return JSON only: {"orders":[{"dateText":"","customerName":"","phone":"","address":"","orderAmount":0,"goodsAmount":0,"usdShipping":0,"lines":[{"freightCost":"","chargeWeight":"","remark":""}]}]} . One order may span multiple shipment lines via vertically merged cells OR multiple values stacked inside 运费成本/计费重量/订单备注 cells. Always expand those into separate lines[]. remark is tracking number. Use null for missing numbers.'
                 },
                 {
                     role: 'user',

@@ -104,16 +104,16 @@ export default function SalesStatsView({
         <div className="overflow-auto rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
           <table className="min-w-[1100px] w-full border-collapse text-base">
             <thead>
-              <tr className="bg-[#DCEBFF] text-center text-[#1E293B]">
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">日期</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">姓名@电话</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">地址</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">订单金额</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">商品金额</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">USD运费</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">运费成本</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">计费重量</th>
-                <th className="border border-[#CBD5E1] px-3 py-3 font-semibold">订单备注</th>
+              <tr className="text-center text-[#1E293B]">
+                <th className="border border-[#CBD5E1] bg-[#DCEBFF] px-3 py-3 font-semibold">日期</th>
+                <th className="border border-[#CBD5E1] bg-[#DCEBFF] px-3 py-3 font-semibold">姓名@电话</th>
+                <th className="border border-[#CBD5E1] bg-[#DCEBFF] px-3 py-3 font-semibold">地址</th>
+                <th className="border border-[#CBD5E1] bg-[#C6F6D5] px-3 py-3 font-semibold">订单金额</th>
+                <th className="border border-[#CBD5E1] bg-[#C6F6D5] px-3 py-3 font-semibold">商品金额</th>
+                <th className="border border-[#CBD5E1] bg-[#C6F6D5] px-3 py-3 font-semibold">USD运费</th>
+                <th className="border border-[#CBD5E1] bg-[#BFDBFE] px-3 py-3 font-semibold">运费成本</th>
+                <th className="border border-[#CBD5E1] bg-[#BFDBFE] px-3 py-3 font-semibold">计费重量</th>
+                <th className="border border-[#CBD5E1] bg-[#BFDBFE] px-3 py-3 font-semibold">订单备注</th>
               </tr>
             </thead>
             <tbody>
