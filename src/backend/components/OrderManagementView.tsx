@@ -1407,6 +1407,10 @@ export const OrderManagementView = ({
     : state.list.find((row) => row.id === state.inboundOrderId);
   const inboundAddressInfo = state.detailData?.id === state.inboundOrderId ? state.detailData.address : null;
   const inboundAddressText = (() => {
+    const freeText = String(
+      (state.detailData?.id === state.inboundOrderId && state.detailData.shippingAddressText) || '',
+    ).trim();
+    if (freeText) return freeText;
     if (!inboundAddressInfo) return '';
     return [
       inboundAddressInfo.recipientName,

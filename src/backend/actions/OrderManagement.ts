@@ -379,6 +379,8 @@ export interface OrderListItem {
   usdShipping: number | null
   /** 定金，允许文字或数字 */
   depositText: string
+  /** 登记入库里双击保存的客户地址原文 */
+  shippingAddressText: string
   /** 已清账 / 已完结，列表行浅金色 */
   isSettled: boolean
   /** 总运费 = sum of package freight costs */
@@ -642,6 +644,7 @@ function readRegisterInfo(raw: unknown) {
     return {
       usdShipping: null as number | null,
       depositText: '',
+      shippingAddressText: '',
       isSettled: false,
       registerCustomerName: '',
       registerPhone: '',
@@ -668,6 +671,7 @@ function readRegisterInfo(raw: unknown) {
   return {
     usdShipping: readUsdShipping(info),
     depositText: readDepositText(info),
+    shippingAddressText: String(info.address || '').trim().slice(0, 1000),
     isSettled: Boolean(info.isSettled === true || info.settled === true || info.cleared === true),
     registerCustomerName: String(info.customerName || '').trim().slice(0, 100),
     registerPhone: String(info.phone || '').trim().slice(0, 30),
@@ -3326,10 +3330,26 @@ export const updateOrderShippingAddress = requireStaff('orders')(
       })
       return updated
     })
+    const resolvedAddressText = shouldUpdateAddress
+      ? addressText
+      : String((saved.registerInfoJson && typeof saved.registerInfoJson === 'object' && !Array.isArray(saved.registerInfoJson) ? (saved.registerInfoJson as Record<string, unknown>).address : '') || addressText || '')
+    const formatted = formatAddressInfo(saved.address)
     return {
-      addressText: shouldUpdateAddress ? addressText : String((saved.registerInfoJson && typeof saved.registerInfoJson === 'object' && !Array.isArray(saved.registerInfoJson) ? (saved.registerInfoJson as Record<string, unknown>).address : '') || addressText || ''),
+      addressText: resolvedAddressText,
       trackingCarrier,
-      address: formatAddressInfo(saved.address),
+      address: formatted || (resolvedAddressText
+        ? {
+            recipientName,
+            phone,
+            countryCode: order.address?.countryCode || 'US',
+            countryName: order.address?.countryName || 'United States',
+            stateName: order.address?.stateName || null,
+            cityName: order.address?.cityName || null,
+            addressLine1: resolvedAddressText.slice(0, 255),
+            addressLine2: null,
+            postalCode: order.address?.postalCode || null,
+          }
+        : null),
     }
   }),
 )

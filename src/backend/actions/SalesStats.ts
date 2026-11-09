@@ -628,7 +628,8 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
   return normalizeOrders(orders)
 }
 
-function fillMergedCells(sheet: Record<string, any>, XLSX: { utils: { encode_cell: Function } }) {
+function fillMergedCells(sheet: Record<string, any> | null | undefined, XLSX: { utils: { encode_cell: Function } }) {
+  if (!sheet || typeof sheet !== 'object') return
   const merges = Array.isArray(sheet['!merges']) ? sheet['!merges'] : []
   for (const merge of merges) {
     if (!merge?.s || !merge?.e) continue
@@ -647,6 +648,11 @@ function fillMergedCells(sheet: Record<string, any>, XLSX: { utils: { encode_cel
   }
 }
 
+function sheetHasCells(sheet: Record<string, any> | null | undefined) {
+  if (!sheet || typeof sheet !== 'object') return false
+  return Object.keys(sheet).some((key) => key && !key.startsWith('!'))
+}
+
 async function parseSpreadsheet(fileBase64: string, fileName = ''): Promise<SalesLedgerOrder[]> {
   const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64')
   if (!raw.length) throw new Error('表格内容为空')
@@ -656,16 +662,46 @@ async function parseSpreadsheet(fileBase64: string, fileName = ''): Promise<Sale
       read: Function
       utils: { sheet_to_json: Function; encode_cell: Function }
     }
-    const workbook = XLSX.read(raw, { type: 'buffer', cellDates: true, cellNF: false, cellText: false })
-    const first = workbook.Sheets[workbook.SheetNames[0]]
-    fillMergedCells(first, XLSX)
-    const aoa = XLSX.utils.sheet_to_json(first, { header: 1, defval: '', raw: false, blankrows: false }) as unknown[][]
-    return parseAoa(aoa, fileName)
+    const workbook = XLSX.read(raw, {
+      type: 'buffer',
+      cellDates: true,
+      cellNF: false,
+      cellText: false,
+      dense: false,
+    })
+    const sheetNames: string[] = Array.isArray(workbook?.SheetNames) ? workbook.SheetNames : []
+    const sheets = workbook?.Sheets && typeof workbook.Sheets === 'object' ? workbook.Sheets : {}
+    const usableNames = sheetNames.filter((name) => sheetHasCells(sheets[name]))
+    const targetNames = usableNames.length ? usableNames : sheetNames.filter((name) => sheets[name])
+    if (!targetNames.length) {
+      throw new Error('表格里没有可用的工作表，请另存为 .xlsx 后再导入')
+    }
+    const allOrders: SalesLedgerOrder[] = []
+    for (const name of targetNames) {
+      const sheet = sheets[name]
+      if (!sheet) continue
+      fillMergedCells(sheet, XLSX)
+      const aoa = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: '',
+        raw: false,
+        blankrows: false,
+      }) as unknown[][]
+      if (!Array.isArray(aoa) || !aoa.length) continue
+      allOrders.push(...parseAoa(aoa, fileName || name))
+    }
+    if (!allOrders.length) throw new Error('没有识别到有效订单行，请确认表头与业务表一致')
+    return allOrders
   } catch (error) {
-    if (lower.endsWith('.csv')) {
+    if (lower.endsWith('.csv') || lower.endsWith('.txt')) {
       const textBody = raw.toString('utf8')
       const rows = textBody.split(/\r?\n/).map((line) => line.split(','))
       return parseAoa(rows, fileName)
+    }
+    // 有些导出其实是 HTML/制表符文本，xlsx 读不到 sheet
+    const asText = raw.toString('utf8')
+    if (/<\/?(?:table|html|body)\b/i.test(asText)) {
+      throw new Error('当前文件像是网页另存，请用 Excel/WPS 另存为 .xlsx 后再导入')
     }
     throw error instanceof Error ? error : new Error('表格解析失败')
   }

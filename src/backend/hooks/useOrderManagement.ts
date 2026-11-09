@@ -839,18 +839,19 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
       return
     }
     let cancelled = false
+    const seq = ++inboundLoadSeq.current
     listInboundShipments(inboundOrderId).then((rows) => {
-      if (!cancelled) setInboundShipments(rows || [])
+      if (!cancelled && seq === inboundLoadSeq.current) setInboundShipments(rows || [])
     }).catch(() => {
-      if (!cancelled) setInboundShipments([])
+      if (!cancelled && seq === inboundLoadSeq.current) setInboundShipments([])
     })
     getOrderSettlementPdf(inboundOrderId).then((url) => {
-      if (!cancelled) setSettlementPdfUrl(String(url || ''))
+      if (!cancelled && seq === inboundLoadSeq.current) setSettlementPdfUrl(String(url || ''))
     }).catch(() => {
-      if (!cancelled) setSettlementPdfUrl('')
+      if (!cancelled && seq === inboundLoadSeq.current) setSettlementPdfUrl('')
     })
     getOrderDetail(inboundOrderId).then((detail) => {
-      if (!cancelled) setDetailData(detail)
+      if (!cancelled && seq === inboundLoadSeq.current) setDetailData(detail)
     }).catch(() => {
       // keep list row summary if detail fails
     })
@@ -884,20 +885,39 @@ export const useOrderManagement = (): { state: OrderManagementState, handlers: O
 
   const saveOrderShippingAddress = async (input: { orderId: string; addressText?: string; trackingCarrier?: string | null }) => {
     try {
+      // 避免打开入库时尚未返回的 getOrderDetail 用旧数据盖掉刚保存的地址
+      inboundLoadSeq.current += 1
       const saved = await updateOrderShippingAddress(input)
+      const nextAddressText = input.addressText !== undefined
+        ? String(saved?.addressText ?? input.addressText ?? '').trim()
+        : undefined
       setDetailData((prev) => {
         if (!prev || prev.id !== input.orderId) return prev
         return {
           ...prev,
           trackingCarrier: saved.trackingCarrier,
-          address: saved.address || prev.address,
+          ...(nextAddressText !== undefined ? { shippingAddressText: nextAddressText } : {}),
+          address: saved.address || (nextAddressText
+            ? {
+                recipientName: prev.address?.recipientName || prev.customerName || '',
+                phone: prev.address?.phone || prev.customerWhatsapp || null,
+                countryCode: prev.address?.countryCode || 'US',
+                countryName: prev.address?.countryName || prev.countryName || 'United States',
+                stateName: prev.address?.stateName || null,
+                cityName: prev.address?.cityName || null,
+                addressLine1: nextAddressText.slice(0, 255),
+                addressLine2: null,
+                postalCode: prev.address?.postalCode || null,
+              }
+            : prev.address),
         }
       })
       setList((prev) => prev.map((item) => item.id === input.orderId ? {
         ...item,
         trackingCarrier: saved.trackingCarrier,
+        ...(nextAddressText !== undefined ? { shippingAddressText: nextAddressText } : {}),
       } : item))
-      toast.success('地址已保存')
+      toast.success(input.addressText !== undefined ? '地址已保存' : '物流渠道已保存')
       return saved
     } catch (err: any) {
       toast.error(err.message || '保存地址失败')
