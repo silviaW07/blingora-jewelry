@@ -76,12 +76,25 @@ export interface RegistrationPeriodMetrics_Output {
   repeatOrderCount: number;
 }
 
+export interface RegistrationMonthRow_Output {
+  /** YYYY-MM */
+  month: string;
+  /** 展示用，如 2026年11月 */
+  monthLabel: string;
+  registerCount: number;
+  convertedCount: number;
+  /** 0-100，保留 1 位小数 */
+  conversionRate: number;
+}
+
 export interface RegistrationStatsDetail_Output {
   generatedAt: string;
   totalCustomerCount: number;
   week: RegistrationPeriodMetrics_Output;
   month: RegistrationPeriodMetrics_Output;
   year: RegistrationPeriodMetrics_Output;
+  /** 按注册月份倒序，最近 12 个月 */
+  months: RegistrationMonthRow_Output[];
 }
 
 export interface ImportTaskOverview_Output {

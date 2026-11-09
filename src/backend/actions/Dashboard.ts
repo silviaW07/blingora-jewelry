@@ -81,6 +81,59 @@ async function registrationPeriodMetrics(start: Date, end: Date) {
   return { registerCount, firstOrderCount, repeatOrderCount }
 }
 
+async function registrationMonthRows(monthCount = 12): Promise<Array<{
+  month: string
+  monthLabel: string
+  registerCount: number
+  convertedCount: number
+  conversionRate: number
+}>> {
+  const now = new Date()
+  const rows: Array<{
+    month: string
+    monthLabel: string
+    registerCount: number
+    convertedCount: number
+    conversionRate: number
+  }> = []
+  for (let offset = 0; offset < monthCount; offset += 1) {
+    const start = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1)
+    const y = start.getFullYear()
+    const m = String(start.getMonth() + 1).padStart(2, '0')
+    const registered = await prisma.sysuser.findMany({
+      where: {
+        role: 'CUSTOMER' as any,
+        createdAt: { gte: start, lt: end },
+      },
+      select: { id: true },
+    })
+    const registerCount = registered.length
+    let convertedCount = 0
+    if (registerCount) {
+      const ids = registered.map((row) => row.id)
+      const ordered = await prisma.orderrecord.findMany({
+        where: { userId: { in: ids } },
+        select: { userId: true },
+        distinct: ['userId'],
+      })
+      convertedCount = ordered.length
+    }
+    const conversionRate = registerCount > 0
+      ? Math.round((convertedCount / registerCount) * 1000) / 10
+      : 0
+    rows.push({
+      month: `${y}-${m}`,
+      monthLabel: `${y}年${Number(m)}月`,
+      registerCount,
+      convertedCount,
+      conversionRate,
+    })
+  }
+  return rows
+}
+
+
 export const getAdminProfile = requireRole([UserRole.ADMIN, UserRole.SUB_ADMIN])(
   withResult(async (): Promise<AdminProfile_Output> => {
     const { userId } = getAuthContext()
@@ -235,11 +288,12 @@ export const getRegistrationStatsDetail = requireStaff('dashboard')(
     const monthStart = startOfMonth(now)
     const yearStart = startOfYear(now)
     const next = addDays(now, 1)
-    const [totalCustomerCount, week, month, year] = await Promise.all([
+    const [totalCustomerCount, week, month, year, months] = await Promise.all([
       prisma.sysuser.count({ where: { role: 'CUSTOMER' as any } }),
       registrationPeriodMetrics(weekStart, addDays(weekStart, 7)),
       registrationPeriodMetrics(monthStart, new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)),
       registrationPeriodMetrics(yearStart, next),
+      registrationMonthRows(12),
     ])
     return {
       generatedAt: now.toISOString(),
@@ -247,6 +301,7 @@ export const getRegistrationStatsDetail = requireStaff('dashboard')(
       week,
       month,
       year,
+      months,
     }
   }),
 )
