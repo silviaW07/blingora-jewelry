@@ -259,6 +259,37 @@ function linkRole(links: OrderLinkGroup[] = [], rowId: string) {
   return 'single' as const
 }
 
+function linkGroupMembers(list: OrderListItem[], links: OrderLinkGroup[] = [], rowId: string) {
+  const asPrimary = links.find((group) => group.primaryId === rowId)
+  if (asPrimary) {
+    const members = [list.find((item) => item.id === rowId), ...asPrimary.children.map((child) => list.find((item) => item.id === child.id))]
+    return members.filter((item): item is OrderListItem => Boolean(item))
+  }
+  const asChild = links.find((group) => group.children.some((child) => child.id === rowId))
+  if (asChild) {
+    const members = [list.find((item) => item.id === asChild.primaryId), ...asChild.children.map((child) => list.find((item) => item.id === child.id))]
+    return members.filter((item): item is OrderListItem => Boolean(item))
+  }
+  const self = list.find((item) => item.id === rowId)
+  return self ? [self] : []
+}
+
+function linkRowSpan(links: OrderLinkGroup[] = [], rowId: string) {
+  const role = linkRole(links, rowId)
+  if (role === 'child') return 0
+  if (role === 'primary') {
+    const group = links.find((item) => item.primaryId === rowId)
+    return 1 + (group?.children.length || 0)
+  }
+  return 1
+}
+
+function mergedLinkAmount(list: OrderListItem[], links: OrderLinkGroup[] = [], rowId: string) {
+  const members = linkGroupMembers(list, links, rowId)
+  return members.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0)
+}
+
+
 const getListStatusClassName = (status: OrderStatus) =>
   LIST_STATUS_OPTIONS.find((o) => o.value === status)?.className ||
   ORDER_STATUS_VARIANTS[status] ||
@@ -1716,8 +1747,13 @@ export const OrderManagementView = ({
                         <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">无符合条件的订单记录</TableCell>
                       </TableRow>
                     ) : (
-                      groupLinkedOrders(state.list, state.orderLinks).map((row) => (
-                        <TableRow key={row.id} className={cn('align-top transition-colors', row.isSettled ? 'bg-[#F6E8C8] hover:bg-[#F1DEB5]' : 'hover:bg-slate-50/50', linkRole(state.orderLinks, row.id) === 'primary' && 'border-x-2 border-t-2 border-slate-400', linkRole(state.orderLinks, row.id) === 'child' && !row.isSettled && 'border-x-2 border-b-2 border-slate-400 bg-slate-50/60', linkRole(state.orderLinks, row.id) === 'child' && row.isSettled && 'border-x-2 border-b-2 border-slate-400')}>
+                      groupLinkedOrders(state.list, state.orderLinks).map((row) => {
+                        const role = linkRole(state.orderLinks, row.id)
+                        const span = linkRowSpan(state.orderLinks, row.id)
+                        const linkMembers = linkGroupMembers(state.list, state.orderLinks, row.id)
+                        const combinedAmount = mergedLinkAmount(state.list, state.orderLinks, row.id)
+                        return (
+                        <TableRow key={row.id} className={cn('align-top transition-colors', row.isSettled ? 'bg-[#F6E8C8] hover:bg-[#F1DEB5]' : 'hover:bg-slate-50/50', role === 'primary' && 'border-x-2 border-t-2 border-slate-400', role === 'child' && !row.isSettled && 'border-x-2 border-b-2 border-slate-400 bg-slate-50/60', role === 'child' && row.isSettled && 'border-x-2 border-b-2 border-slate-400')}>
                           <TableCell className="whitespace-nowrap pl-6 pt-3 text-center text-xs text-muted-foreground">
                             <div className="mb-1.5 flex items-center justify-center gap-1.5">
                               <span className={cn('text-[11px] font-semibold tracking-wide', row.isSettled ? 'text-amber-900' : 'text-slate-500')}>已清账</span>
@@ -1807,8 +1843,11 @@ export const OrderManagementView = ({
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="pt-4 text-center">
-                            {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <Select
+                          {span > 0 ? (
+                          <TableCell className="pt-4 text-center align-middle" rowSpan={span > 1 ? span : undefined}>
+                            <div className="flex h-full flex-col items-center justify-center gap-1">
+                              {role === 'primary' ? <span className="text-[11px] text-slate-400">关联 {linkMembers.length} 单</span> : null}
+                              <Select
                               value={LIST_STATUS_VALUES.has(row.status) ? row.status : row.status}
                               onValueChange={(val) => handlers.handleQuickStatusChange(row.id, val as OrderStatus)}
                             >
@@ -1827,14 +1866,16 @@ export const OrderManagementView = ({
                                   </SelectItem>
                                 ))}
                               </SelectContent>
-                            </Select>}
+                            </Select>
+                            </div>
                           </TableCell>
-                          <TableCell className="pt-4 text-center">
-                            {linkRole(state.orderLinks, row.id) === 'child' ? <span className="text-xs text-slate-400">同主单</span> : <div className="flex flex-col items-center gap-2">
+                          ) : null}
+                          {span > 0 ? (
+                          <TableCell className="pt-4 text-center align-middle" rowSpan={span > 1 ? span : undefined}>
+                            <div className="flex h-full flex-col items-center justify-center gap-2">
                               <Badge className={cn('border font-semibold hover:bg-inherit', INBOUND_BADGE[row.inboundState] || INBOUND_BADGE.NONE)}>
                                 {(() => {
-                                  const group = (state.orderLinks || []).find((item) => item.primaryId === row.id)
-                                  const members = group ? [row, ...group.children.map((child) => state.list.find((item) => item.id === child.id)).filter((item): item is NonNullable<typeof item> => Boolean(item))] : [row]
+                                  const members = linkMembers.length ? linkMembers : [row]
                                   const lines = members.flatMap((item) => item.inboundLines || [])
                                   const ordered = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)
                                   const received = lines.reduce((sum, line) => sum + (Number(line.inboundQty) || 0), 0)
@@ -1863,9 +1904,12 @@ export const OrderManagementView = ({
                                 }).catch((err: Error) => toast.error(err.message || '订单加载失败')).finally(() => setLinkLoading(false))
                               }}>关联</Button>
                               </div>
-                            </div>}
+                            </div>
                           </TableCell>
-                          <TableCell className="pt-3 pb-3 text-center align-middle">
+                          ) : null}
+                          {span > 0 ? (
+                          <TableCell className="pt-3 pb-3 text-center align-middle" rowSpan={span > 1 ? span : undefined}>
+                            <div className="flex h-full flex-col items-center justify-center gap-0.5">
                             {moneyEdit?.id === row.id && moneyEdit.field === 'totalAmount' ? (
                               <input
                                 autoFocus
@@ -1884,13 +1928,18 @@ export const OrderManagementView = ({
                               <button
                                 type="button"
                                 className="mx-auto block w-full whitespace-nowrap rounded-md px-1 py-1 text-center text-sm font-bold hover:bg-slate-100"
-                                title="双击修改金额"
+                                title={role === 'primary' ? '合并金额（主单+关联单）。双击改主单金额' : '双击修改金额'}
                                 onDoubleClick={() => { setMoneyDraft(String(row.totalAmount ?? '')); setMoneyEdit({ id: row.id, field: 'totalAmount' }); }}
                               >
-                                {row.currencyCode} {Number(row.totalAmount).toLocaleString()}
+                                {row.currencyCode} {Number(role === 'primary' ? combinedAmount : row.totalAmount).toLocaleString()}
                               </button>
                             )}
+                            {role === 'primary' && linkMembers.length > 1 ? (
+                              <span className="text-[10px] text-slate-400">合并 {linkMembers.length} 单</span>
+                            ) : null}
+                            </div>
                           </TableCell>
+                          ) : null}
                           <TableCell className="pt-3 pb-3 text-center align-middle">
                             {moneyEdit?.id === row.id && moneyEdit.field === 'usdShipping' ? (
                               <input
@@ -2033,7 +2082,8 @@ export const OrderManagementView = ({
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))
+                        )
+                      })
                     )}
                   </TableBody>
                 </Table>
