@@ -336,6 +336,37 @@ export function useSalesStats() {
     })
   }
 
+  const deleteOrder = (orderId: string) => {
+    const current = detailRef.current
+    if (!current) return
+    const target = current.orders.find((order) => order.id === orderId)
+    if (!target) return
+    if (!window.confirm(`确认删除该行订单？\n${target.customerName || target.dateText || target.id}\n不会影响其它已导入的表。`)) {
+      return
+    }
+    const orders = current.orders.filter((order) => order.id !== orderId)
+    persist({ ...current, orders, summary: buildSummary(orders) })
+    toast.success('已删除该行')
+  }
+
+  const deletePeriod = (periodLabel: string, periodSortKey: number) => {
+    const current = detailRef.current
+    if (!current) return
+    const key = canonicalPeriodKey(periodLabel, periodSortKey)
+    const count = current.orders.filter(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) === key,
+    ).length
+    if (!count) return
+    if (!window.confirm(`确认删除整张表「${periodLabel}」共 ${count} 笔？\n其它已导入的表不会受影响。`)) {
+      return
+    }
+    const orders = current.orders.filter(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) !== key,
+    )
+    persist({ ...current, orders, summary: buildSummary(orders) })
+    toast.success(`已删除「${periodLabel}」`)
+  }
+
   return {
     state: { detail, loading, importing, saving },
     handlers: {
@@ -347,6 +378,8 @@ export function useSalesStats() {
       updateMeta,
       updateOrder,
       updateLine,
+      deleteOrder,
+      deletePeriod,
     },
   }
 }

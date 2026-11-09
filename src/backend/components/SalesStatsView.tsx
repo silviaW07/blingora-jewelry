@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { ArrowLeft, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react'
+import { canonicalPeriodKey } from '@/backend/salesStatsShared'
 import type { useSalesStats } from '@/backend/hooks/useSalesStats'
 import type { SalesColumnKey, SalesLedgerOrder } from '@/backend/salesStatsShared'
 import { DEFAULT_COLUMN_LABELS, DEFAULT_SALES_META, periodSalesLabel } from '@/backend/salesStatsShared'
@@ -124,6 +125,11 @@ export default function SalesStatsView({
     void handlers.updateLine(orderId, lineIndex, patch)
   }
 
+  const periodOrderCount = (periodLabel: string, periodSortKey: number) =>
+    orders.filter(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) === canonicalPeriodKey(periodLabel, periodSortKey),
+    ).length
+
   return (
     <section className="min-h-screen w-full bg-[#F8FAFC] p-4 md:p-6">
       <div className="mx-auto w-full max-w-none space-y-5">
@@ -147,8 +153,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为完整表格追加拼接：保留每张表的表头（姓名@电话等），用表日期（如
-              2026.7月 / 2026年8-9月）判断是否合并，不按订单日期拆分。
+              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为追加拼接；可删除整张表或单行，不影响其它已导入的表。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -243,14 +248,14 @@ export default function SalesStatsView({
             <tbody>
               {state.loading ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
+                  <td colSpan={11} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
                     加载中…
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
-                    还没有数据。请导入表格，或上传业务表截图识别。双击标题也可自定义列名。
+                  <td colSpan={11} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
+                    还没有数据。请导入表格，或上传业务表截图识别。可删除整张表或单行，不影响其它已导入的表。
                   </td>
                 </tr>
               ) : (
@@ -267,6 +272,31 @@ export default function SalesStatsView({
                     ...(order.headerLabels || {}),
                     date: order.periodLabel || order.headerLabels?.date || DEFAULT_COLUMN_LABELS.date,
                   }
+                  const tableToolbar = (
+                    <tr key={`toolbar-${order.periodSortKey}-${order.periodLabel}-${order.id}`}>
+                      <td colSpan={11} className="border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-[#1E3A8A]">
+                            {order.periodLabel}
+                            <span className="ml-2 font-normal text-[#64748B]">
+                              {periodOrderCount(order.periodLabel, order.periodSortKey)} 笔
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            disabled={state.saving || state.importing}
+                            onClick={() => handlers.deletePeriod(order.periodLabel, order.periodSortKey)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            删除整表
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
                   const headerRow = (
                     <tr key={`thead-${order.periodSortKey}-${order.periodLabel}-${order.id}`} className="text-center text-[#1E293B]">
                       {COLUMN_ORDER.map((column) => (
@@ -298,6 +328,9 @@ export default function SalesStatsView({
                           />
                         </th>
                       ))}
+                      <th className="border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-3 text-sm font-semibold text-[#64748B]">
+                        操作
+                      </th>
                     </tr>
                   )
                   const rows = order.lines.map((line, index) => (
@@ -375,11 +408,26 @@ export default function SalesStatsView({
                           onCommit={(next) => updateLine(order.id, index, { remark: next })}
                         />
                       </td>
+                      {index === 0 ? (
+                        <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            disabled={state.saving || state.importing}
+                            onClick={() => handlers.deleteOrder(order.id)}
+                            title="删除该行"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))
-                  // 完整表格拼接：每个月份表保留自己的表头行（日期格显示表标题如 2026年7月，其余为姓名@电话等）
+                  // 完整表格拼接：每个月份表保留自己的表头；可删整表或单行
                   if (!showTableChrome) return rows
-                  return [headerRow, ...rows]
+                  return [tableToolbar, headerRow, ...rows]
                 })
               )}
             </tbody>
